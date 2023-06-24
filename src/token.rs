@@ -172,12 +172,21 @@ impl Token {
 
     pub fn parse_string_literal(segment: &str) -> Option<Token> {
         lazy_static! {
-            static ref STRING_LITERAL: Regex = Regex::new(r#""(?:[^"\\]|\\.)*""#).unwrap();
+            static ref STRING_LITERAL: Regex = Regex::new(r#"^"(?:[^"\\]|\\.)*"$"#).unwrap();
         }
         match STRING_LITERAL.is_match(segment.trim()) {
-            true => Some(Token::StringLiteral(String::from(
-                segment.trim().trim_matches('"').replace("\\\"", "\""),
-            ))),
+            true => {
+                // Trim leading and trailing whitespace.
+                let formatted = segment.trim();
+
+                // Removing opening and losing quotes
+                let formatted = &formatted[1..formatted.len() - 1];
+
+                // Change escaped quotes to just quotes and
+                let formatted = &formatted.replace("\\\"", "\"").replace("\\\\", "\\");
+
+                Some(Token::StringLiteral(String::from(formatted)))
+            }
             _ => None,
         }
     }
@@ -252,13 +261,19 @@ mod tests {
         let result = Token::parse(" \"asdf\" ");
         assert_eq!(result, Some(Token::StringLiteral(String::from("asdf"))));
 
-        let result = Token::parse(" \"say \\\"something\\\"!!\" ");
+        let result = Token::parse(r#" "say \"something\"!!" "#);
         assert_eq!(
             result,
-            Some(Token::StringLiteral(String::from("say \"something\"!!")))
+            Some(Token::StringLiteral(String::from(r#"say "something"!!"#)))
         );
 
-        let result = Token::parse(" \"23424?? ");
+        let result = Token::parse(r#" "" "#);
+        assert_eq!(result, Some(Token::StringLiteral(String::from(""))));
+
+        let result = Token::parse(r#" "\\\\" "#);
+        assert_eq!(result, Some(Token::StringLiteral(String::from(r#"\\"#))));
+
+        let result = Token::parse(r#" "23424?? "#);
         assert_eq!(result, None);
     }
 
@@ -291,11 +306,11 @@ mod tests {
         let result = Token::parse_first("  -3480 ");
         assert_eq!(result, Some((Token::Minus, 3)),);
 
-        let result = Token::parse_first("  \"some \\\"BIG\\\" string\" ");
+        let result = Token::parse_first(r#"  "some \"BIG\" string" "#);
         assert_eq!(
             result,
             Some((
-                Token::StringLiteral(String::from("some \"BIG\" string")),
+                Token::StringLiteral(String::from(r#"some "BIG" string"#)),
                 24,
             )),
         );
@@ -306,14 +321,19 @@ mod tests {
 
     #[test]
     fn tokenize() {
-        let result = Token::tokenize("let thing = 234");
+        let result = Token::tokenize(r#"let thing = 234 "onetwo" "three"four"" "\\\\\\""#);
         assert_eq!(
             result,
             Ok(vec![
                 Token::Let,
                 Token::Variable(String::from("thing")),
                 Token::Equal,
-                Token::Int(234)
+                Token::Int(234),
+                Token::StringLiteral(String::from("onetwo")),
+                Token::StringLiteral(String::from("three")),
+                Token::Variable(String::from("four")),
+                Token::StringLiteral(String::from("")),
+                Token::StringLiteral(String::from(r#"\\\"#)),
             ]),
         );
     }

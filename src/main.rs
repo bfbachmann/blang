@@ -45,8 +45,12 @@ fn main() {
             Err(err) => fatal!("Error reading line: {}", err),
         };
 
-        let tokens = Token::tokenize(line.as_str());
-        debug!("Tokens on line {}: {:#?}", line_num, tokens);
+        match Token::tokenize(line.as_str()) {
+            Ok(tokens) => {
+                debug!("Tokens on line {}: {:#?}", line_num, tokens);
+            }
+            Err(e) => fatal!("{}", e),
+        };
     }
 
     info!("Successfully compiled \"{}\"", file_path);
