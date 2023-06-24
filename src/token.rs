@@ -36,6 +36,7 @@ pub enum Token {
 
     // Built-in/primitive types
     Int(i64),
+    String,
     StringLiteral(String),
     Function,
 
@@ -71,6 +72,7 @@ impl PartialEq for Token {
             (Token::ElseIf, Token::ElseIf) => true,
             (Token::BeginClosure, Token::BeginClosure) => true,
             (Token::EndClosure, Token::EndClosure) => true,
+            (Token::String, Token::String) => true,
             _ => false,
         }
     }
@@ -185,6 +187,10 @@ impl Token {
         }
 
         if let Some(v) = Token::parse_basic(segment, "else", Token::Else) {
+            return Some(v);
+        }
+
+        if let Some(v) = Token::parse_basic(segment, "string", Token::String) {
             return Some(v);
         }
 
