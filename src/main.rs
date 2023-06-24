@@ -34,7 +34,7 @@ fn main() {
     debug!("Opening file \"{}\"", file_path);
     let reader = match open_file(file_path) {
         Ok(r) => r,
-        Err(err) => fatal!("Error opening file \"{}\": {}", file_path, err),
+        Err(err) => fatal!(r#"Error opening file "{}": {}"#, file_path, err),
     };
 
     // Iterate through lines from source
@@ -49,11 +49,11 @@ fn main() {
             Ok(tokens) => {
                 debug!("Tokens on line {}: {:#?}", line_num, tokens);
             }
-            Err(e) => fatal!("{}", e),
+            Err(e) => fatal!("[{}:{}] {}", line_num, e.column, e.message),
         };
     }
 
-    info!("Successfully compiled \"{}\"", file_path);
+    info!("Successfully compiled {}", file_path);
 }
 
 fn open_file(file_path: &str) -> Result<BufReader<File>> {

@@ -1,18 +1,53 @@
 use lazy_static::lazy_static;
-// use log::debug;
 use regex::Regex;
 use std::result::Result;
+
+#[derive(Debug, PartialEq)]
+pub struct ParseError {
+    pub message: String,
+    pub column: usize,
+}
+
+impl ParseError {
+    fn new(message: &str, column: usize) -> Self {
+        ParseError {
+            message: message.to_string(),
+            column,
+        }
+    }
+}
 
 // Represents any valid token in the language.
 #[derive(Debug)]
 pub enum Token {
+    // Binary mathematical operators
     Plus,
     Minus,
+
+    // Variable assignment
     Equal,
-    Variable(String),
+
+    // Comparators
+    Equals,
+    GreaterThan,
+    LessThan,
+    GreaterThanOrEqual,
+    LessThanOrEqual,
+
+    // Primitive types
     Int(i64),
-    Let,
     StringLiteral(String),
+
+    // Keywords and control flow
+    Let,
+    If,
+    Else,
+    ElseIf,
+    BeginClosure,
+    EndClosure,
+
+    // User-defined values
+    Variable(String),
 }
 
 impl PartialEq for Token {
@@ -25,6 +60,14 @@ impl PartialEq for Token {
             (Token::Variable(v1), Token::Variable(v2)) => v1 == v2,
             (Token::StringLiteral(v1), Token::StringLiteral(v2)) => v1 == v2,
             (Token::Int(v1), Token::Int(v2)) => v1 == v2,
+            (Token::Equals, Token::Equals) => true,
+            (Token::GreaterThan, Token::GreaterThan) => true,
+            (Token::LessThan, Token::LessThan) => true,
+            (Token::If, Token::If) => true,
+            (Token::Else, Token::Else) => true,
+            (Token::ElseIf, Token::ElseIf) => true,
+            (Token::BeginClosure, Token::BeginClosure) => true,
+            (Token::EndClosure, Token::EndClosure) => true,
             _ => false,
         }
     }
@@ -33,7 +76,7 @@ impl PartialEq for Token {
 impl Token {
     // Breaks the given slice into a list of tokens. If the slice contains any invalid tokens,
     // an error is returned.
-    pub fn tokenize(segment: &str) -> Result<Vec<Token>, String> {
+    pub fn tokenize(segment: &str) -> Result<Vec<Token>, ParseError> {
         let mut tokens = vec![];
         let mut search_start: usize = 0;
 
@@ -48,7 +91,10 @@ impl Token {
             } else {
                 // The subsegment does not begin with a valid token. This means the segment is
                 // syntactically invalid.
-                return Err(format!("Expected valid token, but got \"{}\"", subseg));
+                return Err(ParseError::new(
+                    format!(r#"Expected valid token, but got {}"#, subseg).as_str(),
+                    search_start,
+                ));
             }
         }
 
@@ -87,94 +133,114 @@ impl Token {
     // Attempts to parse the given slice into a token. Returns None if the slice is not a valid
     // token.
     pub fn parse(segment: &str) -> Option<Token> {
-        // Check +
-        if let Some(v) = Token::parse_plus(segment) {
+        if let Some(v) = Token::parse_basic(segment, "+", Token::Plus) {
             return Some(v);
         }
 
-        // Check -
-        if let Some(v) = Token::parse_minus(segment) {
+        if let Some(v) = Token::parse_basic(segment, "-", Token::Minus) {
             return Some(v);
         }
 
-        // Check =
-        if let Some(v) = Token::parse_equal(segment) {
+        if let Some(v) = Token::parse_basic(segment, "=", Token::Equal) {
             return Some(v);
         }
 
-        // Check let
-        if let Some(v) = Token::parse_let(segment) {
+        if let Some(v) = Token::parse_basic(segment, "let", Token::Let) {
             return Some(v);
         }
 
-        // Check variable name
-        if let Some(v) = Token::parse_variable(segment) {
-            return Some(v);
-        }
-
-        // Check int
         if let Some(v) = Token::parse_int(segment) {
             return Some(v);
         }
 
-        // Check string literal
         if let Some(v) = Token::parse_string_literal(segment) {
+            return Some(v);
+        }
+
+        if let Some(v) = Token::parse_basic(segment, "==", Token::Equals) {
+            return Some(v);
+        }
+
+        if let Some(v) = Token::parse_basic(segment, ">", Token::GreaterThan) {
+            return Some(v);
+        }
+
+        if let Some(v) = Token::parse_basic(segment, "<", Token::LessThan) {
+            return Some(v);
+        }
+
+        if let Some(v) = Token::parse_basic(segment, ">=", Token::GreaterThanOrEqual) {
+            return Some(v);
+        }
+
+        if let Some(v) = Token::parse_basic(segment, "<=", Token::LessThanOrEqual) {
+            return Some(v);
+        }
+
+        if let Some(v) = Token::parse_basic(segment, "if", Token::If) {
+            return Some(v);
+        }
+
+        if let Some(v) = Token::parse_basic(segment, "else", Token::Else) {
+            return Some(v);
+        }
+
+        let re_else_if = Regex::new(r#"^else\s*if$"#).unwrap();
+        if let Some(v) = Token::parse_regex(segment, re_else_if, Token::ElseIf) {
+            return Some(v);
+        }
+
+        if let Some(v) = Token::parse_basic(segment, "{", Token::BeginClosure) {
+            return Some(v);
+        }
+
+        if let Some(v) = Token::parse_basic(segment, "}", Token::EndClosure) {
+            return Some(v);
+        }
+
+        if let Some(v) = Token::parse_variable(segment) {
             return Some(v);
         }
 
         None
     }
 
-    pub fn parse_plus(segment: &str) -> Option<Token> {
-        match segment.trim() {
-            "+" => Some(Token::Plus),
-            _ => None,
+    fn parse_basic(segment: &str, target: &str, token: Token) -> Option<Token> {
+        if segment.trim() == target {
+            return Some(token);
+        }
+        None
+    }
+
+    fn parse_regex(segment: &str, re: Regex, token: Token) -> Option<Token> {
+        match re.is_match(segment.trim()) {
+            true => Some(token),
+            false => None,
         }
     }
 
-    pub fn parse_minus(segment: &str) -> Option<Token> {
-        match segment.trim() {
-            "-" => Some(Token::Minus),
-            _ => None,
-        }
-    }
-
-    pub fn parse_let(segment: &str) -> Option<Token> {
-        match segment.trim() {
-            "let" => Some(Token::Let),
-            _ => None,
-        }
-    }
-
-    pub fn parse_int(segment: &str) -> Option<Token> {
+    fn parse_int(segment: &str) -> Option<Token> {
         match segment.trim().parse::<i64>() {
             Ok(i) => Some(Token::Int(i)),
             Err(_) => None,
         }
     }
 
-    pub fn parse_variable(segment: &str) -> Option<Token> {
+    fn parse_variable(segment: &str) -> Option<Token> {
         lazy_static! {
-            static ref VARIABLE: Regex = Regex::new(r"^[a-zA-Z_]+[a-zA-Z0-9_]*$").unwrap();
+            static ref RE_VARIABLE: Regex = Regex::new(r"^[a-zA-Z_]+[a-zA-Z0-9_]*$").unwrap();
         }
-        match VARIABLE.is_match(segment.trim()) {
+        match RE_VARIABLE.is_match(segment.trim()) {
             true => Some(Token::Variable(String::from(segment.trim()))),
             false => None,
         }
     }
 
-    pub fn parse_equal(segment: &str) -> Option<Token> {
-        match segment.trim() {
-            "=" => Some(Token::Equal),
-            _ => None,
-        }
-    }
-
-    pub fn parse_string_literal(segment: &str) -> Option<Token> {
+    fn parse_string_literal(segment: &str) -> Option<Token> {
         lazy_static! {
-            static ref STRING_LITERAL: Regex = Regex::new(r#"^"(?:[^"\\]|\\.)*"$"#).unwrap();
+            static ref RE_STRING_LITERAL: Regex = Regex::new(r#"^"(?:[^"\\]|\\.)*"$"#).unwrap();
         }
-        match STRING_LITERAL.is_match(segment.trim()) {
+        match RE_STRING_LITERAL.is_match(segment.trim()) {
             true => {
                 // Trim leading and trailing whitespace.
                 let formatted = segment.trim();
@@ -183,7 +249,7 @@ impl Token {
                 let formatted = &formatted[1..formatted.len() - 1];
 
                 // Change escaped quotes to just quotes and
-                let formatted = &formatted.replace("\\\"", "\"").replace("\\\\", "\\");
+                let formatted = &formatted.replace(r#"\""#, r#"""#).replace(r#"\\"#, r#"\"#);
 
                 Some(Token::StringLiteral(String::from(formatted)))
             }
@@ -194,7 +260,7 @@ impl Token {
 
 #[cfg(test)]
 mod tests {
-    use crate::token::Token;
+    use crate::token::{ParseError, Token};
 
     #[test]
     fn parse_let() {
@@ -336,5 +402,34 @@ mod tests {
                 Token::StringLiteral(String::from(r#"\\\"#)),
             ]),
         );
+
+        let result = Token::tokenize(r#"if {} else if {} else {} elser iff"#);
+        assert_eq!(
+            result,
+            Ok(vec![
+                Token::If,
+                Token::BeginClosure,
+                Token::EndClosure,
+                Token::ElseIf,
+                Token::BeginClosure,
+                Token::EndClosure,
+                Token::Else,
+                Token::BeginClosure,
+                Token::EndClosure,
+                Token::Variable(String::from("elser")),
+                Token::Variable(String::from("iff")),
+            ]),
+        );
+
+        let result = Token::tokenize(r#"<?>"#);
+        if let Err(ParseError {
+            message: _,
+            column: col,
+        }) = result
+        {
+            assert_eq!(col, 1);
+        } else {
+            panic!("Expected ParseErr");
+        }
     }
 }
