@@ -34,9 +34,10 @@ pub enum Token {
     GreaterThanOrEqual,
     LessThanOrEqual,
 
-    // Primitive types
+    // Built-in/primitive types
     Int(i64),
     StringLiteral(String),
+    Function,
 
     // Keywords and control flow
     Let,
@@ -47,7 +48,7 @@ pub enum Token {
     EndClosure,
 
     // User-defined values
-    Variable(String),
+    Identifier(String),
 }
 
 impl PartialEq for Token {
@@ -57,7 +58,7 @@ impl PartialEq for Token {
             (Token::Minus, Token::Minus) => true,
             (Token::Let, Token::Let) => true,
             (Token::Equal, Token::Equal) => true,
-            (Token::Variable(v1), Token::Variable(v2)) => v1 == v2,
+            (Token::Identifier(v1), Token::Identifier(v2)) => v1 == v2,
             (Token::StringLiteral(v1), Token::StringLiteral(v2)) => v1 == v2,
             (Token::Int(v1), Token::Int(v2)) => v1 == v2,
             (Token::Equals, Token::Equals) => true,
@@ -200,7 +201,11 @@ impl Token {
             return Some(v);
         }
 
-        if let Some(v) = Token::parse_variable(segment) {
+        if let Some(v) = Token::parse_basic(segment, "fn", Token::Function) {
+            return Some(v);
+        }
+
+        if let Some(v) = Token::parse_identifier(segment) {
             return Some(v);
         }
 
@@ -228,12 +233,12 @@ impl Token {
         }
     }
 
-    fn parse_variable(segment: &str) -> Option<Token> {
+    fn parse_identifier(segment: &str) -> Option<Token> {
         lazy_static! {
-            static ref RE_VARIABLE: Regex = Regex::new(r"^[a-zA-Z_]+[a-zA-Z0-9_]*$").unwrap();
+            static ref RE_IDENTIFIER: Regex = Regex::new(r"^[a-zA-Z_]+[a-zA-Z0-9_]*$").unwrap();
         }
-        match RE_VARIABLE.is_match(segment.trim()) {
-            true => Some(Token::Variable(String::from(segment.trim()))),
+        match RE_IDENTIFIER.is_match(segment.trim()) {
+            true => Some(Token::Identifier(String::from(segment.trim()))),
             false => None,
         }
     }
@@ -313,11 +318,11 @@ mod tests {
     }
 
     #[test]
-    fn parse_variable() {
+    fn parse_identifier() {
         let result = Token::parse(" _a_2_32sdfkeFDSwre980 ");
         assert_eq!(
             result,
-            Some(Token::Variable(String::from("_a_2_32sdfkeFDSwre980")))
+            Some(Token::Identifier(String::from("_a_2_32sdfkeFDSwre980")))
         );
 
         let result = Token::parse(" asr32/23 ");
@@ -351,13 +356,13 @@ mod tests {
         assert_eq!(result, Some((Token::Let, 5)),);
 
         let result = Token::parse_first("letter ");
-        assert_eq!(result, Some((Token::Variable(String::from("letter")), 7)),);
+        assert_eq!(result, Some((Token::Identifier(String::from("letter")), 7)),);
 
         let result = Token::parse_first("let thing 234 ");
         assert_eq!(result, Some((Token::Let, 4)));
 
         let result = Token::parse_first("thing 234 ");
-        assert_eq!(result, Some((Token::Variable(String::from("thing")), 6)));
+        assert_eq!(result, Some((Token::Identifier(String::from("thing")), 6)));
 
         let result = Token::parse_first("    3784751 --");
         assert_eq!(result, Some((Token::Int(3784751), 12)),);
@@ -394,12 +399,12 @@ mod tests {
             result,
             Ok(vec![
                 Token::Let,
-                Token::Variable(String::from("thing")),
+                Token::Identifier(String::from("thing")),
                 Token::Equal,
                 Token::Int(234),
                 Token::StringLiteral(String::from("onetwo")),
                 Token::StringLiteral(String::from("three")),
-                Token::Variable(String::from("four")),
+                Token::Identifier(String::from("four")),
                 Token::StringLiteral(String::from("")),
                 Token::StringLiteral(String::from(r#"\\\"#)),
             ]),
@@ -418,8 +423,8 @@ mod tests {
                 Token::Else,
                 Token::BeginClosure,
                 Token::EndClosure,
-                Token::Variable(String::from("elser")),
-                Token::Variable(String::from("iff")),
+                Token::Identifier(String::from("elser")),
+                Token::Identifier(String::from("iff")),
             ]),
         );
 

@@ -4,7 +4,9 @@ use std::fs::File;
 use std::io::BufRead;
 use std::io::{BufReader, Result};
 use std::process;
+mod ast;
 mod token;
+
 use token::Token;
 
 macro_rules! fatal {
