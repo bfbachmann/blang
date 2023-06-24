@@ -63,6 +63,8 @@ impl PartialEq for Token {
             (Token::Equals, Token::Equals) => true,
             (Token::GreaterThan, Token::GreaterThan) => true,
             (Token::LessThan, Token::LessThan) => true,
+            (Token::GreaterThanOrEqual, Token::GreaterThanOrEqual) => true,
+            (Token::LessThanOrEqual, Token::LessThanOrEqual) => true,
             (Token::If, Token::If) => true,
             (Token::Else, Token::Else) => true,
             (Token::ElseIf, Token::ElseIf) => true,
