@@ -1,13 +1,13 @@
+mod lexer;
+mod parser;
+
 use clap::{arg, Command};
+use lexer::Token;
 use log::{debug, error, info, set_max_level, Level};
 use std::fs::File;
 use std::io::BufRead;
 use std::io::{BufReader, Result};
 use std::process;
-mod ast;
-mod token;
-
-use token::Token;
 
 macro_rules! fatal {
     ($($arg:tt)*) => {{
@@ -44,14 +44,14 @@ fn main() {
     for (line_num, line) in reader.lines().enumerate() {
         let line = match line {
             Ok(l) => l,
-            Err(err) => fatal!("Error reading line: {}", err),
+            Err(err) => fatal!("Error reading line {}: {}", line_num, err),
         };
 
-        match Token::tokenize(line.as_str()) {
+        match Token::tokenize_line(line.as_str(), line_num) {
             Ok(tokens) => {
                 debug!("Tokens on line {}: {:#?}", line_num, tokens);
             }
-            Err(e) => fatal!("[{}:{}] {}", line_num, e.column, e.message),
+            Err(e) => fatal!("{}", e),
         };
     }
 
