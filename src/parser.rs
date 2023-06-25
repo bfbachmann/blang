@@ -26,40 +26,52 @@ impl ParseError {
     }
 }
 
-enum Value {
-    String(String),
-    Int(i64),
-    Function, // TODO
+#[derive(Debug)]
+enum Type {
+    String,
+    Int,
+    Function(Function),
+}
+
+impl PartialEq for Type {
+    fn eq(&self, other: &Self) -> bool {
+        match (&self, other) {
+            (Type::String, Type::String) | (Type::Int, Type::Int) => true,
+            (
+                Type::Function(Function {
+                    name: name1,
+                    args: args1,
+                }),
+                Type::Function(Function {
+                    name: name2,
+                    args: args2,
+                }),
+            ) => name1 == name2 && args1 == args2,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug)]
 struct Argument {
     name: String,
-    kind: TokenKind,
+    arg_type: Type,
 }
 
 impl PartialEq for Argument {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.kind == other.kind
+        self.name == other.name && self.arg_type == other.arg_type
     }
 }
 
 impl Argument {
-    fn new(name: &str, kind: TokenKind) -> Self {
+    fn new(name: &str, arg_type: Type) -> Self {
         Argument {
             name: name.to_string(),
-            kind,
+            arg_type,
         }
     }
 }
-
-struct Statement {}
-
-struct Expression {}
-
-struct Conditional {}
-
-struct Loop {}
 
 #[derive(Debug)]
 struct Function {
@@ -95,13 +107,6 @@ impl Function {
         }
     }
 
-    fn new_no_args(name: &str) -> Self {
-        Function {
-            name: name.to_string(),
-            args: vec![],
-        }
-    }
-
     fn new_anon(args: Vec<Argument>) -> Self {
         Function {
             name: "".to_string(),
@@ -110,13 +115,7 @@ impl Function {
     }
 }
 
-enum ASTNode {
-    Statement,
-    Expression,
-    Conditional,
-    Loop,
-    Function,
-}
+enum ASTNode {}
 
 impl ASTNode {
     // Parses anonymous functions.
@@ -262,20 +261,22 @@ impl ASTNode {
     //      arg_name is an identifier representing the argument name
     fn parse_argument(tokens: &mut VecDeque<Token>) -> Result<Argument, ParseError> {
         // The first token should be the argument type.
-        let kind = match tokens.pop_front() {
+        let arg_type = match tokens.pop_front() {
             Some(Token {
-                kind: k @ (TokenKind::Int | TokenKind::String),
+                kind: TokenKind::Int,
                 start: _,
                 end: _,
-            }) => k,
+            }) => Type::Int,
+            Some(Token {
+                kind: TokenKind::String,
+                start: _,
+                end: _,
+            }) => Type::String,
             Some(Token {
                 kind: TokenKind::Function,
                 start: _,
                 end: _,
-            }) => {
-                // TODO
-                return Err(ParseError::new("Unimplemented", None));
-            }
+            }) => Type::Function(ASTNode::parse_anon_function(tokens)?),
             None => return Err(ParseError::new("Expected type (for argument)", None)),
             Some(other) => {
                 return Err(ParseError::new(
@@ -287,7 +288,7 @@ impl ASTNode {
 
         // The second token should be the argument name.
         let name = ASTNode::parse_identifier(tokens)?;
-        Ok(Argument::new(name.as_str(), kind))
+        Ok(Argument::new(name.as_str(), arg_type))
     }
 
     // Parses identifiers.
@@ -313,8 +314,8 @@ impl ASTNode {
 
 #[cfg(test)]
 mod tests {
-    use crate::lexer::{Token, TokenKind};
-    use crate::parser::{ASTNode, Argument, Function};
+    use crate::lexer::Token;
+    use crate::parser::{ASTNode, Argument, Function, Type};
 
     #[test]
     fn parse_identifier() {
@@ -333,8 +334,28 @@ mod tests {
             Function::new(
                 "my_fn",
                 vec![
-                    Argument::new("arg1", TokenKind::String),
-                    Argument::new("arg2", TokenKind::Int)
+                    Argument::new("arg1", Type::String),
+                    Argument::new("arg2", Type::Int)
+                ]
+            )
+        );
+
+        let mut tokens = Token::tokenize_line("my_fn(fn (string b1, int b2) a1, int a2)", 0)
+            .expect("should not error");
+        let result = ASTNode::parse_function(&mut tokens).expect("should not error");
+        assert_eq!(
+            result,
+            Function::new(
+                "my_fn",
+                vec![
+                    Argument::new(
+                        "a1",
+                        Type::Function(Function::new_anon(vec![
+                            Argument::new("b1", Type::String),
+                            Argument::new("b2", Type::Int)
+                        ]))
+                    ),
+                    Argument::new("a2", Type::Int)
                 ]
             )
         );
@@ -348,8 +369,8 @@ mod tests {
         assert_eq!(
             result,
             Function::new_anon(vec![
-                Argument::new("the_int", TokenKind::Int),
-                Argument::new("the_string", TokenKind::String)
+                Argument::new("the_int", Type::Int),
+                Argument::new("the_string", Type::String)
             ])
         );
     }
