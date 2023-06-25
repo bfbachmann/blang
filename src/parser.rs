@@ -120,7 +120,11 @@ enum ASTNode {
 
 impl ASTNode {
     // Parses anonymous functions.
-    // Expects token sequences of the form "(<arg_type> <arg_name>, ...)".
+    // Expects token sequences of the form
+    //      ([<arg_type> <arg_name>, ...])
+    // where
+    //      arg_type is the type of the argument
+    //      arg_name is an identifier representing the argument name
     fn parse_anon_function(tokens: &mut VecDeque<Token>) -> Result<Function, ParseError> {
         // Just parse arguments since the function has no name.
         let args = ASTNode::parse_arguments(tokens)?;
@@ -128,7 +132,12 @@ impl ASTNode {
     }
 
     // Parses function declarations.
-    // Expects token sequences of the form "fn <fn_name>(<arg_type> <arg_name>, ...)".
+    // Expects token sequences of the form "
+    //      fn <fn_name>([<arg_type> <arg_name>, ...])
+    // where
+    //      fn_name is an identifier representing the name of the function
+    //      arg_type is the type of the argument
+    //      arg_name is an identifier representing the argument name
     fn parse_function(tokens: &mut VecDeque<Token>) -> Result<Function, ParseError> {
         // The first token should be an identifier that represents the function name.
         let fn_name = ASTNode::parse_identifier(tokens)?;
@@ -141,7 +150,11 @@ impl ASTNode {
     }
 
     // Parses arguments in function declarations.
-    // Expects token sequences of the form "(<arg_type> <arg_name>, ...)".
+    // Expects token sequences of the form
+    //      ([<arg_type> <arg_name>, ...])
+    // where
+    //      arg_type is the type of the argument
+    //      arg_name is an identifier representing the argument name
     fn parse_arguments(tokens: &mut VecDeque<Token>) -> Result<Vec<Argument>, ParseError> {
         // The first token should be the opening parenthesis.
         let token = tokens.pop_front();
@@ -242,7 +255,11 @@ impl ASTNode {
     }
 
     // Parses a function argument.
-    // Expects token sequences of the form "<arg_type> <arg_name>".
+    // Expects token sequences of the form
+    //      <arg_type> <arg_name>
+    // where
+    //      arg_type is the type of the argument
+    //      arg_name is an identifier representing the argument name
     fn parse_argument(tokens: &mut VecDeque<Token>) -> Result<Argument, ParseError> {
         // The first token should be the argument type.
         let kind = match tokens.pop_front() {
@@ -274,7 +291,8 @@ impl ASTNode {
     }
 
     // Parses identifiers.
-    // Expects token sequences of the form "<identifier>".
+    // Expects token sequences of the form
+    //      <identifier>
     fn parse_identifier(tokens: &mut VecDeque<Token>) -> Result<String, ParseError> {
         match tokens.pop_front() {
             Some(Token {
