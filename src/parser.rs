@@ -119,25 +119,31 @@ enum ASTNode {
 }
 
 impl ASTNode {
-    // pub fn from(mut tokens: Vec<TokenKind>) /*-> Result<Self, String>*/ {
-    //     let mut cur_node: Option<ASTNode>;
-    //     while !tokens.is_empty() {
-    //
-    //     }
-    // }
-    //
-    // fn build_node(current: ASTNode, mut tokens: Vec<TokenKind>) -> ASTNode {
-    //     let token = tokens.remove(0);
-    //     match token {
-    //         TokenKind::Function =>
-    //     }
-    // }
+    // Parses anonymous functions.
+    // Expects token sequences of the form "(<arg_type> <arg_name>, ...)".
+    fn parse_anon_function(tokens: &mut VecDeque<Token>) -> Result<Function, ParseError> {
+        // Just parse arguments since the function has no name.
+        let args = ASTNode::parse_arguments(tokens)?;
+        Ok(Function::new_anon(args))
+    }
 
+    // Parses function declarations.
+    // Expects token sequences of the form "fn <fn_name>(<arg_type> <arg_name>, ...)".
     fn parse_function(tokens: &mut VecDeque<Token>) -> Result<Function, ParseError> {
         // The first token should be an identifier that represents the function name.
         let fn_name = ASTNode::parse_identifier(tokens)?;
 
-        // The second token should be the opening parenthesis.
+        // The next tokens should represent function arguments.
+        let args = ASTNode::parse_arguments(tokens)?;
+
+        // Now that we have the function name and args, create the node.
+        Ok(Function::new(fn_name.as_str(), args))
+    }
+
+    // Parses arguments in function declarations.
+    // Expects token sequences of the form "(<arg_type> <arg_name>, ...)".
+    fn parse_arguments(tokens: &mut VecDeque<Token>) -> Result<Vec<Argument>, ParseError> {
+        // The first token should be the opening parenthesis.
         let token = tokens.pop_front();
         match token {
             Some(Token {
@@ -232,11 +238,11 @@ impl ASTNode {
             }
         }
 
-        // Now that we have the function name and args, create the node.
-        Ok(Function::new(fn_name.as_str(), args))
+        Ok(args)
     }
 
-    // Attempts to extract an argument from the given deque of tokens.
+    // Parses a function argument.
+    // Expects token sequences of the form "<arg_type> <arg_name>".
     fn parse_argument(tokens: &mut VecDeque<Token>) -> Result<Argument, ParseError> {
         // The first token should be the argument type.
         let kind = match tokens.pop_front() {
@@ -267,7 +273,8 @@ impl ASTNode {
         Ok(Argument::new(name.as_str(), kind))
     }
 
-    // Attempts to extract an identifier from the front of the given deque of tokens.
+    // Parses identifiers.
+    // Expects token sequences of the form "<identifier>".
     fn parse_identifier(tokens: &mut VecDeque<Token>) -> Result<String, ParseError> {
         match tokens.pop_front() {
             Some(Token {
@@ -312,6 +319,20 @@ mod tests {
                     Argument::new("arg2", TokenKind::Int)
                 ]
             )
+        );
+    }
+
+    #[test]
+    fn parse_anon_function() {
+        let mut tokens =
+            Token::tokenize_line("(int the_int, string the_string)", 0).expect("should not error");
+        let result = ASTNode::parse_anon_function(&mut tokens).expect("should not error");
+        assert_eq!(
+            result,
+            Function::new_anon(vec![
+                Argument::new("the_int", TokenKind::Int),
+                Argument::new("the_string", TokenKind::String)
+            ])
         );
     }
 }
