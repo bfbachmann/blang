@@ -1,5 +1,6 @@
 mod lexer;
 mod parser;
+mod util;
 
 use clap::{arg, Command};
 use lexer::Token;

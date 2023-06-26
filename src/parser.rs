@@ -1,4 +1,5 @@
 use crate::lexer::{Token, TokenKind};
+use crate::util;
 use std::collections::VecDeque;
 use std::fmt;
 
@@ -30,23 +31,14 @@ impl ParseError {
 enum Type {
     String,
     Int,
-    Function(Function),
+    Function(FunctionSignature),
 }
 
 impl PartialEq for Type {
     fn eq(&self, other: &Self) -> bool {
         match (&self, other) {
             (Type::String, Type::String) | (Type::Int, Type::Int) => true,
-            (
-                Type::Function(Function {
-                    name: name1,
-                    args: args1,
-                }),
-                Type::Function(Function {
-                    name: name2,
-                    args: args2,
-                }),
-            ) => name1 == name2 && args1 == args2,
+            (Type::Function(f1), Type::Function(f2)) => f1 == f2,
             _ => false,
         }
     }
@@ -74,78 +66,227 @@ impl Argument {
 }
 
 #[derive(Debug)]
-struct Function {
+struct FunctionSignature {
     name: String,
     args: Vec<Argument>,
+    return_types: Vec<Type>,
 }
 
-impl PartialEq for Function {
+impl PartialEq for FunctionSignature {
     fn eq(&self, other: &Self) -> bool {
         if self.name != other.name {
             return false;
         }
 
-        if self.args.len() != other.args.len() {
+        if !util::vectors_are_equal(&self.args, &other.args) {
             return false;
         }
 
-        for (a1, a2) in self.args.iter().zip(other.args.iter()) {
-            if a1 != a2 {
-                return false;
-            }
+        if !util::vectors_are_equal(&self.return_types, &other.return_types) {
+            return false;
         }
 
         true
     }
 }
 
-impl Function {
-    fn new(name: &str, args: Vec<Argument>) -> Self {
-        Function {
+impl FunctionSignature {
+    fn new(name: &str, args: Vec<Argument>, return_types: Vec<Type>) -> Self {
+        FunctionSignature {
             name: name.to_string(),
             args,
+            return_types,
         }
     }
 
-    fn new_anon(args: Vec<Argument>) -> Self {
-        Function {
+    fn new_anon(args: Vec<Argument>, return_types: Vec<Type>) -> Self {
+        FunctionSignature {
             name: "".to_string(),
             args,
+            return_types,
         }
+    }
+}
+
+#[derive(Debug)]
+struct Closure {
+    // TODO
+}
+
+impl PartialEq for Closure {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl Closure {
+    fn new() -> Self {
+        Closure {}
+    }
+}
+
+#[derive(Debug)]
+struct Function {
+    signature: FunctionSignature,
+    body: Closure,
+}
+
+impl PartialEq for Function {
+    fn eq(&self, other: &Self) -> bool {
+        self.signature == other.signature && self.body == other.body
+    }
+}
+
+impl Function {
+    fn new(signature: FunctionSignature, body: Closure) -> Self {
+        Function { signature, body }
     }
 }
 
 enum ASTNode {}
 
 impl ASTNode {
-    // Parses anonymous functions.
+    // Parses closures.
     // Expects token sequences of the form
-    //      ([<arg_type> <arg_name>, ...])
+    //      { [<statement> ... ] }
+    // where
+    //      statement is any valid statement (see parse_statement)
+    fn parse_closure(tokens: &mut VecDeque<Token>) -> Result<Closure, ParseError> {
+        // The first token should be "{".
+        ASTNode::parse_expecting(tokens, vec![TokenKind::BeginClosure])?;
+
+        // The following nodes should be statements.
+        // TODO
+
+        // The last node should be "}".
+        ASTNode::parse_expecting(tokens, vec![TokenKind::EndClosure])?;
+
+        Ok(Closure::new())
+    }
+
+    // Parses anonymous function signatures.
+    // Expects token sequences of the form
+    //      fn ([<arg_type> <arg_name>, ...]) (<return_type>, ...)
     // where
     //      arg_type is the type of the argument
     //      arg_name is an identifier representing the argument name
-    fn parse_anon_function(tokens: &mut VecDeque<Token>) -> Result<Function, ParseError> {
-        // Just parse arguments since the function has no name.
+    //      return_type is the type of the return value
+    fn parse_anon_function_signature(
+        tokens: &mut VecDeque<Token>,
+    ) -> Result<FunctionSignature, ParseError> {
+        // The first token should be "fn".
+        ASTNode::parse_expecting(tokens, vec![TokenKind::Function])?;
+
+        // The next tokens should represent function arguments.
         let args = ASTNode::parse_arguments(tokens)?;
-        Ok(Function::new_anon(args))
+
+        // The next tokens should represent function return types.
+        let return_types = ASTNode::parse_return_types(tokens)?;
+
+        Ok(FunctionSignature::new_anon(args, return_types))
     }
 
-    // Parses function declarations.
-    // Expects token sequences of the form "
-    //      fn <fn_name>([<arg_type> <arg_name>, ...])
+    // Parses function signatures.
+    // Expects token sequences of the form
+    //      fn <fn_name>([<arg_type> <arg_name>, ...]) (<return_type>, ...)
     // where
     //      fn_name is an identifier representing the name of the function
     //      arg_type is the type of the argument
     //      arg_name is an identifier representing the argument name
-    fn parse_function(tokens: &mut VecDeque<Token>) -> Result<Function, ParseError> {
-        // The first token should be an identifier that represents the function name.
+    //      return_type is the type of the return value
+    fn parse_function_signature(
+        tokens: &mut VecDeque<Token>,
+    ) -> Result<FunctionSignature, ParseError> {
+        // The first token should be "fn".
+        ASTNode::parse_expecting(tokens, vec![TokenKind::Function])?;
+
+        // The second token should be an identifier that represents the function name.
         let fn_name = ASTNode::parse_identifier(tokens)?;
 
         // The next tokens should represent function arguments.
         let args = ASTNode::parse_arguments(tokens)?;
 
+        // The next tokens should represent function return types.
+        let return_types = ASTNode::parse_return_types(tokens)?;
+
+        Ok(FunctionSignature::new(fn_name.as_str(), args, return_types))
+    }
+
+    // Parses function return types.
+    // Expects token sequences of the form
+    //      ([<return_type>, ...])
+    // where
+    //      return_type is the type of the return value
+    fn parse_return_types(tokens: &mut VecDeque<Token>) -> Result<Vec<Type>, ParseError> {
+        // The first token should be "(".
+        ASTNode::parse_expecting(tokens, vec![TokenKind::OpenParen])?;
+
+        let mut return_types = vec![];
+        loop {
+            // The next token should either be a return type, or ")".
+            match tokens.pop_front() {
+                Some(Token {
+                    kind: TokenKind::CloseParen,
+                    start: _,
+                    end: _,
+                }) => break,
+                Some(other) => {
+                    tokens.push_front(other);
+                    let return_type = ASTNode::parse_type(tokens)?;
+                    return_types.push(return_type);
+                }
+                None => return Err(ParseError::new(r#"Expected ")" or type"#, None)),
+            };
+
+            // After the return type, the next token should be "," or ")".
+            let kind =
+                ASTNode::parse_expecting(tokens, vec![TokenKind::Comma, TokenKind::CloseParen])?;
+            match kind {
+                TokenKind::Comma => {} // Nothing to do here. Just move onto the next type.
+                TokenKind::CloseParen => break, // We're done parsing return types.
+                _ => {
+                    panic!("this should be impossible")
+                }
+            }
+        }
+
+        Ok(return_types)
+    }
+
+    // Parses anonymous function declarations.
+    // Expects token sequences of the form
+    //      ([<arg_type> <arg_name>, ...]) (<return_type>, ...) { ... }
+    // where
+    //      arg_type is the type of the argument
+    //      arg_name is an identifier representing the argument name
+    //      return_type is the type of the return value
+    fn parse_anon_function(tokens: &mut VecDeque<Token>) -> Result<Function, ParseError> {
+        // The first set of tokens should be the anonymous function signature.
+        let sig = ASTNode::parse_anon_function_signature(tokens)?;
+
+        // The remaining tokens should be the function body.
+        let body = ASTNode::parse_closure(tokens)?;
+
+        Ok(Function::new(sig, body))
+    }
+
+    // Parses function declarations.
+    // Expects token sequences of the form "
+    //      <fn_name>([<arg_type> <arg_name>, ...]) (<return_type>, ...) { ... }
+    // where
+    //      fn_name is an identifier representing the name of the function
+    //      arg_type is the type of the argument
+    //      arg_name is an identifier representing the argument name
+    //      return_type is the type of the return value
+    fn parse_function(tokens: &mut VecDeque<Token>) -> Result<Function, ParseError> {
+        // The first set of tokens should be the function signature.
+        let sig = ASTNode::parse_function_signature(tokens)?;
+
+        // The remaining tokens should be the function body.
+        let body = ASTNode::parse_closure(tokens)?;
+
         // Now that we have the function name and args, create the node.
-        Ok(Function::new(fn_name.as_str(), args))
+        Ok(Function::new(sig, body))
     }
 
     // Parses arguments in function declarations.
@@ -156,30 +297,7 @@ impl ASTNode {
     //      arg_name is an identifier representing the argument name
     fn parse_arguments(tokens: &mut VecDeque<Token>) -> Result<Vec<Argument>, ParseError> {
         // The first token should be the opening parenthesis.
-        let token = tokens.pop_front();
-        match token {
-            Some(Token {
-                kind: TokenKind::BeginArgs,
-                start: _,
-                end: _,
-            }) => {}
-            None => {
-                return Err(ParseError::new(
-                    r#"Expected "(" (beginning of function arguments)"#,
-                    None,
-                ))
-            }
-            Some(other) => {
-                return Err(ParseError::new(
-                    format!(
-                        r#"Expected "(" (beginning of function arguments), but got "{}""#,
-                        other,
-                    )
-                    .as_str(),
-                    Some(other),
-                ))
-            }
-        };
+        ASTNode::parse_expecting(tokens, vec![TokenKind::OpenParen])?;
 
         // The next token(s) should be arguments or a closing parenthesis.
         let mut args = vec![];
@@ -188,7 +306,7 @@ impl ASTNode {
             let token = tokens.pop_front();
             match token {
                 Some(Token {
-                    kind: TokenKind::EndArgs,
+                    kind: TokenKind::CloseParen,
                     start: _,
                     end: _,
                 }) => {
@@ -224,33 +342,43 @@ impl ASTNode {
             };
 
             // After the argument, the next token should be "," or ")".
-            match tokens.pop_front() {
-                Some(Token {
-                    kind: TokenKind::Comma,
-                    start: _,
-                    end: _,
-                }) => {
-                    // Nothing to do here. Just move onto the next arg.
-                }
-                Some(Token {
-                    kind: TokenKind::EndArgs,
-                    start: _,
-                    end: _,
-                }) => {
-                    // We're done parsing args.
-                    break;
-                }
-                None => return Err(ParseError::new(r#"Expected "," or ")""#, None)),
-                Some(other) => {
-                    return Err(ParseError::new(
-                        format!(r#"Expected "," or ")", but got "{}""#, other).as_str(),
-                        Some(other),
-                    ))
+            let kind =
+                ASTNode::parse_expecting(tokens, vec![TokenKind::Comma, TokenKind::CloseParen])?;
+            match kind {
+                TokenKind::Comma => {} // Nothing to do here. Just move onto the next arg.
+                TokenKind::CloseParen => break, // We're done parsing args.
+                _ => {
+                    panic!("this should be impossible")
                 }
             }
         }
 
         Ok(args)
+    }
+
+    // Returns an error if the next token is not any of the given kinds, or the kind otherwise.
+    fn parse_expecting(
+        tokens: &mut VecDeque<Token>,
+        expected: Vec<TokenKind>,
+    ) -> Result<TokenKind, ParseError> {
+        match tokens.pop_front() {
+            None => {
+                return Err(ParseError::new(
+                    format!(r#"Expected one of {:#?}"#, expected).as_str(),
+                    None,
+                ))
+            }
+            Some(token) => {
+                if expected.contains(&token.kind) {
+                    Ok(token.kind)
+                } else {
+                    Err(ParseError::new(
+                        format!(r#"Expected one of {:#?}, but got "{}"#, expected, token).as_str(),
+                        Some(token),
+                    ))
+                }
+            }
+        }
     }
 
     // Parses a function argument.
@@ -261,34 +389,50 @@ impl ASTNode {
     //      arg_name is an identifier representing the argument name
     fn parse_argument(tokens: &mut VecDeque<Token>) -> Result<Argument, ParseError> {
         // The first token should be the argument type.
-        let arg_type = match tokens.pop_front() {
+        let arg_type = ASTNode::parse_type(tokens)?;
+
+        // The second token should be the argument name.
+        let name = ASTNode::parse_identifier(tokens)?;
+
+        Ok(Argument::new(name.as_str(), arg_type))
+    }
+
+    // Parses type names.
+    // Expects token sequences of the form
+    //      <type>
+    // where
+    //      type is a valid type
+    fn parse_type(tokens: &mut VecDeque<Token>) -> Result<Type, ParseError> {
+        match tokens.pop_front() {
             Some(Token {
                 kind: TokenKind::Int,
                 start: _,
                 end: _,
-            }) => Type::Int,
+            }) => Ok(Type::Int),
             Some(Token {
                 kind: TokenKind::String,
                 start: _,
                 end: _,
-            }) => Type::String,
-            Some(Token {
-                kind: TokenKind::Function,
-                start: _,
-                end: _,
-            }) => Type::Function(ASTNode::parse_anon_function(tokens)?),
-            None => return Err(ParseError::new("Expected type (for argument)", None)),
+            }) => Ok(Type::String),
+            Some(
+                token @ Token {
+                    kind: TokenKind::Function,
+                    start: _,
+                    end: _,
+                },
+            ) => {
+                tokens.push_front(token);
+                let sig = ASTNode::parse_anon_function_signature(tokens)?;
+                Ok(Type::Function(sig))
+            }
+            None => return Err(ParseError::new("Expected type", None)),
             Some(other) => {
                 return Err(ParseError::new(
-                    format!(r#"Expected type (for argument), but got "{}""#, other).as_str(),
+                    format!(r#"Expected type, but got "{}""#, other).as_str(),
                     Some(other),
                 ))
             }
-        };
-
-        // The second token should be the argument name.
-        let name = ASTNode::parse_identifier(tokens)?;
-        Ok(Argument::new(name.as_str(), arg_type))
+        }
     }
 
     // Parses identifiers.
@@ -315,7 +459,7 @@ impl ASTNode {
 #[cfg(test)]
 mod tests {
     use crate::lexer::Token;
-    use crate::parser::{ASTNode, Argument, Function, Type};
+    use crate::parser::{ASTNode, Argument, Closure, Function, FunctionSignature, Type};
 
     #[test]
     fn parse_identifier() {
@@ -327,51 +471,55 @@ mod tests {
     #[test]
     fn parse_function() {
         let mut tokens =
-            Token::tokenize_line("my_fn(string arg1, int arg2)", 0).expect("should not error");
+            Token::tokenize_line("fn my_fn(string arg1, int arg2) (string, int) {}", 0)
+                .expect("should not error");
         let result = ASTNode::parse_function(&mut tokens).expect("should not error");
         assert_eq!(
             result,
             Function::new(
-                "my_fn",
-                vec![
-                    Argument::new("arg1", Type::String),
-                    Argument::new("arg2", Type::Int)
-                ]
+                FunctionSignature::new(
+                    "my_fn",
+                    vec![
+                        Argument::new("arg1", Type::String),
+                        Argument::new("arg2", Type::Int)
+                    ],
+                    vec![Type::String, Type::Int]
+                ),
+                Closure::new()
             )
         );
 
-        let mut tokens = Token::tokenize_line("my_fn(fn (string b1, int b2) a1, int a2)", 0)
-            .expect("should not error");
+        let mut tokens = Token::tokenize_line(
+            "fn bigboi(fn (string b1, int b2) () f, int i) (fn (int r) (string)) {}",
+            0,
+        )
+        .expect("should not error");
         let result = ASTNode::parse_function(&mut tokens).expect("should not error");
         assert_eq!(
             result,
             Function::new(
-                "my_fn",
-                vec![
-                    Argument::new(
-                        "a1",
-                        Type::Function(Function::new_anon(vec![
-                            Argument::new("b1", Type::String),
-                            Argument::new("b2", Type::Int)
-                        ]))
-                    ),
-                    Argument::new("a2", Type::Int)
-                ]
+                FunctionSignature::new(
+                    "bigboi",
+                    vec![
+                        Argument::new(
+                            "f",
+                            Type::Function(FunctionSignature::new_anon(
+                                vec![
+                                    Argument::new("b1", Type::String),
+                                    Argument::new("b2", Type::Int)
+                                ],
+                                vec![]
+                            ),),
+                        ),
+                        Argument::new("i", Type::Int)
+                    ],
+                    vec![Type::Function(FunctionSignature::new_anon(
+                        vec![Argument::new("r", Type::Int)],
+                        vec![Type::String]
+                    ))],
+                ),
+                Closure::new()
             )
-        );
-    }
-
-    #[test]
-    fn parse_anon_function() {
-        let mut tokens =
-            Token::tokenize_line("(int the_int, string the_string)", 0).expect("should not error");
-        let result = ASTNode::parse_anon_function(&mut tokens).expect("should not error");
-        assert_eq!(
-            result,
-            Function::new_anon(vec![
-                Argument::new("the_int", Type::Int),
-                Argument::new("the_string", Type::String)
-            ])
         );
     }
 }

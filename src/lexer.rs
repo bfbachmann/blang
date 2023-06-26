@@ -89,8 +89,8 @@ pub enum TokenKind {
     // Delimiters
     BeginClosure,
     EndClosure,
-    BeginArgs,
-    EndArgs,
+    OpenParen,
+    CloseParen,
     Comma,
 
     // User-defined values
@@ -121,8 +121,8 @@ impl fmt::Display for TokenKind {
             TokenKind::EndClosure => write!(f, "}}"),
             TokenKind::Identifier(s) => write!(f, "identifier {}", s),
             TokenKind::Int => write!(f, "integer declaration"),
-            TokenKind::BeginArgs => write!(f, "("),
-            TokenKind::EndArgs => write!(f, ")"),
+            TokenKind::OpenParen => write!(f, "("),
+            TokenKind::CloseParen => write!(f, ")"),
             TokenKind::Comma => write!(f, ","),
         }
     }
@@ -151,9 +151,10 @@ impl PartialEq for TokenKind {
             (TokenKind::String, TokenKind::String) => true,
             (TokenKind::For, TokenKind::For) => true,
             (TokenKind::Int, TokenKind::Int) => true,
-            (TokenKind::BeginArgs, TokenKind::BeginArgs) => true,
-            (TokenKind::EndArgs, TokenKind::EndArgs) => true,
+            (TokenKind::OpenParen, TokenKind::OpenParen) => true,
+            (TokenKind::CloseParen, TokenKind::CloseParen) => true,
             (TokenKind::Comma, TokenKind::Comma) => true,
+            (TokenKind::Function, TokenKind::Function) => true,
             _ => false,
         }
     }
@@ -183,8 +184,8 @@ impl TokenKind {
             TokenKind::EndClosure => "}}".to_string(),
             TokenKind::Identifier(v) => v.to_string(),
             TokenKind::Int => "int".to_string(),
-            TokenKind::BeginArgs => "(".to_string(),
-            TokenKind::EndArgs => ")".to_string(),
+            TokenKind::OpenParen => "(".to_string(),
+            TokenKind::CloseParen => ")".to_string(),
             TokenKind::Comma => ",".to_string(),
         }
     }
@@ -288,11 +289,11 @@ impl TokenKind {
             return Some(v);
         }
 
-        if let Some(v) = TokenKind::lex_basic(segment, "(", TokenKind::BeginArgs) {
+        if let Some(v) = TokenKind::lex_basic(segment, "(", TokenKind::OpenParen) {
             return Some(v);
         }
 
-        if let Some(v) = TokenKind::lex_basic(segment, ")", TokenKind::EndArgs) {
+        if let Some(v) = TokenKind::lex_basic(segment, ")", TokenKind::CloseParen) {
             return Some(v);
         }
 
