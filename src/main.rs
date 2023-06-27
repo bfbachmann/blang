@@ -46,24 +46,27 @@ fn open_file(file_path: &str) -> Result<BufReader<File>> {
 // Compiles a file.
 fn compile(file_path: &str) {
     // Get a reader from the source file
-    debug!(r#"Opening file "{}""#, file_path);
     let reader = match open_file(file_path) {
         Ok(r) => r,
         Err(err) => fatal!(r#"Error opening file "{}": {}"#, file_path, err),
     };
 
-    info!(r#"Compiling "{}""#, file_path);
+    // Break the file into tokens.
     match Token::tokenize_file(reader) {
         Ok(tokens) => debug!("{:#?}", tokens),
         Err(e) => fatal!("{}", e),
     };
+
+    // Parse the tokens.
+    // TODO.
 
     info!("Successfully compiled {}", file_path);
 }
 
 // Starts a REPL.
 fn repl() {
-    info!("Starting REPL. Use ctrl+C to exit. Enter two successive newlines to commit statement.");
+    info!("Starting REPL.");
+    info!("Use ^C to exit. Enter two successive newlines to commit a new statement.");
     loop {
         match collect_tokens() {
             Ok(tokens) => {
@@ -90,7 +93,7 @@ fn collect_tokens() -> Result<VecDeque<Token>> {
         // Print a prompt based on whether this is the beginning of a new sequence or a continuation
         // of the last one.
         match line_num {
-            0 => stdout().write_all(b" >  ")?,
+            0 => stdout().write_all(b" > ")?,
             _ => stdout().write_all(b" >> ")?,
         }
         stdout().flush()?;
