@@ -43,6 +43,7 @@ fn open_file(file_path: &str) -> Result<BufReader<File>> {
     Ok(BufReader::new(file))
 }
 
+// Compiles a file.
 fn compile(file_path: &str) {
     // Get a reader from the source file
     debug!(r#"Opening file "{}""#, file_path);
@@ -60,8 +61,9 @@ fn compile(file_path: &str) {
     info!("Successfully compiled {}", file_path);
 }
 
+// Starts a REPL.
 fn repl() {
-    info!("Starting REPL");
+    info!("Starting REPL. Use ctrl+C to exit. Enter two successive newlines to commit statement.");
     loop {
         match collect_tokens() {
             Ok(tokens) => {
@@ -78,6 +80,8 @@ fn repl() {
     }
 }
 
+// Collects tokens from stdin until the user is done with input (i.e. until they've hit enter twice
+// in a row).
 fn collect_tokens() -> Result<VecDeque<Token>> {
     let mut tokens = VecDeque::from(vec![]);
     let mut line_num = 0;
@@ -86,8 +90,8 @@ fn collect_tokens() -> Result<VecDeque<Token>> {
         // Print a prompt based on whether this is the beginning of a new sequence or a continuation
         // of the last one.
         match line_num {
-            0 => stdout().write_all(b"\n >  ")?,
-            _ => stdout().write_all(b"\n >> ")?,
+            0 => stdout().write_all(b" >  ")?,
+            _ => stdout().write_all(b" >> ")?,
         }
         stdout().flush()?;
         line_num += 1;
