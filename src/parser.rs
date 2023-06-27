@@ -195,12 +195,12 @@ impl ASTNode {
         Ok(Expression {})
     }
 
-    // Parses variable assignments.
-    // Expects token sequences of the form
-    //      <name> = <expr>
-    // where
-    //      name is the variable name
-    //      expr is an expression representing the value assigned to the variable
+    /// Parses variable assignments.
+    /// Expects token sequences of the form
+    ///      <name> = <expr>
+    /// where
+    ///      name is the variable name
+    ///      expr is an expression representing the value assigned to the variable
     fn parse_variable_assignment(tokens: &mut VecDeque<Token>) -> ParseResult<VariableAssignment> {
         // The next token should be an identifier representing the variable name.
         let name = ASTNode::parse_identifier(tokens)?;
@@ -228,13 +228,13 @@ impl ASTNode {
         Ok(VariableAssignment::new(name.as_str(), expr))
     }
 
-    // Parses variable declarations.
-    // Expects token sequences of the form
-    //      <type> <name> = <expr>
-    // where
-    //      type is the variable type
-    //      name is the variable name
-    //      expr is an expression representing the value assigned to the variable
+    /// Parses variable declarations.
+    /// Expects token sequences of the form
+    ///      <type> <name> = <expr>
+    /// where
+    ///      type is the variable type
+    ///      name is the variable name
+    ///      expr is an expression representing the value assigned to the variable
     fn parse_variable_declaration(
         tokens: &mut VecDeque<Token>,
     ) -> ParseResult<VariableDeclaration> {
@@ -251,11 +251,11 @@ impl ASTNode {
         ))
     }
 
-    // Parses a statement.
-    // Statements can be any of the following
-    //  - variable declaration (see parse_variable_declaration)
-    //  - variable assignment (see parse_variable_assignment)
-    //  - function declaration (see parse_function)
+    /// Parses a statement.
+    /// Statements can be any of the following
+    ///  - variable declaration (see parse_variable_declaration)
+    ///  - variable assignment (see parse_variable_assignment)
+    ///  - function declaration (see parse_function)
     pub fn parse_statement(tokens: &mut VecDeque<Token>) -> ParseResult<Statement> {
         // Try use the first token to figure out what type of statement will follow.
         match tokens.pop_front() {
@@ -293,11 +293,11 @@ impl ASTNode {
         }
     }
 
-    // Parses closures.
-    // Expects token sequences of the form
-    //      { <statement> ... }
-    // where
-    //      statement is any valid statement (see parse_statement)
+    /// Parses closures.
+    /// Expects token sequences of the form
+    ///      { <statement> ... }
+    /// where
+    ///      statement is any valid statement (see parse_statement)
     fn parse_closure(tokens: &mut VecDeque<Token>) -> ParseResult<Closure> {
         // The first token should be "{".
         ASTNode::parse_expecting(tokens, HashSet::from([TokenKind::BeginClosure]))?;
@@ -325,13 +325,13 @@ impl ASTNode {
         Ok(Closure::new(statements))
     }
 
-    // Parses anonymous function signatures.
-    // Expects token sequences of the form
-    //      fn (<arg_type> <arg_name>, ...) (<return_type>, ...)
-    // where
-    //      arg_type is the type of the argument
-    //      arg_name is an identifier representing the argument name
-    //      return_type is the type of the return value
+    /// Parses anonymous function signatures.
+    /// Expects token sequences of the form
+    ///      fn (<arg_type> <arg_name>, ...) (<return_type>, ...)
+    /// where
+    ///      arg_type is the type of the argument
+    ///      arg_name is an identifier representing the argument name
+    ///      return_type is the type of the return value
     fn parse_anon_function_signature(
         tokens: &mut VecDeque<Token>,
     ) -> ParseResult<FunctionSignature> {
@@ -347,14 +347,14 @@ impl ASTNode {
         Ok(FunctionSignature::new_anon(args, return_types))
     }
 
-    // Parses function signatures.
-    // Expects token sequences of the form
-    //      fn <fn_name>(<arg_type> <arg_name>, ...) (<return_type>, ...)
-    // where
-    //      fn_name is an identifier representing the name of the function
-    //      arg_type is the type of the argument
-    //      arg_name is an identifier representing the argument name
-    //      return_type is the type of the return value
+    /// Parses function signatures.
+    /// Expects token sequences of the form
+    ///      fn <fn_name>(<arg_type> <arg_name>, ...) (<return_type>, ...)
+    /// where
+    ///      fn_name is an identifier representing the name of the function
+    ///      arg_type is the type of the argument
+    ///      arg_name is an identifier representing the argument name
+    ///      return_type is the type of the return value
     fn parse_function_signature(tokens: &mut VecDeque<Token>) -> ParseResult<FunctionSignature> {
         // The first token should be "fn".
         ASTNode::parse_expecting(tokens, HashSet::from([TokenKind::Function]))?;
@@ -371,11 +371,11 @@ impl ASTNode {
         Ok(FunctionSignature::new(fn_name.as_str(), args, return_types))
     }
 
-    // Parses function return types.
-    // Expects token sequences of the form
-    //      (<return_type>, ...)
-    // where
-    //      return_type is the type of the return value
+    /// Parses function return types.
+    /// Expects token sequences of the form
+    ///      (<return_type>, ...)
+    /// where
+    ///      return_type is the type of the return value
     fn parse_return_types(tokens: &mut VecDeque<Token>) -> ParseResult<Vec<Type>> {
         // The first token should be "(".
         ASTNode::parse_expecting(tokens, HashSet::from([TokenKind::OpenParen]))?;
@@ -414,15 +414,15 @@ impl ASTNode {
         Ok(return_types)
     }
 
-    // Parses function declarations.
-    // Expects token sequences of the form
-    //      fn <fn_name>(<arg_type> <arg_name>, ...) (<return_type>, ...) { <body> }
-    // where
-    //      fn_name is an identifier representing the name of the function
-    //      arg_type is the type of the argument
-    //      arg_name is an identifier representing the argument name
-    //      return_type is the type of the return value
-    //      body is the body of the function
+    /// Parses function declarations.
+    /// Expects token sequences of the form
+    ///      fn <fn_name>(<arg_type> <arg_name>, ...) (<return_type>, ...) { <body> }
+    /// where
+    ///      fn_name is an identifier representing the name of the function
+    ///      arg_type is the type of the argument
+    ///      arg_name is an identifier representing the argument name
+    ///      return_type is the type of the return value
+    ///      body is the body of the function
     fn parse_function(tokens: &mut VecDeque<Token>) -> ParseResult<Function> {
         // The first set of tokens should be the function signature.
         let sig = ASTNode::parse_function_signature(tokens)?;
@@ -434,15 +434,15 @@ impl ASTNode {
         Ok(Function::new(sig, body))
     }
 
-    // Parses anonymous function declarations.
-    // Expects token sequences of the form
-    //      fn (<arg_type> <arg_name>, ...) (<return_type>, ...) { <body> }
-    // where
-    //      fn_name is an identifier representing the name of the function
-    //      arg_type is the type of the argument
-    //      arg_name is an identifier representing the argument name
-    //      return_type is the type of the return value
-    //      body is the body of the function
+    /// Parses anonymous function declarations.
+    /// Expects token sequences of the form
+    ///      fn (<arg_type> <arg_name>, ...) (<return_type>, ...) { <body> }
+    /// where
+    ///      fn_name is an identifier representing the name of the function
+    ///      arg_type is the type of the argument
+    ///      arg_name is an identifier representing the argument name
+    ///      return_type is the type of the return value
+    ///      body is the body of the function
     fn parse_anon_function(tokens: &mut VecDeque<Token>) -> ParseResult<Function> {
         // The first set of tokens should be the function signature.
         let sig = ASTNode::parse_anon_function_signature(tokens)?;
@@ -454,12 +454,12 @@ impl ASTNode {
         Ok(Function::new(sig, body))
     }
 
-    // Parses arguments in function declarations.
-    // Expects token sequences of the form
-    //      (<arg_type> <arg_name>, ...)
-    // where
-    //      arg_type is the type of the argument
-    //      arg_name is an identifier representing the argument name
+    /// Parses arguments in function declarations.
+    /// Expects token sequences of the form
+    ///      (<arg_type> <arg_name>, ...)
+    /// where
+    ///      arg_type is the type of the argument
+    ///      arg_name is an identifier representing the argument name
     fn parse_arguments(tokens: &mut VecDeque<Token>) -> ParseResult<Vec<Argument>> {
         // The first token should be the opening parenthesis.
         ASTNode::parse_expecting(tokens, HashSet::from([TokenKind::OpenParen]))?;
@@ -523,7 +523,7 @@ impl ASTNode {
         Ok(args)
     }
 
-    // Returns an error if the next token is not any of the given kinds, or the kind otherwise.
+    /// Returns an error if the next token is not any of the given kinds, or the kind otherwise.
     fn parse_expecting(
         tokens: &mut VecDeque<Token>,
         expected: HashSet<TokenKind>,
@@ -548,12 +548,12 @@ impl ASTNode {
         }
     }
 
-    // Parses a function argument.
-    // Expects token sequences of the form
-    //      <arg_type> <arg_name>
-    // where
-    //      arg_type is the type of the argument
-    //      arg_name is an identifier representing the argument name
+    /// Parses a function argument.
+    /// Expects token sequences of the form
+    ///      <arg_type> <arg_name>
+    /// where
+    ///      arg_type is the type of the argument
+    ///      arg_name is an identifier representing the argument name
     fn parse_argument(tokens: &mut VecDeque<Token>) -> ParseResult<Argument> {
         // The first token should be the argument type.
         let arg_type = ASTNode::parse_type(tokens)?;
@@ -564,11 +564,11 @@ impl ASTNode {
         Ok(Argument::new(name.as_str(), arg_type))
     }
 
-    // Parses type names.
-    // Expects token sequences of the form
-    //      <type>
-    // where
-    //      type is a valid type
+    /// Parses type names.
+    /// Expects token sequences of the form
+    ///      <type>
+    /// where
+    ///      type is a valid type
     fn parse_type(tokens: &mut VecDeque<Token>) -> ParseResult<Type> {
         match tokens.pop_front() {
             Some(Token {
@@ -602,9 +602,9 @@ impl ASTNode {
         }
     }
 
-    // Parses identifiers.
-    // Expects token sequences of the form
-    //      <identifier>
+    /// Parses identifiers.
+    /// Expects token sequences of the form
+    ///      <identifier>
     fn parse_identifier(tokens: &mut VecDeque<Token>) -> ParseResult<String> {
         match tokens.pop_front() {
             Some(Token {

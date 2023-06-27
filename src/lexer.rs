@@ -62,7 +62,7 @@ impl Position {
     }
 }
 
-// Represents any valid token in the language.
+/// Represents any valid token in the language.
 #[derive(Debug, Eq, Hash)]
 pub enum TokenKind {
     // Binary mathematical operators
@@ -205,8 +205,8 @@ impl TokenKind {
         }
     }
 
-    // Returns false if the token, when lexed, could possibly be a part of a larger token and true
-    // otherwise.
+    /// Returns false if the token, when lexed, could possibly be a part of a larger token and true
+    /// otherwise.
     fn is_greedy(&self) -> bool {
         match self {
             TokenKind::Plus | TokenKind::Minus => true,
@@ -214,12 +214,13 @@ impl TokenKind {
         }
     }
 
+    /// Returns the number of characters in the token.
     fn len(&self) -> usize {
         self.to_string().len()
     }
 
-    // Finds the first valid TokenKind in the slice and the index in the slice at which the token
-    // ends. If the slice does not begin with a valid token, None will be returned.
+    /// Finds the first valid TokenKind in the slice and the index in the slice at which the token
+    /// ends. If the slice does not begin with a valid token, None will be returned.
     fn first_from(segment: &str) -> Option<(TokenKind, usize)> {
         let mut result = None;
         for token_end in 1..=segment.char_indices().count() {
@@ -236,8 +237,8 @@ impl TokenKind {
         result
     }
 
-    // Attempts to lex the given slice into a TokenKind. Returns None if the slice is not a valid
-    // token.
+    /// Attempts to lex the given slice into a TokenKind. Returns None if the slice is not a valid
+    /// token.
     fn from(segment: &str) -> Option<TokenKind> {
         if let Some(v) = TokenKind::lex_basic(segment, "+", TokenKind::Plus) {
             return Some(v);
@@ -400,7 +401,7 @@ impl TokenKind {
     }
 }
 
-// A token has a kind and a start and end position (in the file).
+/// A token has a kind and a start and end position (in the file).
 #[derive(Debug)]
 pub struct Token {
     pub kind: TokenKind,
@@ -430,8 +431,8 @@ impl Token {
         }
     }
 
-    // Attempts to lex the file from the given reader and return a deque of tokens, or an error
-    // if the file contains invalid tokens.
+    /// Attempts to lex the file from the given reader and return a deque of tokens, or an error
+    /// if the file contains invalid tokens.
     pub fn tokenize_file(reader: BufReader<File>) -> LexResult<VecDeque<Token>> {
         let mut tokens = VecDeque::from(vec![]);
         for (line_num, line) in reader.lines().enumerate() {
@@ -455,8 +456,8 @@ impl Token {
         Ok(tokens)
     }
 
-    // Breaks the given slice into a deque of tokens. If the slice contains any invalid tokens,
-    // an error is returned.
+    /// Breaks the given slice into a deque of tokens. If the slice contains any invalid tokens,
+    /// an error is returned.
     pub fn tokenize_line(segment: &str, line_num: usize) -> LexResult<VecDeque<Token>> {
         let mut tokens = VecDeque::from(vec![]);
         let mut search_start: usize = 0;

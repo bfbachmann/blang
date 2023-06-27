@@ -43,7 +43,7 @@ fn open_file(file_path: &str) -> Result<BufReader<File>> {
     Ok(BufReader::new(file))
 }
 
-// Compiles a file.
+/// Compiles a file.
 fn compile(file_path: &str) {
     // Get a reader from the source file
     let reader = match open_file(file_path) {
@@ -63,7 +63,7 @@ fn compile(file_path: &str) {
     info!("Successfully compiled {}", file_path);
 }
 
-// Starts a REPL.
+/// Starts a REPL.
 fn repl() {
     info!("Starting REPL.");
     info!("Use ^C to exit. Enter two successive newlines to commit a new statement.");
@@ -83,8 +83,8 @@ fn repl() {
     }
 }
 
-// Collects tokens from stdin until the user is done with input (i.e. until they've hit enter twice
-// in a row).
+/// Collects tokens from stdin until the user is done with input (i.e. until they've hit enter twice
+/// in a row).
 fn collect_tokens() -> Result<VecDeque<Token>> {
     let mut tokens = VecDeque::from(vec![]);
     let mut line_num = 0;
