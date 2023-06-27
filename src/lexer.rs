@@ -1,8 +1,13 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::collections::VecDeque;
+use std::error::Error;
 use std::fmt;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::result::Result;
+
+type LexResult<T> = Result<T, LexError>;
 
 #[derive(Debug, PartialEq)]
 pub struct LexError {
@@ -10,6 +15,8 @@ pub struct LexError {
     line: usize,
     col: usize,
 }
+
+impl Error for LexError {}
 
 impl LexError {
     fn new(message: &str, line: usize, col: usize) -> Self {
@@ -56,7 +63,7 @@ impl Position {
 }
 
 // Represents any valid token in the language.
-#[derive(Debug)]
+#[derive(Debug, Eq, Hash)]
 pub enum TokenKind {
     // Binary mathematical operators
     Plus,
@@ -84,7 +91,8 @@ pub enum TokenKind {
     If,
     Else,
     ElseIf,
-    For,
+    Loop,
+    Break,
 
     // Delimiters
     BeginClosure,
@@ -92,6 +100,7 @@ pub enum TokenKind {
     OpenParen,
     CloseParen,
     Comma,
+    SemiColon,
 
     // User-defined values
     Identifier(String),
@@ -108,22 +117,24 @@ impl fmt::Display for TokenKind {
             TokenKind::LessThan => write!(f, "<"),
             TokenKind::GreaterThanOrEqual => write!(f, ">="),
             TokenKind::LessThanOrEqual => write!(f, "<="),
-            TokenKind::IntLiteral(i) => write!(f, "integer literal {}", i.to_string()),
-            TokenKind::String => write!(f, "string declaration"),
-            TokenKind::StringLiteral(s) => write!(f, "string literal {}", s),
+            TokenKind::IntLiteral(i) => write!(f, "{} (integer literal)", i.to_string()),
+            TokenKind::String => write!(f, "type string"),
+            TokenKind::StringLiteral(s) => write!(f, "{} (string literal)", s),
             TokenKind::Function => write!(f, "function declaration"),
             TokenKind::Let => write!(f, "let"),
             TokenKind::If => write!(f, "if"),
             TokenKind::Else => write!(f, "else"),
             TokenKind::ElseIf => write!(f, "else if"),
-            TokenKind::For => write!(f, "for"),
+            TokenKind::Loop => write!(f, "loop"),
             TokenKind::BeginClosure => write!(f, "{{"),
             TokenKind::EndClosure => write!(f, "}}"),
-            TokenKind::Identifier(s) => write!(f, "identifier {}", s),
-            TokenKind::Int => write!(f, "integer declaration"),
+            TokenKind::Identifier(s) => write!(f, "{} (identifier)", s),
+            TokenKind::Int => write!(f, "type integer"),
             TokenKind::OpenParen => write!(f, "("),
             TokenKind::CloseParen => write!(f, ")"),
             TokenKind::Comma => write!(f, ","),
+            TokenKind::SemiColon => write!(f, ";"),
+            TokenKind::Break => write!(f, "break"),
         }
     }
 }
@@ -149,12 +160,14 @@ impl PartialEq for TokenKind {
             (TokenKind::BeginClosure, TokenKind::BeginClosure) => true,
             (TokenKind::EndClosure, TokenKind::EndClosure) => true,
             (TokenKind::String, TokenKind::String) => true,
-            (TokenKind::For, TokenKind::For) => true,
+            (TokenKind::Loop, TokenKind::Loop) => true,
             (TokenKind::Int, TokenKind::Int) => true,
             (TokenKind::OpenParen, TokenKind::OpenParen) => true,
             (TokenKind::CloseParen, TokenKind::CloseParen) => true,
             (TokenKind::Comma, TokenKind::Comma) => true,
+            (TokenKind::SemiColon, TokenKind::SemiColon) => true,
             (TokenKind::Function, TokenKind::Function) => true,
+            (TokenKind::Break, TokenKind::Break) => true,
             _ => false,
         }
     }
@@ -179,7 +192,7 @@ impl TokenKind {
             TokenKind::If => "if".to_string(),
             TokenKind::Else => "else".to_string(),
             TokenKind::ElseIf => "else if".to_string(),
-            TokenKind::For => "for".to_string(),
+            TokenKind::Loop => "loop".to_string(),
             TokenKind::BeginClosure => "{{".to_string(),
             TokenKind::EndClosure => "}}".to_string(),
             TokenKind::Identifier(v) => v.to_string(),
@@ -187,6 +200,8 @@ impl TokenKind {
             TokenKind::OpenParen => "(".to_string(),
             TokenKind::CloseParen => ")".to_string(),
             TokenKind::Comma => ",".to_string(),
+            TokenKind::SemiColon => ";".to_string(),
+            TokenKind::Break => "break".to_string(),
         }
     }
 
@@ -301,11 +316,19 @@ impl TokenKind {
             return Some(v);
         }
 
+        if let Some(v) = TokenKind::lex_basic(segment, ";", TokenKind::SemiColon) {
+            return Some(v);
+        }
+
         if let Some(v) = TokenKind::lex_basic(segment, "fn", TokenKind::Function) {
             return Some(v);
         }
 
-        if let Some(v) = TokenKind::lex_basic(segment, "for", TokenKind::For) {
+        if let Some(v) = TokenKind::lex_basic(segment, "loop", TokenKind::Loop) {
+            return Some(v);
+        }
+
+        if let Some(v) = TokenKind::lex_basic(segment, "break", TokenKind::Break) {
             return Some(v);
         }
 
@@ -407,9 +430,34 @@ impl Token {
         }
     }
 
+    // Attempts to lex the file from the given reader and return a deque of tokens, or an error
+    // if the file contains invalid tokens.
+    pub fn tokenize_file(reader: BufReader<File>) -> LexResult<VecDeque<Token>> {
+        let mut tokens = VecDeque::from(vec![]);
+        for (line_num, line) in reader.lines().enumerate() {
+            let line = match line {
+                Ok(l) => l,
+                Err(err) => {
+                    return Err(LexError::new(
+                        format!("Error reading line {}: {}", line_num, err).as_str(),
+                        line_num,
+                        0,
+                    ))
+                }
+            };
+
+            match Token::tokenize_line(line.as_str(), line_num) {
+                Ok(tokens_from_line) => tokens.extend(tokens_from_line),
+                Err(e) => return Err(e),
+            };
+        }
+
+        Ok(tokens)
+    }
+
     // Breaks the given slice into a deque of tokens. If the slice contains any invalid tokens,
     // an error is returned.
-    pub fn tokenize_line(segment: &str, line_num: usize) -> Result<VecDeque<Token>, LexError> {
+    pub fn tokenize_line(segment: &str, line_num: usize) -> LexResult<VecDeque<Token>> {
         let mut tokens = VecDeque::from(vec![]);
         let mut search_start: usize = 0;
 

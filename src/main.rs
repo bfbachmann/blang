@@ -2,12 +2,13 @@ mod lexer;
 mod parser;
 mod util;
 
+use crate::parser::ASTNode;
 use clap::{arg, Command};
 use lexer::Token;
 use log::{debug, error, info, set_max_level, Level};
+use std::collections::VecDeque;
 use std::fs::File;
-use std::io::BufRead;
-use std::io::{BufReader, Result};
+use std::io::{stdin, stdout, BufReader, Error, ErrorKind, Result, Write};
 use std::process;
 
 macro_rules! fatal {
@@ -23,43 +24,91 @@ fn main() {
     set_max_level(Level::Debug.to_level_filter());
 
     // Define command
-    let matches = Command::new("dog")
+    let matches = Command::new("blang")
         .version("0.1")
         .author("Bruno Bachmann")
-        .about("A dogsh*t programming language.")
-        .arg(arg!([file] "File to compile").required(true))
+        .about("A bad programming language.")
+        .arg(arg!([file] "File to compile"))
         .get_matches();
 
-    // Get file name from command line argument
-    let file_path = matches.get_one::<String>("file").unwrap();
-
-    // Get a reader from the source file
-    debug!("Opening file \"{}\"", file_path);
-    let reader = match open_file(file_path) {
-        Ok(r) => r,
-        Err(err) => fatal!(r#"Error opening file "{}": {}"#, file_path, err),
-    };
-
-    // Iterate through lines from source
-    info!("Compiling \"{}\"", file_path);
-    for (line_num, line) in reader.lines().enumerate() {
-        let line = match line {
-            Ok(l) => l,
-            Err(err) => fatal!("Error reading line {}: {}", line_num, err),
-        };
-
-        match Token::tokenize_line(line.as_str(), line_num) {
-            Ok(tokens) => {
-                debug!("Tokens on line {}: {:#?}", line_num, tokens);
-            }
-            Err(e) => fatal!("{}", e),
-        };
+    // Get file name from command line argument. If there is none, start a repl.
+    match matches.get_one::<String>("file") {
+        Some(file_path) => compile(file_path),
+        None => repl(),
     }
-
-    info!("Successfully compiled {}", file_path);
 }
 
 fn open_file(file_path: &str) -> Result<BufReader<File>> {
     let file = File::open(file_path)?;
     Ok(BufReader::new(file))
+}
+
+fn compile(file_path: &str) {
+    // Get a reader from the source file
+    debug!(r#"Opening file "{}""#, file_path);
+    let reader = match open_file(file_path) {
+        Ok(r) => r,
+        Err(err) => fatal!(r#"Error opening file "{}": {}"#, file_path, err),
+    };
+
+    info!(r#"Compiling "{}""#, file_path);
+    match Token::tokenize_file(reader) {
+        Ok(tokens) => debug!("{:#?}", tokens),
+        Err(e) => fatal!("{}", e),
+    };
+
+    info!("Successfully compiled {}", file_path);
+}
+
+fn repl() {
+    info!("Starting REPL");
+    loop {
+        match collect_tokens() {
+            Ok(tokens) => {
+                let mut tokens = tokens;
+                match ASTNode::parse_statement(&mut tokens) {
+                    Ok(statement) => {
+                        dbg!(statement);
+                    }
+                    Err(e) => error!("{}", e),
+                };
+            }
+            Err(e) => error!("{}", e),
+        };
+    }
+}
+
+fn collect_tokens() -> Result<VecDeque<Token>> {
+    let mut tokens = VecDeque::from(vec![]);
+    let mut line_num = 0;
+
+    loop {
+        // Print a prompt based on whether this is the beginning of a new sequence or a continuation
+        // of the last one.
+        match line_num {
+            0 => stdout().write_all(b"\n >  ")?,
+            _ => stdout().write_all(b"\n >> ")?,
+        }
+        stdout().flush()?;
+        line_num += 1;
+
+        // Read input.
+        let mut buf = String::new();
+        stdin().read_line(&mut buf)?;
+
+        // If the input is only whitespace, it means we're done collecting tokens and we should
+        // parse what we've collected so far.
+        let input = buf.as_str();
+        if input.trim().is_empty() {
+            break;
+        }
+
+        // Tokenize input.
+        match Token::tokenize_line(input, line_num) {
+            Ok(new_tokens) => tokens.extend(new_tokens),
+            Err(e) => return Err(Error::new(ErrorKind::InvalidInput, e)),
+        };
+    }
+
+    Ok(tokens)
 }
