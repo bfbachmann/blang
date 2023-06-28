@@ -1,5 +1,4 @@
-use lazy_static::lazy_static;
-use regex::Regex;
+use crate::token_kind::TokenKind;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::fmt;
@@ -59,345 +58,6 @@ impl fmt::Display for Position {
 impl Position {
     fn new(line: usize, col: usize) -> Self {
         Position { line, col }
-    }
-}
-
-/// Represents any valid token in the language.
-#[derive(Debug, Eq, Hash)]
-pub enum TokenKind {
-    // Binary mathematical operators
-    Plus,
-    Minus,
-
-    // Variable assignment
-    Equal,
-
-    // Comparators
-    Equals,
-    GreaterThan,
-    LessThan,
-    GreaterThanOrEqual,
-    LessThanOrEqual,
-
-    // Built-in/primitive types
-    Int,
-    IntLiteral(i64),
-    String,
-    StringLiteral(String),
-    Function,
-
-    // Keywords and control flow
-    Let,
-    If,
-    Else,
-    ElseIf,
-    Loop,
-    Break,
-
-    // Delimiters
-    BeginClosure,
-    EndClosure,
-    OpenParen,
-    CloseParen,
-    Comma,
-    SemiColon,
-
-    // User-defined values
-    Identifier(String),
-}
-
-impl fmt::Display for TokenKind {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            TokenKind::Plus => write!(f, "+"),
-            TokenKind::Minus => write!(f, "-"),
-            TokenKind::Equal => write!(f, "="),
-            TokenKind::Equals => write!(f, "=="),
-            TokenKind::GreaterThan => write!(f, ">"),
-            TokenKind::LessThan => write!(f, "<"),
-            TokenKind::GreaterThanOrEqual => write!(f, ">="),
-            TokenKind::LessThanOrEqual => write!(f, "<="),
-            TokenKind::IntLiteral(i) => write!(f, "{} (integer literal)", i.to_string()),
-            TokenKind::String => write!(f, "type string"),
-            TokenKind::StringLiteral(s) => write!(f, "{} (string literal)", s),
-            TokenKind::Function => write!(f, "function declaration"),
-            TokenKind::Let => write!(f, "let"),
-            TokenKind::If => write!(f, "if"),
-            TokenKind::Else => write!(f, "else"),
-            TokenKind::ElseIf => write!(f, "else if"),
-            TokenKind::Loop => write!(f, "loop"),
-            TokenKind::BeginClosure => write!(f, "{{"),
-            TokenKind::EndClosure => write!(f, "}}"),
-            TokenKind::Identifier(s) => write!(f, "{} (identifier)", s),
-            TokenKind::Int => write!(f, "type integer"),
-            TokenKind::OpenParen => write!(f, "("),
-            TokenKind::CloseParen => write!(f, ")"),
-            TokenKind::Comma => write!(f, ","),
-            TokenKind::SemiColon => write!(f, ";"),
-            TokenKind::Break => write!(f, "break"),
-        }
-    }
-}
-
-impl PartialEq for TokenKind {
-    fn eq(&self, other: &Self) -> bool {
-        match (&self, other) {
-            (TokenKind::Plus, TokenKind::Plus) => true,
-            (TokenKind::Minus, TokenKind::Minus) => true,
-            (TokenKind::Let, TokenKind::Let) => true,
-            (TokenKind::Equal, TokenKind::Equal) => true,
-            (TokenKind::Identifier(v1), TokenKind::Identifier(v2)) => v1 == v2,
-            (TokenKind::StringLiteral(v1), TokenKind::StringLiteral(v2)) => v1 == v2,
-            (TokenKind::IntLiteral(v1), TokenKind::IntLiteral(v2)) => v1 == v2,
-            (TokenKind::Equals, TokenKind::Equals) => true,
-            (TokenKind::GreaterThan, TokenKind::GreaterThan) => true,
-            (TokenKind::LessThan, TokenKind::LessThan) => true,
-            (TokenKind::GreaterThanOrEqual, TokenKind::GreaterThanOrEqual) => true,
-            (TokenKind::LessThanOrEqual, TokenKind::LessThanOrEqual) => true,
-            (TokenKind::If, TokenKind::If) => true,
-            (TokenKind::Else, TokenKind::Else) => true,
-            (TokenKind::ElseIf, TokenKind::ElseIf) => true,
-            (TokenKind::BeginClosure, TokenKind::BeginClosure) => true,
-            (TokenKind::EndClosure, TokenKind::EndClosure) => true,
-            (TokenKind::String, TokenKind::String) => true,
-            (TokenKind::Loop, TokenKind::Loop) => true,
-            (TokenKind::Int, TokenKind::Int) => true,
-            (TokenKind::OpenParen, TokenKind::OpenParen) => true,
-            (TokenKind::CloseParen, TokenKind::CloseParen) => true,
-            (TokenKind::Comma, TokenKind::Comma) => true,
-            (TokenKind::SemiColon, TokenKind::SemiColon) => true,
-            (TokenKind::Function, TokenKind::Function) => true,
-            (TokenKind::Break, TokenKind::Break) => true,
-            _ => false,
-        }
-    }
-}
-
-impl TokenKind {
-    fn to_string(&self) -> String {
-        match self {
-            TokenKind::Plus => "+".to_string(),
-            TokenKind::Minus => "-".to_string(),
-            TokenKind::Equal => "=".to_string(),
-            TokenKind::Equals => "==".to_string(),
-            TokenKind::GreaterThan => ">".to_string(),
-            TokenKind::LessThan => "<".to_string(),
-            TokenKind::GreaterThanOrEqual => ">=".to_string(),
-            TokenKind::LessThanOrEqual => "<=".to_string(),
-            TokenKind::IntLiteral(v) => v.to_string(),
-            TokenKind::String => "string".to_string(),
-            TokenKind::StringLiteral(v) => v.to_string(),
-            TokenKind::Function => "fn".to_string(),
-            TokenKind::Let => "let".to_string(),
-            TokenKind::If => "if".to_string(),
-            TokenKind::Else => "else".to_string(),
-            TokenKind::ElseIf => "else if".to_string(),
-            TokenKind::Loop => "loop".to_string(),
-            TokenKind::BeginClosure => "{{".to_string(),
-            TokenKind::EndClosure => "}}".to_string(),
-            TokenKind::Identifier(v) => v.to_string(),
-            TokenKind::Int => "int".to_string(),
-            TokenKind::OpenParen => "(".to_string(),
-            TokenKind::CloseParen => ")".to_string(),
-            TokenKind::Comma => ",".to_string(),
-            TokenKind::SemiColon => ";".to_string(),
-            TokenKind::Break => "break".to_string(),
-        }
-    }
-
-    /// Returns false if the token, when lexed, could possibly be a part of a larger token and true
-    /// otherwise.
-    fn is_greedy(&self) -> bool {
-        match self {
-            TokenKind::Plus | TokenKind::Minus => true,
-            _ => false,
-        }
-    }
-
-    /// Returns the number of characters in the token.
-    fn len(&self) -> usize {
-        self.to_string().len()
-    }
-
-    /// Finds the first valid TokenKind in the slice and the index in the slice at which the token
-    /// ends. If the slice does not begin with a valid token, None will be returned.
-    fn first_from(segment: &str) -> Option<(TokenKind, usize)> {
-        let mut result = None;
-        for token_end in 1..=segment.char_indices().count() {
-            if let Some(kind) = TokenKind::from(&segment[..token_end]) {
-                // The current subsegment is a valid token.
-                // If the current token is greedy, we should return it immediately.
-                if kind.is_greedy() {
-                    return Some((kind, token_end));
-                }
-                result = Some((kind, token_end));
-            }
-        }
-
-        result
-    }
-
-    /// Attempts to lex the given slice into a TokenKind. Returns None if the slice is not a valid
-    /// token.
-    fn from(segment: &str) -> Option<TokenKind> {
-        if let Some(v) = TokenKind::lex_basic(segment, "+", TokenKind::Plus) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, "-", TokenKind::Minus) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, "=", TokenKind::Equal) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, "let", TokenKind::Let) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, "int", TokenKind::Int) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, "==", TokenKind::Equals) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, ">", TokenKind::GreaterThan) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, "<", TokenKind::LessThan) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, ">=", TokenKind::GreaterThanOrEqual) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, "<=", TokenKind::LessThanOrEqual) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, "if", TokenKind::If) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, "else", TokenKind::Else) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, "string", TokenKind::String) {
-            return Some(v);
-        }
-
-        let re_else_if = Regex::new(r#"^else\s*if$"#).unwrap();
-        if let Some(v) = TokenKind::lex_regex(segment, re_else_if, TokenKind::ElseIf) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, "{", TokenKind::BeginClosure) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, "}", TokenKind::EndClosure) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, "(", TokenKind::OpenParen) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, ")", TokenKind::CloseParen) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, ",", TokenKind::Comma) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, ";", TokenKind::SemiColon) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, "fn", TokenKind::Function) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, "loop", TokenKind::Loop) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_basic(segment, "break", TokenKind::Break) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_int_literal(segment) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_string_literal(segment) {
-            return Some(v);
-        }
-
-        if let Some(v) = TokenKind::lex_identifier(segment) {
-            return Some(v);
-        }
-
-        None
-    }
-
-    fn lex_basic(segment: &str, target: &str, token: TokenKind) -> Option<TokenKind> {
-        if segment.trim() == target {
-            return Some(token);
-        }
-        None
-    }
-
-    fn lex_regex(segment: &str, re: Regex, token: TokenKind) -> Option<TokenKind> {
-        match re.is_match(segment.trim()) {
-            true => Some(token),
-            false => None,
-        }
-    }
-
-    fn lex_int_literal(segment: &str) -> Option<TokenKind> {
-        match segment.trim().parse::<i64>() {
-            Ok(i) => Some(TokenKind::IntLiteral(i)),
-            Err(_) => None,
-        }
-    }
-
-    fn lex_identifier(segment: &str) -> Option<TokenKind> {
-        lazy_static! {
-            static ref RE_IDENTIFIER: Regex = Regex::new(r"^[a-zA-Z_]+[a-zA-Z0-9_]*$").unwrap();
-        }
-        match RE_IDENTIFIER.is_match(segment.trim()) {
-            true => Some(TokenKind::Identifier(String::from(segment.trim()))),
-            false => None,
-        }
-    }
-
-    fn lex_string_literal(segment: &str) -> Option<TokenKind> {
-        lazy_static! {
-            static ref RE_STRING_LITERAL: Regex = Regex::new(r#"^"(?:[^"\\]|\\.)*"$"#).unwrap();
-        }
-        match RE_STRING_LITERAL.is_match(segment.trim()) {
-            true => {
-                // Trim leading and trailing whitespace.
-                let formatted = segment.trim();
-
-                // Removing opening and losing quotes
-                let formatted = &formatted[1..formatted.len() - 1];
-
-                // Change escaped quotes to just quotes and
-                let formatted = &formatted.replace(r#"\""#, r#"""#).replace(r#"\\"#, r#"\"#);
-
-                Some(TokenKind::StringLiteral(String::from(formatted)))
-            }
-            false => None,
-        }
     }
 }
 
@@ -500,18 +160,18 @@ mod tests {
     }
 
     #[test]
-    fn lex_plus() {
+    fn lex_add() {
         let result = TokenKind::from(" + ");
-        assert_eq!(result, Some(TokenKind::Plus));
+        assert_eq!(result, Some(TokenKind::Add));
 
         let result = TokenKind::from(" aos83;2/ ");
         assert_eq!(result, None);
     }
 
     #[test]
-    fn lex_minus() {
+    fn lex_subtract() {
         let result = TokenKind::from(" - ");
-        assert_eq!(result, Some(TokenKind::Minus));
+        assert_eq!(result, Some(TokenKind::Subtract));
 
         let result = TokenKind::from(" ao9u5424lm/ ");
         assert_eq!(result, None);
@@ -606,10 +266,10 @@ mod tests {
         assert_eq!(result, Some((TokenKind::Equal, 3)),);
 
         let result = TokenKind::first_from("  +++++ ");
-        assert_eq!(result, Some((TokenKind::Plus, 3)),);
+        assert_eq!(result, Some((TokenKind::Add, 3)),);
 
         let result = TokenKind::first_from("  -3480 ");
-        assert_eq!(result, Some((TokenKind::Minus, 3)),);
+        assert_eq!(result, Some((TokenKind::Subtract, 3)),);
 
         let result = TokenKind::first_from(r#"  "some \"BIG\" string" "#);
         assert_eq!(

@@ -1,4 +1,5 @@
-use crate::lexer::{Token, TokenKind};
+use crate::lexer::Token;
+use crate::token_kind::TokenKind;
 use crate::util;
 use std::collections::{HashSet, VecDeque};
 use std::fmt;
@@ -191,7 +192,7 @@ pub enum ASTNode {}
 
 impl ASTNode {
     // TODO
-    fn parse_expression(_: &mut VecDeque<Token>) -> ParseResult<Expression> {
+    fn parse_expression(tokens: &mut VecDeque<Token>) -> ParseResult<Expression> {
         Ok(Expression {})
     }
 

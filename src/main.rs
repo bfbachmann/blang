@@ -1,5 +1,6 @@
 mod lexer;
 mod parser;
+mod token_kind;
 mod util;
 
 use crate::parser::ASTNode;
