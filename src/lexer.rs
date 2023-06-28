@@ -8,6 +8,7 @@ use std::result::Result;
 
 type LexResult<T> = Result<T, LexError>;
 
+/// Represents any fatal error that occurs during lexing.
 #[derive(Debug, PartialEq)]
 pub struct LexError {
     message: String,
@@ -37,6 +38,7 @@ impl fmt::Display for LexError {
     }
 }
 
+/// Represents the position (line and column) within a file.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Position {
     line: usize,

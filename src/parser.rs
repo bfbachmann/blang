@@ -6,6 +6,7 @@ use std::fmt;
 
 type ParseResult<T> = Result<T, ParseError>;
 
+/// Represents any fatal error that occurs during parsing.
 #[derive(Debug)]
 pub struct ParseError {
     message: String,
@@ -30,6 +31,7 @@ impl ParseError {
     }
 }
 
+/// Represents any valid type.
 #[derive(Debug, PartialEq)]
 enum Type {
     String,
@@ -38,10 +40,7 @@ enum Type {
 }
 
 impl Type {
-    /// Parses types. Valid types are
-    ///  - int
-    ///  - string
-    ///  - function
+    /// Parses a type.
     fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         match tokens.pop_front() {
             Some(Token {
@@ -76,6 +75,7 @@ impl Type {
     }
 }
 
+/// Represents a function argument declaration.
 #[derive(Debug, PartialEq)]
 struct Argument {
     name: String,
@@ -108,6 +108,8 @@ impl Argument {
     }
 }
 
+/// Represents the name, arguments, and return type of a function. Anonymous functions have empty
+/// names.
 #[derive(Debug)]
 struct FunctionSignature {
     name: String,
@@ -219,6 +221,7 @@ impl FunctionSignature {
     }
 }
 
+/// Represents a binary operator.
 #[derive(Debug, PartialEq)]
 pub enum BinaryOp {
     Add,
@@ -228,12 +231,27 @@ pub enum BinaryOp {
     Modulo,
 }
 
+/// Represents basic and composite expressions. A basic expression can be any of the following:
+///  - an identifier representing a variable value
+///  - a literal value
+///  - a function call
+/// whereas a composite expression can be any token sequence of the form
+///
+///     <basic_expr> <binary_op> <comp_expr>
+///
+/// where
+///  - `basic_expr` is a basic expression
+///  - `binary_op` is a binary operator
+///  - `comp_expr` is a composite expression
 #[derive(Debug, PartialEq)]
 pub enum Expression {
-    FunctionCall(FunctionCall),
+    // Basic expressions.
     VariableValue(String),
     IntLiteral(i64),
     StringLiteral(String),
+    FunctionCall(FunctionCall),
+
+    // Composite expressions.
     BinaryOp(Box<Expression>, BinaryOp, Box<Expression>),
 }
 
@@ -369,6 +387,7 @@ impl Expression {
     }
 }
 
+/// Represents the calling of a function.
 #[derive(Debug)]
 pub struct FunctionCall {
     fn_name: String,
@@ -434,6 +453,7 @@ impl FunctionCall {
     }
 }
 
+/// Represents the assignment of some value (i.e. an expression) to a variable.
 #[derive(Debug, PartialEq)]
 pub struct VariableAssignment {
     name: String,
@@ -469,6 +489,8 @@ impl VariableAssignment {
     }
 }
 
+/// Represents a variable declaration. Each variable declaration must have a valid type, a name,
+/// and some value as the result of an expression.
 #[derive(Debug, PartialEq)]
 pub struct VariableDeclaration {
     typ: Type,
@@ -504,6 +526,7 @@ impl VariableDeclaration {
     }
 }
 
+/// Represents a statement.
 #[derive(Debug, PartialEq)]
 pub enum Statement {
     VariableDeclaration(VariableDeclaration),
@@ -622,6 +645,7 @@ impl Statement {
     }
 }
 
+/// Represents a closure, which is just a series of statements with their own scope.
 #[derive(Debug)]
 pub struct Closure {
     statements: Vec<Statement>,
@@ -689,6 +713,7 @@ impl Closure {
     }
 }
 
+/// Represents a function declaration.
 #[derive(Debug, PartialEq)]
 pub struct Function {
     signature: FunctionSignature,
@@ -813,6 +838,7 @@ impl Function {
     }
 }
 
+/// Represents a complete program.
 #[derive(Debug)]
 pub struct Program {
     statements: Vec<Statement>,
