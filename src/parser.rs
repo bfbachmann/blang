@@ -192,9 +192,30 @@ impl Function {
     }
 }
 
-pub enum AST {}
+#[derive(Debug)]
+pub struct Program {
+    statements: Vec<Statement>,
+}
 
-impl AST {
+impl Program {
+    /// Attempts to parse a program from the deque of tokens. Expects token sequences of the form
+    ///
+    ///     <statement>; ...
+    ///
+    /// where
+    ///  - `statement` is a valid statement (see parse_statement)
+    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+        let mut statements = vec![];
+        while !tokens.is_empty() {
+            match Program::parse_statement(tokens) {
+                Ok(statement) => statements.push(statement),
+                Err(err) => return Err(err),
+            };
+        }
+
+        Ok(Program { statements })
+    }
+
     /// Parses a basic expression. A basic expression can be any of the following:
     ///  - an identifier representing a variable value
     ///  - a literal value
@@ -218,7 +239,7 @@ impl AST {
                         end: _,
                     }) => {
                         tokens.push_front(token);
-                        let call = AST::parse_function_call(tokens)?;
+                        let call = Program::parse_function_call(tokens)?;
                         Ok(Expression::FunctionCall(call))
                     }
 
@@ -288,7 +309,7 @@ impl AST {
         terminators: HashSet<TokenKind>,
     ) -> ParseResult<(Expression, TokenKind)> {
         // The first tokens should represent a basic expression.
-        let left_expr = AST::parse_basic_expr(tokens)?;
+        let left_expr = Program::parse_basic_expr(tokens)?;
 
         // The next token should either be a binary operator or a terminator.
         match tokens.pop_front() {
@@ -315,7 +336,7 @@ impl AST {
                 };
 
                 // What remains of the expression (the right side) can be parsed recursively.
-                let (right_expr, terminator) = AST::parse_expression(tokens, terminators)?;
+                let (right_expr, terminator) = Program::parse_expression(tokens, terminators)?;
                 Ok((
                     Expression::BinaryOp(Box::new(left_expr), bin_op, Box::new(right_expr)),
                     terminator,
@@ -334,10 +355,10 @@ impl AST {
     ///  - `arg` is some expression that evaluates to the argument value
     fn parse_function_call(tokens: &mut VecDeque<Token>) -> ParseResult<FunctionCall> {
         // The first token should be the function name.
-        let fn_name = AST::parse_identifier(tokens)?;
+        let fn_name = Program::parse_identifier(tokens)?;
 
         // The next token should be "(".
-        AST::parse_expecting(tokens, HashSet::from([TokenKind::OpenParen]))?;
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::OpenParen]))?;
 
         // The remaining tokens should be expressions representing argument values separated by ","
         // and ending in ")".
@@ -358,7 +379,7 @@ impl AST {
             }
 
             // Try parse the next argument as an expression.
-            let (expr, term) = AST::parse_expression(
+            let (expr, term) = Program::parse_expression(
                 tokens,
                 HashSet::from([TokenKind::Comma, TokenKind::CloseParen]),
             )?;
@@ -378,13 +399,13 @@ impl AST {
     ///  - `expr` is an expression representing the value assigned to the variable
     fn parse_variable_assignment(tokens: &mut VecDeque<Token>) -> ParseResult<VariableAssignment> {
         // The next token should be an identifier representing the variable name.
-        let name = AST::parse_identifier(tokens)?;
+        let name = Program::parse_identifier(tokens)?;
 
         // The next token should be an assignment "=".
-        AST::parse_expecting(tokens, HashSet::from([TokenKind::Equal]))?;
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::Equal]))?;
 
         // The next tokens should be some expression ending in ";".
-        let (expr, _) = AST::parse_expression(tokens, HashSet::from([TokenKind::SemiColon]))?;
+        let (expr, _) = Program::parse_expression(tokens, HashSet::from([TokenKind::SemiColon]))?;
 
         Ok(VariableAssignment::new(name.as_str(), expr))
     }
@@ -401,10 +422,10 @@ impl AST {
         tokens: &mut VecDeque<Token>,
     ) -> ParseResult<VariableDeclaration> {
         // The first token(s) should be the variable type.
-        let var_type = AST::parse_type(tokens)?;
+        let var_type = Program::parse_type(tokens)?;
 
         // The next tokens should take the form of a variable assignment.
-        let assign = AST::parse_variable_assignment(tokens)?;
+        let assign = Program::parse_variable_assignment(tokens)?;
 
         Ok(VariableDeclaration::new(
             var_type,
@@ -447,7 +468,7 @@ impl AST {
                 },
                 _,
             ) => {
-                let var_decl = AST::parse_variable_declaration(tokens)?;
+                let var_decl = Program::parse_variable_declaration(tokens)?;
                 Ok(Statement::VariableDeclaration(var_decl))
             }
 
@@ -464,7 +485,7 @@ impl AST {
                     end: _,
                 },
             ) => {
-                let assign = AST::parse_variable_assignment(tokens)?;
+                let assign = Program::parse_variable_assignment(tokens)?;
                 Ok(Statement::VariableAssignment(assign))
             }
 
@@ -477,7 +498,7 @@ impl AST {
                 },
                 _,
             ) => {
-                let fn_decl = AST::parse_function_declaration(tokens)?;
+                let fn_decl = Program::parse_function_declaration(tokens)?;
                 Ok(Statement::FunctionDeclaration(fn_decl))
             }
 
@@ -490,7 +511,7 @@ impl AST {
                 },
                 _,
             ) => {
-                let closure = AST::parse_closure(tokens)?;
+                let closure = Program::parse_closure(tokens)?;
                 Ok(Statement::Closure(closure))
             }
 
@@ -507,14 +528,14 @@ impl AST {
                     end: _,
                 },
             ) => {
-                let call = AST::parse_function_call(tokens)?;
+                let call = Program::parse_function_call(tokens)?;
                 Ok(Statement::FunctionCall(call))
             }
 
             // If the tokens are anything else, we'll try parse as an expression.
             (_, _) => {
                 let (expr, _) =
-                    AST::parse_expression(tokens, HashSet::from([TokenKind::SemiColon]))?;
+                    Program::parse_expression(tokens, HashSet::from([TokenKind::SemiColon]))?;
                 Ok(Statement::Expression(expr))
             }
         }
@@ -522,13 +543,13 @@ impl AST {
 
     /// Parses closures. Expects token sequences of the form
     ///
-    ///      { <statement> ... }
+    ///      { <statement>; ... }
     ///
     /// where
     /// - `statement` is any valid statement (see parse_statement)
     fn parse_closure(tokens: &mut VecDeque<Token>) -> ParseResult<Closure> {
         // The first token should be "{".
-        AST::parse_expecting(tokens, HashSet::from([TokenKind::BeginClosure]))?;
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::BeginClosure]))?;
 
         // The following nodes should be statements separated by ";".
         let mut statements = vec![];
@@ -557,7 +578,7 @@ impl AST {
                 // If the next token is anything else, we expect it to be the beginning of a new
                 // statement.
                 _ => {
-                    let statement = AST::parse_statement(tokens)?;
+                    let statement = Program::parse_statement(tokens)?;
                     statements.push(statement);
                 }
             };
@@ -581,7 +602,7 @@ impl AST {
     ///  - `return_type` is the type of the optional return value
     fn parse_args_and_return(tokens: &mut VecDeque<Token>) -> ParseResult<FunctionSignature> {
         // The next tokens should represent function arguments.
-        let args = AST::parse_argument_declarations(tokens)?;
+        let args = Program::parse_argument_declarations(tokens)?;
 
         // The next token should be ":" if there is a return type. Otherwise, there is no return
         // type and we're done.
@@ -594,7 +615,7 @@ impl AST {
             }) => {
                 // Remove the ":" and parse the return type.
                 tokens.pop_front();
-                return_type = Some(AST::parse_type(tokens)?);
+                return_type = Some(Program::parse_type(tokens)?);
             }
             _ => {}
         }
@@ -615,10 +636,10 @@ impl AST {
         tokens: &mut VecDeque<Token>,
     ) -> ParseResult<FunctionSignature> {
         // The first token should be "fn".
-        AST::parse_expecting(tokens, HashSet::from([TokenKind::Function]))?;
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::Function]))?;
 
         // The next tokens should represent function arguments followed by the return type.
-        let fn_sig = AST::parse_args_and_return(tokens)?;
+        let fn_sig = Program::parse_args_and_return(tokens)?;
         Ok(fn_sig)
     }
 
@@ -634,13 +655,13 @@ impl AST {
     ///  - `return_type` is the type of the optional return type
     fn parse_function_signature(tokens: &mut VecDeque<Token>) -> ParseResult<FunctionSignature> {
         // The first token should be "fn".
-        AST::parse_expecting(tokens, HashSet::from([TokenKind::Function]))?;
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::Function]))?;
 
         // The second token should be an identifier that represents the function name.
-        let fn_name = AST::parse_identifier(tokens)?;
+        let fn_name = Program::parse_identifier(tokens)?;
 
         // The next tokens should represent function arguments and optional return type.
-        let fn_sig = AST::parse_args_and_return(tokens)?;
+        let fn_sig = Program::parse_args_and_return(tokens)?;
 
         Ok(FunctionSignature::new(
             fn_name.as_str(),
@@ -662,10 +683,10 @@ impl AST {
     ///  - `body` is the body of the function
     fn parse_function_declaration(tokens: &mut VecDeque<Token>) -> ParseResult<Function> {
         // The first set of tokens should be the function signature.
-        let sig = AST::parse_function_signature(tokens)?;
+        let sig = Program::parse_function_signature(tokens)?;
 
         // The remaining tokens should be the function body.
-        let body = AST::parse_closure(tokens)?;
+        let body = Program::parse_closure(tokens)?;
 
         // Now that we have the function name and args, create the node.
         Ok(Function::new(sig, body))
@@ -684,10 +705,10 @@ impl AST {
     ///  - `body` is the body of the function
     fn parse_anon_function(tokens: &mut VecDeque<Token>) -> ParseResult<Function> {
         // The first set of tokens should be the function signature.
-        let sig = AST::parse_anon_function_signature(tokens)?;
+        let sig = Program::parse_anon_function_signature(tokens)?;
 
         // The remaining tokens should be the function body.
-        let body = AST::parse_closure(tokens)?;
+        let body = Program::parse_closure(tokens)?;
 
         // Now that we have the function name and args, create the node.
         Ok(Function::new(sig, body))
@@ -702,7 +723,7 @@ impl AST {
     ///  - `arg_name` is an identifier representing the argument name
     fn parse_argument_declarations(tokens: &mut VecDeque<Token>) -> ParseResult<Vec<Argument>> {
         // The first token should be the opening parenthesis.
-        AST::parse_expecting(tokens, HashSet::from([TokenKind::OpenParen]))?;
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::OpenParen]))?;
 
         // The next token(s) should be arguments or a closing parenthesis.
         let mut args = vec![];
@@ -725,7 +746,7 @@ impl AST {
                 }) => {
                     // The next few tokens represent an argument.
                     tokens.push_front(token.unwrap());
-                    let arg = AST::parse_argument_declaration(tokens)?;
+                    let arg = Program::parse_argument_declaration(tokens)?;
                     args.push(arg);
                 }
                 None => {
@@ -747,7 +768,7 @@ impl AST {
             };
 
             // After the argument, the next token should be "," or ")".
-            let kind = AST::parse_expecting(
+            let kind = Program::parse_expecting(
                 tokens,
                 HashSet::from([TokenKind::Comma, TokenKind::CloseParen]),
             )?;
@@ -795,10 +816,10 @@ impl AST {
     ///  - `arg_name` is an identifier representing the argument name
     fn parse_argument_declaration(tokens: &mut VecDeque<Token>) -> ParseResult<Argument> {
         // The first token should be the argument type.
-        let arg_type = AST::parse_type(tokens)?;
+        let arg_type = Program::parse_type(tokens)?;
 
         // The second token should be the argument name.
-        let name = AST::parse_identifier(tokens)?;
+        let name = Program::parse_identifier(tokens)?;
 
         Ok(Argument::new(name.as_str(), arg_type))
     }
@@ -824,7 +845,7 @@ impl AST {
                 },
             ) => {
                 tokens.push_front(token);
-                let sig = AST::parse_anon_function_signature(tokens)?;
+                let sig = Program::parse_anon_function_signature(tokens)?;
                 Ok(Type::Function(Box::new(sig)))
             }
             None => return Err(ParseError::new("Expected type", None)),
@@ -860,14 +881,14 @@ impl AST {
 mod tests {
     use crate::lexer::Token;
     use crate::parser::{
-        Argument, Closure, Expression, Function, FunctionCall, FunctionSignature, Statement, Type,
-        VariableDeclaration, AST,
+        Argument, Closure, Expression, Function, FunctionCall, FunctionSignature, Program,
+        Statement, Type, VariableDeclaration,
     };
 
     #[test]
     fn parse_identifier() {
         let mut tokens = Token::tokenize_line("something", 0).expect("should not error");
-        let result = AST::parse_identifier(&mut tokens).expect("should not error");
+        let result = Program::parse_identifier(&mut tokens).expect("should not error");
         assert_eq!(result, "something");
     }
 
@@ -878,7 +899,7 @@ mod tests {
             0,
         )
         .expect("should not error");
-        let result = AST::parse_function_declaration(&mut tokens).expect("should not error");
+        let result = Program::parse_function_declaration(&mut tokens).expect("should not error");
         assert_eq!(
             result,
             Function::new(
@@ -906,7 +927,7 @@ mod tests {
             0,
         )
         .expect("should not error");
-        let result = AST::parse_function_declaration(&mut tokens).expect("should not error");
+        let result = Program::parse_function_declaration(&mut tokens).expect("should not error");
         assert_eq!(
             result,
             Function::new(
@@ -939,7 +960,7 @@ mod tests {
     fn parse_function_call() {
         let mut tokens =
             Token::tokenize_line(r#"do_thing("one", "two")"#, 0).expect("should not error");
-        let result = AST::parse_function_call(&mut tokens).expect("should not error");
+        let result = Program::parse_function_call(&mut tokens).expect("should not error");
         assert_eq!(
             result,
             FunctionCall::new(

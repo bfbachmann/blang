@@ -3,7 +3,7 @@ mod parser;
 mod token_kind;
 mod util;
 
-use crate::parser::AST;
+use crate::parser::Program;
 use clap::{arg, Command};
 use lexer::Token;
 use log::{error, info, set_max_level, Level};
@@ -58,15 +58,11 @@ fn compile(file_path: &str) {
         Err(e) => fatal!("{}", e),
     };
 
-    // Parse the tokens.
-    while !tokens.is_empty() {
-        match AST::parse_statement(&mut tokens) {
-            Ok(statement) => {
-                dbg!(statement);
-            }
-            Err(e) => error!("{}", e),
-        }
-    }
+    // Parse the program.
+    match Program::from(&mut tokens) {
+        Ok(prog) => dbg!(prog),
+        Err(e) => fatal!("{}", e),
+    };
 }
 
 /// Starts a REPL.
@@ -77,7 +73,7 @@ fn repl() {
         match collect_tokens() {
             Ok(tokens) => {
                 let mut tokens = tokens;
-                match AST::parse_statement(&mut tokens) {
+                match Program::parse_statement(&mut tokens) {
                     Ok(statement) => {
                         dbg!(statement);
                     }
