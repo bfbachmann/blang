@@ -291,12 +291,12 @@ impl Program {
         }
     }
 
-    /// Parses a basic or compound expression from the given tokens ending with any of the given
+    /// Parses a basic or composite expression from the given tokens ending with any of the given
     /// terminator tokens. A basic expression can be any of the following:
     ///  - an identifier representing a variable value
     ///  - a literal value
     ///  - a function call
-    /// whereas a compound expression can be any token sequence of the form
+    /// whereas a composite expression can be any token sequence of the form
     ///
     ///     <basic_expr> <binary_op> <comp_expr>
     ///
