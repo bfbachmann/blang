@@ -3,7 +3,7 @@ mod parser;
 mod token_kind;
 mod util;
 
-use crate::parser::ASTNode;
+use crate::parser::AST;
 use clap::{arg, Command};
 use lexer::Token;
 use log::{error, info, set_max_level, Level};
@@ -60,7 +60,7 @@ fn compile(file_path: &str) {
 
     // Parse the tokens.
     while !tokens.is_empty() {
-        match ASTNode::parse_statement(&mut tokens) {
+        match AST::parse_statement(&mut tokens) {
             Ok(statement) => {
                 dbg!(statement);
             }
@@ -77,7 +77,7 @@ fn repl() {
         match collect_tokens() {
             Ok(tokens) => {
                 let mut tokens = tokens;
-                match ASTNode::parse_statement(&mut tokens) {
+                match AST::parse_statement(&mut tokens) {
                     Ok(statement) => {
                         dbg!(statement);
                     }
