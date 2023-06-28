@@ -163,7 +163,7 @@ pub enum Statement {
 }
 
 #[derive(Debug)]
-struct Closure {
+pub struct Closure {
     statements: Vec<Statement>,
     result: Option<Expression>,
 }

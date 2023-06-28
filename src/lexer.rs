@@ -268,7 +268,7 @@ mod tests {
             )),
         );
 
-        let result = TokenKind::first_from(" :O#$J@#?@ ");
+        let result = TokenKind::first_from(" #$J@#?@ ");
         assert_eq!(result, None);
     }
 
