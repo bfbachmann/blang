@@ -71,7 +71,7 @@ fn repl() {
     info!("Starting REPL.");
     info!("Use ^C to exit. Enter two successive newlines to commit a new statement.");
     loop {
-        match collect_tokens() {
+        match repl_collect_tokens() {
             Ok(tokens) => {
                 let mut tokens = tokens;
                 match Program::parse_statement(&mut tokens) {
@@ -88,7 +88,7 @@ fn repl() {
 
 /// Collects tokens from stdin until the user is done with input (i.e. until they've hit enter twice
 /// in a row).
-fn collect_tokens() -> Result<VecDeque<Token>> {
+fn repl_collect_tokens() -> Result<VecDeque<Token>> {
     let mut tokens = VecDeque::new();
     let mut line_num = 0;
 
