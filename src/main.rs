@@ -65,7 +65,8 @@ fn compile(file_path: &str) {
     };
 }
 
-/// Starts a REPL.
+/// Starts a REPL. The REPL will prompt for input and try to interpret it as a statement, then
+/// print the result of the statement.
 fn repl() {
     info!("Starting REPL.");
     info!("Use ^C to exit. Enter two successive newlines to commit a new statement.");

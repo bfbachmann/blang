@@ -149,15 +149,6 @@ mod tests {
     use std::collections::VecDeque;
 
     #[test]
-    fn lex_let() {
-        let result = TokenKind::from(" let ");
-        assert_eq!(result, Some(TokenKind::Let));
-
-        let result = TokenKind::from(" ??a2 ");
-        assert_eq!(result, None);
-    }
-
-    #[test]
     fn lex_add() {
         let result = TokenKind::from(" + ");
         assert_eq!(result, Some(TokenKind::Add));
@@ -236,17 +227,11 @@ mod tests {
 
     #[test]
     fn lex_first() {
-        let result = TokenKind::first_from(" let thing  =1  ");
-        assert_eq!(result, Some((TokenKind::Let, 5)),);
-
         let result = TokenKind::first_from("letter ");
         assert_eq!(
             result,
             Some((TokenKind::Identifier(String::from("letter")), 7)),
         );
-
-        let result = TokenKind::first_from("let thing 234 ");
-        assert_eq!(result, Some((TokenKind::Let, 4)));
 
         let result = TokenKind::first_from("thing 234 ");
         assert_eq!(
@@ -284,19 +269,18 @@ mod tests {
 
     #[test]
     fn tokenize_line() {
-        let result = Token::tokenize_line(r#"let thing = 234 "onetwo" "three"four"" "\\\\\\""#, 0);
+        let result = Token::tokenize_line(r#"thing = 234 "onetwo" "three"four"" "\\\\\\""#, 0);
         assert_eq!(
             result,
             Ok(VecDeque::from(vec![
-                Token::new(TokenKind::Let, 0, 0),
-                Token::new(TokenKind::Identifier(String::from("thing")), 0, 4),
-                Token::new(TokenKind::Equal, 0, 10),
-                Token::new(TokenKind::IntLiteral(234), 0, 12),
-                Token::new(TokenKind::StringLiteral(String::from("onetwo")), 0, 16),
-                Token::new(TokenKind::StringLiteral(String::from("three")), 0, 25),
-                Token::new(TokenKind::Identifier(String::from("four")), 0, 32),
-                Token::new(TokenKind::StringLiteral(String::from("")), 0, 36),
-                Token::new(TokenKind::StringLiteral(String::from(r#"\\\"#)), 0, 39),
+                Token::new(TokenKind::Identifier(String::from("thing")), 0, 0),
+                Token::new(TokenKind::Equal, 0, 6),
+                Token::new(TokenKind::IntLiteral(234), 0, 8),
+                Token::new(TokenKind::StringLiteral(String::from("onetwo")), 0, 12),
+                Token::new(TokenKind::StringLiteral(String::from("three")), 0, 21),
+                Token::new(TokenKind::Identifier(String::from("four")), 0, 28),
+                Token::new(TokenKind::StringLiteral(String::from("")), 0, 32),
+                Token::new(TokenKind::StringLiteral(String::from(r#"\\\"#)), 0, 35),
             ])),
         );
 

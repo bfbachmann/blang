@@ -30,7 +30,6 @@ pub enum TokenKind {
     Function,
 
     // Keywords and control flow
-    Let,
     If,
     Else,
     ElseIf,
@@ -79,7 +78,6 @@ impl TokenKind {
             TokenKind::String => "string".to_string(),
             TokenKind::StringLiteral(v) => v.to_string(),
             TokenKind::Function => "fn".to_string(),
-            TokenKind::Let => "let".to_string(),
             TokenKind::If => "if".to_string(),
             TokenKind::Else => "else".to_string(),
             TokenKind::ElseIf => "else if".to_string(),
@@ -139,7 +137,6 @@ impl TokenKind {
             TokenKind::Divide,
             TokenKind::Modulo,
             TokenKind::Equal,
-            TokenKind::Let,
             TokenKind::Int,
             TokenKind::Equals,
             TokenKind::GreaterThan,
