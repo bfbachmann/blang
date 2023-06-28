@@ -94,14 +94,21 @@ impl FunctionSignature {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Expression {
-    typ: Type,
+pub enum BinaryOp {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Modulo,
 }
 
-impl Expression {
-    fn new(typ: Type) -> Self {
-        Expression { typ }
-    }
+#[derive(Debug, PartialEq)]
+pub enum Expression {
+    FunctionCall(FunctionCall),
+    VariableValue(String),
+    IntLiteral(i64),
+    StringLiteral(String),
+    BinaryOp(Box<Expression>, BinaryOp, Box<Expression>),
 }
 
 #[derive(Debug)]
@@ -160,6 +167,7 @@ pub enum Statement {
     FunctionDeclaration(Function),
     Closure(Closure),
     Expression(Expression),
+    FunctionCall(FunctionCall),
 }
 
 #[derive(Debug)]
@@ -195,30 +203,131 @@ impl Function {
 pub enum ASTNode {}
 
 impl ASTNode {
-    // TODO
+    /// Parses a basic expression. A basic expression can be any of the following:
+    ///  - an identifier representing a variable value
+    ///  - a literal value
+    ///  - a function call
+    fn parse_basic_expr(tokens: &mut VecDeque<Token>) -> ParseResult<Expression> {
+        match tokens.pop_front() {
+            // If the first token is an identifier, the expression can either be a function call
+            // or a variable value.
+            Some(
+                token @ Token {
+                    kind: TokenKind::Identifier(_),
+                    start: _,
+                    end: _,
+                },
+            ) => {
+                match tokens.front() {
+                    // If the next token is "(", it's a function call.
+                    Some(&Token {
+                        kind: TokenKind::OpenParen,
+                        start: _,
+                        end: _,
+                    }) => {
+                        tokens.push_front(token);
+                        let call = ASTNode::parse_function_call(tokens)?;
+                        Ok(Expression::FunctionCall(call))
+                    }
+
+                    // If the next token is anything else, we'll assume it's a variable value.
+                    _ => {
+                        if let Token {
+                            kind: TokenKind::Identifier(var_name),
+                            start: _,
+                            end: _,
+                        } = token
+                        {
+                            Ok(Expression::VariableValue(var_name))
+                        } else {
+                            // This should be impossible because we know the token is an identifier.
+                            Err(ParseError::new(
+                                r#"Expected identifier, but got "{}""#,
+                                Some(token),
+                            ))
+                        }
+                    }
+                }
+            }
+
+            // Check if it's an integer literal.
+            Some(Token {
+                kind: TokenKind::IntLiteral(i),
+                start: _,
+                end: _,
+            }) => Ok(Expression::IntLiteral(i)),
+
+            // Check if it's a string literal.
+            Some(Token {
+                kind: TokenKind::StringLiteral(s),
+                start: _,
+                end: _,
+            }) => Ok(Expression::StringLiteral(s)),
+
+            // If the token is anything else, error.
+            Some(token) => Err(ParseError::new(
+                r#"Invalid expression: Expected literal value, variable value, or function call, but got "{}""#,
+                Some(token),
+            )),
+
+            // If there is no token, error.
+            None => Err(ParseError::new("Unexpected end of expression", None)),
+        }
+    }
+
+    /// Parses a basic or compound expression from the given tokens ending with any of the given
+    /// terminator tokens. A basic expression can be any of the following:
+    ///  - an identifier representing a variable value
+    ///  - a literal value
+    ///  - a function call
+    /// whereas a compound expression can be any token sequence of the form
+    ///
+    ///     <basic_expr> <binary_op> <comp_expr>
+    ///
+    /// where
+    ///  - `basic_expr` is a basic expression
+    ///  - `binary_op` is a binary operator
+    ///  - `comp_expr` is a composite expression
     fn parse_expression(
         tokens: &mut VecDeque<Token>,
         terminators: HashSet<TokenKind>,
     ) -> ParseResult<(Expression, TokenKind)> {
-        // Collect up all the tokens until we hit one of the given terminator tokens.
-        // TODO: This algorithm doesn't actually work.
-        let mut expr_tokens = VecDeque::new();
-        let terminator_kind: TokenKind;
-        loop {
-            match tokens.pop_front() {
-                Some(token) => {
-                    if terminators.contains(&token.kind) {
-                        terminator_kind = token.kind;
-                        break;
-                    }
+        // The first tokens should represent a basic expression.
+        let left_expr = ASTNode::parse_basic_expr(tokens)?;
 
-                    expr_tokens.push_back(token);
+        // The next token should either be a binary operator or a terminator.
+        match tokens.pop_front() {
+            Some(token) => {
+                if terminators.contains(&token.kind) {
+                    // We've reached the end of the expression, so just return the basic expression
+                    // we have.
+                    return Ok((left_expr, token.kind));
                 }
-                None => return Err(ParseError::new("Unexpected end of expression", None)),
-            };
-        }
 
-        Ok((Expression::new(Type::String), terminator_kind))
+                // At this point we know the token must be a binary operator.
+                let bin_op = match token.kind {
+                    TokenKind::Add => BinaryOp::Add,
+                    TokenKind::Subtract => BinaryOp::Subtract,
+                    TokenKind::Multiply => BinaryOp::Multiply,
+                    TokenKind::Divide => BinaryOp::Divide,
+                    TokenKind::Modulo => BinaryOp::Modulo,
+                    _ => {
+                        return Err(ParseError::new(
+                            format!(r#"Expected binary operator, but got "{}""#, token).as_str(),
+                            Some(token),
+                        ))
+                    }
+                };
+
+                // What remains of the expression (the right side) can be parsed recursively.
+                let (right_expr, terminator) = ASTNode::parse_expression(tokens, terminators)?;
+                Ok((
+                    Expression::BinaryOp(Box::new(left_expr), bin_op, Box::new(right_expr)),
+                    terminator,
+                ))
+            }
+            None => Err(ParseError::new("Unexpected end of expression", None)),
+        }
     }
 
     /// Parses function calls. Expects token sequences of the form
@@ -305,47 +414,103 @@ impl ASTNode {
     ///  - closure (see parse_closure)
     ///  - expression (see parse_expression)
     pub fn parse_statement(tokens: &mut VecDeque<Token>) -> ParseResult<Statement> {
-        // Try use the first token to figure out what type of statement will follow.
-        match tokens.front() {
+        // Try use the first two tokens to figure out what type of statement will follow. This works
+        // because no valid statement can contain fewer than two tokens.
+        let (first, second) = (tokens.front(), tokens.get(1));
+        match (&first, &second) {
+            (None, None) => return Err(ParseError::new("Unexpected end of of statement", None)),
+            (None, Some(&ref token)) | (Some(&ref token), None) => {
+                return Err(ParseError::new(
+                    "Unexpected end of of statement",
+                    Some(token.clone()),
+                ))
+            }
+            _ => {}
+        }
+
+        match (
+            first.expect("first token should not be None"),
+            second.expect("second token should not be None"),
+        ) {
             // If the first token is a type, it must be a variable declaration.
-            Some(Token {
-                kind: TokenKind::Int | TokenKind::String,
-                start: _,
-                end: _,
-            }) => {
+            (
+                Token {
+                    kind: TokenKind::Int | TokenKind::String,
+                    start: _,
+                    end: _,
+                },
+                _,
+            ) => {
                 let var_decl = ASTNode::parse_variable_declaration(tokens)?;
                 Ok(Statement::VariableDeclaration(var_decl))
             }
 
+            // If the first two tokens are "<identifier> =", it must be a variable assignment.
+            (
+                Token {
+                    kind: TokenKind::Identifier(_),
+                    start: _,
+                    end: _,
+                },
+                Token {
+                    kind: TokenKind::Equal,
+                    start: _,
+                    end: _,
+                },
+            ) => {
+                let assign = ASTNode::parse_variable_assignment(tokens)?;
+                Ok(Statement::VariableAssignment(assign))
+            }
+
             // If the first token is "fn", it must be a function declaration.
-            Some(Token {
-                kind: TokenKind::Function,
-                start: _,
-                end: _,
-            }) => {
+            (
+                Token {
+                    kind: TokenKind::Function,
+                    start: _,
+                    end: _,
+                },
+                _,
+            ) => {
                 let fn_decl = ASTNode::parse_function_declaration(tokens)?;
                 Ok(Statement::FunctionDeclaration(fn_decl))
             }
 
             // If the first token is "{", it must be a closure.
-            Some(Token {
-                kind: TokenKind::BeginClosure,
-                start: _,
-                end: _,
-            }) => {
+            (
+                Token {
+                    kind: TokenKind::BeginClosure,
+                    start: _,
+                    end: _,
+                },
+                _,
+            ) => {
                 let closure = ASTNode::parse_closure(tokens)?;
                 Ok(Statement::Closure(closure))
             }
 
-            // If the token is anything else, we'll try parse it as an expression.
-            Some(_) => {
+            // If the first two tokens are "<identifier>(", it must be a function call.
+            (
+                Token {
+                    kind: TokenKind::Identifier(_),
+                    start: _,
+                    end: _,
+                },
+                Token {
+                    kind: TokenKind::OpenParen,
+                    start: _,
+                    end: _,
+                },
+            ) => {
+                let call = ASTNode::parse_function_call(tokens)?;
+                Ok(Statement::FunctionCall(call))
+            }
+
+            // If the tokens are anything else, we'll try parse as an expression.
+            (_, _) => {
                 let (expr, _) =
                     ASTNode::parse_expression(tokens, HashSet::from([TokenKind::SemiColon]))?;
                 Ok(Statement::Expression(expr))
             }
-
-            // If there is no token, we error.
-            None => Err(ParseError::new("Expected statement", None)),
         }
     }
 
@@ -710,7 +875,7 @@ mod tests {
                     vec![Statement::VariableDeclaration(VariableDeclaration::new(
                         Type::String,
                         "s".to_string(),
-                        Expression::new(Type::String),
+                        Expression::StringLiteral("hello world!".to_string()),
                     )),],
                     None
                 ),
@@ -761,8 +926,8 @@ mod tests {
             FunctionCall::new(
                 "do_thing",
                 vec![
-                    Value::Expression(Expression::new(Type::String)),
-                    Value::Expression(Expression::new(Type::String)),
+                    Value::Expression(Expression::StringLiteral("one".to_string())),
+                    Value::Expression(Expression::StringLiteral("two".to_string())),
                 ]
             )
         );

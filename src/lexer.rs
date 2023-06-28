@@ -37,7 +37,7 @@ impl fmt::Display for LexError {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Position {
     line: usize,
     col: usize,
@@ -61,6 +61,16 @@ pub struct Token {
     pub kind: TokenKind,
     pub start: Position,
     pub end: Position,
+}
+
+impl Clone for Token {
+    fn clone(&self) -> Self {
+        Token {
+            kind: self.kind.clone(),
+            start: self.start,
+            end: self.end,
+        }
+    }
 }
 
 impl fmt::Display for Token {

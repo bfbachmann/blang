@@ -3,7 +3,7 @@ use regex::Regex;
 use std::fmt;
 
 /// Represents any valid token in the language.
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TokenKind {
     // Binary mathematical operators
     Add,
