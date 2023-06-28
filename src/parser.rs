@@ -258,7 +258,10 @@ impl AST {
 
             // If the token is anything else, error.
             Some(token) => Err(ParseError::new(
-                r#"Invalid expression: Expected literal value, variable value, or function call, but got "{}""#,
+                format!(
+                    r#"Invalid expression: Expected literal value, variable value, or function call, but got "{}""#,
+                    &token
+                ).as_str(),
                 Some(token),
             )),
 
@@ -339,17 +342,28 @@ impl AST {
         // The remaining tokens should be expressions representing argument values separated by ","
         // and ending in ")".
         let mut args = vec![];
-        loop {
-            let (expr, terminator) = AST::parse_expression(
+        let mut terminator = TokenKind::Comma;
+        while terminator != TokenKind::CloseParen {
+            // If the next token is ")", we're done parsing arguments.
+            match tokens.front() {
+                Some(&Token {
+                    kind: TokenKind::CloseParen,
+                    start: _,
+                    end: _,
+                }) => {
+                    tokens.pop_front();
+                    break;
+                }
+                _ => {}
+            }
+
+            // Try parse the next argument as an expression.
+            let (expr, term) = AST::parse_expression(
                 tokens,
                 HashSet::from([TokenKind::Comma, TokenKind::CloseParen]),
             )?;
             args.push(expr);
-
-            match terminator {
-                TokenKind::CloseParen => break, // We've reached the end of the arguments.
-                _ => {}                         // Move on to the next argument.
-            }
+            terminator = term;
         }
 
         Ok(FunctionCall::new(fn_name.as_str(), args))
@@ -516,11 +530,12 @@ impl AST {
         // The first token should be "{".
         AST::parse_expecting(tokens, HashSet::from([TokenKind::BeginClosure]))?;
 
-        // The following nodes should be statements.
+        // The following nodes should be statements separated by ";".
         let mut statements = vec![];
         loop {
             match tokens.front() {
-                Some(Token {
+                // If the next token is "}", we've reached the end of the closure.
+                Some(&Token {
                     kind: TokenKind::EndClosure,
                     start: _,
                     end: _,
@@ -529,6 +544,18 @@ impl AST {
                     tokens.pop_front();
                     break;
                 }
+
+                // If the next token is ";", we've reached the end of the statement.
+                Some(&Token {
+                    kind: TokenKind::SemiColon,
+                    start: _,
+                    end: _,
+                }) => {
+                    tokens.pop_front();
+                }
+
+                // If the next token is anything else, we expect it to be the beginning of a new
+                // statement.
                 _ => {
                     let statement = AST::parse_statement(tokens)?;
                     statements.push(statement);
