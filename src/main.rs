@@ -39,6 +39,7 @@ fn main() {
     }
 }
 
+/// Opens the file at the given path and returns a reader for it.
 fn open_file(file_path: &str) -> Result<BufReader<File>> {
     let file = File::open(file_path)?;
     Ok(BufReader::new(file))
