@@ -323,7 +323,7 @@ impl ASTNode {
                 start: _,
                 end: _,
             }) => {
-                let fn_decl = ASTNode::parse_function(tokens)?;
+                let fn_decl = ASTNode::parse_function_declaration(tokens)?;
                 Ok(Statement::FunctionDeclaration(fn_decl))
             }
 
@@ -476,7 +476,7 @@ impl ASTNode {
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return type
     ///  - `body` is the body of the function
-    fn parse_function(tokens: &mut VecDeque<Token>) -> ParseResult<Function> {
+    fn parse_function_declaration(tokens: &mut VecDeque<Token>) -> ParseResult<Function> {
         // The first set of tokens should be the function signature.
         let sig = ASTNode::parse_function_signature(tokens)?;
 
@@ -688,13 +688,13 @@ mod tests {
     }
 
     #[test]
-    fn parse_function() {
+    fn parse_function_declaration() {
         let mut tokens = Token::tokenize_line(
             r#"fn my_fn(string arg1, int arg2): string { string s = "hello world!"; }"#,
             0,
         )
         .expect("should not error");
-        let result = ASTNode::parse_function(&mut tokens).expect("should not error");
+        let result = ASTNode::parse_function_declaration(&mut tokens).expect("should not error");
         assert_eq!(
             result,
             Function::new(
@@ -722,7 +722,7 @@ mod tests {
             0,
         )
         .expect("should not error");
-        let result = ASTNode::parse_function(&mut tokens).expect("should not error");
+        let result = ASTNode::parse_function_declaration(&mut tokens).expect("should not error");
         assert_eq!(
             result,
             Function::new(

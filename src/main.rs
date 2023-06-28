@@ -6,7 +6,7 @@ mod util;
 use crate::parser::ASTNode;
 use clap::{arg, Command};
 use lexer::Token;
-use log::{debug, error, info, set_max_level, Level};
+use log::{error, info, set_max_level, Level};
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{stdin, stdout, BufReader, Error, ErrorKind, Result, Write};
@@ -53,15 +53,20 @@ fn compile(file_path: &str) {
     };
 
     // Break the file into tokens.
-    match Token::tokenize_file(reader) {
-        Ok(tokens) => debug!("{:#?}", tokens),
+    let mut tokens = match Token::tokenize_file(reader) {
+        Ok(tokens) => tokens,
         Err(e) => fatal!("{}", e),
     };
 
     // Parse the tokens.
-    // TODO.
-
-    info!("Successfully compiled {}", file_path);
+    while !tokens.is_empty() {
+        match ASTNode::parse_statement(&mut tokens) {
+            Ok(statement) => {
+                dbg!(statement);
+            }
+            Err(e) => error!("{}", e),
+        }
+    }
 }
 
 /// Starts a REPL.
