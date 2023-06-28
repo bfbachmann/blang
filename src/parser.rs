@@ -37,6 +37,45 @@ enum Type {
     Function(Box<FunctionSignature>),
 }
 
+impl Type {
+    /// Parses types. Valid types are
+    ///  - int
+    ///  - string
+    ///  - function
+    fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+        match tokens.pop_front() {
+            Some(Token {
+                kind: TokenKind::Int,
+                start: _,
+                end: _,
+            }) => Ok(Type::Int),
+            Some(Token {
+                kind: TokenKind::String,
+                start: _,
+                end: _,
+            }) => Ok(Type::String),
+            Some(
+                token @ Token {
+                    kind: TokenKind::Function,
+                    start: _,
+                    end: _,
+                },
+            ) => {
+                tokens.push_front(token);
+                let sig = FunctionSignature::from_anon(tokens)?;
+                Ok(Type::Function(Box::new(sig)))
+            }
+            None => return Err(ParseError::new("Expected type", None)),
+            Some(other) => {
+                return Err(ParseError::new(
+                    format!(r#"Expected type, but got "{}""#, other).as_str(),
+                    Some(other),
+                ))
+            }
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 struct Argument {
     name: String,
@@ -49,6 +88,23 @@ impl Argument {
             name: name.to_string(),
             typ,
         }
+    }
+
+    /// Parses a function argument declaration. Expects token sequences of the form
+    ///
+    ///      <arg_type> <arg_name>
+    ///
+    /// where
+    ///  - `arg_type` is the type of the argument
+    ///  - `arg_name` is an identifier representing the argument name
+    fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+        // The first token should be the argument type.
+        let arg_type = Type::from(tokens)?;
+
+        // The second token should be the argument name.
+        let name = Program::parse_identifier(tokens)?;
+
+        Ok(Argument::new(name.as_str(), arg_type))
     }
 }
 
@@ -83,6 +139,84 @@ impl FunctionSignature {
             return_type,
         }
     }
+
+    /// Parses function signatures. Expects token sequences of the forms
+    ///
+    ///      fn <fn_name>(<arg_type> <arg_name>, ...): (<return_type>, ...)
+    ///      fn <fn_name>(<arg_type> <arg_name>, ...)
+    ///
+    /// where
+    ///  - `fn_name` is an identifier representing the name of the function
+    ///  - `arg_type` is the type of the argument
+    ///  - `arg_name` is an identifier representing the argument name
+    ///  - `return_type` is the type of the optional return type
+    fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+        // The first token should be "fn".
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::Function]))?;
+
+        // The second token should be an identifier that represents the function name.
+        let fn_name = Program::parse_identifier(tokens)?;
+
+        // The next tokens should represent function arguments and optional return type.
+        let fn_sig = FunctionSignature::from_args_and_return(tokens)?;
+
+        Ok(FunctionSignature::new(
+            fn_name.as_str(),
+            fn_sig.args,
+            fn_sig.return_type,
+        ))
+    }
+
+    /// Parses function arguments and return value from a function signature. Expects token
+    /// sequences of the forms
+    ///
+    ///     (<arg_type> <arg_name>, ...): <return_type>
+    ///     (<arg_type> <arg_name>, ...)
+    ///
+    /// where
+    ///  - `arg_type` is the type of the argument
+    ///  - `arg_name` is an identifier representing the argument name
+    ///  - `return_type` is the type of the optional return value
+    fn from_args_and_return(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+        // The next tokens should represent function arguments.
+        let args = Function::arg_declarations_from(tokens)?;
+
+        // The next token should be ":" if there is a return type. Otherwise, there is no return
+        // type and we're done.
+        let mut return_type = None;
+        match tokens.front() {
+            Some(Token {
+                kind: TokenKind::Colon,
+                start: _,
+                end: _,
+            }) => {
+                // Remove the ":" and parse the return type.
+                tokens.pop_front();
+                return_type = Some(Type::from(tokens)?);
+            }
+            _ => {}
+        }
+
+        Ok(FunctionSignature::new_anon(args, return_type))
+    }
+
+    /// Parses anonymous function signatures. Expects token sequences of the forms
+    ///
+    ///      fn (<arg_type> <arg_name>, ...): <return_type>
+    ///      fn (<arg_type> <arg_name>, ...)
+    ///
+    /// where
+    ///  - `arg_type` is the type of the argument
+    ///  - `arg_name` is an identifier representing the argument name
+    ///  - `return_type` is the type of the optional return type
+    fn from_anon(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+        // The first token should be "fn".
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::Function]))?;
+
+        // The next tokens should represent function arguments followed by the return type.
+        let fn_sig = FunctionSignature::from_args_and_return(tokens)?;
+        Ok(fn_sig)
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -103,124 +237,12 @@ pub enum Expression {
     BinaryOp(Box<Expression>, BinaryOp, Box<Expression>),
 }
 
-#[derive(Debug)]
-pub struct FunctionCall {
-    fn_name: String,
-    args: Vec<Expression>,
-}
-
-impl PartialEq for FunctionCall {
-    fn eq(&self, other: &Self) -> bool {
-        self.fn_name == other.fn_name && util::vectors_are_equal(&self.args, &other.args)
-    }
-}
-
-impl FunctionCall {
-    fn new(fn_name: &str, args: Vec<Expression>) -> Self {
-        FunctionCall {
-            fn_name: fn_name.to_string(),
-            args,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct VariableAssignment {
-    name: String,
-    value: Expression,
-}
-
-impl VariableAssignment {
-    fn new(name: &str, value: Expression) -> Self {
-        VariableAssignment {
-            name: name.to_string(),
-            value,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct VariableDeclaration {
-    typ: Type,
-    name: String,
-    value: Expression,
-}
-
-impl VariableDeclaration {
-    fn new(typ: Type, name: String, value: Expression) -> Self {
-        VariableDeclaration { typ, name, value }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Statement {
-    VariableDeclaration(VariableDeclaration),
-    VariableAssignment(VariableAssignment),
-    FunctionDeclaration(Function),
-    Closure(Closure),
-    Expression(Expression),
-    FunctionCall(FunctionCall),
-}
-
-#[derive(Debug)]
-pub struct Closure {
-    statements: Vec<Statement>,
-    result: Option<Expression>,
-}
-
-impl PartialEq for Closure {
-    fn eq(&self, other: &Self) -> bool {
-        util::vectors_are_equal(&self.statements, &other.statements) && self.result == other.result
-    }
-}
-
-impl Closure {
-    fn new(statements: Vec<Statement>, result: Option<Expression>) -> Self {
-        Closure { statements, result }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Function {
-    signature: FunctionSignature,
-    body: Closure,
-}
-
-impl Function {
-    fn new(signature: FunctionSignature, body: Closure) -> Self {
-        Function { signature, body }
-    }
-}
-
-#[derive(Debug)]
-pub struct Program {
-    statements: Vec<Statement>,
-}
-
-impl Program {
-    /// Attempts to parse a program from the deque of tokens. Expects token sequences of the form
-    ///
-    ///     <statement>; ...
-    ///
-    /// where
-    ///  - `statement` is a valid statement (see parse_statement)
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
-        let mut statements = vec![];
-        while !tokens.is_empty() {
-            match Program::parse_statement(tokens) {
-                Ok(statement) => statements.push(statement),
-                Err(err) => return Err(err),
-            };
-        }
-
-        Ok(Program { statements })
-    }
-
+impl Expression {
     /// Parses a basic expression. A basic expression can be any of the following:
     ///  - an identifier representing a variable value
     ///  - a literal value
     ///  - a function call
-    fn parse_basic_expr(tokens: &mut VecDeque<Token>) -> ParseResult<Expression> {
+    fn from_basic(tokens: &mut VecDeque<Token>) -> ParseResult<Expression> {
         match tokens.pop_front() {
             // If the first token is an identifier, the expression can either be a function call
             // or a variable value.
@@ -239,7 +261,7 @@ impl Program {
                         end: _,
                     }) => {
                         tokens.push_front(token);
-                        let call = Program::parse_function_call(tokens)?;
+                        let call = FunctionCall::from(tokens)?;
                         Ok(Expression::FunctionCall(call))
                     }
 
@@ -265,17 +287,17 @@ impl Program {
 
             // Check if it's an integer literal.
             Some(Token {
-                kind: TokenKind::IntLiteral(i),
-                start: _,
-                end: _,
-            }) => Ok(Expression::IntLiteral(i)),
+                     kind: TokenKind::IntLiteral(i),
+                     start: _,
+                     end: _,
+                 }) => Ok(Expression::IntLiteral(i)),
 
             // Check if it's a string literal.
             Some(Token {
-                kind: TokenKind::StringLiteral(s),
-                start: _,
-                end: _,
-            }) => Ok(Expression::StringLiteral(s)),
+                     kind: TokenKind::StringLiteral(s),
+                     start: _,
+                     end: _,
+                 }) => Ok(Expression::StringLiteral(s)),
 
             // If the token is anything else, error.
             Some(token) => Err(ParseError::new(
@@ -304,12 +326,12 @@ impl Program {
     ///  - `basic_expr` is a basic expression
     ///  - `binary_op` is a binary operator
     ///  - `comp_expr` is a composite expression
-    fn parse_expression(
+    fn from(
         tokens: &mut VecDeque<Token>,
         terminators: HashSet<TokenKind>,
     ) -> ParseResult<(Expression, TokenKind)> {
         // The first tokens should represent a basic expression.
-        let left_expr = Program::parse_basic_expr(tokens)?;
+        let left_expr = Expression::from_basic(tokens)?;
 
         // The next token should either be a binary operator or a terminator.
         match tokens.pop_front() {
@@ -336,13 +358,34 @@ impl Program {
                 };
 
                 // What remains of the expression (the right side) can be parsed recursively.
-                let (right_expr, terminator) = Program::parse_expression(tokens, terminators)?;
+                let (right_expr, terminator) = Expression::from(tokens, terminators)?;
                 Ok((
                     Expression::BinaryOp(Box::new(left_expr), bin_op, Box::new(right_expr)),
                     terminator,
                 ))
             }
             None => Err(ParseError::new("Unexpected end of expression", None)),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct FunctionCall {
+    fn_name: String,
+    args: Vec<Expression>,
+}
+
+impl PartialEq for FunctionCall {
+    fn eq(&self, other: &Self) -> bool {
+        self.fn_name == other.fn_name && util::vectors_are_equal(&self.args, &other.args)
+    }
+}
+
+impl FunctionCall {
+    fn new(fn_name: &str, args: Vec<Expression>) -> Self {
+        FunctionCall {
+            fn_name: fn_name.to_string(),
+            args,
         }
     }
 
@@ -353,7 +396,7 @@ impl Program {
     /// where
     ///  - `name` is the name of the function being called
     ///  - `arg` is some expression that evaluates to the argument value
-    fn parse_function_call(tokens: &mut VecDeque<Token>) -> ParseResult<FunctionCall> {
+    fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         // The first token should be the function name.
         let fn_name = Program::parse_identifier(tokens)?;
 
@@ -379,7 +422,7 @@ impl Program {
             }
 
             // Try parse the next argument as an expression.
-            let (expr, term) = Program::parse_expression(
+            let (expr, term) = Expression::from(
                 tokens,
                 HashSet::from([TokenKind::Comma, TokenKind::CloseParen]),
             )?;
@@ -389,6 +432,21 @@ impl Program {
 
         Ok(FunctionCall::new(fn_name.as_str(), args))
     }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct VariableAssignment {
+    name: String,
+    value: Expression,
+}
+
+impl VariableAssignment {
+    fn new(name: &str, value: Expression) -> Self {
+        VariableAssignment {
+            name: name.to_string(),
+            value,
+        }
+    }
 
     /// Parses variable assignments. Expects token sequences of the form
     ///
@@ -397,7 +455,7 @@ impl Program {
     /// where
     ///  - `name` is the variable name
     ///  - `expr` is an expression representing the value assigned to the variable
-    fn parse_variable_assignment(tokens: &mut VecDeque<Token>) -> ParseResult<VariableAssignment> {
+    fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         // The next token should be an identifier representing the variable name.
         let name = Program::parse_identifier(tokens)?;
 
@@ -405,9 +463,22 @@ impl Program {
         Program::parse_expecting(tokens, HashSet::from([TokenKind::Equal]))?;
 
         // The next tokens should be some expression ending in ";".
-        let (expr, _) = Program::parse_expression(tokens, HashSet::from([TokenKind::SemiColon]))?;
+        let (expr, _) = Expression::from(tokens, HashSet::from([TokenKind::SemiColon]))?;
 
         Ok(VariableAssignment::new(name.as_str(), expr))
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct VariableDeclaration {
+    typ: Type,
+    name: String,
+    value: Expression,
+}
+
+impl VariableDeclaration {
+    fn new(typ: Type, name: String, value: Expression) -> Self {
+        VariableDeclaration { typ, name, value }
     }
 
     /// Parses variable declarations. Expects token sequences of the form
@@ -418,14 +489,12 @@ impl Program {
     ///  - `type` is the variable type
     ///  - `name` is the variable name
     ///  - `expr` is an expression representing the value assigned to the variable
-    fn parse_variable_declaration(
-        tokens: &mut VecDeque<Token>,
-    ) -> ParseResult<VariableDeclaration> {
+    fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         // The first token(s) should be the variable type.
-        let var_type = Program::parse_type(tokens)?;
+        let var_type = Type::from(tokens)?;
 
         // The next tokens should take the form of a variable assignment.
-        let assign = Program::parse_variable_assignment(tokens)?;
+        let assign = VariableAssignment::from(tokens)?;
 
         Ok(VariableDeclaration::new(
             var_type,
@@ -433,14 +502,26 @@ impl Program {
             assign.value,
         ))
     }
+}
 
+#[derive(Debug, PartialEq)]
+pub enum Statement {
+    VariableDeclaration(VariableDeclaration),
+    VariableAssignment(VariableAssignment),
+    FunctionDeclaration(Function),
+    Closure(Closure),
+    Expression(Expression),
+    FunctionCall(FunctionCall),
+}
+
+impl Statement {
     /// Parses a statement. Statements can be any of the following:
-    ///  - variable declaration (see parse_variable_declaration)
-    ///  - variable assignment (see parse_variable_assignment)
-    ///  - function declaration (see parse_function)
-    ///  - closure (see parse_closure)
-    ///  - expression (see parse_expression)
-    pub fn parse_statement(tokens: &mut VecDeque<Token>) -> ParseResult<Statement> {
+    ///  - variable declaration (see VariableDeclaration::from)
+    ///  - variable assignment (see VariableAssignment::from)
+    ///  - function declaration (see Function::from)
+    ///  - closure (see Closure::from)
+    ///  - expression (see Expression::from)
+    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         // Try use the first two tokens to figure out what type of statement will follow. This works
         // because no valid statement can contain fewer than two tokens.
         let (first, second) = (tokens.front(), tokens.get(1));
@@ -468,7 +549,7 @@ impl Program {
                 },
                 _,
             ) => {
-                let var_decl = Program::parse_variable_declaration(tokens)?;
+                let var_decl = VariableDeclaration::from(tokens)?;
                 Ok(Statement::VariableDeclaration(var_decl))
             }
 
@@ -485,7 +566,7 @@ impl Program {
                     end: _,
                 },
             ) => {
-                let assign = Program::parse_variable_assignment(tokens)?;
+                let assign = VariableAssignment::from(tokens)?;
                 Ok(Statement::VariableAssignment(assign))
             }
 
@@ -498,7 +579,7 @@ impl Program {
                 },
                 _,
             ) => {
-                let fn_decl = Program::parse_function_declaration(tokens)?;
+                let fn_decl = Function::from(tokens)?;
                 Ok(Statement::FunctionDeclaration(fn_decl))
             }
 
@@ -511,7 +592,7 @@ impl Program {
                 },
                 _,
             ) => {
-                let closure = Program::parse_closure(tokens)?;
+                let closure = Closure::from(tokens)?;
                 Ok(Statement::Closure(closure))
             }
 
@@ -528,17 +609,34 @@ impl Program {
                     end: _,
                 },
             ) => {
-                let call = Program::parse_function_call(tokens)?;
+                let call = FunctionCall::from(tokens)?;
                 Ok(Statement::FunctionCall(call))
             }
 
             // If the tokens are anything else, we'll try parse as an expression.
             (_, _) => {
-                let (expr, _) =
-                    Program::parse_expression(tokens, HashSet::from([TokenKind::SemiColon]))?;
+                let (expr, _) = Expression::from(tokens, HashSet::from([TokenKind::SemiColon]))?;
                 Ok(Statement::Expression(expr))
             }
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct Closure {
+    statements: Vec<Statement>,
+    result: Option<Expression>,
+}
+
+impl PartialEq for Closure {
+    fn eq(&self, other: &Self) -> bool {
+        util::vectors_are_equal(&self.statements, &other.statements) && self.result == other.result
+    }
+}
+
+impl Closure {
+    fn new(statements: Vec<Statement>, result: Option<Expression>) -> Self {
+        Closure { statements, result }
     }
 
     /// Parses closures. Expects token sequences of the form
@@ -546,8 +644,8 @@ impl Program {
     ///      { <statement>; ... }
     ///
     /// where
-    /// - `statement` is any valid statement (see parse_statement)
-    fn parse_closure(tokens: &mut VecDeque<Token>) -> ParseResult<Closure> {
+    /// - `statement` is any valid statement (see Statement::from)
+    fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         // The first token should be "{".
         Program::parse_expecting(tokens, HashSet::from([TokenKind::BeginClosure]))?;
 
@@ -578,7 +676,7 @@ impl Program {
                 // If the next token is anything else, we expect it to be the beginning of a new
                 // statement.
                 _ => {
-                    let statement = Program::parse_statement(tokens)?;
+                    let statement = Statement::from(tokens)?;
                     statements.push(statement);
                 }
             };
@@ -589,85 +687,17 @@ impl Program {
 
         Ok(Closure::new(statements, None))
     }
+}
 
-    /// Parses function arguments and return value from a function signature. Expects token
-    /// sequences of the forms
-    ///
-    ///     (<arg_type> <arg_name>, ...): <return_type>
-    ///     (<arg_type> <arg_name>, ...)
-    ///
-    /// where
-    ///  - `arg_type` is the type of the argument
-    ///  - `arg_name` is an identifier representing the argument name
-    ///  - `return_type` is the type of the optional return value
-    fn parse_args_and_return(tokens: &mut VecDeque<Token>) -> ParseResult<FunctionSignature> {
-        // The next tokens should represent function arguments.
-        let args = Program::parse_argument_declarations(tokens)?;
+#[derive(Debug, PartialEq)]
+pub struct Function {
+    signature: FunctionSignature,
+    body: Closure,
+}
 
-        // The next token should be ":" if there is a return type. Otherwise, there is no return
-        // type and we're done.
-        let mut return_type = None;
-        match tokens.front() {
-            Some(Token {
-                kind: TokenKind::Colon,
-                start: _,
-                end: _,
-            }) => {
-                // Remove the ":" and parse the return type.
-                tokens.pop_front();
-                return_type = Some(Program::parse_type(tokens)?);
-            }
-            _ => {}
-        }
-
-        Ok(FunctionSignature::new_anon(args, return_type))
-    }
-
-    /// Parses anonymous function signatures. Expects token sequences of the forms
-    ///
-    ///      fn (<arg_type> <arg_name>, ...): <return_type>
-    ///      fn (<arg_type> <arg_name>, ...)
-    ///
-    /// where
-    ///  - `arg_type` is the type of the argument
-    ///  - `arg_name` is an identifier representing the argument name
-    ///  - `return_type` is the type of the optional return type
-    fn parse_anon_function_signature(
-        tokens: &mut VecDeque<Token>,
-    ) -> ParseResult<FunctionSignature> {
-        // The first token should be "fn".
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::Function]))?;
-
-        // The next tokens should represent function arguments followed by the return type.
-        let fn_sig = Program::parse_args_and_return(tokens)?;
-        Ok(fn_sig)
-    }
-
-    /// Parses function signatures. Expects token sequences of the forms
-    ///
-    ///      fn <fn_name>(<arg_type> <arg_name>, ...): (<return_type>, ...)
-    ///      fn <fn_name>(<arg_type> <arg_name>, ...)
-    ///
-    /// where
-    ///  - `fn_name` is an identifier representing the name of the function
-    ///  - `arg_type` is the type of the argument
-    ///  - `arg_name` is an identifier representing the argument name
-    ///  - `return_type` is the type of the optional return type
-    fn parse_function_signature(tokens: &mut VecDeque<Token>) -> ParseResult<FunctionSignature> {
-        // The first token should be "fn".
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::Function]))?;
-
-        // The second token should be an identifier that represents the function name.
-        let fn_name = Program::parse_identifier(tokens)?;
-
-        // The next tokens should represent function arguments and optional return type.
-        let fn_sig = Program::parse_args_and_return(tokens)?;
-
-        Ok(FunctionSignature::new(
-            fn_name.as_str(),
-            fn_sig.args,
-            fn_sig.return_type,
-        ))
+impl Function {
+    fn new(signature: FunctionSignature, body: Closure) -> Self {
+        Function { signature, body }
     }
 
     /// Parses function declarations. Expects token sequences of the form
@@ -681,12 +711,12 @@ impl Program {
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return type
     ///  - `body` is the body of the function
-    fn parse_function_declaration(tokens: &mut VecDeque<Token>) -> ParseResult<Function> {
+    fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         // The first set of tokens should be the function signature.
-        let sig = Program::parse_function_signature(tokens)?;
+        let sig = FunctionSignature::from(tokens)?;
 
         // The remaining tokens should be the function body.
-        let body = Program::parse_closure(tokens)?;
+        let body = Closure::from(tokens)?;
 
         // Now that we have the function name and args, create the node.
         Ok(Function::new(sig, body))
@@ -703,12 +733,12 @@ impl Program {
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return type
     ///  - `body` is the body of the function
-    fn parse_anon_function(tokens: &mut VecDeque<Token>) -> ParseResult<Function> {
+    fn from_anon(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         // The first set of tokens should be the function signature.
-        let sig = Program::parse_anon_function_signature(tokens)?;
+        let sig = FunctionSignature::from_anon(tokens)?;
 
         // The remaining tokens should be the function body.
-        let body = Program::parse_closure(tokens)?;
+        let body = Closure::from(tokens)?;
 
         // Now that we have the function name and args, create the node.
         Ok(Function::new(sig, body))
@@ -721,7 +751,7 @@ impl Program {
     /// where
     ///  - `arg_type` is the type of the argument
     ///  - `arg_name` is an identifier representing the argument name
-    fn parse_argument_declarations(tokens: &mut VecDeque<Token>) -> ParseResult<Vec<Argument>> {
+    fn arg_declarations_from(tokens: &mut VecDeque<Token>) -> ParseResult<Vec<Argument>> {
         // The first token should be the opening parenthesis.
         Program::parse_expecting(tokens, HashSet::from([TokenKind::OpenParen]))?;
 
@@ -746,7 +776,7 @@ impl Program {
                 }) => {
                     // The next few tokens represent an argument.
                     tokens.push_front(token.unwrap());
-                    let arg = Program::parse_argument_declaration(tokens)?;
+                    let arg = Argument::from(tokens)?;
                     args.push(arg);
                 }
                 None => {
@@ -781,6 +811,31 @@ impl Program {
 
         Ok(args)
     }
+}
+
+#[derive(Debug)]
+pub struct Program {
+    statements: Vec<Statement>,
+}
+
+impl Program {
+    /// Attempts to parse a program from the deque of tokens. Expects token sequences of the form
+    ///
+    ///     <statement>; ...
+    ///
+    /// where
+    ///  - `statement` is a valid statement (see Statement::from)
+    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+        let mut statements = vec![];
+        while !tokens.is_empty() {
+            match Statement::from(tokens) {
+                Ok(statement) => statements.push(statement),
+                Err(err) => return Err(err),
+            };
+        }
+
+        Ok(Program { statements })
+    }
 
     /// Returns an error if the next token is not any of the given kinds, or the kind otherwise.
     fn parse_expecting(
@@ -807,58 +862,7 @@ impl Program {
         }
     }
 
-    /// Parses a function argument declaration. Expects token sequences of the form
-    ///
-    ///      <arg_type> <arg_name>
-    ///
-    /// where
-    ///  - `arg_type` is the type of the argument
-    ///  - `arg_name` is an identifier representing the argument name
-    fn parse_argument_declaration(tokens: &mut VecDeque<Token>) -> ParseResult<Argument> {
-        // The first token should be the argument type.
-        let arg_type = Program::parse_type(tokens)?;
-
-        // The second token should be the argument name.
-        let name = Program::parse_identifier(tokens)?;
-
-        Ok(Argument::new(name.as_str(), arg_type))
-    }
-
-    /// Parses types.
-    fn parse_type(tokens: &mut VecDeque<Token>) -> ParseResult<Type> {
-        match tokens.pop_front() {
-            Some(Token {
-                kind: TokenKind::Int,
-                start: _,
-                end: _,
-            }) => Ok(Type::Int),
-            Some(Token {
-                kind: TokenKind::String,
-                start: _,
-                end: _,
-            }) => Ok(Type::String),
-            Some(
-                token @ Token {
-                    kind: TokenKind::Function,
-                    start: _,
-                    end: _,
-                },
-            ) => {
-                tokens.push_front(token);
-                let sig = Program::parse_anon_function_signature(tokens)?;
-                Ok(Type::Function(Box::new(sig)))
-            }
-            None => return Err(ParseError::new("Expected type", None)),
-            Some(other) => {
-                return Err(ParseError::new(
-                    format!(r#"Expected type, but got "{}""#, other).as_str(),
-                    Some(other),
-                ))
-            }
-        }
-    }
-
-    /// Parses identifiers.
+    /// Parses an identifier, returning its name.
     fn parse_identifier(tokens: &mut VecDeque<Token>) -> ParseResult<String> {
         match tokens.pop_front() {
             Some(Token {
@@ -899,7 +903,7 @@ mod tests {
             0,
         )
         .expect("should not error");
-        let result = Program::parse_function_declaration(&mut tokens).expect("should not error");
+        let result = Function::from(&mut tokens).expect("should not error");
         assert_eq!(
             result,
             Function::new(
@@ -927,7 +931,7 @@ mod tests {
             0,
         )
         .expect("should not error");
-        let result = Program::parse_function_declaration(&mut tokens).expect("should not error");
+        let result = Function::from(&mut tokens).expect("should not error");
         assert_eq!(
             result,
             Function::new(
@@ -960,7 +964,7 @@ mod tests {
     fn parse_function_call() {
         let mut tokens =
             Token::tokenize_line(r#"do_thing("one", "two")"#, 0).expect("should not error");
-        let result = Program::parse_function_call(&mut tokens).expect("should not error");
+        let result = FunctionCall::from(&mut tokens).expect("should not error");
         assert_eq!(
             result,
             FunctionCall::new(

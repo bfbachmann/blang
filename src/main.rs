@@ -3,7 +3,7 @@ mod parser;
 mod token_kind;
 mod util;
 
-use crate::parser::Program;
+use crate::parser::{Program, Statement};
 use clap::{arg, Command};
 use lexer::Token;
 use log::{error, info, set_max_level, Level};
@@ -75,7 +75,7 @@ fn repl() {
         match repl_collect_tokens() {
             Ok(tokens) => {
                 let mut tokens = tokens;
-                match Program::parse_statement(&mut tokens) {
+                match Statement::from(&mut tokens) {
                     Ok(statement) => {
                         dbg!(statement);
                     }
