@@ -37,16 +37,10 @@ impl fmt::Display for LexError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Position {
     line: usize,
     col: usize,
-}
-
-impl PartialEq for Position {
-    fn eq(&self, other: &Self) -> bool {
-        self.line == other.line && self.col == other.col
-    }
 }
 
 impl fmt::Display for Position {
@@ -62,7 +56,7 @@ impl Position {
 }
 
 /// A token has a kind and a start and end position (in the file).
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
     pub start: Position,
@@ -72,12 +66,6 @@ pub struct Token {
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} to {}: {}", self.start, self.end, self.kind)
-    }
-}
-
-impl PartialEq for Token {
-    fn eq(&self, other: &Self) -> bool {
-        self.kind == other.kind && self.start == other.start && self.end == other.end
     }
 }
 
@@ -94,7 +82,7 @@ impl Token {
     /// Attempts to lex the file from the given reader and return a deque of tokens, or an error
     /// if the file contains invalid tokens.
     pub fn tokenize_file(reader: BufReader<File>) -> LexResult<VecDeque<Token>> {
-        let mut tokens = VecDeque::from(vec![]);
+        let mut tokens = VecDeque::new();
         for (line_num, line) in reader.lines().enumerate() {
             let line = match line {
                 Ok(l) => l,
@@ -119,7 +107,7 @@ impl Token {
     /// Breaks the given slice into a deque of tokens. If the slice contains any invalid tokens,
     /// an error is returned.
     pub fn tokenize_line(segment: &str, line_num: usize) -> LexResult<VecDeque<Token>> {
-        let mut tokens = VecDeque::from(vec![]);
+        let mut tokens = VecDeque::new();
         let mut search_start: usize = 0;
 
         while search_start < segment.len() {

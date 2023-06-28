@@ -3,7 +3,7 @@ use regex::Regex;
 use std::fmt;
 
 /// Represents any valid token in the language.
-#[derive(Debug, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum TokenKind {
     // Binary mathematical operators
     Add,
@@ -44,6 +44,7 @@ pub enum TokenKind {
     CloseParen,
     Comma,
     SemiColon,
+    Colon,
 
     // User-defined values
     Identifier(String),
@@ -56,43 +57,6 @@ impl fmt::Display for TokenKind {
             TokenKind::StringLiteral(s) => write!(f, r#"string literal "{}""#, s),
             TokenKind::Identifier(s) => write!(f, r#"identifier "{}""#, s),
             other => write!(f, r#""{}""#, other.to_string()),
-        }
-    }
-}
-
-impl PartialEq for TokenKind {
-    fn eq(&self, other: &Self) -> bool {
-        match (&self, other) {
-            (TokenKind::Add, TokenKind::Add)
-            | (TokenKind::Subtract, TokenKind::Subtract)
-            | (TokenKind::Multiply, TokenKind::Multiply)
-            | (TokenKind::Divide, TokenKind::Divide)
-            | (TokenKind::Modulo, TokenKind::Modulo)
-            | (TokenKind::Let, TokenKind::Let)
-            | (TokenKind::Equal, TokenKind::Equal)
-            | (TokenKind::Equals, TokenKind::Equals)
-            | (TokenKind::GreaterThan, TokenKind::GreaterThan)
-            | (TokenKind::LessThan, TokenKind::LessThan)
-            | (TokenKind::GreaterThanOrEqual, TokenKind::GreaterThanOrEqual)
-            | (TokenKind::LessThanOrEqual, TokenKind::LessThanOrEqual)
-            | (TokenKind::If, TokenKind::If)
-            | (TokenKind::Else, TokenKind::Else)
-            | (TokenKind::ElseIf, TokenKind::ElseIf)
-            | (TokenKind::BeginClosure, TokenKind::BeginClosure)
-            | (TokenKind::EndClosure, TokenKind::EndClosure)
-            | (TokenKind::String, TokenKind::String)
-            | (TokenKind::Loop, TokenKind::Loop)
-            | (TokenKind::Int, TokenKind::Int)
-            | (TokenKind::OpenParen, TokenKind::OpenParen)
-            | (TokenKind::CloseParen, TokenKind::CloseParen)
-            | (TokenKind::Comma, TokenKind::Comma)
-            | (TokenKind::SemiColon, TokenKind::SemiColon)
-            | (TokenKind::Function, TokenKind::Function)
-            | (TokenKind::Break, TokenKind::Break) => true,
-            (TokenKind::Identifier(v1), TokenKind::Identifier(v2)) => v1 == v2,
-            (TokenKind::StringLiteral(v1), TokenKind::StringLiteral(v2)) => v1 == v2,
-            (TokenKind::IntLiteral(v1), TokenKind::IntLiteral(v2)) => v1 == v2,
-            _ => false,
         }
     }
 }
@@ -128,6 +92,7 @@ impl TokenKind {
             TokenKind::CloseParen => ")".to_string(),
             TokenKind::Comma => ",".to_string(),
             TokenKind::SemiColon => ";".to_string(),
+            TokenKind::Colon => ":".to_string(),
             TokenKind::Break => "break".to_string(),
         }
     }
@@ -190,6 +155,7 @@ impl TokenKind {
             TokenKind::CloseParen,
             TokenKind::Comma,
             TokenKind::SemiColon,
+            TokenKind::Colon,
             TokenKind::Function,
             TokenKind::Loop,
             TokenKind::Break,

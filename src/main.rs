@@ -87,7 +87,7 @@ fn repl() {
 /// Collects tokens from stdin until the user is done with input (i.e. until they've hit enter twice
 /// in a row).
 fn collect_tokens() -> Result<VecDeque<Token>> {
-    let mut tokens = VecDeque::from(vec![]);
+    let mut tokens = VecDeque::new();
     let mut line_num = 0;
 
     loop {
