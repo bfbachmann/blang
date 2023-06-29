@@ -1031,7 +1031,7 @@ impl Function {
     }
 }
 
-/// Represents a complete program.
+/// Represents a complete and syntactically valid (but not necessarily semantically valid) program.
 #[derive(Debug)]
 pub struct Program {
     statements: Vec<Statement>,
