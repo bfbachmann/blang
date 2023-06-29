@@ -222,14 +222,22 @@ impl FunctionSignature {
     }
 }
 
-/// Represents a binary operator.
+/// Represents an operator.
 #[derive(Debug, PartialEq)]
-pub enum BinaryOp {
+pub enum Operator {
+    // Basic operators
     Add,
     Subtract,
     Multiply,
     Divide,
     Modulo,
+
+    // Comparators
+    Equals,
+    GreaterThan,
+    LessThan,
+    GreaterThanOrEqual,
+    LessThanOrEqual,
 }
 
 /// Represents basic and composite expressions. A basic expression can be any of the following:
@@ -238,11 +246,11 @@ pub enum BinaryOp {
 ///  - a function call
 /// whereas a composite expression can be any token sequence of the form
 ///
-///     <basic_expr> <binary_op> <comp_expr>
+///     <basic_expr> <op> <comp_expr>
 ///
 /// where
 ///  - `basic_expr` is a basic expression
-///  - `binary_op` is a binary operator
+///  - `op` is an operator
 ///  - `comp_expr` is a composite expression
 #[derive(Debug, PartialEq)]
 pub enum Expression {
@@ -254,7 +262,7 @@ pub enum Expression {
     FunctionCall(FunctionCall),
 
     // Composite expressions.
-    BinaryOp(Box<Expression>, BinaryOp, Box<Expression>),
+    Operator(Box<Expression>, Operator, Box<Expression>),
 }
 
 impl Expression {
@@ -335,44 +343,50 @@ impl Expression {
     }
 
     /// Parses a basic or composite expression from the given tokens ending with any of the given
-    /// terminator tokens. A basic expression can be any of the following:
+    /// terminator token kinds. Returns the parsed expression and the terminator token. A basic
+    /// expression can be any of the following:
     ///  - an identifier representing a variable value
     ///  - a literal value
     ///  - a function call
     /// whereas a composite expression can be any token sequence of the form
     ///
-    ///     <basic_expr> <binary_op> <comp_expr>
+    ///     <basic_expr> <op> <comp_expr>
     ///
     /// where
     ///  - `basic_expr` is a basic expression
-    ///  - `binary_op` is a binary operator
+    ///  - `op` is an operator
     ///  - `comp_expr` is a composite expression
     fn from(
         tokens: &mut VecDeque<Token>,
         terminators: HashSet<TokenKind>,
-    ) -> ParseResult<(Expression, TokenKind)> {
+    ) -> ParseResult<(Expression, Token)> {
         // The first tokens should represent a basic expression.
         let left_expr = Expression::from_basic(tokens)?;
 
-        // The next token should either be a binary operator or a terminator.
+        // The next token should either be an operator or a terminator.
         match tokens.pop_front() {
             Some(token) => {
                 if terminators.contains(&token.kind) {
                     // We've reached the end of the expression, so just return the basic expression
                     // we have.
-                    return Ok((left_expr, token.kind));
+                    return Ok((left_expr, token));
                 }
 
-                // At this point we know the token must be a binary operator.
+                // At this point we know the token must be an operator.
                 let bin_op = match token.kind {
-                    TokenKind::Add => BinaryOp::Add,
-                    TokenKind::Subtract => BinaryOp::Subtract,
-                    TokenKind::Multiply => BinaryOp::Multiply,
-                    TokenKind::Divide => BinaryOp::Divide,
-                    TokenKind::Modulo => BinaryOp::Modulo,
+                    TokenKind::Add => Operator::Add,
+                    TokenKind::Subtract => Operator::Subtract,
+                    TokenKind::Multiply => Operator::Multiply,
+                    TokenKind::Divide => Operator::Divide,
+                    TokenKind::Modulo => Operator::Modulo,
+                    TokenKind::Equals => Operator::Equals,
+                    TokenKind::GreaterThan => Operator::GreaterThan,
+                    TokenKind::LessThan => Operator::LessThan,
+                    TokenKind::GreaterThanOrEqual => Operator::GreaterThanOrEqual,
+                    TokenKind::LessThanOrEqual => Operator::LessThanOrEqual,
                     _ => {
                         return Err(ParseError::new(
-                            format!(r#"Expected binary operator, but got "{}""#, token).as_str(),
+                            format!(r#"Expected operator, but got "{}""#, token).as_str(),
                             Some(token),
                         ))
                     }
@@ -381,7 +395,7 @@ impl Expression {
                 // What remains of the expression (the right side) can be parsed recursively.
                 let (right_expr, terminator) = Expression::from(tokens, terminators)?;
                 Ok((
-                    Expression::BinaryOp(Box::new(left_expr), bin_op, Box::new(right_expr)),
+                    Expression::Operator(Box::new(left_expr), bin_op, Box::new(right_expr)),
                     terminator,
                 ))
             }
@@ -448,7 +462,7 @@ impl FunctionCall {
                 HashSet::from([TokenKind::Comma, TokenKind::CloseParen]),
             )?;
             args.push(expr);
-            terminator = term;
+            terminator = term.kind;
         }
 
         Ok(FunctionCall::new(fn_name.as_str(), args))
@@ -537,15 +551,17 @@ pub enum Statement {
     Closure(Closure),
     Expression(Expression),
     FunctionCall(FunctionCall),
+    Conditional(Conditional),
 }
 
 impl Statement {
     /// Parses a statement. Statements can be any of the following:
-    ///  - variable declaration (see VariableDeclaration::from)
-    ///  - variable assignment (see VariableAssignment::from)
-    ///  - function declaration (see Function::from)
-    ///  - closure (see Closure::from)
-    ///  - expression (see Expression::from)
+    ///  - variable declaration (see `VariableDeclaration::from`)
+    ///  - variable assignment (see `VariableAssignment::from`)
+    ///  - function declaration (see `Function::from`)
+    ///  - closure (see `Closure::from`)
+    ///  - expression (see `Expression::from`)
+    ///  - conditional (see `Conditional::from`)
     pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         // Try use the first two tokens to figure out what type of statement will follow. This works
         // because no valid statement can contain fewer than two tokens.
@@ -631,12 +647,148 @@ impl Statement {
                 Ok(Statement::FunctionCall(call))
             }
 
+            // If the first token is "if", it must be a conditional.
+            (
+                Token {
+                    kind: TokenKind::If,
+                    ..
+                },
+                _,
+            ) => {
+                let cond = Conditional::from(tokens)?;
+                Ok(Statement::Conditional(cond))
+            }
+
             // If the tokens are anything else, we'll try parse as an expression.
             (_, _) => {
                 let (expr, _) = Expression::from(tokens, HashSet::from([TokenKind::SemiColon]))?;
                 Ok(Statement::Expression(expr))
             }
         }
+    }
+}
+
+/// Represents a branch in a conditional. "if" and "else if" branches must have condition
+/// expressions, but "else" branches must not.
+#[derive(Debug, PartialEq)]
+pub struct Branch {
+    condition: Option<Expression>,
+    body: Closure,
+}
+
+impl Branch {
+    fn new(condition: Option<Expression>, body: Closure) -> Self {
+        Branch { condition, body }
+    }
+
+    /// Parses a branch. If `with_condition` is true, expects token sequences of the form
+    ///
+    ///     <expr> { <statement> ... }
+    ///
+    /// Otherwise, expects token sequences of the form
+    ///
+    ///     { <statement> ... }
+    ///
+    /// where
+    ///  - `expr` is the branch condition expression (see `Expression::from`)
+    ///  - `statement` is any valid statement (see `Statement::from`)
+    fn from(tokens: &mut VecDeque<Token>, with_condition: bool) -> ParseResult<Self> {
+        let mut cond_expr = None;
+        if with_condition {
+            // The following tokens should be an expression that represents the branch condition.
+            let (expr, terminator) =
+                Expression::from(tokens, HashSet::from([TokenKind::BeginClosure]))?;
+            cond_expr = Some(expr);
+
+            // Put the "{" token back because closure parsing requires it.
+            tokens.push_front(terminator);
+        }
+
+        // The following tokens should be a closure that contains the statements that would be
+        // executed if the branch were taken.
+        let body = Closure::from(tokens)?;
+
+        Ok(Branch::new(cond_expr, body))
+    }
+}
+
+/// Represents a conditional (i.e. branching if/else if/else statements).
+#[derive(Debug)]
+pub struct Conditional {
+    branches: Vec<Branch>,
+}
+
+impl PartialEq for Conditional {
+    fn eq(&self, other: &Self) -> bool {
+        util::vectors_are_equal(&self.branches, &other.branches)
+    }
+}
+
+impl Conditional {
+    fn new(branches: Vec<Branch>) -> Self {
+        Conditional { branches }
+    }
+
+    /// Parses conditionals. Expects token sequences of the forms
+    ///
+    ///     if <if_cond> {
+    ///         <statement>; ...
+    ///     } else if <else_if_cond> {
+    ///         <statement>; ...
+    ///     } else {
+    ///         <statement>; ...
+    ///     }
+    ///
+    /// where
+    ///  - the `else if` and `else` branches are optional, and the `else if` branch is repeatable
+    ///  - `if_cond` is an expression that represents the `if` branch condition
+    ///  - `else_if_cond` is an expression that represents the `else if` branch condition
+    ///  - `statement` is any valid statement (see `Statement::from`)
+    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+        // The first token should be "if".
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::If]))?;
+
+        // Parse the rest of the branch (the expression and the closure).
+        let branch = Branch::from(tokens, true)?;
+
+        // We now have the first "if" branch. Continue by adding other "else if" branches until
+        // there are none left.
+        let mut branches = vec![branch];
+        loop {
+            match tokens.front() {
+                Some(&Token {
+                    kind: TokenKind::ElseIf,
+                    ..
+                }) => {
+                    // Pop the "else if" token.
+                    tokens.pop_front();
+
+                    // Parse the rest of the branch and add it to the list of branches.
+                    let branch = Branch::from(tokens, true)?;
+                    branches.push(branch);
+                }
+                Some(&Token {
+                    kind: TokenKind::Else,
+                    ..
+                }) => {
+                    // Pop the "else" token.
+                    tokens.pop_front();
+
+                    // Parse the rest of the branch and add it to the list of branches, then break
+                    // because we're reached the end of the conditional.
+                    let branch = Branch::from(tokens, false)?;
+                    branches.push(branch);
+                    break;
+                }
+                _ => {
+                    // The next token is not "else if" or "else", so we assume it's some new
+                    // statement and break.
+                    break;
+                }
+            }
+        }
+
+        Ok(Conditional::new(branches))
     }
 }
 
@@ -663,7 +815,7 @@ impl Closure {
     ///      { <statement>; ... }
     ///
     /// where
-    /// - `statement` is any valid statement (see Statement::from)
+    /// - `statement` is any valid statement (see `Statement::from`)
     fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         // The first token should be "{".
         Program::parse_expecting(tokens, HashSet::from([TokenKind::BeginClosure]))?;
@@ -841,7 +993,7 @@ impl Program {
     ///     <statement>; ...
     ///
     /// where
-    ///  - `statement` is a valid statement (see Statement::from)
+    ///  - `statement` is a valid statement (see `Statement::from`)
     pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         let mut statements = vec![];
         while !tokens.is_empty() {

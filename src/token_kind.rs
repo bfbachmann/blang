@@ -6,7 +6,7 @@ use std::fmt;
 /// Represents any valid token in the language.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TokenKind {
-    // Binary mathematical operators
+    // Operators
     Add,
     Subtract,
     Multiply,
