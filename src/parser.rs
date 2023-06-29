@@ -34,6 +34,7 @@ impl ParseError {
 /// Represents any valid type.
 #[derive(Debug, PartialEq)]
 enum Type {
+    Bool,
     String,
     Int,
     Function(Box<FunctionSignature>),
@@ -44,20 +45,21 @@ impl Type {
     fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         match tokens.pop_front() {
             Some(Token {
+                kind: TokenKind::Bool,
+                ..
+            }) => Ok(Type::Bool),
+            Some(Token {
                 kind: TokenKind::Int,
-                start: _,
-                end: _,
+                ..
             }) => Ok(Type::Int),
             Some(Token {
                 kind: TokenKind::String,
-                start: _,
-                end: _,
+                ..
             }) => Ok(Type::String),
             Some(
                 token @ Token {
                     kind: TokenKind::Function,
-                    start: _,
-                    end: _,
+                    ..
                 },
             ) => {
                 tokens.push_front(token);
@@ -189,8 +191,7 @@ impl FunctionSignature {
         match tokens.front() {
             Some(Token {
                 kind: TokenKind::Colon,
-                start: _,
-                end: _,
+                ..
             }) => {
                 // Remove the ":" and parse the return type.
                 tokens.pop_front();
@@ -267,16 +268,14 @@ impl Expression {
             Some(
                 token @ Token {
                     kind: TokenKind::Identifier(_),
-                    start: _,
-                    end: _,
+                    ..
                 },
             ) => {
                 match tokens.front() {
                     // If the next token is "(", it's a function call.
                     Some(&Token {
                         kind: TokenKind::OpenParen,
-                        start: _,
-                        end: _,
+                        ..
                     }) => {
                         tokens.push_front(token);
                         let call = FunctionCall::from(tokens)?;
@@ -287,8 +286,7 @@ impl Expression {
                     _ => {
                         if let Token {
                             kind: TokenKind::Identifier(var_name),
-                            start: _,
-                            end: _,
+                            ..
                         } = token
                         {
                             Ok(Expression::VariableValue(var_name))
@@ -306,15 +304,13 @@ impl Expression {
             // Check if it's an integer literal.
             Some(Token {
                      kind: TokenKind::IntLiteral(i),
-                     start: _,
-                     end: _,
+                     ..
                  }) => Ok(Expression::IntLiteral(i)),
 
             // Check if it's a string literal.
             Some(Token {
                      kind: TokenKind::StringLiteral(s),
-                     start: _,
-                     end: _,
+                     ..
                  }) => Ok(Expression::StringLiteral(s)),
 
             // If the token is anything else, error.
@@ -431,8 +427,7 @@ impl FunctionCall {
             match tokens.front() {
                 Some(&Token {
                     kind: TokenKind::CloseParen,
-                    start: _,
-                    end: _,
+                    ..
                 }) => {
                     tokens.pop_front();
                     break;
@@ -567,8 +562,7 @@ impl Statement {
             (
                 Token {
                     kind: TokenKind::Int | TokenKind::String,
-                    start: _,
-                    end: _,
+                    ..
                 },
                 _,
             ) => {
@@ -580,13 +574,11 @@ impl Statement {
             (
                 Token {
                     kind: TokenKind::Identifier(_),
-                    start: _,
-                    end: _,
+                    ..
                 },
                 Token {
                     kind: TokenKind::Equal,
-                    start: _,
-                    end: _,
+                    ..
                 },
             ) => {
                 let assign = VariableAssignment::from(tokens)?;
@@ -597,8 +589,7 @@ impl Statement {
             (
                 Token {
                     kind: TokenKind::Function,
-                    start: _,
-                    end: _,
+                    ..
                 },
                 _,
             ) => {
@@ -610,8 +601,7 @@ impl Statement {
             (
                 Token {
                     kind: TokenKind::BeginClosure,
-                    start: _,
-                    end: _,
+                    ..
                 },
                 _,
             ) => {
@@ -623,13 +613,11 @@ impl Statement {
             (
                 Token {
                     kind: TokenKind::Identifier(_),
-                    start: _,
-                    end: _,
+                    ..
                 },
                 Token {
                     kind: TokenKind::OpenParen,
-                    start: _,
-                    end: _,
+                    ..
                 },
             ) => {
                 let call = FunctionCall::from(tokens)?;
@@ -680,8 +668,7 @@ impl Closure {
                 // If the next token is "}", we've reached the end of the closure.
                 Some(&Token {
                     kind: TokenKind::EndClosure,
-                    start: _,
-                    end: _,
+                    ..
                 }) => {
                     // We've reached the end of the closure. Pop the "}" and break the loop.
                     tokens.pop_front();
@@ -691,8 +678,7 @@ impl Closure {
                 // If the next token is ";", we've reached the end of the statement.
                 Some(&Token {
                     kind: TokenKind::SemiColon,
-                    start: _,
-                    end: _,
+                    ..
                 }) => {
                     tokens.pop_front();
                 }
@@ -788,16 +774,14 @@ impl Function {
             match token {
                 Some(Token {
                     kind: TokenKind::CloseParen,
-                    start: _,
-                    end: _,
+                    ..
                 }) => {
                     // We're done assembling arguments.
                     break;
                 }
                 Some(Token {
                     kind: TokenKind::String | TokenKind::Int | TokenKind::Function,
-                    start: _,
-                    end: _,
+                    ..
                 }) => {
                     // The next few tokens represent an argument.
                     tokens.push_front(token.unwrap());
@@ -893,8 +877,7 @@ impl Program {
         match tokens.pop_front() {
             Some(Token {
                 kind: TokenKind::Identifier(name),
-                start: _,
-                end: _,
+                ..
             }) => Ok(name),
             None => return Err(ParseError::new("Expected identifier", None)),
             Some(other) => {

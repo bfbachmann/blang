@@ -1,3 +1,4 @@
+use crate::lexer::Token;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::fmt;
@@ -23,6 +24,8 @@ pub enum TokenKind {
     LessThanOrEqual,
 
     // Built-in/primitive types
+    Bool,
+    BoolLiteral(bool),
     Int,
     IntLiteral(i64),
     String,
@@ -52,6 +55,7 @@ pub enum TokenKind {
 impl fmt::Display for TokenKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            TokenKind::BoolLiteral(b) => write!(f, "boolean literal {}", b.to_string()),
             TokenKind::IntLiteral(i) => write!(f, "integer literal {}", i.to_string()),
             TokenKind::StringLiteral(s) => write!(f, r#"string literal "{}""#, s),
             TokenKind::Identifier(s) => write!(f, r#"identifier "{}""#, s),
@@ -74,6 +78,8 @@ impl TokenKind {
             TokenKind::LessThan => "<".to_string(),
             TokenKind::GreaterThanOrEqual => ">=".to_string(),
             TokenKind::LessThanOrEqual => "<=".to_string(),
+            TokenKind::Bool => "bool".to_string(),
+            TokenKind::BoolLiteral(v) => v.to_string(),
             TokenKind::IntLiteral(v) => v.to_string(),
             TokenKind::String => "string".to_string(),
             TokenKind::StringLiteral(v) => v.to_string(),
@@ -138,6 +144,7 @@ impl TokenKind {
             TokenKind::Modulo,
             TokenKind::Equal,
             TokenKind::Int,
+            TokenKind::Bool,
             TokenKind::Equals,
             TokenKind::GreaterThan,
             TokenKind::LessThan,
@@ -169,6 +176,10 @@ impl TokenKind {
             return Some(v);
         }
 
+        if let Some(v) = TokenKind::lex_bool_literal(segment) {
+            return Some(v);
+        }
+
         if let Some(v) = TokenKind::lex_int_literal(segment) {
             return Some(v);
         }
@@ -195,6 +206,13 @@ impl TokenKind {
         match re.is_match(segment.trim()) {
             true => Some(token),
             false => None,
+        }
+    }
+
+    fn lex_bool_literal(segment: &str) -> Option<TokenKind> {
+        match segment.trim().parse::<bool>() {
+            Ok(b) => Some(TokenKind::BoolLiteral(b)),
+            Err(_) => None,
         }
     }
 

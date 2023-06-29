@@ -9,3 +9,7 @@ test:
 .PHONY: source
 source:
 	RUST_LOG=debug cargo run -- source
+
+.PHONY: docs
+docs:
+	cargo doc
