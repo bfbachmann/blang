@@ -248,6 +248,7 @@ pub enum BinaryOp {
 pub enum Expression {
     // Basic expressions.
     VariableValue(String),
+    BoolLiteral(bool),
     IntLiteral(i64),
     StringLiteral(String),
     FunctionCall(FunctionCall),
@@ -300,6 +301,12 @@ impl Expression {
                     }
                 }
             }
+
+            // Check if it's a bool literal.
+            Some(Token {
+                     kind: TokenKind::BoolLiteral(b),
+                     ..
+                 }) => Ok(Expression::BoolLiteral(b)),
 
             // Check if it's an integer literal.
             Some(Token {
@@ -561,7 +568,7 @@ impl Statement {
             // If the first token is a type, it must be a variable declaration.
             (
                 Token {
-                    kind: TokenKind::Int | TokenKind::String,
+                    kind: TokenKind::Int | TokenKind::String | TokenKind::Bool,
                     ..
                 },
                 _,
@@ -780,7 +787,7 @@ impl Function {
                     break;
                 }
                 Some(Token {
-                    kind: TokenKind::String | TokenKind::Int | TokenKind::Function,
+                    kind: TokenKind::String | TokenKind::Int | TokenKind::Bool | TokenKind::Function,
                     ..
                 }) => {
                     // The next few tokens represent an argument.
@@ -972,7 +979,7 @@ mod tests {
     #[test]
     fn parse_function_call() {
         let mut tokens =
-            Token::tokenize_line(r#"do_thing("one", "two")"#, 0).expect("should not error");
+            Token::tokenize_line(r#"do_thing("one", "two", true)"#, 0).expect("should not error");
         let result = FunctionCall::from(&mut tokens).expect("should not error");
         assert_eq!(
             result,
@@ -981,6 +988,7 @@ mod tests {
                 vec![
                     Expression::StringLiteral("one".to_string()),
                     Expression::StringLiteral("two".to_string()),
+                    Expression::BoolLiteral(true),
                 ]
             )
         );
