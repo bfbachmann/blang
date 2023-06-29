@@ -1,12 +1,12 @@
 mod lexer;
 mod parser;
-mod token_kind;
 mod util;
 
-use crate::parser::{Program, Statement};
+use crate::parser::Program;
 use clap::{arg, Command};
 use lexer::Token;
 use log::{error, info, set_max_level, Level};
+use parser::statement::Statement;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{stdin, stdout, BufReader, Error, ErrorKind, Result, Write};

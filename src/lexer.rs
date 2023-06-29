@@ -1,61 +1,17 @@
-use crate::token_kind::TokenKind;
+use error::LexError;
+use kind::TokenKind;
+use pos::Position;
 use std::collections::VecDeque;
-use std::error::Error;
 use std::fmt;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::result::Result;
 
+mod error;
+pub mod kind;
+pub mod pos;
+
 type LexResult<T> = Result<T, LexError>;
-
-/// Represents any fatal error that occurs during lexing.
-#[derive(Debug, PartialEq)]
-pub struct LexError {
-    message: String,
-    line: usize,
-    col: usize,
-}
-
-impl Error for LexError {}
-
-impl LexError {
-    fn new(message: &str, line: usize, col: usize) -> Self {
-        LexError {
-            message: message.to_string(),
-            line,
-            col,
-        }
-    }
-}
-
-impl fmt::Display for LexError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "Lex error at position [{}:{}]: {}.",
-            self.line, self.col, self.message
-        )
-    }
-}
-
-/// Represents the position (line and column) within a file.
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct Position {
-    line: usize,
-    col: usize,
-}
-
-impl fmt::Display for Position {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[{}:{}]", self.line, self.col)
-    }
-}
-
-impl Position {
-    fn new(line: usize, col: usize) -> Self {
-        Position { line, col }
-    }
-}
 
 /// A token has a kind and a start and end position (in the file).
 #[derive(Debug, PartialEq)]
@@ -147,7 +103,9 @@ impl Token {
 
 #[cfg(test)]
 mod tests {
-    use crate::lexer::{LexError, Token, TokenKind};
+    use crate::lexer::error::LexError;
+    use crate::lexer::kind::TokenKind;
+    use crate::lexer::Token;
     use std::collections::VecDeque;
 
     #[test]
