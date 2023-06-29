@@ -552,6 +552,8 @@ pub enum Statement {
     Expression(Expression),
     FunctionCall(FunctionCall),
     Conditional(Conditional),
+    Loop(Loop),
+    Break,
 }
 
 impl Statement {
@@ -562,6 +564,8 @@ impl Statement {
     ///  - closure (see `Closure::from`)
     ///  - expression (see `Expression::from`)
     ///  - conditional (see `Conditional::from`)
+    ///  - loop (see `Loop::from`)
+    ///  - break
     pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         // Try use the first two tokens to figure out what type of statement will follow. This works
         // because no valid statement can contain fewer than two tokens.
@@ -659,12 +663,60 @@ impl Statement {
                 Ok(Statement::Conditional(cond))
             }
 
+            // If the first token is "loop", it must be a loop.
+            (
+                Token {
+                    kind: TokenKind::Loop,
+                    ..
+                },
+                _,
+            ) => {
+                let cond = Loop::from(tokens)?;
+                Ok(Statement::Loop(cond))
+            }
+
+            // If the first token is "break", it must be a break statement.
+            (
+                Token {
+                    kind: TokenKind::Break,
+                    ..
+                },
+                _,
+            ) => {
+                tokens.pop_front();
+                Ok(Statement::Break)
+            }
+
             // If the tokens are anything else, we'll try parse as an expression.
             (_, _) => {
                 let (expr, _) = Expression::from(tokens, HashSet::from([TokenKind::SemiColon]))?;
                 Ok(Statement::Expression(expr))
             }
         }
+    }
+}
+
+/// Represents a closure that is executed repeatedly.
+#[derive(Debug, PartialEq)]
+pub struct Loop {
+    closure: Closure,
+}
+
+impl Loop {
+    fn new(closure: Closure) -> Self {
+        Loop { closure }
+    }
+
+    /// Parses a loop. Expects token sequences of the form
+    ///
+    ///     loop { ... }
+    fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+        // The first token should be "loop".
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::Loop]))?;
+
+        // The rest should be the closure representing the loop body.
+        let body = Closure::from(tokens)?;
+        Ok(Loop::new(body))
     }
 }
 
@@ -683,15 +735,14 @@ impl Branch {
 
     /// Parses a branch. If `with_condition` is true, expects token sequences of the form
     ///
-    ///     <expr> { <statement> ... }
+    ///     <expr> { ... }
     ///
     /// Otherwise, expects token sequences of the form
     ///
-    ///     { <statement> ... }
+    ///     { ... }
     ///
     /// where
     ///  - `expr` is the branch condition expression (see `Expression::from`)
-    ///  - `statement` is any valid statement (see `Statement::from`)
     fn from(tokens: &mut VecDeque<Token>, with_condition: bool) -> ParseResult<Self> {
         let mut cond_expr = None;
         if with_condition {
@@ -732,18 +783,17 @@ impl Conditional {
     /// Parses conditionals. Expects token sequences of the forms
     ///
     ///     if <if_cond> {
-    ///         <statement>; ...
+    ///         ...
     ///     } else if <else_if_cond> {
-    ///         <statement>; ...
+    ///         ...
     ///     } else {
-    ///         <statement>; ...
+    ///         ...
     ///     }
     ///
     /// where
     ///  - the `else if` and `else` branches are optional, and the `else if` branch is repeatable
     ///  - `if_cond` is an expression that represents the `if` branch condition
     ///  - `else_if_cond` is an expression that represents the `else if` branch condition
-    ///  - `statement` is any valid statement (see `Statement::from`)
     pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         // The first token should be "if".
         Program::parse_expecting(tokens, HashSet::from([TokenKind::If]))?;
