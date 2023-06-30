@@ -1,9 +1,8 @@
-use crate::lexer::kind::TokenKind;
 use crate::lexer::Token;
 use crate::parser::closure::Closure;
 use crate::parser::expr::Expression;
 use crate::parser::ParseResult;
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 
 /// Represents a branch in a conditional. "if" and "else if" branches must have condition
 /// expressions, but "else" branches must not.
@@ -32,12 +31,8 @@ impl Branch {
         let mut cond_expr = None;
         if with_condition {
             // The following tokens should be an expression that represents the branch condition.
-            let (expr, terminator) =
-                Expression::from(tokens, HashSet::from([TokenKind::BeginClosure]))?;
+            let expr = Expression::from(tokens)?;
             cond_expr = Some(expr);
-
-            // Put the "{" token back because closure parsing requires it.
-            tokens.push_front(terminator);
         }
 
         // The following tokens should be a closure that contains the statements that would be

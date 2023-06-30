@@ -25,3 +25,22 @@ impl ParseError {
         }
     }
 }
+
+/// Represents any fatal error that occurs during program analysis.
+pub struct AnalyzeError {
+    message: String,
+}
+
+impl AnalyzeError {
+    pub fn new(message: &str) -> Self {
+        AnalyzeError {
+            message: message.to_string(),
+        }
+    }
+}
+
+impl fmt::Display for AnalyzeError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Analyze error: {}", self.message)
+    }
+}

@@ -16,6 +16,7 @@ mod var_dec;
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::Token;
+use crate::util;
 use error::ParseError;
 use r#type::Type;
 use statement::Statement;
@@ -27,6 +28,12 @@ type ParseResult<T> = Result<T, ParseError>;
 #[derive(Debug)]
 pub struct Program {
     statements: Vec<Statement>,
+}
+
+impl PartialEq for Program {
+    fn eq(&self, other: &Self) -> bool {
+        util::vectors_are_equal(&self.statements, &other.statements)
+    }
 }
 
 impl Program {
@@ -110,6 +117,30 @@ mod tests {
         let mut tokens = Token::tokenize_line("something", 0).expect("should not error");
         let result = Program::parse_identifier(&mut tokens).expect("should not error");
         assert_eq!(result, "something");
+    }
+
+    #[test]
+    fn parse_program() {
+        let mut tokens =
+            Token::tokenize_line("int i = 123 int j = 1231", 0).expect("should not error");
+        let result = Program::from(&mut tokens).expect("should not error");
+        assert_eq!(
+            result,
+            Program {
+                statements: vec![
+                    Statement::VariableDeclaration(VariableDeclaration::new(
+                        Type::Int,
+                        "i".to_string(),
+                        Expression::IntLiteral(123),
+                    )),
+                    Statement::VariableDeclaration(VariableDeclaration::new(
+                        Type::Int,
+                        "j".to_string(),
+                        Expression::IntLiteral(1231),
+                    ))
+                ]
+            }
+        );
     }
 
     #[test]

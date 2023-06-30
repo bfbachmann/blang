@@ -33,8 +33,8 @@ impl VariableAssignment {
         // The next token should be an assignment "=".
         Program::parse_expecting(tokens, HashSet::from([TokenKind::Equal]))?;
 
-        // The next tokens should be some expression ending in ";".
-        let (expr, _) = Expression::from(tokens, HashSet::from([TokenKind::SemiColon]))?;
+        // The next tokens should be some expression.
+        let expr = Expression::from(tokens)?;
 
         Ok(VariableAssignment::new(name.as_str(), expr))
     }

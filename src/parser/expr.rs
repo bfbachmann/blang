@@ -5,19 +5,20 @@ use crate::parser::fn_call::FunctionCall;
 use crate::parser::op::Operator;
 use crate::parser::r#fn::Function;
 use crate::parser::ParseResult;
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 
 /// Represents basic and composite expressions. A basic expression can be any of the following:
 ///  - an identifier representing a variable value
 ///  - a literal value
 ///  - a function call
-/// whereas a composite expression can be any token sequence of the form
+///  - a unary operator followed by a composite expression (`<unary_op> <comp_expr>`)
+/// whereas a composite expression can be any token sequence of the forms
 ///
-///     <basic_expr> <op> <comp_expr>
+///     <basic_expr> <binary_op> <comp_expr>
 ///
 /// where
 ///  - `basic_expr` is a basic expression
-///  - `op` is an operator
+///  - `binary_op` is a binary operator
 ///  - `comp_expr` is a composite expression
 #[derive(Debug, PartialEq)]
 pub enum Expression {
@@ -30,7 +31,8 @@ pub enum Expression {
     AnonFunction(Box<Function>),
 
     // Composite expressions.
-    Operator(Box<Expression>, Operator, Box<Expression>),
+    BinaryOperation(Box<Expression>, Operator, Box<Expression>),
+    UnaryOperation(Operator, Box<Expression>),
 }
 
 impl Expression {
@@ -38,17 +40,23 @@ impl Expression {
     ///  - an identifier representing a variable value
     ///  - a literal value (includes anonymous functions)
     ///  - a function call
+    ///  - a unary operator followed by a composite expression (`<unary_op> <comp_expr>`)
     fn from_basic(tokens: &mut VecDeque<Token>) -> ParseResult<Expression> {
         match tokens.pop_front() {
             // If the first token is "fn", we'll assume the expression is an anonymous function.
-            Some(token @ Token{kind: TokenKind::Function, ..}) => {
+            Some(
+                token @ Token {
+                    kind: TokenKind::Function,
+                    ..
+                },
+            ) => {
                 // Put the "fn" token back because it's expected by Function::from_anon.
                 tokens.push_front(token);
 
                 // Parse the anonymous function and return it.
                 let func = Function::from_anon(tokens)?;
                 Ok(Expression::AnonFunction(Box::new(func)))
-            },
+            }
 
             // If the first token is an identifier, the expression can either be a function call
             // or a variable value.
@@ -88,30 +96,44 @@ impl Expression {
                 }
             }
 
+            // If the first token is a unary operator, we know the rest should be a composite
+            // expression.
+            Some(
+                token @ Token {
+                    kind: TokenKind::Not,
+                    ..
+                },
+            ) => {
+                let op = Operator::from(&token.kind).expect("operator should not be None");
+                let expr = Expression::from(tokens)?;
+                Ok(Expression::UnaryOperation(op, Box::new(expr)))
+            }
+
             // Check if it's a bool literal.
             Some(Token {
-                     kind: TokenKind::BoolLiteral(b),
-                     ..
-                 }) => Ok(Expression::BoolLiteral(b)),
+                kind: TokenKind::BoolLiteral(b),
+                ..
+            }) => Ok(Expression::BoolLiteral(b)),
 
             // Check if it's an integer literal.
             Some(Token {
-                     kind: TokenKind::IntLiteral(i),
-                     ..
-                 }) => Ok(Expression::IntLiteral(i)),
+                kind: TokenKind::IntLiteral(i),
+                ..
+            }) => Ok(Expression::IntLiteral(i)),
 
             // Check if it's a string literal.
             Some(Token {
-                     kind: TokenKind::StringLiteral(s),
-                     ..
-                 }) => Ok(Expression::StringLiteral(s)),
+                kind: TokenKind::StringLiteral(s),
+                ..
+            }) => Ok(Expression::StringLiteral(s)),
 
             // If the token is anything else, error.
             Some(token) => Err(ParseError::new(
                 format!(
                     r#"Invalid expression: Expected literal value, variable value, or function call, but got "{}""#,
-                    &token
-                ).as_str(),
+                    token
+                )
+                .as_str(),
                 Some(token),
             )),
 
@@ -120,55 +142,70 @@ impl Expression {
         }
     }
 
-    /// Parses a basic or composite expression from the given tokens ending with any of the given
-    /// terminator token kinds. Returns the parsed expression and the terminator token. A basic
-    /// expression can be any of the following:
+    /// Parses a basic or composite expression from the given tokens. A basic expression can be any
+    /// of the following:
     ///  - an identifier representing a variable value
     ///  - a literal value
     ///  - a function call
+    ///  - a unary operator followed by a composite expression (`<unary_op> <comp_expr>`)
     /// whereas a composite expression can be any token sequence of the form
     ///
-    ///     <basic_expr> <op> <comp_expr>
+    ///     <basic_expr> <binary_op> <comp_expr>
     ///
     /// where
     ///  - `basic_expr` is a basic expression
-    ///  - `op` is an operator
+    ///  - `binary_op` is a binary operator
     ///  - `comp_expr` is a composite expression
-    pub fn from(
-        tokens: &mut VecDeque<Token>,
-        terminators: HashSet<TokenKind>,
-    ) -> ParseResult<(Expression, Token)> {
+    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Expression> {
         // The first tokens should represent a basic expression.
         let left_expr = Expression::from_basic(tokens)?;
 
-        // The next token should either be an operator or a terminator.
-        match tokens.pop_front() {
+        // If the next token is a binary operator, this is a compound expression. Otherwise, we
+        // assume that we have a basic expression and we're done parsing.
+        match tokens.front() {
             Some(token) => {
-                if terminators.contains(&token.kind) {
-                    // We've reached the end of the expression, so just return the basic expression
-                    // we have.
-                    return Ok((left_expr, token));
-                }
-
-                // At this point we know the token must be an operator.
-                let bin_op = match Operator::from(&token.kind) {
-                    Some(op) => op,
-                    None => {
-                        return Err(ParseError::new(
-                            format!(r#"Expected operator, but got "{}""#, token).as_str(),
-                            Some(token),
+                let binary_op = Operator::from(&token.kind);
+                match binary_op {
+                    Some(
+                        Operator::Add
+                        | Operator::Subtract
+                        | Operator::Multiply
+                        | Operator::Divide
+                        | Operator::Modulo
+                        | Operator::LogicalAnd
+                        | Operator::LogicalOr
+                        | Operator::EqualTo
+                        | Operator::NotEqualTo
+                        | Operator::GreaterThan
+                        | Operator::LessThan
+                        | Operator::GreaterThanOrEqual
+                        | Operator::LessThanOrEqual,
+                    ) => {
+                        // The token is a binary operator, so what remains of the expression (the
+                        // right side) can be parsed recursively. Pop the operator and parse the
+                        // expression.
+                        tokens.pop_front();
+                        let right_expr = Expression::from(tokens)?;
+                        Ok(Expression::BinaryOperation(
+                            Box::new(left_expr),
+                            binary_op.expect("binary op should not be None"),
+                            Box::new(right_expr),
                         ))
                     }
-                };
-
-                // What remains of the expression (the right side) can be parsed recursively.
-                let (right_expr, terminator) = Expression::from(tokens, terminators)?;
-                Ok((
-                    Expression::Operator(Box::new(left_expr), bin_op, Box::new(right_expr)),
-                    terminator,
-                ))
+                    Some(_) => {
+                        // The token is an operator, but not a binary operator.
+                        Err(ParseError::new(
+                            format!(r#"Expected binary operator, but got "{}""#, token).as_str(),
+                            Some(token.clone()),
+                        ))
+                    }
+                    None => {
+                        // The token is not an operator, so we assume we have a basic expression.
+                        Ok(left_expr)
+                    }
+                }
             }
-            None => Err(ParseError::new("Unexpected end of expression", None)),
+            None => Ok(left_expr),
         }
     }
 }

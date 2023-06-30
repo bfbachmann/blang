@@ -10,7 +10,7 @@ use crate::parser::r#loop::Loop;
 use crate::parser::var_assign::VariableAssignment;
 use crate::parser::var_dec::VariableDeclaration;
 use crate::parser::ParseResult;
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 
 /// Represents a statement.
 #[derive(Debug, PartialEq)]
@@ -168,15 +168,27 @@ impl Statement {
                 _,
             ) => {
                 tokens.pop_front();
-                let (expr, _) = Expression::from(tokens, HashSet::from([TokenKind::SemiColon]))?;
+                let expr = Expression::from(tokens)?;
                 Ok(Statement::Return(expr))
             }
 
             // If the tokens are anything else, we'll try parse as an expression.
             (_, _) => {
-                let (expr, _) = Expression::from(tokens, HashSet::from([TokenKind::SemiColon]))?;
+                let expr = Expression::from(tokens)?;
                 Ok(Statement::Expression(expr))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::lexer::Token;
+    use crate::parser::statement::Statement;
+
+    #[test]
+    fn parse_var_assignment() {
+        let mut tokens = Token::tokenize_line("int thing = 234", 0).expect("should not error");
+        Statement::from(&mut tokens).expect("should not error");
     }
 }

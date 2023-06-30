@@ -5,7 +5,7 @@ use std::fmt;
 /// Represents any valid token in the language.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TokenKind {
-    // Operators
+    // Binary operators
     Add,
     Subtract,
     Multiply,
@@ -14,11 +14,15 @@ pub enum TokenKind {
     LogicalAnd,
     LogicalOr,
 
+    // Unary operators
+    Not,
+
     // Variable assignment
     Equal,
 
     // Comparators
-    Equals,
+    EqualTo,
+    NotEqualTo,
     GreaterThan,
     LessThan,
     GreaterThanOrEqual,
@@ -76,8 +80,10 @@ impl TokenKind {
             TokenKind::Modulo => "%".to_string(),
             TokenKind::LogicalAnd => "&&".to_string(),
             TokenKind::LogicalOr => "||".to_string(),
+            TokenKind::Not => "!".to_string(),
             TokenKind::Equal => "=".to_string(),
-            TokenKind::Equals => "==".to_string(),
+            TokenKind::EqualTo => "==".to_string(),
+            TokenKind::NotEqualTo => "!=".to_string(),
             TokenKind::GreaterThan => ">".to_string(),
             TokenKind::LessThan => "<".to_string(),
             TokenKind::GreaterThanOrEqual => ">=".to_string(),
@@ -149,10 +155,12 @@ impl TokenKind {
             TokenKind::Modulo,
             TokenKind::LogicalAnd,
             TokenKind::LogicalOr,
+            TokenKind::Not,
             TokenKind::Equal,
             TokenKind::Int,
             TokenKind::Bool,
-            TokenKind::Equals,
+            TokenKind::EqualTo,
+            TokenKind::NotEqualTo,
             TokenKind::GreaterThan,
             TokenKind::LessThan,
             TokenKind::GreaterThanOrEqual,

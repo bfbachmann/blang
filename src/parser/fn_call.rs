@@ -1,5 +1,6 @@
 use crate::lexer::kind::TokenKind;
 use crate::lexer::Token;
+use crate::parser::error::ParseError;
 use crate::parser::expr::Expression;
 use crate::parser::{ParseResult, Program};
 use crate::util;
@@ -43,27 +44,48 @@ impl FunctionCall {
         // The remaining tokens should be expressions representing argument values separated by ","
         // and ending in ")".
         let mut args = vec![];
-        let mut terminator = TokenKind::Comma;
-        while terminator != TokenKind::CloseParen {
-            // If the next token is ")", we're done parsing arguments.
+        loop {
             match tokens.front() {
+                // If the next token is ")", we break because we're done parsing arguments.
                 Some(&Token {
                     kind: TokenKind::CloseParen,
                     ..
                 }) => {
+                    // Pop the ")".
                     tokens.pop_front();
                     break;
                 }
+
+                // If the next token is ",", we'll make sure that we've already parsed at least one
+                // argument because the comma should only come after an argument.
+                Some(
+                    comma @ &Token {
+                        kind: TokenKind::Comma,
+                        ..
+                    },
+                ) => {
+                    if args.len() == 0 {
+                        return Err(ParseError::new(
+                            format!(r#"Expected expression or ")", but got "{}"#, comma).as_str(),
+                            Some(comma.clone()),
+                        ));
+                    }
+
+                    // Pop the ",".
+                    tokens.pop_front();
+                }
+
+                None => {
+                    return Err(ParseError::new("Unexpected end of arguments", None));
+                }
+
+                // If the next token is not "," or ")", we assume that it's the beginning of an
+                // expression that represents the next argument.
                 _ => {}
             }
 
-            // Try parse the next argument as an expression.
-            let (expr, term) = Expression::from(
-                tokens,
-                HashSet::from([TokenKind::Comma, TokenKind::CloseParen]),
-            )?;
+            let expr = Expression::from(tokens)?;
             args.push(expr);
-            terminator = term.kind;
         }
 
         Ok(FunctionCall::new(fn_name.as_str(), args))

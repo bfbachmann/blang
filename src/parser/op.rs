@@ -1,9 +1,10 @@
 use crate::lexer::kind::TokenKind;
+use core::fmt;
 
 /// Represents an operator.
 #[derive(Debug, PartialEq)]
 pub enum Operator {
-    // Basic operators
+    // Basic binary operators
     Add,
     Subtract,
     Multiply,
@@ -12,12 +13,22 @@ pub enum Operator {
     LogicalAnd,
     LogicalOr,
 
+    // Basic unary operators
+    Not,
+
     // Comparators
-    Equals,
+    EqualTo,
+    NotEqualTo,
     GreaterThan,
     LessThan,
     GreaterThanOrEqual,
     LessThanOrEqual,
+}
+
+impl fmt::Display for Operator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
 }
 
 impl Operator {
@@ -32,12 +43,33 @@ impl Operator {
             TokenKind::Modulo => Some(Operator::Modulo),
             TokenKind::LogicalAnd => Some(Operator::LogicalAnd),
             TokenKind::LogicalOr => Some(Operator::LogicalOr),
-            TokenKind::Equals => Some(Operator::Equals),
+            TokenKind::Not => Some(Operator::Not),
+            TokenKind::EqualTo => Some(Operator::EqualTo),
+            TokenKind::NotEqualTo => Some(Operator::NotEqualTo),
             TokenKind::GreaterThan => Some(Operator::GreaterThan),
             TokenKind::LessThan => Some(Operator::LessThan),
             TokenKind::GreaterThanOrEqual => Some(Operator::GreaterThanOrEqual),
             TokenKind::LessThanOrEqual => Some(Operator::LessThanOrEqual),
             _ => None,
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Operator::Add => "+".to_string(),
+            Operator::Subtract => "-".to_string(),
+            Operator::Multiply => "*".to_string(),
+            Operator::Divide => "/".to_string(),
+            Operator::Modulo => "%".to_string(),
+            Operator::LogicalAnd => "&&".to_string(),
+            Operator::LogicalOr => "||".to_string(),
+            Operator::Not => "!".to_string(),
+            Operator::EqualTo => "==".to_string(),
+            Operator::NotEqualTo => "!=".to_string(),
+            Operator::GreaterThan => ">".to_string(),
+            Operator::LessThan => "<".to_string(),
+            Operator::GreaterThanOrEqual => ">=".to_string(),
+            Operator::LessThanOrEqual => "<=".to_string(),
         }
     }
 }
