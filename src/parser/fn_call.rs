@@ -75,6 +75,19 @@ impl FunctionCall {
 
                     // Pop the ",".
                     tokens.pop_front();
+
+                    // If the next token is ")", we break. We're allowing arguments to end in ",)"
+                    // a to account for cases where function call arguments are broken over
+                    // multiple lines and the user wishes to end the last argument with a ",".
+                    if let Some(&Token {
+                        kind: TokenKind::CloseParen,
+                        ..
+                    }) = tokens.front()
+                    {
+                        // Pop the ")".
+                        tokens.pop_front();
+                        break;
+                    }
                 }
 
                 None => {

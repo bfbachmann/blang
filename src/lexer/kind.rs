@@ -122,11 +122,6 @@ impl TokenKind {
         }
     }
 
-    /// Returns the number of characters in the token.
-    pub fn len(&self) -> usize {
-        self.to_string().len()
-    }
-
     /// Finds the first valid TokenKind in the slice and the index in the slice at which the token
     /// ends. If the slice does not begin with a valid token, None will be returned.
     pub fn first_from(segment: &str) -> Option<(TokenKind, usize)> {

@@ -54,10 +54,7 @@ impl Statement {
             _ => {}
         }
 
-        match (
-            first.expect("first token should not be None"),
-            second.expect("second token should not be None"),
-        ) {
+        match (first.unwrap(), second.unwrap()) {
             // If the first token is a type, it must be a variable declaration.
             (
                 Token {

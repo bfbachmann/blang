@@ -105,7 +105,7 @@ impl Expression {
                     ..
                 },
             ) => {
-                let op = Operator::from(&token.kind).expect("operator should not be None");
+                let op = Operator::from(&token.kind).unwrap();
                 let expr = Expression::from(tokens)?;
                 Ok(Expression::UnaryOperation(op, Box::new(expr)))
             }

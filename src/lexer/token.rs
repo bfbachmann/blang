@@ -33,12 +33,11 @@ impl fmt::Display for Token {
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, line: usize, start_col: usize) -> Self {
-        let len = kind.len();
+    pub fn new(kind: TokenKind, line: usize, start_col: usize, end_col: usize) -> Self {
         Token {
             kind,
             start: Position::new(line, start_col),
-            end: Position::new(line, start_col + len),
+            end: Position::new(line, end_col),
         }
     }
 
@@ -75,12 +74,14 @@ impl Token {
 
         while search_start < segment.len() {
             let subseg = &segment[search_start..];
-            if let Some((kind, token_end)) = TokenKind::first_from(subseg) {
+            if let Some((kind, end_col)) = TokenKind::first_from(subseg) {
                 // The current subsegment begins with (or is entirely) a valid token. Store it and
                 // record its end index so we can start the next search at the end of the current
                 // token.
-                tokens.push_back(Token::new(kind, line_num, search_start));
-                search_start += token_end;
+                let token_start = search_start + whitespace_prefix_size(subseg);
+                let token_end = search_start + end_col - whitespace_suffix_size(&subseg[..end_col]);
+                tokens.push_back(Token::new(kind, line_num, token_start, token_end));
+                search_start += end_col;
             } else {
                 // The subsegment does not begin with a valid token. This means the segment is
                 // syntactically invalid.
@@ -94,4 +95,12 @@ impl Token {
 
         Ok(tokens)
     }
+}
+
+fn whitespace_prefix_size(s: &str) -> usize {
+    s.chars().take_while(|c| c.is_whitespace()).count()
+}
+
+fn whitespace_suffix_size(s: &str) -> usize {
+    s.chars().rev().take_while(|c| c.is_whitespace()).count()
 }

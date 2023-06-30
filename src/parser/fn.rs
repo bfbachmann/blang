@@ -1,12 +1,8 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 
-use crate::lexer::kind::TokenKind;
 use crate::lexer::token::Token;
-use crate::parser::arg::Argument;
 use crate::parser::closure::Closure;
-use crate::parser::error::ParseError;
 use crate::parser::func_sig::FunctionSignature;
-use crate::parser::program::Program;
 use crate::parser::ParseResult;
 
 /// Represents a function declaration.
@@ -63,71 +59,5 @@ impl Function {
 
         // Now that we have the function name and args, create the node.
         Ok(Function::new(sig, body))
-    }
-
-    /// Parses argument declarations in function declarations. Expects token sequences of the form
-    ///
-    ///      (<arg_type> <arg_name>, ...)
-    ///
-    /// where
-    ///  - `arg_type` is the type of the argument
-    ///  - `arg_name` is an identifier representing the argument name
-    pub fn arg_declarations_from(tokens: &mut VecDeque<Token>) -> ParseResult<Vec<Argument>> {
-        // The first token should be the opening parenthesis.
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::OpenParen]))?;
-
-        // The next token(s) should be arguments or a closing parenthesis.
-        let mut args = vec![];
-        loop {
-            // The next token should be an argument, or ")".
-            let token = tokens.pop_front();
-            match token {
-                Some(Token {
-                    kind: TokenKind::CloseParen,
-                    ..
-                }) => {
-                    // We're done assembling arguments.
-                    break;
-                }
-                Some(Token {
-                    kind: TokenKind::String | TokenKind::Int | TokenKind::Bool | TokenKind::Function,
-                    ..
-                }) => {
-                    // The next few tokens represent an argument.
-                    tokens.push_front(token.unwrap());
-                    let arg = Argument::from(tokens)?;
-                    args.push(arg);
-                }
-                None => {
-                    return Err(ParseError::new(
-                        r#"Expected argument or ")" (end of function arguments)"#,
-                        None,
-                    ))
-                }
-                Some(other) => {
-                    return Err(ParseError::new(
-                        format!(
-                            r#"Expected argument or ")" (end of function arguments), but got "{}""#,
-                            other
-                        )
-                        .as_str(),
-                        Some(other),
-                    ))
-                }
-            };
-
-            // After the argument, the next token should be "," or ")".
-            let kind = Program::parse_expecting(
-                tokens,
-                HashSet::from([TokenKind::Comma, TokenKind::CloseParen]),
-            )?;
-            match kind {
-                TokenKind::Comma => {} // Nothing to do here. Just move onto the next arg.
-                TokenKind::CloseParen => break, // We're done parsing args.
-                _ => panic!("this should be impossible"),
-            }
-        }
-
-        Ok(args)
     }
 }

@@ -142,14 +142,14 @@ mod tests {
         assert_eq!(
             result,
             Ok(VecDeque::from(vec![
-                Token::new(TokenKind::Identifier(String::from("thing")), 0, 0),
-                Token::new(TokenKind::Equal, 0, 6),
-                Token::new(TokenKind::IntLiteral(234), 0, 8),
-                Token::new(TokenKind::StringLiteral(String::from("onetwo")), 0, 12),
-                Token::new(TokenKind::StringLiteral(String::from("three")), 0, 21),
-                Token::new(TokenKind::Identifier(String::from("four")), 0, 28),
-                Token::new(TokenKind::StringLiteral(String::from("")), 0, 32),
-                Token::new(TokenKind::StringLiteral(String::from(r#"\\\"#)), 0, 35),
+                Token::new(TokenKind::Identifier(String::from("thing")), 0, 0, 5),
+                Token::new(TokenKind::Equal, 0, 6, 7),
+                Token::new(TokenKind::IntLiteral(234), 0, 8, 11),
+                Token::new(TokenKind::StringLiteral(String::from("onetwo")), 0, 12, 20),
+                Token::new(TokenKind::StringLiteral(String::from("three")), 0, 21, 28),
+                Token::new(TokenKind::Identifier(String::from("four")), 0, 28, 32),
+                Token::new(TokenKind::StringLiteral(String::from("")), 0, 32, 34),
+                Token::new(TokenKind::StringLiteral(String::from(r#"\\\"#)), 0, 35, 43),
             ])),
         );
 
@@ -157,17 +157,17 @@ mod tests {
         assert_eq!(
             result,
             Ok(VecDeque::from(vec![
-                Token::new(TokenKind::If, 100, 0),
-                Token::new(TokenKind::BeginClosure, 100, 3),
-                Token::new(TokenKind::EndClosure, 100, 4),
-                Token::new(TokenKind::ElseIf, 100, 6),
-                Token::new(TokenKind::BeginClosure, 100, 14),
-                Token::new(TokenKind::EndClosure, 100, 15),
-                Token::new(TokenKind::Else, 100, 17),
-                Token::new(TokenKind::BeginClosure, 100, 22),
-                Token::new(TokenKind::EndClosure, 100, 23),
-                Token::new(TokenKind::Identifier(String::from("elser")), 100, 25),
-                Token::new(TokenKind::Identifier(String::from("iff")), 100, 31),
+                Token::new(TokenKind::If, 100, 0, 2),
+                Token::new(TokenKind::BeginClosure, 100, 3, 4),
+                Token::new(TokenKind::EndClosure, 100, 4, 5),
+                Token::new(TokenKind::ElseIf, 100, 6, 13),
+                Token::new(TokenKind::BeginClosure, 100, 14, 15),
+                Token::new(TokenKind::EndClosure, 100, 15, 16),
+                Token::new(TokenKind::Else, 100, 17, 21),
+                Token::new(TokenKind::BeginClosure, 100, 22, 23),
+                Token::new(TokenKind::EndClosure, 100, 23, 24),
+                Token::new(TokenKind::Identifier(String::from("elser")), 100, 25, 30),
+                Token::new(TokenKind::Identifier(String::from("iff")), 100, 31, 34),
             ])),
         );
 
