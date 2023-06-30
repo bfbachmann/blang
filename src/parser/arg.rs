@@ -1,5 +1,6 @@
 use crate::lexer::Token;
-use crate::parser::{ParseResult, Program, Type};
+use crate::parser::program::Program;
+use crate::parser::{ParseResult, Type};
 use std::collections::VecDeque;
 
 /// Represents a function argument declaration.

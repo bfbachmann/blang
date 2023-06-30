@@ -4,10 +4,10 @@ mod lexer;
 mod parser;
 mod util;
 
-use crate::parser::Program;
 use clap::{arg, Command};
 use lexer::Token;
 use log::{error, info, set_max_level, Level};
+use parser::program::Program;
 use parser::statement::Statement;
 use std::collections::VecDeque;
 use std::fs::File;

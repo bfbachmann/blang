@@ -4,7 +4,8 @@ use crate::parser::arg::Argument;
 use crate::parser::closure::Closure;
 use crate::parser::error::ParseError;
 use crate::parser::func_sig::FunctionSignature;
-use crate::parser::{ParseResult, Program};
+use crate::parser::program::Program;
+use crate::parser::ParseResult;
 use std::collections::{HashSet, VecDeque};
 
 /// Represents a function declaration.

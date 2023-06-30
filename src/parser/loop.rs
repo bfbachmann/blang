@@ -1,7 +1,8 @@
 use crate::lexer::kind::TokenKind;
 use crate::lexer::Token;
 use crate::parser::closure::Closure;
-use crate::parser::{ParseResult, Program};
+use crate::parser::program::Program;
+use crate::parser::ParseResult;
 use std::collections::{HashSet, VecDeque};
 
 /// Represents a closure that is executed repeatedly.

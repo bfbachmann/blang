@@ -1,8 +1,9 @@
 use crate::lexer::kind::TokenKind;
 use crate::lexer::Token;
 use crate::parser::expr::Expression;
+use crate::parser::program::Program;
 use crate::parser::statement::Statement;
-use crate::parser::{ParseResult, Program};
+use crate::parser::ParseResult;
 use crate::util;
 use std::collections::{HashSet, VecDeque};
 

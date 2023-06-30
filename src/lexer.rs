@@ -1,3 +1,8 @@
+pub mod error;
+pub mod kind;
+pub mod pos;
+pub mod token;
+
 use error::LexError;
 use kind::TokenKind;
 use pos::Position;
@@ -7,10 +12,6 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::result::Result;
 
-mod error;
-pub mod kind;
-pub mod pos;
-
 type LexResult<T> = Result<T, LexError>;
 
 /// A token has a kind and a start and end position (in the file).
@@ -19,16 +20,6 @@ pub struct Token {
     pub kind: TokenKind,
     pub start: Position,
     pub end: Position,
-}
-
-impl Clone for Token {
-    fn clone(&self) -> Self {
-        Token {
-            kind: self.kind.clone(),
-            start: self.start,
-            end: self.end,
-        }
-    }
 }
 
 impl fmt::Display for Token {
