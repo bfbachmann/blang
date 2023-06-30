@@ -25,6 +25,7 @@ fn main() {
     }
 }
 
+// Calls `visitor_fn` with n and returns the n'th Fibonacci number.
 fn fib(int n, fn (int a) visitor_fn): int {
     visitor_fn(n)
 

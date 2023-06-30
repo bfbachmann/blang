@@ -54,6 +54,7 @@ pub enum TokenKind {
     Comma,
     SemiColon,
     Colon,
+    BeginComment,
 
     // User-defined values
     Identifier(String),
@@ -110,6 +111,7 @@ impl TokenKind {
             TokenKind::Colon => ":".to_string(),
             TokenKind::Break => "break".to_string(),
             TokenKind::Return => "return".to_string(),
+            TokenKind::BeginComment => "//".to_string(),
         }
     }
 
@@ -175,6 +177,7 @@ impl TokenKind {
             TokenKind::Loop,
             TokenKind::Break,
             TokenKind::Return,
+            TokenKind::BeginComment,
         ];
 
         for kind in basic_kinds {

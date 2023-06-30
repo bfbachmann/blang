@@ -75,6 +75,11 @@ impl Token {
         while search_start < segment.len() {
             let subseg = &segment[search_start..];
             if let Some((kind, end_col)) = TokenKind::first_from(subseg) {
+                // Ignore everything on the line after a comment.
+                if kind == TokenKind::BeginComment {
+                    break;
+                }
+
                 // The current subsegment begins with (or is entirely) a valid token. Store it and
                 // record its end index so we can start the next search at the end of the current
                 // token.
