@@ -1,9 +1,10 @@
+use std::collections::{HashSet, VecDeque};
+
 use crate::lexer::kind::TokenKind;
-use crate::lexer::Token;
+use crate::lexer::token::Token;
 use crate::parser::closure::Closure;
 use crate::parser::program::Program;
 use crate::parser::ParseResult;
-use std::collections::{HashSet, VecDeque};
 
 /// Represents a closure that is executed repeatedly.
 #[derive(Debug, PartialEq)]

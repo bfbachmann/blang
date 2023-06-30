@@ -1,9 +1,10 @@
+use std::collections::VecDeque;
+
 use crate::lexer::kind::TokenKind;
-use crate::lexer::Token;
+use crate::lexer::token::Token;
 use crate::parser::error::ParseError;
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::ParseResult;
-use std::collections::VecDeque;
 
 /// Represents any valid type.
 #[derive(Debug, PartialEq)]

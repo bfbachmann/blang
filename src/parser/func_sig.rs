@@ -1,11 +1,12 @@
+use std::collections::{HashSet, VecDeque};
+
 use crate::lexer::kind::TokenKind;
-use crate::lexer::Token;
+use crate::lexer::token::Token;
 use crate::parser::arg::Argument;
 use crate::parser::program::Program;
 use crate::parser::r#fn::Function;
 use crate::parser::{ParseResult, Type};
 use crate::util;
-use std::collections::{HashSet, VecDeque};
 
 /// Represents the name, arguments, and return type of a function. Anonymous functions have empty
 /// names.

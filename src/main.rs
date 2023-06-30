@@ -1,18 +1,20 @@
 extern crate core;
 
-mod lexer;
-mod parser;
-mod util;
-
-use clap::{arg, Command};
-use lexer::Token;
-use log::{error, info, set_max_level, Level};
-use parser::program::Program;
-use parser::statement::Statement;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{stdin, stdout, BufReader, Error, ErrorKind, Result, Write};
 use std::process;
+
+use clap::{arg, Command};
+use log::{error, info, set_max_level, Level};
+
+use lexer::token::Token;
+use parser::program::Program;
+use parser::statement::Statement;
+
+mod lexer;
+mod parser;
+mod util;
 
 macro_rules! fatal {
     ($($arg:tt)*) => {{

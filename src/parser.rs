@@ -1,3 +1,6 @@
+use error::ParseError;
+use r#type::Type;
+
 mod arg;
 mod branch;
 mod closure;
@@ -15,14 +18,11 @@ mod r#type;
 mod var_assign;
 mod var_dec;
 
-use error::ParseError;
-use r#type::Type;
-
 type ParseResult<T> = Result<T, ParseError>;
 
 #[cfg(test)]
 mod tests {
-    use crate::lexer::Token;
+    use crate::lexer::token::Token;
     use crate::parser::arg::Argument;
     use crate::parser::closure::Closure;
     use crate::parser::expr::Expression;

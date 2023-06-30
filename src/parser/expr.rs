@@ -1,11 +1,12 @@
+use std::collections::VecDeque;
+
 use crate::lexer::kind::TokenKind;
-use crate::lexer::Token;
+use crate::lexer::token::Token;
 use crate::parser::error::ParseError;
 use crate::parser::fn_call::FunctionCall;
 use crate::parser::op::Operator;
 use crate::parser::r#fn::Function;
 use crate::parser::ParseResult;
-use std::collections::VecDeque;
 
 /// Represents basic and composite expressions. A basic expression can be any of the following:
 ///  - an identifier representing a variable value

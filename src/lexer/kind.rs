@@ -1,6 +1,7 @@
+use std::fmt;
+
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::fmt;
 
 /// Represents any valid token in the language.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

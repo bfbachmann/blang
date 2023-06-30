@@ -1,5 +1,6 @@
-use crate::lexer::Token;
 use std::fmt;
+
+use crate::lexer::token::Token;
 
 /// Represents any fatal error that occurs during parsing.
 #[derive(Debug)]

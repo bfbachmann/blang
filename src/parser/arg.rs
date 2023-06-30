@@ -1,7 +1,8 @@
-use crate::lexer::Token;
+use std::collections::VecDeque;
+
+use crate::lexer::token::Token;
 use crate::parser::program::Program;
 use crate::parser::{ParseResult, Type};
-use std::collections::VecDeque;
 
 /// Represents a function argument declaration.
 #[derive(Debug, PartialEq)]

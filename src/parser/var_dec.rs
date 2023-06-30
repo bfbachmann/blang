@@ -1,9 +1,10 @@
-use crate::lexer::Token;
+use std::collections::VecDeque;
+
+use crate::lexer::token::Token;
 use crate::parser::expr::Expression;
 use crate::parser::r#type::Type;
 use crate::parser::var_assign::VariableAssignment;
 use crate::parser::ParseResult;
-use std::collections::VecDeque;
 
 /// Represents a variable declaration. Each variable declaration must have a valid type, a name,
 /// and some value as the result of an expression.

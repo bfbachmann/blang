@@ -1,11 +1,12 @@
+use std::collections::{HashSet, VecDeque};
+
 use crate::lexer::kind::TokenKind;
-use crate::lexer::Token;
+use crate::lexer::token::Token;
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
 use crate::parser::statement::Statement;
 use crate::parser::ParseResult;
 use crate::util;
-use std::collections::{HashSet, VecDeque};
 
 /// Represents a closure, which is just a series of statements with their own scope.
 #[derive(Debug)]

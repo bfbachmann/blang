@@ -1,5 +1,7 @@
+use std::collections::VecDeque;
+
 use crate::lexer::kind::TokenKind;
-use crate::lexer::Token;
+use crate::lexer::token::Token;
 use crate::parser::closure::Closure;
 use crate::parser::cond::Conditional;
 use crate::parser::error::ParseError;
@@ -10,7 +12,6 @@ use crate::parser::r#loop::Loop;
 use crate::parser::var_assign::VariableAssignment;
 use crate::parser::var_dec::VariableDeclaration;
 use crate::parser::ParseResult;
-use std::collections::VecDeque;
 
 /// Represents a statement.
 #[derive(Debug, PartialEq)]
@@ -183,7 +184,7 @@ impl Statement {
 
 #[cfg(test)]
 mod tests {
-    use crate::lexer::Token;
+    use crate::lexer::token::Token;
     use crate::parser::statement::Statement;
 
     #[test]

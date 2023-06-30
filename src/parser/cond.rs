@@ -1,10 +1,11 @@
+use std::collections::{HashSet, VecDeque};
+
 use crate::lexer::kind::TokenKind;
-use crate::lexer::Token;
+use crate::lexer::token::Token;
 use crate::parser::branch::Branch;
 use crate::parser::program::Program;
 use crate::parser::ParseResult;
 use crate::util;
-use std::collections::{HashSet, VecDeque};
 
 /// Represents a conditional (i.e. branching if/else if/else statements).
 #[derive(Debug)]

@@ -1,10 +1,11 @@
+use std::collections::{HashSet, VecDeque};
+
 use crate::lexer::kind::TokenKind;
-use crate::lexer::Token;
+use crate::lexer::token::Token;
 use crate::parser::error::ParseError;
 use crate::parser::statement::Statement;
 use crate::parser::ParseResult;
 use crate::util;
-use std::collections::{HashSet, VecDeque};
 
 /// Represents a complete and syntactically valid (but not necessarily semantically valid) program.
 #[derive(Debug)]
