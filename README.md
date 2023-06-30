@@ -36,3 +36,16 @@ fn fib(int n, fn (int a) visitor_fn): int {
     return fib(n-1) + fib(n-2)
 }
 ```
+
+## Useful commands
+
+```bash
+# Run the REPL
+make repl
+
+# Run tests
+make test
+
+# Compile Blang source code in file "my_code.bl"
+make my_code
+```

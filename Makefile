@@ -6,10 +6,10 @@ repl:
 test:
 	cargo test
 
-.PHONY: source
-source:
-	RUST_LOG=debug cargo run -- source
-
 .PHONY: docs
 docs:
 	cargo doc
+
+.PHONY: %
+%:
+	RUST_LOG=debug cargo run -- $@.bl
