@@ -35,4 +35,17 @@ impl Argument {
 
         Ok(Argument::new(name.as_str(), arg_type))
     }
+
+    /// Parses an unnamed function argument declaration. Expects token sequences of the form
+    ///
+    ///      <arg_type>
+    ///
+    /// where
+    ///  - `arg_type` is the type of the argument
+    pub fn unnamed_from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+        // The next token should be the argument type.
+        let arg_type = Type::from(tokens)?;
+
+        Ok(Argument::new("", arg_type))
+    }
 }

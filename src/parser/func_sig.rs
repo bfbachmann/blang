@@ -60,7 +60,7 @@ impl FunctionSignature {
         let fn_name = Program::parse_identifier(tokens)?;
 
         // The next tokens should represent function arguments and optional return type.
-        let fn_sig = FunctionSignature::from_args_and_return(tokens)?;
+        let fn_sig = FunctionSignature::from_args_and_return(tokens, true)?;
 
         Ok(FunctionSignature::new(
             fn_name.as_str(),
@@ -69,37 +69,47 @@ impl FunctionSignature {
         ))
     }
 
-    /// Parses anonymous function signatures. Expects token sequences of the forms
+    /// Parses anonymous function signatures. If `named` is true, expects token sequences of the
+    /// forms
     ///
     ///      fn (<arg_type> <arg_name>, ...): <return_type>
     ///      fn (<arg_type> <arg_name>, ...)
+    ///
+    /// Otherwise, expects token sequences of the forms
+    ///
+    ///      fn (<arg_type>, ...): <return_type>
+    ///      fn (<arg_type>, ...)
     ///
     /// where
     ///  - `arg_type` is the type of the argument
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return type
-    pub fn from_anon(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+    pub fn from_anon(tokens: &mut VecDeque<Token>, named: bool) -> ParseResult<Self> {
         // The first token should be "fn".
         Program::parse_expecting(tokens, HashSet::from([TokenKind::Function]))?;
 
         // The next tokens should represent function arguments followed by the return type.
-        let fn_sig = FunctionSignature::from_args_and_return(tokens)?;
+        let fn_sig = FunctionSignature::from_args_and_return(tokens, named)?;
         Ok(fn_sig)
     }
 
-    /// Parses function arguments and return value from a function signature. Expects token
-    /// sequences of the forms
+    /// Parses function arguments and return value from a function signature. If `named` is true,
+    /// expects token sequences of the forms
     ///
     ///     (<arg_type> <arg_name>, ...): <return_type>
     ///     (<arg_type> <arg_name>, ...)
+    ///
+    /// Otherwise, expects token sequences of the form
+    ///
+    ///     (<arg_type>, ...)
     ///
     /// where
     ///  - `arg_type` is the type of the argument
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return value
-    fn from_args_and_return(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+    fn from_args_and_return(tokens: &mut VecDeque<Token>, named: bool) -> ParseResult<Self> {
         // The next tokens should represent function arguments.
-        let args = FunctionSignature::arg_declarations_from(tokens)?;
+        let args = FunctionSignature::arg_declarations_from(tokens, named)?;
 
         // The next token should be ":" if there is a return type. Otherwise, there is no return
         // type and we're done.
@@ -119,14 +129,22 @@ impl FunctionSignature {
         Ok(FunctionSignature::new_anon(args, return_type))
     }
 
-    /// Parses argument declarations in function declarations. Expects token sequences of the form
+    /// Parses argument declarations in function declarations. If `named` is true, expects token
+    /// sequences of the form
     ///
     ///      (<arg_type> <arg_name>, ...)
+    ///
+    /// Otherwise, expects token sequences of the form
+    ///
+    ///      (<arg_type>, ...)
     ///
     /// where
     ///  - `arg_type` is the type of the argument
     ///  - `arg_name` is an identifier representing the argument name
-    fn arg_declarations_from(tokens: &mut VecDeque<Token>) -> ParseResult<Vec<Argument>> {
+    fn arg_declarations_from(
+        tokens: &mut VecDeque<Token>,
+        named: bool,
+    ) -> ParseResult<Vec<Argument>> {
         // The first token should be the opening parenthesis.
         Program::parse_expecting(tokens, HashSet::from([TokenKind::OpenParen]))?;
 
@@ -149,7 +167,11 @@ impl FunctionSignature {
                 }) => {
                     // The next few tokens represent an argument.
                     tokens.push_front(token.unwrap());
-                    let arg = Argument::from(tokens)?;
+                    let arg = if named {
+                        Argument::from(tokens)?
+                    } else {
+                        Argument::unnamed_from(tokens)?
+                    };
                     args.push(arg);
                 }
                 None => {

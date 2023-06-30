@@ -52,7 +52,7 @@ impl Function {
     ///  - `body` is the body of the function
     pub fn from_anon(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         // The first set of tokens should be the function signature.
-        let sig = FunctionSignature::from_anon(tokens)?;
+        let sig = FunctionSignature::from_anon(tokens, true)?;
 
         // The remaining tokens should be the function body.
         let body = Closure::from(tokens)?;

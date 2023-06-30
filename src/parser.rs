@@ -96,7 +96,7 @@ mod tests {
         );
 
         let mut tokens = Token::tokenize_line(
-            "fn bigboi(fn (string b1, int b2) f, int i): fn (bool b): string {}",
+            "fn bigboi(fn (string, int): bool f, int i): fn (bool): string {}",
             0,
         )
         .expect("should not error");
@@ -111,16 +111,16 @@ mod tests {
                             "f",
                             Type::Function(Box::new(FunctionSignature::new_anon(
                                 vec![
-                                    Argument::new("b1", Type::String),
-                                    Argument::new("b2", Type::Int)
+                                    Argument::new("", Type::String),
+                                    Argument::new("", Type::Int)
                                 ],
-                                None,
+                                Some(Type::Bool),
                             ))),
                         ),
                         Argument::new("i", Type::Int)
                     ],
                     Some(Type::Function(Box::new(FunctionSignature::new_anon(
-                        vec![Argument::new("b", Type::Bool)],
+                        vec![Argument::new("", Type::Bool)],
                         Some(Type::String),
                     )))),
                 ),

@@ -38,7 +38,7 @@ impl Type {
                 },
             ) => {
                 tokens.push_front(token);
-                let sig = FunctionSignature::from_anon(tokens)?;
+                let sig = FunctionSignature::from_anon(tokens, false)?;
                 Ok(Type::Function(Box::new(sig)))
             }
             None => return Err(ParseError::new("Expected type", None)),

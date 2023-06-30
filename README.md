@@ -12,7 +12,7 @@ fn main() {
         string prefix = "Fibonacci number " + itoa(i) + " is: "
         int result = fib(
             i,
-            fn (int n) {
+            fn (int n) { // Anonymous functions are allowed
                 print("fib visitor sees n=" + itoa(n))
             },
         )
@@ -26,7 +26,7 @@ fn main() {
 }
 
 // Calls `visitor_fn` with n and returns the n'th Fibonacci number.
-fn fib(int n, fn (int a) visitor_fn): int {
+fn fib(int n, fn (int) visitor_fn): int {
     visitor_fn(n)
 
     if n <= 1 {
