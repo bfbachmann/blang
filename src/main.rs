@@ -74,17 +74,23 @@ fn compile(file_path: &str) {
 /// print the result of the statement.
 fn repl() {
     info!("Starting REPL.");
-    info!("Use ^C to exit. Enter two successive newlines to commit a new statement.");
+    info!("Use ^C to exit. Enter two successive newlines to commit a new statements.");
+
     loop {
         match repl_collect_tokens() {
             Ok(tokens) => {
                 let mut tokens = tokens;
-                match Statement::from(&mut tokens) {
-                    Ok(statement) => {
-                        dbg!(statement);
-                    }
-                    Err(e) => error!("{}", e),
-                };
+                'inner: while !tokens.is_empty() {
+                    match Statement::from(&mut tokens) {
+                        Ok(statement) => {
+                            dbg!(statement);
+                        }
+                        Err(e) => {
+                            error!("{}", e);
+                            break 'inner;
+                        }
+                    };
+                }
             }
             Err(e) => error!("{}", e),
         };
@@ -100,10 +106,7 @@ fn repl_collect_tokens() -> Result<VecDeque<Token>> {
     loop {
         // Print a prompt based on whether this is the beginning of a new sequence or a continuation
         // of the last one.
-        match line_num {
-            0 => stdout().write_all(b" > ")?,
-            _ => stdout().write_all(b" >> ")?,
-        }
+        stdout().write_all(format!("{} > ", line_num).as_bytes())?;
         stdout().flush()?;
         line_num += 1;
 
