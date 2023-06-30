@@ -11,6 +11,8 @@ pub enum TokenKind {
     Multiply,
     Divide,
     Modulo,
+    LogicalAnd,
+    LogicalOr,
 
     // Variable assignment
     Equal,
@@ -37,6 +39,7 @@ pub enum TokenKind {
     ElseIf,
     Loop,
     Break,
+    Return,
 
     // Delimiters
     BeginClosure,
@@ -71,6 +74,8 @@ impl TokenKind {
             TokenKind::Multiply => "*".to_string(),
             TokenKind::Divide => "/".to_string(),
             TokenKind::Modulo => "%".to_string(),
+            TokenKind::LogicalAnd => "&&".to_string(),
+            TokenKind::LogicalOr => "||".to_string(),
             TokenKind::Equal => "=".to_string(),
             TokenKind::Equals => "==".to_string(),
             TokenKind::GreaterThan => ">".to_string(),
@@ -97,6 +102,7 @@ impl TokenKind {
             TokenKind::SemiColon => ";".to_string(),
             TokenKind::Colon => ":".to_string(),
             TokenKind::Break => "break".to_string(),
+            TokenKind::Return => "return".to_string(),
         }
     }
 
@@ -141,6 +147,8 @@ impl TokenKind {
             TokenKind::Multiply,
             TokenKind::Divide,
             TokenKind::Modulo,
+            TokenKind::LogicalAnd,
+            TokenKind::LogicalOr,
             TokenKind::Equal,
             TokenKind::Int,
             TokenKind::Bool,
@@ -162,6 +170,7 @@ impl TokenKind {
             TokenKind::Function,
             TokenKind::Loop,
             TokenKind::Break,
+            TokenKind::Return,
         ];
 
         for kind in basic_kinds {

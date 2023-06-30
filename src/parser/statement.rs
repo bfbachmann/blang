@@ -24,6 +24,7 @@ pub enum Statement {
     Conditional(Conditional),
     Loop(Loop),
     Break,
+    Return(Expression),
 }
 
 impl Statement {
@@ -36,6 +37,7 @@ impl Statement {
     ///  - conditional (see `Conditional::from`)
     ///  - loop (see `Loop::from`)
     ///  - break
+    ///  - return (of the form `return <expr>` where `expr` is an expression)
     pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         // Try use the first two tokens to figure out what type of statement will follow. This works
         // because no valid statement can contain fewer than two tokens.
@@ -155,6 +157,19 @@ impl Statement {
             ) => {
                 tokens.pop_front();
                 Ok(Statement::Break)
+            }
+
+            // If the first token is "return", it must be a return statement.
+            (
+                Token {
+                    kind: TokenKind::Return,
+                    ..
+                },
+                _,
+            ) => {
+                tokens.pop_front();
+                let (expr, _) = Expression::from(tokens, HashSet::from([TokenKind::SemiColon]))?;
+                Ok(Statement::Return(expr))
             }
 
             // If the tokens are anything else, we'll try parse as an expression.

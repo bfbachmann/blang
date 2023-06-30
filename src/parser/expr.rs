@@ -3,6 +3,7 @@ use crate::lexer::Token;
 use crate::parser::error::ParseError;
 use crate::parser::fn_call::FunctionCall;
 use crate::parser::op::Operator;
+use crate::parser::r#fn::Function;
 use crate::parser::ParseResult;
 use std::collections::{HashSet, VecDeque};
 
@@ -26,6 +27,7 @@ pub enum Expression {
     IntLiteral(i64),
     StringLiteral(String),
     FunctionCall(FunctionCall),
+    AnonFunction(Box<Function>),
 
     // Composite expressions.
     Operator(Box<Expression>, Operator, Box<Expression>),
@@ -34,10 +36,20 @@ pub enum Expression {
 impl Expression {
     /// Parses a basic expression. A basic expression can be any of the following:
     ///  - an identifier representing a variable value
-    ///  - a literal value
+    ///  - a literal value (includes anonymous functions)
     ///  - a function call
     fn from_basic(tokens: &mut VecDeque<Token>) -> ParseResult<Expression> {
         match tokens.pop_front() {
+            // If the first token is "fn", we'll assume the expression is an anonymous function.
+            Some(token @ Token{kind: TokenKind::Function, ..}) => {
+                // Put the "fn" token back because it's expected by Function::from_anon.
+                tokens.push_front(token);
+
+                // Parse the anonymous function and return it.
+                let func = Function::from_anon(tokens)?;
+                Ok(Expression::AnonFunction(Box::new(func)))
+            },
+
             // If the first token is an identifier, the expression can either be a function call
             // or a variable value.
             Some(
@@ -139,18 +151,9 @@ impl Expression {
                 }
 
                 // At this point we know the token must be an operator.
-                let bin_op = match token.kind {
-                    TokenKind::Add => Operator::Add,
-                    TokenKind::Subtract => Operator::Subtract,
-                    TokenKind::Multiply => Operator::Multiply,
-                    TokenKind::Divide => Operator::Divide,
-                    TokenKind::Modulo => Operator::Modulo,
-                    TokenKind::Equals => Operator::Equals,
-                    TokenKind::GreaterThan => Operator::GreaterThan,
-                    TokenKind::LessThan => Operator::LessThan,
-                    TokenKind::GreaterThanOrEqual => Operator::GreaterThanOrEqual,
-                    TokenKind::LessThanOrEqual => Operator::LessThanOrEqual,
-                    _ => {
+                let bin_op = match Operator::from(&token.kind) {
+                    Some(op) => op,
+                    None => {
                         return Err(ParseError::new(
                             format!(r#"Expected operator, but got "{}""#, token).as_str(),
                             Some(token),
