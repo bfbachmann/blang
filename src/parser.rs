@@ -79,6 +79,10 @@ mod tests {
         
             return fib(n-1) + fib(n-2)
         }
+        
+        fn do_nothing() {
+            return
+        }
         "#;
         let mut tokens = Token::tokenize(Cursor::new(raw_code).lines()).expect("should not error");
         Program::from(&mut tokens).expect("should not error");

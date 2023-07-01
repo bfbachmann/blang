@@ -25,7 +25,7 @@ pub enum Statement {
     Conditional(Conditional),
     Loop(Loop),
     Break,
-    Return(Expression),
+    Return(Option<Expression>),
 }
 
 impl Statement {
@@ -166,8 +166,19 @@ impl Statement {
                 _,
             ) => {
                 tokens.pop_front();
+
+                // If the next token is "}", it's an empty return. Otherwise, we expect an
+                // expression.
+                if let Some(Token {
+                    kind: TokenKind::EndClosure,
+                    ..
+                }) = tokens.front()
+                {
+                    return Ok(Statement::Return(None));
+                }
+
                 let expr = Expression::from(tokens)?;
-                Ok(Statement::Return(expr))
+                Ok(Statement::Return(Some(expr)))
             }
 
             // If the tokens are anything else, we'll try parse as an expression.
