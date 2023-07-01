@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 use std::fmt;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, Lines};
 
 use crate::lexer::error::LexError;
 use crate::lexer::kind::TokenKind;
@@ -41,11 +40,11 @@ impl Token {
         }
     }
 
-    /// Attempts to lex the file from the given reader and return a deque of tokens, or an error
-    /// if the file contains invalid tokens.
-    pub fn tokenize_file(reader: BufReader<File>) -> LexResult<VecDeque<Token>> {
+    /// Attempts to lex lines from the given reader and return a deque of tokens, or an error
+    /// if the buffer contains invalid tokens.
+    pub fn tokenize<B: BufRead>(lines: Lines<B>) -> LexResult<VecDeque<Token>> {
         let mut tokens = VecDeque::new();
-        for (line_num, line) in reader.lines().enumerate() {
+        for (line_num, line) in lines.enumerate() {
             let line = match line {
                 Ok(l) => l,
                 Err(err) => {
@@ -87,6 +86,10 @@ impl Token {
                 let token_end = search_start + end_col - whitespace_suffix_size(&subseg[..end_col]);
                 tokens.push_back(Token::new(kind, line_num, token_start, token_end));
                 search_start += end_col;
+            } else if subseg.trim().is_empty() {
+                // The subsegment is just whitespace, so just continue from the end of the
+                // subsegment.
+                search_start += subseg.len();
             } else {
                 // The subsegment does not begin with a valid token. This means the segment is
                 // syntactically invalid.
@@ -102,10 +105,12 @@ impl Token {
     }
 }
 
+/// Returns the number of leading whitespace characters in the string.
 fn whitespace_prefix_size(s: &str) -> usize {
     s.chars().take_while(|c| c.is_whitespace()).count()
 }
 
+/// Returns the number of trailing whitespace characters in the string.
 fn whitespace_suffix_size(s: &str) -> usize {
     s.chars().rev().take_while(|c| c.is_whitespace()).count()
 }

@@ -22,6 +22,8 @@ type ParseResult<T> = Result<T, ParseError>;
 
 #[cfg(test)]
 mod tests {
+    use std::io::{BufRead, Cursor};
+
     use crate::lexer::token::Token;
     use crate::parser::arg::Argument;
     use crate::parser::closure::Closure;
@@ -43,6 +45,44 @@ mod tests {
 
     #[test]
     fn parse_program() {
+        let raw_code = r#"
+        fn main() {
+            int i = 0
+        
+            loop {
+                string prefix = "Fibonacci number " + itoa(i) + " is: "
+                int result = fib(
+                    i,
+                    fn (int n): bool {
+                        print("fib visitor sees n=" + itoa(n))
+                        return n % 2 == 0
+                    },
+                )
+        
+                print(prefix + itoa(result))
+        
+                if i == 10 {
+                    break
+                }
+            }
+        }
+        
+        // Calls `visitor_fn` with n and returns the n'th Fibonacci number.
+        fn fib(int n, fn (int): bool visitor_fn): int {
+            if visitor_fn(n) {
+                print("visitor returned true")
+            }
+        
+            if n <= 1 {
+                return 1
+            }
+        
+            return fib(n-1) + fib(n-2)
+        }
+        "#;
+        let mut tokens = Token::tokenize(Cursor::new(raw_code).lines()).expect("should not error");
+        Program::from(&mut tokens).expect("should not error");
+
         let mut tokens =
             Token::tokenize_line("int i = 123 int j = 1231", 0).expect("should not error");
         let result = Program::from(&mut tokens).expect("should not error");

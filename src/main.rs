@@ -2,7 +2,7 @@ extern crate core;
 
 use std::collections::VecDeque;
 use std::fs::File;
-use std::io::{stdin, stdout, BufReader, Error, ErrorKind, Result, Write};
+use std::io::{stdin, stdout, BufRead, BufReader, Error, ErrorKind, Result, Write};
 use std::process;
 
 use clap::{arg, Command};
@@ -51,14 +51,14 @@ fn open_file(file_path: &str) -> Result<BufReader<File>> {
 
 /// Compiles a file.
 fn compile(file_path: &str) {
-    // Get a reader from the source file
+    // Get a reader from the source file.
     let reader = match open_file(file_path) {
         Ok(r) => r,
         Err(err) => fatal!(r#"Error opening file "{}": {}"#, file_path, err),
     };
 
     // Break the file into tokens.
-    let mut tokens = match Token::tokenize_file(reader) {
+    let mut tokens = match Token::tokenize(reader.lines()) {
         Ok(tokens) => tokens,
         Err(e) => fatal!("{}", e),
     };
