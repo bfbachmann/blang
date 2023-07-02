@@ -2,7 +2,7 @@ use std::collections::{HashSet, VecDeque};
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::token::Token;
-use crate::parser::error::ParseError;
+use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::statement::Statement;
 use crate::parser::ParseResult;
 use crate::util;
@@ -46,6 +46,7 @@ impl Program {
         match tokens.pop_front() {
             None => {
                 return Err(ParseError::new(
+                    ErrorKind::UnexpectedToken,
                     format!(r#"Expected one of {:#?}"#, expected).as_str(),
                     None,
                 ))
@@ -55,6 +56,7 @@ impl Program {
                     Ok(token.kind)
                 } else {
                     Err(ParseError::new(
+                        ErrorKind::UnexpectedToken,
                         format!(r#"Expected one of {:#?}, but got "{}"#, expected, token).as_str(),
                         Some(token),
                     ))
@@ -70,9 +72,16 @@ impl Program {
                 kind: TokenKind::Identifier(name),
                 ..
             }) => Ok(name),
-            None => return Err(ParseError::new("Expected identifier", None)),
+            None => {
+                return Err(ParseError::new(
+                    ErrorKind::ExpectedIndent,
+                    "Expected identifier",
+                    None,
+                ))
+            }
             Some(other) => {
                 return Err(ParseError::new(
+                    ErrorKind::ExpectedIndent,
                     format!(r#"Expected identifier, but got "{}""#, other).as_str(),
                     Some(other),
                 ))

@@ -4,7 +4,7 @@ use crate::lexer::kind::TokenKind;
 use crate::lexer::token::Token;
 use crate::parser::closure::Closure;
 use crate::parser::cond::Conditional;
-use crate::parser::error::ParseError;
+use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::expr::Expression;
 use crate::parser::fn_call::FunctionCall;
 use crate::parser::r#fn::Function;
@@ -43,9 +43,16 @@ impl Statement {
         // because no valid statement can contain fewer than two tokens.
         let (first, second) = (tokens.front(), tokens.get(1));
         match (&first, &second) {
-            (None, None) => return Err(ParseError::new("Unexpected end of of statement", None)),
+            (None, None) => {
+                return Err(ParseError::new(
+                    ErrorKind::UnexpectedEndOfStatement,
+                    "Unexpected end of of statement",
+                    None,
+                ))
+            }
             (None, Some(&ref token)) | (Some(&ref token), None) => {
                 return Err(ParseError::new(
+                    ErrorKind::UnexpectedEndOfStatement,
                     "Unexpected end of of statement",
                     Some(token.clone()),
                 ))
@@ -181,7 +188,11 @@ impl Statement {
             }
 
             // If the tokens are anything else, we error because it's an invalid statement.
-            (&ref token, _) => Err(ParseError::new("Invalid statement", Some(token.clone()))),
+            (&ref token, _) => Err(ParseError::new(
+                ErrorKind::InvalidStatement,
+                "Invalid statement",
+                Some(token.clone()),
+            )),
         }
     }
 }

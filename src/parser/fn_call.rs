@@ -2,7 +2,7 @@ use std::collections::{HashSet, VecDeque};
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::token::Token;
-use crate::parser::error::ParseError;
+use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
 use crate::parser::ParseResult;
@@ -54,7 +54,7 @@ impl FunctionCall {
                     ..
                 }) => {
                     // Pop the ")".
-                    println!("end of args!");
+                    dbg!("end of args!");
                     tokens.pop_front();
                     break;
                 }
@@ -69,6 +69,7 @@ impl FunctionCall {
                 ) => {
                     if args.len() == 0 {
                         return Err(ParseError::new(
+                            ErrorKind::ExpectedExprOrCloseParen,
                             format!(r#"Expected expression or ")", but got "{}"#, comma).as_str(),
                             Some(comma.clone()),
                         ));
@@ -92,7 +93,11 @@ impl FunctionCall {
                 }
 
                 None => {
-                    return Err(ParseError::new("Unexpected end of arguments", None));
+                    return Err(ParseError::new(
+                        ErrorKind::UnexpectedEndOfArgs,
+                        "Unexpected end of arguments",
+                        None,
+                    ));
                 }
 
                 // If the next token is not "," or ")", we assume that it's the beginning of an

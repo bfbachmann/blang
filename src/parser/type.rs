@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::token::Token;
-use crate::parser::error::ParseError;
+use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::ParseResult;
 
@@ -41,9 +41,16 @@ impl Type {
                 let sig = FunctionSignature::from_anon(tokens, false)?;
                 Ok(Type::Function(Box::new(sig)))
             }
-            None => return Err(ParseError::new("Expected type", None)),
+            None => {
+                return Err(ParseError::new(
+                    ErrorKind::ExpectedType,
+                    "Expected type",
+                    None,
+                ))
+            }
             Some(other) => {
                 return Err(ParseError::new(
+                    ErrorKind::ExpectedType,
                     format!(r#"Expected type, but got "{}""#, other).as_str(),
                     Some(other),
                 ))

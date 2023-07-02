@@ -2,9 +2,30 @@ use std::fmt;
 
 use crate::lexer::token::Token;
 
+#[derive(Debug)]
+pub enum ErrorKind {
+    ExpectedExpr,
+    ExpectedExprOrCloseParen,
+    ExpectedBasicExpr,
+    ExpectedBeginExpr,
+    ExpectedBinOpOrEndOfExpr,
+    ExpectedIndent,
+    ExpectedArgOrEndOfArgs,
+    ExpectedType,
+    UnmatchedCloseParen,
+    UnmatchedOpenParen,
+    UnexpectedEndOfExpr,
+    UnexpectedExprToken,
+    UnexpectedEndOfArgs,
+    UnexpectedToken,
+    UnexpectedEndOfStatement,
+    InvalidStatement,
+}
+
 /// Represents any fatal error that occurs during parsing.
 #[derive(Debug)]
 pub struct ParseError {
+    pub kind: ErrorKind,
     pub message: String,
     pub token: Option<Token>,
 }
@@ -19,8 +40,9 @@ impl fmt::Display for ParseError {
 }
 
 impl ParseError {
-    pub fn new(message: &str, token: Option<Token>) -> Self {
+    pub fn new(kind: ErrorKind, message: &str, token: Option<Token>) -> Self {
         ParseError {
+            kind,
             message: message.to_string(),
             token,
         }

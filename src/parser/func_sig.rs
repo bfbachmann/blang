@@ -3,7 +3,7 @@ use std::collections::{HashSet, VecDeque};
 use crate::lexer::kind::TokenKind;
 use crate::lexer::token::Token;
 use crate::parser::arg::Argument;
-use crate::parser::error::ParseError;
+use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::program::Program;
 use crate::parser::{ParseResult, Type};
 use crate::util;
@@ -176,17 +176,15 @@ impl FunctionSignature {
                 }
                 None => {
                     return Err(ParseError::new(
-                        r#"Expected argument or ")" (end of function arguments)"#,
+                        ErrorKind::ExpectedArgOrEndOfArgs,
+                        r#"Expected argument or ")""#,
                         None,
                     ))
                 }
                 Some(other) => {
                     return Err(ParseError::new(
-                        format!(
-                            r#"Expected argument or ")" (end of function arguments), but got "{}""#,
-                            other
-                        )
-                        .as_str(),
+                        ErrorKind::ExpectedArgOrEndOfArgs,
+                        format!(r#"Expected argument or ")", but got "{}""#, other).as_str(),
                         Some(other),
                     ))
                 }

@@ -29,7 +29,7 @@ mod tests {
     use crate::lexer::token::Token;
     use crate::parser::arg::Argument;
     use crate::parser::closure::Closure;
-    use crate::parser::error::ParseError;
+    use crate::parser::error::{ErrorKind, ParseError};
     use crate::parser::expr::Expression;
     use crate::parser::fn_call::FunctionCall;
     use crate::parser::func_sig::FunctionSignature;
@@ -202,6 +202,7 @@ mod tests {
         assert!(matches!(
             result,
             Err(ParseError {
+                kind: ErrorKind::ExpectedExprOrCloseParen,
                 message: _,
                 token: Some(Token {
                     kind: TokenKind::Comma,
@@ -220,6 +221,7 @@ mod tests {
         assert!(matches!(
             result,
             Err(ParseError {
+                kind: ErrorKind::UnmatchedCloseParen,
                 message: _,
                 token: Some(Token {
                     kind: TokenKind::RightParen,
@@ -235,8 +237,28 @@ mod tests {
         let raw = r#"do(((x+3) > 2) || other"#;
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let result = Program::from(&mut tokens);
-        dbg!(&result);
-        let msg = "Unexpected end of arguments".to_string();
-        assert!(matches!(result, Err(ParseError { message: msg, .. })));
+        assert!(matches!(
+            result,
+            Err(ParseError {
+                kind: ErrorKind::UnexpectedEndOfArgs,
+                message: _,
+                token: None,
+            })
+        ));
+    }
+
+    #[test]
+    fn invalid_start_of_expression() {
+        let raw = r#"do(&& true)"#;
+        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let result = Program::from(&mut tokens);
+        assert!(matches!(
+            result,
+            Err(ParseError {
+                kind: ErrorKind::UnexpectedEndOfExpr,
+                message: _,
+                token: None,
+            })
+        ));
     }
 }

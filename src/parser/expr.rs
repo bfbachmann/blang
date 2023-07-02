@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::token::Token;
-use crate::parser::error::ParseError;
+use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::fn_call::FunctionCall;
 use crate::parser::op::Operator;
 use crate::parser::r#fn::Function;
@@ -55,14 +55,14 @@ pub enum Expression {
 impl Expression {
     /// Parses an expression tree from reverse Polish notation.
     fn from_rpn(q: &mut VecDeque<OutputNode>) -> ParseResult<Self> {
-        println!("processing rpn");
+        dbg!("processing rpn");
         dbg!(&q);
         match q.pop_back() {
             // If the node is an operator, we need to assemble its children.
             Some(OutputNode::Operator(op)) => {
-                println!("parsing right child of op {}", op);
+                dbg!("parsing right child of op {}", &op);
                 let right_child = Expression::from_rpn(q)?;
-                println!("parsing left child of op {}", op);
+                dbg!(format!("parsing left child of op {}", &op));
                 let left_child = Expression::from_rpn(q)?;
                 Ok(Expression::BinaryOperation(
                     Box::new(left_child),
@@ -73,7 +73,11 @@ impl Expression {
             // Otherwise, this is a leaf node (i.e. basic expression).
             Some(OutputNode::BasicExpr(expr)) => Ok(expr),
             // The queue should not be empty.
-            None => Err(ParseError::new("Unexpected end of expression", None)),
+            None => Err(ParseError::new(
+                ErrorKind::UnexpectedEndOfExpr,
+                "Unexpected end of expression",
+                None,
+            )),
         }
     }
 
@@ -129,6 +133,7 @@ impl Expression {
                         } else {
                             // This should be impossible because we know the token is an identifier.
                             Err(ParseError::new(
+                                ErrorKind::ExpectedIndent,
                                 r#"Expected identifier, but got "{}""#,
                                 Some(token),
                             ))
@@ -198,12 +203,12 @@ impl Expression {
         let mut last_token: Option<Token> = None;
         let mut expect_binop_or_end = false;
 
-        println!("beginning expression parsing");
+        dbg!("beginning expression parsing");
 
         // While there are still tokens to be read, pop and process them one by one in order to
         // form an output queue of expressions in reverse Polish notation.
         'outer: while let Some(op1_token) = tokens.pop_front() {
-            println!("seeing {}", &op1_token);
+            dbg!("seeing {}", &op1_token);
 
             // If the token is ",", we can stop trying to parse the expression and assume we've
             // reached the end because commas aren't valid in expressions.
@@ -212,7 +217,7 @@ impl Expression {
                 ..
             } = op1_token
             {
-                println!("found ,");
+                dbg!("found ,");
                 if is_arg {
                     // Add the "," back to the token sequence because it's expected during
                     // function argument parsing.
@@ -221,17 +226,19 @@ impl Expression {
                 }
 
                 return Err(ParseError::new(
+                    ErrorKind::UnexpectedExprToken,
                     "Unexpected token in expression",
                     Some(op1_token),
                 ));
             }
             // Check if the token is "(".
             else if let Some(Operator::LeftParen) = Operator::from(&op1_token.kind) {
-                println!("it's (");
+                dbg!("it's (");
                 // We should not be here if we we're expecting a binary operator or the end of the
                 // expression.
                 if expect_binop_or_end {
                     return Err(ParseError::new(
+                        ErrorKind::ExpectedBinOpOrEndOfExpr,
                         "Expected binary operator or end of expression",
                         Some(op1_token),
                     ));
@@ -241,7 +248,7 @@ impl Expression {
             }
             // Check if the token is ")".
             else if let Some(Operator::RightParen) = Operator::from(&op1_token.kind) {
-                println!("it's )");
+                dbg!("it's )");
                 // Look for the "(" that matches this ")" on the operator stack.
                 loop {
                     match op_stack.back() {
@@ -250,7 +257,7 @@ impl Expression {
                             kind: TokenKind::LeftParen,
                             ..
                         }) => {
-                            println!("found matching (");
+                            dbg!("found matching (");
                             break;
                         }
                         // If there is no operator at the top of the stack, then this is an
@@ -259,7 +266,7 @@ impl Expression {
                         // function call.
                         None => {
                             if is_arg {
-                                println!("Operator stack is empty, returning optimistically");
+                                dbg!("Operator stack is empty, returning optimistically");
                                 // Add the ")" back to the token sequence because it's expected during
                                 // function argument parsing.
                                 tokens.push_front(op1_token);
@@ -267,6 +274,7 @@ impl Expression {
                             }
 
                             return Err(ParseError::new(
+                                ErrorKind::UnmatchedCloseParen,
                                 "Unmatched closing parenthesis in expression",
                                 Some(op1_token),
                             ));
@@ -274,7 +282,7 @@ impl Expression {
                         // Otherwise, we just pop the operator from the stack and add it to the
                         // output queue.
                         other => {
-                            println!(
+                            dbg!(
                                 "token is not matching (, but is {}... adding to output queue",
                                 other.unwrap()
                             );
@@ -296,6 +304,7 @@ impl Expression {
                     op_stack.pop_back();
                 } else {
                     return Err(ParseError::new(
+                        ErrorKind::UnmatchedCloseParen,
                         "Unmatched closing parenthesis in expression",
                         Some(op1_token),
                     ));
@@ -307,6 +316,7 @@ impl Expression {
                 // expression.
                 if expect_binop_or_end {
                     return Err(ParseError::new(
+                        ErrorKind::ExpectedBinOpOrEndOfExpr,
                         "Expected binary operator or end of expression",
                         Some(op1_token),
                     ));
@@ -314,7 +324,7 @@ impl Expression {
 
                 // Add the operator back to the token deque so it can be parsed as part of the basic
                 // expression.
-                println!("it's a unary op");
+                dbg!("it's a unary op");
                 tokens.push_front(op1_token.clone());
                 let expr = Expression::from_basic(tokens, is_arg)?;
                 out_q.push_back(OutputNode::from_basic_expr(expr.unwrap()));
@@ -322,7 +332,7 @@ impl Expression {
             }
             // Check if the token is a binary operator.
             else if let Some(op1) = Operator::from(&op1_token.kind) {
-                println!("it's an operator");
+                dbg!("it's an operator");
                 // At this point, we know we have a binary operator.
                 while let Some(&ref op2_token) = op_stack.back() {
                     let op2 = Operator::from(&op2_token.kind).unwrap();
@@ -344,13 +354,13 @@ impl Expression {
             }
             // At this point we know that the token is not an operator or a parenthesis.
             else {
-                println!("in else case");
+                dbg!("in else case");
 
                 // If we're expecting a binary operator or the end of the expression and we've
                 // reached this point, we'll assume that means we've reached the end of the
                 // expression.
                 if expect_binop_or_end {
-                    println!("reached end of expr");
+                    dbg!("reached end of expr");
                     tokens.push_front(op1_token);
                     break;
                 }
@@ -360,15 +370,16 @@ impl Expression {
                 // we should error.
                 match last_token {
                     None => {
-                        println!("last token was none");
+                        dbg!("last token was none");
                         // This is the beginning of the expression, so we expect a basic expression.
                         tokens.push_front(op1_token.clone());
                         if let Some(expr) = Expression::from_basic(tokens, is_arg)? {
-                            println!("it's basic expr");
+                            dbg!("it's basic expr");
                             out_q.push_back(OutputNode::from_basic_expr(expr));
                             expect_binop_or_end = true;
                         } else {
                             return Err(ParseError::new(
+                                ErrorKind::ExpectedBeginExpr,
                                 format!("Expected beginning of expression, but got {}", op1_token)
                                     .as_str(),
                                 Some(op1_token),
@@ -376,7 +387,7 @@ impl Expression {
                         }
                     }
                     Some(last) => {
-                        println!("last token was: {}", last);
+                        dbg!("last token was: {}", &last);
                         // This is the continuation of the expression, so if the last token was a
                         // binary operator, we expect a basic expression - it can't be composite
                         // because that would have been handled by other branches in the if
@@ -385,11 +396,12 @@ impl Expression {
                             if last_op.is_binary() {
                                 tokens.push_front(op1_token.clone());
                                 if let Some(expr) = Expression::from_basic(tokens, is_arg)? {
-                                    println!("it's basic expr");
+                                    dbg!("it's basic expr");
                                     out_q.push_back(OutputNode::from_basic_expr(expr));
                                     expect_binop_or_end = true;
                                 } else {
                                     return Err(ParseError::new(
+                                        ErrorKind::ExpectedBasicExpr,
                                         format!("Expected basic expression, but got {}", op1_token)
                                             .as_str(),
                                         Some(op1_token),
@@ -397,6 +409,7 @@ impl Expression {
                                 }
                             } else {
                                 return Err(ParseError::new(
+                                    ErrorKind::ExpectedExpr,
                                     format!("Expected expression, but got {}", op1_token).as_str(),
                                     Some(op1_token),
                                 ));
@@ -404,7 +417,7 @@ impl Expression {
                         } else {
                             // At this point we know we the token is not part of the expression, so
                             // we're done.
-                            println!("it's not part of the expression");
+                            dbg!("it's not part of the expression");
                             tokens.push_front(op1_token);
                             break;
                         }
@@ -417,7 +430,7 @@ impl Expression {
 
         // Pop the remaining items from the operator stack into the output queue.
         while let Some(op) = op_stack.pop_back() {
-            println!("popping {} from op stack", op);
+            dbg!("popping {} from op stack", &op);
             // Assert the operator on top of the stack is not "(".
             if let token @ Token {
                 kind: TokenKind::LeftParen,
@@ -425,6 +438,7 @@ impl Expression {
             } = op
             {
                 return Err(ParseError::new(
+                    ErrorKind::UnmatchedOpenParen,
                     "Unmatched opening parenthesis in expression",
                     Some(token),
                 ));
@@ -437,7 +451,7 @@ impl Expression {
 
         // At this point we have an output queue representing the tokens in the expression in
         // reverse Polish notation (RPN). We just have to convert the RPN into an expression tree.
-        println!("returning expression");
+        dbg!("returning expression");
         Ok(Expression::from_rpn(&mut out_q)?)
     }
 }
