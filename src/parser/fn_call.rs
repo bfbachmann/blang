@@ -54,7 +54,6 @@ impl FunctionCall {
                     ..
                 }) => {
                     // Pop the ")".
-                    dbg!("end of args!");
                     tokens.pop_front();
                     break;
                 }
