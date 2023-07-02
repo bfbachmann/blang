@@ -5,8 +5,8 @@ use crate::lexer::token::Token;
 /// Represents any fatal error that occurs during parsing.
 #[derive(Debug)]
 pub struct ParseError {
-    message: String,
-    token: Option<Token>,
+    pub message: String,
+    pub token: Option<Token>,
 }
 
 impl fmt::Display for ParseError {

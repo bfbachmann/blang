@@ -146,7 +146,7 @@ impl FunctionSignature {
         named: bool,
     ) -> ParseResult<Vec<Argument>> {
         // The first token should be the opening parenthesis.
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::OpenParen]))?;
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::LeftParen]))?;
 
         // The next token(s) should be arguments or a closing parenthesis.
         let mut args = vec![];
@@ -155,7 +155,7 @@ impl FunctionSignature {
             let token = tokens.pop_front();
             match token {
                 Some(Token {
-                    kind: TokenKind::CloseParen,
+                    kind: TokenKind::RightParen,
                     ..
                 }) => {
                     // We're done assembling arguments.
@@ -195,11 +195,11 @@ impl FunctionSignature {
             // After the argument, the next token should be "," or ")".
             let kind = Program::parse_expecting(
                 tokens,
-                HashSet::from([TokenKind::Comma, TokenKind::CloseParen]),
+                HashSet::from([TokenKind::Comma, TokenKind::RightParen]),
             )?;
             match kind {
                 TokenKind::Comma => {} // Nothing to do here. Just move onto the next arg.
-                TokenKind::CloseParen => break, // We're done parsing args.
+                TokenKind::RightParen => break, // We're done parsing args.
                 _ => panic!("this should be impossible"),
             }
         }

@@ -8,21 +8,11 @@ use crate::lexer::pos::Position;
 use crate::lexer::LexResult;
 
 /// A token has a kind and a start and end position (in the file).
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
     pub start: Position,
     pub end: Position,
-}
-
-impl Clone for Token {
-    fn clone(&self) -> Self {
-        Token {
-            kind: self.kind.clone(),
-            start: self.start,
-            end: self.end,
-        }
-    }
 }
 
 impl fmt::Display for Token {

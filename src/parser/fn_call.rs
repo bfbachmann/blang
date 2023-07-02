@@ -41,7 +41,7 @@ impl FunctionCall {
         let fn_name = Program::parse_identifier(tokens)?;
 
         // The next token should be "(".
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::OpenParen]))?;
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::LeftParen]))?;
 
         // The remaining tokens should be expressions representing argument values separated by ","
         // and ending in ")".
@@ -50,10 +50,11 @@ impl FunctionCall {
             match tokens.front() {
                 // If the next token is ")", we break because we're done parsing arguments.
                 Some(&Token {
-                    kind: TokenKind::CloseParen,
+                    kind: TokenKind::RightParen,
                     ..
                 }) => {
                     // Pop the ")".
+                    println!("end of args!");
                     tokens.pop_front();
                     break;
                 }
@@ -80,7 +81,7 @@ impl FunctionCall {
                     // a to account for cases where function call arguments are broken over
                     // multiple lines and the user wishes to end the last argument with a ",".
                     if let Some(&Token {
-                        kind: TokenKind::CloseParen,
+                        kind: TokenKind::RightParen,
                         ..
                     }) = tokens.front()
                     {
@@ -99,7 +100,7 @@ impl FunctionCall {
                 _ => {}
             }
 
-            let expr = Expression::from(tokens)?;
+            let expr = Expression::from(tokens, true)?;
             args.push(expr);
         }
 

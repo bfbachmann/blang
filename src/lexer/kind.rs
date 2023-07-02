@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 /// Represents any valid token in the language.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum TokenKind {
     // Binary operators
     Add,
@@ -49,8 +49,8 @@ pub enum TokenKind {
     // Delimiters
     BeginClosure,
     EndClosure,
-    OpenParen,
-    CloseParen,
+    LeftParen,
+    RightParen,
     Comma,
     SemiColon,
     Colon,
@@ -58,6 +58,50 @@ pub enum TokenKind {
 
     // User-defined values
     Identifier(String),
+}
+
+impl Clone for TokenKind {
+    fn clone(&self) -> Self {
+        match self {
+            TokenKind::Add => TokenKind::Add,
+            TokenKind::Subtract => TokenKind::Subtract,
+            TokenKind::Multiply => TokenKind::Multiply,
+            TokenKind::Divide => TokenKind::Divide,
+            TokenKind::Modulo => TokenKind::Modulo,
+            TokenKind::LogicalAnd => TokenKind::LogicalAnd,
+            TokenKind::LogicalOr => TokenKind::LogicalOr,
+            TokenKind::Not => TokenKind::Not,
+            TokenKind::Equal => TokenKind::Equal,
+            TokenKind::EqualTo => TokenKind::EqualTo,
+            TokenKind::NotEqualTo => TokenKind::NotEqualTo,
+            TokenKind::GreaterThan => TokenKind::GreaterThan,
+            TokenKind::LessThan => TokenKind::LessThan,
+            TokenKind::GreaterThanOrEqual => TokenKind::GreaterThanOrEqual,
+            TokenKind::LessThanOrEqual => TokenKind::LessThanOrEqual,
+            TokenKind::Bool => TokenKind::Bool,
+            TokenKind::BoolLiteral(v) => TokenKind::BoolLiteral(*v),
+            TokenKind::Int => TokenKind::Int,
+            TokenKind::IntLiteral(v) => TokenKind::IntLiteral(*v),
+            TokenKind::String => TokenKind::String,
+            TokenKind::StringLiteral(v) => TokenKind::StringLiteral(v.clone()),
+            TokenKind::Function => TokenKind::Function,
+            TokenKind::If => TokenKind::If,
+            TokenKind::Else => TokenKind::Else,
+            TokenKind::ElseIf => TokenKind::ElseIf,
+            TokenKind::Loop => TokenKind::Loop,
+            TokenKind::Break => TokenKind::Break,
+            TokenKind::Return => TokenKind::Return,
+            TokenKind::BeginClosure => TokenKind::BeginClosure,
+            TokenKind::EndClosure => TokenKind::EndClosure,
+            TokenKind::LeftParen => TokenKind::LeftParen,
+            TokenKind::RightParen => TokenKind::RightParen,
+            TokenKind::Comma => TokenKind::Comma,
+            TokenKind::SemiColon => TokenKind::SemiColon,
+            TokenKind::Colon => TokenKind::Colon,
+            TokenKind::BeginComment => TokenKind::BeginComment,
+            TokenKind::Identifier(v) => TokenKind::Identifier(v.clone()),
+        }
+    }
 }
 
 impl fmt::Display for TokenKind {
@@ -104,8 +148,8 @@ impl TokenKind {
             TokenKind::EndClosure => "}".to_string(),
             TokenKind::Identifier(v) => v.to_string(),
             TokenKind::Int => "int".to_string(),
-            TokenKind::OpenParen => "(".to_string(),
-            TokenKind::CloseParen => ")".to_string(),
+            TokenKind::LeftParen => "(".to_string(),
+            TokenKind::RightParen => ")".to_string(),
             TokenKind::Comma => ",".to_string(),
             TokenKind::SemiColon => ";".to_string(),
             TokenKind::Colon => ":".to_string(),
@@ -168,8 +212,8 @@ impl TokenKind {
             TokenKind::String,
             TokenKind::BeginClosure,
             TokenKind::EndClosure,
-            TokenKind::OpenParen,
-            TokenKind::CloseParen,
+            TokenKind::LeftParen,
+            TokenKind::RightParen,
             TokenKind::Comma,
             TokenKind::SemiColon,
             TokenKind::Colon,

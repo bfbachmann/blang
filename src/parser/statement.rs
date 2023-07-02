@@ -20,7 +20,6 @@ pub enum Statement {
     VariableAssignment(VariableAssignment),
     FunctionDeclaration(Function),
     Closure(Closure),
-    Expression(Expression),
     FunctionCall(FunctionCall),
     Conditional(Conditional),
     Loop(Loop),
@@ -113,7 +112,7 @@ impl Statement {
                     ..
                 },
                 Token {
-                    kind: TokenKind::OpenParen,
+                    kind: TokenKind::LeftParen,
                     ..
                 },
             ) => {
@@ -177,15 +176,12 @@ impl Statement {
                     return Ok(Statement::Return(None));
                 }
 
-                let expr = Expression::from(tokens)?;
+                let expr = Expression::from(tokens, false)?;
                 Ok(Statement::Return(Some(expr)))
             }
 
-            // If the tokens are anything else, we'll try parse as an expression.
-            (_, _) => {
-                let expr = Expression::from(tokens)?;
-                Ok(Statement::Expression(expr))
-            }
+            // If the tokens are anything else, we error because it's an invalid statement.
+            (&ref token, _) => Err(ParseError::new("Invalid statement", Some(token.clone()))),
         }
     }
 }

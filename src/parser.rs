@@ -22,11 +22,14 @@ type ParseResult<T> = Result<T, ParseError>;
 
 #[cfg(test)]
 mod tests {
+    use crate::lexer::kind::TokenKind;
+    use crate::lexer::pos::Position;
     use std::io::{BufRead, Cursor};
 
     use crate::lexer::token::Token;
     use crate::parser::arg::Argument;
     use crate::parser::closure::Closure;
+    use crate::parser::error::ParseError;
     use crate::parser::expr::Expression;
     use crate::parser::fn_call::FunctionCall;
     use crate::parser::func_sig::FunctionSignature;
@@ -189,5 +192,51 @@ mod tests {
                 ]
             )
         );
+    }
+
+    #[test]
+    fn invalid_extra_comma() {
+        let raw = r#"int i = call(,,)"#;
+        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let result = Program::from(&mut tokens);
+        assert!(matches!(
+            result,
+            Err(ParseError {
+                message: _,
+                token: Some(Token {
+                    kind: TokenKind::Comma,
+                    start: Position { line: 0, col: 13 },
+                    end: Position { line: 0, col: 14 },
+                }),
+            })
+        ));
+    }
+
+    #[test]
+    fn invalid_extra_close_paren() {
+        let raw = r#"int i = call())"#;
+        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let result = Program::from(&mut tokens);
+        assert!(matches!(
+            result,
+            Err(ParseError {
+                message: _,
+                token: Some(Token {
+                    kind: TokenKind::RightParen,
+                    start: Position { line: 0, col: 14 },
+                    end: Position { line: 0, col: 15 },
+                }),
+            })
+        ));
+    }
+
+    #[test]
+    fn invalid_missing_close_paren() {
+        let raw = r#"do(((x+3) > 2) || other"#;
+        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let result = Program::from(&mut tokens);
+        dbg!(&result);
+        let msg = "Unexpected end of arguments".to_string();
+        assert!(matches!(result, Err(ParseError { message: msg, .. })));
     }
 }

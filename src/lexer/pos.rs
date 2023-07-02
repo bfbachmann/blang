@@ -3,8 +3,8 @@ use std::fmt;
 /// Represents the position (line and column) within a file.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Position {
-    line: usize,
-    col: usize,
+    pub line: usize,
+    pub col: usize,
 }
 
 impl fmt::Display for Position {
