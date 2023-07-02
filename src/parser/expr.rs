@@ -428,11 +428,15 @@ impl Expression {
 
 #[cfg(test)]
 mod tests {
+    use std::io::{BufRead, Cursor};
+
+    use crate::lexer::kind::TokenKind;
+    use crate::lexer::pos::Position;
     use crate::lexer::token::Token;
+    use crate::parser::error::{ErrorKind, ParseError};
     use crate::parser::expr::Expression;
     use crate::parser::fn_call::FunctionCall;
     use crate::parser::op::Operator;
-    use std::io::{BufRead, Cursor};
 
     #[test]
     fn parse_basic_var_value() {
@@ -582,5 +586,25 @@ mod tests {
                 Box::new(Expression::IntLiteral(5)),
             )
         );
+    }
+
+    #[test]
+    fn parse_unmatched_open_paren() {
+        let mut tokens =
+            Token::tokenize(Cursor::new("3 - 4 / (2 * 3:").lines()).expect("should not error");
+        let result = Expression::from(&mut tokens, false);
+        dbg!(&result);
+        assert!(matches!(
+            result,
+            Err(ParseError {
+                kind: ErrorKind::UnmatchedOpenParen,
+                message: _,
+                token: Some(Token {
+                    kind: TokenKind::LeftParen,
+                    start: Position { line: 0, col: 8 },
+                    end: Position { line: 0, col: 9 }
+                })
+            })
+        ));
     }
 }
