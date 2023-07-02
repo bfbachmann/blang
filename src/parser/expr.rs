@@ -432,6 +432,7 @@ mod tests {
     use crate::parser::expr::Expression;
     use crate::parser::fn_call::FunctionCall;
     use crate::parser::op::Operator;
+    use std::io::{BufRead, Cursor};
 
     #[test]
     fn parse_basic_var_value() {
@@ -545,5 +546,41 @@ mod tests {
                 ))
             )
         )
+    }
+
+    #[test]
+    fn parse_multiline() {
+        let raw = r#"(var - 3) / 4 *
+            (call(true) % 2) +
+            5"#;
+        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let result = Expression::from(&mut tokens, false).expect("should not error");
+        assert_eq!(
+            result,
+            Expression::BinaryOperation(
+                Box::new(Expression::BinaryOperation(
+                    Box::new(Expression::BinaryOperation(
+                        Box::new(Expression::BinaryOperation(
+                            Box::new(Expression::VariableReference("var".to_string(),)),
+                            Operator::Subtract,
+                            Box::new(Expression::IntLiteral(3,)),
+                        )),
+                        Operator::Divide,
+                        Box::new(Expression::IntLiteral(4)),
+                    )),
+                    Operator::Multiply,
+                    Box::new(Expression::BinaryOperation(
+                        Box::new(Expression::FunctionCall(FunctionCall::new(
+                            "call",
+                            vec![Expression::BoolLiteral(true)],
+                        ))),
+                        Operator::Modulo,
+                        Box::new(Expression::IntLiteral(2)),
+                    )),
+                )),
+                Operator::Add,
+                Box::new(Expression::IntLiteral(5)),
+            )
+        );
     }
 }

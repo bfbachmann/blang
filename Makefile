@@ -4,7 +4,7 @@ repl:
 
 .PHONY: test
 test:
-	cargo test -- --nocapture
+	cargo llvm-cov -- --nocapture
 
 .PHONY: docs
 docs:
