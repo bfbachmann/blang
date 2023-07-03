@@ -733,6 +733,13 @@ mod tests {
     }
 
     #[test]
+    fn parse_redundant_parens() {
+        let mut tokens = Token::tokenize(Cursor::new("(((1)))").lines()).expect("should not error");
+        let result = Expression::from(&mut tokens, false).expect("shold not error");
+        assert_eq!(result, Expression::IntLiteral(1))
+    }
+
+    #[test]
     fn parse_unexpected_end_of_expr() {
         for input in ["2 --", "ok *", "5/", "v -3 + -", "(3 % 3) +"] {
             let mut tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
