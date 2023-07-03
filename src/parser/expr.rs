@@ -313,7 +313,34 @@ impl Expression {
             }
             // Check if the token is a binary operator.
             else if let Some(op1) = Operator::from(&op1_token.kind) {
-                // At this point, we know we have a binary operator.
+                // At this point, we know we have a binary operator. We should error here if we're
+                // not expecting a binary operator unless this is the beginning of the expression
+                // (or a parenthesized expression) and the operator is "-" because it might be a
+                // negative value.
+                // let is_subexpr_start = matches!(
+                //     last_token,
+                //     (None
+                //         | Some(Token {
+                //             kind: TokenKind::LeftParen,
+                //             ..
+                //         }))
+                // );
+                if expect_binop_or_end {
+                    expect_binop_or_end = false;
+                } else if op1 == Operator::Subtract {
+                    // Push -1 to the output queue.
+                    out_q.push_back(OutputNode::from_basic_expr(Expression::IntLiteral(-1)));
+                    // Push * to the operator stack.
+                    op_stack.push_back(Token::new(TokenKind::Multiply, 0, 0, 0));
+                    continue;
+                } else {
+                    return Err(ParseError::new(
+                        ErrorKind::UnexpectedOperator,
+                        "Unexpected operator",
+                        Some(op1_token),
+                    ));
+                }
+
                 while let Some(&ref op2_token) = op_stack.back() {
                     let op2 = Operator::from(&op2_token.kind).unwrap();
                     if op2 != Operator::LeftParen
@@ -330,7 +357,6 @@ impl Expression {
 
                 // Push operator 1 onto the operator stack.
                 op_stack.push_back(op1_token.clone());
-                expect_binop_or_end = false;
             }
             // At this point we know that the token is not an operator or a parenthesis.
             else {
@@ -605,5 +631,177 @@ mod tests {
                 })
             })
         ));
+    }
+
+    #[test]
+    fn parse_composite_negative_values() {
+        let mut tokens = Token::tokenize(Cursor::new("-8 - (-100 + 2) * 4 / 2 + 8").lines())
+            .expect("should not error");
+        let result = Expression::from(&mut tokens, false).expect("should not error");
+        assert_eq!(
+            result,
+            Expression::BinaryOperation(
+                Box::new(Expression::BinaryOperation(
+                    Box::new(Expression::BinaryOperation(
+                        Box::new(Expression::IntLiteral(-1)),
+                        Operator::Multiply,
+                        Box::new(Expression::IntLiteral(8)),
+                    )),
+                    Operator::Subtract,
+                    Box::new(Expression::BinaryOperation(
+                        Box::new(Expression::BinaryOperation(
+                            Box::new(Expression::BinaryOperation(
+                                Box::new(Expression::BinaryOperation(
+                                    Box::new(Expression::IntLiteral(-1)),
+                                    Operator::Multiply,
+                                    Box::new(Expression::IntLiteral(100))
+                                )),
+                                Operator::Add,
+                                Box::new(Expression::IntLiteral(2)),
+                            )),
+                            Operator::Multiply,
+                            Box::new(Expression::IntLiteral(4)),
+                        )),
+                        Operator::Divide,
+                        Box::new(Expression::IntLiteral(2)),
+                    )),
+                )),
+                Operator::Add,
+                Box::new(Expression::IntLiteral(8)),
+            )
+        );
+    }
+
+    #[test]
+    fn parse_basic_negative_values() {
+        let mut tokens = Token::tokenize(Cursor::new("-8").lines()).expect("should not error");
+        let result = Expression::from(&mut tokens, false).expect("should not error");
+        assert_eq!(
+            result,
+            Expression::BinaryOperation(
+                Box::new(Expression::IntLiteral(-1)),
+                Operator::Multiply,
+                Box::new(Expression::IntLiteral(8)),
+            )
+        );
+
+        let mut tokens = Token::tokenize(Cursor::new("-x").lines()).expect("should not error");
+        let result = Expression::from(&mut tokens, false).expect("should not error");
+        assert_eq!(
+            result,
+            Expression::BinaryOperation(
+                Box::new(Expression::IntLiteral(-1)),
+                Operator::Multiply,
+                Box::new(Expression::VariableReference("x".to_string())),
+            )
+        );
+
+        let mut tokens = Token::tokenize(Cursor::new("-f()").lines()).expect("should not error");
+        let result = Expression::from(&mut tokens, false).expect("should not error");
+        assert_eq!(
+            result,
+            Expression::BinaryOperation(
+                Box::new(Expression::IntLiteral(-1)),
+                Operator::Multiply,
+                Box::new(Expression::FunctionCall(FunctionCall::new("f", vec![]))),
+            )
+        );
+    }
+
+    #[test]
+    fn parse_unexpected_operator() {
+        let inputs = [
+            "2 ++6",
+            "v - 3 * (4 +*- a)",
+            "**3",
+            "3 **2",
+            "4 / / 4",
+            "%%2",
+        ];
+
+        for input in inputs {
+            let mut tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
+            let result = Expression::from(&mut tokens, false);
+            assert!(matches!(
+                result,
+                Err(ParseError {
+                    kind: ErrorKind::UnexpectedOperator,
+                    ..
+                })
+            ))
+        }
+    }
+
+    #[test]
+    fn parse_unexpected_end_of_expr() {
+        for input in ["2 --", "ok *", "5/", "v -3 + -", "(3 % 3) +"] {
+            let mut tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
+            let result = Expression::from(&mut tokens, false);
+            assert!(matches!(
+                result,
+                Err(ParseError {
+                    kind: ErrorKind::UnexpectedEndOfExpr,
+                    ..
+                })
+            ))
+        }
+    }
+
+    #[test]
+    fn parse_repeated_minus() {
+        let input = "--(-v--a)-2--(-100 -- call(1))";
+        let mut tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
+        let result = Expression::from(&mut tokens, false).expect("should not error");
+        assert_eq!(
+            result,
+            Expression::BinaryOperation(
+                Box::new(Expression::BinaryOperation(
+                    Box::new(Expression::BinaryOperation(
+                        Box::new(Expression::IntLiteral(-1)),
+                        Operator::Multiply,
+                        Box::new(Expression::BinaryOperation(
+                            Box::new(Expression::IntLiteral(-1)),
+                            Operator::Multiply,
+                            Box::new(Expression::BinaryOperation(
+                                Box::new(Expression::BinaryOperation(
+                                    Box::new(Expression::IntLiteral(-1)),
+                                    Operator::Multiply,
+                                    Box::new(Expression::VariableReference("v".to_string())),
+                                )),
+                                Operator::Subtract,
+                                Box::new(Expression::BinaryOperation(
+                                    Box::new(Expression::IntLiteral(-1)),
+                                    Operator::Multiply,
+                                    Box::new(Expression::VariableReference("a".to_string())),
+                                )),
+                            )),
+                        )),
+                    )),
+                    Operator::Subtract,
+                    Box::new(Expression::IntLiteral(2)),
+                )),
+                Operator::Subtract,
+                Box::new(Expression::BinaryOperation(
+                    Box::new(Expression::IntLiteral(-1)),
+                    Operator::Multiply,
+                    Box::new(Expression::BinaryOperation(
+                        Box::new(Expression::BinaryOperation(
+                            Box::new(Expression::IntLiteral(-1)),
+                            Operator::Multiply,
+                            Box::new(Expression::IntLiteral(100)),
+                        )),
+                        Operator::Subtract,
+                        Box::new(Expression::BinaryOperation(
+                            Box::new(Expression::IntLiteral(-1)),
+                            Operator::Multiply,
+                            Box::new(Expression::FunctionCall(FunctionCall::new(
+                                "call",
+                                vec![Expression::IntLiteral(1)],
+                            ))),
+                        )),
+                    )),
+                )),
+            )
+        )
     }
 }

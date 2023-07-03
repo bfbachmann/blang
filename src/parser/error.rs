@@ -12,6 +12,7 @@ pub enum ErrorKind {
     ExpectedIndent,
     ExpectedArgOrEndOfArgs,
     ExpectedType,
+    UnexpectedOperator,
     UnmatchedCloseParen,
     UnmatchedOpenParen,
     UnexpectedEndOfExpr,

@@ -22,17 +22,20 @@ type ParseResult<T> = Result<T, ParseError>;
 
 #[cfg(test)]
 mod tests {
-    use crate::lexer::kind::TokenKind;
-    use crate::lexer::pos::Position;
     use std::io::{BufRead, Cursor};
 
+    use crate::lexer::kind::TokenKind;
+    use crate::lexer::pos::Position;
     use crate::lexer::token::Token;
     use crate::parser::arg::Argument;
+    use crate::parser::branch::Branch;
     use crate::parser::closure::Closure;
+    use crate::parser::cond::Conditional;
     use crate::parser::error::{ErrorKind, ParseError};
     use crate::parser::expr::Expression;
     use crate::parser::fn_call::FunctionCall;
     use crate::parser::func_sig::FunctionSignature;
+    use crate::parser::op::Operator;
     use crate::parser::program::Program;
     use crate::parser::r#fn::Function;
     use crate::parser::r#type::Type;
@@ -255,10 +258,74 @@ mod tests {
         assert!(matches!(
             result,
             Err(ParseError {
-                kind: ErrorKind::UnexpectedEndOfExpr,
+                kind: ErrorKind::UnexpectedOperator,
+                message: _,
+                token: Some(Token {
+                    kind: TokenKind::LogicalAnd,
+                    start: Position { line: 0, col: 3 },
+                    end: Position { line: 0, col: 5 },
+                }),
+            })
+        ));
+    }
+
+    #[test]
+    fn empty_fn_return() {
+        let raw = r#"fn my_func(string s) {
+            if s == "dog" {
+                return
+            }
+            
+            print("not dog")
+        }"#;
+        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let result = Program::from(&mut tokens).expect("should not error");
+        assert_eq!(
+            result,
+            Program {
+                statements: vec![Statement::FunctionDeclaration(Function::new(
+                    FunctionSignature::new("my_func", vec![Argument::new("s", Type::String)], None),
+                    Closure::new(
+                        vec![
+                            Statement::Conditional(Conditional::new(vec![Branch::new(
+                                Some(Expression::BinaryOperation(
+                                    Box::new(Expression::VariableReference("s".to_string())),
+                                    Operator::EqualTo,
+                                    Box::new(Expression::StringLiteral("dog".to_string())),
+                                )),
+                                Closure::new(vec![Statement::Return(None)], None),
+                            )])),
+                            Statement::FunctionCall(FunctionCall::new(
+                                "print",
+                                vec![Expression::StringLiteral("not dog".to_string())]
+                            ))
+                        ],
+                        None,
+                    )
+                ))]
+            }
+        );
+    }
+
+    #[test]
+    fn missing_fn_closing_brace() {
+        let raw = r#"fn thing(): int {
+            return 4 / 2 + 8
+        "#;
+        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let result = Program::from(&mut tokens);
+        assert!(matches!(
+            result,
+            Err(ParseError {
+                kind: ErrorKind::UnexpectedEndOfStatement,
                 message: _,
                 token: None,
             })
         ));
+    }
+
+    #[test]
+    fn expr_extra_parens() {
+        // TODO
     }
 }
