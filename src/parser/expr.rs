@@ -68,7 +68,8 @@ impl Expression {
             }
             // Otherwise, this is a leaf node (i.e. basic expression).
             Some(OutputNode::BasicExpr(expr)) => Ok(expr),
-            // The queue should not be empty.
+            // The queue should not be empty. If this happens, it means that the queue passed to
+            // this function was not valid RPN.
             None => Err(ParseError::new(
                 ErrorKind::UnexpectedEndOfExpr,
                 "Unexpected end of expression",
@@ -128,11 +129,7 @@ impl Expression {
                             Ok(Some(Expression::VariableReference(var_name)))
                         } else {
                             // This should be impossible because we know the token is an identifier.
-                            Err(ParseError::new(
-                                ErrorKind::ExpectedIndent,
-                                r#"Expected identifier, but got "{}""#,
-                                Some(token),
-                            ))
+                            panic!("expected identifier");
                         }
                     }
                 }
@@ -193,6 +190,10 @@ impl Expression {
     ///  - `basic_expr` is a basic expression
     ///  - `binary_op` is a binary operator
     ///  - `comp_expr` is a composite expression
+    ///
+    /// This function implements a modified version of the shunting yard algorithm. The general
+    /// structure is the same, but modifications have been made to handle negative values and
+    /// function calls with arbitrary arguments.
     pub fn from(tokens: &mut VecDeque<Token>, is_arg: bool) -> ParseResult<Expression> {
         let mut out_q: VecDeque<OutputNode> = VecDeque::new();
         let mut op_stack: VecDeque<Token> = VecDeque::new();
