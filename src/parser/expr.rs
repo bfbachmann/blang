@@ -593,7 +593,6 @@ mod tests {
         let mut tokens =
             Token::tokenize(Cursor::new("3 - 4 / (2 * 3:").lines()).expect("should not error");
         let result = Expression::from(&mut tokens, false);
-        dbg!(&result);
         assert!(matches!(
             result,
             Err(ParseError {
