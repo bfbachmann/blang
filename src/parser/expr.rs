@@ -315,25 +315,49 @@ impl Expression {
             // Check if the token is a binary operator.
             else if let Some(op1) = Operator::from(&op1_token.kind) {
                 // At this point, we know we have a binary operator. We should error here if we're
-                // not expecting a binary operator unless this is the beginning of the expression
-                // (or a parenthesized expression) and the operator is "-" because it might be a
-                // negative value.
-                // let is_subexpr_start = matches!(
-                //     last_token,
-                //     (None
-                //         | Some(Token {
-                //             kind: TokenKind::LeftParen,
-                //             ..
-                //         }))
-                // );
+                // not expecting a binary operator unless it's a negative.
                 if expect_binop_or_end {
                     expect_binop_or_end = false;
+
+                    while let Some(&ref op2_token) = op_stack.back() {
+                        let op2 = Operator::from(&op2_token.kind).unwrap();
+                        if op2 != Operator::LeftParen
+                            && (op2.precedence() > op1.precedence()
+                                || (op2.precedence() == op1.precedence()
+                                    && op1.is_left_associative()))
+                        {
+                            // Pop op2 from the operator stack and onto the output queue.
+                            let op2 = Operator::from(&op_stack.pop_back().unwrap().kind).unwrap();
+                            out_q.push_back(OutputNode::from_op(op2));
+                        } else {
+                            break;
+                        }
+                    }
+
+                    // Push operator 1 onto the operator stack.
+                    op_stack.push_back(op1_token.clone());
                 } else if op1 == Operator::Subtract {
-                    // Push -1 to the output queue.
+                    // Error if this is a double negative. We could actually handle this cleanly,
+                    // by why allow confusing and unnecessary syntax?
+                    if let Some(
+                        token @ Token {
+                            kind: TokenKind::Subtract,
+                            ..
+                        },
+                    ) = last_token.clone()
+                    {
+                        return Err(ParseError::new(
+                            ErrorKind::UseOfDoubleNegative,
+                            "Use of double negative in expression",
+                            Some(token),
+                        ));
+                    }
+
+                    // We have a negative value here, so we're going to represent it as the value
+                    // multiplied by -1. Push -1 to the output queue and push * to the operator
+                    // stack.
                     out_q.push_back(OutputNode::from_basic_expr(Expression::IntLiteral(-1)));
-                    // Push * to the operator stack.
                     op_stack.push_back(Token::new(TokenKind::Multiply, 0, 0, 0));
-                    continue;
                 } else {
                     return Err(ParseError::new(
                         ErrorKind::UnexpectedOperator,
@@ -341,23 +365,6 @@ impl Expression {
                         Some(op1_token),
                     ));
                 }
-
-                while let Some(&ref op2_token) = op_stack.back() {
-                    let op2 = Operator::from(&op2_token.kind).unwrap();
-                    if op2 != Operator::LeftParen
-                        && (op2.precedence() > op1.precedence()
-                            || (op2.precedence() == op1.precedence() && op1.is_left_associative()))
-                    {
-                        // Pop op2 from the operator stack and onto the output queue.
-                        let op2 = Operator::from(&op_stack.pop_back().unwrap().kind).unwrap();
-                        out_q.push_back(OutputNode::from_op(op2));
-                    } else {
-                        break;
-                    }
-                }
-
-                // Push operator 1 onto the operator stack.
-                op_stack.push_back(op1_token.clone());
             }
             // At this point we know that the token is not an operator or a parenthesis.
             else {
@@ -754,7 +761,7 @@ mod tests {
 
     #[test]
     fn parse_unexpected_end_of_expr() {
-        for input in ["2 --", "ok *", "5/", "v -3 + -", "(3 % 3) +"] {
+        for input in ["2 -", "ok *", "5/", "v -3 + -", "(3 % 3) +"] {
             let mut tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
             let result = Expression::from(&mut tokens, false);
             assert!(matches!(
@@ -771,57 +778,18 @@ mod tests {
     fn parse_repeated_minus() {
         let input = "--(-v--a)-2--(-100 -- call(1))";
         let mut tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
-        let result = Expression::from(&mut tokens, false).expect("should not error");
-        assert_eq!(
+        let result = Expression::from(&mut tokens, false);
+        assert!(matches!(
             result,
-            Expression::BinaryOperation(
-                Box::new(Expression::BinaryOperation(
-                    Box::new(Expression::BinaryOperation(
-                        Box::new(Expression::IntLiteral(-1)),
-                        Operator::Multiply,
-                        Box::new(Expression::BinaryOperation(
-                            Box::new(Expression::IntLiteral(-1)),
-                            Operator::Multiply,
-                            Box::new(Expression::BinaryOperation(
-                                Box::new(Expression::BinaryOperation(
-                                    Box::new(Expression::IntLiteral(-1)),
-                                    Operator::Multiply,
-                                    Box::new(Expression::VariableReference("v".to_string())),
-                                )),
-                                Operator::Subtract,
-                                Box::new(Expression::BinaryOperation(
-                                    Box::new(Expression::IntLiteral(-1)),
-                                    Operator::Multiply,
-                                    Box::new(Expression::VariableReference("a".to_string())),
-                                )),
-                            )),
-                        )),
-                    )),
-                    Operator::Subtract,
-                    Box::new(Expression::IntLiteral(2)),
-                )),
-                Operator::Subtract,
-                Box::new(Expression::BinaryOperation(
-                    Box::new(Expression::IntLiteral(-1)),
-                    Operator::Multiply,
-                    Box::new(Expression::BinaryOperation(
-                        Box::new(Expression::BinaryOperation(
-                            Box::new(Expression::IntLiteral(-1)),
-                            Operator::Multiply,
-                            Box::new(Expression::IntLiteral(100)),
-                        )),
-                        Operator::Subtract,
-                        Box::new(Expression::BinaryOperation(
-                            Box::new(Expression::IntLiteral(-1)),
-                            Operator::Multiply,
-                            Box::new(Expression::FunctionCall(FunctionCall::new(
-                                "call",
-                                vec![Expression::IntLiteral(1)],
-                            ))),
-                        )),
-                    )),
-                )),
-            )
-        )
+            Err(ParseError {
+                kind: ErrorKind::UseOfDoubleNegative,
+                message: _,
+                token: Some(Token {
+                    kind: TokenKind::Subtract,
+                    start: Position { line: 0, col: 0 },
+                    end: Position { line: 0, col: 1 }
+                })
+            })
+        ))
     }
 }

@@ -21,6 +21,7 @@ pub enum ErrorKind {
     UnexpectedToken,
     UnexpectedEndOfStatement,
     InvalidStatement,
+    UseOfDoubleNegative,
 }
 
 /// Represents any fatal error that occurs during parsing.
