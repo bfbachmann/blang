@@ -792,4 +792,31 @@ mod tests {
             })
         ))
     }
+
+    #[test]
+    fn redundant_parenthesized_negatives() {
+        let input = "-(-b-(-100))";
+        let mut tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
+        let result = Expression::from(&mut tokens, false).expect("should not error");
+        assert_eq!(
+            result,
+            Expression::BinaryOperation(
+                Box::new(Expression::IntLiteral(-1)),
+                Operator::Multiply,
+                Box::new(Expression::BinaryOperation(
+                    Box::new(Expression::BinaryOperation(
+                        Box::new(Expression::IntLiteral(-1)),
+                        Operator::Multiply,
+                        Box::new(Expression::VariableReference("b".to_string())),
+                    )),
+                    Operator::Subtract,
+                    Box::new(Expression::BinaryOperation(
+                        Box::new(Expression::IntLiteral(-1)),
+                        Operator::Multiply,
+                        Box::new(Expression::IntLiteral(100)),
+                    )),
+                )),
+            )
+        )
+    }
 }
