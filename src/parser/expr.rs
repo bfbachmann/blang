@@ -734,9 +734,21 @@ mod tests {
 
     #[test]
     fn parse_redundant_parens() {
-        let mut tokens = Token::tokenize(Cursor::new("(((1)))").lines()).expect("should not error");
-        let result = Expression::from(&mut tokens, false).expect("shold not error");
-        assert_eq!(result, Expression::IntLiteral(1))
+        let mut tokens =
+            Token::tokenize(Cursor::new("(((1>0)+1))").lines()).expect("should not error");
+        let result = Expression::from(&mut tokens, false).expect("should not error");
+        assert_eq!(
+            result,
+            Expression::BinaryOperation(
+                Box::new(Expression::BinaryOperation(
+                    Box::new(Expression::IntLiteral(1)),
+                    Operator::GreaterThan,
+                    Box::new(Expression::IntLiteral(0)),
+                )),
+                Operator::Add,
+                Box::new(Expression::IntLiteral(1)),
+            )
+        )
     }
 
     #[test]
