@@ -301,11 +301,16 @@ impl TokenKind {
                 // Trim leading and trailing whitespace.
                 let formatted = segment.trim();
 
-                // Removing opening and losing quotes
+                // Removing opening and closing quotes.
                 let formatted = &formatted[1..formatted.len() - 1];
 
-                // Change escaped quotes to just quotes and
-                let formatted = &formatted.replace(r#"\""#, r#"""#).replace(r#"\\"#, r#"\"#);
+                // Handle whitespace characters and escaped quotes and backslashes.
+                let formatted = &formatted
+                    .replace(r#"\\"#, r#"\"#)
+                    .replace(r#"\n"#, "\n")
+                    .replace(r#"\r"#, "\r")
+                    .replace(r#"\t"#, "\t")
+                    .replace(r#"\""#, r#"""#);
 
                 Some(TokenKind::StringLiteral(String::from(formatted)))
             }

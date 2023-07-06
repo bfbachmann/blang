@@ -90,6 +90,9 @@ mod tests {
             Some(TokenKind::StringLiteral(String::from(r#"\\"#)))
         );
 
+        let result = TokenKind::from(r#""\n\t\r""#);
+        assert_eq!(result, Some(TokenKind::StringLiteral("\n\t\r".to_string())));
+
         let result = TokenKind::from(r#" "23424?? "#);
         assert_eq!(result, None);
     }
