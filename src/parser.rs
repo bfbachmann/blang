@@ -1,22 +1,22 @@
 use error::ParseError;
 use r#type::Type;
 
-mod arg;
-mod branch;
-mod closure;
-mod cond;
+pub mod arg;
+pub mod branch;
+pub mod closure;
+pub mod cond;
 mod error;
-mod expr;
-mod r#fn;
-mod fn_call;
-mod func_sig;
-mod r#loop;
-mod op;
+pub mod expr;
+pub mod r#fn;
+pub mod fn_call;
+pub mod func_sig;
+pub mod r#loop;
+pub mod op;
 pub mod program;
 pub mod statement;
-mod r#type;
-mod var_assign;
-mod var_dec;
+pub mod r#type;
+pub mod var_assign;
+pub mod var_dec;
 
 type ParseResult<T> = Result<T, ParseError>;
 
@@ -322,10 +322,5 @@ mod tests {
                 token: None,
             })
         ));
-    }
-
-    #[test]
-    fn expr_extra_parens() {
-        // TODO
     }
 }

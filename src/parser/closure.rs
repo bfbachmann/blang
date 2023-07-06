@@ -9,7 +9,7 @@ use crate::parser::ParseResult;
 use crate::util;
 
 /// Represents a closure, which is just a series of statements with their own scope.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Closure {
     statements: Vec<Statement>,
     result: Option<Expression>,

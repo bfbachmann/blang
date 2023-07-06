@@ -7,7 +7,7 @@ use crate::parser::program::Program;
 use crate::parser::ParseResult;
 
 /// Represents the assignment of some value (i.e. an expression) to a variable.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct VariableAssignment {
     pub name: String,
     pub value: Expression,

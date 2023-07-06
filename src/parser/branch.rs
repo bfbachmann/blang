@@ -7,7 +7,7 @@ use crate::parser::ParseResult;
 
 /// Represents a branch in a conditional. "if" and "else if" branches must have condition
 /// expressions, but "else" branches must not.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Branch {
     condition: Option<Expression>,
     body: Closure,

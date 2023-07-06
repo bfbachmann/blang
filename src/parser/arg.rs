@@ -1,14 +1,21 @@
 use std::collections::VecDeque;
+use std::fmt;
 
 use crate::lexer::token::Token;
 use crate::parser::program::Program;
 use crate::parser::{ParseResult, Type};
 
 /// Represents a function argument declaration.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Argument {
-    name: String,
-    typ: Type,
+    pub name: String,
+    pub typ: Type,
+}
+
+impl fmt::Display for Argument {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.typ, self.name)
+    }
 }
 
 impl Argument {

@@ -1,0 +1,425 @@
+use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::AnalyzeResult;
+use crate::parser::expr::Expression;
+use crate::parser::op::Operator;
+use crate::parser::r#type::Type;
+use crate::parser::var_dec::VariableDeclaration;
+
+fn analyze_expr(ctx: &ProgramContext, expr: &Expression) -> AnalyzeResult<Type> {
+    match expr {
+        Expression::VariableReference(ref var_name) => {
+            // Make sure the variable being referenced exists.
+            match ctx.get_var(var_name.as_str()) {
+                Some(&ref var_dec) => Ok(var_dec.typ.clone()),
+                None => Err(AnalyzeError::new_from_expr(
+                    ErrorKind::VariableNotDefined,
+                    &expr,
+                    format!("Variable {} does not exist", var_name).as_str(),
+                )),
+            }
+        }
+        Expression::BoolLiteral(_) => Ok(Type::Bool),
+        Expression::IntLiteral(_) => Ok(Type::Int),
+        Expression::StringLiteral(_) => Ok(Type::String),
+        ref fn_call_expr @ Expression::FunctionCall(ref fn_call) => {
+            // Make sure the function exists.
+            match ctx.get_fn(fn_call.fn_name.as_str()) {
+                Some(&ref func) => {
+                    // Make sure the right number of arguments were passed.
+                    if fn_call.args.len() != func.signature.args.len() {
+                        return Err(AnalyzeError::new(
+                            ErrorKind::WrongNumberOfArgs,
+                            format!(
+                                "Function {} takes {} args, but {} were provided",
+                                func.signature.name,
+                                func.signature.args.len(),
+                                fn_call.args.len()
+                            )
+                            .as_str(),
+                        ));
+                    }
+
+                    // Make sure the arguments are of the right types.
+                    for (passed, defined) in fn_call.args.iter().zip(&func.signature.args) {
+                        let passed_type = analyze_expr(ctx, passed)?;
+                        if passed_type != defined.typ {
+                            return Err(AnalyzeError::new(
+                                ErrorKind::IncompatibleTypes,
+                                format!(
+                                    r#"Argument {} of function {} has type {}, \
+                                    but a value of type {} was provided"#,
+                                    defined.name, func.signature.name, defined.typ, passed_type
+                                )
+                                .as_str(),
+                            ));
+                        }
+                    }
+
+                    if let Some(typ) = func.signature.return_type.clone() {
+                        return Ok(typ);
+                    }
+
+                    // Error because there is no return type.
+                    Err(AnalyzeError::new_from_expr(
+                        ErrorKind::ExpectedValue,
+                        &fn_call_expr,
+                        format!(
+                            r#"Function {} has no return value, but was \
+                            used in an expression where a value is expected"#,
+                            fn_call.fn_name,
+                        )
+                        .as_str(),
+                    ))
+                }
+                None => Err(AnalyzeError::new_from_expr(
+                    ErrorKind::FunctionNotDefined,
+                    &fn_call_expr,
+                    format!("Function {} does not exist", fn_call.fn_name).as_str(),
+                )),
+            }
+        }
+        // TODO
+        // Expression::AnonFunction(Box<Function>) => {},
+        Expression::UnaryOperation(ref op, ref right_expr) => match op {
+            Operator::Not => {
+                // Make sure the expression has type bool.
+                match analyze_expr(ctx, right_expr)? {
+                    Type::Bool => Ok(Type::Bool),
+                    other => Err(AnalyzeError::new_from_expr(
+                        ErrorKind::IncompatibleTypes,
+                        &expr,
+                        format!(
+                            r#"Unary operator ! can only be applied to \
+                            values of type bool, but found type {}"#,
+                            other,
+                        )
+                        .as_str(),
+                    )),
+                }
+            }
+            other => {
+                // If this happens, the parser is badly broken.
+                panic!("invalid unary operator {}", other)
+            }
+        },
+        Expression::BinaryOperation(ref left_expr, ref op, ref right_expr) => {
+            let left_type = analyze_expr(ctx, left_expr)?;
+            let right_type = analyze_expr(ctx, right_expr)?;
+            let expected_type = match op {
+                // Mathematical operators only work on numeric types.
+                Operator::Add
+                | Operator::Subtract
+                | Operator::Multiply
+                | Operator::Divide
+                | Operator::Modulo => Some(Type::Int),
+                // Logical operators only work on bools.
+                Operator::LogicalAnd | Operator::LogicalOr => Some(Type::Bool),
+                // Equality operators work on anything.
+                Operator::EqualTo | Operator::NotEqualTo => None,
+                // Comparators only work on numeric types.
+                Operator::GreaterThan
+                | Operator::LessThan
+                | Operator::GreaterThanOrEqual
+                | Operator::LessThanOrEqual => Some(Type::Int),
+                // If this happens, the parser is badly broken.
+                other => panic!("unexpected operator {}", other),
+            };
+
+            // If there is an expected type, make sure the left and right expressions match the
+            // type. Otherwise, we just make sure both the left and right expression types match.
+            if let Some(expected) = expected_type {
+                if left_type != expected {
+                    return Err(AnalyzeError::new_from_expr(
+                        ErrorKind::IncompatibleTypes,
+                        &expr,
+                        format!(
+                            r#"Cannot apply operator {} to left-side \
+                            expression of type {}"#,
+                            op, left_type
+                        )
+                        .as_str(),
+                    ));
+                }
+
+                if right_type != expected {
+                    return Err(AnalyzeError::new_from_expr(
+                        ErrorKind::IncompatibleTypes,
+                        &expr,
+                        format!(
+                            "Cannot apply operator {} to right-side expression type {}",
+                            op, right_type
+                        )
+                        .as_str(),
+                    ));
+                }
+            } else if left_type != right_type {
+                return Err(AnalyzeError::new_from_expr(
+                    ErrorKind::IncompatibleTypes,
+                    &expr,
+                    format!("Incompatible types {} and {}", left_type, right_type).as_str(),
+                ));
+            }
+
+            Ok(left_type)
+        }
+        _ => {
+            panic!("unimplemented")
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::analyzer::error::{AnalyzeError, ErrorKind};
+    use crate::analyzer::expr::analyze_expr;
+    use crate::analyzer::prog_context::ProgramContext;
+    use crate::parser::arg::Argument;
+    use crate::parser::closure::Closure;
+    use crate::parser::expr::Expression;
+    use crate::parser::fn_call::FunctionCall;
+    use crate::parser::func_sig::FunctionSignature;
+    use crate::parser::op::Operator;
+    use crate::parser::r#fn::Function;
+    use crate::parser::r#type::Type;
+    use crate::parser::var_dec::VariableDeclaration;
+
+    #[test]
+    fn analyze_int_literal() {
+        let ctx = ProgramContext::new();
+        let expr = Expression::IntLiteral(1);
+        let result = analyze_expr(&ctx, &expr);
+        assert!(matches!(result, Ok(Type::Int)));
+    }
+
+    #[test]
+    fn analyze_bool_literal() {
+        let ctx = ProgramContext::new();
+        let expr = Expression::BoolLiteral(false);
+        let result = analyze_expr(&ctx, &expr);
+        assert!(matches!(result, Ok(Type::Bool)));
+    }
+
+    #[test]
+    fn analyze_string_literal() {
+        let ctx = ProgramContext::new();
+        let expr = Expression::StringLiteral("test".to_string());
+        let result = analyze_expr(&ctx, &expr);
+        assert!(matches!(result, Ok(Type::String)));
+    }
+
+    #[test]
+    fn analyze_var_ref() {
+        let mut ctx = ProgramContext::new();
+        ctx.add_var(VariableDeclaration::new(
+            Type::String,
+            "myvar".to_string(),
+            Expression::StringLiteral("hello".to_string()),
+        ));
+        let result = analyze_expr(&ctx, &Expression::VariableReference("myvar".to_string()));
+        assert!(matches!(result, Ok(Type::String)));
+    }
+
+    #[test]
+    fn analyze_invalid_var_ref() {
+        let ctx = ProgramContext::new();
+        let result = analyze_expr(&ctx, &Expression::VariableReference("myvar".to_string()));
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::VariableNotDefined,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn analyze_fn_call() {
+        let mut ctx = ProgramContext::new();
+        ctx.add_fn(Function::new(
+            FunctionSignature::new(
+                "do_thing",
+                vec![Argument::new("first", Type::Bool)],
+                Some(Type::String),
+            ),
+            Closure::new(vec![], None),
+        ));
+        let result = analyze_expr(
+            &ctx,
+            &Expression::FunctionCall(FunctionCall::new(
+                "do_thing",
+                vec![Expression::BoolLiteral(true)],
+            )),
+        );
+        assert!(matches!(result, Ok(Type::String)));
+    }
+
+    #[test]
+    fn fn_call_no_return() {
+        let mut ctx = ProgramContext::new();
+        ctx.add_fn(Function::new(
+            FunctionSignature::new("do_thing", vec![], None),
+            Closure::new(vec![], None),
+        ));
+        let result = analyze_expr(
+            &ctx,
+            &Expression::BinaryOperation(
+                Box::new(Expression::IntLiteral(1)),
+                Operator::Add,
+                Box::new(Expression::FunctionCall(FunctionCall::new(
+                    "do_thing",
+                    vec![],
+                ))),
+            ),
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::ExpectedValue,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn fn_call_missing_arg() {
+        let mut ctx = ProgramContext::new();
+        ctx.add_fn(Function::new(
+            FunctionSignature::new("do_thing", vec![Argument::new("arg", Type::Bool)], None),
+            Closure::new(vec![], None),
+        ));
+        let result = analyze_expr(
+            &ctx,
+            &Expression::BinaryOperation(
+                Box::new(Expression::IntLiteral(1)),
+                Operator::Add,
+                Box::new(Expression::FunctionCall(FunctionCall::new(
+                    "do_thing",
+                    vec![],
+                ))),
+            ),
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::WrongNumberOfArgs,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn fn_call_invalid_arg_type() {
+        let mut ctx = ProgramContext::new();
+        ctx.add_fn(Function::new(
+            FunctionSignature::new("do_thing", vec![Argument::new("arg", Type::Bool)], None),
+            Closure::new(vec![], None),
+        ));
+        let result = analyze_expr(
+            &ctx,
+            &Expression::BinaryOperation(
+                Box::new(Expression::IntLiteral(1)),
+                Operator::Add,
+                Box::new(Expression::FunctionCall(FunctionCall::new(
+                    "do_thing",
+                    vec![Expression::IntLiteral(1)],
+                ))),
+            ),
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::IncompatibleTypes,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn binary_op_invalid_operand_types() {
+        let mut ctx = ProgramContext::new();
+
+        let result = analyze_expr(
+            &ctx,
+            &Expression::BinaryOperation(
+                Box::new(Expression::IntLiteral(1)),
+                Operator::Add,
+                Box::new(Expression::StringLiteral("asdf".to_string())),
+            ),
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::IncompatibleTypes,
+                ..
+            })
+        ));
+
+        let result = analyze_expr(
+            &ctx,
+            &Expression::BinaryOperation(
+                Box::new(Expression::StringLiteral("asdf".to_string())),
+                Operator::Add,
+                Box::new(Expression::IntLiteral(1)),
+            ),
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::IncompatibleTypes,
+                ..
+            })
+        ));
+
+        let result = analyze_expr(
+            &ctx,
+            &Expression::BinaryOperation(
+                Box::new(Expression::IntLiteral(2)),
+                Operator::LogicalOr,
+                Box::new(Expression::IntLiteral(1)),
+            ),
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::IncompatibleTypes,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn unary_op() {
+        let mut ctx = ProgramContext::new();
+        let result = analyze_expr(
+            &ctx,
+            &Expression::UnaryOperation(Operator::Not, Box::new(Expression::IntLiteral(1))),
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::IncompatibleTypes,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn unary_op_invalid_operand_type() {
+        let mut ctx = ProgramContext::new();
+        let result = analyze_expr(
+            &ctx,
+            &Expression::UnaryOperation(
+                Operator::Not,
+                Box::new(Expression::StringLiteral("s".to_string())),
+            ),
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::IncompatibleTypes,
+                ..
+            })
+        ));
+    }
+}

@@ -6,10 +6,10 @@ use crate::parser::func_sig::FunctionSignature;
 use crate::parser::ParseResult;
 
 /// Represents a function declaration.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Function {
-    signature: FunctionSignature,
-    body: Closure,
+    pub signature: FunctionSignature,
+    pub body: Closure,
 }
 
 impl Function {

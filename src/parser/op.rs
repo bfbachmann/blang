@@ -3,7 +3,7 @@ use core::fmt;
 use crate::lexer::kind::TokenKind;
 
 /// Represents an operator.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Operator {
     // Basic binary operators
     Add,

@@ -13,8 +13,10 @@ use crate::parser::var_assign::VariableAssignment;
 use crate::parser::var_dec::VariableDeclaration;
 use crate::parser::ParseResult;
 
+use std::fmt;
+
 /// Represents a statement.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Statement {
     VariableDeclaration(VariableDeclaration),
     VariableAssignment(VariableAssignment),
@@ -25,6 +27,44 @@ pub enum Statement {
     Loop(Loop),
     Break,
     Return(Option<Expression>),
+}
+
+impl fmt::Display for Statement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Statement::VariableDeclaration(var_dec) => {
+                write!(
+                    f,
+                    "variable declaration {} {} = ...",
+                    var_dec.typ, var_dec.name
+                )
+            }
+            Statement::VariableAssignment(var_assign) => {
+                write!(f, "variable assignment {} = ...", var_assign.name)
+            }
+            Statement::FunctionDeclaration(func) => {
+                write!(f, "function declaration {}", func.signature)
+            }
+            Statement::Closure(_) => {
+                write!(f, "closure")
+            }
+            Statement::FunctionCall(call) => {
+                write!(f, "function call {}(...)", call.fn_name)
+            }
+            Statement::Conditional(_) => {
+                write!(f, "conditional")
+            }
+            Statement::Loop(_) => {
+                write!(f, "loop")
+            }
+            Statement::Break => {
+                write!(f, "break")
+            }
+            Statement::Return(_) => {
+                write!(f, "return")
+            }
+        }
+    }
 }
 
 impl Statement {

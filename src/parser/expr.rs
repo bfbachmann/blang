@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::fmt;
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::token::Token;
@@ -37,7 +38,7 @@ impl OutputNode {
 ///  - `basic_expr` is a basic expression
 ///  - `binary_op` is a binary operator
 ///  - `comp_expr` is a composite expression
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
     // Basic expressions.
     VariableReference(String),
@@ -50,6 +51,13 @@ pub enum Expression {
 
     // Composite expressions.
     BinaryOperation(Box<Expression>, Operator, Box<Expression>),
+}
+
+impl fmt::Display for Expression {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // TODO
+        write!(f, "??")
+    }
 }
 
 impl Expression {
@@ -389,8 +397,11 @@ impl Expression {
                         } else {
                             return Err(ParseError::new(
                                 ErrorKind::ExpectedBeginExpr,
-                                format!("Expected beginning of expression, but got {}", op1_token)
-                                    .as_str(),
+                                format!(
+                                    "Expected beginning of expression, but found {}",
+                                    op1_token
+                                )
+                                .as_str(),
                                 Some(op1_token),
                             ));
                         }
@@ -409,15 +420,19 @@ impl Expression {
                                 } else {
                                     return Err(ParseError::new(
                                         ErrorKind::ExpectedBasicExpr,
-                                        format!("Expected basic expression, but got {}", op1_token)
-                                            .as_str(),
+                                        format!(
+                                            "Expected basic expression, but found {}",
+                                            op1_token
+                                        )
+                                        .as_str(),
                                         Some(op1_token),
                                     ));
                                 }
                             } else {
                                 return Err(ParseError::new(
                                     ErrorKind::ExpectedExpr,
-                                    format!("Expected expression, but got {}", op1_token).as_str(),
+                                    format!("Expected expression, but found {}", op1_token)
+                                        .as_str(),
                                     Some(op1_token),
                                 ));
                             }

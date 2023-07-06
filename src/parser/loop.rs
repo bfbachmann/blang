@@ -7,7 +7,7 @@ use crate::parser::program::Program;
 use crate::parser::ParseResult;
 
 /// Represents a closure that is executed repeatedly.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Loop {
     closure: Closure,
 }

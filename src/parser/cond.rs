@@ -8,7 +8,7 @@ use crate::parser::ParseResult;
 use crate::util;
 
 /// Represents a conditional (i.e. branching if/else if/else statements).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Conditional {
     branches: Vec<Branch>,
 }

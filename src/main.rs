@@ -12,6 +12,7 @@ use lexer::token::Token;
 use parser::program::Program;
 use parser::statement::Statement;
 
+mod analyzer;
 mod lexer;
 mod parser;
 mod util;

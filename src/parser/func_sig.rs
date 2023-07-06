@@ -1,4 +1,5 @@
 use std::collections::{HashSet, VecDeque};
+use std::fmt;
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::token::Token;
@@ -10,11 +11,31 @@ use crate::util;
 
 /// Represents the name, arguments, and return type of a function. Anonymous functions have empty
 /// names.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionSignature {
-    name: String,
-    args: Vec<Argument>,
-    return_type: Option<Type>,
+    pub name: String,
+    pub args: Vec<Argument>,
+    pub return_type: Option<Type>,
+}
+
+impl fmt::Display for FunctionSignature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "fn {}(", self.name)?;
+
+        for arg in self.args.iter() {
+            write!(f, "{}", arg)?;
+
+            if arg != self.args.last().unwrap() {
+                write!(f, ", ")?;
+            }
+        }
+
+        if let Some(typ) = &self.return_type {
+            write!(f, "): {}", typ)
+        } else {
+            write!(f, ")")
+        }
+    }
 }
 
 impl PartialEq for FunctionSignature {
@@ -150,6 +171,7 @@ impl FunctionSignature {
 
         // The next token(s) should be arguments or a closing parenthesis.
         let mut args = vec![];
+        let mut arg_names = HashSet::new();
         loop {
             // The next token should be an argument, or ")".
             let token = tokens.pop_front();
@@ -166,12 +188,24 @@ impl FunctionSignature {
                     ..
                 }) => {
                     // The next few tokens represent an argument.
-                    tokens.push_front(token.unwrap());
+                    tokens.push_front(token.clone().unwrap());
                     let arg = if named {
-                        Argument::from(tokens)?
+                        let arg = Argument::from(tokens)?;
+
+                        // Make sure the arg name isn't already used.
+                        if !arg_names.insert(arg.name.clone()) {
+                            return Err(ParseError::new(
+                                ErrorKind::DuplicateArgName,
+                                format!("Duplicate argument name {}", arg.name).as_str(),
+                                token,
+                            ));
+                        }
+
+                        arg
                     } else {
                         Argument::unnamed_from(tokens)?
                     };
+
                     args.push(arg);
                 }
                 None => {
@@ -184,7 +218,7 @@ impl FunctionSignature {
                 Some(other) => {
                     return Err(ParseError::new(
                         ErrorKind::ExpectedArgOrEndOfArgs,
-                        format!(r#"Expected argument or ")", but got "{}""#, other).as_str(),
+                        format!(r#"Expected argument or ")", but found "{}""#, other).as_str(),
                         Some(other),
                     ))
                 }
@@ -203,5 +237,29 @@ impl FunctionSignature {
         }
 
         Ok(args)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::{BufRead, Cursor};
+
+    use crate::lexer::token::Token;
+    use crate::parser::error::ErrorKind;
+    use crate::parser::error::ParseError;
+    use crate::parser::program::Program;
+
+    #[test]
+    fn duplicate_arg_name() {
+        let raw = r#"fn one(int a, int b, int a) {}"#;
+        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let result = Program::from(&mut tokens);
+        assert!(matches!(
+            result,
+            Err(ParseError {
+                kind: ErrorKind::DuplicateArgName,
+                ..
+            })
+        ));
     }
 }

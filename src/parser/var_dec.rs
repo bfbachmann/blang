@@ -8,11 +8,11 @@ use crate::parser::ParseResult;
 
 /// Represents a variable declaration. Each variable declaration must have a valid type, a name,
 /// and some value as the result of an expression.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct VariableDeclaration {
-    typ: Type,
-    name: String,
-    value: Expression,
+    pub typ: Type,
+    pub name: String,
+    pub value: Expression,
 }
 
 impl VariableDeclaration {

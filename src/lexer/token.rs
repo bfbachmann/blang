@@ -84,7 +84,7 @@ impl Token {
                 // The subsegment does not begin with a valid token. This means the segment is
                 // syntactically invalid.
                 return Err(LexError::new(
-                    format!(r#"Expected valid token, but got {}"#, subseg).as_str(),
+                    format!(r#"Expected valid token, but found {}"#, subseg).as_str(),
                     line_num,
                     search_start,
                 ));

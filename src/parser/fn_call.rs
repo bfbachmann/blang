@@ -9,10 +9,10 @@ use crate::parser::ParseResult;
 use crate::util;
 
 /// Represents the calling of a function.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionCall {
-    fn_name: String,
-    args: Vec<Expression>,
+    pub fn_name: String,
+    pub args: Vec<Expression>,
 }
 
 impl PartialEq for FunctionCall {
@@ -69,7 +69,7 @@ impl FunctionCall {
                     if args.len() == 0 {
                         return Err(ParseError::new(
                             ErrorKind::ExpectedExprOrCloseParen,
-                            format!(r#"Expected expression or ")", but got "{}"#, comma).as_str(),
+                            format!(r#"Expected expression or ")", but found "{}"#, comma).as_str(),
                             Some(comma.clone()),
                         ));
                     }
