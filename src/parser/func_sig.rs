@@ -184,7 +184,7 @@ impl FunctionSignature {
                     break;
                 }
                 Some(Token {
-                    kind: TokenKind::String | TokenKind::Int | TokenKind::Bool | TokenKind::Function,
+                    kind: TokenKind::String | TokenKind::I64 | TokenKind::Bool | TokenKind::Function,
                     ..
                 }) => {
                     // The next few tokens represent an argument.
@@ -251,7 +251,7 @@ mod tests {
 
     #[test]
     fn duplicate_arg_name() {
-        let raw = r#"fn one(int a, int b, int a) {}"#;
+        let raw = r#"fn one(i64 a, i64 b, i64 a) {}"#;
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let result = Program::from(&mut tokens);
         assert!(matches!(

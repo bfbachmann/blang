@@ -21,7 +21,7 @@ pub fn analyze_expr(ctx: &mut ProgramContext, expr: &Expression) -> AnalyzeResul
             }
         }
         Expression::BoolLiteral(_) => Ok(Type::Bool),
-        Expression::IntLiteral(_) => Ok(Type::Int),
+        Expression::I64Literal(_) => Ok(Type::I64),
         Expression::StringLiteral(_) => Ok(Type::String),
         Expression::FunctionCall(ref fn_call) => match analyze_fn_call(ctx, fn_call)? {
             Some(typ) => Ok(typ),
@@ -79,7 +79,7 @@ pub fn analyze_expr(ctx: &mut ProgramContext, expr: &Expression) -> AnalyzeResul
                 | Operator::Subtract
                 | Operator::Multiply
                 | Operator::Divide
-                | Operator::Modulo => (Some(Type::Int), Type::Int),
+                | Operator::Modulo => (Some(Type::I64), Type::I64),
                 // Logical operators only work on bools.
                 Operator::LogicalAnd | Operator::LogicalOr => (Some(Type::Bool), Type::Bool),
                 // Equality operators work on anything.
@@ -88,7 +88,7 @@ pub fn analyze_expr(ctx: &mut ProgramContext, expr: &Expression) -> AnalyzeResul
                 Operator::GreaterThan
                 | Operator::LessThan
                 | Operator::GreaterThanOrEqual
-                | Operator::LessThanOrEqual => (Some(Type::Int), Type::Bool),
+                | Operator::LessThanOrEqual => (Some(Type::I64), Type::Bool),
                 // If this happens, the parser is badly broken.
                 other => panic!("unexpected operator {}", other),
             };
@@ -149,11 +149,11 @@ mod tests {
     use crate::parser::var_dec::VariableDeclaration;
 
     #[test]
-    fn analyze_int_literal() {
+    fn analyze_i64_literal() {
         let mut ctx = ProgramContext::new();
-        let expr = Expression::IntLiteral(1);
+        let expr = Expression::I64Literal(1);
         let result = analyze_expr(&mut ctx, &expr);
-        assert!(matches!(result, Ok(Type::Int)));
+        assert!(matches!(result, Ok(Type::I64)));
     }
 
     #[test]
@@ -234,7 +234,7 @@ mod tests {
         let result = analyze_expr(
             &mut ctx,
             &Expression::BinaryOperation(
-                Box::new(Expression::IntLiteral(1)),
+                Box::new(Expression::I64Literal(1)),
                 Operator::Add,
                 Box::new(Expression::FunctionCall(FunctionCall::new(
                     "do_thing",
@@ -261,7 +261,7 @@ mod tests {
         let result = analyze_expr(
             &mut ctx,
             &Expression::BinaryOperation(
-                Box::new(Expression::IntLiteral(1)),
+                Box::new(Expression::I64Literal(1)),
                 Operator::Add,
                 Box::new(Expression::FunctionCall(FunctionCall::new(
                     "do_thing",
@@ -288,11 +288,11 @@ mod tests {
         let result = analyze_expr(
             &mut ctx,
             &Expression::BinaryOperation(
-                Box::new(Expression::IntLiteral(1)),
+                Box::new(Expression::I64Literal(1)),
                 Operator::Add,
                 Box::new(Expression::FunctionCall(FunctionCall::new(
                     "do_thing",
-                    vec![Expression::IntLiteral(1)],
+                    vec![Expression::I64Literal(1)],
                 ))),
             ),
         );
@@ -311,7 +311,7 @@ mod tests {
         let result = analyze_expr(
             &mut ctx,
             &Expression::BinaryOperation(
-                Box::new(Expression::IntLiteral(1)),
+                Box::new(Expression::I64Literal(1)),
                 Operator::Add,
                 Box::new(Expression::StringLiteral("asdf".to_string())),
             ),
@@ -329,7 +329,7 @@ mod tests {
             &Expression::BinaryOperation(
                 Box::new(Expression::StringLiteral("asdf".to_string())),
                 Operator::Add,
-                Box::new(Expression::IntLiteral(1)),
+                Box::new(Expression::I64Literal(1)),
             ),
         );
         assert!(matches!(
@@ -343,9 +343,9 @@ mod tests {
         let result = analyze_expr(
             &mut ctx,
             &Expression::BinaryOperation(
-                Box::new(Expression::IntLiteral(2)),
+                Box::new(Expression::I64Literal(2)),
                 Operator::LogicalOr,
-                Box::new(Expression::IntLiteral(1)),
+                Box::new(Expression::I64Literal(1)),
             ),
         );
         assert!(matches!(
@@ -362,7 +362,7 @@ mod tests {
         let mut ctx = ProgramContext::new();
         let result = analyze_expr(
             &mut ctx,
-            &Expression::UnaryOperation(Operator::Not, Box::new(Expression::IntLiteral(1))),
+            &Expression::UnaryOperation(Operator::Not, Box::new(Expression::I64Literal(1))),
         );
         assert!(matches!(
             result,

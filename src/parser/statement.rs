@@ -104,7 +104,7 @@ impl Statement {
             // If the first token is a type, it must be a variable declaration.
             (
                 Token {
-                    kind: TokenKind::Int | TokenKind::String | TokenKind::Bool,
+                    kind: TokenKind::I64 | TokenKind::String | TokenKind::Bool,
                     ..
                 },
                 _,
@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn parse_var_assignment() {
-        let mut tokens = Token::tokenize_line("int thing = 234", 0).expect("should not error");
+        let mut tokens = Token::tokenize_line("i64 thing = 234", 0).expect("should not error");
         Statement::from(&mut tokens).expect("should not error");
     }
 }

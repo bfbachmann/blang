@@ -12,14 +12,14 @@ use crate::parser::ParseResult;
 pub enum Type {
     Bool,
     String,
-    Int,
+    I64,
     Function(Box<FunctionSignature>),
 }
 
 impl PartialEq for Type {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Type::Bool, Type::Bool) | (Type::String, Type::String) | (Type::Int, Type::Int) => {
+            (Type::Bool, Type::Bool) | (Type::String, Type::String) | (Type::I64, Type::I64) => {
                 true
             }
             (Type::Function(f1), Type::Function(f2)) => {
@@ -46,7 +46,7 @@ impl fmt::Display for Type {
         match self {
             Type::Bool => write!(f, "bool"),
             Type::String => write!(f, "string"),
-            Type::Int => write!(f, "int"),
+            Type::I64 => write!(f, "int"),
             Type::Function(fn_sig) => write!(f, "{}", fn_sig),
         }
     }
@@ -61,9 +61,9 @@ impl Type {
                 ..
             }) => Ok(Type::Bool),
             Some(Token {
-                kind: TokenKind::Int,
+                kind: TokenKind::I64,
                 ..
-            }) => Ok(Type::Int),
+            }) => Ok(Type::I64),
             Some(Token {
                 kind: TokenKind::String,
                 ..

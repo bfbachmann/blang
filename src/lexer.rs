@@ -45,12 +45,12 @@ mod tests {
     }
 
     #[test]
-    fn lex_int_literal() {
+    fn lex_i64_literal() {
         let result = TokenKind::from(" 123 ");
-        assert_eq!(result, Some(TokenKind::IntLiteral(123)));
+        assert_eq!(result, Some(TokenKind::I64Literal(123)));
 
         let result = TokenKind::from(" 9923423 ");
-        assert_eq!(result, Some(TokenKind::IntLiteral(9923423)));
+        assert_eq!(result, Some(TokenKind::I64Literal(9923423)));
 
         let result = TokenKind::from(" ..23423;lj1 ");
         assert_eq!(result, None);
@@ -112,7 +112,7 @@ mod tests {
         );
 
         let result = TokenKind::first_from("    3784751 --");
-        assert_eq!(result, Some((TokenKind::IntLiteral(3784751), 12)),);
+        assert_eq!(result, Some((TokenKind::I64Literal(3784751), 12)),);
 
         let result = TokenKind::first_from("  =letting 435");
         assert_eq!(result, Some((TokenKind::Equal, 3)),);
@@ -147,7 +147,7 @@ mod tests {
             Ok(VecDeque::from(vec![
                 Token::new(TokenKind::Identifier(String::from("thing")), 0, 0, 5),
                 Token::new(TokenKind::Equal, 0, 6, 7),
-                Token::new(TokenKind::IntLiteral(234), 0, 8, 11),
+                Token::new(TokenKind::I64Literal(234), 0, 8, 11),
                 Token::new(TokenKind::StringLiteral(String::from("onetwo")), 0, 12, 20),
                 Token::new(TokenKind::StringLiteral(String::from("three")), 0, 21, 28),
                 Token::new(TokenKind::Identifier(String::from("four")), 0, 28, 32),

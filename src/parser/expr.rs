@@ -43,7 +43,7 @@ pub enum Expression {
     // Basic expressions.
     VariableReference(String),
     BoolLiteral(bool),
-    IntLiteral(i64),
+    I64Literal(i64),
     StringLiteral(String),
     FunctionCall(FunctionCall),
     AnonFunction(Box<Function>),
@@ -164,9 +164,9 @@ impl Expression {
 
             // Check if it's an integer literal.
             Some(Token {
-                kind: TokenKind::IntLiteral(i),
+                kind: TokenKind::I64Literal(i),
                 ..
-            }) => Ok(Some(Expression::IntLiteral(i))),
+            }) => Ok(Some(Expression::I64Literal(i))),
 
             // Check if it's a string literal.
             Some(Token {
@@ -364,7 +364,7 @@ impl Expression {
                     // We have a negative value here, so we're going to represent it as the value
                     // multiplied by -1. Push -1 to the output queue and push * to the operator
                     // stack.
-                    out_q.push_back(OutputNode::from_basic_expr(Expression::IntLiteral(-1)));
+                    out_q.push_back(OutputNode::from_basic_expr(Expression::I64Literal(-1)));
                     op_stack.push_back(Token::new(TokenKind::Multiply, 0, 0, 0));
                 } else {
                     return Err(ParseError::new(
@@ -509,10 +509,10 @@ mod tests {
     }
 
     #[test]
-    fn parse_basic_int_literal() {
+    fn parse_basic_i64_literal() {
         let mut tokens = Token::tokenize_line("123", 0).expect("should not error");
         let result = Expression::from_basic(&mut tokens, false).expect("should not error");
-        assert_eq!(result, Some(Expression::IntLiteral(123)));
+        assert_eq!(result, Some(Expression::I64Literal(123)));
     }
 
     #[test]
@@ -540,12 +540,12 @@ mod tests {
                 vec![
                     Expression::BinaryOperation(
                         Box::new(Expression::BinaryOperation(
-                            Box::new(Expression::IntLiteral(3)),
+                            Box::new(Expression::I64Literal(3)),
                             Operator::Multiply,
-                            Box::new(Expression::IntLiteral(2))
+                            Box::new(Expression::I64Literal(2))
                         )),
                         Operator::Subtract,
-                        Box::new(Expression::IntLiteral(2))
+                        Box::new(Expression::I64Literal(2))
                     ),
                     Expression::FunctionCall(FunctionCall::new(
                         "other",
@@ -555,12 +555,12 @@ mod tests {
                                 Box::new(Expression::VariableReference("thing".to_string()))
                             ),
                             Expression::BinaryOperation(
-                                Box::new(Expression::IntLiteral(1)),
+                                Box::new(Expression::I64Literal(1)),
                                 Operator::GreaterThan,
                                 Box::new(Expression::BinaryOperation(
                                     Box::new(Expression::VariableReference("var".to_string())),
                                     Operator::Modulo,
-                                    Box::new(Expression::IntLiteral(2))
+                                    Box::new(Expression::I64Literal(2))
                                 ))
                             )
                         ]
@@ -571,7 +571,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_int_arithmetic() {
+    fn parse_i64_arithmetic() {
         let mut tokens =
             Token::tokenize_line("(3 + 6) / 3 - 5 + 2 * 3", 0).expect("should not error");
         let result = Expression::from(&mut tokens, false).expect("should not error");
@@ -581,21 +581,21 @@ mod tests {
                 Box::new(Expression::BinaryOperation(
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::BinaryOperation(
-                            Box::new(Expression::IntLiteral(3)),
+                            Box::new(Expression::I64Literal(3)),
                             Operator::Add,
-                            Box::new(Expression::IntLiteral(6))
+                            Box::new(Expression::I64Literal(6))
                         )),
                         Operator::Divide,
-                        Box::new(Expression::IntLiteral(3))
+                        Box::new(Expression::I64Literal(3))
                     )),
                     Operator::Subtract,
-                    Box::new(Expression::IntLiteral(5))
+                    Box::new(Expression::I64Literal(5))
                 )),
                 Operator::Add,
                 Box::new(Expression::BinaryOperation(
-                    Box::new(Expression::IntLiteral(2)),
+                    Box::new(Expression::I64Literal(2)),
                     Operator::Multiply,
-                    Box::new(Expression::IntLiteral(3))
+                    Box::new(Expression::I64Literal(3))
                 ))
             )
         )
@@ -616,10 +616,10 @@ mod tests {
                         Box::new(Expression::BinaryOperation(
                             Box::new(Expression::VariableReference("var".to_string(),)),
                             Operator::Subtract,
-                            Box::new(Expression::IntLiteral(3,)),
+                            Box::new(Expression::I64Literal(3,)),
                         )),
                         Operator::Divide,
-                        Box::new(Expression::IntLiteral(4)),
+                        Box::new(Expression::I64Literal(4)),
                     )),
                     Operator::Multiply,
                     Box::new(Expression::BinaryOperation(
@@ -628,11 +628,11 @@ mod tests {
                             vec![Expression::BoolLiteral(true)],
                         ))),
                         Operator::Modulo,
-                        Box::new(Expression::IntLiteral(2)),
+                        Box::new(Expression::I64Literal(2)),
                     )),
                 )),
                 Operator::Add,
-                Box::new(Expression::IntLiteral(5)),
+                Box::new(Expression::I64Literal(5)),
             )
         );
     }
@@ -666,31 +666,31 @@ mod tests {
             Expression::BinaryOperation(
                 Box::new(Expression::BinaryOperation(
                     Box::new(Expression::BinaryOperation(
-                        Box::new(Expression::IntLiteral(-1)),
+                        Box::new(Expression::I64Literal(-1)),
                         Operator::Multiply,
-                        Box::new(Expression::IntLiteral(8)),
+                        Box::new(Expression::I64Literal(8)),
                     )),
                     Operator::Subtract,
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::BinaryOperation(
                             Box::new(Expression::BinaryOperation(
                                 Box::new(Expression::BinaryOperation(
-                                    Box::new(Expression::IntLiteral(-1)),
+                                    Box::new(Expression::I64Literal(-1)),
                                     Operator::Multiply,
-                                    Box::new(Expression::IntLiteral(100))
+                                    Box::new(Expression::I64Literal(100))
                                 )),
                                 Operator::Add,
-                                Box::new(Expression::IntLiteral(2)),
+                                Box::new(Expression::I64Literal(2)),
                             )),
                             Operator::Multiply,
-                            Box::new(Expression::IntLiteral(4)),
+                            Box::new(Expression::I64Literal(4)),
                         )),
                         Operator::Divide,
-                        Box::new(Expression::IntLiteral(2)),
+                        Box::new(Expression::I64Literal(2)),
                     )),
                 )),
                 Operator::Add,
-                Box::new(Expression::IntLiteral(8)),
+                Box::new(Expression::I64Literal(8)),
             )
         );
     }
@@ -702,9 +702,9 @@ mod tests {
         assert_eq!(
             result,
             Expression::BinaryOperation(
-                Box::new(Expression::IntLiteral(-1)),
+                Box::new(Expression::I64Literal(-1)),
                 Operator::Multiply,
-                Box::new(Expression::IntLiteral(8)),
+                Box::new(Expression::I64Literal(8)),
             )
         );
 
@@ -713,7 +713,7 @@ mod tests {
         assert_eq!(
             result,
             Expression::BinaryOperation(
-                Box::new(Expression::IntLiteral(-1)),
+                Box::new(Expression::I64Literal(-1)),
                 Operator::Multiply,
                 Box::new(Expression::VariableReference("x".to_string())),
             )
@@ -724,7 +724,7 @@ mod tests {
         assert_eq!(
             result,
             Expression::BinaryOperation(
-                Box::new(Expression::IntLiteral(-1)),
+                Box::new(Expression::I64Literal(-1)),
                 Operator::Multiply,
                 Box::new(Expression::FunctionCall(FunctionCall::new("f", vec![]))),
             )
@@ -764,12 +764,12 @@ mod tests {
             result,
             Expression::BinaryOperation(
                 Box::new(Expression::BinaryOperation(
-                    Box::new(Expression::IntLiteral(1)),
+                    Box::new(Expression::I64Literal(1)),
                     Operator::GreaterThan,
-                    Box::new(Expression::IntLiteral(0)),
+                    Box::new(Expression::I64Literal(0)),
                 )),
                 Operator::Add,
-                Box::new(Expression::IntLiteral(1)),
+                Box::new(Expression::I64Literal(1)),
             )
         )
     }
@@ -816,19 +816,19 @@ mod tests {
         assert_eq!(
             result,
             Expression::BinaryOperation(
-                Box::new(Expression::IntLiteral(-1)),
+                Box::new(Expression::I64Literal(-1)),
                 Operator::Multiply,
                 Box::new(Expression::BinaryOperation(
                     Box::new(Expression::BinaryOperation(
-                        Box::new(Expression::IntLiteral(-1)),
+                        Box::new(Expression::I64Literal(-1)),
                         Operator::Multiply,
                         Box::new(Expression::VariableReference("b".to_string())),
                     )),
                     Operator::Subtract,
                     Box::new(Expression::BinaryOperation(
-                        Box::new(Expression::IntLiteral(-1)),
+                        Box::new(Expression::I64Literal(-1)),
                         Operator::Multiply,
-                        Box::new(Expression::IntLiteral(100)),
+                        Box::new(Expression::I64Literal(100)),
                     )),
                 )),
             )

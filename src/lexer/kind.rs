@@ -32,8 +32,8 @@ pub enum TokenKind {
     // Built-in/primitive types
     Bool,
     BoolLiteral(bool),
-    Int,
-    IntLiteral(i64),
+    I64,
+    I64Literal(i64),
     String,
     StringLiteral(String),
     Function,
@@ -80,8 +80,8 @@ impl Clone for TokenKind {
             TokenKind::LessThanOrEqual => TokenKind::LessThanOrEqual,
             TokenKind::Bool => TokenKind::Bool,
             TokenKind::BoolLiteral(v) => TokenKind::BoolLiteral(*v),
-            TokenKind::Int => TokenKind::Int,
-            TokenKind::IntLiteral(v) => TokenKind::IntLiteral(*v),
+            TokenKind::I64 => TokenKind::I64,
+            TokenKind::I64Literal(v) => TokenKind::I64Literal(*v),
             TokenKind::String => TokenKind::String,
             TokenKind::StringLiteral(v) => TokenKind::StringLiteral(v.clone()),
             TokenKind::Function => TokenKind::Function,
@@ -108,7 +108,7 @@ impl fmt::Display for TokenKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             TokenKind::BoolLiteral(b) => write!(f, "boolean literal {}", b.to_string()),
-            TokenKind::IntLiteral(i) => write!(f, "integer literal {}", i.to_string()),
+            TokenKind::I64Literal(i) => write!(f, "i64 literal {}", i.to_string()),
             TokenKind::StringLiteral(s) => write!(f, r#"string literal "{}""#, s),
             TokenKind::Identifier(s) => write!(f, r#"identifier "{}""#, s),
             other => write!(f, r#""{}""#, other.to_string()),
@@ -136,7 +136,7 @@ impl TokenKind {
             TokenKind::LessThanOrEqual => "<=".to_string(),
             TokenKind::Bool => "bool".to_string(),
             TokenKind::BoolLiteral(v) => v.to_string(),
-            TokenKind::IntLiteral(v) => v.to_string(),
+            TokenKind::I64Literal(v) => v.to_string(),
             TokenKind::String => "string".to_string(),
             TokenKind::StringLiteral(v) => v.to_string(),
             TokenKind::Function => "fn".to_string(),
@@ -147,7 +147,7 @@ impl TokenKind {
             TokenKind::BeginClosure => "{".to_string(),
             TokenKind::EndClosure => "}".to_string(),
             TokenKind::Identifier(v) => v.to_string(),
-            TokenKind::Int => "int".to_string(),
+            TokenKind::I64 => "i64".to_string(),
             TokenKind::LeftParen => "(".to_string(),
             TokenKind::RightParen => ")".to_string(),
             TokenKind::Comma => ",".to_string(),
@@ -199,7 +199,7 @@ impl TokenKind {
             TokenKind::LogicalOr,
             TokenKind::Not,
             TokenKind::Equal,
-            TokenKind::Int,
+            TokenKind::I64,
             TokenKind::Bool,
             TokenKind::EqualTo,
             TokenKind::NotEqualTo,
@@ -239,7 +239,7 @@ impl TokenKind {
             return Some(v);
         }
 
-        if let Some(v) = TokenKind::lex_int_literal(segment) {
+        if let Some(v) = TokenKind::lex_i64_literal(segment) {
             return Some(v);
         }
 
@@ -275,9 +275,9 @@ impl TokenKind {
         }
     }
 
-    fn lex_int_literal(segment: &str) -> Option<TokenKind> {
+    fn lex_i64_literal(segment: &str) -> Option<TokenKind> {
         match segment.trim().parse::<i64>() {
-            Ok(i) => Some(TokenKind::IntLiteral(i)),
+            Ok(i) => Some(TokenKind::I64Literal(i)),
             Err(_) => None,
         }
     }

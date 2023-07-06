@@ -75,7 +75,7 @@ mod tests {
     fn type_mismatch() {
         let mut ctx = ProgramContext::new();
         let var_decl = &VariableDeclaration::new(
-            Type::Int,
+            Type::I64,
             "my_string".to_string(),
             Expression::StringLiteral("bingo".to_string()),
         );

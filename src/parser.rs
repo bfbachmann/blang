@@ -53,13 +53,13 @@ mod tests {
     fn parse_program() {
         let raw_code = r#"
         fn main() {
-            int i = 0
+            i64 i = 0
         
             loop {
                 string prefix = "Fibonacci number " + itoa(i) + " is: "
-                int result = fib(
+                i64 result = fib(
                     i,
-                    fn (int n): bool {
+                    fn (i64 n): bool {
                         print("fib visitor sees n=" + itoa(n))
                         return n % 2 == 0
                     },
@@ -74,7 +74,7 @@ mod tests {
         }
         
         // Calls `visitor_fn` with n and returns the n'th Fibonacci number.
-        fn fib(int n, fn (int): bool visitor_fn): int {
+        fn fib(i64 n, fn (i64): bool visitor_fn): i64 {
             if visitor_fn(n) {
                 print("visitor returned true")
             }
@@ -94,21 +94,21 @@ mod tests {
         Program::from(&mut tokens).expect("should not error");
 
         let mut tokens =
-            Token::tokenize_line("int i = 123 int j = 1231", 0).expect("should not error");
+            Token::tokenize_line("i64 i = 123 i64 j = 1231", 0).expect("should not error");
         let result = Program::from(&mut tokens).expect("should not error");
         assert_eq!(
             result,
             Program {
                 statements: vec![
                     Statement::VariableDeclaration(VariableDeclaration::new(
-                        Type::Int,
+                        Type::I64,
                         "i".to_string(),
-                        Expression::IntLiteral(123),
+                        Expression::I64Literal(123),
                     )),
                     Statement::VariableDeclaration(VariableDeclaration::new(
-                        Type::Int,
+                        Type::I64,
                         "j".to_string(),
-                        Expression::IntLiteral(1231),
+                        Expression::I64Literal(1231),
                     ))
                 ]
             }
@@ -118,7 +118,7 @@ mod tests {
     #[test]
     fn parse_function_declaration() {
         let mut tokens = Token::tokenize_line(
-            r#"fn my_fn(string arg1, int arg2): string { string s = "hello world!"; }"#,
+            r#"fn my_fn(string arg1, i64 arg2): string { string s = "hello world!"; }"#,
             0,
         )
         .expect("should not error");
@@ -130,7 +130,7 @@ mod tests {
                     "my_fn",
                     vec![
                         Argument::new("arg1", Type::String),
-                        Argument::new("arg2", Type::Int)
+                        Argument::new("arg2", Type::I64)
                     ],
                     Some(Type::String),
                 ),
@@ -146,7 +146,7 @@ mod tests {
         );
 
         let mut tokens = Token::tokenize_line(
-            "fn bigboi(fn (string, int): bool f, int i): fn (bool): string {}",
+            "fn bigboi(fn (string, i64): bool f, i64 i): fn (bool): string {}",
             0,
         )
         .expect("should not error");
@@ -162,12 +162,12 @@ mod tests {
                             Type::Function(Box::new(FunctionSignature::new_anon(
                                 vec![
                                     Argument::new("", Type::String),
-                                    Argument::new("", Type::Int)
+                                    Argument::new("", Type::I64)
                                 ],
                                 Some(Type::Bool),
                             ))),
                         ),
-                        Argument::new("i", Type::Int)
+                        Argument::new("i", Type::I64)
                     ],
                     Some(Type::Function(Box::new(FunctionSignature::new_anon(
                         vec![Argument::new("", Type::Bool)],
@@ -199,7 +199,7 @@ mod tests {
 
     #[test]
     fn invalid_extra_comma() {
-        let raw = r#"int i = call(,,)"#;
+        let raw = r#"i64 i = call(,,)"#;
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let result = Program::from(&mut tokens);
         assert!(matches!(
@@ -218,7 +218,7 @@ mod tests {
 
     #[test]
     fn invalid_extra_close_paren() {
-        let raw = r#"int i = call())"#;
+        let raw = r#"i64 i = call())"#;
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let result = Program::from(&mut tokens);
         assert!(matches!(
@@ -309,7 +309,7 @@ mod tests {
 
     #[test]
     fn missing_fn_closing_brace() {
-        let raw = r#"fn thing(): int {
+        let raw = r#"fn thing(): i64 {
             return 4 / 2 + 8
         "#;
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");

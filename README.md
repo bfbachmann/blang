@@ -6,12 +6,12 @@ _A bad language (don't use it, it's bad)._
 
 ```
 fn main() {
-    int i = 0
+    i64 i = 0
     loop {
         string prefix = str_concat(str_concat("Fibonacci number ", itoa(i)), " is: ")
-        int result = fib(
+        i64 result = fib(
             i,
-            fn (int n): bool {
+            fn (i64 n): bool {
                 print(str_concat("fib visitor sees n=", itoa(n)))
                 return n % 2 == 0
             },
@@ -24,7 +24,7 @@ fn main() {
 }
 
 // Calls `visitor_fn` with n and returns the n'th Fibonacci number.
-fn fib(int n, fn (int): bool visitor_fn): int {
+fn fib(i64 n, fn (i64): bool visitor_fn): i64 {
     if visitor_fn(n) {
         print("visitor returned true")
     }
@@ -34,15 +34,13 @@ fn fib(int n, fn (int): bool visitor_fn): int {
     return fib(n-1, visitor_fn) + fib(n-2, visitor_fn)
 }
 
-fn print(string s) {
-    // Do IO...
-}
+fn print(string s) {}
 
 fn str_concat(string a, string b): string {
     return a
 }
 
-fn itoa(int i): string {
+fn itoa(i64 i): string {
     return "fake"
 }
 ```
