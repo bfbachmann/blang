@@ -1,48 +1,67 @@
 use std::collections::{HashMap, VecDeque};
-use std::env::var;
 
-use crate::parser::expr::Expression;
-use crate::parser::r#fn::Function;
-use crate::parser::r#type::Type;
+use crate::parser::func::Function;
+use crate::parser::func_sig::FunctionSignature;
 use crate::parser::var_dec::VariableDeclaration;
 
-/// Represents a stack frame in the program. Each frame corresponds to a unique closure which can
-/// be a function body, an inline closure, or a branch.
-pub struct Frame {
-    vars: HashMap<String, VariableDeclaration>,
-    fns: HashMap<String, Function>,
-    is_fn_body: bool,
+enum ScopeKind {
+    FnBody,
+    Inline,
+    Branch,
+    Loop,
 }
 
-impl Frame {
-    /// Creates a new frame. `is_fn_body` should be true if the frame represents a function body,
-    /// and false otherwise (i.e. if it's an inline, branch, or loop closure).
-    pub fn new(is_fn_body: bool) -> Self {
-        Frame {
+/// Represents a scope in the program. Each scope corresponds to a unique closure which can
+/// be a function body, an inline closure, a branch, or a loop.
+pub struct Scope {
+    vars: HashMap<String, VariableDeclaration>,
+    fns: HashMap<String, Function>,
+    extern_fns: HashMap<String, FunctionSignature>,
+    kind: ScopeKind,
+}
+
+impl Scope {
+    /// Creates a new scope.
+    pub fn new() -> Self {
+        Scope {
             vars: HashMap::new(),
             fns: HashMap::new(),
-            is_fn_body,
+            extern_fns: HashMap::new(),
+            kind: ScopeKind::Inline,
         }
     }
 
-    // Adds the function to the frame. If there was already a function with the same name in the
-    // frame, returns the old function.
+    // Adds the signature of the external function to the scope. If there was already a function
+    // with the same name in the scope, returns the old function. Use this method to record the
+    // existence of functions before their bodies are analyzed.
+    fn add_extern_fn(&mut self, sig: FunctionSignature) -> Option<FunctionSignature> {
+        self.extern_fns.insert(sig.name.to_string(), sig)
+    }
+
+    // Returns the external function signature with the given name from the scope, or None if no
+    // such external function exists.
+    fn get_extern_fn(&self, name: &str) -> Option<&FunctionSignature> {
+        self.extern_fns.get(name)
+    }
+
+    // Adds the function to the scope. If there was already a function with the same name in the
+    // scope, returns the old function.
     fn add_fn(&mut self, func: Function) -> Option<Function> {
         self.fns.insert(func.signature.name.to_string(), func)
     }
 
-    // Adds the variable to the frame. If there was already a variable with the same name in the
-    // frame, returns the old variable.
+    // Adds the variable to the scope. If there was already a variable with the same name in the
+    // scope, returns the old variable.
     fn add_var(&mut self, var_dec: VariableDeclaration) -> Option<VariableDeclaration> {
         self.vars.insert(var_dec.name.clone(), var_dec)
     }
 
-    // Returns the function with the given name from the frame, or None if no such function exists.
+    // Returns the function with the given name from the scope, or None if no such function exists.
     fn get_fn(&self, name: &str) -> Option<&Function> {
         self.fns.get(name)
     }
 
-    // Returns the variable with the given name from the frame, or None if no such variable exists.
+    // Returns the variable with the given name from the scope, or None if no such variable exists.
     fn get_var(&self, name: &str) -> Option<&VariableDeclaration> {
         self.vars.get(name)
     }
@@ -50,16 +69,22 @@ impl Frame {
 
 /// Represents the current program stack and analysis state.
 pub struct ProgramContext {
-    stack: VecDeque<Frame>,
+    stack: VecDeque<Scope>,
 }
 
 impl ProgramContext {
-    /// Returns a new ProgramContext with a single initialized stack frame representing the global
+    /// Returns a new ProgramContext with a single initialized scope representing the global
     /// scope.
     pub fn new() -> Self {
         ProgramContext {
-            stack: VecDeque::from([Frame::new(false)]),
+            stack: VecDeque::from([Scope::new()]),
         }
+    }
+
+    /// Adds the external function signature to the context. If there was already a function with
+    /// the same name, returns the old function signature.
+    pub fn add_extern_fn(&mut self, sig: FunctionSignature) -> Option<FunctionSignature> {
+        self.stack.back_mut().unwrap().add_extern_fn(sig)
     }
 
     /// Adds the function to the context. If there was already a function with the same name, returns
@@ -74,23 +99,25 @@ impl ProgramContext {
         self.stack.back_mut().unwrap().add_var(var_dec)
     }
 
-    /// Attempts to locate the function with the given name and returns it, if found.
-    pub fn get_fn(&self, name: &str) -> Option<&Function> {
-        // Try to find the function in the global frame.
-        if let Some(func) = self.stack.front().unwrap().get_fn(name) {
-            return Some(func);
+    /// Attempts to locate the external function signature with the given name and returns it,
+    /// if found.
+    pub fn get_extern_fn(&self, name: &str) -> Option<&FunctionSignature> {
+        // Search up the stack from the current scope.
+        for scope in self.stack.iter().rev() {
+            if let Some(sig) = scope.get_extern_fn(name) {
+                return Some(sig);
+            }
         }
 
-        // We can keep searching up the stack as long as we remain within frames that are not
-        // function bodies (i.e. we're in some inline, branch, or loop closures). In other words,
-        // we can't step outside of a function body to look for the function.
-        for frame in self.stack.iter().rev() {
-            if let Some(func) = frame.get_fn(name) {
-                return Some(func);
-            }
+        None
+    }
 
-            if frame.is_fn_body {
-                break;
+    /// Attempts to locate the function with the given name and returns it, if found.
+    pub fn get_fn(&self, name: &str) -> Option<&Function> {
+        // Search up the stack from the current scope.
+        for scope in self.stack.iter().rev() {
+            if let Some(func) = scope.get_fn(name) {
+                return Some(func);
             }
         }
 
@@ -99,34 +126,23 @@ impl ProgramContext {
 
     /// Attempts to locate the variable with the given name and returns it, if found.
     pub fn get_var(&self, name: &str) -> Option<&VariableDeclaration> {
-        // Try to find the function in the global frame.
-        if let Some(var) = self.stack.front().unwrap().get_var(name) {
-            return Some(var);
-        }
-
-        // We can keep searching up the stack as long as we remain within frames that are not
-        // function bodies (i.e. we're in some inline, branch, or loop closures). In other words,
-        // we can't step outside of a function body to look for the function.
-        for frame in self.stack.iter().rev() {
-            if let Some(var) = frame.get_var(name) {
+        // Search up the stack from the current scope.
+        for scope in self.stack.iter().rev() {
+            if let Some(var) = scope.get_var(name) {
                 return Some(var);
-            }
-
-            if frame.is_fn_body {
-                break;
             }
         }
 
         None
     }
 
-    /// Adds the given frame to the top of the stack.
-    pub fn push_frame(&mut self, frame: Frame) {
-        self.stack.push_back(frame);
+    /// Adds the given scope to the top of the stack.
+    pub fn push_scope(&mut self, scope: Scope) {
+        self.stack.push_back(scope);
     }
 
-    /// Pops the frame at the top of the stack.
-    pub fn pop_frame(&mut self) {
+    /// Pops the scope at the top of the stack.
+    pub fn pop_scope(&mut self) {
         self.stack.pop_back();
     }
 }

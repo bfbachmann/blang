@@ -22,7 +22,8 @@ impl PartialEq for Program {
 impl Program {
     /// Attempts to parse a program from the deque of tokens. Expects token sequences of the form
     ///
-    ///     <statement>; ...
+    ///     <statement>
+    ///     ...
     ///
     /// where
     ///  - `statement` is a valid statement (see `Statement::from`)

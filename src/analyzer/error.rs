@@ -8,6 +8,7 @@ pub enum ErrorKind {
     IncompatibleTypes,
     ExpectedValue,
     FunctionNotDefined,
+    FunctionAlreadyDefined,
     VariableNotDefined,
     VariableAlreadyDefined,
     WrongNumberOfArgs,

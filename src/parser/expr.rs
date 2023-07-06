@@ -4,9 +4,9 @@ use std::fmt;
 use crate::lexer::kind::TokenKind;
 use crate::lexer::token::Token;
 use crate::parser::error::{ErrorKind, ParseError};
-use crate::parser::fn_call::FunctionCall;
+use crate::parser::func::Function;
+use crate::parser::func_call::FunctionCall;
 use crate::parser::op::Operator;
-use crate::parser::r#fn::Function;
 use crate::parser::ParseResult;
 
 #[derive(Debug)]
@@ -484,7 +484,7 @@ mod tests {
     use crate::lexer::token::Token;
     use crate::parser::error::{ErrorKind, ParseError};
     use crate::parser::expr::Expression;
-    use crate::parser::fn_call::FunctionCall;
+    use crate::parser::func_call::FunctionCall;
     use crate::parser::op::Operator;
 
     #[test]

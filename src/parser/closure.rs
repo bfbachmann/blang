@@ -11,8 +11,8 @@ use crate::util;
 /// Represents a closure, which is just a series of statements with their own scope.
 #[derive(Debug, Clone)]
 pub struct Closure {
-    statements: Vec<Statement>,
-    result: Option<Expression>,
+    pub statements: Vec<Statement>,
+    pub result: Option<Expression>,
 }
 
 impl PartialEq for Closure {

@@ -25,7 +25,7 @@ impl fmt::Display for LexError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Lex error at position [{}:{}]: {}.",
+            "[{}:{}] Syntax error: {}",
             self.line, self.col, self.message
         )
     }

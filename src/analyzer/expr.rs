@@ -1,12 +1,12 @@
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::func::analyze_fn_call;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::AnalyzeResult;
 use crate::parser::expr::Expression;
 use crate::parser::op::Operator;
 use crate::parser::r#type::Type;
-use crate::parser::var_dec::VariableDeclaration;
 
-fn analyze_expr(ctx: &ProgramContext, expr: &Expression) -> AnalyzeResult<Type> {
+pub fn analyze_expr(ctx: &ProgramContext, expr: &Expression) -> AnalyzeResult<Type> {
     match expr {
         Expression::VariableReference(ref var_name) => {
             // Make sure the variable being referenced exists.
@@ -22,65 +22,22 @@ fn analyze_expr(ctx: &ProgramContext, expr: &Expression) -> AnalyzeResult<Type> 
         Expression::BoolLiteral(_) => Ok(Type::Bool),
         Expression::IntLiteral(_) => Ok(Type::Int),
         Expression::StringLiteral(_) => Ok(Type::String),
-        ref fn_call_expr @ Expression::FunctionCall(ref fn_call) => {
-            // Make sure the function exists.
-            match ctx.get_fn(fn_call.fn_name.as_str()) {
-                Some(&ref func) => {
-                    // Make sure the right number of arguments were passed.
-                    if fn_call.args.len() != func.signature.args.len() {
-                        return Err(AnalyzeError::new(
-                            ErrorKind::WrongNumberOfArgs,
-                            format!(
-                                "Function {} takes {} args, but {} were provided",
-                                func.signature.name,
-                                func.signature.args.len(),
-                                fn_call.args.len()
-                            )
-                            .as_str(),
-                        ));
-                    }
-
-                    // Make sure the arguments are of the right types.
-                    for (passed, defined) in fn_call.args.iter().zip(&func.signature.args) {
-                        let passed_type = analyze_expr(ctx, passed)?;
-                        if passed_type != defined.typ {
-                            return Err(AnalyzeError::new(
-                                ErrorKind::IncompatibleTypes,
-                                format!(
-                                    r#"Argument {} of function {} has type {}, \
-                                    but a value of type {} was provided"#,
-                                    defined.name, func.signature.name, defined.typ, passed_type
-                                )
-                                .as_str(),
-                            ));
-                        }
-                    }
-
-                    if let Some(typ) = func.signature.return_type.clone() {
-                        return Ok(typ);
-                    }
-
-                    // Error because there is no return type.
-                    Err(AnalyzeError::new_from_expr(
-                        ErrorKind::ExpectedValue,
-                        &fn_call_expr,
-                        format!(
-                            r#"Function {} has no return value, but was \
-                            used in an expression where a value is expected"#,
-                            fn_call.fn_name,
-                        )
-                        .as_str(),
-                    ))
-                }
-                None => Err(AnalyzeError::new_from_expr(
-                    ErrorKind::FunctionNotDefined,
-                    &fn_call_expr,
-                    format!("Function {} does not exist", fn_call.fn_name).as_str(),
-                )),
-            }
+        Expression::FunctionCall(ref fn_call) => match analyze_fn_call(ctx, fn_call)? {
+            Some(typ) => Ok(typ),
+            None => Err(AnalyzeError::new(
+                ErrorKind::ExpectedValue,
+                format!(
+                    r#"Function {} has no return value, but was used in an expression \
+                            where a value is expected"#,
+                    fn_call.fn_name,
+                )
+                .as_str(),
+            )),
+        },
+        Expression::AnonFunction(_) => {
+            // TODO
+            panic!("unimplemented");
         }
-        // TODO
-        // Expression::AnonFunction(Box<Function>) => {},
         Expression::UnaryOperation(ref op, ref right_expr) => match op {
             Operator::Not => {
                 // Make sure the expression has type bool.
@@ -163,9 +120,6 @@ fn analyze_expr(ctx: &ProgramContext, expr: &Expression) -> AnalyzeResult<Type> 
 
             Ok(left_type)
         }
-        _ => {
-            panic!("unimplemented")
-        }
     }
 }
 
@@ -177,10 +131,10 @@ mod tests {
     use crate::parser::arg::Argument;
     use crate::parser::closure::Closure;
     use crate::parser::expr::Expression;
-    use crate::parser::fn_call::FunctionCall;
+    use crate::parser::func::Function;
+    use crate::parser::func_call::FunctionCall;
     use crate::parser::func_sig::FunctionSignature;
     use crate::parser::op::Operator;
-    use crate::parser::r#fn::Function;
     use crate::parser::r#type::Type;
     use crate::parser::var_dec::VariableDeclaration;
 
@@ -337,8 +291,7 @@ mod tests {
 
     #[test]
     fn binary_op_invalid_operand_types() {
-        let mut ctx = ProgramContext::new();
-
+        let ctx = ProgramContext::new();
         let result = analyze_expr(
             &ctx,
             &Expression::BinaryOperation(
@@ -390,7 +343,7 @@ mod tests {
 
     #[test]
     fn unary_op() {
-        let mut ctx = ProgramContext::new();
+        let ctx = ProgramContext::new();
         let result = analyze_expr(
             &ctx,
             &Expression::UnaryOperation(Operator::Not, Box::new(Expression::IntLiteral(1))),
@@ -406,7 +359,7 @@ mod tests {
 
     #[test]
     fn unary_op_invalid_operand_type() {
-        let mut ctx = ProgramContext::new();
+        let ctx = ProgramContext::new();
         let result = analyze_expr(
             &ctx,
             &Expression::UnaryOperation(
