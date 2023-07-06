@@ -12,6 +12,10 @@ pub enum ErrorKind {
     VariableNotDefined,
     VariableAlreadyDefined,
     WrongNumberOfArgs,
+    UnexpectedBreak,
+    UnexpectedReturn,
+    MissingMain,
+    InvalidMain,
 }
 
 /// Represents any fatal error that occurs during program analysis.

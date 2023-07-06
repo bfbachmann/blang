@@ -9,8 +9,8 @@ use crate::parser::ParseResult;
 /// expressions, but "else" branches must not.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Branch {
-    condition: Option<Expression>,
-    body: Closure,
+    pub condition: Option<Expression>,
+    pub body: Closure,
 }
 
 impl Branch {

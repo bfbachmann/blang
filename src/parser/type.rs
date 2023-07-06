@@ -8,12 +8,37 @@ use crate::parser::func_sig::FunctionSignature;
 use crate::parser::ParseResult;
 
 /// Represents any valid type.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub enum Type {
     Bool,
     String,
     Int,
     Function(Box<FunctionSignature>),
+}
+
+impl PartialEq for Type {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Type::Bool, Type::Bool) | (Type::String, Type::String) | (Type::Int, Type::Int) => {
+                true
+            }
+            (Type::Function(f1), Type::Function(f2)) => {
+                if f1.args.len() != f2.args.len() {
+                    false
+                } else {
+                    let mut args_match = true;
+                    for (a1, a2) in f1.args.iter().zip(f2.args.iter()) {
+                        if a1.typ != a2.typ {
+                            args_match = false;
+                        }
+                    }
+
+                    args_match && f1.return_type == f2.return_type
+                }
+            }
+            (_, _) => false,
+        }
+    }
 }
 
 impl fmt::Display for Type {

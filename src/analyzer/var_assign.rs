@@ -8,6 +8,9 @@ pub fn analyze_var_assign(
     ctx: &mut ProgramContext,
     assign: &VariableAssignment,
 ) -> AnalyzeResult<()> {
+    // Analyze the expression representing the value assigned to the variable.
+    let expr_type = analyze_expr(ctx, &assign.value)?;
+
     // Make sure the variable has been defined.
     let decl = ctx.get_var(assign.name.as_str());
     if let None = decl {
@@ -19,7 +22,6 @@ pub fn analyze_var_assign(
 
     // Make sure the variable type is the same as the expression type.
     let decl = decl.unwrap();
-    let expr_type = analyze_expr(ctx, &assign.value)?;
     if decl.typ != expr_type {
         return Err(AnalyzeError::new(
             ErrorKind::IncompatibleTypes,

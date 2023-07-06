@@ -1,33 +1,63 @@
+use crate::parser::arg::Argument;
+use crate::parser::expr::Expression;
 use std::collections::{HashMap, VecDeque};
+use std::fmt;
 
 use crate::parser::func::Function;
 use crate::parser::func_sig::FunctionSignature;
+use crate::parser::r#type::Type;
 use crate::parser::var_dec::VariableDeclaration;
 
-enum ScopeKind {
+#[derive(PartialEq, Clone)]
+pub enum ScopeKind {
     FnBody,
     Inline,
     Branch,
     Loop,
 }
 
+impl fmt::Display for ScopeKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ScopeKind::FnBody => write!(f, "function body"),
+            ScopeKind::Inline => write!(f, "inline closure"),
+            ScopeKind::Branch => write!(f, "branch body"),
+            ScopeKind::Loop => write!(f, "loop body"),
+        }
+    }
+}
+
 /// Represents a scope in the program. Each scope corresponds to a unique closure which can
 /// be a function body, an inline closure, a branch, or a loop.
 pub struct Scope {
+    // TODO: VariableDeclaration contains potentially unnecessary expression.
     vars: HashMap<String, VariableDeclaration>,
     fns: HashMap<String, Function>,
     extern_fns: HashMap<String, FunctionSignature>,
     kind: ScopeKind,
+    return_type: Option<Type>,
 }
 
 impl Scope {
     /// Creates a new scope.
-    pub fn new() -> Self {
+    pub fn new(kind: ScopeKind, args: Vec<Argument>, return_type: Option<Type>) -> Self {
+        let mut vars = HashMap::new();
+
+        // If there are args, add them to the current scope variables.
+        for arg in args {
+            // TODO: don't use placeholder expression here.
+            vars.insert(
+                arg.name.clone(),
+                VariableDeclaration::new(arg.typ, arg.name.clone(), Expression::BoolLiteral(false)),
+            );
+        }
+
         Scope {
-            vars: HashMap::new(),
+            vars,
             fns: HashMap::new(),
             extern_fns: HashMap::new(),
-            kind: ScopeKind::Inline,
+            kind,
+            return_type,
         }
     }
 
@@ -77,7 +107,7 @@ impl ProgramContext {
     /// scope.
     pub fn new() -> Self {
         ProgramContext {
-            stack: VecDeque::from([Scope::new()]),
+            stack: VecDeque::from([Scope::new(ScopeKind::Inline, vec![], None)]),
         }
     }
 
@@ -93,8 +123,8 @@ impl ProgramContext {
         self.stack.back_mut().unwrap().add_fn(func)
     }
 
-    /// Adds the variable to the context. If there was already a variable with the same name, returns
-    /// the old variable.
+    /// Adds the variable to the context. If there was already a variable with the same name,
+    /// returns the old variable.
     pub fn add_var(&mut self, var_dec: VariableDeclaration) -> Option<VariableDeclaration> {
         self.stack.back_mut().unwrap().add_var(var_dec)
     }
@@ -144,5 +174,41 @@ impl ProgramContext {
     /// Pops the scope at the top of the stack.
     pub fn pop_scope(&mut self) {
         self.stack.pop_back();
+    }
+
+    /// Returns true if the current scope falls within a function body at any depth.
+    pub fn is_in_fn(&self) -> bool {
+        // Search up the stack from the current scope to see if we are inside a function body.
+        for scope in self.stack.iter().rev() {
+            if scope.kind == ScopeKind::FnBody {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Returns true if the current scope falls within a loop.
+    pub fn is_in_loop(&self) -> bool {
+        for scope in self.stack.iter().rev() {
+            if scope.kind == ScopeKind::Loop {
+                return true;
+            } else if scope.kind == ScopeKind::FnBody {
+                return false;
+            }
+        }
+
+        false
+    }
+
+    /// Returns the return type of the current scope, or none if there is no return type.
+    pub fn return_type(&self) -> &Option<Type> {
+        for scope in self.stack.iter().rev() {
+            if scope.kind == ScopeKind::FnBody {
+                return &scope.return_type;
+            }
+        }
+
+        &None
     }
 }

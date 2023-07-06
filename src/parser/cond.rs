@@ -10,7 +10,7 @@ use crate::util;
 /// Represents a conditional (i.e. branching if/else if/else statements).
 #[derive(Debug, Clone)]
 pub struct Conditional {
-    branches: Vec<Branch>,
+    pub branches: Vec<Branch>,
 }
 
 impl PartialEq for Conditional {

@@ -1,12 +1,13 @@
+use crate::analyzer::closure::analyze_closure;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::analyze_fn_call;
-use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::AnalyzeResult;
 use crate::parser::expr::Expression;
 use crate::parser::op::Operator;
 use crate::parser::r#type::Type;
 
-pub fn analyze_expr(ctx: &ProgramContext, expr: &Expression) -> AnalyzeResult<Type> {
+pub fn analyze_expr(ctx: &mut ProgramContext, expr: &Expression) -> AnalyzeResult<Type> {
     match expr {
         Expression::VariableReference(ref var_name) => {
             // Make sure the variable being referenced exists.
@@ -34,9 +35,18 @@ pub fn analyze_expr(ctx: &ProgramContext, expr: &Expression) -> AnalyzeResult<Ty
                 .as_str(),
             )),
         },
-        Expression::AnonFunction(_) => {
-            // TODO
-            panic!("unimplemented");
+        Expression::AnonFunction(anon_fn) => {
+            // We don't need to analyze the function signature, since it has no name. Just analyze
+            // the function body.
+            analyze_closure(
+                ctx,
+                &anon_fn.body,
+                ScopeKind::FnBody,
+                anon_fn.signature.args.clone(),
+                anon_fn.signature.return_type.clone(),
+            )?;
+
+            Ok(Type::Function(Box::new(anon_fn.signature.clone())))
         }
         Expression::UnaryOperation(ref op, ref right_expr) => match op {
             Operator::Not => {
@@ -63,22 +73,22 @@ pub fn analyze_expr(ctx: &ProgramContext, expr: &Expression) -> AnalyzeResult<Ty
         Expression::BinaryOperation(ref left_expr, ref op, ref right_expr) => {
             let left_type = analyze_expr(ctx, left_expr)?;
             let right_type = analyze_expr(ctx, right_expr)?;
-            let expected_type = match op {
+            let (expected_type, result_type) = match op {
                 // Mathematical operators only work on numeric types.
                 Operator::Add
                 | Operator::Subtract
                 | Operator::Multiply
                 | Operator::Divide
-                | Operator::Modulo => Some(Type::Int),
+                | Operator::Modulo => (Some(Type::Int), Type::Int),
                 // Logical operators only work on bools.
-                Operator::LogicalAnd | Operator::LogicalOr => Some(Type::Bool),
+                Operator::LogicalAnd | Operator::LogicalOr => (Some(Type::Bool), Type::Bool),
                 // Equality operators work on anything.
-                Operator::EqualTo | Operator::NotEqualTo => None,
+                Operator::EqualTo | Operator::NotEqualTo => (None, Type::Bool),
                 // Comparators only work on numeric types.
                 Operator::GreaterThan
                 | Operator::LessThan
                 | Operator::GreaterThanOrEqual
-                | Operator::LessThanOrEqual => Some(Type::Int),
+                | Operator::LessThanOrEqual => (Some(Type::Int), Type::Bool),
                 // If this happens, the parser is badly broken.
                 other => panic!("unexpected operator {}", other),
             };
@@ -118,7 +128,7 @@ pub fn analyze_expr(ctx: &ProgramContext, expr: &Expression) -> AnalyzeResult<Ty
                 ));
             }
 
-            Ok(left_type)
+            Ok(result_type)
         }
     }
 }
@@ -140,25 +150,25 @@ mod tests {
 
     #[test]
     fn analyze_int_literal() {
-        let ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new();
         let expr = Expression::IntLiteral(1);
-        let result = analyze_expr(&ctx, &expr);
+        let result = analyze_expr(&mut ctx, &expr);
         assert!(matches!(result, Ok(Type::Int)));
     }
 
     #[test]
     fn analyze_bool_literal() {
-        let ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new();
         let expr = Expression::BoolLiteral(false);
-        let result = analyze_expr(&ctx, &expr);
+        let result = analyze_expr(&mut ctx, &expr);
         assert!(matches!(result, Ok(Type::Bool)));
     }
 
     #[test]
     fn analyze_string_literal() {
-        let ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new();
         let expr = Expression::StringLiteral("test".to_string());
-        let result = analyze_expr(&ctx, &expr);
+        let result = analyze_expr(&mut ctx, &expr);
         assert!(matches!(result, Ok(Type::String)));
     }
 
@@ -170,14 +180,20 @@ mod tests {
             "myvar".to_string(),
             Expression::StringLiteral("hello".to_string()),
         ));
-        let result = analyze_expr(&ctx, &Expression::VariableReference("myvar".to_string()));
+        let result = analyze_expr(
+            &mut ctx,
+            &Expression::VariableReference("myvar".to_string()),
+        );
         assert!(matches!(result, Ok(Type::String)));
     }
 
     #[test]
     fn analyze_invalid_var_ref() {
-        let ctx = ProgramContext::new();
-        let result = analyze_expr(&ctx, &Expression::VariableReference("myvar".to_string()));
+        let mut ctx = ProgramContext::new();
+        let result = analyze_expr(
+            &mut ctx,
+            &Expression::VariableReference("myvar".to_string()),
+        );
         assert!(matches!(
             result,
             Err(AnalyzeError {
@@ -199,7 +215,7 @@ mod tests {
             Closure::new(vec![], None),
         ));
         let result = analyze_expr(
-            &ctx,
+            &mut ctx,
             &Expression::FunctionCall(FunctionCall::new(
                 "do_thing",
                 vec![Expression::BoolLiteral(true)],
@@ -216,7 +232,7 @@ mod tests {
             Closure::new(vec![], None),
         ));
         let result = analyze_expr(
-            &ctx,
+            &mut ctx,
             &Expression::BinaryOperation(
                 Box::new(Expression::IntLiteral(1)),
                 Operator::Add,
@@ -243,7 +259,7 @@ mod tests {
             Closure::new(vec![], None),
         ));
         let result = analyze_expr(
-            &ctx,
+            &mut ctx,
             &Expression::BinaryOperation(
                 Box::new(Expression::IntLiteral(1)),
                 Operator::Add,
@@ -270,7 +286,7 @@ mod tests {
             Closure::new(vec![], None),
         ));
         let result = analyze_expr(
-            &ctx,
+            &mut ctx,
             &Expression::BinaryOperation(
                 Box::new(Expression::IntLiteral(1)),
                 Operator::Add,
@@ -291,9 +307,9 @@ mod tests {
 
     #[test]
     fn binary_op_invalid_operand_types() {
-        let ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new();
         let result = analyze_expr(
-            &ctx,
+            &mut ctx,
             &Expression::BinaryOperation(
                 Box::new(Expression::IntLiteral(1)),
                 Operator::Add,
@@ -309,7 +325,7 @@ mod tests {
         ));
 
         let result = analyze_expr(
-            &ctx,
+            &mut ctx,
             &Expression::BinaryOperation(
                 Box::new(Expression::StringLiteral("asdf".to_string())),
                 Operator::Add,
@@ -325,7 +341,7 @@ mod tests {
         ));
 
         let result = analyze_expr(
-            &ctx,
+            &mut ctx,
             &Expression::BinaryOperation(
                 Box::new(Expression::IntLiteral(2)),
                 Operator::LogicalOr,
@@ -343,9 +359,9 @@ mod tests {
 
     #[test]
     fn unary_op() {
-        let ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new();
         let result = analyze_expr(
-            &ctx,
+            &mut ctx,
             &Expression::UnaryOperation(Operator::Not, Box::new(Expression::IntLiteral(1))),
         );
         assert!(matches!(
@@ -359,9 +375,9 @@ mod tests {
 
     #[test]
     fn unary_op_invalid_operand_type() {
-        let ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new();
         let result = analyze_expr(
-            &ctx,
+            &mut ctx,
             &Expression::UnaryOperation(
                 Operator::Not,
                 Box::new(Expression::StringLiteral("s".to_string())),

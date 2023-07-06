@@ -518,12 +518,12 @@ mod tests {
     #[test]
     fn parse_basic_string_literal() {
         let mut tokens =
-            Token::tokenize_line(r#""this is my \"string\"""#, 0).expect("should not error");
+            Token::tokenize_line(r#""this is my \"String\"""#, 0).expect("should not error");
         let result = Expression::from_basic(&mut tokens, false).expect("should not error");
         assert_eq!(
             result,
             Some(Expression::StringLiteral(
-                r#"this is my "string""#.to_string()
+                r#"this is my "String""#.to_string()
             ))
         );
     }
