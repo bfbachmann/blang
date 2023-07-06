@@ -7,19 +7,16 @@ _A bad language (don't use it, it's bad)._
 ```
 fn main() {
     int i = 0
-
     loop {
-        string prefix = "Fibonacci number " + itoa(i) + " is: "
+        string prefix = str_concat(str_concat("Fibonacci number ", itoa(i)), " is: ")
         int result = fib(
             i,
             fn (int n): bool {
-                print("fib visitor sees n=" + itoa(n))
+                print(str_concat("fib visitor sees n=", itoa(n)))
                 return n % 2 == 0
             },
         )
-
-        print(prefix + itoa(result))
-
+        print(str_concat(prefix, itoa(result)))
         if i == 10 {
             break
         }
@@ -31,12 +28,22 @@ fn fib(int n, fn (int): bool visitor_fn): int {
     if visitor_fn(n) {
         print("visitor returned true")
     }
-
     if n <= 1 {
         return 1
     }
+    return fib(n-1, visitor_fn) + fib(n-2, visitor_fn)
+}
 
-    return fib(n-1) + fib(n-2)
+fn print(string s) {
+    // Do IO...
+}
+
+fn str_concat(string a, string b): string {
+    return a
+}
+
+fn itoa(int i): string {
+    return "fake"
 }
 ```
 

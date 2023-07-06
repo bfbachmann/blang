@@ -13,6 +13,7 @@ use parser::program::Program;
 use parser::statement::Statement;
 
 use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::program::analyze_program;
 use crate::analyzer::statement::analyze_statement;
 
 mod analyzer;
@@ -67,9 +68,12 @@ fn compile(file_path: &str) {
         Err(e) => fatal!("{}", e),
     };
 
-    // Parse the program.
+    // Parse and analyze the program.
     match Program::from(&mut tokens) {
-        Ok(prog) => dbg!(prog),
+        Ok(prog) => match analyze_program(&prog) {
+            Ok(_) => {}
+            Err(e) => fatal!("{}", e),
+        },
         Err(e) => fatal!("{}", e),
     };
 }
