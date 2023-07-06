@@ -5,9 +5,9 @@ mod cond;
 mod error;
 mod expr;
 mod func;
-mod prog_context;
-mod program;
-mod statement;
+pub mod prog_context;
+pub mod program;
+pub mod statement;
 mod var_assign;
 mod var_dec;
 

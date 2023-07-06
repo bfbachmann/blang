@@ -6,7 +6,7 @@ use crate::analyzer::AnalyzeResult;
 use crate::parser::program::Program;
 use crate::parser::statement::Statement;
 
-fn analyze_program(program: &Program) -> AnalyzeResult<()> {
+pub fn analyze_program(program: &Program) -> AnalyzeResult<()> {
     let mut ctx = ProgramContext::new();
 
     // Analyze all function signatures defined at the top level of the program so we can reference

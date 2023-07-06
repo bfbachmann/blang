@@ -12,6 +12,9 @@ use lexer::token::Token;
 use parser::program::Program;
 use parser::statement::Statement;
 
+use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::statement::analyze_statement;
+
 mod analyzer;
 mod lexer;
 mod parser;
@@ -75,17 +78,19 @@ fn compile(file_path: &str) {
 /// print the result of the statement.
 fn repl() {
     info!("Starting REPL.");
-    info!("Use ^C to exit. Enter two successive newlines to commit a new statements.");
+    info!("Use ^C to exit. Enter two successive newlines to commit statements.");
 
+    let mut ctx = ProgramContext::new();
     loop {
         match repl_collect_tokens() {
             Ok(tokens) => {
                 let mut tokens = tokens;
                 'inner: while !tokens.is_empty() {
                     match Statement::from(&mut tokens) {
-                        Ok(statement) => {
-                            dbg!(statement);
-                        }
+                        Ok(statement) => match analyze_statement(&mut ctx, &statement) {
+                            Ok(_) => {}
+                            Err(e) => error!("{}", e),
+                        },
                         Err(e) => {
                             error!("{}", e);
                             break 'inner;
@@ -103,12 +108,15 @@ fn repl() {
 fn repl_collect_tokens() -> Result<VecDeque<Token>> {
     let mut tokens = VecDeque::new();
     let mut line_num = 0;
+    let mut out = stdout();
+
+    out.write("----------------\n".as_bytes())?;
 
     loop {
         // Print a prompt based on whether this is the beginning of a new sequence or a continuation
         // of the last one.
-        stdout().write_all(format!("{} > ", line_num).as_bytes())?;
-        stdout().flush()?;
+        out.write_all(format!("{} > ", line_num).as_bytes())?;
+        out.flush()?;
         line_num += 1;
 
         // Read input.
