@@ -140,6 +140,7 @@ mod tests {
             i64 i = 0
             loop {
                 string prefix = str_concat(str_concat("Fibonacci number ", itoa(i)), " is: ")
+                
                 i64 result = fib(
                     i,
                     fn (i64 n): bool {
@@ -147,10 +148,18 @@ mod tests {
                         return n % 2 == 0
                     },
                 )
+                
                 print(str_concat(prefix, itoa(result)))
+                
                 if i == 10 {
                     break
+                } else if i % 2 == 0 {
+                    print("i is even")
+                } else {
+                    print("i is odd")
                 }
+                
+                i = i + 1
             }
         }
         
