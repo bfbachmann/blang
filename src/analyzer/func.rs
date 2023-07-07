@@ -115,7 +115,10 @@ pub fn analyze_fn_call(
     Ok(fn_sig.return_type.clone())
 }
 
-pub fn analyze_return(ctx: &mut ProgramContext, expr: &Option<Expression>) -> AnalyzeResult<()> {
+pub fn analyze_return(
+    ctx: &mut ProgramContext,
+    expr: &Option<Expression>,
+) -> AnalyzeResult<Option<Type>> {
     // Make sure we are inside a function body.
     if !ctx.is_in_fn() {
         return Err(AnalyzeError::new(
@@ -126,43 +129,46 @@ pub fn analyze_return(ctx: &mut ProgramContext, expr: &Option<Expression>) -> An
 
     match expr {
         Some(expr) => {
-            // We're returning a value. Make sure the value if of the expected type.
+            // We're returning a value. Make sure the value is of the expected type.
             let expr_type = analyze_expr(ctx, expr)?;
             match ctx.return_type() {
                 Some(expected) => {
                     if expected != &expr_type {
-                        return Err(AnalyzeError::new(
+                        Err(AnalyzeError::new(
                             ErrorKind::IncompatibleTypes,
                             format!(
                                 "Cannot return value of type {} from function with return type {}",
                                 &expr_type, &expected
                             )
                             .as_str(),
-                        ));
+                        ))
+                    } else {
+                        Ok(Some(expr_type))
                     }
                 }
-                None => {
-                    return Err(AnalyzeError::new(
-                        ErrorKind::IncompatibleTypes,
-                        format!(
-                            "Cannot return value of type {} from function with no return type",
-                            expr_type
-                        )
-                        .as_str(),
-                    ));
-                }
+                None => Err(AnalyzeError::new(
+                    ErrorKind::IncompatibleTypes,
+                    format!(
+                        "Cannot return value of type {} from function with no return type",
+                        expr_type
+                    )
+                    .as_str(),
+                )),
             }
         }
         None => {
             // This is an empty return. Make sure we're not expecting a return type.
-            if let Some(expected) = ctx.return_type() {
-                return Err(AnalyzeError::new(
+            match ctx.return_type() {
+                Some(expected) => Err(AnalyzeError::new(
                     ErrorKind::IncompatibleTypes,
-                    format!("Expected return value of type {}", expected).as_str(),
-                ));
+                    format!(
+                        "Expected return value of type {}, but found empty return",
+                        expected
+                    )
+                    .as_str(),
+                )),
+                None => Ok(None),
             }
         }
     }
-
-    Ok(())
 }

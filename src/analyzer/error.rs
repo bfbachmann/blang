@@ -15,7 +15,27 @@ pub enum ErrorKind {
     UnexpectedBreak,
     UnexpectedReturn,
     MissingMain,
+    MissingReturn,
     InvalidMain,
+}
+
+impl fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ErrorKind::IncompatibleTypes => write!(f, "Incompatible types"),
+            ErrorKind::ExpectedValue => write!(f, "Expected value"),
+            ErrorKind::FunctionNotDefined => write!(f, "Function not defined"),
+            ErrorKind::FunctionAlreadyDefined => write!(f, "Function already defined"),
+            ErrorKind::VariableNotDefined => write!(f, "Variable not defined"),
+            ErrorKind::VariableAlreadyDefined => write!(f, "Variable already defined"),
+            ErrorKind::WrongNumberOfArgs => write!(f, "Wrong number of arguments"),
+            ErrorKind::UnexpectedBreak => write!(f, "Unexpected break"),
+            ErrorKind::UnexpectedReturn => write!(f, "Unexpected return"),
+            ErrorKind::MissingMain => write!(f, "Missing main"),
+            ErrorKind::MissingReturn => write!(f, "Missing return"),
+            ErrorKind::InvalidMain => write!(f, "Invalid main"),
+        }
+    }
 }
 
 /// Represents any fatal error that occurs during program analysis.
@@ -27,7 +47,7 @@ pub struct AnalyzeError {
 
 impl fmt::Display for AnalyzeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.message)
+        write!(f, "{}: {}", self.kind, self.message)
     }
 }
 

@@ -6,7 +6,11 @@ use crate::analyzer::AnalyzeResult;
 use crate::parser::cond::Conditional;
 use crate::parser::r#type::Type;
 
-pub(crate) fn analyze_cond(ctx: &mut ProgramContext, cond: &Conditional) -> AnalyzeResult<()> {
+pub(crate) fn analyze_cond(
+    ctx: &mut ProgramContext,
+    cond: &Conditional,
+) -> AnalyzeResult<Option<Type>> {
+    let mut ret_types = vec![];
     for branch in &cond.branches {
         // Check that the branch expression evaluates to a bool, if one exists.
         if let Some(branch_cond) = &branch.condition {
@@ -23,9 +27,19 @@ pub(crate) fn analyze_cond(ctx: &mut ProgramContext, cond: &Conditional) -> Anal
             }
         }
 
-        // Analyze the branch body.
-        analyze_closure(ctx, &branch.body, ScopeKind::Branch, vec![], None)?;
+        // Analyze the branch body and record the return type if the body is guaranteed to end in a
+        // return statement.
+        let ret_type = analyze_closure(ctx, &branch.body, ScopeKind::Branch, vec![], None)?;
+        ret_types.push(ret_type);
     }
 
-    Ok(())
+    // If any of the branch bodies doesn't have a guaranteed return, we return None. Otherwise,
+    // we return the guaranteed return type.
+    for typ in &ret_types {
+        if typ.is_none() {
+            return Ok(None);
+        }
+    }
+
+    Ok(ret_types.pop().unwrap())
 }

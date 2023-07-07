@@ -305,14 +305,44 @@ impl TokenKind {
                 let formatted = &formatted[1..formatted.len() - 1];
 
                 // Handle whitespace characters and escaped quotes and backslashes.
-                let formatted = &formatted
-                    .replace(r#"\\"#, r#"\"#)
-                    .replace(r#"\n"#, "\n")
-                    .replace(r#"\r"#, "\r")
-                    .replace(r#"\t"#, "\t")
-                    .replace(r#"\""#, r#"""#);
+                let mut replaced = String::from("");
+                let mut i = 0;
+                while i < formatted.len() {
+                    let cur_char = formatted.chars().nth(i).unwrap();
+                    let next_char = formatted.chars().nth(i + 1);
 
-                Some(TokenKind::StringLiteral(String::from(formatted)))
+                    let to_add = match cur_char {
+                        '\\' => match next_char {
+                            Some('\\') => {
+                                i += 1;
+                                '\\'
+                            }
+                            Some('n') => {
+                                i += 1;
+                                '\n'
+                            }
+                            Some('t') => {
+                                i += 1;
+                                '\t'
+                            }
+                            Some('r') => {
+                                i += 1;
+                                '\r'
+                            }
+                            Some('"') => {
+                                i += 1;
+                                '"'
+                            }
+                            _ => '\\',
+                        },
+                        other => other,
+                    };
+
+                    replaced.push(to_add);
+                    i += 1;
+                }
+
+                Some(TokenKind::StringLiteral(String::from(replaced)))
             }
             false => None,
         }
