@@ -55,8 +55,18 @@ pub enum Expression {
 
 impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // TODO
-        write!(f, "??")
+        match self {
+            Expression::VariableReference(s) => write!(f, "{}", s),
+            Expression::BoolLiteral(b) => write!(f, "{}", b),
+            Expression::I64Literal(i) => write!(f, "{}", i),
+            Expression::StringLiteral(s) => write!(f, "{}", s),
+            Expression::FunctionCall(fn_call) => write!(f, "{}", fn_call),
+            Expression::AnonFunction(func) => write!(f, "{}", func),
+            Expression::UnaryOperation(op, expr) => write!(f, "{}{}", op, expr),
+            Expression::BinaryOperation(left_expr, op, right_expr) => {
+                write!(f, "{} {} {}", left_expr, op, right_expr)
+            }
+        }
     }
 }
 

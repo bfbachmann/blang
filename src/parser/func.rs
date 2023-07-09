@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::fmt;
 
 use crate::lexer::token::Token;
 use crate::parser::closure::Closure;
@@ -10,6 +11,12 @@ use crate::parser::ParseResult;
 pub struct Function {
     pub signature: FunctionSignature,
     pub body: Closure,
+}
+
+impl fmt::Display for Function {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {{ ... }}", self.signature)
+    }
 }
 
 impl Function {

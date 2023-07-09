@@ -71,7 +71,8 @@ fn open_file(file_path: &str) -> Result<BufReader<File>> {
     Ok(BufReader::new(file))
 }
 
-/// Compiles a source file for the given target ISA.
+/// Compiles a source file for the given target ISA. If there is no target, infers configuration
+/// for the current system.
 fn compile(input_path: &str, target: Option<&String>) {
     // Get a reader from the source file.
     let reader = match open_file(input_path) {

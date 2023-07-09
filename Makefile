@@ -1,3 +1,6 @@
+export RUST_LOG=debug
+export RUST_BACKTRACE=1
+
 .PHONY: repl
 repl:
 	RUST_LOG=debug cargo run -- repl
@@ -12,4 +15,4 @@ docs:
 
 .PHONY: %
 %:
-	RUST_LOG=debug cargo run -- build $@.bl
+	cargo run -- build $@.bl

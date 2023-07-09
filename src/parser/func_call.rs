@@ -1,4 +1,5 @@
 use std::collections::{HashSet, VecDeque};
+use std::fmt;
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::token::Token;
@@ -18,6 +19,22 @@ pub struct FunctionCall {
 impl PartialEq for FunctionCall {
     fn eq(&self, other: &Self) -> bool {
         self.fn_name == other.fn_name && util::vectors_are_equal(&self.args, &other.args)
+    }
+}
+
+impl fmt::Display for FunctionCall {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}(", self.fn_name)?;
+
+        for (i, arg) in self.args.iter().enumerate() {
+            write!(f, "{}", arg)?;
+
+            if i < self.args.len() - 1 {
+                write!(f, ", ")?;
+            }
+        }
+
+        write!(f, ")")
     }
 }
 

@@ -1,16 +1,18 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 
-use crate::parser::closure::Closure;
-use crate::parser::expr::Expression;
 use cranelift::prelude::*;
 use cranelift_codegen::ir::UserFuncName;
 use cranelift_codegen::isa::{Builder, OwnedTargetIsa};
 use cranelift_codegen::settings::{builder, Flags};
 use cranelift_codegen::{ir, verify_function};
+use log::debug;
 use target_lexicon::Triple;
 
+use crate::parser::closure::Closure;
+use crate::parser::cond::Conditional;
+use crate::parser::expr::Expression;
 use crate::parser::func::Function;
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::op::Operator;
@@ -19,6 +21,7 @@ use crate::parser::r#type::Type;
 use crate::parser::statement::Statement;
 use crate::parser::var_dec::VariableDeclaration;
 
+/// Represents kinds of errors that happen during IR generation.
 enum IRGenErrorKind {
     InitFailure,
     FnVerificationFailed,
@@ -33,6 +36,7 @@ impl fmt::Display for IRGenErrorKind {
     }
 }
 
+/// Represents errors that happen during IR generation.
 pub struct IRGenError {
     kind: IRGenErrorKind,
     message: String,
@@ -53,6 +57,7 @@ impl IRGenError {
     }
 }
 
+/// Represents the result of IR generation.
 type IRGenResult<T> = Result<T, IRGenError>;
 
 /// Represents functions for which IR has been generated.
@@ -67,53 +72,290 @@ impl GenFn {
     }
 }
 
-pub struct GenScope {
-    var_index: usize,
+/// Generates IR for functions.
+struct FnGenerator<'a> {
+    vars: HashMap<String, Variable>,
+    fn_builder: FunctionBuilder<'a>,
+    var_counter: usize,
 }
 
-impl GenScope {
-    fn new() -> Self {
-        GenScope { var_index: 0 }
+impl FnGenerator<'_> {
+    /// Returns a new variable identifier that is unique within the current function.
+    fn next_var(&mut self) -> usize {
+        self.var_counter += 1;
+        self.var_counter - 1
     }
-}
 
-pub struct GenContext {
-    stack: VecDeque<GenScope>,
-}
+    /// Returns a new variable.
+    fn new_var(&mut self) -> Variable {
+        Variable::new(self.next_var())
+    }
 
-impl GenContext {
-    fn new() -> Self {
-        GenContext {
-            stack: VecDeque::from(vec![GenScope::new()]),
+    /// Generates IR for a statement in the current function.
+    fn gen_statement(&mut self, statement: &Statement) -> IRGenResult<()> {
+        match statement {
+            // Statement::FunctionDeclaration(func) => self.gen_fn(func),
+            Statement::VariableDeclaration(var_decl) => self.gen_var_decl(var_decl),
+            Statement::Return(expr) => self.gen_return(expr.as_ref()),
+            Statement::Conditional(cond) => self.gen_cond(cond),
+            other => {
+                return Err(IRGenError::new(
+                    IRGenErrorKind::InitFailure,
+                    format!("unimplemented {}", other).as_str(),
+                ))
+            }
         }
     }
 
-    fn next_var(&mut self) -> usize {
-        let scope = self.stack.back_mut().unwrap();
-        scope.var_index += 1;
-        scope.var_index - 1
+    /// Generates IR for a conditional in the current function.
+    fn gen_cond(&mut self, cond: &Conditional) -> IRGenResult<()> {
+        // Create an end block that we can jump to one we're done executing the branch.
+        let end_block = self.fn_builder.create_block();
+
+        for branch in &cond.branches {
+            if let Some(branch_cond) = &branch.condition {
+                // Generate the condition variable and the two blocks that we'll branch to based
+                // on the condition.
+                let cond_var = self.gen_expr(&branch_cond);
+                let then_block = self.fn_builder.create_block();
+                let else_block = self.fn_builder.create_block();
+
+                // Create the branch instruction that will jump to one of the two blocks based
+                // on the condition.
+                self.fn_builder
+                    .ins()
+                    .brif(cond_var, then_block, &[], else_block, &[]);
+
+                // Seal the blocks since there should be nothing else that branches/jumps to them.
+                self.fn_builder.seal_block(then_block);
+                self.fn_builder.seal_block(else_block);
+
+                // Fill the then block.
+                self.fn_builder.switch_to_block(then_block);
+                if let Err(e) = self.gen_closure(&branch.body, end_block) {
+                    return Err(e);
+                }
+
+                // Continue on the else block.
+                self.fn_builder.switch_to_block(else_block);
+            } else {
+                // There is no branch condition, meaning this is the else case, so we must jump to
+                // the then block.
+                let then_block = self.fn_builder.create_block();
+                self.fn_builder.ins().jump(then_block, &[]);
+
+                // Seal the then block because nothing else will jump/branch to it.
+                self.fn_builder.seal_block(then_block);
+
+                // Continue on the then block.
+                self.fn_builder.switch_to_block(then_block);
+
+                // Generate instructions for end closure.
+                if let Err(e) = self.gen_closure(&branch.body, end_block) {
+                    return Err(e);
+                }
+            }
+        }
+
+        // Seal the end block before returning, because we know nothing else will branch/jump to it.
+        self.fn_builder.seal_block(end_block);
+
+        // Continue on the end block.
+        self.fn_builder.switch_to_block(end_block);
+
+        Ok(())
     }
 
-    fn push_scope(&mut self) {
-        let scope = GenScope::new();
-        self.stack.push_back(scope);
+    /// Generates IR for a closure in the current function. Note that closures can be inline,
+    /// branch bodies, or loop bodies.
+    fn gen_closure(&mut self, closure: &Closure, end_block: Block) -> IRGenResult<()> {
+        let mut returned = false;
+        for statement in &closure.statements {
+            if let Err(e) = self.gen_statement(statement) {
+                return Err(e);
+            }
+
+            if let Statement::Return(_) = statement {
+                returned = true
+            }
+        }
+
+        // We must either return or jump to another block at the end of the closure.
+        if !returned {
+            self.fn_builder.ins().jump(end_block, &[]);
+        }
+
+        Ok(())
     }
 
-    fn pop_scope(&mut self) {
-        self.stack.pop_back();
+    /// Generates IR for return statements in the function.
+    fn gen_return(&mut self, expr: Option<&Expression>) -> IRGenResult<()> {
+        if expr.is_none() {
+            self.fn_builder.ins().return_(&[]);
+        } else {
+            let ret_val = self.gen_expr(expr.unwrap());
+            self.fn_builder.ins().return_(&[ret_val]);
+        }
+
+        Ok(())
+    }
+
+    /// Generates IR for variable declarations in the function.
+    fn gen_var_decl(&mut self, var_decl: &VariableDeclaration) -> IRGenResult<()> {
+        // Create a new variable.
+        let var = self.new_var();
+
+        // Declare the variable type.
+        self.declare_var(var, &var_decl.typ);
+
+        // Define the variable based on its value.
+        self.def_var(var, &var_decl.value);
+
+        Ok(())
+    }
+
+    /// Generates IR for unary operations in the function.
+    fn gen_unary_op(&mut self, op: &Operator, expr: &Expression) -> Value {
+        let val = self.gen_expr(expr);
+        match op {
+            Operator::Not => {
+                // Make sure the boolean value is either all 0s (representing false) or all 1s
+                // (representing true).
+                let tmp = self.fn_builder.ins().bmask(ir::types::I8, val);
+                // Bitwise not to flip all the bits.
+                self.fn_builder.ins().bnot(tmp)
+            }
+            _ => panic!("invalid unary operator {}", op),
+        }
+    }
+
+    /// Generates IR for binary operations in the function.
+    fn gen_binary_op(&mut self, left: &Expression, op: &Operator, right: &Expression) -> Value {
+        let left_val = self.gen_expr(left);
+        let right_val = self.gen_expr(right);
+
+        match op {
+            Operator::Add => self.fn_builder.ins().iadd(left_val, right_val),
+            Operator::Subtract => self.fn_builder.ins().isub(left_val, right_val),
+            Operator::Multiply => self.fn_builder.ins().imul(left_val, right_val),
+            Operator::Divide => self.fn_builder.ins().udiv(left_val, right_val),
+            Operator::Modulo => self.fn_builder.ins().urem(left_val, right_val),
+            Operator::LogicalAnd => self.fn_builder.ins().band(left_val, right_val),
+            Operator::LogicalOr => self.fn_builder.ins().bor(left_val, right_val),
+            // TODO: handle comparators based on operand types
+            // Operator::EqualTo =>
+            // Operator::NotEqualTo =>
+            Operator::GreaterThan => {
+                self.fn_builder
+                    .ins()
+                    .icmp(IntCC::SignedGreaterThan, left_val, right_val)
+            }
+            Operator::LessThan => {
+                self.fn_builder
+                    .ins()
+                    .icmp(IntCC::SignedLessThan, left_val, right_val)
+            }
+            Operator::GreaterThanOrEqual => {
+                self.fn_builder
+                    .ins()
+                    .icmp(IntCC::SignedGreaterThanOrEqual, left_val, right_val)
+            }
+            Operator::LessThanOrEqual => {
+                self.fn_builder
+                    .ins()
+                    .icmp(IntCC::SignedLessThanOrEqual, left_val, right_val)
+            }
+            other => panic!("unimplemented binary operator {}", other),
+        }
+    }
+
+    /// Generates IR for expressions in the function.
+    fn gen_expr(&mut self, expr: &Expression) -> Value {
+        match expr {
+            Expression::BoolLiteral(b) => self.gen_bool_literal(*b),
+            Expression::I64Literal(i) => self.gen_i64_literal(*i),
+            Expression::BinaryOperation(left, op, right) => self.gen_binary_op(left, op, right),
+            Expression::UnaryOperation(op, expr) => self.gen_unary_op(op, expr),
+            other => {
+                panic!("unimplemented expression {}", other)
+            }
+        }
+    }
+
+    /// Generates IR for the function body.
+    fn gen_fn_body(&mut self, func: &Function) -> IRGenResult<()> {
+        // Create the entry block, to start emitting code in.
+        let block0 = self.fn_builder.create_block();
+
+        // Since this is the entry block, add block parameters corresponding to the function's
+        // parameters.
+        self.fn_builder
+            .append_block_params_for_function_params(block0);
+
+        // Tell the builder to emit code in this block.
+        self.fn_builder.switch_to_block(block0);
+
+        // Seal the block since nothing else can jump to it.
+        self.fn_builder.seal_block(block0);
+
+        // Generate IR for statements.
+        let mut returned = false;
+        for statement in &func.body.statements {
+            if let Err(e) = self.gen_statement(statement) {
+                return Err(e);
+            }
+
+            if let Statement::Return(_) = statement {
+                returned = true
+            }
+        }
+
+        // Generate a return instruction if the source code didn't already contain a return.
+        if !returned {
+            self.fn_builder.ins().return_(&[]);
+        }
+
+        Ok(())
+    }
+
+    /// Defines the initial value of the given variable from the given expression using the function
+    /// builder.
+    fn def_var(&mut self, var: Variable, expr: &Expression) {
+        let val = self.gen_expr(expr);
+        self.fn_builder.def_var(var, val);
+    }
+
+    /// Declares the type of the given variable using the function builder.
+    fn declare_var(&mut self, var: Variable, typ: &Type) {
+        let typ = gen_type(typ);
+        self.fn_builder.declare_var(var, typ);
+    }
+
+    /// Generates an i64 literal with the given value using the function builder.
+    fn gen_i64_literal(&mut self, i: i64) -> Value {
+        self.fn_builder.ins().iconst(gen_type(&Type::I64), i)
+    }
+
+    /// Generates a bool literal (represented as u8 because Cranelift doesn't have bools) with the
+    /// given value using the function builder.
+    fn gen_bool_literal(&mut self, b: bool) -> Value {
+        let val = match b {
+            true => 1,
+            false => 0,
+        };
+        self.fn_builder.ins().iconst(gen_type(&Type::Bool), val)
     }
 }
 
+/// Generates IR for a program.
 pub struct IRGenerator {
     target_isa: OwnedTargetIsa,
     /// Tracks functions for which IR has been generated.
     gen_fns: HashMap<String, GenFn>,
     /// Represents the index of the next function to be generated.
-    fn_index: u32,
+    fn_counter: u32,
     /// Stores IR generator settings.
     flags: Flags,
-    /// Stores the IR generator context.
-    ctx: GenContext,
 }
 
 impl IRGenerator {
@@ -143,7 +385,7 @@ impl IRGenerator {
             }
         };
 
-        IRGenerator::from(isa_builder)
+        IRGenerator::new_for_isa(isa_builder)
     }
 
     /// Creates a new IR generator configured for the host system.
@@ -165,11 +407,11 @@ impl IRGenerator {
             ));
         }
 
-        IRGenerator::from(isa_builder)
+        IRGenerator::new_for_isa(isa_builder)
     }
 
     /// Creates a new IR generator from the given ISA builder.
-    fn from(isa_builder: Builder) -> IRGenResult<Self> {
+    fn new_for_isa(isa_builder: Builder) -> IRGenResult<Self> {
         let flags = Flags::new(builder());
         let target_isa = match isa_builder.finish(flags.clone()) {
             Ok(i) => i,
@@ -184,170 +426,55 @@ impl IRGenerator {
         Ok(IRGenerator {
             target_isa,
             gen_fns: HashMap::new(),
-            fn_index: 0,
+            fn_counter: 0,
             flags,
-            ctx: GenContext::new(),
         })
     }
 
+    /// Generates IR for the given program.
     pub fn gen_prog(&mut self, prog: Program) -> IRGenResult<()> {
-        // Generate IR for each statement in the program. We're representing the program as an
-        // anonymous function with no args or return for convenience so we can reuse code.
-        self.gen_fn(&Function::new(
-            FunctionSignature::new("", vec![], None),
-            Closure::new(prog.statements, None),
-        ))
-    }
-
-    pub fn gen_statement(
-        &mut self,
-        fn_builder: &mut FunctionBuilder,
-        statement: &Statement,
-    ) -> IRGenResult<()> {
-        match statement {
-            Statement::FunctionDeclaration(func) => self.gen_fn(func),
-            Statement::VariableDeclaration(var_decl) => self.gen_var_decl(fn_builder, var_decl),
-            Statement::Return(expr) => self.gen_return(fn_builder, expr.as_ref()),
-            _ => {
-                return Err(IRGenError::new(
-                    IRGenErrorKind::InitFailure,
-                    "unimplemented",
-                ))
+        // Generate IR for each statement in the program.
+        for statement in &prog.statements {
+            if let Err(e) = match statement {
+                Statement::FunctionDeclaration(func) => self.gen_fn(func),
+                other => {
+                    panic!("unimplemented top-level statement: {}", other);
+                }
+            } {
+                return Err(e);
             }
-        }
-    }
-
-    fn gen_return(
-        &mut self,
-        fn_builder: &mut FunctionBuilder,
-        expr: Option<&Expression>,
-    ) -> IRGenResult<()> {
-        if expr.is_none() {
-            fn_builder.ins().return_(&[]);
-        } else {
-            let ret_val = self.gen_expr(fn_builder, expr.unwrap());
-            fn_builder.ins().return_(&[ret_val]);
         }
 
         Ok(())
     }
 
-    fn gen_var_decl(
-        &mut self,
-        fn_builder: &mut FunctionBuilder,
-        var_decl: &VariableDeclaration,
-    ) -> IRGenResult<()> {
-        // Create a new variable.
-        let var = self.new_var();
-
-        // Declare the variable type.
-        declare_var(fn_builder, var, &var_decl.typ);
-
-        // Define the variable based on its value.
-        self.def_var(fn_builder, var, &var_decl.value);
-
-        Ok(())
-    }
-
-    fn gen_unary_op(
-        &mut self,
-        fn_builder: &mut FunctionBuilder,
-        op: &Operator,
-        expr: &Expression,
-    ) -> Value {
-        let val = self.gen_expr(fn_builder, expr);
-        match op {
-            Operator::Not => {
-                // Make sure the boolean value is either all 0s (representing false) or all 1s
-                // (representing true).
-                let tmp = fn_builder.ins().bmask(ir::types::I8, val);
-                // Bitwise not to flip all the bits.
-                fn_builder.ins().bnot(tmp)
-            }
-            _ => panic!("invalid unary operator {}", op),
-        }
-    }
-
-    fn gen_binary_op(
-        &mut self,
-        fn_builder: &mut FunctionBuilder,
-        left: &Expression,
-        op: &Operator,
-        right: &Expression,
-    ) -> Value {
-        let left_val = self.gen_expr(fn_builder, left);
-        let right_val = self.gen_expr(fn_builder, right);
-
-        match op {
-            Operator::Add => fn_builder.ins().iadd(left_val, right_val),
-            Operator::Subtract => fn_builder.ins().isub(left_val, right_val),
-            Operator::Multiply => fn_builder.ins().imul(left_val, right_val),
-            Operator::Divide => fn_builder.ins().udiv(left_val, right_val),
-            Operator::Modulo => fn_builder.ins().urem(left_val, right_val),
-            Operator::LogicalAnd => fn_builder.ins().band(left_val, right_val),
-            Operator::LogicalOr => fn_builder.ins().bor(left_val, right_val),
-            // TODO: handle comparators based on operand types
-            // Operator::EqualTo =>
-            // Operator::NotEqualTo =>
-            Operator::GreaterThan => {
-                fn_builder
-                    .ins()
-                    .icmp(IntCC::SignedGreaterThan, left_val, right_val)
-            }
-            Operator::LessThan => fn_builder
-                .ins()
-                .icmp(IntCC::SignedLessThan, left_val, right_val),
-            Operator::GreaterThanOrEqual => {
-                fn_builder
-                    .ins()
-                    .icmp(IntCC::SignedGreaterThanOrEqual, left_val, right_val)
-            }
-            Operator::LessThanOrEqual => {
-                fn_builder
-                    .ins()
-                    .icmp(IntCC::SignedLessThanOrEqual, left_val, right_val)
-            }
-            other => panic!("unsupported binary operator {}", other),
-        }
-    }
-
-    fn gen_expr(&mut self, fn_builder: &mut FunctionBuilder, expr: &Expression) -> Value {
-        match expr {
-            Expression::BoolLiteral(b) => gen_bool_literal(fn_builder, *b),
-            Expression::I64Literal(i) => gen_i64_literal(fn_builder, *i),
-            Expression::BinaryOperation(left, op, right) => {
-                self.gen_binary_op(fn_builder, left, op, right)
-            }
-            Expression::UnaryOperation(op, expr) => self.gen_unary_op(fn_builder, op, expr),
-            other => {
-                panic!("unimplemented expression {}", other)
-            }
-        }
-    }
-
+    /// Generates IR for a new function.
     fn gen_fn(&mut self, func: &Function) -> IRGenResult<()> {
         // Generate the function signature.
         let sig = self.gen_fn_sig(&func.signature);
 
         // Create a new function with the signature.
-        let fn_index = self.next_fn_index();
+        let fn_index = self.next_fn();
         let mut new_func = ir::Function::with_name_signature(UserFuncName::user(0, fn_index), sig);
 
         // Create a new function builder that we'll use to build this function.
         let mut fn_builder_ctx = FunctionBuilderContext::new();
-        let mut fn_builder = FunctionBuilder::new(&mut new_func, &mut fn_builder_ctx);
-
-        // Create a new scope for the function body.
-        self.ctx.push_scope();
+        let fn_builder = FunctionBuilder::new(&mut new_func, &mut fn_builder_ctx);
+        let mut fn_gen = FnGenerator {
+            vars: HashMap::new(),
+            fn_builder,
+            var_counter: 0,
+        };
 
         // Generate the function body.
-        if let Err(e) = self.gen_fn_body(&mut fn_builder, func) {
+        if let Err(e) = fn_gen.gen_fn_body(func) {
             return Err(e);
         }
 
-        // Tell the builder we're done with this function and then verify it.
-        println!("fn: {}", new_func);
-        // fn_builder.finalize();
+        // Tell the builder we're done with this function.
+        fn_gen.fn_builder.finalize();
+
+        // Verify the function.
         if let Err(e) = verify_function(&new_func, &self.flags) {
             return Err(IRGenError::new(
                 IRGenErrorKind::FnVerificationFailed,
@@ -361,13 +488,11 @@ impl IRGenerator {
             GenFn::new(fn_index, func.signature.clone()),
         );
 
-        // Pop the scope since we're exiting it.
-        self.ctx.pop_scope();
-
-        println!("{}", new_func.display());
+        debug!("{}", new_func.display());
         Ok(())
     }
 
+    /// Creates a function signature.
     fn gen_fn_sig(&mut self, sig: &FunctionSignature) -> Signature {
         // Define the function signature.
         let mut fn_sig = Signature::new(self.target_isa.default_call_conv());
@@ -387,71 +512,11 @@ impl IRGenerator {
         fn_sig
     }
 
-    fn gen_fn_body(
-        &mut self,
-        fn_builder: &mut FunctionBuilder,
-        func: &Function,
-    ) -> IRGenResult<()> {
-        // Create the entry block, to start emitting code in.
-        let block0 = fn_builder.create_block();
-
-        // Since this is the entry block, add block parameters corresponding to the function's
-        // parameters.
-        fn_builder.append_block_params_for_function_params(block0);
-
-        // Tell the builder to emit code in this block.
-        fn_builder.switch_to_block(block0);
-
-        // And, tell the builder that this block will have no further predecessors. Since it's the
-        // entry block, it won't have any predecessors.
-        fn_builder.seal_block(block0);
-
-        // Generate IR for statements.
-        for statement in &func.body.statements {
-            if let Err(e) = self.gen_statement(fn_builder, statement) {
-                return Err(e);
-            }
-        }
-
-        Ok(())
+    /// Returns the next function identifier.
+    fn next_fn(&mut self) -> u32 {
+        self.fn_counter += 1;
+        self.fn_counter - 1
     }
-
-    /// Defines the initial value of the given variable from the given expression using the function
-    /// builder.
-    fn def_var(&mut self, fn_builder: &mut FunctionBuilder, var: Variable, expr: &Expression) {
-        let val = self.gen_expr(fn_builder, expr);
-        fn_builder.def_var(var, val);
-    }
-
-    fn new_var(&mut self) -> Variable {
-        Variable::new(self.ctx.next_var())
-    }
-
-    fn next_fn_index(&mut self) -> u32 {
-        self.fn_index += 1;
-        self.fn_index - 1
-    }
-}
-
-/// Declares the type of the given variable using the function builder.
-fn declare_var(fn_builder: &mut FunctionBuilder, var: Variable, typ: &Type) {
-    let typ = gen_type(typ);
-    fn_builder.declare_var(var, typ);
-}
-
-/// Generates an i64 literal with the given value using the function builder.
-fn gen_i64_literal(fn_builder: &mut FunctionBuilder, i: i64) -> Value {
-    fn_builder.ins().iconst(gen_type(&Type::I64), i)
-}
-
-/// Generates a bool literal (represented as u8 because Cranelift doesn't have bools) with the
-/// given value using the function builder.
-fn gen_bool_literal(fn_builder: &mut FunctionBuilder, b: bool) -> Value {
-    let val = match b {
-        true => 1,
-        false => 0,
-    };
-    fn_builder.ins().iconst(gen_type(&Type::Bool), val)
 }
 
 /// Creates an ABI parameter with the given type.
