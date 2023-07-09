@@ -15,8 +15,10 @@ use parser::statement::Statement;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::program::analyze_program;
 use crate::analyzer::statement::analyze_statement;
+use crate::codegen::IRGenerator;
 
 mod analyzer;
+mod codegen;
 mod lexer;
 mod parser;
 mod util;
@@ -29,23 +31,38 @@ macro_rules! fatal {
 }
 
 fn main() {
-    // Set log level
+    // Set log level.
     env_logger::init();
     set_max_level(Level::Debug.to_level_filter());
 
-    // Define command
+    // Define commands.
     let matches = Command::new("blang")
         .version("0.1")
         .author("Bruno Bachmann")
         .about("A bad programming language.")
-        .arg(arg!([file] "File to compile"))
+        .subcommand_required(true)
+        .arg_required_else_help(true)
+        .subcommand(
+            Command::new("build")
+                .about("Builds a binary from Blang source code")
+                .arg(arg!([SRC_PATH]).required(true))
+                .arg(arg!(-t --target <TARGET> "Specifies target ISA triple").required(false)),
+        )
+        .subcommand(Command::new("repl").about("Runs a REPL"))
         .get_matches();
 
     // Get file name from command line argument. If there is none, start a repl.
-    match matches.get_one::<String>("file") {
-        Some(file_path) => compile(file_path),
-        None => repl(),
-    }
+    match matches.subcommand() {
+        Some(("build", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
+            Some(file_path) => {
+                let target = sub_matches.get_one::<String>("target");
+                compile(file_path, target)
+            }
+            _ => fatal!("Expected source path"),
+        },
+        Some(("repl", _)) => repl(),
+        _ => unreachable!("No subcommand"),
+    };
 }
 
 /// Opens the file at the given path and returns a reader for it.
@@ -54,12 +71,12 @@ fn open_file(file_path: &str) -> Result<BufReader<File>> {
     Ok(BufReader::new(file))
 }
 
-/// Compiles a file.
-fn compile(file_path: &str) {
+/// Compiles a source file for the given target ISA.
+fn compile(input_path: &str, target: Option<&String>) {
     // Get a reader from the source file.
-    let reader = match open_file(file_path) {
+    let reader = match open_file(input_path) {
         Ok(r) => r,
-        Err(err) => fatal!(r#"Error opening file "{}": {}"#, file_path, err),
+        Err(err) => fatal!(r#"Error opening file "{}": {}"#, input_path, err),
     };
 
     // Break the file into tokens.
@@ -68,12 +85,30 @@ fn compile(file_path: &str) {
         Err(e) => fatal!("{}", e),
     };
 
-    // Parse and analyze the program.
-    match Program::from(&mut tokens) {
-        Ok(prog) => match analyze_program(&prog) {
-            Ok(_) => {}
-            Err(e) => fatal!("{}", e),
-        },
+    // Parse the program.
+    let prog = match Program::from(&mut tokens) {
+        Err(e) => fatal!("{}", e),
+        Ok(p) => p,
+    };
+
+    // Analyze the program.
+    if let Err(e) = analyze_program(&prog) {
+        fatal!("{}", e);
+    }
+
+    // Create IR generator.
+    let ir_gen_result = match target {
+        Some(t) => IRGenerator::new_for_target(t),
+        None => IRGenerator::new(),
+    };
+    let mut ir_gen = match ir_gen_result {
+        Ok(g) => g,
+        Err(e) => fatal!("{}", e),
+    };
+
+    // Generate IR.
+    match ir_gen.gen_prog(prog) {
+        Ok(_) => {}
         Err(e) => fatal!("{}", e),
     };
 }
@@ -85,21 +120,30 @@ fn repl() {
     info!("Use ^C to exit. Enter two successive newlines to commit statements.");
 
     let mut ctx = ProgramContext::new();
+    let mut ir_gen = match IRGenerator::new() {
+        Err(e) => fatal!("{}", e),
+        Ok(v) => v,
+    };
+
     loop {
         match repl_collect_tokens() {
             Ok(tokens) => {
                 let mut tokens = tokens;
                 'inner: while !tokens.is_empty() {
-                    match Statement::from(&mut tokens) {
+                    let statement = match Statement::from(&mut tokens) {
                         Ok(statement) => match analyze_statement(&mut ctx, &statement) {
                             Ok(_) => {}
-                            Err(e) => error!("{}", e),
+                            Err(e) => {
+                                error!("{}", e);
+                            }
                         },
                         Err(e) => {
                             error!("{}", e);
                             break 'inner;
                         }
                     };
+
+                    // TODO: generate IR
                 }
             }
             Err(e) => error!("{}", e),

@@ -1,6 +1,6 @@
 .PHONY: repl
 repl:
-	RUST_LOG=debug cargo run
+	RUST_LOG=debug cargo run -- repl
 
 .PHONY: test
 test:
@@ -12,4 +12,4 @@ docs:
 
 .PHONY: %
 %:
-	RUST_LOG=debug cargo run -- $@.bl
+	RUST_LOG=debug cargo run -- build $@.bl
