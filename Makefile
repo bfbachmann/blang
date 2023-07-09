@@ -1,9 +1,12 @@
+# Enable debug logs.
 export RUST_LOG=debug
+
+# Enable stack traces.
 export RUST_BACKTRACE=1
 
 .PHONY: repl
 repl:
-	RUST_LOG=debug cargo run -- repl
+	cargo run -- repl
 
 .PHONY: test
 test:

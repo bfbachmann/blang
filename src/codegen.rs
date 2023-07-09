@@ -208,8 +208,11 @@ impl FnGenerator<'_> {
         // Declare the variable type.
         self.declare_var(var, &var_decl.typ);
 
-        // Define the variable based on its value.
+        // Define the variable with its initial value.
         self.def_var(var, &var_decl.value);
+
+        // Track the variable so we can reference it later.
+        self.vars.insert(var_decl.name.clone(), var);
 
         Ok(())
     }
@@ -336,7 +339,7 @@ impl FnGenerator<'_> {
         self.fn_builder.ins().iconst(gen_type(&Type::I64), i)
     }
 
-    /// Generates a bool literal (represented as u8 because Cranelift doesn't have bools) with the
+    /// Generates a bool literal (represented as i8 because Cranelift doesn't have bools) with the
     /// given value using the function builder.
     fn gen_bool_literal(&mut self, b: bool) -> Value {
         let val = match b {
@@ -403,7 +406,7 @@ impl IRGenerator {
         if let Err(e) = cranelift_native::infer_native_flags(&mut isa_builder) {
             return Err(IRGenError::new(
                 IRGenErrorKind::InitFailure,
-                format!("Failure to infer native flags: {}", e).as_str(),
+                format!("Failed to infer native flags: {}", e).as_str(),
             ));
         }
 
@@ -418,7 +421,7 @@ impl IRGenerator {
             Err(e) => {
                 return Err(IRGenError::new(
                     IRGenErrorKind::InitFailure,
-                    format!("Failure to finish building ISA: {}", e).as_str(),
+                    format!("Failed to finish building ISA: {}", e).as_str(),
                 ))
             }
         };
@@ -488,7 +491,11 @@ impl IRGenerator {
             GenFn::new(fn_index, func.signature.clone()),
         );
 
-        debug!("{}", new_func.display());
+        debug!(
+            "Generated IR for function {}:\n{}",
+            &func.signature.name,
+            new_func.display()
+        );
         Ok(())
     }
 
