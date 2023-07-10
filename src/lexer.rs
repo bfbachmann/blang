@@ -183,7 +183,7 @@ mod tests {
         {
             assert_eq!(col, 1);
         } else {
-            panic!("Expected TokenizeError");
+            panic!("expected TokenizeError");
         }
     }
 }

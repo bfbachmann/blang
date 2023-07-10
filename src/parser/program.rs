@@ -48,7 +48,7 @@ impl Program {
             None => {
                 return Err(ParseError::new(
                     ErrorKind::UnexpectedToken,
-                    format!(r#"Expected one of {:#?}"#, expected).as_str(),
+                    format!(r#"expected one of {:#?}"#, expected).as_str(),
                     None,
                 ))
             }
@@ -58,7 +58,7 @@ impl Program {
                 } else {
                     Err(ParseError::new(
                         ErrorKind::UnexpectedToken,
-                        format!(r#"Expected one of {:#?}, but found "{}"#, expected, token)
+                        format!(r#"expected one of {:#?}, but found "{}"#, expected, token)
                             .as_str(),
                         Some(token),
                     ))
@@ -77,14 +77,14 @@ impl Program {
             None => {
                 return Err(ParseError::new(
                     ErrorKind::ExpectedIndent,
-                    "Expected identifier",
+                    "expected identifier",
                     None,
                 ))
             }
             Some(other) => {
                 return Err(ParseError::new(
                     ErrorKind::ExpectedIndent,
-                    format!(r#"Expected identifier, but found "{}""#, other).as_str(),
+                    format!(r#"expected identifier, but found "{}""#, other).as_str(),
                     Some(other),
                 ))
             }

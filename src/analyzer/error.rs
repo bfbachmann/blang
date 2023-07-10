@@ -22,18 +22,18 @@ pub enum ErrorKind {
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ErrorKind::IncompatibleTypes => write!(f, "Incompatible types"),
-            ErrorKind::ExpectedValue => write!(f, "Expected value"),
-            ErrorKind::FunctionNotDefined => write!(f, "Function not defined"),
-            ErrorKind::FunctionAlreadyDefined => write!(f, "Function already defined"),
-            ErrorKind::VariableNotDefined => write!(f, "Variable not defined"),
-            ErrorKind::VariableAlreadyDefined => write!(f, "Variable already defined"),
-            ErrorKind::WrongNumberOfArgs => write!(f, "Wrong number of arguments"),
-            ErrorKind::UnexpectedBreak => write!(f, "Unexpected break"),
-            ErrorKind::UnexpectedReturn => write!(f, "Unexpected return"),
-            ErrorKind::MissingMain => write!(f, "Missing main"),
-            ErrorKind::MissingReturn => write!(f, "Missing return"),
-            ErrorKind::InvalidMain => write!(f, "Invalid main"),
+            ErrorKind::IncompatibleTypes => write!(f, "incompatible types"),
+            ErrorKind::ExpectedValue => write!(f, "expected value"),
+            ErrorKind::FunctionNotDefined => write!(f, "function not defined"),
+            ErrorKind::FunctionAlreadyDefined => write!(f, "function already defined"),
+            ErrorKind::VariableNotDefined => write!(f, "variable not defined"),
+            ErrorKind::VariableAlreadyDefined => write!(f, "variable already defined"),
+            ErrorKind::WrongNumberOfArgs => write!(f, "wrong number of arguments"),
+            ErrorKind::UnexpectedBreak => write!(f, "unexpected break"),
+            ErrorKind::UnexpectedReturn => write!(f, "unexpected return"),
+            ErrorKind::MissingMain => write!(f, "missing main"),
+            ErrorKind::MissingReturn => write!(f, "missing return"),
+            ErrorKind::InvalidMain => write!(f, "invalid main"),
         }
     }
 }
@@ -62,14 +62,14 @@ impl AnalyzeError {
     pub fn new_from_expr(kind: ErrorKind, expr: &Expression, message: &str) -> Self {
         AnalyzeError {
             kind,
-            message: format!("Invalid expression {}: {}", expr, message),
+            message: format!("invalid expression {}: {}", expr, message),
         }
     }
 
     pub fn new_from_statement(kind: ErrorKind, statement: &Statement, message: &str) -> Self {
         AnalyzeError {
             kind,
-            message: format!("Invalid statement {}: {}", statement, message),
+            message: format!("invalid statement {}: {}", statement, message),
         }
     }
 }

@@ -90,7 +90,7 @@ impl Expression {
             // this function was not valid RPN.
             None => Err(ParseError::new(
                 ErrorKind::UnexpectedEndOfExpr,
-                "Unexpected end of expression",
+                "unexpected end of expression",
                 None,
             )),
         }
@@ -237,7 +237,7 @@ impl Expression {
 
                 return Err(ParseError::new(
                     ErrorKind::UnexpectedExprToken,
-                    "Unexpected token in expression",
+                    "unexpected token in expression",
                     Some(op1_token),
                 ));
             }
@@ -248,7 +248,7 @@ impl Expression {
                 if expect_binop_or_end {
                     return Err(ParseError::new(
                         ErrorKind::ExpectedBinOpOrEndOfExpr,
-                        "Expected binary operator or end of expression",
+                        "expected binary operator or end of expression",
                         Some(op1_token),
                     ));
                 }
@@ -281,7 +281,7 @@ impl Expression {
 
                             return Err(ParseError::new(
                                 ErrorKind::UnmatchedCloseParen,
-                                "Unmatched closing parenthesis in expression",
+                                "unmatched closing parenthesis in expression",
                                 Some(op1_token),
                             ));
                         }
@@ -306,7 +306,7 @@ impl Expression {
                 } else {
                     return Err(ParseError::new(
                         ErrorKind::UnmatchedCloseParen,
-                        "Unmatched closing parenthesis in expression",
+                        "unmatched closing parenthesis in expression",
                         Some(op1_token),
                     ));
                 }
@@ -318,7 +318,7 @@ impl Expression {
                 if expect_binop_or_end {
                     return Err(ParseError::new(
                         ErrorKind::ExpectedBinOpOrEndOfExpr,
-                        "Expected binary operator or end of expression",
+                        "expected binary operator or end of expression",
                         Some(op1_token),
                     ));
                 }
@@ -366,7 +366,7 @@ impl Expression {
                     {
                         return Err(ParseError::new(
                             ErrorKind::UseOfDoubleNegative,
-                            "Use of double negative in expression",
+                            "use of double negative in expression",
                             Some(token),
                         ));
                     }
@@ -379,7 +379,7 @@ impl Expression {
                 } else {
                     return Err(ParseError::new(
                         ErrorKind::UnexpectedOperator,
-                        "Unexpected operator",
+                        "unexpected operator",
                         Some(op1_token),
                     ));
                 }
@@ -408,7 +408,7 @@ impl Expression {
                             return Err(ParseError::new(
                                 ErrorKind::ExpectedBeginExpr,
                                 format!(
-                                    "Expected beginning of expression, but found {}",
+                                    "expected beginning of expression, but found {}",
                                     op1_token
                                 )
                                 .as_str(),
@@ -431,7 +431,7 @@ impl Expression {
                                     return Err(ParseError::new(
                                         ErrorKind::ExpectedBasicExpr,
                                         format!(
-                                            "Expected basic expression, but found {}",
+                                            "expected basic expression, but found {}",
                                             op1_token
                                         )
                                         .as_str(),
@@ -441,7 +441,7 @@ impl Expression {
                             } else {
                                 return Err(ParseError::new(
                                     ErrorKind::ExpectedExpr,
-                                    format!("Expected expression, but found {}", op1_token)
+                                    format!("expected expression, but found {}", op1_token)
                                         .as_str(),
                                     Some(op1_token),
                                 ));
@@ -469,7 +469,7 @@ impl Expression {
             {
                 return Err(ParseError::new(
                     ErrorKind::UnmatchedOpenParen,
-                    "Unmatched opening parenthesis in expression",
+                    "unmatched opening parenthesis in expression",
                     Some(token),
                 ));
             }

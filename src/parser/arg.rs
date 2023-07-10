@@ -14,7 +14,11 @@ pub struct Argument {
 
 impl fmt::Display for Argument {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {}", self.typ, self.name)
+        if self.name.is_empty() {
+            write!(f, "{}", self.typ)
+        } else {
+            write!(f, "{} {}", self.typ, self.name)
+        }
     }
 }
 

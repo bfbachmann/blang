@@ -196,7 +196,7 @@ impl FunctionSignature {
                         if !arg_names.insert(arg.name.clone()) {
                             return Err(ParseError::new(
                                 ErrorKind::DuplicateArgName,
-                                format!("Duplicate argument name {}", arg.name).as_str(),
+                                format!("duplicate argument name {}", arg.name).as_str(),
                                 token,
                             ));
                         }
@@ -211,14 +211,14 @@ impl FunctionSignature {
                 None => {
                     return Err(ParseError::new(
                         ErrorKind::ExpectedArgOrEndOfArgs,
-                        r#"Expected argument or ")""#,
+                        r#"expected argument or ")""#,
                         None,
                     ))
                 }
                 Some(other) => {
                     return Err(ParseError::new(
                         ErrorKind::ExpectedArgOrEndOfArgs,
-                        format!(r#"Expected argument or ")", but found "{}""#, other).as_str(),
+                        format!(r#"expected argument or ")", but found "{}""#, other).as_str(),
                         Some(other),
                     ))
                 }

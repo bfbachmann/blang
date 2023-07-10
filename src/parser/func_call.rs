@@ -86,7 +86,7 @@ impl FunctionCall {
                     if args.len() == 0 {
                         return Err(ParseError::new(
                             ErrorKind::ExpectedExprOrCloseParen,
-                            format!(r#"Expected expression or ")", but found "{}"#, comma).as_str(),
+                            format!(r#"expected expression or ")", but found "{}"#, comma).as_str(),
                             Some(comma.clone()),
                         ));
                     }
@@ -111,7 +111,7 @@ impl FunctionCall {
                 None => {
                     return Err(ParseError::new(
                         ErrorKind::UnexpectedEndOfArgs,
-                        "Unexpected end of arguments",
+                        "unexpected end of arguments",
                         None,
                     ));
                 }

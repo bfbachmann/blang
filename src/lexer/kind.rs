@@ -209,6 +209,7 @@ impl TokenKind {
             TokenKind::LessThanOrEqual,
             TokenKind::If,
             TokenKind::Else,
+            TokenKind::ElseIf,
             TokenKind::String,
             TokenKind::BeginClosure,
             TokenKind::EndClosure,
@@ -228,11 +229,6 @@ impl TokenKind {
             if let Some(v) = TokenKind::lex_basic(segment, kind.to_string().as_str(), kind) {
                 return Some(v);
             }
-        }
-
-        let re_else_if = Regex::new(r#"^else\s*if$"#).unwrap();
-        if let Some(v) = TokenKind::lex_regex(segment, re_else_if, TokenKind::ElseIf) {
-            return Some(v);
         }
 
         if let Some(v) = TokenKind::lex_bool_literal(segment) {
@@ -259,13 +255,6 @@ impl TokenKind {
             return Some(token);
         }
         None
-    }
-
-    fn lex_regex(segment: &str, re: Regex, token: TokenKind) -> Option<TokenKind> {
-        match re.is_match(segment.trim()) {
-            true => Some(token),
-            false => None,
-        }
     }
 
     fn lex_bool_literal(segment: &str) -> Option<TokenKind> {

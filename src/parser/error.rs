@@ -36,8 +36,8 @@ pub struct ParseError {
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.token {
-            Some(token) => write!(f, "Parse error at token {}: {}.", token, self.message),
-            None => write!(f, "Parse error: {}.", self.message),
+            Some(token) => write!(f, "parse error at token {}: {}.", token, self.message),
+            None => write!(f, "parse error: {}.", self.message),
         }
     }
 }

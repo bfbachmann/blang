@@ -1,62 +1,74 @@
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::analyze_fn_sig;
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::statement::analyze_statement;
+use crate::analyzer::statement::RichStatement;
 use crate::analyzer::AnalyzeResult;
 use crate::parser::program::Program;
 use crate::parser::statement::Statement;
+use std::os::macos::raw::stat;
 
-pub fn analyze_program(program: &Program) -> AnalyzeResult<()> {
-    let mut ctx = ProgramContext::new();
+#[derive(Debug)]
+pub struct RichProg {
+    pub statements: Vec<RichStatement>,
+}
 
-    // Analyze all function signatures defined at the top level of the program so we can reference
-    // them when we analyze statements.
-    let mut main_fn = None;
-    for statement in &program.statements {
-        match statement {
-            Statement::FunctionDeclaration(func) => {
-                analyze_fn_sig(&mut ctx, &func.signature)?;
+impl RichProg {
+    pub fn from(prog: Program) -> AnalyzeResult<Self> {
+        let mut ctx = ProgramContext::new();
 
-                if func.signature.name == "main" {
-                    main_fn = Some(&func.signature)
+        // Analyze all function signatures defined at the top level of the program so we can reference
+        // them when we analyze statements.
+        let mut main_fn = None;
+        for statement in &prog.statements {
+            match statement {
+                Statement::FunctionDeclaration(func) => {
+                    analyze_fn_sig(&mut ctx, &func.signature)?;
+
+                    if func.signature.name == "main" {
+                        main_fn = Some(&func.signature)
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Make sure a main function was declared.
+        match main_fn {
+            Some(main_sig) => {
+                // Make sure main has no args or return.
+                if main_sig.args.len() != 0 {
+                    return Err(AnalyzeError::new(
+                        ErrorKind::InvalidMain,
+                        "function main cannot have arguments",
+                    ));
+                }
+
+                if let Some(_) = main_sig.return_type {
+                    return Err(AnalyzeError::new(
+                        ErrorKind::InvalidMain,
+                        "function main cannot have a return type",
+                    ));
                 }
             }
-            _ => {}
-        }
-    }
-
-    // Make sure a main function was declared.
-    match main_fn {
-        Some(main_sig) => {
-            // Make sure main has no args or return.
-            if main_sig.args.len() != 0 {
+            None => {
                 return Err(AnalyzeError::new(
-                    ErrorKind::InvalidMain,
-                    "Function main cannot have arguments",
-                ));
-            }
-
-            if let Some(_) = main_sig.return_type {
-                return Err(AnalyzeError::new(
-                    ErrorKind::InvalidMain,
-                    "Function main cannot have a return type",
+                    ErrorKind::MissingMain,
+                    "missing main function",
                 ));
             }
         }
-        None => {
-            return Err(AnalyzeError::new(
-                ErrorKind::MissingMain,
-                "Missing main function",
-            ));
+
+        // Analyze each statement in the program and collect the results.
+        let mut rich_statements = vec![];
+        for statement in prog.statements {
+            let rich_statement = RichStatement::from(&mut ctx, statement)?;
+            rich_statements.push(rich_statement);
         }
-    }
 
-    // Analyze each statement in the program.
-    for statement in &program.statements {
-        analyze_statement(&mut ctx, statement)?;
+        Ok(RichProg {
+            statements: rich_statements,
+        })
     }
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -64,7 +76,7 @@ mod tests {
     use std::io::{BufRead, Cursor};
 
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
-    use crate::analyzer::program::analyze_program;
+    use crate::analyzer::program::RichProg;
     use crate::lexer::token::Token;
     use crate::parser::program::Program;
 
@@ -78,8 +90,8 @@ mod tests {
         "#;
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let prog = Program::from(&mut tokens).expect("should not error");
-        let result = analyze_program(&prog);
-        assert!(matches!(result, Ok(())));
+        let result = RichProg::from(prog);
+        assert!(matches!(result, Ok(_)));
     }
 
     #[test]
@@ -91,8 +103,8 @@ mod tests {
         }"#;
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let prog = Program::from(&mut tokens).expect("should not error");
-        let result = analyze_program(&prog);
-        assert!(matches!(result, Ok(())));
+        let result = RichProg::from(prog);
+        assert!(matches!(result, Ok(_)));
     }
 
     #[test]
@@ -103,7 +115,7 @@ mod tests {
         "#;
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let prog = Program::from(&mut tokens).expect("should not error");
-        let result = analyze_program(&prog);
+        let result = RichProg::from(prog);
         assert!(matches!(
             result,
             Err(AnalyzeError {
@@ -129,8 +141,8 @@ mod tests {
 
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let prog = Program::from(&mut tokens).expect("should not error");
-        let result = analyze_program(&prog);
-        assert!(matches!(result, Ok(())));
+        let result = RichProg::from(prog);
+        assert!(matches!(result, Ok(_)));
     }
 
     #[test]
@@ -186,7 +198,7 @@ mod tests {
         "#;
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let prog = Program::from(&mut tokens).expect("should not error");
-        let result = analyze_program(&prog);
-        assert_eq!(result, Ok(()));
+        let result = RichProg::from(prog);
+        assert!(matches!(result, Ok(_)));
     }
 }

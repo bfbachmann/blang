@@ -1,4 +1,6 @@
 use std::collections::{HashSet, VecDeque};
+use std::fmt;
+use std::fmt::Formatter;
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::token::Token;
@@ -11,6 +13,13 @@ use crate::util;
 #[derive(Debug, Clone)]
 pub struct Conditional {
     pub branches: Vec<Branch>,
+}
+
+impl fmt::Display for Conditional {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        // TODO
+        write!(f, "if ...",)
+    }
 }
 
 impl PartialEq for Conditional {

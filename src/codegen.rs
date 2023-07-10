@@ -10,6 +10,13 @@ use cranelift_codegen::{ir, verify_function};
 use log::debug;
 use target_lexicon::Triple;
 
+use crate::analyzer::closure::RichClosure;
+use crate::analyzer::cond::{RichBranch, RichCond};
+use crate::analyzer::expr::{RichExpr, RichExprKind};
+use crate::analyzer::func::{RichFn, RichRet};
+use crate::analyzer::program::RichProg;
+use crate::analyzer::statement::RichStatement;
+use crate::analyzer::var_dec::RichVarDecl;
 use crate::parser::closure::Closure;
 use crate::parser::cond::Conditional;
 use crate::parser::expr::Expression;
@@ -30,8 +37,8 @@ enum IRGenErrorKind {
 impl fmt::Display for IRGenErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            IRGenErrorKind::InitFailure => write!(f, "Initialization failure"),
-            IRGenErrorKind::FnVerificationFailed => write!(f, "Function verification failed"),
+            IRGenErrorKind::InitFailure => write!(f, "initialization failure"),
+            IRGenErrorKind::FnVerificationFailed => write!(f, "function verification failed"),
         }
     }
 }
@@ -92,12 +99,13 @@ impl FnGenerator<'_> {
     }
 
     /// Generates IR for a statement in the current function.
-    fn gen_statement(&mut self, statement: &Statement) -> IRGenResult<()> {
+    fn gen_statement(&mut self, statement: &RichStatement) -> IRGenResult<()> {
         match statement {
+            // TODO
             // Statement::FunctionDeclaration(func) => self.gen_fn(func),
-            Statement::VariableDeclaration(var_decl) => self.gen_var_decl(var_decl),
-            Statement::Return(expr) => self.gen_return(expr.as_ref()),
-            Statement::Conditional(cond) => self.gen_cond(cond),
+            RichStatement::VariableDeclaration(var_decl) => self.gen_var_decl(var_decl),
+            RichStatement::Return(expr) => self.gen_return(expr),
+            RichStatement::Conditional(cond) => self.gen_cond(cond),
             other => {
                 return Err(IRGenError::new(
                     IRGenErrorKind::InitFailure,
@@ -108,15 +116,15 @@ impl FnGenerator<'_> {
     }
 
     /// Generates IR for a conditional in the current function.
-    fn gen_cond(&mut self, cond: &Conditional) -> IRGenResult<()> {
+    fn gen_cond(&mut self, rich_cond: &RichCond) -> IRGenResult<()> {
         // Create an end block that we can jump to one we're done executing the branch.
         let end_block = self.fn_builder.create_block();
 
-        for branch in &cond.branches {
-            if let Some(branch_cond) = &branch.condition {
+        for branch in &rich_cond.branches {
+            if let Some(branch_cond) = &branch.cond {
                 // Generate the condition variable and the two blocks that we'll branch to based
                 // on the condition.
-                let cond_var = self.gen_expr(&branch_cond);
+                let cond_var = self.gen_expr(branch_cond);
                 let then_block = self.fn_builder.create_block();
                 let else_block = self.fn_builder.create_block();
 
@@ -168,14 +176,14 @@ impl FnGenerator<'_> {
 
     /// Generates IR for a closure in the current function. Note that closures can be inline,
     /// branch bodies, or loop bodies.
-    fn gen_closure(&mut self, closure: &Closure, end_block: Block) -> IRGenResult<()> {
+    fn gen_closure(&mut self, closure: &RichClosure, end_block: Block) -> IRGenResult<()> {
         let mut returned = false;
         for statement in &closure.statements {
             if let Err(e) = self.gen_statement(statement) {
                 return Err(e);
             }
 
-            if let Statement::Return(_) = statement {
+            if let RichStatement::Return(_) = statement {
                 returned = true
             }
         }
@@ -189,19 +197,19 @@ impl FnGenerator<'_> {
     }
 
     /// Generates IR for return statements in the function.
-    fn gen_return(&mut self, expr: Option<&Expression>) -> IRGenResult<()> {
-        if expr.is_none() {
-            self.fn_builder.ins().return_(&[]);
-        } else {
-            let ret_val = self.gen_expr(expr.unwrap());
+    fn gen_return(&mut self, rich_ret: &RichRet) -> IRGenResult<()> {
+        if let Some(val) = &rich_ret.val {
+            let ret_val = self.gen_expr(val);
             self.fn_builder.ins().return_(&[ret_val]);
+        } else {
+            self.fn_builder.ins().return_(&[]);
         }
 
         Ok(())
     }
 
     /// Generates IR for variable declarations in the function.
-    fn gen_var_decl(&mut self, var_decl: &VariableDeclaration) -> IRGenResult<()> {
+    fn gen_var_decl(&mut self, var_decl: &RichVarDecl) -> IRGenResult<()> {
         // Create a new variable.
         let var = self.new_var();
 
@@ -209,7 +217,7 @@ impl FnGenerator<'_> {
         self.declare_var(var, &var_decl.typ);
 
         // Define the variable with its initial value.
-        self.def_var(var, &var_decl.value);
+        self.def_var(var, &var_decl.val);
 
         // Track the variable so we can reference it later.
         self.vars.insert(var_decl.name.clone(), var);
@@ -218,7 +226,7 @@ impl FnGenerator<'_> {
     }
 
     /// Generates IR for unary operations in the function.
-    fn gen_unary_op(&mut self, op: &Operator, expr: &Expression) -> Value {
+    fn gen_unary_op(&mut self, op: &Operator, expr: &RichExpr) -> Value {
         let val = self.gen_expr(expr);
         match op {
             Operator::Not => {
@@ -233,7 +241,7 @@ impl FnGenerator<'_> {
     }
 
     /// Generates IR for binary operations in the function.
-    fn gen_binary_op(&mut self, left: &Expression, op: &Operator, right: &Expression) -> Value {
+    fn gen_binary_op(&mut self, left: &RichExpr, op: &Operator, right: &RichExpr) -> Value {
         let left_val = self.gen_expr(left);
         let right_val = self.gen_expr(right);
 
@@ -273,12 +281,12 @@ impl FnGenerator<'_> {
     }
 
     /// Generates IR for expressions in the function.
-    fn gen_expr(&mut self, expr: &Expression) -> Value {
-        match expr {
-            Expression::BoolLiteral(b) => self.gen_bool_literal(*b),
-            Expression::I64Literal(i) => self.gen_i64_literal(*i),
-            Expression::BinaryOperation(left, op, right) => self.gen_binary_op(left, op, right),
-            Expression::UnaryOperation(op, expr) => self.gen_unary_op(op, expr),
+    fn gen_expr(&mut self, expr: &RichExpr) -> Value {
+        match &expr.kind {
+            RichExprKind::BoolLiteral(b) => self.gen_bool_literal(*b),
+            RichExprKind::I64Literal(i) => self.gen_i64_literal(*i),
+            RichExprKind::BinaryOperation(left, op, right) => self.gen_binary_op(left, op, right),
+            RichExprKind::UnaryOperation(op, expr) => self.gen_unary_op(op, expr),
             other => {
                 panic!("unimplemented expression {}", other)
             }
@@ -286,7 +294,7 @@ impl FnGenerator<'_> {
     }
 
     /// Generates IR for the function body.
-    fn gen_fn_body(&mut self, func: &Function) -> IRGenResult<()> {
+    fn gen_fn_body(&mut self, rich_fn: &RichFn) -> IRGenResult<()> {
         // Create the entry block, to start emitting code in.
         let block0 = self.fn_builder.create_block();
 
@@ -303,12 +311,12 @@ impl FnGenerator<'_> {
 
         // Generate IR for statements.
         let mut returned = false;
-        for statement in &func.body.statements {
+        for statement in &rich_fn.closure.statements {
             if let Err(e) = self.gen_statement(statement) {
                 return Err(e);
             }
 
-            if let Statement::Return(_) = statement {
+            if let RichStatement::Return(_) = statement {
                 returned = true
             }
         }
@@ -323,7 +331,7 @@ impl FnGenerator<'_> {
 
     /// Defines the initial value of the given variable from the given expression using the function
     /// builder.
-    fn def_var(&mut self, var: Variable, expr: &Expression) {
+    fn def_var(&mut self, var: Variable, expr: &RichExpr) {
         let val = self.gen_expr(expr);
         self.fn_builder.def_var(var, val);
     }
@@ -369,7 +377,7 @@ impl IRGenerator {
             Err(e) => {
                 return Err(IRGenError::new(
                     IRGenErrorKind::InitFailure,
-                    format!("Failed to initialize target triple: {}", e).as_str(),
+                    format!("failed to initialize target triple: {}", e).as_str(),
                 ));
             }
         };
@@ -380,7 +388,7 @@ impl IRGenerator {
                 return Err(IRGenError::new(
                     IRGenErrorKind::InitFailure,
                     format!(
-                        "Failed to look up ISA builder for target {}: {}",
+                        "failed to look up ISA builder for target {}: {}",
                         target_triple, e
                     )
                     .as_str(),
@@ -398,7 +406,7 @@ impl IRGenerator {
             Err(err) => {
                 return Err(IRGenError::new(
                     IRGenErrorKind::InitFailure,
-                    format!("Failed to initialize ISA builder {}", err).as_str(),
+                    format!("failed to initialize ISA builder {}", err).as_str(),
                 ));
             }
         };
@@ -406,7 +414,7 @@ impl IRGenerator {
         if let Err(e) = cranelift_native::infer_native_flags(&mut isa_builder) {
             return Err(IRGenError::new(
                 IRGenErrorKind::InitFailure,
-                format!("Failed to infer native flags: {}", e).as_str(),
+                format!("failed to infer native flags: {}", e).as_str(),
             ));
         }
 
@@ -421,7 +429,7 @@ impl IRGenerator {
             Err(e) => {
                 return Err(IRGenError::new(
                     IRGenErrorKind::InitFailure,
-                    format!("Failed to finish building ISA: {}", e).as_str(),
+                    format!("failed to finish building ISA: {}", e).as_str(),
                 ))
             }
         };
@@ -435,11 +443,11 @@ impl IRGenerator {
     }
 
     /// Generates IR for the given program.
-    pub fn gen_prog(&mut self, prog: Program) -> IRGenResult<()> {
+    pub fn gen_prog(&mut self, prog: RichProg) -> IRGenResult<()> {
         // Generate IR for each statement in the program.
-        for statement in &prog.statements {
+        for statement in prog.statements {
             if let Err(e) = match statement {
-                Statement::FunctionDeclaration(func) => self.gen_fn(func),
+                RichStatement::FunctionDeclaration(func) => self.gen_fn(&func),
                 other => {
                     panic!("unimplemented top-level statement: {}", other);
                 }
@@ -452,9 +460,9 @@ impl IRGenerator {
     }
 
     /// Generates IR for a new function.
-    fn gen_fn(&mut self, func: &Function) -> IRGenResult<()> {
+    fn gen_fn(&mut self, rich_fn: &RichFn) -> IRGenResult<()> {
         // Generate the function signature.
-        let sig = self.gen_fn_sig(&func.signature);
+        let sig = self.gen_fn_sig(&rich_fn.signature);
 
         // Create a new function with the signature.
         let fn_index = self.next_fn();
@@ -470,7 +478,7 @@ impl IRGenerator {
         };
 
         // Generate the function body.
-        if let Err(e) = fn_gen.gen_fn_body(func) {
+        if let Err(e) = fn_gen.gen_fn_body(rich_fn) {
             return Err(e);
         }
 
@@ -487,13 +495,13 @@ impl IRGenerator {
 
         // Track the generated function so we can reference it later.
         self.gen_fns.insert(
-            func.signature.name.clone(),
-            GenFn::new(fn_index, func.signature.clone()),
+            rich_fn.signature.name.clone(),
+            GenFn::new(fn_index, rich_fn.signature.clone()),
         );
 
         debug!(
-            "Generated IR for function {}:\n{}",
-            &func.signature.name,
+            "generated IR for function {}:\n{}",
+            &rich_fn.signature.name,
             new_func.display()
         );
         Ok(())

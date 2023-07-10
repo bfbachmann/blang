@@ -86,14 +86,14 @@ impl Statement {
             (None, None) => {
                 return Err(ParseError::new(
                     ErrorKind::UnexpectedEndOfStatement,
-                    "Unexpected end of of statement",
+                    "unexpected end of of statement",
                     None,
                 ))
             }
             (None, Some(&ref token)) | (Some(&ref token), None) => {
                 return Err(ParseError::new(
                     ErrorKind::UnexpectedEndOfStatement,
-                    "Unexpected end of of statement",
+                    "unexpected end of of statement",
                     Some(token.clone()),
                 ))
             }
@@ -230,7 +230,7 @@ impl Statement {
             // If the tokens are anything else, we error because it's an invalid statement.
             (&ref token, _) => Err(ParseError::new(
                 ErrorKind::InvalidStatement,
-                "Invalid statement",
+                "invalid statement",
                 Some(token.clone()),
             )),
         }

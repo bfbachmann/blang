@@ -81,14 +81,14 @@ impl Type {
             None => {
                 return Err(ParseError::new(
                     ErrorKind::ExpectedType,
-                    "Expected type",
+                    "expected type",
                     None,
                 ))
             }
             Some(other) => {
                 return Err(ParseError::new(
                     ErrorKind::ExpectedType,
-                    format!(r#"Expected type, but found "{}""#, other).as_str(),
+                    format!(r#"expected type, but found "{}""#, other).as_str(),
                     Some(other),
                 ))
             }

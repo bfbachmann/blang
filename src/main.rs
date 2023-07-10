@@ -13,8 +13,8 @@ use parser::program::Program;
 use parser::statement::Statement;
 
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::program::analyze_program;
-use crate::analyzer::statement::analyze_statement;
+use crate::analyzer::program::RichProg;
+use crate::analyzer::statement::RichStatement;
 use crate::codegen::IRGenerator;
 
 mod analyzer;
@@ -58,10 +58,10 @@ fn main() {
                 let target = sub_matches.get_one::<String>("target");
                 compile(file_path, target)
             }
-            _ => fatal!("Expected source path"),
+            _ => fatal!("expected source path"),
         },
         Some(("repl", _)) => repl(),
-        _ => unreachable!("No subcommand"),
+        _ => unreachable!("no subcommand"),
     };
 }
 
@@ -77,7 +77,7 @@ fn compile(input_path: &str, target: Option<&String>) {
     // Get a reader from the source file.
     let reader = match open_file(input_path) {
         Ok(r) => r,
-        Err(err) => fatal!(r#"Error opening file "{}": {}"#, input_path, err),
+        Err(err) => fatal!(r#"error opening file "{}": {}"#, input_path, err),
     };
 
     // Break the file into tokens.
@@ -93,9 +93,10 @@ fn compile(input_path: &str, target: Option<&String>) {
     };
 
     // Analyze the program.
-    if let Err(e) = analyze_program(&prog) {
-        fatal!("{}", e);
-    }
+    let rich_prog = match RichProg::from(prog) {
+        Ok(rp) => rp,
+        Err(e) => fatal!("{}", e),
+    };
 
     // Create IR generator.
     let ir_gen_result = match target {
@@ -108,7 +109,7 @@ fn compile(input_path: &str, target: Option<&String>) {
     };
 
     // Generate IR.
-    match ir_gen.gen_prog(prog) {
+    match ir_gen.gen_prog(rich_prog) {
         Ok(_) => {}
         Err(e) => fatal!("{}", e),
     };
@@ -132,7 +133,7 @@ fn repl() {
                 let mut tokens = tokens;
                 'inner: while !tokens.is_empty() {
                     let statement = match Statement::from(&mut tokens) {
-                        Ok(statement) => match analyze_statement(&mut ctx, &statement) {
+                        Ok(statement) => match RichStatement::from(&mut ctx, statement) {
                             Ok(_) => {}
                             Err(e) => {
                                 error!("{}", e);
