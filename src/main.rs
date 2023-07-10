@@ -122,7 +122,7 @@ fn repl() {
     info!("Use ^C to exit. Enter two successive newlines to commit statements.");
 
     let mut ctx = ProgramContext::new();
-    let mut ir_gen = match IRGenerator::new() {
+    let _ir_gen = match IRGenerator::new() {
         Err(e) => fatal!("{}", e),
         Ok(v) => v,
     };
@@ -132,7 +132,7 @@ fn repl() {
             Ok(tokens) => {
                 let mut tokens = tokens;
                 'inner: while !tokens.is_empty() {
-                    let statement = match Statement::from(&mut tokens) {
+                    let _statement = match Statement::from(&mut tokens) {
                         Ok(statement) => match RichStatement::from(&mut ctx, statement) {
                             Ok(_) => {}
                             Err(e) => {

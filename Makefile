@@ -16,6 +16,10 @@ test:
 docs:
 	cargo doc
 
+.PHONY: fix
+fix:
+	cargo fix --allow-dirty
+
 .PHONY: %
 %:
 	cargo run -- build $@.bl

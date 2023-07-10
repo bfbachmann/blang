@@ -5,7 +5,7 @@ use crate::analyzer::statement::RichStatement;
 use crate::analyzer::AnalyzeResult;
 use crate::parser::program::Program;
 use crate::parser::statement::Statement;
-use std::os::macos::raw::stat;
+
 
 #[derive(Debug)]
 pub struct RichProg {

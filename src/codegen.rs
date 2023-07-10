@@ -11,22 +11,22 @@ use log::debug;
 use target_lexicon::Triple;
 
 use crate::analyzer::closure::RichClosure;
-use crate::analyzer::cond::{RichBranch, RichCond};
+use crate::analyzer::cond::{RichCond};
 use crate::analyzer::expr::{RichExpr, RichExprKind};
 use crate::analyzer::func::{RichFn, RichRet};
 use crate::analyzer::program::RichProg;
 use crate::analyzer::statement::RichStatement;
 use crate::analyzer::var_dec::RichVarDecl;
-use crate::parser::closure::Closure;
-use crate::parser::cond::Conditional;
-use crate::parser::expr::Expression;
-use crate::parser::func::Function;
+
+
+
+
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::op::Operator;
-use crate::parser::program::Program;
+
 use crate::parser::r#type::Type;
-use crate::parser::statement::Statement;
-use crate::parser::var_dec::VariableDeclaration;
+
+
 
 /// Represents kinds of errors that happen during IR generation.
 enum IRGenErrorKind {
