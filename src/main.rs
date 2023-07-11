@@ -127,6 +127,9 @@ fn compile(input_path: &str, output_path: &str, target: Option<&String>) {
         Ok(_) => {}
         Err(e) => fatal!("error writing object data to {}: {}", output_path, e),
     };
+
+    info!("compilation succeeded");
+    info!("generated object file {output_path}");
 }
 
 /// Writes object data to a file at the given path.

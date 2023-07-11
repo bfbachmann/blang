@@ -571,6 +571,10 @@ impl IRGenerator {
                 ))
             }
         };
+        debug!(
+            "initializing IR generator for target {}",
+            &target_isa.triple()
+        );
         let obj_builder = match ObjectBuilder::new(
             target_isa,
             "program",
