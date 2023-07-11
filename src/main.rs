@@ -6,6 +6,8 @@ use std::io::{stdin, stdout, BufRead, BufReader, Error, ErrorKind, Result, Write
 use std::process;
 
 use clap::{arg, Command};
+
+use cranelift_object::ObjectProduct;
 use log::{error, info, set_max_level, Level};
 
 use lexer::token::Token;
@@ -46,7 +48,12 @@ fn main() {
             Command::new("build")
                 .about("Builds a binary from Blang source code")
                 .arg(arg!([SRC_PATH]).required(true))
-                .arg(arg!(-t --target <TARGET> "Specifies target ISA triple").required(false)),
+                .arg(arg!(-t --target <TARGET> "Specifies target ISA triple").required(false))
+                .arg(
+                    arg!(-o --out <DST_PATH> "Specifies output file path")
+                        .required(false)
+                        .default_value("out.o"),
+                ),
         )
         .subcommand(Command::new("repl").about("Runs a REPL"))
         .get_matches();
@@ -56,7 +63,8 @@ fn main() {
         Some(("build", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(file_path) => {
                 let target = sub_matches.get_one::<String>("target");
-                compile(file_path, target)
+                let dst_path = sub_matches.get_one::<String>("out").unwrap();
+                compile(file_path, dst_path, target)
             }
             _ => fatal!("expected source path"),
         },
@@ -73,7 +81,7 @@ fn open_file(file_path: &str) -> Result<BufReader<File>> {
 
 /// Compiles a source file for the given target ISA. If there is no target, infers configuration
 /// for the current system.
-fn compile(input_path: &str, target: Option<&String>) {
+fn compile(input_path: &str, output_path: &str, target: Option<&String>) {
     // Get a reader from the source file.
     let reader = match open_file(input_path) {
         Ok(r) => r,
@@ -99,20 +107,35 @@ fn compile(input_path: &str, target: Option<&String>) {
     };
 
     // Create IR generator.
-    let ir_gen_result = match target {
+    let ir_generator = match target {
         Some(t) => IRGenerator::new_for_target(t),
         None => IRGenerator::new(),
     };
-    let mut ir_gen = match ir_gen_result {
+    let ir_generator = match ir_generator {
         Ok(g) => g,
         Err(e) => fatal!("{}", e),
     };
 
     // Generate IR.
-    match ir_gen.gen_prog(rich_prog) {
-        Ok(_) => {}
+    let result = match ir_generator.generate(rich_prog) {
+        Ok(result) => result,
         Err(e) => fatal!("{}", e),
     };
+
+    // Write object data to file.
+    match write_obj_file(output_path, result) {
+        Ok(_) => {}
+        Err(e) => fatal!("error writing object data to {}: {}", output_path, e),
+    };
+}
+
+/// Writes object data to a file at the given path.
+fn write_obj_file(file_path: &str, obj_product: ObjectProduct) -> Result<()> {
+    let mut file = File::create(file_path)?;
+    obj_product
+        .object
+        .write_stream(&mut file)
+        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))
 }
 
 /// Starts a REPL. The REPL will prompt for input and try to interpret it as a statement, then

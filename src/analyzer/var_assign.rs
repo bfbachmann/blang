@@ -2,15 +2,15 @@ use core::fmt;
 use std::fmt::Formatter;
 
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::expr::{RichExpr};
+use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::AnalyzeResult;
 use crate::parser::var_assign::VariableAssignment;
 
 #[derive(PartialEq, Debug)]
 pub struct RichVarAssign {
-    name: String,
-    val: RichExpr,
+    pub name: String,
+    pub val: RichExpr,
 }
 
 impl fmt::Display for RichVarAssign {

@@ -2,3 +2,5 @@
 /target
 *.bl
 *.profraw
+*.o
+*.out

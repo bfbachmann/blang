@@ -350,7 +350,7 @@ mod tests {
             Ok(RichExpr {
                 kind: RichExprKind::FunctionCall(RichFnCall {
                     fn_name: fn_call.fn_name,
-                    rich_args: vec![RichExpr {
+                    args: vec![RichExpr {
                         kind: RichExprKind::BoolLiteral(true),
                         typ: Type::Bool
                     }],

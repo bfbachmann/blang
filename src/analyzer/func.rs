@@ -75,7 +75,7 @@ impl RichFn {
 #[derive(Debug)]
 pub struct RichFnCall {
     pub fn_name: String,
-    pub rich_args: Vec<RichExpr>,
+    pub args: Vec<RichExpr>,
     pub ret_type: Option<Type>,
 }
 
@@ -83,10 +83,10 @@ impl fmt::Display for RichFnCall {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}(", self.fn_name)?;
 
-        for (i, arg) in self.rich_args.iter().enumerate() {
+        for (i, arg) in self.args.iter().enumerate() {
             write!(f, "{}", arg)?;
 
-            if i < self.rich_args.len() - 1 {
+            if i < self.args.len() - 1 {
                 write!(f, ", ")?;
             }
         }
@@ -98,7 +98,7 @@ impl fmt::Display for RichFnCall {
 impl PartialEq for RichFnCall {
     fn eq(&self, other: &Self) -> bool {
         self.fn_name == other.fn_name
-            && util::vectors_are_equal(&self.rich_args, &other.rich_args)
+            && util::vectors_are_equal(&self.args, &other.args)
             && util::optionals_are_equal(&self.ret_type, &other.ret_type)
     }
 }
@@ -164,7 +164,7 @@ impl RichFnCall {
 
         Ok(RichFnCall {
             fn_name: call.fn_name,
-            rich_args,
+            args: rich_args,
             ret_type: fn_sig.return_type.clone(),
         })
     }

@@ -3,35 +3,31 @@ use std::fmt;
 use std::str::FromStr;
 
 use cranelift::prelude::*;
-use cranelift_codegen::ir::UserFuncName;
-use cranelift_codegen::isa::{Builder, OwnedTargetIsa};
+use cranelift_codegen::isa::Builder;
 use cranelift_codegen::settings::{builder, Flags};
-use cranelift_codegen::{ir, verify_function};
+use cranelift_codegen::verify_function;
+use cranelift_module::{Linkage, Module};
+use cranelift_object::{ObjectBuilder, ObjectModule, ObjectProduct};
 use log::debug;
 use target_lexicon::Triple;
 
 use crate::analyzer::closure::RichClosure;
-use crate::analyzer::cond::{RichCond};
+use crate::analyzer::cond::RichCond;
 use crate::analyzer::expr::{RichExpr, RichExprKind};
-use crate::analyzer::func::{RichFn, RichRet};
+use crate::analyzer::func::{RichFn, RichFnCall, RichRet};
 use crate::analyzer::program::RichProg;
 use crate::analyzer::statement::RichStatement;
+use crate::analyzer::var_assign::RichVarAssign;
 use crate::analyzer::var_dec::RichVarDecl;
-
-
-
-
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::op::Operator;
-
 use crate::parser::r#type::Type;
-
-
 
 /// Represents kinds of errors that happen during IR generation.
 enum IRGenErrorKind {
     InitFailure,
     FnVerificationFailed,
+    FnDeclarationFailed,
 }
 
 impl fmt::Display for IRGenErrorKind {
@@ -39,6 +35,7 @@ impl fmt::Display for IRGenErrorKind {
         match self {
             IRGenErrorKind::InitFailure => write!(f, "initialization failure"),
             IRGenErrorKind::FnVerificationFailed => write!(f, "function verification failed"),
+            IRGenErrorKind::FnDeclarationFailed => write!(f, "function declaration failed"),
         }
     }
 }
@@ -67,23 +64,12 @@ impl IRGenError {
 /// Represents the result of IR generation.
 type IRGenResult<T> = Result<T, IRGenError>;
 
-/// Represents functions for which IR has been generated.
-struct GenFn {
-    index: u32,
-    sig: FunctionSignature,
-}
-
-impl GenFn {
-    fn new(index: u32, sig: FunctionSignature) -> Self {
-        GenFn { index, sig }
-    }
-}
-
 /// Generates IR for functions.
 struct FnGenerator<'a> {
     vars: HashMap<String, Variable>,
     fn_builder: FunctionBuilder<'a>,
     var_counter: usize,
+    module: &'a mut ObjectModule,
 }
 
 impl FnGenerator<'_> {
@@ -98,28 +84,65 @@ impl FnGenerator<'_> {
         Variable::new(self.next_var())
     }
 
+    /// Generates IR for the given function.
+    fn generate(mut self, rich_fn: &RichFn) -> IRGenResult<()> {
+        debug!("generating IR for function {}", &rich_fn.signature.name);
+        self.gen_fn_sig(&rich_fn.signature);
+        self.gen_fn_body(rich_fn)?;
+        self.fn_builder.finalize();
+        Ok(())
+    }
+
     /// Generates IR for a statement in the current function.
     fn gen_statement(&mut self, statement: &RichStatement) -> IRGenResult<()> {
+        debug!("generating IR for {}", statement);
+
         match statement {
             // TODO
             // Statement::FunctionDeclaration(func) => self.gen_fn(func),
+            // RichStatement::Break
+            // RichStatement::Loop()
+            // RichStatement::Closure()
             RichStatement::VariableDeclaration(var_decl) => self.gen_var_decl(var_decl),
+            RichStatement::VariableAssignment(var_assign) => self.gen_var_assign(var_assign),
             RichStatement::Return(expr) => self.gen_return(expr),
             RichStatement::Conditional(cond) => self.gen_cond(cond),
+            RichStatement::FunctionCall(call) => {
+                self.gen_call(call);
+                Ok(())
+            }
             other => {
                 return Err(IRGenError::new(
                     IRGenErrorKind::InitFailure,
-                    format!("unimplemented {}", other).as_str(),
+                    format!("unimplemented statement {}", other).as_str(),
                 ))
             }
         }
     }
 
+    /// Generates IR for assignment of a value to an existing variable.
+    fn gen_var_assign(&mut self, var_assign: &RichVarAssign) -> IRGenResult<()> {
+        // Generate IR for the expression being assigned to the variable.
+        let val = self.gen_expr(&var_assign.val);
+
+        // Look up the variable to which we are assigning.
+        let var = self.vars.remove(var_assign.name.as_str()).unwrap();
+
+        // Set the variable value to the result of the expression.
+        self.fn_builder.def_var(var, val);
+
+        // Track the new variable value so we can use it later.
+        self.vars.insert(var_assign.name.clone(), var);
+
+        Ok(())
+    }
+
     /// Generates IR for a conditional in the current function.
     fn gen_cond(&mut self, rich_cond: &RichCond) -> IRGenResult<()> {
-        // Create an end block that we can jump to one we're done executing the branch.
+        // Create an end block that we can jump to once we're done executing the branch body.
         let end_block = self.fn_builder.create_block();
 
+        let mut had_else_case = false;
         for branch in &rich_cond.branches {
             if let Some(branch_cond) = &branch.cond {
                 // Generate the condition variable and the two blocks that we'll branch to based
@@ -147,6 +170,8 @@ impl FnGenerator<'_> {
                 // Continue on the else block.
                 self.fn_builder.switch_to_block(else_block);
             } else {
+                had_else_case = true;
+
                 // There is no branch condition, meaning this is the else case, so we must jump to
                 // the then block.
                 let then_block = self.fn_builder.create_block();
@@ -163,6 +188,12 @@ impl FnGenerator<'_> {
                     return Err(e);
                 }
             }
+        }
+
+        // If there was no else case, we need to make sure we don't leave the else block from
+        // the last branch dangling. We do this by simply inserting a jump to the end block.
+        if !had_else_case {
+            self.fn_builder.ins().jump(end_block, &[]);
         }
 
         // Seal the end block before returning, because we know nothing else will branch/jump to it.
@@ -230,11 +261,10 @@ impl FnGenerator<'_> {
         let val = self.gen_expr(expr);
         match op {
             Operator::Not => {
-                // Make sure the boolean value is either all 0s (representing false) or all 1s
-                // (representing true).
-                let tmp = self.fn_builder.ins().bmask(ir::types::I8, val);
                 // Bitwise not to flip all the bits.
-                self.fn_builder.ins().bnot(tmp)
+                let result = self.fn_builder.ins().bnot(val);
+                // Bitwise and with 1 to ensure the result is either 0 (false) or all 1 (true).
+                self.fn_builder.ins().band_imm(result, 1)
             }
             _ => panic!("invalid unary operator {}", op),
         }
@@ -253,9 +283,58 @@ impl FnGenerator<'_> {
             Operator::Modulo => self.fn_builder.ins().urem(left_val, right_val),
             Operator::LogicalAnd => self.fn_builder.ins().band(left_val, right_val),
             Operator::LogicalOr => self.fn_builder.ins().bor(left_val, right_val),
-            // TODO: handle comparators based on operand types
-            // Operator::EqualTo =>
-            // Operator::NotEqualTo =>
+            Operator::EqualTo => match (&left.typ, &right.typ) {
+                (Type::Bool, Type::Bool) => {
+                    // Compare the bools. This will return -1 if they're equal and -0 otherwise.
+                    let result = self
+                        .fn_builder
+                        .ins()
+                        .icmp(IntCC::Equal, left_val, right_val);
+
+                    // Bitwise and the result with 1 to zero the sign bit.
+                    self.fn_builder.ins().band_imm(result, 1)
+                }
+                (Type::I64, Type::I64) => {
+                    // Compare the i64s, returning -1 if they're equal and -0 otherwise.
+                    let result = self
+                        .fn_builder
+                        .ins()
+                        .icmp(IntCC::Equal, left_val, right_val);
+
+                    // Bitwise and with 1 to make sure the result is either 0 or 1.
+                    self.fn_builder.ins().band_imm(result, 1)
+                }
+                (_, _) => panic!(
+                    "operands of == expression have mismatched or unsupported types {} and {}",
+                    left.typ, right.typ
+                ),
+            },
+            Operator::NotEqualTo => match (&left.typ, &right.typ) {
+                (Type::Bool, Type::Bool) => {
+                    // Compare the bools. This will return -1 if they're equal and -0 otherwise.
+                    let result = self
+                        .fn_builder
+                        .ins()
+                        .icmp(IntCC::NotEqual, left_val, right_val);
+
+                    // Bitwise and the result with 1 to zero the sign bit.
+                    self.fn_builder.ins().band_imm(result, 1)
+                }
+                (Type::I64, Type::I64) => {
+                    // Compare the i64s, returning -1 if they're equal and -0 otherwise.
+                    let result = self
+                        .fn_builder
+                        .ins()
+                        .icmp(IntCC::NotEqual, left_val, right_val);
+
+                    // Bitwise and with 1 to make sure the result is either 0 or 1.
+                    self.fn_builder.ins().band_imm(result, 1)
+                }
+                (_, _) => panic!(
+                    "operands of == expression have mismatched or unsupported types {} and {}",
+                    left.typ, right.typ
+                ),
+            },
             Operator::GreaterThan => {
                 self.fn_builder
                     .ins()
@@ -283,6 +362,8 @@ impl FnGenerator<'_> {
     /// Generates IR for expressions in the function.
     fn gen_expr(&mut self, expr: &RichExpr) -> Value {
         match &expr.kind {
+            RichExprKind::FunctionCall(call) => self.gen_call(call),
+            RichExprKind::VariableReference(name) => self.gen_var_ref(name.to_string()),
             RichExprKind::BoolLiteral(b) => self.gen_bool_literal(*b),
             RichExprKind::I64Literal(i) => self.gen_i64_literal(*i),
             RichExprKind::BinaryOperation(left, op, right) => self.gen_binary_op(left, op, right),
@@ -293,21 +374,88 @@ impl FnGenerator<'_> {
         }
     }
 
+    /// Generates IR for a function call.
+    fn gen_call(&mut self, call: &RichFnCall) -> Value {
+        // Attach argument types to the function signature.
+        let mut sig = self.module.make_signature();
+        sig.params = call.args.iter().map(|a| gen_abi_param(&a.typ)).collect();
+
+        // Attach return type to the function signature, if one exists.
+        if let Some(ret_type) = &call.ret_type {
+            sig.returns.push(gen_abi_param(ret_type));
+        }
+
+        // Import the function with the matching signature from the module.
+        let fn_id = self
+            .module
+            .declare_function(&call.fn_name, Linkage::Import, &sig)
+            .expect("called function should exist");
+        let fn_ref = self
+            .module
+            .declare_func_in_func(fn_id, self.fn_builder.func);
+
+        // Collect passed argument values.
+        let arg_vals: Vec<Value> = call.args.iter().map(|a| self.gen_expr(a)).collect();
+
+        // Generate instructions to call the function with the collected args and return the result.
+        let call = self.fn_builder.ins().call(fn_ref, arg_vals.as_slice());
+        self.fn_builder.inst_results(call)[0]
+    }
+
+    /// Generates IR for a variable reference.
+    fn gen_var_ref(&mut self, name: String) -> Value {
+        self.fn_builder
+            .use_var(self.vars.get(name.as_str()).unwrap().clone())
+    }
+
+    /// Populates the current function's signature with information from the given signature.
+    fn gen_fn_sig(&mut self, sig: &FunctionSignature) {
+        // Add the function argument types.
+        for arg in &sig.args {
+            self.fn_builder
+                .func
+                .signature
+                .params
+                .push(gen_abi_param(&arg.typ));
+        }
+
+        // Add the return type, if there is one.
+        if sig.return_type.is_some() {
+            self.fn_builder
+                .func
+                .signature
+                .returns
+                .push(gen_abi_param(sig.return_type.as_ref().unwrap()));
+        }
+    }
+
     /// Generates IR for the function body.
     fn gen_fn_body(&mut self, rich_fn: &RichFn) -> IRGenResult<()> {
         // Create the entry block, to start emitting code in.
-        let block0 = self.fn_builder.create_block();
+        let entry_block = self.fn_builder.create_block();
 
         // Since this is the entry block, add block parameters corresponding to the function's
         // parameters.
         self.fn_builder
-            .append_block_params_for_function_params(block0);
+            .append_block_params_for_function_params(entry_block);
 
         // Tell the builder to emit code in this block.
-        self.fn_builder.switch_to_block(block0);
+        self.fn_builder.switch_to_block(entry_block);
 
         // Seal the block since nothing else can jump to it.
-        self.fn_builder.seal_block(block0);
+        self.fn_builder.seal_block(entry_block);
+
+        // Declare and define arguments as variables so we can reference them later in function
+        // body.
+        for (i, arg) in rich_fn.signature.args.iter().enumerate() {
+            let arg_var = self.new_var();
+            self.fn_builder.declare_var(arg_var, gen_type(&arg.typ));
+
+            let arg_val = self.fn_builder.block_params(entry_block)[i];
+            self.fn_builder.def_var(arg_var, arg_val);
+
+            self.vars.insert(arg.name.clone(), arg_var);
+        }
 
         // Generate IR for statements.
         let mut returned = false;
@@ -360,13 +508,10 @@ impl FnGenerator<'_> {
 
 /// Generates IR for a program.
 pub struct IRGenerator {
-    target_isa: OwnedTargetIsa,
-    /// Tracks functions for which IR has been generated.
-    gen_fns: HashMap<String, GenFn>,
-    /// Represents the index of the next function to be generated.
-    fn_counter: u32,
     /// Stores IR generator settings.
     flags: Flags,
+    /// For collecting functions and data objects and linking them together.
+    module: ObjectModule,
 }
 
 impl IRGenerator {
@@ -401,7 +546,7 @@ impl IRGenerator {
 
     /// Creates a new IR generator configured for the host system.
     pub fn new() -> IRGenResult<Self> {
-        let mut isa_builder = match cranelift_native::builder() {
+        let isa_builder = match cranelift_native::builder() {
             Ok(builder) => builder,
             Err(err) => {
                 return Err(IRGenError::new(
@@ -410,13 +555,6 @@ impl IRGenerator {
                 ));
             }
         };
-
-        if let Err(e) = cranelift_native::infer_native_flags(&mut isa_builder) {
-            return Err(IRGenError::new(
-                IRGenErrorKind::InitFailure,
-                format!("failed to infer native flags: {}", e).as_str(),
-            ));
-        }
 
         IRGenerator::new_for_isa(isa_builder)
     }
@@ -433,104 +571,98 @@ impl IRGenerator {
                 ))
             }
         };
-
-        Ok(IRGenerator {
+        let obj_builder = match ObjectBuilder::new(
             target_isa,
-            gen_fns: HashMap::new(),
-            fn_counter: 0,
-            flags,
-        })
+            "program",
+            cranelift_module::default_libcall_names(),
+        ) {
+            Ok(ob) => ob,
+            Err(e) => {
+                return Err(IRGenError::new(
+                    IRGenErrorKind::InitFailure,
+                    format!("failed to initialize object builder: {}", e).as_str(),
+                ))
+            }
+        };
+        let module = ObjectModule::new(obj_builder);
+
+        Ok(IRGenerator { flags, module })
     }
 
-    /// Generates IR for the given program.
-    pub fn gen_prog(&mut self, prog: RichProg) -> IRGenResult<()> {
+    /// Generates IR for the given program, returning the object product that can be used to output
+    /// machine code.
+    pub fn generate(mut self, prog: RichProg) -> IRGenResult<ObjectProduct> {
         // Generate IR for each statement in the program.
-        for statement in prog.statements {
-            if let Err(e) = match statement {
-                RichStatement::FunctionDeclaration(func) => self.gen_fn(&func),
+        for statement in &prog.statements {
+            match statement {
+                RichStatement::FunctionDeclaration(func) => self.gen_fn(func)?,
+                // TODO: support top-level data declarations
                 other => {
-                    panic!("unimplemented top-level statement: {}", other);
+                    panic!("unsupported top-level statement: {}", other);
                 }
-            } {
-                return Err(e);
-            }
+            };
         }
 
-        Ok(())
+        // Finalize all reclocations and return the compilation result.
+        Ok(self.module.finish())
     }
 
     /// Generates IR for a new function.
     fn gen_fn(&mut self, rich_fn: &RichFn) -> IRGenResult<()> {
-        // Generate the function signature.
-        let sig = self.gen_fn_sig(&rich_fn.signature);
-
-        // Create a new function with the signature.
-        let fn_index = self.next_fn();
-        let mut new_func = ir::Function::with_name_signature(UserFuncName::user(0, fn_index), sig);
-
         // Create a new function builder that we'll use to build this function.
         let mut fn_builder_ctx = FunctionBuilderContext::new();
-        let fn_builder = FunctionBuilder::new(&mut new_func, &mut fn_builder_ctx);
-        let mut fn_gen = FnGenerator {
+        let mut fn_ctx = self.module.make_context();
+        let fn_gen = FnGenerator {
             vars: HashMap::new(),
-            fn_builder,
+            fn_builder: FunctionBuilder::new(&mut fn_ctx.func, &mut fn_builder_ctx),
             var_counter: 0,
+            module: &mut self.module,
         };
 
-        // Generate the function body.
-        if let Err(e) = fn_gen.gen_fn_body(rich_fn) {
-            return Err(e);
-        }
+        // Generate IR for the function.
+        fn_gen.generate(rich_fn)?;
 
-        // Tell the builder we're done with this function.
-        fn_gen.fn_builder.finalize();
+        // Verify the generated function IR.
+        verify_function(&fn_ctx.func, &self.flags).map_err(|e| {
+            IRGenError::new(IRGenErrorKind::FnVerificationFailed, e.to_string().as_str())
+        })?;
 
-        // Verify the function.
-        if let Err(e) = verify_function(&new_func, &self.flags) {
-            return Err(IRGenError::new(
-                IRGenErrorKind::FnVerificationFailed,
-                e.to_string().as_str(),
-            ));
-        }
+        // Declare the function in the module and export it. For now, all top-level functions
+        // are exported.
+        let fn_id = self
+            .module
+            .declare_function(
+                &rich_fn.signature.name,
+                Linkage::Export,
+                &fn_ctx.func.signature,
+            )
+            .map_err(|e| {
+                IRGenError::new(
+                    IRGenErrorKind::FnDeclarationFailed,
+                    format!("error declaring function {}: {}", rich_fn.signature.name, e).as_str(),
+                )
+            })?;
 
-        // Track the generated function so we can reference it later.
-        self.gen_fns.insert(
-            rich_fn.signature.name.clone(),
-            GenFn::new(fn_index, rich_fn.signature.clone()),
-        );
+        // Define the function to complete its compilation.
+        self.module
+            .define_function(fn_id, &mut fn_ctx)
+            .map_err(|e| {
+                IRGenError::new(
+                    IRGenErrorKind::FnDeclarationFailed,
+                    format!("error defining function {}: {}", rich_fn.signature.name, e).as_str(),
+                )
+            })?;
 
         debug!(
             "generated IR for function {}:\n{}",
             &rich_fn.signature.name,
-            new_func.display()
+            fn_ctx.func.display()
         );
+
+        // Clear the function context since we're done with it.
+        self.module.clear_context(&mut fn_ctx);
+
         Ok(())
-    }
-
-    /// Creates a function signature.
-    fn gen_fn_sig(&mut self, sig: &FunctionSignature) -> Signature {
-        // Define the function signature.
-        let mut fn_sig = Signature::new(self.target_isa.default_call_conv());
-
-        // Add the function argument types.
-        for arg in &sig.args {
-            fn_sig.params.push(gen_abi_param(&arg.typ));
-        }
-
-        // Add the return type, if there is one.
-        if sig.return_type.is_some() {
-            fn_sig
-                .returns
-                .push(gen_abi_param(sig.return_type.as_ref().unwrap()));
-        }
-
-        fn_sig
-    }
-
-    /// Returns the next function identifier.
-    fn next_fn(&mut self) -> u32 {
-        self.fn_counter += 1;
-        self.fn_counter - 1
     }
 }
 
