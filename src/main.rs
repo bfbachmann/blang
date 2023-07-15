@@ -6,8 +6,6 @@ use std::io::{stdin, stdout, BufRead, BufReader, Error, ErrorKind, Result, Write
 use std::process;
 
 use clap::{arg, Command};
-
-use cranelift_object::ObjectProduct;
 use log::{error, info, set_max_level, Level};
 
 use lexer::token::Token;
@@ -17,10 +15,9 @@ use parser::statement::Statement;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::program::RichProg;
 use crate::analyzer::statement::RichStatement;
-use crate::codegen::IRGenerator;
 
 mod analyzer;
-mod codegen;
+mod compiler;
 mod lexer;
 mod parser;
 mod util;
@@ -81,7 +78,7 @@ fn open_file(file_path: &str) -> Result<BufReader<File>> {
 
 /// Compiles a source file for the given target ISA. If there is no target, infers configuration
 /// for the current system.
-fn compile(input_path: &str, output_path: &str, target: Option<&String>) {
+fn compile(input_path: &str, _output_path: &str, _target: Option<&String>) {
     // Get a reader from the source file.
     let reader = match open_file(input_path) {
         Ok(r) => r,
@@ -101,44 +98,12 @@ fn compile(input_path: &str, output_path: &str, target: Option<&String>) {
     };
 
     // Analyze the program.
-    let rich_prog = match RichProg::from(prog) {
+    let _rich_prog = match RichProg::from(prog) {
         Ok(rp) => rp,
         Err(e) => fatal!("{}", e),
     };
 
-    // Create IR generator.
-    let ir_generator = match target {
-        Some(t) => IRGenerator::new_for_target(t),
-        None => IRGenerator::new(),
-    };
-    let ir_generator = match ir_generator {
-        Ok(g) => g,
-        Err(e) => fatal!("{}", e),
-    };
-
-    // Generate IR.
-    let result = match ir_generator.generate(rich_prog) {
-        Ok(result) => result,
-        Err(e) => fatal!("{}", e),
-    };
-
-    // Write object data to file.
-    match write_obj_file(output_path, result) {
-        Ok(_) => {}
-        Err(e) => fatal!("error writing object data to {}: {}", output_path, e),
-    };
-
-    info!("compilation succeeded");
-    info!("generated object file {output_path}");
-}
-
-/// Writes object data to a file at the given path.
-fn write_obj_file(file_path: &str, obj_product: ObjectProduct) -> Result<()> {
-    let mut file = File::create(file_path)?;
-    obj_product
-        .object
-        .write_stream(&mut file)
-        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))
+    // TODO: compile program
 }
 
 /// Starts a REPL. The REPL will prompt for input and try to interpret it as a statement, then
@@ -148,10 +113,6 @@ fn repl() {
     info!("Use ^C to exit. Enter two successive newlines to commit statements.");
 
     let mut ctx = ProgramContext::new();
-    let _ir_gen = match IRGenerator::new() {
-        Err(e) => fatal!("{}", e),
-        Ok(v) => v,
-    };
 
     loop {
         match repl_collect_tokens() {

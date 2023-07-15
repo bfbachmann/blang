@@ -57,3 +57,7 @@ make test
 # Compile Blang source code in file "my_code.bl"
 make my_code
 ```
+
+## Requirements
+
+Rust, Cargo, and a working installation of LLVM (currently using v15.0.0).

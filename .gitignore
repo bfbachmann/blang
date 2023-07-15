@@ -4,3 +4,4 @@
 *.profraw
 *.o
 *.out
+.cargo

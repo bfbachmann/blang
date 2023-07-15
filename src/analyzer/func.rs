@@ -30,12 +30,12 @@ pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) -> Anal
 #[derive(PartialEq, Debug)]
 pub struct RichFn {
     pub signature: FunctionSignature,
-    pub closure: RichClosure,
+    pub body: RichClosure,
 }
 
 impl fmt::Display for RichFn {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "function with body {}", &self.closure)
+        write!(f, "function with body {}", &self.body)
     }
 }
 
@@ -67,7 +67,7 @@ impl RichFn {
 
         Ok(RichFn {
             signature: func.signature,
-            closure: rich_closure,
+            body: rich_closure,
         })
     }
 }

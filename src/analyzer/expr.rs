@@ -137,7 +137,7 @@ impl RichExpr {
                 Ok(RichExpr {
                     kind: RichExprKind::AnonFunction(Box::new(RichFn {
                         signature: anon_fn.signature.clone(),
-                        closure: rich_closure,
+                        body: rich_closure,
                     })),
                     typ: Type::Function(Box::new(anon_fn.signature)),
                 })
