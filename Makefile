@@ -1,8 +1,8 @@
 # Enable debug logs.
-export RUST_LOG=debug
+export RUST_LOG=trace
 
 # Enable stack traces.
-export RUST_BACKTRACE=1
+export RUST_BACKTRACE=full
 
 # Run the REPL.
 .PHONY: repl

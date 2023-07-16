@@ -6,8 +6,14 @@ use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::passes::PassManager;
 use inkwell::targets::TargetTriple;
-use inkwell::types::{AnyType, AnyTypeEnum, AsTypeRef, BasicMetadataTypeEnum, FunctionType};
-use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntMathValue, PointerValue};
+use inkwell::types::{
+    AnyType, AnyTypeEnum, AsTypeRef, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType,
+};
+use inkwell::values::{
+    AnyValue, AsValueRef, BasicValue, BasicValueEnum, FunctionValue, IntMathValue, IntValue,
+    PointerValue,
+};
+use inkwell::IntPredicate;
 use llvm_sys::core::LLVMFunctionType;
 use llvm_sys::prelude::LLVMTypeRef;
 use log::debug;
@@ -88,9 +94,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
         // Define function arguments as variables on the stack so they can be referenced in blocks.
         for (arg_val, arg) in fn_val.get_param_iter().zip(func.signature.args.iter()) {
-            let alloc = self.create_entry_alloc(arg.name.as_str(), &arg.typ);
-            self.builder.build_store(alloc, arg_val);
-            self.vars.insert(arg.name.clone(), alloc);
+            self.create_var(arg.name.as_str(), &arg.typ, arg_val);
         }
 
         // Compile the function body. This will return true if the function already ends in an
@@ -118,6 +122,27 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
     }
 
+    /// Creates and initializes a new variable with the given name, type, and initial value.
+    /// Panics if a variable by the same name already exists.
+    fn create_var(&mut self, name: &str, typ: &Type, val: BasicValueEnum) {
+        let ptr = self.create_entry_alloc(name, typ);
+        self.builder.build_store(ptr, val);
+        assert!(self.vars.insert(name.to_string(), ptr).is_none());
+    }
+
+    /// Assigns the value to the variable with the given name. Panics if no such variable exists.
+    fn assign_var(&mut self, name: &str, val: BasicValueEnum) {
+        let var = self.vars.get(name).unwrap();
+        self.builder.build_store(*var, val);
+    }
+
+    /// Gets the value of the variable with the given name. Panics if no such variable exists.
+    fn get_var(&self, name: &str) -> BasicValueEnum<'ctx> {
+        let var = self.vars.get(name).unwrap();
+        let val = self.builder.build_load(var.get_type(), *var, name);
+        val
+    }
+
     /// Creates a new stack allocation instruction in the entry block of the current function.
     fn create_entry_alloc(&self, name: &str, typ: &Type) -> PointerValue<'ctx> {
         let builder = self.context.create_builder();
@@ -128,18 +153,17 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             None => builder.position_at_end(entry),
         }
 
-        match typ {
-            Type::I64 => builder.build_alloca(self.context.i64_type(), name),
-            Type::Bool => builder.build_alloca(self.context.bool_type(), name),
-            other => panic!("unsupported type {other}"),
-        }
+        builder.build_alloca(get_basic_type(self.context, typ), name)
     }
 
     /// Compiles all statements in the closure. Returns true if the closure returns unconditionally.
     fn compile_closure(&mut self, closure: &RichClosure) -> CompileResult<bool> {
-        let mut returns = !closure.statements.is_empty();
-        for statement in &closure.statements {
-            returns &= self.compile_statement(statement)?;
+        let mut returns = false;
+        for (i, statement) in closure.statements.iter().enumerate() {
+            let returned = self.compile_statement(statement)?;
+            if i == closure.statements.len() - 1 {
+                returns = returned
+            }
         }
 
         Ok(returns)
@@ -161,7 +185,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// Converts a `FunctionSignature` into an LLVM `FunctionType`.
     fn create_fn_type(&self, sig: &FunctionSignature) -> FunctionType<'ctx> {
         // Get return type.
-        let ret_type = get_type(self.context, sig.return_type.as_ref());
+        let ret_type = get_any_type(self.context, sig.return_type.as_ref());
 
         // Get arg types.
         let arg_types = sig
@@ -191,14 +215,18 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     fn compile_statement(&mut self, statement: &RichStatement) -> CompileResult<bool> {
         match statement {
             RichStatement::VariableDeclaration(decl) => {
-                panic!("{} not yet supported", decl);
+                // Get the value of the expression being assigned to the variable.
+                let val = self.compile_expr(&decl.val);
+
+                // Create and initialize the variable.
+                self.create_var(decl.name.as_str(), &decl.typ, val);
             }
             RichStatement::VariableAssignment(assign) => {
-                panic!("{} not yet supported", assign);
+                let val = self.compile_expr(&assign.val);
+                self.assign_var(assign.name.as_str(), val);
             }
             RichStatement::FunctionDeclaration(func) => {
                 let fn_val = self.compile_fn(func)?;
-                debug!("compiled function:\n{fn_val}");
             }
             RichStatement::Closure(closure) => {
                 panic!("{} not yet supported", closure);
@@ -224,6 +252,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         Ok(false)
     }
 
+    /// Compiles a return statement.
     fn compile_return(&self, ret: &RichRet) {
         match &ret.val {
             Some(expr) => {
@@ -236,43 +265,209 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
     }
 
+    /// Compiles an arbitrary expression.
     fn compile_expr(&self, expr: &RichExpr) -> BasicValueEnum<'ctx> {
         match &expr.kind {
-            RichExprKind::VariableReference(name) => match self.vars.get(name) {
-                Some(&var) => self.builder.build_load(var.get_type(), var, name.as_str()),
-                None => panic!("variable {name} does not exist in this scope"),
-            },
-            RichExprKind::BoolLiteral(b) => match b {
-                true => self
-                    .context
-                    .bool_type()
-                    .const_all_ones()
-                    .as_basic_value_enum(),
-                false => self.context.bool_type().const_zero().as_basic_value_enum(),
-            },
+            RichExprKind::VariableReference(name) => self.get_var(name),
+
+            RichExprKind::BoolLiteral(b) => self
+                .context
+                .bool_type()
+                .const_int(*b as u64, false)
+                .as_basic_value_enum(),
+
             RichExprKind::I64Literal(i) => self
                 .context
                 .i64_type()
                 .const_int(i.abs() as u64, *i < 0)
                 .as_basic_value_enum(),
+
             // RichExprKind::StringLiteral(String),
             // RichExprKind::FunctionCall(RichFnCall),
             // RichExprKind::AnonFunction(Box<RichFn>),
-            RichExprKind::UnaryOperation(op, expr) => {
-                // Only the not operator is supported as a unary operator at the moment.
-                if *op != Operator::Not {
-                    panic!("unexpected unary operator {op}");
-                }
+            RichExprKind::UnaryOperation(op, expr) => self.compile_unary_op(op, expr),
 
-                let expr_val = self.compile_expr(expr);
-                let result = self.builder.build_not(expr_val.into_int_value(), "test");
-                result.as_basic_value_enum()
+            RichExprKind::BinaryOperation(left_expr, op, right_expr) => {
+                self.compile_bin_op(left_expr, op, right_expr)
             }
-            // RichExprKind::BinaryOperation(Box<RichExpr>, Operator, Box<RichExpr>),
-            // TODO
             other => {
                 panic!("{other} not implemented");
             }
+        }
+    }
+
+    /// Compiles a unary operation expression.
+    fn compile_unary_op(&self, op: &Operator, expr: &RichExpr) -> BasicValueEnum<'ctx> {
+        // Only the not operator is supported as a unary operator at the moment.
+        if *op != Operator::Not {
+            panic!("unsupported unary operator {op}");
+        }
+
+        // Compile the operand expression.
+        let expr_val = self.compile_expr(expr);
+
+        // If the value is a pointer (i.e. a variable reference), we need to get the bool
+        // value it points to.
+        let operand = if expr_val.is_pointer_value() {
+            self.builder.build_ptr_to_int(
+                expr_val.into_pointer_value(),
+                self.context.bool_type(),
+                "negatedbool",
+            )
+        } else {
+            expr_val.into_int_value()
+        };
+
+        // Build the logical not as the result of the int compare != 0.
+        let result = self.builder.build_int_compare(
+            IntPredicate::NE,
+            operand,
+            self.context.bool_type().const_int(0, false),
+            "test",
+        );
+
+        result
+            .const_cast(self.context.bool_type(), false)
+            .as_basic_value_enum()
+    }
+
+    /// Compiles a binary operation expression.
+    fn compile_bin_op(
+        &self,
+        left_expr: &RichExpr,
+        op: &Operator,
+        right_expr: &RichExpr,
+    ) -> BasicValueEnum<'ctx> {
+        let lhs = self.compile_expr(left_expr);
+        let rhs = self.compile_expr(right_expr);
+
+        match op {
+            // Arithmetic operators.
+            Operator::Add
+            | Operator::Subtract
+            | Operator::Multiply
+            | Operator::Divide
+            | Operator::Modulo => self.compile_arith_op(lhs, op, rhs).as_basic_value_enum(),
+
+            // Comparators.
+            Operator::EqualTo
+            | Operator::NotEqualTo
+            | Operator::GreaterThan
+            | Operator::LessThan
+            | Operator::GreaterThanOrEqual
+            | Operator::LessThanOrEqual => self.compile_cmp(lhs, op, rhs).as_basic_value_enum(),
+
+            // Logical operators.
+            Operator::LogicalAnd | Operator::LogicalOr => {
+                self.compile_logical_op(lhs, op, rhs).as_basic_value_enum()
+            }
+
+            other => panic!("unsupported operator {other}"),
+        }
+    }
+
+    /// Compiles a logical (boolean) operation expression.
+    fn compile_logical_op(
+        &self,
+        lhs: BasicValueEnum<'ctx>,
+        op: &Operator,
+        rhs: BasicValueEnum<'ctx>,
+    ) -> IntValue<'ctx> {
+        // Expect both operands to be of type bool.
+        let lhs = self.get_bool(lhs);
+        let rhs = self.get_bool(rhs);
+
+        match op {
+            Operator::LogicalAnd => self.builder.build_and(lhs, rhs, "and"),
+            Operator::LogicalOr => self.builder.build_or(lhs, rhs, "or"),
+            other => panic!("unexpected logical operator {other}"),
+        }
+    }
+
+    /// Compiles a comparison operation expression.
+    fn compile_cmp(
+        &self,
+        lhs: BasicValueEnum<'ctx>,
+        op: &Operator,
+        rhs: BasicValueEnum<'ctx>,
+    ) -> IntValue<'ctx> {
+        // TODO: will it work if we always treat operands as ints?
+        let lhs = self.get_int(lhs);
+        let rhs = self.get_int(rhs);
+
+        match op {
+            Operator::EqualTo => self
+                .builder
+                .build_int_compare(IntPredicate::EQ, lhs, rhs, "eq"),
+            Operator::NotEqualTo => {
+                self.builder
+                    .build_int_compare(IntPredicate::NE, lhs, rhs, "ne")
+            }
+            Operator::GreaterThan => {
+                self.builder
+                    .build_int_compare(IntPredicate::SGT, lhs, rhs, "gt")
+            }
+            Operator::LessThan => self
+                .builder
+                .build_int_compare(IntPredicate::SLT, lhs, rhs, "lt"),
+            Operator::GreaterThanOrEqual => {
+                self.builder
+                    .build_int_compare(IntPredicate::SGE, lhs, rhs, "ge")
+            }
+            Operator::LessThanOrEqual => {
+                self.builder
+                    .build_int_compare(IntPredicate::SLE, lhs, rhs, "le")
+            }
+            other => panic!("unexpected comparison operator {other}"),
+        }
+    }
+
+    /// Compiles a binary arithmetic operation expression.
+    fn compile_arith_op(
+        &self,
+        lhs: BasicValueEnum<'ctx>,
+        op: &Operator,
+        rhs: BasicValueEnum<'ctx>,
+    ) -> IntValue<'ctx> {
+        // Expect both operands to be of type i64.
+        let lhs = self.get_int(lhs);
+        let rhs = self.get_int(rhs);
+
+        match op {
+            Operator::Add => self.builder.build_int_add(lhs, rhs, "sum"),
+            Operator::Subtract => self.builder.build_int_sub(lhs, rhs, "diff"),
+            Operator::Multiply => self.builder.build_int_mul(lhs, rhs, "prod"),
+            Operator::Divide => self.builder.build_int_signed_div(lhs, rhs, "quot"),
+            Operator::Modulo => self.builder.build_int_signed_rem(lhs, rhs, "rem"),
+            other => panic!("unexpected arithmetic operator {other}"),
+        }
+    }
+
+    /// Returns the given value as a boolean int value. This is useful for cases where the value may
+    /// by a pointer to a bool.
+    fn get_bool(&self, val: BasicValueEnum<'ctx>) -> IntValue<'ctx> {
+        if val.is_pointer_value() {
+            self.builder.build_ptr_to_int(
+                val.into_pointer_value(),
+                self.context.bool_type(),
+                "ptrtobool",
+            )
+        } else {
+            val.into_int_value()
+        }
+    }
+
+    /// Returns the given value as an int value. This is useful for cases where the value may by
+    /// a pointer to an int.
+    fn get_int(&self, val: BasicValueEnum<'ctx>) -> IntValue<'ctx> {
+        if val.is_pointer_value() {
+            self.builder.build_ptr_to_int(
+                val.into_pointer_value(),
+                self.context.i64_type(),
+                "ptrtoint",
+            )
+        } else {
+            val.into_int_value()
         }
     }
 }
@@ -316,18 +511,20 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
             program,
         };
 
-        compiler.compile_program()
+        compiler.compile_program()?;
+        compiler.module.print_to_stderr();
+
+        Ok(())
     }
 
     fn compile_program(&mut self) -> CompileResult<()> {
         for statement in &self.program.statements {
             match statement {
                 RichStatement::FunctionDeclaration(func) => {
-                    let result = self.compile_fn(func)?;
-                    result.print_to_stderr();
+                    self.compile_fn(func)?;
                 }
                 other => {
-                    panic!("{other} not implemented");
+                    panic!("top-level statement {other} not implemented");
                 }
             }
         }
@@ -341,7 +538,17 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
     }
 }
 
-fn get_type<'a>(context: &'a Context, typ: Option<&Type>) -> AnyTypeEnum<'a> {
+fn get_basic_type<'a>(context: &'a Context, typ: &Type) -> BasicTypeEnum<'a> {
+    match typ {
+        Type::Bool => context.bool_type().as_basic_type_enum(),
+        Type::I64 => context.i64_type().as_basic_type_enum(),
+        other => {
+            panic!("invalid basic type {other}");
+        }
+    }
+}
+
+fn get_any_type<'a>(context: &'a Context, typ: Option<&Type>) -> AnyTypeEnum<'a> {
     match typ {
         None => context.void_type().as_any_type_enum(),
         Some(Type::Bool) => context.bool_type().as_any_type_enum(),
@@ -380,11 +587,14 @@ mod tests {
                 return
             }
             
-            fn thing(): bool {
-                return !false
+            fn thing(bool b): bool {
+                bool a = true
+                return !a || b
             }
             
-            fn other() {}
+            fn other(i64 a, i64 b): i64 {
+                return a * b + a / 2 - 1
+            }
         "#;
         let mut tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
         let prog = Program::from(&mut tokens).expect("should not error");
