@@ -7,9 +7,7 @@ use inkwell::module::Module;
 use inkwell::passes::PassManager;
 use inkwell::targets::TargetTriple;
 use inkwell::types::{AnyType, AnyTypeEnum, AsTypeRef, BasicMetadataTypeEnum, FunctionType};
-use inkwell::values::{
-    BasicValue, BasicValueEnum, FunctionValue, IntMathValue, PointerValue,
-};
+use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntMathValue, PointerValue};
 use llvm_sys::core::LLVMFunctionType;
 use llvm_sys::prelude::LLVMTypeRef;
 use log::debug;
@@ -95,10 +93,14 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             self.vars.insert(arg.name.clone(), alloc);
         }
 
-        // Compile the function body.
-        self.compile_closure(&func.body)?;
+        // Compile the function body. This will return true if the function already ends in an
+        // explicit return statement (or a set of unconditional branches that all return).
+        let returns = self.compile_closure(&func.body)?;
 
-        // TODO: check return value
+        // If the function body does not end in an explicit return, we have to insert one.
+        if !returns {
+            self.builder.build_return(None);
+        }
 
         // Verify and optimize the function.
         if fn_val.verify(true) {
@@ -133,12 +135,14 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
     }
 
-    fn compile_closure(&mut self, closure: &RichClosure) -> CompileResult<()> {
+    /// Compiles all statements in the closure. Returns true if the closure returns unconditionally.
+    fn compile_closure(&mut self, closure: &RichClosure) -> CompileResult<bool> {
+        let mut returns = !closure.statements.is_empty();
         for statement in &closure.statements {
-            self.compile_statement(statement)?;
+            returns &= self.compile_statement(statement)?;
         }
 
-        Ok(())
+        Ok(returns)
     }
 
     fn compile_fn_sig(&self, sig: &FunctionSignature) -> FunctionValue<'ctx> {
@@ -379,6 +383,8 @@ mod tests {
             fn thing(): bool {
                 return !false
             }
+            
+            fn other() {}
         "#;
         let mut tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
         let prog = Program::from(&mut tokens).expect("should not error");
