@@ -116,4 +116,34 @@ impl Operator {
             _ => true,
         }
     }
+
+    /// Returns true if the operator is an arithmetic binary operator.
+    pub fn is_arithmetic(&self) -> bool {
+        matches!(
+            self,
+            Operator::Add
+                | Operator::Subtract
+                | Operator::Multiply
+                | Operator::Divide
+                | Operator::Modulo
+        )
+    }
+
+    /// Returns true if the operator is a binary comparator.
+    pub fn is_comparator(&self) -> bool {
+        matches!(
+            self,
+            Operator::EqualTo
+                | Operator::NotEqualTo
+                | Operator::GreaterThan
+                | Operator::LessThan
+                | Operator::GreaterThanOrEqual
+                | Operator::LessThanOrEqual
+        )
+    }
+
+    /// Returns true if the operator is a binary logical operator..
+    pub fn is_logical(&self) -> bool {
+        matches!(self, Operator::LogicalAnd | Operator::LogicalOr)
+    }
 }

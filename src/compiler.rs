@@ -402,28 +402,14 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         let lhs = self.compile_expr(left_expr);
         let rhs = self.compile_expr(right_expr);
 
-        match op {
-            // Arithmetic operators.
-            Operator::Add
-            | Operator::Subtract
-            | Operator::Multiply
-            | Operator::Divide
-            | Operator::Modulo => self.compile_arith_op(lhs, op, rhs).as_basic_value_enum(),
-
-            // Comparators.
-            Operator::EqualTo
-            | Operator::NotEqualTo
-            | Operator::GreaterThan
-            | Operator::LessThan
-            | Operator::GreaterThanOrEqual
-            | Operator::LessThanOrEqual => self.compile_cmp(lhs, op, rhs).as_basic_value_enum(),
-
-            // Logical operators.
-            Operator::LogicalAnd | Operator::LogicalOr => {
-                self.compile_logical_op(lhs, op, rhs).as_basic_value_enum()
-            }
-
-            other => panic!("unsupported operator {other}"),
+        if op.is_arithmetic() {
+            self.compile_arith_op(lhs, op, rhs).as_basic_value_enum()
+        } else if op.is_comparator() {
+            self.compile_cmp(lhs, op, rhs).as_basic_value_enum()
+        } else if op.is_logical() {
+            self.compile_logical_op(lhs, op, rhs).as_basic_value_enum()
+        } else {
+            panic!("unsupported operator {op}")
         }
     }
 
