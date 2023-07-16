@@ -17,8 +17,9 @@ use llvm_sys::core::LLVMFunctionType;
 use llvm_sys::prelude::LLVMTypeRef;
 
 use crate::analyzer::closure::RichClosure;
+use crate::analyzer::cond::RichCond;
 use crate::analyzer::expr::{RichExpr, RichExprKind};
-use crate::analyzer::func::{RichFn, RichRet};
+use crate::analyzer::func::{RichFn, RichFnCall, RichRet};
 use crate::analyzer::program::RichProg;
 use crate::analyzer::statement::RichStatement;
 use crate::parser::func_sig::FunctionSignature;
@@ -108,7 +109,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
 
         // Verify and optimize the function.
-        if fn_val.verify(false) {
+        if fn_val.verify(true) {
             self.fpm.run_on(&fn_val);
             Ok(fn_val)
         } else {
@@ -192,25 +193,13 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 self.compile_fn(func)?;
             }
             RichStatement::Closure(closure) => {
-                panic!("{} not yet supported", closure);
+                self.compile_closure(closure)?;
             }
             RichStatement::FunctionCall(call) => {
-                // Get the function value from the module.
-                let func = self.module.get_function(call.fn_name.as_str()).unwrap();
-
-                // Compile call args.
-                let arg_types: Vec<BasicMetadataValueEnum> = call
-                    .args
-                    .iter()
-                    .map(|a| self.compile_expr(a).into())
-                    .collect();
-
-                // Compile the function call.
-                self.builder
-                    .build_call(func, arg_types.as_slice(), call.fn_name.as_str());
+                self.compile_call(call);
             }
             RichStatement::Conditional(cond) => {
-                panic!("{} not yet supported", cond);
+                return self.compile_cond(cond);
             }
             RichStatement::Loop(closure) => {
                 panic!("{} not yet supported", closure);
@@ -225,6 +214,79 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
 
         Ok(false)
+    }
+
+    /// Compiles a conditional. Returns true if all branches of the conditional result in
+    /// unconditional returns.
+    fn compile_cond(&mut self, cond: &RichCond) -> CompileResult<bool> {
+        // Compile each branch, recording whether it returns.
+        let mut end_block = None;
+        let mut all_branches_return = true;
+        let mut else_branch_exists = false;
+        for (i, branch) in cond.branches.iter().enumerate() {
+            // If there is a branch condition, it means we are on an "if" or "else if" branch.
+            // Otherwise, it means we're on an "else" branch.
+            if let Some(expr) = &branch.cond {
+                // Create a "then" block to jump to if the branch condition is true.
+                let then_block = self
+                    .context
+                    .append_basic_block(self.fn_value.unwrap(), format!("branch{}", i).as_str());
+
+                // Create an "else" block to jump to if the branch condition is false.
+                let else_block = self
+                    .context
+                    .append_basic_block(self.fn_value.unwrap(), format!("branch{}", i).as_str());
+
+                // Branch from the current block based on the value of the conditional expression.
+                let cond_val = self.get_bool(self.compile_expr(expr));
+                self.builder
+                    .build_conditional_branch(cond_val, then_block, else_block);
+
+                // Fill the "then" block with the branch body.
+                self.builder.position_at_end(then_block);
+                let returns = self.compile_closure(&branch.body)?;
+                all_branches_return &= returns;
+
+                // If this branch does not end in an unconditional return, we need to complete
+                // the corresponding "then" block with an unconditional jump to the "end" block.
+                if !returns {
+                    if end_block.is_none() {
+                        end_block = Some(
+                            self.context
+                                .append_basic_block(self.fn_value.unwrap(), "endcond"),
+                        );
+                    }
+                    self.builder.build_unconditional_branch(end_block.unwrap());
+                }
+
+                // Continue on the "else" block.
+                self.builder.position_at_end(else_block);
+            } else {
+                // This is an else branch, so we must execute the branch body.
+                else_branch_exists = true;
+                let returns = self.compile_closure(&branch.body)?;
+                all_branches_return &= returns;
+
+                // If this branch does not end in an unconditional return, we need to complete
+                // the current block with an unconditional jump to the "end" block.
+                if !returns {
+                    if end_block.is_none() {
+                        end_block = Some(
+                            self.context
+                                .append_basic_block(self.fn_value.unwrap(), "endcond"),
+                        );
+                    }
+                    self.builder.build_unconditional_branch(end_block.unwrap());
+                }
+            }
+        }
+
+        // If there is an "end" block, continue on that block.
+        if let Some(block) = end_block {
+            self.builder.position_at_end(block);
+        }
+
+        Ok(all_branches_return && else_branch_exists)
     }
 
     /// Compiles a return statement.
@@ -258,24 +320,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 .as_basic_value_enum(),
 
             // RichExprKind::StringLiteral(String),
-            RichExprKind::FunctionCall(call) => {
-                // Get the function value from the module.
-                let func = self.module.get_function(call.fn_name.as_str()).unwrap();
-
-                // Compile call args.
-                let arg_types: Vec<BasicMetadataValueEnum> = call
-                    .args
-                    .iter()
-                    .map(|a| self.compile_expr(a).into())
-                    .collect();
-
-                // Compile the function call and return the result.
-                self.builder
-                    .build_call(func, arg_types.as_slice(), call.fn_name.as_str())
-                    .try_as_basic_value()
-                    .left()
-                    .unwrap()
-            }
+            RichExprKind::FunctionCall(call) => self.compile_call(call).unwrap(),
 
             // TODO
             // RichExprKind::AnonFunction(Box<RichFn>),
@@ -289,6 +334,27 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 panic!("{other} not implemented");
             }
         }
+    }
+
+    /// Compiles a function call, returning the result if one exists.
+    fn compile_call(&self, call: &RichFnCall) -> Option<BasicValueEnum<'ctx>> {
+        // Get the function value from the module.
+        let func = self.module.get_function(call.fn_name.as_str()).unwrap();
+
+        // Compile call args.
+        let mut args: Vec<BasicMetadataValueEnum> = vec![];
+        for arg in &call.args {
+            // Compile the argument expression, making sure to dereference any pointers
+            // if necessary.
+            let arg_val = self.deref_if_ptr(self.compile_expr(arg), &arg.typ);
+            args.push(arg_val.into());
+        }
+
+        // Compile the function call and return the result.
+        self.builder
+            .build_call(func, args.as_slice(), call.fn_name.as_str())
+            .try_as_basic_value()
+            .left()
     }
 
     /// Compiles a unary operation expression.
@@ -465,6 +531,16 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             val.into_int_value()
         }
     }
+
+    /// If the given value is a pointer, it will be dereferenced as the given type. Otherwise
+    /// the value is simply returned.
+    fn deref_if_ptr(&self, val: BasicValueEnum<'ctx>, typ: &Type) -> BasicValueEnum<'ctx> {
+        match typ {
+            Type::I64 => self.get_int(val).as_basic_value_enum(),
+            Type::Bool => self.get_bool(val).as_basic_value_enum(),
+            other => panic!("cannot dereference pointer to value of type {other}"),
+        }
+    }
 }
 
 struct Compiler<'a, 'ctx> {
@@ -629,6 +705,7 @@ mod tests {
         let code = r#"
             fn main() {
                 i64 val = other(2, 10)
+                fib(val)
             }
             
             fn thing(bool b): bool {
@@ -638,6 +715,14 @@ mod tests {
             
             fn other(i64 a, i64 b): i64 {
                 return a * b + a / 2 - 1
+            }
+            
+            fn fib(i64 n): i64 {
+                if n < 2 {
+                    return 1
+                }
+                
+                return fib(n-1) + fib(n-2)
             }
         "#;
         let mut tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
