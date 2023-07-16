@@ -10,13 +10,11 @@ use inkwell::types::{
     AnyType, AnyTypeEnum, AsTypeRef, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType,
 };
 use inkwell::values::{
-    AnyValue, AsValueRef, BasicValue, BasicValueEnum, FunctionValue, IntMathValue, IntValue,
-    PointerValue,
+    BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue,
 };
 use inkwell::IntPredicate;
 use llvm_sys::core::LLVMFunctionType;
 use llvm_sys::prelude::LLVMTypeRef;
-use log::debug;
 
 use crate::analyzer::closure::RichClosure;
 use crate::analyzer::expr::{RichExpr, RichExprKind};
@@ -80,9 +78,12 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     fn compile_fn(&mut self, func: &RichFn) -> CompileResult<FunctionValue<'ctx>> {
-        // Build the function signature and create a new "entry" block at the start of the function
+        // Retrieve the function and create a new "entry" block at the start of the function
         // body.
-        let fn_val = self.compile_fn_sig(&func.signature);
+        let fn_val = self
+            .module
+            .get_function(func.signature.name.as_str())
+            .unwrap();
         let entry = self.context.append_basic_block(fn_val, "entry");
 
         // Start building from the beginning of the entry block.
@@ -107,7 +108,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
 
         // Verify and optimize the function.
-        if fn_val.verify(true) {
+        if fn_val.verify(false) {
             self.fpm.run_on(&fn_val);
             Ok(fn_val)
         } else {
@@ -169,44 +170,6 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         Ok(returns)
     }
 
-    fn compile_fn_sig(&self, sig: &FunctionSignature) -> FunctionValue<'ctx> {
-        // Define the function in the module.
-        let fn_type = self.create_fn_type(sig);
-        let fn_val = self.module.add_function(sig.name.as_str(), fn_type, None);
-
-        // Set arg names.
-        for (arg_val, arg) in fn_val.get_param_iter().zip(sig.args.iter()) {
-            arg_val.set_name(arg.name.as_str());
-        }
-
-        fn_val
-    }
-
-    /// Converts a `FunctionSignature` into an LLVM `FunctionType`.
-    fn create_fn_type(&self, sig: &FunctionSignature) -> FunctionType<'ctx> {
-        // Get return type.
-        let ret_type = get_any_type(self.context, sig.return_type.as_ref());
-
-        // Get arg types.
-        let arg_types = sig
-            .args
-            .iter()
-            .map(|a| metadata_type_enum(self.context, &a.typ))
-            .collect::<Vec<BasicMetadataTypeEnum>>();
-
-        // Create the function type.
-        let mut param_types: Vec<LLVMTypeRef> =
-            arg_types.iter().map(|val| val.as_type_ref()).collect();
-        unsafe {
-            FunctionType::new(LLVMFunctionType(
-                ret_type.as_type_ref(),
-                param_types.as_mut_ptr(),
-                param_types.len() as u32,
-                false as i32,
-            ))
-        }
-    }
-
     /// Compiles a statement and returns true if the statement always results in a return.
     /// Statements that would always result in a return are
     ///  - explicit return statements
@@ -226,13 +189,25 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 self.assign_var(assign.name.as_str(), val);
             }
             RichStatement::FunctionDeclaration(func) => {
-                let fn_val = self.compile_fn(func)?;
+                self.compile_fn(func)?;
             }
             RichStatement::Closure(closure) => {
                 panic!("{} not yet supported", closure);
             }
             RichStatement::FunctionCall(call) => {
-                panic!("{} not yet supported", call);
+                // Get the function value from the module.
+                let func = self.module.get_function(call.fn_name.as_str()).unwrap();
+
+                // Compile call args.
+                let arg_types: Vec<BasicMetadataValueEnum> = call
+                    .args
+                    .iter()
+                    .map(|a| self.compile_expr(a).into())
+                    .collect();
+
+                // Compile the function call.
+                self.builder
+                    .build_call(func, arg_types.as_slice(), call.fn_name.as_str());
             }
             RichStatement::Conditional(cond) => {
                 panic!("{} not yet supported", cond);
@@ -283,13 +258,33 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 .as_basic_value_enum(),
 
             // RichExprKind::StringLiteral(String),
-            // RichExprKind::FunctionCall(RichFnCall),
+            RichExprKind::FunctionCall(call) => {
+                // Get the function value from the module.
+                let func = self.module.get_function(call.fn_name.as_str()).unwrap();
+
+                // Compile call args.
+                let arg_types: Vec<BasicMetadataValueEnum> = call
+                    .args
+                    .iter()
+                    .map(|a| self.compile_expr(a).into())
+                    .collect();
+
+                // Compile the function call and return the result.
+                self.builder
+                    .build_call(func, arg_types.as_slice(), call.fn_name.as_str())
+                    .try_as_basic_value()
+                    .left()
+                    .unwrap()
+            }
+
+            // TODO
             // RichExprKind::AnonFunction(Box<RichFn>),
             RichExprKind::UnaryOperation(op, expr) => self.compile_unary_op(op, expr),
 
             RichExprKind::BinaryOperation(left_expr, op, right_expr) => {
                 self.compile_bin_op(left_expr, op, right_expr)
             }
+
             other => {
                 panic!("{other} not implemented");
             }
@@ -481,6 +476,8 @@ struct Compiler<'a, 'ctx> {
 }
 
 impl<'a, 'ctx> Compiler<'a, 'ctx> {
+    /// Compiles the program for the given target. If there is no target, compiles the program for
+    /// the host system.
     fn compile(program: &RichProg, target_triple: Option<&str>) -> CompileResult<()> {
         let ctx = Context::create();
         let builder = ctx.create_builder();
@@ -517,11 +514,22 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
         Ok(())
     }
 
+    /// Compiles the program.
     fn compile_program(&mut self) -> CompileResult<()> {
+        // Do one shallow pass to define all top-level functions in the module.
         for statement in &self.program.statements {
             match statement {
                 RichStatement::FunctionDeclaration(func) => {
-                    self.compile_fn(func)?;
+                    self.compile_fn_sig(&func.signature);
+                }
+                _ => {}
+            }
+        }
+
+        for statement in &self.program.statements {
+            match statement {
+                RichStatement::FunctionDeclaration(func) => {
+                    FnCompiler::compile(self.context, self.builder, self.fpm, self.module, func)?;
                 }
                 other => {
                     panic!("top-level statement {other} not implemented");
@@ -529,12 +537,48 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
             }
         }
 
+        if let Err(e) = self.module.verify() {
+            panic!("module verification failed: {}", e);
+        }
+
         Ok(())
     }
 
-    /// Compiles the function to an LLVM `FunctionValue`.
-    fn compile_fn(&mut self, func: &RichFn) -> CompileResult<FunctionValue<'ctx>> {
-        FnCompiler::compile(self.context, self.builder, self.fpm, self.module, func)
+    /// Defines the given function in the current module based on the function signature.
+    fn compile_fn_sig(&self, sig: &FunctionSignature) {
+        // Define the function in the module.
+        let fn_type = self.create_fn_type(sig);
+        let fn_val = self.module.add_function(sig.name.as_str(), fn_type, None);
+
+        // Set arg names.
+        for (arg_val, arg) in fn_val.get_param_iter().zip(sig.args.iter()) {
+            arg_val.set_name(arg.name.as_str());
+        }
+    }
+
+    /// Converts a `FunctionSignature` into an LLVM `FunctionType`.
+    fn create_fn_type(&self, sig: &FunctionSignature) -> FunctionType<'ctx> {
+        // Get return type.
+        let ret_type = get_any_type(self.context, sig.return_type.as_ref());
+
+        // Get arg types.
+        let arg_types = sig
+            .args
+            .iter()
+            .map(|a| metadata_type_enum(self.context, &a.typ))
+            .collect::<Vec<BasicMetadataTypeEnum>>();
+
+        // Create the function type.
+        let mut param_types: Vec<LLVMTypeRef> =
+            arg_types.iter().map(|val| val.as_type_ref()).collect();
+        unsafe {
+            FunctionType::new(LLVMFunctionType(
+                ret_type.as_type_ref(),
+                param_types.as_mut_ptr(),
+                param_types.len() as u32,
+                false as i32,
+            ))
+        }
     }
 }
 
@@ -584,7 +628,7 @@ mod tests {
     fn thing() {
         let code = r#"
             fn main() {
-                return
+                i64 val = other(2, 10)
             }
             
             fn thing(bool b): bool {
