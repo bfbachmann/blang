@@ -5,3 +5,7 @@
 *.o
 *.out
 .cargo
+*.ll
+out
+*.bc
+*.s

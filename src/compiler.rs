@@ -1,5 +1,7 @@
 use std::collections::HashMap;
-use std::fmt::Debug;
+use std::fmt;
+use std::fmt::{Debug, Formatter};
+use std::path::Path;
 
 use inkwell::builder::Builder;
 use inkwell::context::Context;
@@ -29,14 +31,29 @@ use crate::parser::r#type::Type;
 #[derive(Debug)]
 enum ErrorKind {
     FnVerificationFailed,
+    WriteOutFailed,
+}
+
+impl fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            ErrorKind::FnVerificationFailed => write!(f, "function verification failed"),
+            ErrorKind::WriteOutFailed => write!(f, "writing output failed"),
+        }
+    }
 }
 
 #[derive(Debug)]
-struct CompileError {
+pub struct CompileError {
     kind: ErrorKind,
     message: String,
 }
 
+impl fmt::Display for CompileError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.kind, self.message)
+    }
+}
 impl CompileError {
     fn new(kind: ErrorKind, message: &str) -> Self {
         CompileError {
@@ -529,7 +546,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 }
 
-struct Compiler<'a, 'ctx> {
+pub struct Compiler<'a, 'ctx> {
     context: &'ctx Context,
     builder: &'a Builder<'ctx>,
     fpm: &'a PassManager<FunctionValue<'ctx>>,
@@ -540,7 +557,12 @@ struct Compiler<'a, 'ctx> {
 impl<'a, 'ctx> Compiler<'a, 'ctx> {
     /// Compiles the program for the given target. If there is no target, compiles the program for
     /// the host system.
-    fn compile(program: &RichProg, target_triple: Option<&str>) -> CompileResult<()> {
+    pub fn compile(
+        program: &RichProg,
+        target_triple: Option<&String>,
+        bitcode_output_path: Option<&String>,
+        ir_output_path: Option<&String>,
+    ) -> CompileResult<()> {
         let ctx = Context::create();
         let builder = ctx.create_builder();
         let module = ctx.create_module("main");
@@ -571,7 +593,19 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
         };
 
         compiler.compile_program()?;
-        compiler.module.print_to_stderr();
+
+        if let Some(path) = bitcode_output_path {
+            compiler.module.write_bitcode_to_path(Path::new(path));
+        }
+
+        if let Some(path) = ir_output_path {
+            if let Err(e) = compiler.module.print_to_file(Path::new(path)) {
+                return Err(CompileError::new(
+                    ErrorKind::WriteOutFailed,
+                    e.to_string().as_str(),
+                ));
+            }
+        }
 
         Ok(())
     }
@@ -714,6 +748,6 @@ mod tests {
         let mut tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
         let prog = Program::from(&mut tokens).expect("should not error");
         let rich_prog = RichProg::from(prog).expect("should not error");
-        Compiler::compile(&rich_prog, None).expect("should not error");
+        Compiler::compile(&rich_prog, None, None, None).expect("should not error");
     }
 }

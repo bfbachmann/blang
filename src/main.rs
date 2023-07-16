@@ -7,6 +7,7 @@ use std::process;
 
 use clap::{arg, Command};
 use log::{error, info, set_max_level, Level};
+use regex::Replacer;
 
 use lexer::token::Token;
 use parser::program::Program;
@@ -15,6 +16,7 @@ use parser::statement::Statement;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::program::RichProg;
 use crate::analyzer::statement::RichStatement;
+use crate::compiler::Compiler;
 
 mod analyzer;
 mod compiler;
@@ -47,10 +49,15 @@ fn main() {
                 .arg(arg!([SRC_PATH]).required(true))
                 .arg(arg!(-t --target <TARGET> "Specifies target ISA triple").required(false))
                 .arg(
-                    arg!(-o --out <DST_PATH> "Specifies output file path")
+                    arg!(-o --out <DST_PATH> "Specifies executable output file path")
                         .required(false)
-                        .default_value("out.o"),
-                ),
+                        .default_value("out"),
+                )
+                .arg(
+                    arg!(-b --bitcode <BC_PATH> "Specifies bitcode output file path")
+                        .required(false),
+                )
+                .arg(arg!(-i --ir <LL_PATH> "Specifies LLVM IR output file path").required(false)),
         )
         .subcommand(Command::new("repl").about("Runs a REPL"))
         .get_matches();
@@ -60,8 +67,10 @@ fn main() {
         Some(("build", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(file_path) => {
                 let target = sub_matches.get_one::<String>("target");
-                let dst_path = sub_matches.get_one::<String>("out").unwrap();
-                compile(file_path, dst_path, target)
+                let exe_path = sub_matches.get_one::<String>("out").unwrap();
+                let bc_path = sub_matches.get_one::<String>("bitcode");
+                let ir_path = sub_matches.get_one::<String>("ir");
+                compile(file_path, exe_path, bc_path, ir_path, target)
             }
             _ => fatal!("expected source path"),
         },
@@ -78,7 +87,13 @@ fn open_file(file_path: &str) -> Result<BufReader<File>> {
 
 /// Compiles a source file for the given target ISA. If there is no target, infers configuration
 /// for the current system.
-fn compile(input_path: &str, _output_path: &str, _target: Option<&String>) {
+fn compile(
+    input_path: &str,
+    exe_path: &str,
+    bc_path: Option<&String>,
+    ll_path: Option<&String>,
+    target: Option<&String>,
+) {
     // Get a reader from the source file.
     let reader = match open_file(input_path) {
         Ok(r) => r,
@@ -98,12 +113,15 @@ fn compile(input_path: &str, _output_path: &str, _target: Option<&String>) {
     };
 
     // Analyze the program.
-    let _rich_prog = match RichProg::from(prog) {
+    let prog = match RichProg::from(prog) {
         Ok(rp) => rp,
         Err(e) => fatal!("{}", e),
     };
 
-    // TODO: compile program
+    // Compile the program.
+    if let Err(e) = Compiler::compile(&prog, target, bc_path, ll_path) {
+        fatal!("{}", e);
+    }
 }
 
 /// Starts a REPL. The REPL will prompt for input and try to interpret it as a statement, then
