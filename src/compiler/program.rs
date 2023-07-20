@@ -15,6 +15,7 @@ use llvm_sys::core::LLVMFunctionType;
 use llvm_sys::prelude::LLVMTypeRef;
 use std::path::Path;
 
+/// Compiles a type-rich and semantically valid program to LLVM IR and/or bitcode.
 pub struct Compiler<'a, 'ctx> {
     context: &'ctx Context,
     builder: &'a Builder<'ctx>,

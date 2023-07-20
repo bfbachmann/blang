@@ -10,6 +10,7 @@ use crate::parser::cond::Conditional;
 use crate::parser::r#type::Type;
 use crate::util;
 
+/// Represents a semantically valid and type-rich branch.
 #[derive(Debug)]
 pub struct RichBranch {
     pub cond: Option<RichExpr>,
@@ -22,6 +23,7 @@ impl PartialEq for RichBranch {
     }
 }
 
+/// Represents a semantically valid and type-rich conditional.
 #[derive(Debug)]
 pub struct RichCond {
     pub branches: Vec<RichBranch>,
@@ -43,6 +45,8 @@ impl PartialEq for RichCond {
 }
 
 impl RichCond {
+    /// Performs semantic analysis on the given conditional and returns a type-rich version of it,
+    /// or an error if the conditional is semantically invalid.
     pub fn from(ctx: &mut ProgramContext, cond: Conditional) -> AnalyzeResult<Self> {
         let mut rich_branches = vec![];
         for branch in cond.branches {

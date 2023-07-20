@@ -7,6 +7,7 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::AnalyzeResult;
 use crate::parser::var_assign::VariableAssignment;
 
+/// Represents a semantically valid and type-rich variable assignment.
 #[derive(PartialEq, Debug)]
 pub struct RichVarAssign {
     pub name: String,
@@ -20,6 +21,8 @@ impl fmt::Display for RichVarAssign {
 }
 
 impl RichVarAssign {
+    /// Performs semantic analysis on the given variable assignment and returns a type-rich version
+    /// of it, or an error if the statement is variable assignment invalid.
     pub fn from(ctx: &mut ProgramContext, assign: VariableAssignment) -> AnalyzeResult<Self> {
         // Analyze the expression representing the value assigned to the variable.
         let rich_expr = RichExpr::from(ctx, assign.value)?;

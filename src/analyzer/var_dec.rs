@@ -9,6 +9,7 @@ use crate::parser::r#type::Type;
 use crate::parser::statement::Statement;
 use crate::parser::var_dec::VariableDeclaration;
 
+/// Represents a semantically valid and type-rich variable declaration.
 #[derive(PartialEq, Debug)]
 pub struct RichVarDecl {
     pub typ: Type,
@@ -23,6 +24,8 @@ impl fmt::Display for RichVarDecl {
 }
 
 impl RichVarDecl {
+    /// Performs semantic analysis on the given variable declaration and returns a type-rich version
+    /// of it, or an error if the variable declaration is semantically invalid.
     pub fn from(ctx: &mut ProgramContext, var_decl: VariableDeclaration) -> AnalyzeResult<Self> {
         // Check if the variable is already defined in this scope.
         if let Some(_) = ctx.get_var(var_decl.name.as_str()) {

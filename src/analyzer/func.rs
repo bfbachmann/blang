@@ -27,6 +27,7 @@ pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) -> Anal
     Ok(())
 }
 
+/// Represents a semantically valid and type-rich function.
 #[derive(PartialEq, Debug)]
 pub struct RichFn {
     pub signature: FunctionSignature,
@@ -40,6 +41,8 @@ impl fmt::Display for RichFn {
 }
 
 impl RichFn {
+    /// Performs semantic analysis on the given function and returns a type-rich version of it,
+    /// or an error if the function is semantically invalid.
     pub fn from(ctx: &mut ProgramContext, func: Function) -> AnalyzeResult<Self> {
         // Make sure the function is not already defined.
         if let Some(_) = ctx.get_fn(func.signature.name.as_str()) {

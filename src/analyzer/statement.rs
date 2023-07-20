@@ -10,6 +10,7 @@ use crate::analyzer::var_dec::RichVarDecl;
 use crate::analyzer::AnalyzeResult;
 use crate::parser::statement::Statement;
 
+/// Represents a semantically valid and type-rich statement.
 #[derive(PartialEq, Debug)]
 pub enum RichStatement {
     VariableDeclaration(RichVarDecl),
@@ -40,6 +41,8 @@ impl fmt::Display for RichStatement {
 }
 
 impl RichStatement {
+    /// Performs semantic analysis on the given statement and returns a type-rich version of it,
+    /// or an error if the statement is semantically invalid.
     pub fn from(ctx: &mut ProgramContext, statement: Statement) -> AnalyzeResult<Self> {
         match statement {
             Statement::VariableDeclaration(var_decl) => match RichVarDecl::from(ctx, var_decl) {

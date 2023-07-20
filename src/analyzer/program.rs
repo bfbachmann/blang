@@ -6,13 +6,15 @@ use crate::analyzer::AnalyzeResult;
 use crate::parser::program::Program;
 use crate::parser::statement::Statement;
 
-
+/// Represents a semantically valid and type-rich program.
 #[derive(Debug)]
 pub struct RichProg {
     pub statements: Vec<RichStatement>,
 }
 
 impl RichProg {
+    /// Performs semantic analysis on the given program and returns a type-rich version of it,
+    /// or an error if the program is semantically invalid.
     pub fn from(prog: Program) -> AnalyzeResult<Self> {
         let mut ctx = ProgramContext::new();
 

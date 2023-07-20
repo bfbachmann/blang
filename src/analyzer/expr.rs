@@ -60,6 +60,7 @@ impl PartialEq for RichExprKind {
     }
 }
 
+/// Represents a semantically valid and type-rich expression.
 #[derive(PartialEq, Debug)]
 pub struct RichExpr {
     pub kind: RichExprKind,
@@ -73,6 +74,8 @@ impl fmt::Display for RichExpr {
 }
 
 impl RichExpr {
+    /// Performs semantic analysis on the given expression and returns a type-rich version of it,
+    /// or an error if the expression is semantically invalid.
     pub fn from(ctx: &mut ProgramContext, expr: Expression) -> AnalyzeResult<RichExpr> {
         match expr {
             Expression::VariableReference(ref var_name) => {

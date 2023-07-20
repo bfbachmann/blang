@@ -12,6 +12,7 @@ use crate::parser::closure::Closure;
 use crate::parser::r#type::Type;
 use crate::util;
 
+/// Represents a semantically valid and type-rich closure.
 #[derive(Debug)]
 pub struct RichClosure {
     pub statements: Vec<RichStatement>,
@@ -32,6 +33,8 @@ impl PartialEq for RichClosure {
 }
 
 impl RichClosure {
+    /// Performs semantic analysis on the given closure and returns a type-rich version of it,
+    /// or an error if the closure is semantically invalid.
     pub fn from(
         ctx: &mut ProgramContext,
         closure: Closure,

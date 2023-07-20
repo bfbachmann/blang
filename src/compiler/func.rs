@@ -20,11 +20,13 @@ use crate::compiler::error::{CompileError, CompileResult, ErrorKind};
 use crate::parser::op::Operator;
 use crate::parser::r#type::Type;
 
+/// Stores information about the current loop being compiled.
 struct LoopContext<'ctx> {
     end_block: Option<BasicBlock<'ctx>>,
     has_return: bool,
 }
 
+/// Compiles type-rich (i.e. semantically valid) functions.
 pub struct FnCompiler<'a, 'ctx> {
     context: &'ctx Context,
     builder: &'a Builder<'ctx>,
@@ -37,6 +39,7 @@ pub struct FnCompiler<'a, 'ctx> {
 }
 
 impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
+    /// Compiles the given function.
     pub fn compile(
         context: &'ctx Context,
         builder: &'a Builder<'ctx>,
@@ -57,6 +60,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         fn_compiler.compile_fn(func)
     }
 
+    /// Creates a new loop context, adds it to the stack, and returns it.
     fn new_loop_ctx(&mut self) -> BasicBlock<'ctx> {
         let loop_begin = self
             .context
@@ -68,22 +72,29 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         loop_begin
     }
 
+    /// Pops the current loop context from the stack. This panics if there is no current loop
+    /// context.
     fn pop_loop_ctx(&mut self) {
         self.loop_ctx.pop().unwrap();
     }
 
+    /// Returns true if we are currently inside a loop.
     fn is_in_loop(&self) -> bool {
         !self.loop_ctx.is_empty()
     }
 
+    /// Marks the current loop at the top of the stack as containing a return.
     fn set_loop_has_return(&mut self) {
         self.loop_ctx.last_mut().unwrap().has_return = true;
     }
 
+    /// Returns true if the current loop at the top of the stack contains a return statement.
     fn loop_has_return(&self) -> bool {
         self.loop_ctx.last().unwrap().has_return
     }
 
+    /// Returns the existing loop end block from the current loop context, if one exists. Otherwise,
+    /// creates one, adds it to the current loop context, and returns it.
     fn get_or_create_loop_end_block(&mut self) -> BasicBlock<'ctx> {
         let loop_block = self.loop_ctx.last_mut().unwrap();
 
@@ -98,10 +109,13 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         end_block
     }
 
+    /// Fetches the loop end block from the current loop context. Panics if there is no loop
+    /// context.
     fn get_loop_end_block(&self) -> Option<BasicBlock<'ctx>> {
         self.loop_ctx.last().unwrap().end_block
     }
 
+    /// Compiles the given function.
     fn compile_fn(&mut self, func: &RichFn) -> CompileResult<FunctionValue<'ctx>> {
         // Retrieve the function and create a new "entry" block at the start of the function
         // body.
@@ -599,6 +613,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 }
 
+/// Gets the LLVM basic type that corresponds to the given type.
 fn get_basic_type<'a>(context: &'a Context, typ: &Type) -> BasicTypeEnum<'a> {
     match typ {
         Type::Bool => context.bool_type().as_basic_type_enum(),
@@ -609,6 +624,7 @@ fn get_basic_type<'a>(context: &'a Context, typ: &Type) -> BasicTypeEnum<'a> {
     }
 }
 
+/// Gets the LLVM "any" type that corresponds to the given type.
 pub fn get_any_type<'a>(context: &'a Context, typ: Option<&Type>) -> AnyTypeEnum<'a> {
     match typ {
         None => context.void_type().as_any_type_enum(),
@@ -624,6 +640,7 @@ pub fn get_any_type<'a>(context: &'a Context, typ: Option<&Type>) -> AnyTypeEnum
     }
 }
 
+/// Gets the LLVM metadata type that corresponds to the given type.
 pub fn metadata_type_enum<'a>(context: &'a Context, typ: &Type) -> BasicMetadataTypeEnum<'a> {
     match typ {
         Type::I64 => BasicMetadataTypeEnum::from(context.i64_type()),
