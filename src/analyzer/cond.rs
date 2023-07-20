@@ -94,4 +94,13 @@ impl RichCond {
             ret_type,
         })
     }
+
+    /// Returns true if the conditional is exhaustive (i.e. if it has an else case).
+    pub fn is_exhaustive(&self) -> bool {
+        if let Some(branch) = self.branches.last() {
+            return branch.cond.is_none();
+        }
+
+        false
+    }
 }

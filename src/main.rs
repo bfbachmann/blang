@@ -7,7 +7,7 @@ use std::process;
 
 use clap::{arg, Command};
 use log::{error, info, set_max_level, Level};
-use regex::Replacer;
+
 
 use lexer::token::Token;
 use parser::program::Program;
@@ -49,11 +49,6 @@ fn main() {
                 .arg(arg!([SRC_PATH]).required(true))
                 .arg(arg!(-t --target <TARGET> "Specifies target ISA triple").required(false))
                 .arg(
-                    arg!(-o --out <DST_PATH> "Specifies executable output file path")
-                        .required(false)
-                        .default_value("out"),
-                )
-                .arg(
                     arg!(-b --bitcode <BC_PATH> "Specifies bitcode output file path")
                         .required(false),
                 )
@@ -67,10 +62,9 @@ fn main() {
         Some(("build", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(file_path) => {
                 let target = sub_matches.get_one::<String>("target");
-                let exe_path = sub_matches.get_one::<String>("out").unwrap();
                 let bc_path = sub_matches.get_one::<String>("bitcode");
                 let ir_path = sub_matches.get_one::<String>("ir");
-                compile(file_path, exe_path, bc_path, ir_path, target)
+                compile(file_path, bc_path, ir_path, target)
             }
             _ => fatal!("expected source path"),
         },
@@ -89,7 +83,6 @@ fn open_file(file_path: &str) -> Result<BufReader<File>> {
 /// for the current system.
 fn compile(
     input_path: &str,
-    exe_path: &str,
     bc_path: Option<&String>,
     ll_path: Option<&String>,
     target: Option<&String>,

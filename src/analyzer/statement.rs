@@ -24,7 +24,7 @@ pub enum RichStatement {
 }
 
 impl fmt::Display for RichStatement {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             RichStatement::VariableDeclaration(v) => write!(f, "{}", v),
             RichStatement::VariableAssignment(v) => write!(f, "{}", v),
@@ -84,5 +84,240 @@ impl RichStatement {
                 Err(e) => Err(e),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::{BufRead, Cursor};
+
+    use crate::analyzer::error::ErrorKind;
+    use crate::analyzer::prog_context::ProgramContext;
+    use crate::analyzer::statement::RichStatement;
+    use crate::analyzer::AnalyzeError;
+    use crate::analyzer::AnalyzeResult;
+    use crate::lexer::token::Token;
+    use crate::parser::statement::Statement;
+
+    fn analyze_statement(raw: &str) -> AnalyzeResult<RichStatement> {
+        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let statement = Statement::from(&mut tokens).expect("should not error");
+        let mut ctx = ProgramContext::new();
+        RichStatement::from(&mut ctx, statement)
+    }
+
+    #[test]
+    fn simple_return() {
+        let raw = r#"
+            fn thing(): bool {
+                bool b = true
+                return b
+            }
+        "#;
+        let result = analyze_statement(raw);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn return_in_conditional() {
+        let raw = r#"
+            fn thing(i64 a): bool {
+                a = a * 2
+                if a > 10 {
+                    return true
+                } else if a > 5 {
+                    return false
+                } else  {
+                    return true
+                }
+            }
+        "#;
+        let result = analyze_statement(raw);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn missing_return_in_conditional() {
+        let raw = r#"
+            fn thing(i64 a): bool {
+                a = a * 2
+                if a > 10 {
+                    return true
+                } else if a > 5 {
+                    return false
+                } else  {
+                    a = 2
+                }
+            }
+        "#;
+        let result = analyze_statement(raw);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn non_exhaustive_conditional() {
+        let raw = r#"
+            fn thing(i64 a): bool {
+                a = a * 2
+                if a > 10 {
+                    return true
+                } else if a > 5 {
+                    return false
+                }
+            }
+        "#;
+        let result = analyze_statement(raw);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn conditional_with_loop() {
+        let raw = r#"
+            fn thing(i64 a): bool {
+                a = a * 2
+                if a > 10 {
+                    return true
+                } else if a > 5 {
+                    return false
+                } else  {
+                    loop {
+                        a = a * 2
+                        if a > 50 {
+                            return true
+                        }
+                    }
+                }
+            }
+        "#;
+        let result = analyze_statement(raw);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn conditional_with_closure() {
+        let raw = r#"
+            fn thing(i64 a): bool {
+                a = a * 2
+                if a > 10 {
+                    return true
+                } else {
+                    {
+                        if a > 50 {
+                            return true
+                        }
+                    }
+                }
+            }
+        "#;
+        let result = analyze_statement(raw);
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::MissingReturn,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn loop_with_return() {
+        let raw = r#"
+            fn thing(i64 a): bool {
+                loop {
+                    return true
+                }
+            }
+        "#;
+        let result = analyze_statement(raw);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn loop_with_return_in_cond() {
+        let raw = r#"
+            fn thing(i64 a): bool {
+                loop {
+                    if a == 1 {
+                        return true
+                    }
+                }
+            }
+        "#;
+        let result = analyze_statement(raw);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn loop_with_return_in_closure() {
+        let raw = r#"
+            fn thing(i64 a): bool {
+                loop {
+                    loop {
+                        if a == 1 {
+                            return true
+                        }
+                    }
+                }
+            }
+        "#;
+        let result = analyze_statement(raw);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn statements_following_return() {
+        let raw = r#"
+            fn thing(i64 a): bool {
+                return true
+                a = 2
+                return false
+            }
+        "#;
+        let result = analyze_statement(raw);
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::UnexpectedReturn,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn return_outside_fn() {
+        let raw = "return 1";
+        let result = analyze_statement(raw);
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::UnexpectedReturn,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn loop_with_return_and_break() {
+        let raw = r#"
+            fn thing(i64 a): bool {
+                loop {
+                    loop {
+                        if a == 1 {
+                            return true
+                        }
+                    }
+                    
+                    break
+                }
+            }
+        "#;
+        let result = analyze_statement(raw);
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::MissingReturn,
+                ..
+            })
+        ));
     }
 }

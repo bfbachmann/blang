@@ -1,7 +1,7 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use crate::analyzer::closure::RichClosure;
+use crate::analyzer::closure::{check_closure_returns, RichClosure};
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
@@ -61,6 +61,11 @@ impl RichFn {
             func.signature.args.clone(),
             func.signature.return_type.clone(),
         )?;
+
+        // Make sure the function return conditions are satisfied by the closure.
+        if let Some(ret_type) = &func.signature.return_type {
+            check_closure_returns(&rich_closure, ret_type, &ScopeKind::FnBody)?;
+        }
 
         // Add the function to the program context so we can reference it later.
         ctx.add_fn(func.clone());
@@ -212,7 +217,7 @@ impl RichRet {
                                 ErrorKind::IncompatibleTypes,
                                 format!(
                                     "cannot return value of type {} from function with return type {}",
-                                    &rich_expr, &expected
+                                    &rich_expr.typ, &expected
                                 )
                                 .as_str(),
                             ))

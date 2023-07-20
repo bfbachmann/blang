@@ -1,3 +1,4 @@
+use inkwell::basic_block::BasicBlock;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
@@ -12,7 +13,8 @@ use inkwell::types::{
     AnyType, AnyTypeEnum, AsTypeRef, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType,
 };
 use inkwell::values::{
-    BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue,
+    BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, IntValue,
+    PointerValue,
 };
 use inkwell::IntPredicate;
 use llvm_sys::core::LLVMFunctionType;
@@ -24,6 +26,7 @@ use crate::analyzer::expr::{RichExpr, RichExprKind};
 use crate::analyzer::func::{RichFn, RichFnCall, RichRet};
 use crate::analyzer::program::RichProg;
 use crate::analyzer::statement::RichStatement;
+
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::op::Operator;
 use crate::parser::r#type::Type;
@@ -65,6 +68,11 @@ impl CompileError {
 
 type CompileResult<T> = Result<T, CompileError>;
 
+struct LoopContext<'ctx> {
+    end_block: Option<BasicBlock<'ctx>>,
+    has_return: bool,
+}
+
 struct FnCompiler<'a, 'ctx> {
     context: &'ctx Context,
     builder: &'a Builder<'ctx>,
@@ -73,6 +81,7 @@ struct FnCompiler<'a, 'ctx> {
 
     vars: HashMap<String, PointerValue<'ctx>>,
     fn_value: Option<FunctionValue<'ctx>>,
+    loop_ctx: Vec<LoopContext<'ctx>>,
 }
 
 impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
@@ -90,9 +99,55 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             module,
             vars: HashMap::new(),
             fn_value: None,
+            loop_ctx: vec![],
         };
 
         fn_compiler.compile_fn(func)
+    }
+
+    fn new_loop_ctx(&mut self) -> BasicBlock<'ctx> {
+        let loop_begin = self
+            .context
+            .append_basic_block(self.fn_value.unwrap(), "loopbegin");
+        self.loop_ctx.push(LoopContext {
+            end_block: None,
+            has_return: false,
+        });
+        loop_begin
+    }
+
+    fn pop_loop_ctx(&mut self) {
+        self.loop_ctx.pop().unwrap();
+    }
+
+    fn is_in_loop(&self) -> bool {
+        !self.loop_ctx.is_empty()
+    }
+
+    fn set_loop_has_return(&mut self) {
+        self.loop_ctx.last_mut().unwrap().has_return = true;
+    }
+
+    fn loop_has_return(&self) -> bool {
+        self.loop_ctx.last().unwrap().has_return
+    }
+
+    fn get_or_create_loop_end_block(&mut self) -> BasicBlock<'ctx> {
+        let loop_block = self.loop_ctx.last_mut().unwrap();
+
+        if let Some(end_block) = loop_block.end_block {
+            return end_block;
+        }
+
+        let end_block = self
+            .context
+            .append_basic_block(self.fn_value.unwrap(), "loopend");
+        loop_block.end_block = Some(end_block);
+        end_block
+    }
+
+    fn get_loop_end_block(&self) -> Option<BasicBlock<'ctx>> {
+        self.loop_ctx.last().unwrap().end_block
     }
 
     fn compile_fn(&mut self, func: &RichFn) -> CompileResult<FunctionValue<'ctx>> {
@@ -130,13 +185,14 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             self.fpm.run_on(&fn_val);
             Ok(fn_val)
         } else {
+            fn_val.print_to_stderr();
             unsafe {
                 fn_val.delete();
             }
 
             Err(CompileError::new(
                 ErrorKind::FnVerificationFailed,
-                format!("failed to verify function {}", func.signature.name).as_str(),
+                format!("failed to verify function {}", func.signature).as_str(),
             ))
         }
     }
@@ -177,15 +233,15 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// Compiles all statements in the closure. Returns true if the closure returns unconditionally.
     fn compile_closure(&mut self, closure: &RichClosure) -> CompileResult<bool> {
-        let mut returns = false;
         for (i, statement) in closure.statements.iter().enumerate() {
             let returned = self.compile_statement(statement)?;
-            if i == closure.statements.len() - 1 {
-                returns = returned
+            let is_last = i == closure.statements.len() - 1;
+            if is_last {
+                return Ok(returned);
             }
         }
 
-        Ok(returns)
+        Ok(false)
     }
 
     /// Compiles a statement and returns true if the statement always results in a return.
@@ -219,10 +275,10 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 return self.compile_cond(cond);
             }
             RichStatement::Loop(closure) => {
-                panic!("{} not yet supported", closure);
+                return self.compile_loop(closure);
             }
             RichStatement::Break => {
-                panic!("break not yet supported");
+                self.compile_break();
             }
             RichStatement::Return(ret) => {
                 self.compile_return(ret);
@@ -231,6 +287,44 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
 
         Ok(false)
+    }
+
+    /// Compiles a break statement.
+    fn compile_break(&mut self) {
+        let loop_end = self.get_or_create_loop_end_block();
+        self.builder.build_unconditional_branch(loop_end);
+    }
+
+    /// Compiles a loop. Returns true if the loop returns unconditionally.
+    fn compile_loop(&mut self, loop_body: &RichClosure) -> CompileResult<bool> {
+        // Create a new block for the loop body, and branch to it.
+        let loop_begin = self.new_loop_ctx();
+        self.builder.build_unconditional_branch(loop_begin);
+        self.builder.position_at_end(loop_begin);
+
+        // Compile the loop body.
+        let mut returns = self.compile_closure(loop_body)?;
+
+        // If the loop doesn't have a guaranteed return, we need to branch back to the start of the
+        // loop at the end of the loop body.
+        if !returns {
+            self.builder.build_unconditional_branch(loop_begin);
+        }
+
+        // If there is a loop end block, it means the loop has a break and we need to continue
+        // compilation on the loop end block.
+        if let Some(loop_end) = self.get_loop_end_block() {
+            self.builder.position_at_end(loop_end);
+        } else if self.loop_has_return() {
+            // At this point we know the loop contains a return but no break statements, so it
+            // is guaranteed to return or run forever.
+            returns = true;
+        }
+
+        // Pop the loop context now that we've compiled the loop body.
+        self.pop_loop_ctx();
+
+        Ok(returns)
     }
 
     /// Compiles a conditional. Returns true if all branches of the conditional result in
@@ -307,7 +401,11 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Compiles a return statement.
-    fn compile_return(&self, ret: &RichRet) {
+    fn compile_return(&mut self, ret: &RichRet) {
+        if self.is_in_loop() {
+            self.set_loop_has_return();
+        }
+
         match &ret.val {
             Some(expr) => {
                 let result = self.compile_expr(expr);
@@ -321,7 +419,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// Compiles an arbitrary expression.
     fn compile_expr(&self, expr: &RichExpr) -> BasicValueEnum<'ctx> {
-        match &expr.kind {
+        let result = match &expr.kind {
             RichExprKind::VariableReference(name) => self.get_var(name),
 
             RichExprKind::BoolLiteral(b) => self
@@ -350,7 +448,10 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             other => {
                 panic!("{other} not implemented");
             }
-        }
+        };
+
+        // Dereference the result if it's a pointer.
+        self.deref_if_ptr(result, &expr.typ)
     }
 
     /// Compiles a function call, returning the result if one exists.
@@ -363,7 +464,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         for arg in &call.args {
             // Compile the argument expression, making sure to dereference any pointers
             // if necessary.
-            let arg_val = self.deref_if_ptr(self.compile_expr(arg), &arg.typ);
+            let arg_val = self.compile_expr(arg);
             args.push(arg_val.into());
         }
 
@@ -721,7 +822,7 @@ mod tests {
     use crate::parser::program::Program;
 
     #[test]
-    fn thing() {
+    fn basic_program() {
         let code = r#"
             fn main() {
                 i64 val = other(2, 10)
@@ -743,6 +844,19 @@ mod tests {
                 }
                 
                 return fib(n-1) + fib(n-2)
+            }
+            
+            fn cum_sum(i64 n): i64 {
+                i64 i = 1
+                i64 result = 0
+                loop {
+                    if i >= n {
+                        return result 
+                    }
+                
+                    result = result + i
+                    i = i + 1
+                }
             }
         "#;
         let mut tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
