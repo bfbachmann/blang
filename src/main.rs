@@ -8,7 +8,6 @@ use std::process;
 use clap::{arg, Command};
 use log::{error, info, set_max_level, Level};
 
-
 use lexer::token::Token;
 use parser::program::Program;
 use parser::statement::Statement;
@@ -16,7 +15,7 @@ use parser::statement::Statement;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::program::RichProg;
 use crate::analyzer::statement::RichStatement;
-use crate::compiler::Compiler;
+use compiler::program::Compiler;
 
 mod analyzer;
 mod compiler;
