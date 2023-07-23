@@ -182,6 +182,25 @@ mod tests {
                 return fib(n-1) + fib(n-2)
             }
             
+            fn do_thing(i64 a): i64 {
+                i64 result = 5
+                loop {
+                    if a < 10 {
+                        loop {
+                            result = result + 1
+                            if result > 100 {
+                                a = a / 2
+                                break
+                            } else {
+                                continue
+                            }
+                        }
+                    }
+                    
+                    return a * result
+                }
+            }
+            
             fn cum_sum(i64 n): i64 {
                 i64 i = 1
                 i64 result = 0
@@ -190,8 +209,10 @@ mod tests {
                         return result 
                     }
                 
-                    result = result + i
-                    i = i + 1
+                    {{
+                        result = result + i
+                        i = i + 1
+                    }}
                 }
             }
         "#;

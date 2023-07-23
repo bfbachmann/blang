@@ -20,10 +20,64 @@ use crate::compiler::error::{CompileError, CompileResult, ErrorKind};
 use crate::parser::op::Operator;
 use crate::parser::r#type::Type;
 
-/// Stores information about the current loop being compiled.
 struct LoopContext<'ctx> {
+    begin_block: BasicBlock<'ctx>,
     end_block: Option<BasicBlock<'ctx>>,
-    has_return: bool,
+    guarantees_return: bool,
+    guarantees_terminator: bool,
+    contains_return: bool,
+}
+
+struct FnContext {
+    guarantees_return: bool,
+}
+
+struct StatementContext {
+    guarantees_return: bool,
+    guarantees_terminator: bool,
+}
+
+struct BranchContext {
+    guarantees_return: bool,
+    guarantees_terminator: bool,
+}
+
+/// Stores information about the current closure or statement being compiled.
+enum CompilationContext<'ctx> {
+    Loop(LoopContext<'ctx>),
+    Branch(BranchContext),
+    Func(FnContext),
+    Statement(StatementContext),
+}
+
+impl<'ctx> CompilationContext<'ctx> {
+    fn to_loop(self) -> LoopContext<'ctx> {
+        match self {
+            CompilationContext::Loop(ctx) => ctx,
+            _ => panic!("cannot cast context to LoopContext"),
+        }
+    }
+
+    fn to_branch(self) -> BranchContext {
+        match self {
+            CompilationContext::Branch(ctx) => ctx,
+            _ => panic!("cannot cast context to BranchContext"),
+        }
+    }
+
+    fn to_fn(self) -> FnContext {
+        match self {
+            CompilationContext::Func(ctx) => ctx,
+            _ => panic!("cannot cast context to FnContext"),
+        }
+    }
+
+    fn to_statement(self) -> StatementContext {
+        match self {
+            CompilationContext::Statement(ctx) => ctx,
+            _ => panic!("cannot cast context to StatementContext"),
+        }
+    }
 }
 
 /// Compiles type-rich (i.e. semantically valid) functions.
@@ -35,7 +89,7 @@ pub struct FnCompiler<'a, 'ctx> {
 
     vars: HashMap<String, PointerValue<'ctx>>,
     fn_value: Option<FunctionValue<'ctx>>,
-    loop_ctx: Vec<LoopContext<'ctx>>,
+    stack: Vec<CompilationContext<'ctx>>,
 }
 
 impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
@@ -54,65 +108,153 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             module,
             vars: HashMap::new(),
             fn_value: None,
-            loop_ctx: vec![],
+            stack: vec![],
         };
 
         fn_compiler.compile_fn(func)
     }
 
-    /// Creates a new loop context, adds it to the stack, and returns it.
-    fn new_loop_ctx(&mut self) -> BasicBlock<'ctx> {
-        let loop_begin = self
-            .context
-            .append_basic_block(self.fn_value.unwrap(), "loopbegin");
-        self.loop_ctx.push(LoopContext {
-            end_block: None,
-            has_return: false,
-        });
-        loop_begin
+    /// Creates a new statement context and pushes it onto the stack.
+    fn push_statement_ctx(&mut self) {
+        self.stack
+            .push(CompilationContext::Statement(StatementContext {
+                guarantees_return: false,
+                guarantees_terminator: false,
+            }));
     }
 
-    /// Pops the current loop context from the stack. This panics if there is no current loop
+    /// Creates a new branch context and pushes it onto the stack.
+    fn push_branch_ctx(&mut self) {
+        self.stack.push(CompilationContext::Branch(BranchContext {
+            guarantees_return: false,
+            guarantees_terminator: false,
+        }));
+    }
+
+    /// Creates a new loop context and pushes it onto the stack.
+    fn push_loop_ctx(&mut self) {
+        let begin_block = self
+            .context
+            .append_basic_block(self.fn_value.unwrap(), "loopbegin");
+        let loop_ctx = LoopContext {
+            begin_block,
+            end_block: None,
+            guarantees_terminator: false,
+            guarantees_return: false,
+            contains_return: false,
+        };
+        self.stack.push(CompilationContext::Loop(loop_ctx));
+    }
+
+    /// Creates a new function context and pushes it onto the stack.
+    fn push_fn_ctx(&mut self) {
+        self.stack.push(CompilationContext::Func(FnContext {
+            guarantees_return: false,
+        }));
+    }
+
+    /// Pops the current loop context from the stack. Panics if the current context is not a loop
     /// context.
-    fn pop_loop_ctx(&mut self) {
-        self.loop_ctx.pop().unwrap();
+    fn pop_ctx(&mut self) -> CompilationContext<'ctx> {
+        self.stack.pop().unwrap()
     }
 
     /// Returns true if we are currently inside a loop.
     fn is_in_loop(&self) -> bool {
-        !self.loop_ctx.is_empty()
+        for ctx in self.stack.iter().rev() {
+            if let CompilationContext::Loop(_) = ctx {
+                return true;
+            }
+        }
+
+        false
     }
 
-    /// Marks the current loop at the top of the stack as containing a return.
-    fn set_loop_has_return(&mut self) {
-        self.loop_ctx.last_mut().unwrap().has_return = true;
+    /// Sets the `guarantees_return` flag on the current context.
+    fn set_guarantees_return(&mut self, guarantees_return: bool) {
+        match self.stack.last_mut().unwrap() {
+            CompilationContext::Loop(ctx) => {
+                ctx.guarantees_return = guarantees_return;
+                ctx.guarantees_terminator = guarantees_return || ctx.guarantees_terminator;
+            }
+            CompilationContext::Func(ctx) => {
+                ctx.guarantees_return = guarantees_return;
+            }
+            CompilationContext::Statement(ctx) => {
+                ctx.guarantees_return = guarantees_return;
+                ctx.guarantees_terminator = guarantees_return || ctx.guarantees_terminator;
+            }
+            CompilationContext::Branch(ctx) => {
+                ctx.guarantees_return = guarantees_return;
+                ctx.guarantees_terminator = guarantees_return || ctx.guarantees_terminator;
+            }
+        }
     }
 
-    /// Returns true if the current loop at the top of the stack contains a return statement.
-    fn loop_has_return(&self) -> bool {
-        self.loop_ctx.last().unwrap().has_return
+    /// Sets the `guarantees_terminator` flag on the current context, if applicable.
+    fn set_guarantees_terminator(&mut self, guarantees_term: bool) {
+        match self.stack.last_mut().unwrap() {
+            CompilationContext::Statement(ctx) => {
+                ctx.guarantees_terminator = guarantees_term;
+            }
+            CompilationContext::Branch(ctx) => {
+                ctx.guarantees_terminator = guarantees_term;
+            }
+            CompilationContext::Loop(ctx) => {
+                ctx.guarantees_terminator = guarantees_term;
+            }
+            CompilationContext::Func(_) => {}
+        }
+    }
+
+    /// Returns a reference to the nearest loop context in the stack.
+    fn get_loop_ctx(&mut self) -> &mut LoopContext<'ctx> {
+        for ctx in self.stack.iter_mut().rev() {
+            if let CompilationContext::Loop(loop_ctx) = ctx {
+                return loop_ctx;
+            }
+        }
+
+        panic!("call to get_loop_ctx occurred outside of loop");
     }
 
     /// Returns the existing loop end block from the current loop context, if one exists. Otherwise,
-    /// creates one, adds it to the current loop context, and returns it.
+    /// creates one, adds it to the current loop context, and returns it. Panics if there is no
+    /// loop context in the stack.
     fn get_or_create_loop_end_block(&mut self) -> BasicBlock<'ctx> {
-        let loop_block = self.loop_ctx.last_mut().unwrap();
-
-        if let Some(end_block) = loop_block.end_block {
+        if let Some(end_block) = self.get_loop_end_block() {
             return end_block;
         }
 
         let end_block = self
             .context
             .append_basic_block(self.fn_value.unwrap(), "loopend");
-        loop_block.end_block = Some(end_block);
-        end_block
+
+        let ctx = self.get_loop_ctx();
+        ctx.end_block = Some(end_block);
+        ctx.end_block.unwrap()
     }
 
     /// Fetches the loop end block from the current loop context. Panics if there is no loop
-    /// context.
-    fn get_loop_end_block(&self) -> Option<BasicBlock<'ctx>> {
-        self.loop_ctx.last().unwrap().end_block
+    /// context (i.e. if not called from within a loop).
+    fn get_loop_end_block(&mut self) -> Option<BasicBlock<'ctx>> {
+        let loop_ctx = self.get_loop_ctx();
+        loop_ctx.end_block
+    }
+
+    /// Returns the block that begins the current loop. Panics if there is no loop context (i.e. if
+    /// not called from within a loop).
+    fn get_loop_begin_block(&mut self) -> BasicBlock<'ctx> {
+        let loop_ctx = self.get_loop_ctx();
+        loop_ctx.begin_block
+    }
+
+    /// If inside a loop, sets the loop's `contains_return` flag.
+    fn set_loop_contains_return(&mut self, contains_return: bool) {
+        if self.is_in_loop() {
+            let loop_ctx = self.get_loop_ctx();
+            loop_ctx.contains_return = contains_return;
+        }
     }
 
     /// Compiles the given function.
@@ -137,12 +279,17 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             self.create_var(arg.name.as_str(), &arg.typ, arg_val);
         }
 
+        // Push a function context onto the stack so we can reference it later.
+        self.push_fn_ctx();
+
         // Compile the function body. This will return true if the function already ends in an
         // explicit return statement (or a set of unconditional branches that all return).
-        let returns = self.compile_closure(&func.body)?;
+        self.compile_closure(&func.body)?;
 
-        // If the function body does not end in an explicit return, we have to insert one.
-        if !returns {
+        // If the function body does not end in an explicit return (or other terminator
+        // instruction), we have to insert one.
+        let ctx = self.pop_ctx().to_fn();
+        if !ctx.guarantees_return {
             self.builder.build_return(None);
         }
 
@@ -197,25 +344,31 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         builder.build_alloca(get_basic_type(self.context, typ), name)
     }
 
-    /// Compiles all statements in the closure. Returns true if the closure returns unconditionally.
-    fn compile_closure(&mut self, closure: &RichClosure) -> CompileResult<bool> {
+    /// Compiles all statements in the closure.
+    fn compile_closure(&mut self, closure: &RichClosure) -> CompileResult<()> {
         for (i, statement) in closure.statements.iter().enumerate() {
-            let returned = self.compile_statement(statement)?;
-            let is_last = i == closure.statements.len() - 1;
-            if is_last {
-                return Ok(returned);
+            // Create a new statement context that can store information about the statement
+            // we're about to compile.
+            self.push_statement_ctx();
+
+            self.compile_statement(statement)?;
+
+            // Pop the statement context now that we've compiled the statement.
+            let ctx = self.pop_ctx().to_statement();
+
+            // If this is the last statement in the closure, we need to propagate information about
+            // terminators and returns to the parent context.
+            if i + 1 == closure.statements.len() {
+                self.set_guarantees_return(ctx.guarantees_return);
+                self.set_guarantees_terminator(ctx.guarantees_terminator);
             }
         }
 
-        Ok(false)
+        Ok(())
     }
 
-    /// Compiles a statement and returns true if the statement always results in a return.
-    /// Statements that would always result in a return are
-    ///  - explicit return statements
-    ///  - conditionals where every possible branch results in a return
-    ///  - loops that always result in a return
-    fn compile_statement(&mut self, statement: &RichStatement) -> CompileResult<bool> {
+    /// Compiles a statement.
+    fn compile_statement(&mut self, statement: &RichStatement) -> CompileResult<()> {
         match statement {
             RichStatement::VariableDeclaration(decl) => {
                 // Get the value of the expression being assigned to the variable.
@@ -238,67 +391,90 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 self.compile_call(call);
             }
             RichStatement::Conditional(cond) => {
-                return self.compile_cond(cond);
+                self.compile_cond(cond)?;
             }
             RichStatement::Loop(closure) => {
-                return self.compile_loop(closure);
+                self.compile_loop(closure)?;
             }
             RichStatement::Break => {
                 self.compile_break();
             }
+            RichStatement::Continue => {
+                self.compile_continue();
+            }
             RichStatement::Return(ret) => {
                 self.compile_return(ret);
-                return Ok(true);
             }
-        }
+        };
 
-        Ok(false)
+        Ok(())
     }
 
     /// Compiles a break statement.
     fn compile_break(&mut self) {
+        self.set_guarantees_terminator(true);
         let loop_end = self.get_or_create_loop_end_block();
         self.builder.build_unconditional_branch(loop_end);
     }
 
-    /// Compiles a loop. Returns true if the loop returns unconditionally.
-    fn compile_loop(&mut self, loop_body: &RichClosure) -> CompileResult<bool> {
-        // Create a new block for the loop body, and branch to it.
-        let loop_begin = self.new_loop_ctx();
+    /// Compiles a continue statement.
+    fn compile_continue(&mut self) {
+        self.set_guarantees_terminator(true);
+        let loop_begin = self.get_loop_begin_block();
         self.builder.build_unconditional_branch(loop_begin);
-        self.builder.position_at_end(loop_begin);
-
-        // Compile the loop body.
-        let mut returns = self.compile_closure(loop_body)?;
-
-        // If the loop doesn't have a guaranteed return, we need to branch back to the start of the
-        // loop at the end of the loop body.
-        if !returns {
-            self.builder.build_unconditional_branch(loop_begin);
-        }
-
-        // If there is a loop end block, it means the loop has a break and we need to continue
-        // compilation on the loop end block.
-        if let Some(loop_end) = self.get_loop_end_block() {
-            self.builder.position_at_end(loop_end);
-        } else if self.loop_has_return() {
-            // At this point we know the loop contains a return but no break statements, so it
-            // is guaranteed to return or run forever.
-            returns = true;
-        }
-
-        // Pop the loop context now that we've compiled the loop body.
-        self.pop_loop_ctx();
-
-        Ok(returns)
     }
 
-    /// Compiles a conditional. Returns true if all branches of the conditional result in
-    /// unconditional returns.
-    fn compile_cond(&mut self, cond: &RichCond) -> CompileResult<bool> {
+    /// Compiles a loop.
+    fn compile_loop(&mut self, loop_body: &RichClosure) -> CompileResult<()> {
+        // Create a loop context to store information about the loop body.
+        self.push_loop_ctx();
+
+        // Create a new block for the loop body, and branch to it.
+        let begin_block = self.get_loop_ctx().begin_block;
+        self.builder.build_unconditional_branch(begin_block);
+        self.builder.position_at_end(begin_block);
+
+        // Compile the loop body.
+        self.compile_closure(loop_body)?;
+
+        // Pop the loop context now that we've compiled the loop body.
+        let ctx = self.pop_ctx().to_loop();
+
+        // If the loop doesn't already end in a terminator instruction, we need to branch back
+        // to the beginning of the loop.
+        if !ctx.guarantees_terminator {
+            self.builder.build_unconditional_branch(begin_block);
+        }
+
+        // Update the parent context with return information.
+        self.set_guarantees_return(ctx.guarantees_return);
+
+        // If there is a loop end block, it means the loop has a break and we need to continue
+        // compilation on the loop end block. In this case, we also inform the parent context
+        // that this loop is not guaranteed to end in a terminator or return (since it can be broken
+        // out of).
+        if let Some(end_block) = ctx.end_block {
+            self.builder.position_at_end(end_block);
+            self.set_guarantees_terminator(false);
+            self.set_guarantees_return(false);
+        } else {
+            // The loop has no break statements.
+            self.set_guarantees_terminator(true);
+
+            // If there is a return inside the loop and it never breaks, we can tell the
+            // parent context that is is guaranteed to return (or run forever, which is fine).
+            self.set_guarantees_return(ctx.contains_return);
+        }
+
+        Ok(())
+    }
+
+    /// Compiles a conditional.
+    fn compile_cond(&mut self, cond: &RichCond) -> CompileResult<()> {
         // Compile each branch, recording whether it returns.
         let mut end_block = None;
         let mut all_branches_return = true;
+        let mut all_branches_terminate = true;
         let mut else_branch_exists = false;
         for (i, branch) in cond.branches.iter().enumerate() {
             // If there is a branch condition, it means we are on an "if" or "else if" branch.
@@ -309,10 +485,22 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                     .context
                     .append_basic_block(self.fn_value.unwrap(), format!("branch{}", i).as_str());
 
-                // Create an "else" block to jump to if the branch condition is false.
-                let else_block = self
-                    .context
-                    .append_basic_block(self.fn_value.unwrap(), format!("branch{}", i).as_str());
+                // Create an "else" block to jump to if the branch condition is false. If this is
+                // the last branch in the conditional, the "else" block is the "end" block.
+                // Otherwise, we create a new "else" block.
+                let else_block = if i + 1 == cond.branches.len() {
+                    if end_block.is_none() {
+                        end_block = Some(
+                            self.context
+                                .append_basic_block(self.fn_value.unwrap(), "endcond"),
+                        );
+                    }
+
+                    end_block.unwrap()
+                } else {
+                    self.context
+                        .append_basic_block(self.fn_value.unwrap(), format!("branch{}", i).as_str())
+                };
 
                 // Branch from the current block based on the value of the conditional expression.
                 let cond_val = self.get_bool(self.compile_expr(expr));
@@ -321,12 +509,22 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
                 // Fill the "then" block with the branch body.
                 self.builder.position_at_end(then_block);
-                let returns = self.compile_closure(&branch.body)?;
-                all_branches_return &= returns;
+
+                // Create a branch context to store information about the branch being compiled.
+                self.push_branch_ctx();
+
+                // Compile the branch body.
+                self.compile_closure(&branch.body)?;
+
+                // Pop the branch context now that we're done compiling the branch.
+                let ctx = self.pop_ctx().to_branch();
+
+                all_branches_return = all_branches_return && ctx.guarantees_return;
+                all_branches_terminate = all_branches_terminate && ctx.guarantees_terminator;
 
                 // If this branch does not end in an unconditional return, we need to complete
                 // the corresponding "then" block with an unconditional jump to the "end" block.
-                if !returns {
+                if !ctx.guarantees_terminator {
                     if end_block.is_none() {
                         end_block = Some(
                             self.context
@@ -341,12 +539,15 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             } else {
                 // This is an else branch, so we must execute the branch body.
                 else_branch_exists = true;
-                let returns = self.compile_closure(&branch.body)?;
-                all_branches_return &= returns;
+                self.push_branch_ctx();
+                self.compile_closure(&branch.body)?;
+                let ctx = self.pop_ctx().to_branch();
+                all_branches_return = all_branches_return && ctx.guarantees_return;
+                all_branches_terminate = all_branches_terminate && ctx.guarantees_terminator;
 
                 // If this branch does not end in an unconditional return, we need to complete
                 // the current block with an unconditional jump to the "end" block.
-                if !returns {
+                if !ctx.guarantees_terminator {
                     if end_block.is_none() {
                         end_block = Some(
                             self.context
@@ -363,14 +564,16 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             self.builder.position_at_end(block);
         }
 
-        Ok(all_branches_return && else_branch_exists)
+        // Update the parent context with return and terminator information.
+        self.set_guarantees_return(all_branches_return && else_branch_exists);
+        self.set_guarantees_terminator(all_branches_terminate && else_branch_exists);
+        Ok(())
     }
 
     /// Compiles a return statement.
     fn compile_return(&mut self, ret: &RichRet) {
-        if self.is_in_loop() {
-            self.set_loop_has_return();
-        }
+        self.set_guarantees_return(true);
+        self.set_loop_contains_return(true);
 
         match &ret.val {
             Some(expr) => {

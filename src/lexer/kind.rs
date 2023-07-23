@@ -45,6 +45,7 @@ pub enum TokenKind {
     Loop,
     Break,
     Return,
+    Continue,
 
     // Delimiters
     BeginClosure,
@@ -100,6 +101,7 @@ impl Clone for TokenKind {
             TokenKind::Colon => TokenKind::Colon,
             TokenKind::BeginComment => TokenKind::BeginComment,
             TokenKind::Identifier(v) => TokenKind::Identifier(v.clone()),
+            TokenKind::Continue => TokenKind::Continue,
         }
     }
 }
@@ -156,6 +158,7 @@ impl TokenKind {
             TokenKind::Break => "break".to_string(),
             TokenKind::Return => "return".to_string(),
             TokenKind::BeginComment => "//".to_string(),
+            TokenKind::Continue => "continue".to_string(),
         }
     }
 
@@ -223,6 +226,7 @@ impl TokenKind {
             TokenKind::Break,
             TokenKind::Return,
             TokenKind::BeginComment,
+            TokenKind::Continue,
         ];
 
         for kind in basic_kinds {

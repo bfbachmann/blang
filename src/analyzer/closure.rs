@@ -289,6 +289,7 @@ fn check_return(ret: &RichRet, expected: Option<&Type>) -> AnalyzeResult<()> {
     Ok(())
 }
 
+/// Performs semantic analysis on a break statement.
 pub fn analyze_break(ctx: &mut ProgramContext) -> AnalyzeResult<()> {
     // Make sure we are inside a loop closure.
     if ctx.is_in_loop() {
@@ -298,5 +299,18 @@ pub fn analyze_break(ctx: &mut ProgramContext) -> AnalyzeResult<()> {
     Err(AnalyzeError::new(
         ErrorKind::UnexpectedBreak,
         "cannot break from outside a loop",
+    ))
+}
+
+/// Performs semantic analysis on a continue statement.
+pub fn analyze_continue(ctx: &mut ProgramContext) -> AnalyzeResult<()> {
+    // Make sure we are inside a loop closure.
+    if ctx.is_in_loop() {
+        return Ok(());
+    }
+
+    Err(AnalyzeError::new(
+        ErrorKind::UnexpectedContinue,
+        "cannot continue from outside a loop",
     ))
 }

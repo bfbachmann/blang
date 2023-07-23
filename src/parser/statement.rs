@@ -26,6 +26,7 @@ pub enum Statement {
     Conditional(Conditional),
     Loop(Loop),
     Break,
+    Continue,
     Return(Option<Expression>),
 }
 
@@ -60,6 +61,9 @@ impl fmt::Display for Statement {
             Statement::Break => {
                 write!(f, "break")
             }
+            Statement::Continue => {
+                write!(f, "continue")
+            }
             Statement::Return(_) => {
                 write!(f, "return")
             }
@@ -77,6 +81,7 @@ impl Statement {
     ///  - conditional (see `Conditional::from`)
     ///  - loop (see `Loop::from`)
     ///  - break
+    ///  - continue
     ///  - return (of the form `return <expr>` where `expr` is an expression)
     pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         // Try use the first two tokens to figure out what type of statement will follow. This works
@@ -201,6 +206,18 @@ impl Statement {
             ) => {
                 tokens.pop_front();
                 Ok(Statement::Break)
+            }
+
+            // If the first token is "continue", it must be a loop continue.
+            (
+                Token {
+                    kind: TokenKind::Continue,
+                    ..
+                },
+                _,
+            ) => {
+                tokens.pop_front();
+                Ok(Statement::Continue)
             }
 
             // If the first token is "return", it must be a return statement.

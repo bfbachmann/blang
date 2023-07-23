@@ -1,7 +1,7 @@
 use core::fmt;
 use std::fmt::Formatter;
 
-use crate::analyzer::closure::{analyze_break, RichClosure};
+use crate::analyzer::closure::{analyze_break, analyze_continue, RichClosure};
 use crate::analyzer::cond::RichCond;
 use crate::analyzer::func::{RichFn, RichFnCall, RichRet};
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
@@ -21,6 +21,7 @@ pub enum RichStatement {
     Conditional(RichCond),
     Loop(RichClosure),
     Break,
+    Continue,
     Return(RichRet),
 }
 
@@ -35,6 +36,7 @@ impl fmt::Display for RichStatement {
             RichStatement::Conditional(v) => write!(f, "{}", v),
             RichStatement::Loop(v) => write!(f, "{}", v),
             RichStatement::Break => write!(f, "break"),
+            RichStatement::Continue => write!(f, "continue"),
             RichStatement::Return(v) => write!(f, "{}", v),
         }
     }
@@ -80,6 +82,10 @@ impl RichStatement {
             }
             Statement::Break => match analyze_break(ctx) {
                 Ok(_) => Ok(RichStatement::Break),
+                Err(e) => Err(e),
+            },
+            Statement::Continue => match analyze_continue(ctx) {
+                Ok(_) => Ok(RichStatement::Continue),
                 Err(e) => Err(e),
             },
             Statement::Return(expr) => match RichRet::from(ctx, expr) {
@@ -260,6 +266,24 @@ mod tests {
                             return true
                         }
                     }
+                }
+            }
+        "#;
+        let result = analyze_statement(raw);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn loop_with_continue() {
+        let raw = r#"
+            fn thing(i64 a): bool {
+                loop {
+                    a = a - 1
+                    if a == 1 {
+                        continue
+                    }
+                    
+                    return true
                 }
             }
         "#;
