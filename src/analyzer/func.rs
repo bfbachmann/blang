@@ -113,6 +113,14 @@ impl PartialEq for RichFnCall {
 
 impl RichFnCall {
     pub fn from(ctx: &mut ProgramContext, call: FunctionCall) -> AnalyzeResult<Self> {
+        // Calls to "main" should not be allowed.
+        if call.fn_name == "main" {
+            return Err(AnalyzeError::new(
+                ErrorKind::CallToMain,
+                "cannot call entrypoint main",
+            ));
+        }
+
         // Extract type information from args.
         let mut rich_args = vec![];
         for arg in call.args {

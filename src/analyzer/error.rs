@@ -16,6 +16,7 @@ pub enum ErrorKind {
     UnexpectedContinue,
     UnexpectedReturn,
     MissingMain,
+    CallToMain,
     MissingReturn,
     InvalidMain,
 }
@@ -34,6 +35,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::UnexpectedContinue => write!(f, "unexpected continue"),
             ErrorKind::UnexpectedReturn => write!(f, "unexpected return"),
             ErrorKind::MissingMain => write!(f, "missing main"),
+            ErrorKind::CallToMain => write!(f, "call to main"),
             ErrorKind::MissingReturn => write!(f, "missing return"),
             ErrorKind::InvalidMain => write!(f, "invalid main"),
         }

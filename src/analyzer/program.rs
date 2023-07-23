@@ -79,8 +79,36 @@ mod tests {
 
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
     use crate::analyzer::program::RichProg;
+    use crate::analyzer::AnalyzeResult;
     use crate::lexer::token::Token;
     use crate::parser::program::Program;
+
+    fn analyze_prog(raw: &str) -> AnalyzeResult<RichProg> {
+        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let prog = Program::from(&mut tokens).expect("should not error");
+        RichProg::from(prog)
+    }
+
+    #[test]
+    fn call_to_main() {
+        let raw = r#"
+        fn main() {
+            thing()
+        }
+        
+        fn thing() {
+            main()
+        }
+        "#;
+        let result = analyze_prog(raw);
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::CallToMain,
+                ..
+            })
+        ));
+    }
 
     #[test]
     fn variable_assignment() {
@@ -90,9 +118,7 @@ mod tests {
             i = 11
         }
         "#;
-        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        let prog = Program::from(&mut tokens).expect("should not error");
-        let result = RichProg::from(prog);
+        let result = analyze_prog(raw);
         assert!(matches!(result, Ok(_)));
     }
 
@@ -103,9 +129,7 @@ mod tests {
         fn test(i64 a, string b) { 
             string s = "hello world!" 
         }"#;
-        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        let prog = Program::from(&mut tokens).expect("should not error");
-        let result = RichProg::from(prog);
+        let result = analyze_prog(raw);
         assert!(matches!(result, Ok(_)));
     }
 
@@ -115,9 +139,7 @@ mod tests {
         fn test() {}
         fn test(string thing) {}
         "#;
-        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        let prog = Program::from(&mut tokens).expect("should not error");
-        let result = RichProg::from(prog);
+        let result = analyze_prog(raw);
         assert!(matches!(
             result,
             Err(AnalyzeError {
@@ -141,9 +163,7 @@ mod tests {
         }
         "#;
 
-        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        let prog = Program::from(&mut tokens).expect("should not error");
-        let result = RichProg::from(prog);
+        let result = analyze_prog(raw);
         assert!(matches!(result, Ok(_)));
     }
 
@@ -198,9 +218,7 @@ mod tests {
             return "fake"
         }
         "#;
-        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        let prog = Program::from(&mut tokens).expect("should not error");
-        let result = RichProg::from(prog);
+        let result = analyze_prog(raw);
         assert!(matches!(result, Ok(_)));
     }
 }
