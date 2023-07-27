@@ -778,7 +778,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         match typ {
             Type::I64 => self.get_int(val).as_basic_value_enum(),
             Type::Bool => self.get_bool(val).as_basic_value_enum(),
-            Type::String => val, // TODO: probably not safe. Maybe this should be a bitcast.
+            // Strings should already be represented as pointers.
+            Type::String => val,
             other => panic!("cannot dereference pointer to value of type {other}"),
         }
     }
