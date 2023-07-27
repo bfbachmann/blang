@@ -16,7 +16,7 @@ use llvm_sys::prelude::LLVMTypeRef;
 use std::path::Path;
 
 /// Compiles a type-rich and semantically valid program to LLVM IR and/or bitcode.
-pub struct Compiler<'a, 'ctx> {
+pub struct ProgCompiler<'a, 'ctx> {
     context: &'ctx Context,
     builder: &'a Builder<'ctx>,
     fpm: &'a PassManager<FunctionValue<'ctx>>,
@@ -24,7 +24,7 @@ pub struct Compiler<'a, 'ctx> {
     program: &'a RichProg,
 }
 
-impl<'a, 'ctx> Compiler<'a, 'ctx> {
+impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     /// Compiles the program for the given target. If there is no target, compiles the program for
     /// the host system.
     pub fn compile(
@@ -57,7 +57,7 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
         }
         fpm.initialize();
 
-        let mut compiler = Compiler {
+        let mut compiler = ProgCompiler {
             context: &ctx,
             builder: &builder,
             fpm: &fpm,
@@ -156,7 +156,7 @@ mod tests {
     use std::io::{BufRead, Cursor};
 
     use crate::analyzer::program::RichProg;
-    use crate::compiler::program::Compiler;
+    use crate::compiler::program::ProgCompiler;
     use crate::lexer::token::Token;
     use crate::parser::program::Program;
 
@@ -229,6 +229,6 @@ mod tests {
         let mut tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
         let prog = Program::from(&mut tokens).expect("should not error");
         let rich_prog = RichProg::from(prog).expect("should not error");
-        Compiler::compile(&rich_prog, None, None, None, false).expect("should not error");
+        ProgCompiler::compile(&rich_prog, None, None, None, false).expect("should not error");
     }
 }

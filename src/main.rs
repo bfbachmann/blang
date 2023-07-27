@@ -15,7 +15,7 @@ use parser::statement::Statement;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::program::RichProg;
 use crate::analyzer::statement::RichStatement;
-use compiler::program::Compiler;
+use compiler::program::ProgCompiler;
 
 mod analyzer;
 mod compiler;
@@ -117,7 +117,7 @@ fn compile(
     };
 
     // Compile the program.
-    if let Err(e) = Compiler::compile(&prog, target, bc_path, ll_path, simplify_ir) {
+    if let Err(e) = ProgCompiler::compile(&prog, target, bc_path, ll_path, simplify_ir) {
         fatal!("{}", e);
     }
 }
