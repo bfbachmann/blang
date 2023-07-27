@@ -613,18 +613,26 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 .as_basic_value_enum(),
 
             RichExprKind::StringLiteral(literal) => {
-                let mut chars: Vec<u32> = literal.clone().chars().map(|c| c as u32).collect();
-                chars.push(0);
-
                 let char_type = self.context.i32_type();
-                let array_type = char_type.array_type((chars.len()) as u32);
-                let array_vals: Vec<_> = chars
-                    .iter()
-                    .map(|v| char_type.const_int((*v).into(), false))
-                    .collect();
 
-                let global = self.module.add_global(array_type, None, literal.as_str());
-                global.set_initializer(&char_type.const_array(array_vals.as_slice()));
+                // Check if this string literal already exists as a global.
+                let global = if let Some(global) = self.module.get_global(literal) {
+                    global
+                } else {
+                    let mut chars: Vec<u32> = literal.clone().chars().map(|c| c as u32).collect();
+                    chars.push(0);
+
+                    let array_type = char_type.array_type((chars.len()) as u32);
+                    let array_vals: Vec<_> = chars
+                        .iter()
+                        .map(|v| char_type.const_int((*v).into(), false))
+                        .collect();
+
+                    let global = self.module.add_global(array_type, None, literal.as_str());
+                    global.set_initializer(&char_type.const_array(array_vals.as_slice()));
+
+                    global
+                };
 
                 self.builder.build_bitcast(
                     global.as_pointer_value(),
