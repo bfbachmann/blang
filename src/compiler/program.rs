@@ -32,6 +32,7 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
         target_triple: Option<&String>,
         bitcode_output_path: Option<&String>,
         ir_output_path: Option<&String>,
+        simplify_ir: bool,
     ) -> CompileResult<()> {
         let ctx = Context::create();
         let builder = ctx.create_builder();
@@ -44,14 +45,16 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
 
         // Set up function pass manager.
         let fpm = PassManager::create(&module);
-        fpm.add_instruction_combining_pass();
-        fpm.add_reassociate_pass();
-        fpm.add_gvn_pass();
-        fpm.add_cfg_simplification_pass();
-        fpm.add_basic_alias_analysis_pass();
-        fpm.add_promote_memory_to_register_pass();
-        fpm.add_instruction_combining_pass();
-        fpm.add_reassociate_pass();
+        if simplify_ir {
+            fpm.add_instruction_combining_pass();
+            fpm.add_reassociate_pass();
+            fpm.add_gvn_pass();
+            fpm.add_cfg_simplification_pass();
+            fpm.add_basic_alias_analysis_pass();
+            fpm.add_promote_memory_to_register_pass();
+            fpm.add_instruction_combining_pass();
+            fpm.add_reassociate_pass();
+        }
         fpm.initialize();
 
         let mut compiler = Compiler {
@@ -219,6 +222,6 @@ mod tests {
         let mut tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
         let prog = Program::from(&mut tokens).expect("should not error");
         let rich_prog = RichProg::from(prog).expect("should not error");
-        Compiler::compile(&rich_prog, None, None, None).expect("should not error");
+        Compiler::compile(&rich_prog, None, None, None, false).expect("should not error");
     }
 }

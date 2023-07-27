@@ -9,7 +9,7 @@ use inkwell::types::{AnyType, AnyTypeEnum, BasicMetadataTypeEnum, BasicType, Bas
 use inkwell::values::{
     BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue,
 };
-use inkwell::IntPredicate;
+use inkwell::{AddressSpace, IntPredicate};
 
 use crate::analyzer::closure::RichClosure;
 use crate::analyzer::cond::RichCond;
@@ -90,6 +90,7 @@ pub struct FnCompiler<'a, 'ctx> {
     vars: HashMap<String, PointerValue<'ctx>>,
     fn_value: Option<FunctionValue<'ctx>>,
     stack: Vec<CompilationContext<'ctx>>,
+    cur_block: Option<BasicBlock<'ctx>>,
 }
 
 impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
@@ -109,9 +110,19 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             vars: HashMap::new(),
             fn_value: None,
             stack: vec![],
+            cur_block: None,
         };
 
         fn_compiler.compile_fn(func)
+    }
+
+    /// Creates a new basic block for this function and returns it.
+    fn append_block(&mut self, name: &str) -> BasicBlock<'ctx> {
+        let block = self
+            .context
+            .append_basic_block(self.fn_value.unwrap(), name);
+        self.cur_block = Some(block);
+        block
     }
 
     /// Creates a new statement context and pushes it onto the stack.
@@ -133,9 +144,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// Creates a new loop context and pushes it onto the stack.
     fn push_loop_ctx(&mut self) {
-        let begin_block = self
-            .context
-            .append_basic_block(self.fn_value.unwrap(), "loopbegin");
+        let begin_block = self.append_block("loop_begin");
         let loop_ctx = LoopContext {
             begin_block,
             end_block: None,
@@ -226,9 +235,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             return end_block;
         }
 
-        let end_block = self
-            .context
-            .append_basic_block(self.fn_value.unwrap(), "loopend");
+        let end_block = self.append_block("loop_end");
 
         let ctx = self.get_loop_ctx();
         ctx.end_block = Some(end_block);
@@ -265,14 +272,12 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             .module
             .get_function(func.signature.name.as_str())
             .unwrap();
-        let entry = self.context.append_basic_block(fn_val, "entry");
+        self.fn_value = Some(fn_val);
+
+        let entry = self.append_block("entry");
 
         // Start building from the beginning of the entry block.
         self.builder.position_at_end(entry);
-
-        // Track the function value so we can reference it later (when we need to allocate variables
-        // in its entry block.
-        self.fn_value = Some(fn_val);
 
         // Define function arguments as variables on the stack so they can be referenced in blocks.
         for (arg_val, arg) in fn_val.get_param_iter().zip(func.signature.args.iter()) {
@@ -312,8 +317,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// Creates and initializes a new variable with the given name, type, and initial value.
     /// Panics if a variable by the same name already exists.
-    fn create_var(&mut self, name: &str, typ: &Type, val: BasicValueEnum) {
-        let ptr = self.create_entry_alloc(name, typ);
+    fn create_var(&mut self, name: &str, typ: &Type, val: BasicValueEnum<'ctx>) {
+        let ptr = self.create_entry_alloc(name, typ, val);
         self.builder.build_store(ptr, val);
         assert!(self.vars.insert(name.to_string(), ptr).is_none());
     }
@@ -332,16 +337,32 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Creates a new stack allocation instruction in the entry block of the current function.
-    fn create_entry_alloc(&self, name: &str, typ: &Type) -> PointerValue<'ctx> {
-        let builder = self.context.create_builder();
+    fn create_entry_alloc(
+        &self,
+        name: &str,
+        typ: &Type,
+        val: BasicValueEnum<'ctx>,
+    ) -> PointerValue<'ctx> {
         let entry = self.fn_value.unwrap().get_first_basic_block().unwrap();
 
+        // Switch to the beginning of the entry block if we're not already there.
         match entry.get_first_instruction() {
-            Some(first_instr) => builder.position_before(&first_instr),
-            None => builder.position_at_end(entry),
+            Some(first_instr) => self.builder.position_before(&first_instr),
+            None => self.builder.position_at_end(entry),
         }
 
-        builder.build_alloca(get_basic_type(self.context, typ), name)
+        let val = if *typ == Type::String {
+            self.builder.build_alloca(val.get_type(), name)
+        } else {
+            self.builder
+                .build_alloca(get_basic_type(self.context, typ), name)
+        };
+
+        // Make sure we continue from where we left off as our builder position may have changed
+        // in this function.
+        self.builder.position_at_end(self.cur_block.unwrap());
+
+        val
     }
 
     /// Compiles all statements in the closure.
@@ -481,25 +502,19 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             // Otherwise, it means we're on an "else" branch.
             if let Some(expr) = &branch.cond {
                 // Create a "then" block to jump to if the branch condition is true.
-                let then_block = self
-                    .context
-                    .append_basic_block(self.fn_value.unwrap(), format!("branch{}", i).as_str());
+                let then_block = self.append_block("cond_branch");
 
                 // Create an "else" block to jump to if the branch condition is false. If this is
                 // the last branch in the conditional, the "else" block is the "end" block.
                 // Otherwise, we create a new "else" block.
                 let else_block = if i + 1 == cond.branches.len() {
                     if end_block.is_none() {
-                        end_block = Some(
-                            self.context
-                                .append_basic_block(self.fn_value.unwrap(), "endcond"),
-                        );
+                        end_block = Some(self.append_block("cond_end"));
                     }
 
                     end_block.unwrap()
                 } else {
-                    self.context
-                        .append_basic_block(self.fn_value.unwrap(), format!("branch{}", i).as_str())
+                    self.append_block("cond_branch")
                 };
 
                 // Branch from the current block based on the value of the conditional expression.
@@ -526,10 +541,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 // the corresponding "then" block with an unconditional jump to the "end" block.
                 if !ctx.guarantees_terminator {
                     if end_block.is_none() {
-                        end_block = Some(
-                            self.context
-                                .append_basic_block(self.fn_value.unwrap(), "endcond"),
-                        );
+                        end_block = Some(self.append_block("cond_end"));
                     }
                     self.builder.build_unconditional_branch(end_block.unwrap());
                 }
@@ -549,10 +561,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 // the current block with an unconditional jump to the "end" block.
                 if !ctx.guarantees_terminator {
                     if end_block.is_none() {
-                        end_block = Some(
-                            self.context
-                                .append_basic_block(self.fn_value.unwrap(), "endcond"),
-                        );
+                        end_block = Some(self.append_block("cond_end"));
                     }
                     self.builder.build_unconditional_branch(end_block.unwrap());
                 }
@@ -603,7 +612,27 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 .const_int(i.abs() as u64, *i < 0)
                 .as_basic_value_enum(),
 
-            // RichExprKind::StringLiteral(String),
+            RichExprKind::StringLiteral(literal) => {
+                let mut chars: Vec<u32> = literal.clone().chars().map(|c| c as u32).collect();
+                chars.push(0);
+
+                let char_type = self.context.i32_type();
+                let array_type = char_type.array_type((chars.len()) as u32);
+                let array_vals: Vec<_> = chars
+                    .iter()
+                    .map(|v| char_type.const_int((*v).into(), false))
+                    .collect();
+
+                let global = self.module.add_global(array_type, None, literal.as_str());
+                global.set_initializer(&char_type.const_array(array_vals.as_slice()));
+
+                self.builder.build_bitcast(
+                    global.as_pointer_value(),
+                    char_type.ptr_type(AddressSpace::default()),
+                    "str_lit_as_i32_ptr",
+                )
+            }
+
             RichExprKind::FunctionCall(call) => self.compile_call(call).unwrap(),
 
             // TODO
@@ -660,7 +689,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             self.builder.build_ptr_to_int(
                 expr_val.into_pointer_value(),
                 self.context.bool_type(),
-                "negatedbool",
+                "negated_bool",
             )
         } else {
             expr_val.into_int_value()
@@ -671,7 +700,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             IntPredicate::NE,
             operand,
             self.context.bool_type().const_int(0, false),
-            "test",
+            "not_zero",
         );
 
         result
@@ -712,8 +741,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         let rhs = self.get_bool(rhs);
 
         match op {
-            Operator::LogicalAnd => self.builder.build_and(lhs, rhs, "and"),
-            Operator::LogicalOr => self.builder.build_or(lhs, rhs, "or"),
+            Operator::LogicalAnd => self.builder.build_and(lhs, rhs, "logical_and"),
+            Operator::LogicalOr => self.builder.build_or(lhs, rhs, "logical_or"),
             other => panic!("unexpected logical operator {other}"),
         }
     }
@@ -778,27 +807,27 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Returns the given value as a boolean int value. This is useful for cases where the value may
-    /// by a pointer to a bool.
+    /// be a pointer to a bool.
     fn get_bool(&self, val: BasicValueEnum<'ctx>) -> IntValue<'ctx> {
         if val.is_pointer_value() {
             self.builder.build_ptr_to_int(
                 val.into_pointer_value(),
                 self.context.bool_type(),
-                "ptrtobool",
+                "ptr_to_bool",
             )
         } else {
             val.into_int_value()
         }
     }
 
-    /// Returns the given value as an int value. This is useful for cases where the value may by
+    /// Returns the given value as an int value. This is useful for cases where the value may be
     /// a pointer to an int.
     fn get_int(&self, val: BasicValueEnum<'ctx>) -> IntValue<'ctx> {
         if val.is_pointer_value() {
             self.builder.build_ptr_to_int(
                 val.into_pointer_value(),
                 self.context.i64_type(),
-                "ptrtoint",
+                "ptr_to_int",
             )
         } else {
             val.into_int_value()
@@ -811,6 +840,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         match typ {
             Type::I64 => self.get_int(val).as_basic_value_enum(),
             Type::Bool => self.get_bool(val).as_basic_value_enum(),
+            Type::String => val, // TODO: probably not safe. Maybe this should be a bitcast.
             other => panic!("cannot dereference pointer to value of type {other}"),
         }
     }
@@ -848,6 +878,9 @@ pub fn metadata_type_enum<'a>(context: &'a Context, typ: &Type) -> BasicMetadata
     match typ {
         Type::I64 => BasicMetadataTypeEnum::from(context.i64_type()),
         Type::Bool => BasicMetadataTypeEnum::from(context.bool_type()),
+        Type::String => {
+            BasicMetadataTypeEnum::from(context.i32_type().ptr_type(AddressSpace::default()))
+        }
         other => panic!("unsupported type {}", other),
     }
 }

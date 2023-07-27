@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{stdin, stdout, BufRead, BufReader, Error, ErrorKind, Result, Write};
 use std::process;
 
-use clap::{arg, Command};
+use clap::{arg, ArgAction, Command};
 use log::{error, info, set_max_level, Level};
 
 use lexer::token::Token;
@@ -46,6 +46,10 @@ fn main() {
             Command::new("build")
                 .about("Builds a binary from Blang source code")
                 .arg(arg!([SRC_PATH]).required(true))
+                .arg(
+                    arg!(-u --unoptimized ... "Prevents simplification of generated LLVM IR")
+                        .required(false),
+                )
                 .arg(arg!(-t --target <TARGET> "Specifies target ISA triple").required(false))
                 .arg(
                     arg!(-b --bitcode <BC_PATH> "Specifies bitcode output file path")
@@ -63,7 +67,8 @@ fn main() {
                 let target = sub_matches.get_one::<String>("target");
                 let bc_path = sub_matches.get_one::<String>("bitcode");
                 let ir_path = sub_matches.get_one::<String>("ir");
-                compile(file_path, bc_path, ir_path, target)
+                let simplify_ir = *sub_matches.get_one::<u8>("unoptimized").unwrap() == 0;
+                compile(file_path, bc_path, ir_path, target, simplify_ir)
             }
             _ => fatal!("expected source path"),
         },
@@ -85,6 +90,7 @@ fn compile(
     bc_path: Option<&String>,
     ll_path: Option<&String>,
     target: Option<&String>,
+    simplify_ir: bool,
 ) {
     // Get a reader from the source file.
     let reader = match open_file(input_path) {
@@ -111,7 +117,7 @@ fn compile(
     };
 
     // Compile the program.
-    if let Err(e) = Compiler::compile(&prog, target, bc_path, ll_path) {
+    if let Err(e) = Compiler::compile(&prog, target, bc_path, ll_path, simplify_ir) {
         fatal!("{}", e);
     }
 }
