@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{stdin, stdout, BufRead, BufReader, Error, ErrorKind, Result, Write};
 use std::process;
 
-use clap::{arg, ArgAction, Command};
+use clap::{arg, Command};
 use log::{error, info, set_max_level, Level};
 
 use lexer::token::Token;

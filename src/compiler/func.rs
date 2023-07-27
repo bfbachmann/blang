@@ -5,80 +5,23 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::passes::PassManager;
-use inkwell::types::{AnyType, AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum};
 use inkwell::values::{
     BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue,
 };
-use inkwell::{AddressSpace, IntPredicate};
+use inkwell::IntPredicate;
 
 use crate::analyzer::closure::RichClosure;
 use crate::analyzer::cond::RichCond;
 use crate::analyzer::expr::{RichExpr, RichExprKind};
 use crate::analyzer::func::{RichFn, RichFnCall, RichRet};
 use crate::analyzer::statement::RichStatement;
+use crate::compiler::context::{
+    BranchContext, CompilationContext, FnContext, LoopContext, StatementContext,
+};
+use crate::compiler::convert;
 use crate::compiler::error::{CompileError, CompileResult, ErrorKind};
 use crate::parser::op::Operator;
 use crate::parser::r#type::Type;
-
-struct LoopContext<'ctx> {
-    begin_block: BasicBlock<'ctx>,
-    end_block: Option<BasicBlock<'ctx>>,
-    guarantees_return: bool,
-    guarantees_terminator: bool,
-    contains_return: bool,
-}
-
-struct FnContext {
-    guarantees_return: bool,
-}
-
-struct StatementContext {
-    guarantees_return: bool,
-    guarantees_terminator: bool,
-}
-
-struct BranchContext {
-    guarantees_return: bool,
-    guarantees_terminator: bool,
-}
-
-/// Stores information about the current closure or statement being compiled.
-enum CompilationContext<'ctx> {
-    Loop(LoopContext<'ctx>),
-    Branch(BranchContext),
-    Func(FnContext),
-    Statement(StatementContext),
-}
-
-impl<'ctx> CompilationContext<'ctx> {
-    fn to_loop(self) -> LoopContext<'ctx> {
-        match self {
-            CompilationContext::Loop(ctx) => ctx,
-            _ => panic!("cannot cast context to LoopContext"),
-        }
-    }
-
-    fn to_branch(self) -> BranchContext {
-        match self {
-            CompilationContext::Branch(ctx) => ctx,
-            _ => panic!("cannot cast context to BranchContext"),
-        }
-    }
-
-    fn to_fn(self) -> FnContext {
-        match self {
-            CompilationContext::Func(ctx) => ctx,
-            _ => panic!("cannot cast context to FnContext"),
-        }
-    }
-
-    fn to_statement(self) -> StatementContext {
-        match self {
-            CompilationContext::Statement(ctx) => ctx,
-            _ => panic!("cannot cast context to StatementContext"),
-        }
-    }
-}
 
 /// Compiles type-rich (i.e. semantically valid) functions.
 pub struct FnCompiler<'a, 'ctx> {
@@ -128,38 +71,25 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// Creates a new statement context and pushes it onto the stack.
     fn push_statement_ctx(&mut self) {
         self.stack
-            .push(CompilationContext::Statement(StatementContext {
-                guarantees_return: false,
-                guarantees_terminator: false,
-            }));
+            .push(CompilationContext::Statement(StatementContext::new()));
     }
 
     /// Creates a new branch context and pushes it onto the stack.
     fn push_branch_ctx(&mut self) {
-        self.stack.push(CompilationContext::Branch(BranchContext {
-            guarantees_return: false,
-            guarantees_terminator: false,
-        }));
+        self.stack
+            .push(CompilationContext::Branch(BranchContext::new()));
     }
 
     /// Creates a new loop context and pushes it onto the stack.
     fn push_loop_ctx(&mut self) {
         let begin_block = self.append_block("loop_begin");
-        let loop_ctx = LoopContext {
-            begin_block,
-            end_block: None,
-            guarantees_terminator: false,
-            guarantees_return: false,
-            contains_return: false,
-        };
+        let loop_ctx = LoopContext::new(begin_block);
         self.stack.push(CompilationContext::Loop(loop_ctx));
     }
 
     /// Creates a new function context and pushes it onto the stack.
     fn push_fn_ctx(&mut self) {
-        self.stack.push(CompilationContext::Func(FnContext {
-            guarantees_return: false,
-        }));
+        self.stack.push(CompilationContext::Func(FnContext::new()));
     }
 
     /// Pops the current loop context from the stack. Panics if the current context is not a loop
@@ -355,7 +285,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             self.builder.build_alloca(val.get_type(), name)
         } else {
             self.builder
-                .build_alloca(get_basic_type(self.context, typ), name)
+                .build_alloca(convert::to_basic_type(self.context, typ), name)
         };
 
         // Make sure we continue from where we left off as our builder position may have changed
@@ -636,7 +566,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
                 self.builder.build_bitcast(
                     global.as_pointer_value(),
-                    char_type.ptr_type(AddressSpace::default()),
+                    convert::to_basic_type(self.context, &Type::String),
                     "str_lit_as_i32_ptr",
                 )
             }
@@ -851,44 +781,5 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             Type::String => val, // TODO: probably not safe. Maybe this should be a bitcast.
             other => panic!("cannot dereference pointer to value of type {other}"),
         }
-    }
-}
-
-/// Gets the LLVM basic type that corresponds to the given type.
-fn get_basic_type<'a>(context: &'a Context, typ: &Type) -> BasicTypeEnum<'a> {
-    match typ {
-        Type::Bool => context.bool_type().as_basic_type_enum(),
-        Type::I64 => context.i64_type().as_basic_type_enum(),
-        other => {
-            panic!("invalid basic type {other}");
-        }
-    }
-}
-
-/// Gets the LLVM "any" type that corresponds to the given type.
-pub fn get_any_type<'a>(context: &'a Context, typ: Option<&Type>) -> AnyTypeEnum<'a> {
-    match typ {
-        None => context.void_type().as_any_type_enum(),
-        Some(Type::Bool) => context.bool_type().as_any_type_enum(),
-        Some(Type::I64) => context.i64_type().as_any_type_enum(),
-        // TODO: string and function types
-        Some(Type::Function(sig)) => {
-            panic!("not implemented: {sig}")
-        }
-        Some(Type::String) => {
-            panic!("not implemented: string")
-        }
-    }
-}
-
-/// Gets the LLVM metadata type that corresponds to the given type.
-pub fn metadata_type_enum<'a>(context: &'a Context, typ: &Type) -> BasicMetadataTypeEnum<'a> {
-    match typ {
-        Type::I64 => BasicMetadataTypeEnum::from(context.i64_type()),
-        Type::Bool => BasicMetadataTypeEnum::from(context.bool_type()),
-        Type::String => {
-            BasicMetadataTypeEnum::from(context.i32_type().ptr_type(AddressSpace::default()))
-        }
-        other => panic!("unsupported type {}", other),
     }
 }

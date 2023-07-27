@@ -1,7 +1,7 @@
 use crate::analyzer::program::RichProg;
 use crate::analyzer::statement::RichStatement;
+use crate::compiler::convert;
 use crate::compiler::error::{CompileError, CompileResult, ErrorKind};
-use crate::compiler::func;
 use crate::compiler::func::FnCompiler;
 use crate::parser::func_sig::FunctionSignature;
 use inkwell::builder::Builder;
@@ -128,13 +128,13 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
     /// Converts a `FunctionSignature` into an LLVM `FunctionType`.
     fn create_fn_type(&self, sig: &FunctionSignature) -> FunctionType<'ctx> {
         // Get return type.
-        let ret_type = func::get_any_type(self.context, sig.return_type.as_ref());
+        let ret_type = convert::to_any_type(self.context, sig.return_type.as_ref());
 
         // Get arg types.
         let arg_types = sig
             .args
             .iter()
-            .map(|a| func::metadata_type_enum(self.context, &a.typ))
+            .map(|a| convert::to_metadata_type_enum(self.context, &a.typ))
             .collect::<Vec<BasicMetadataTypeEnum>>();
 
         // Create the function type.
@@ -166,6 +166,9 @@ mod tests {
             fn main() {
                 i64 val = other(2, 10)
                 fib(val)
+                
+                string hi = "hello world!!"
+                string_stuff("test")
             }
             
             fn thing(bool b): bool {
@@ -217,6 +220,10 @@ mod tests {
                         i = i + 1
                     }}
                 }
+            }
+            
+            fn string_stuff(string s): string {
+                return "test"
             }
         "#;
         let mut tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
