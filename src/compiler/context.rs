@@ -1,5 +1,6 @@
 use inkwell::basic_block::BasicBlock;
 
+/// Stores information about a loop that is being compiled.
 pub struct LoopContext<'ctx> {
     pub begin_block: BasicBlock<'ctx>,
     pub end_block: Option<BasicBlock<'ctx>>,
@@ -20,6 +21,7 @@ impl<'ctx> LoopContext<'ctx> {
     }
 }
 
+/// Stores information about a function that is being compiled.
 pub struct FnContext {
     pub guarantees_return: bool,
 }
@@ -32,6 +34,7 @@ impl FnContext {
     }
 }
 
+/// Stores information about a statement that is being compiled.
 pub struct StatementContext {
     pub guarantees_return: bool,
     pub guarantees_terminator: bool,
@@ -46,6 +49,7 @@ impl StatementContext {
     }
 }
 
+/// Stores information about a branch that is being compiled.
 pub struct BranchContext {
     pub guarantees_return: bool,
     pub guarantees_terminator: bool,
