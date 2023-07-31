@@ -1,19 +1,22 @@
-use crate::analyzer::program::RichProg;
-use crate::analyzer::statement::RichStatement;
-use crate::compiler::convert;
-use crate::compiler::error::{CompileError, CompileResult, ErrorKind};
-use crate::compiler::func::FnCompiler;
-use crate::parser::func_sig::FunctionSignature;
+use std::path::Path;
+
 use inkwell::builder::Builder;
 use inkwell::context::Context;
-use inkwell::module::Module;
+use inkwell::module::{Linkage, Module};
 use inkwell::passes::PassManager;
 use inkwell::targets::TargetTriple;
 use inkwell::types::{AsTypeRef, BasicMetadataTypeEnum, FunctionType};
 use inkwell::values::FunctionValue;
 use llvm_sys::core::LLVMFunctionType;
 use llvm_sys::prelude::LLVMTypeRef;
-use std::path::Path;
+
+use crate::analyzer::program::RichProg;
+use crate::analyzer::statement::RichStatement;
+use crate::compiler::convert;
+use crate::compiler::error::{CompileError, CompileResult, ErrorKind};
+use crate::compiler::func::FnCompiler;
+use crate::parser::func_sig::FunctionSignature;
+use crate::syscall::syscall::all_syscalls;
 
 /// Compiles a type-rich and semantically valid program to LLVM IR and/or bitcode.
 pub struct ProgCompiler<'a, 'ctx> {
@@ -57,6 +60,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
         }
         fpm.initialize();
 
+        // Create the program compiler and compile the program.
         let mut compiler = ProgCompiler {
             context: &ctx,
             builder: &builder,
@@ -67,10 +71,12 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
 
         compiler.compile_program()?;
 
+        // Optionally write output as bitcode to file.
         if let Some(path) = bitcode_output_path {
             compiler.module.write_bitcode_to_path(Path::new(path));
         }
 
+        // Optionally write output as IR to file.
         if let Some(path) = ir_output_path {
             if let Err(e) = compiler.module.print_to_file(Path::new(path)) {
                 return Err(CompileError::new(
@@ -85,6 +91,10 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
 
     /// Compiles the program.
     fn compile_program(&mut self) -> CompileResult<()> {
+        // Define external syscall functions so we can call the safely from within the module.
+        // Their actual implementations should be linked from libc when generating an executable.
+        self.define_syscalls();
+
         // Do one shallow pass to define all top-level functions in the module.
         for statement in &self.program.statements {
             match statement {
@@ -95,6 +105,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
             }
         }
 
+        // Compile all the statements in the program.
         for statement in &self.program.statements {
             match statement {
                 RichStatement::FunctionDeclaration(func) => {
@@ -147,6 +158,15 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
                 param_types.len() as u32,
                 false as i32,
             ))
+        }
+    }
+
+    /// Defines external syscall functions in the current module.
+    fn define_syscalls(&mut self) {
+        for syscall in all_syscalls() {
+            let fn_type = self.create_fn_type(&syscall);
+            self.module
+                .add_function(syscall.name.as_str(), fn_type, Some(Linkage::External));
         }
     }
 }

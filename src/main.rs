@@ -21,6 +21,7 @@ mod analyzer;
 mod compiler;
 mod lexer;
 mod parser;
+mod syscall;
 mod util;
 
 macro_rules! fatal {

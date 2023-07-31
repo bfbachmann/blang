@@ -545,12 +545,11 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             RichExprKind::StringLiteral(literal) => {
                 let char_type = self.context.i32_type();
 
-                // Check if this string literal already exists as a global.
+                // Check if this string literal already exists as a global. If not, create one.
                 let global = if let Some(global) = self.module.get_global(literal) {
                     global
                 } else {
-                    let mut chars: Vec<u32> = literal.clone().chars().map(|c| c as u32).collect();
-                    chars.push(0);
+                    let chars: Vec<u32> = literal.clone().chars().map(|c| c as u32).collect();
 
                     let array_type = char_type.array_type((chars.len()) as u32);
                     let array_vals: Vec<_> = chars

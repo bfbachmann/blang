@@ -3,8 +3,12 @@ use crate::analyzer::func::analyze_fn_sig;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::statement::RichStatement;
 use crate::analyzer::AnalyzeResult;
+
+
 use crate::parser::program::Program;
+
 use crate::parser::statement::Statement;
+use crate::syscall::syscall::all_syscalls;
 
 /// Represents a semantically valid and type-rich program.
 #[derive(Debug)]
@@ -17,6 +21,11 @@ impl RichProg {
     /// or an error if the program is semantically invalid.
     pub fn from(prog: Program) -> AnalyzeResult<Self> {
         let mut ctx = ProgramContext::new();
+
+        // Define built-in syscall functions.
+        for syscall in all_syscalls() {
+            analyze_fn_sig(&mut ctx, &syscall)?;
+        }
 
         // Analyze all function signatures defined at the top level of the program so we can reference
         // them when we analyze statements.
