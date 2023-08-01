@@ -1,12 +1,10 @@
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::analyze_fn_sig;
 use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::r#struct::analyze_struct_containment;
 use crate::analyzer::statement::RichStatement;
 use crate::analyzer::AnalyzeResult;
-
-
 use crate::parser::program::Program;
-
 use crate::parser::statement::Statement;
 use crate::syscall::syscall::all_syscalls;
 
@@ -27,47 +25,11 @@ impl RichProg {
             analyze_fn_sig(&mut ctx, &syscall)?;
         }
 
-        // Analyze all function signatures defined at the top level of the program so we can reference
-        // them when we analyze statements.
-        let mut main_fn = None;
-        for statement in &prog.statements {
-            match statement {
-                Statement::FunctionDeclaration(func) => {
-                    analyze_fn_sig(&mut ctx, &func.signature)?;
+        // Analyze top-level struct declarations.
+        define_structs(&mut ctx, &prog)?;
 
-                    if func.signature.name == "main" {
-                        main_fn = Some(&func.signature)
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        // Make sure a main function was declared.
-        match main_fn {
-            Some(main_sig) => {
-                // Make sure main has no args or return.
-                if main_sig.args.len() != 0 {
-                    return Err(AnalyzeError::new(
-                        ErrorKind::InvalidMain,
-                        "function main cannot have arguments",
-                    ));
-                }
-
-                if let Some(_) = main_sig.return_type {
-                    return Err(AnalyzeError::new(
-                        ErrorKind::InvalidMain,
-                        "function main cannot have a return type",
-                    ));
-                }
-            }
-            None => {
-                return Err(AnalyzeError::new(
-                    ErrorKind::MissingMain,
-                    "missing main function",
-                ));
-            }
-        }
+        // Analyze top-level function declarations.
+        define_fns(&mut ctx, &prog)?;
 
         // Analyze each statement in the program and collect the results.
         let mut rich_statements = vec![];
@@ -80,6 +42,83 @@ impl RichProg {
             statements: rich_statements,
         })
     }
+}
+
+/// Defines top-level struct types in the program context without deeply analyzing their fields, so
+/// they can be referenced later. This will simply check for struct type name collisions and
+/// containment cycles.
+fn define_structs(ctx: &mut ProgramContext, prog: &Program) -> AnalyzeResult<()> {
+    // First pass: Define all structs without analyzing their fields. In this pass, we will only
+    // check that there are no struct name collisions.
+    for statement in &prog.statements {
+        match statement {
+            Statement::StructDeclaration(struct_type) => {
+                if let Some(_) = ctx.add_extern_struct(struct_type.clone()) {
+                    return Err(AnalyzeError::new(
+                        ErrorKind::TypeAlreadyDefined,
+                        format!(
+                            "another type with the name {} already exists",
+                            struct_type.name
+                        )
+                        .as_str(),
+                    ));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Second pass: Check for struct containment cycles.
+    for struct_type in ctx.extern_structs() {
+        analyze_struct_containment(ctx, struct_type)?;
+    }
+
+    Ok(())
+}
+
+/// Analyzes all top-level function signatures and defines them in the program context so they
+/// can be referenced later. This will not perform any analysis of function bodies.
+fn define_fns(ctx: &mut ProgramContext, prog: &Program) -> AnalyzeResult<()> {
+    let mut main_fn = None;
+    for statement in &prog.statements {
+        match statement {
+            Statement::FunctionDeclaration(func) => {
+                analyze_fn_sig(ctx, &func.signature)?;
+                if func.signature.name == "main" {
+                    main_fn = Some(&func.signature)
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Make sure a main function was declared.
+    match main_fn {
+        Some(main_sig) => {
+            // Make sure main has no args or return.
+            if main_sig.args.len() != 0 {
+                return Err(AnalyzeError::new(
+                    ErrorKind::InvalidMain,
+                    "function main cannot have arguments",
+                ));
+            }
+
+            if let Some(_) = main_sig.return_type {
+                return Err(AnalyzeError::new(
+                    ErrorKind::InvalidMain,
+                    "function main cannot have a return type",
+                ));
+            }
+        }
+        None => {
+            return Err(AnalyzeError::new(
+                ErrorKind::MissingMain,
+                "missing main function",
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -226,8 +265,83 @@ mod tests {
         fn itoa(i64 i): string {
             return "fake"
         }
+        
+        struct MyStruct {
+            MyInnerStruct inner
+        }
+        
+        struct MyInnerStruct {
+            bool cond
+        }
+        
+        fn check_struct(MyStruct s) {}
         "#;
         let result = analyze_prog(raw);
         assert!(matches!(result, Ok(_)));
+    }
+
+    #[test]
+    fn struct_defs_with_legal_containment() {
+        let raw = r#"
+            struct Inner {
+                i64 count
+                string msg
+            }
+            
+            struct Outer {
+                Inner inner
+                bool cond
+            }
+            
+            struct Empty {}
+            
+            fn main() {}
+        "#;
+        let result = analyze_prog(raw);
+        assert!(matches!(result, Ok(_)));
+    }
+
+    #[test]
+    fn direct_struct_containment_cycle() {
+        let raw = r#"
+            struct Test {
+                Test inner
+            }
+            
+            fn main() {}
+        "#;
+        let result = analyze_prog(raw);
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::ContainmentCycle,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn indirect_struct_containment_cycle() {
+        let raw = r#"
+            struct Inner {
+                i64 count
+                Outer outer
+            }
+            
+            struct Outer {
+                bool cond
+                Inner inner
+            }
+            
+            fn main() {}
+        "#;
+        let result = analyze_prog(raw);
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::ContainmentCycle,
+                ..
+            })
+        ));
     }
 }

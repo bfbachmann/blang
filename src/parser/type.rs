@@ -5,7 +5,9 @@ use crate::lexer::kind::TokenKind;
 use crate::lexer::token::Token;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::func_sig::FunctionSignature;
+use crate::parser::r#struct::Struct;
 use crate::parser::ParseResult;
+use crate::util;
 
 /// Represents any valid type.
 #[derive(Debug, Clone)]
@@ -13,7 +15,10 @@ pub enum Type {
     Bool,
     String,
     I64,
+    Struct(Struct),
     Function(Box<FunctionSignature>),
+    /// Represents a named user-defined (i.e. non-primitive) type.
+    Unresolved(String),
 }
 
 impl PartialEq for Type {
@@ -36,6 +41,9 @@ impl PartialEq for Type {
                     args_match && f1.return_type == f2.return_type
                 }
             }
+            (Type::Struct(s1), Type::Struct(s2)) => {
+                s1.name == s2.name && util::vectors_are_equal(&s1.fields, &s2.fields)
+            }
             (_, _) => false,
         }
     }
@@ -48,6 +56,8 @@ impl fmt::Display for Type {
             Type::String => write!(f, "string"),
             Type::I64 => write!(f, "int"),
             Type::Function(fn_sig) => write!(f, "{}", fn_sig),
+            Type::Struct(s) => write!(f, "{}", s),
+            Type::Unresolved(name) => write!(f, "{}", name),
         }
     }
 }
@@ -60,14 +70,17 @@ impl Type {
                 kind: TokenKind::Bool,
                 ..
             }) => Ok(Type::Bool),
+
             Some(Token {
                 kind: TokenKind::I64,
                 ..
             }) => Ok(Type::I64),
+
             Some(Token {
                 kind: TokenKind::String,
                 ..
             }) => Ok(Type::String),
+
             Some(
                 token @ Token {
                     kind: TokenKind::Function,
@@ -78,6 +91,23 @@ impl Type {
                 let sig = FunctionSignature::from_anon(tokens, false)?;
                 Ok(Type::Function(Box::new(sig)))
             }
+
+            Some(
+                token @ Token {
+                    kind: TokenKind::Struct,
+                    ..
+                },
+            ) => {
+                tokens.push_front(token);
+                let struct_type = Struct::from(tokens)?;
+                Ok(Type::Struct(struct_type))
+            }
+
+            Some(Token {
+                kind: TokenKind::Identifier(type_name),
+                ..
+            }) => Ok(Type::Unresolved(type_name)),
+
             None => {
                 return Err(ParseError::new(
                     ErrorKind::ExpectedType,
@@ -85,6 +115,7 @@ impl Type {
                     None,
                 ))
             }
+
             Some(other) => {
                 return Err(ParseError::new(
                     ErrorKind::ExpectedType,

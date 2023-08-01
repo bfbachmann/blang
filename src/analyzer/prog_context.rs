@@ -1,10 +1,13 @@
+use crate::analyzer::r#struct::RichStruct;
 use crate::parser::arg::Argument;
 use crate::parser::expr::Expression;
+use std::collections::hash_map::Iter;
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
 
 use crate::parser::func::Function;
 use crate::parser::func_sig::FunctionSignature;
+use crate::parser::r#struct::Struct;
 use crate::parser::r#type::Type;
 use crate::parser::var_dec::VariableDeclaration;
 
@@ -32,8 +35,10 @@ impl fmt::Display for ScopeKind {
 pub struct Scope {
     // TODO: VariableDeclaration contains potentially unnecessary expression.
     vars: HashMap<String, VariableDeclaration>,
-    fns: HashMap<String, Function>,
     extern_fns: HashMap<String, FunctionSignature>,
+    fns: HashMap<String, Function>,
+    extern_structs: HashMap<String, Struct>,
+    structs: HashMap<String, RichStruct>,
     kind: ScopeKind,
     return_type: Option<Type>,
 }
@@ -54,8 +59,10 @@ impl Scope {
 
         Scope {
             vars,
-            fns: HashMap::new(),
             extern_fns: HashMap::new(),
+            fns: HashMap::new(),
+            extern_structs: HashMap::new(),
+            structs: HashMap::new(),
             kind,
             return_type,
         }
@@ -80,6 +87,18 @@ impl Scope {
         self.fns.insert(func.signature.name.to_string(), func)
     }
 
+    // Adds the external struct type to the scope. If there was already a struct type with the same
+    // name in the scope, returns the old type.
+    fn add_extern_struct(&mut self, s: Struct) -> Option<Struct> {
+        self.extern_structs.insert(s.name.to_string(), s)
+    }
+
+    // Adds the struct type to the scope. If there was already a struct type with the same name in
+    // the scope, returns the old type.
+    fn add_struct(&mut self, s: RichStruct) -> Option<RichStruct> {
+        self.structs.insert(s.name.to_string(), s)
+    }
+
     // Adds the variable to the scope. If there was already a variable with the same name in the
     // scope, returns the old variable.
     fn add_var(&mut self, var_dec: VariableDeclaration) -> Option<VariableDeclaration> {
@@ -89,6 +108,22 @@ impl Scope {
     // Returns the function with the given name from the scope, or None if no such function exists.
     fn get_fn(&self, name: &str) -> Option<&Function> {
         self.fns.get(name)
+    }
+
+    // Returns the extern struct type with the given name from the scope, or None if no such type
+    // exists.
+    fn get_extern_struct(&self, name: &str) -> Option<&Struct> {
+        self.extern_structs.get(name)
+    }
+
+    /// Returns an iterator over all extern structs in this scope.
+    fn extern_structs(&self) -> Iter<String, Struct> {
+        self.extern_structs.iter()
+    }
+
+    // Returns the struct type with the given name from the scope, or None if no such type exists.
+    fn get_struct(&self, name: &str) -> Option<&RichStruct> {
+        self.structs.get(name)
     }
 
     // Returns the variable with the given name from the scope, or None if no such variable exists.
@@ -123,6 +158,18 @@ impl ProgramContext {
         self.stack.back_mut().unwrap().add_fn(func)
     }
 
+    /// Adds the external struct type to the context. If there was already a struct type with the
+    /// same name, returns the old type.
+    pub fn add_extern_struct(&mut self, s: Struct) -> Option<Struct> {
+        self.stack.back_mut().unwrap().add_extern_struct(s)
+    }
+
+    /// Adds the struct type to the context. If there was already a struct type with the same name,
+    /// returns the old type.
+    pub fn add_struct(&mut self, s: RichStruct) -> Option<RichStruct> {
+        self.stack.back_mut().unwrap().add_struct(s)
+    }
+
     /// Adds the variable to the context. If there was already a variable with the same name,
     /// returns the old variable.
     pub fn add_var(&mut self, var_dec: VariableDeclaration) -> Option<VariableDeclaration> {
@@ -152,6 +199,42 @@ impl ProgramContext {
         }
 
         None
+    }
+
+    /// Attempts to locate the extern struct type with the given name and returns it, if found.
+    pub fn get_extern_struct(&self, name: &str) -> Option<&Struct> {
+        // Search up the stack from the current scope.
+        for scope in self.stack.iter().rev() {
+            if let Some(s) = scope.get_extern_struct(name) {
+                return Some(s);
+            }
+        }
+
+        None
+    }
+
+    /// Attempts to locate the struct type with the given name and returns it, if found.
+    pub fn get_struct(&self, name: &str) -> Option<&RichStruct> {
+        // Search up the stack from the current scope.
+        for scope in self.stack.iter().rev() {
+            if let Some(s) = scope.get_struct(name) {
+                return Some(s);
+            }
+        }
+
+        None
+    }
+
+    /// Returns all extern structs in the program context.
+    pub fn extern_structs(&self) -> Vec<&Struct> {
+        let mut extern_structs = vec![];
+        for scope in self.stack.iter() {
+            for (_, struct_type) in scope.extern_structs() {
+                extern_structs.push(struct_type);
+            }
+        }
+
+        extern_structs
     }
 
     /// Attempts to locate the variable with the given name and returns it, if found.

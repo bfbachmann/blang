@@ -1,5 +1,3 @@
-extern crate core;
-
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{stdin, stdout, BufRead, BufReader, Error, ErrorKind, Result, Write};
@@ -135,20 +133,22 @@ fn repl() {
         match repl_collect_tokens() {
             Ok(tokens) => {
                 let mut tokens = tokens;
-                'inner: while !tokens.is_empty() {
-                    let _statement = match Statement::from(&mut tokens) {
+                while !tokens.is_empty() {
+                    let statement = match Statement::from(&mut tokens) {
                         Ok(statement) => match RichStatement::from(&mut ctx, statement) {
-                            Ok(_) => {}
+                            Ok(s) => s,
                             Err(e) => {
                                 error!("{}", e);
+                                break;
                             }
                         },
                         Err(e) => {
                             error!("{}", e);
-                            break 'inner;
+                            break;
                         }
                     };
 
+                    dbg!(&statement);
                     // TODO: generate IR
                 }
             }

@@ -111,6 +111,9 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
                 RichStatement::FunctionDeclaration(func) => {
                     FnCompiler::compile(self.context, self.builder, self.fpm, self.module, func)?;
                 }
+                RichStatement::StructTypeDeclaration(_s) => {
+                    // TODO
+                }
                 other => {
                     panic!("top-level statement {other} not implemented");
                 }

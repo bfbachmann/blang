@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::fmt;
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::token::Token;
@@ -9,11 +10,10 @@ use crate::parser::expr::Expression;
 use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
 use crate::parser::r#loop::Loop;
+use crate::parser::r#struct::Struct;
 use crate::parser::var_assign::VariableAssignment;
 use crate::parser::var_dec::VariableDeclaration;
 use crate::parser::ParseResult;
-
-use std::fmt;
 
 /// Represents a statement.
 #[derive(Debug, PartialEq, Clone)]
@@ -28,6 +28,7 @@ pub enum Statement {
     Break,
     Continue,
     Return(Option<Expression>),
+    StructDeclaration(Struct),
 }
 
 impl fmt::Display for Statement {
@@ -67,6 +68,9 @@ impl fmt::Display for Statement {
             Statement::Return(_) => {
                 write!(f, "return")
             }
+            Statement::StructDeclaration(s) => {
+                write!(f, "{}", s)
+            }
         }
     }
 }
@@ -83,6 +87,7 @@ impl Statement {
     ///  - break
     ///  - continue
     ///  - return (of the form `return <expr>` where `expr` is an expression)
+    ///  - struct declaration (see `Struct::from`)
     pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         // Try use the first two tokens to figure out what type of statement will follow. This works
         // because no valid statement can contain fewer than two tokens.
@@ -242,6 +247,18 @@ impl Statement {
 
                 let expr = Expression::from(tokens, false)?;
                 Ok(Statement::Return(Some(expr)))
+            }
+
+            // If the first token is "struct" it must be a struct declaration.
+            (
+                Token {
+                    kind: TokenKind::Struct,
+                    ..
+                },
+                _,
+            ) => {
+                let struct_decl = Struct::from(tokens)?;
+                Ok(Statement::StructDeclaration(struct_decl))
             }
 
             // If the tokens are anything else, we error because it's an invalid statement.

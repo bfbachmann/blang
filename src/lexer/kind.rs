@@ -37,6 +37,7 @@ pub enum TokenKind {
     String,
     StringLiteral(String),
     Function,
+    Struct,
 
     // Keywords and control flow
     If,
@@ -86,6 +87,7 @@ impl Clone for TokenKind {
             TokenKind::String => TokenKind::String,
             TokenKind::StringLiteral(v) => TokenKind::StringLiteral(v.clone()),
             TokenKind::Function => TokenKind::Function,
+            TokenKind::Struct => TokenKind::Struct,
             TokenKind::If => TokenKind::If,
             TokenKind::Else => TokenKind::Else,
             TokenKind::ElseIf => TokenKind::ElseIf,
@@ -142,6 +144,7 @@ impl TokenKind {
             TokenKind::String => "string".to_string(),
             TokenKind::StringLiteral(v) => v.to_string(),
             TokenKind::Function => "fn".to_string(),
+            TokenKind::Struct => "struct".to_string(),
             TokenKind::If => "if".to_string(),
             TokenKind::Else => "else".to_string(),
             TokenKind::ElseIf => "else if".to_string(),
@@ -222,6 +225,7 @@ impl TokenKind {
             TokenKind::SemiColon,
             TokenKind::Colon,
             TokenKind::Function,
+            TokenKind::Struct,
             TokenKind::Loop,
             TokenKind::Break,
             TokenKind::Return,

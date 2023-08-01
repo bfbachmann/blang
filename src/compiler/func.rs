@@ -5,6 +5,7 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::passes::PassManager;
+
 use inkwell::values::{
     BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue,
 };
@@ -14,6 +15,7 @@ use crate::analyzer::closure::RichClosure;
 use crate::analyzer::cond::RichCond;
 use crate::analyzer::expr::{RichExpr, RichExprKind};
 use crate::analyzer::func::{RichFn, RichFnCall, RichRet};
+use crate::analyzer::r#struct::RichStruct;
 use crate::analyzer::statement::RichStatement;
 use crate::compiler::context::{
     BranchContext, CompilationContext, FnContext, LoopContext, StatementContext,
@@ -328,6 +330,9 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 // Create and initialize the variable.
                 self.create_var(decl.name.as_str(), &decl.typ, val);
             }
+            RichStatement::StructTypeDeclaration(struct_type) => {
+                self.compile_struct_type_decl(struct_type);
+            }
             RichStatement::VariableAssignment(assign) => {
                 let val = self.compile_expr(&assign.val);
                 self.assign_var(assign.name.as_str(), val);
@@ -359,6 +364,18 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         };
 
         Ok(())
+    }
+
+    /// Compiles a struct type declaration.
+    fn compile_struct_type_decl(&mut self, _struct_decl: &RichStruct) {
+        // let field_types: Vec<BasicTypeEnum> = struct_decl
+        //     .fields
+        //     .iter()
+        //     .map(|field| convert::to_basic_type(self.context, &field.typ))
+        //     .collect();
+        // let struct_type = self.context.struct_type(field_types.as_slice(), false);
+
+        // TODO: continue
     }
 
     /// Compiles a break statement.

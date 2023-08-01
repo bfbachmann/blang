@@ -14,6 +14,8 @@ use crate::parser::r#type::Type;
 use crate::parser::var_dec::VariableDeclaration;
 use crate::util;
 
+/// Performs semantic analysis on the function signature, ensuring it doesn't match any other
+/// function signature in the ProgramContext.
 pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) -> AnalyzeResult<()> {
     // Add the function to the program context with an empty body, making sure it doesn't already
     // exist. We'll replace the function body when we analyze it later.

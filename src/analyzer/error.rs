@@ -9,8 +9,11 @@ pub enum ErrorKind {
     ExpectedValue,
     FunctionNotDefined,
     FunctionAlreadyDefined,
+    TypeAlreadyDefined,
+    TypeNotDefined,
     VariableNotDefined,
     VariableAlreadyDefined,
+    DuplicateStructFieldName,
     WrongNumberOfArgs,
     UnexpectedBreak,
     UnexpectedContinue,
@@ -19,6 +22,7 @@ pub enum ErrorKind {
     CallToMain,
     MissingReturn,
     InvalidMain,
+    ContainmentCycle,
 }
 
 impl fmt::Display for ErrorKind {
@@ -28,8 +32,11 @@ impl fmt::Display for ErrorKind {
             ErrorKind::ExpectedValue => write!(f, "expected value"),
             ErrorKind::FunctionNotDefined => write!(f, "function not defined"),
             ErrorKind::FunctionAlreadyDefined => write!(f, "function already defined"),
+            ErrorKind::TypeAlreadyDefined => write!(f, "type already defined"),
+            ErrorKind::TypeNotDefined => write!(f, "type not defined"),
             ErrorKind::VariableNotDefined => write!(f, "variable not defined"),
             ErrorKind::VariableAlreadyDefined => write!(f, "variable already defined"),
+            ErrorKind::DuplicateStructFieldName => write!(f, "duplicate struct field name"),
             ErrorKind::WrongNumberOfArgs => write!(f, "wrong number of arguments"),
             ErrorKind::UnexpectedBreak => write!(f, "unexpected break"),
             ErrorKind::UnexpectedContinue => write!(f, "unexpected continue"),
@@ -38,6 +45,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::CallToMain => write!(f, "call to main"),
             ErrorKind::MissingReturn => write!(f, "missing return"),
             ErrorKind::InvalidMain => write!(f, "invalid main"),
+            ErrorKind::ContainmentCycle => write!(f, "containment cycle"),
         }
     }
 }

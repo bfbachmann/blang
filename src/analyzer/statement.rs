@@ -5,6 +5,7 @@ use crate::analyzer::closure::{analyze_break, analyze_continue, RichClosure};
 use crate::analyzer::cond::RichCond;
 use crate::analyzer::func::{RichFn, RichFnCall, RichRet};
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
+use crate::analyzer::r#struct::RichStruct;
 use crate::analyzer::var_assign::RichVarAssign;
 use crate::analyzer::var_dec::RichVarDecl;
 use crate::analyzer::AnalyzeResult;
@@ -23,6 +24,7 @@ pub enum RichStatement {
     Break,
     Continue,
     Return(RichRet),
+    StructTypeDeclaration(RichStruct),
 }
 
 impl fmt::Display for RichStatement {
@@ -38,6 +40,7 @@ impl fmt::Display for RichStatement {
             RichStatement::Break => write!(f, "break"),
             RichStatement::Continue => write!(f, "continue"),
             RichStatement::Return(v) => write!(f, "{}", v),
+            RichStatement::StructTypeDeclaration(s) => write!(f, "{}", s),
         }
     }
 }
@@ -92,6 +95,10 @@ impl RichStatement {
                 Ok(rr) => Ok(RichStatement::Return(rr)),
                 Err(e) => Err(e),
             },
+            Statement::StructDeclaration(s) => {
+                let rich_struct = RichStruct::from(ctx, &s)?;
+                Ok(RichStatement::StructTypeDeclaration(rich_struct))
+            }
         }
     }
 }
@@ -102,6 +109,8 @@ mod tests {
 
     use crate::analyzer::error::ErrorKind;
     use crate::analyzer::prog_context::ProgramContext;
+    use crate::analyzer::r#struct::{RichField, RichStruct};
+    use crate::analyzer::r#type::RichType;
     use crate::analyzer::statement::RichStatement;
     use crate::analyzer::AnalyzeError;
     use crate::analyzer::AnalyzeResult;
@@ -346,5 +355,37 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn struct_decl() {
+        let raw = r#"
+            struct MyStruct {
+                i64 counter
+                bool is_even
+                string message
+            }
+        "#;
+        let result = analyze_statement(raw);
+        assert_eq!(
+            result,
+            Ok(RichStatement::StructTypeDeclaration(RichStruct {
+                name: "MyStruct".to_string(),
+                fields: vec![
+                    RichField {
+                        name: "counter".to_string(),
+                        typ: RichType::I64
+                    },
+                    RichField {
+                        name: "is_even".to_string(),
+                        typ: RichType::Bool
+                    },
+                    RichField {
+                        name: "message".to_string(),
+                        typ: RichType::String
+                    },
+                ],
+            }))
+        )
     }
 }

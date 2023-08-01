@@ -183,8 +183,14 @@ impl FunctionSignature {
                     // We're done assembling arguments.
                     break;
                 }
+
                 Some(Token {
-                    kind: TokenKind::String | TokenKind::I64 | TokenKind::Bool | TokenKind::Function,
+                    kind:
+                        TokenKind::String
+                        | TokenKind::I64
+                        | TokenKind::Bool
+                        | TokenKind::Function
+                        | TokenKind::Identifier(_),
                     ..
                 }) => {
                     // The next few tokens represent an argument.
@@ -208,6 +214,7 @@ impl FunctionSignature {
 
                     args.push(arg);
                 }
+
                 None => {
                     return Err(ParseError::new(
                         ErrorKind::ExpectedArgOrEndOfArgs,
@@ -215,6 +222,7 @@ impl FunctionSignature {
                         None,
                     ))
                 }
+
                 Some(other) => {
                     return Err(ParseError::new(
                         ErrorKind::ExpectedArgOrEndOfArgs,

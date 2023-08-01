@@ -14,6 +14,7 @@ pub mod r#loop;
 pub mod op;
 pub mod program;
 pub mod statement;
+pub mod r#struct;
 pub mod r#type;
 pub mod var_assign;
 pub mod var_dec;
