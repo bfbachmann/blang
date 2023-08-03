@@ -9,3 +9,4 @@
 out
 *.bc
 *.s
+.DS_Store
