@@ -5,13 +5,13 @@ use crate::analyzer::closure::RichClosure;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
+use crate::analyzer::r#type::RichType;
 use crate::analyzer::AnalyzeResult;
 use crate::parser::cond::Conditional;
-use crate::parser::r#type::Type;
 use crate::util;
 
 /// Represents a semantically valid and type-rich branch.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RichBranch {
     pub cond: Option<RichExpr>,
     pub body: RichClosure,
@@ -24,10 +24,10 @@ impl PartialEq for RichBranch {
 }
 
 /// Represents a semantically valid and type-rich conditional.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RichCond {
     pub branches: Vec<RichBranch>,
-    pub ret_type: Option<Type>,
+    pub ret_type: Option<RichType>,
 }
 
 impl fmt::Display for RichCond {
@@ -54,7 +54,7 @@ impl RichCond {
             let rich_expr = match &branch.condition {
                 Some(branch_cond) => {
                     let rich_expr = RichExpr::from(ctx, branch_cond.clone())?;
-                    if rich_expr.typ != Type::Bool {
+                    if rich_expr.typ != RichType::Bool {
                         return Err(AnalyzeError::new(
                             ErrorKind::IncompatibleTypes,
                             format!(

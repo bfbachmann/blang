@@ -5,13 +5,13 @@ use crate::analyzer::closure::{check_closure_returns, RichClosure};
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
+use crate::analyzer::r#type::RichType;
 use crate::analyzer::AnalyzeResult;
+use crate::parser::arg::Argument;
 use crate::parser::expr::Expression;
 use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
 use crate::parser::func_sig::FunctionSignature;
-use crate::parser::r#type::Type;
-use crate::parser::var_dec::VariableDeclaration;
 use crate::util;
 
 /// Performs semantic analysis on the function signature, ensuring it doesn't match any other
@@ -19,7 +19,8 @@ use crate::util;
 pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) -> AnalyzeResult<()> {
     // Add the function to the program context with an empty body, making sure it doesn't already
     // exist. We'll replace the function body when we analyze it later.
-    if let Some(_) = ctx.add_extern_fn(sig.clone()) {
+    let rich_fn_sig = RichFnSig::from(ctx, &sig)?;
+    if let Some(_) = ctx.add_extern_fn(rich_fn_sig) {
         return Err(AnalyzeError::new(
             ErrorKind::FunctionAlreadyDefined,
             format!("function {} was already defined in this scope", sig.name).as_str(),
@@ -29,20 +30,120 @@ pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) -> Anal
     Ok(())
 }
 
+/// Represents a semantically valid function argument.
+#[derive(PartialEq, Debug, Clone)]
+pub struct RichArg {
+    pub name: String,
+    pub typ: RichType,
+}
+
+impl fmt::Display for RichArg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.name.is_empty() {
+            write!(f, "{}", self.typ)
+        } else {
+            write!(f, "{} {}", self.typ, self.name)
+        }
+    }
+}
+
+impl RichArg {
+    /// Performs semantic analysis on the argument and returns an analyzed version of it.
+    pub fn from(ctx: &mut ProgramContext, arg: &Argument) -> AnalyzeResult<Self> {
+        Ok(RichArg {
+            name: arg.name.to_string(),
+            typ: RichType::from(ctx, &arg.typ)?,
+        })
+    }
+}
+
+/// Represents a semantically valid function signature.
+#[derive(Debug, Clone)]
+pub struct RichFnSig {
+    pub name: String,
+    pub args: Vec<RichArg>,
+    pub return_type: Option<RichType>,
+}
+
+impl PartialEq for RichFnSig {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && util::vectors_are_equal(&self.args, &other.args)
+            && util::optionals_are_equal(&self.return_type, &other.return_type)
+    }
+}
+
+impl fmt::Display for RichFnSig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "fn {}(", self.name)?;
+
+        for arg in self.args.iter() {
+            write!(f, "{}", arg)?;
+
+            if arg != self.args.last().unwrap() {
+                write!(f, ", ")?;
+            }
+        }
+
+        if let Some(typ) = &self.return_type {
+            write!(f, "): {}", typ)
+        } else {
+            write!(f, ")")
+        }
+    }
+}
+
+impl RichFnSig {
+    /// Creates a new function signature.
+    pub fn new(name: &str, args: Vec<RichArg>, return_type: Option<RichType>) -> Self {
+        RichFnSig {
+            name: name.to_string(),
+            args,
+            return_type,
+        }
+    }
+
+    /// Analyzes a function signature and returns a semantically valid, type-rich function
+    /// signature.
+    pub fn from(ctx: &mut ProgramContext, sig: &FunctionSignature) -> AnalyzeResult<Self> {
+        let mut args = vec![];
+        for arg in &sig.args {
+            let rich_arg = RichArg::from(ctx, &arg)?;
+            args.push(rich_arg);
+        }
+
+        let return_type = match &sig.return_type {
+            Some(typ) => Some(RichType::from(ctx, typ)?),
+            None => None,
+        };
+
+        Ok(RichFnSig {
+            name: sig.name.to_string(),
+            args,
+            return_type,
+        })
+    }
+}
+
 /// Represents a semantically valid and type-rich function.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct RichFn {
-    pub signature: FunctionSignature,
+    pub signature: RichFnSig,
     pub body: RichClosure,
 }
 
 impl fmt::Display for RichFn {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "function with body {}", &self.body)
+        write!(f, "{} {{...}}", &self.signature)
     }
 }
 
 impl RichFn {
+    /// Creates a new function.
+    pub fn new(signature: RichFnSig, body: RichClosure) -> Self {
+        RichFn { signature, body }
+    }
+
     /// Performs semantic analysis on the given function and returns a type-rich version of it,
     /// or an error if the function is semantically invalid.
     pub fn from(ctx: &mut ProgramContext, func: Function) -> AnalyzeResult<Self> {
@@ -69,24 +170,25 @@ impl RichFn {
 
         // Make sure the function return conditions are satisfied by the closure.
         if let Some(ret_type) = &func.signature.return_type {
-            check_closure_returns(&rich_closure, ret_type, &ScopeKind::FnBody)?;
+            let rich_ret_type = RichType::from(ctx, &ret_type)?;
+            check_closure_returns(&rich_closure, &rich_ret_type, &ScopeKind::FnBody)?;
         }
 
         // Add the function to the program context so we can reference it later.
-        ctx.add_fn(func.clone());
-
-        Ok(RichFn {
-            signature: func.signature,
+        let rich_fn = RichFn {
+            signature: RichFnSig::from(ctx, &func.signature)?,
             body: rich_closure,
-        })
+        };
+        ctx.add_fn(rich_fn.clone());
+        Ok(rich_fn)
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RichFnCall {
     pub fn_name: String,
     pub args: Vec<RichExpr>,
-    pub ret_type: Option<Type>,
+    pub ret_type: Option<RichType>,
 }
 
 impl fmt::Display for RichFnCall {
@@ -137,10 +239,7 @@ impl RichFnCall {
             None => match ctx.get_fn(call.fn_name.as_str()) {
                 Some(decl) => &decl.signature,
                 None => match ctx.get_var(call.fn_name.as_str()) {
-                    Some(&VariableDeclaration {
-                        typ: Type::Function(ref func),
-                        ..
-                    }) => func,
+                    Some(&RichType::Function(ref func)) => func,
                     _ => {
                         return Err(AnalyzeError::new(
                             ErrorKind::FunctionNotDefined,
@@ -167,12 +266,12 @@ impl RichFnCall {
 
         // Make sure the arguments are of the right types.
         for (passed_type, defined) in rich_args.iter().map(|a| &a.typ).zip(&fn_sig.args) {
-            if passed_type != &defined.typ {
+            if !passed_type.is_compatible_with(&defined.typ) {
                 return Err(AnalyzeError::new(
                     ErrorKind::IncompatibleTypes,
                     format!(
                         r#"argument {} of function {} has type {}, but a value of type {} was \
-                    provided"#,
+                        provided"#,
                         &defined.name, &fn_sig.name, &defined.typ, &passed_type
                     )
                     .as_str(),
@@ -188,7 +287,7 @@ impl RichFnCall {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RichRet {
     pub val: Option<RichExpr>,
 }

@@ -5,6 +5,8 @@ use std::fmt::Formatter;
 use crate::lexer::kind::TokenKind;
 use crate::lexer::token::Token;
 use crate::parser::error::{ErrorKind, ParseError};
+
+use crate::parser::func_sig::FunctionSignature;
 use crate::parser::program::Program;
 use crate::parser::r#type::Type;
 use crate::parser::ParseResult;
@@ -52,8 +54,15 @@ impl Struct {
         // The first token should be "struct".
         Program::parse_expecting(tokens, HashSet::from([TokenKind::Struct]))?;
 
-        // The next token should be the struct mame.
-        let name = Program::parse_identifier(tokens)?;
+        // The next token should might be the struct type name, which is optional.
+        let mut name = "".to_string();
+        if let Some(Token {
+            kind: TokenKind::Identifier(_),
+            ..
+        }) = tokens.front()
+        {
+            name = Program::parse_identifier(tokens)?;
+        }
 
         // The next token should be "{".
         Program::parse_expecting(tokens, HashSet::from([TokenKind::BeginClosure]))?;
@@ -90,6 +99,28 @@ impl Struct {
                     kind: TokenKind::Identifier(type_name),
                     ..
                 }) => Type::Unresolved(type_name),
+
+                Some(
+                    token @ Token {
+                        kind: TokenKind::Function,
+                        ..
+                    },
+                ) => {
+                    tokens.push_front(token);
+                    let fn_sig = FunctionSignature::from_anon(tokens, false)?;
+                    Type::Function(Box::new(fn_sig))
+                }
+
+                Some(
+                    token @ Token {
+                        kind: TokenKind::Struct,
+                        ..
+                    },
+                ) => {
+                    tokens.push_front(token);
+                    let struct_type = Struct::from(tokens)?;
+                    Type::Struct(struct_type)
+                }
 
                 other => {
                     return Err(ParseError::new(

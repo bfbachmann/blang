@@ -23,6 +23,8 @@ pub enum ErrorKind {
     MissingReturn,
     InvalidMain,
     ContainmentCycle,
+    MissingTypeName,
+    UnexpectedTypeName,
 }
 
 impl fmt::Display for ErrorKind {
@@ -46,6 +48,8 @@ impl fmt::Display for ErrorKind {
             ErrorKind::MissingReturn => write!(f, "missing return"),
             ErrorKind::InvalidMain => write!(f, "invalid main"),
             ErrorKind::ContainmentCycle => write!(f, "containment cycle"),
+            ErrorKind::MissingTypeName => write!(f, "missing type name"),
+            ErrorKind::UnexpectedTypeName => write!(f, "unexpected type name"),
         }
     }
 }

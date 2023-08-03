@@ -1,9 +1,10 @@
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::func::analyze_fn_sig;
+use crate::analyzer::func::{analyze_fn_sig, RichFnSig};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#struct::analyze_struct_containment;
 use crate::analyzer::statement::RichStatement;
 use crate::analyzer::AnalyzeResult;
+use crate::parser::func_sig::FunctionSignature;
 use crate::parser::program::Program;
 use crate::parser::statement::Statement;
 use crate::syscall::syscall::all_syscalls;
@@ -12,12 +13,13 @@ use crate::syscall::syscall::all_syscalls;
 #[derive(Debug)]
 pub struct RichProg {
     pub statements: Vec<RichStatement>,
+    pub extern_fns: Vec<RichFnSig>,
 }
 
 impl RichProg {
     /// Performs semantic analysis on the given program and returns a type-rich version of it,
     /// or an error if the program is semantically invalid.
-    pub fn from(prog: Program) -> AnalyzeResult<Self> {
+    pub fn from(prog: Program, extern_fn_sigs: Vec<FunctionSignature>) -> AnalyzeResult<Self> {
         let mut ctx = ProgramContext::new();
 
         // Define built-in syscall functions.
@@ -38,8 +40,15 @@ impl RichProg {
             rich_statements.push(rich_statement);
         }
 
+        // Analyze external functions to be added to the program.
+        let mut rich_extern_fns = vec![];
+        for extern_fn_sig in extern_fn_sigs {
+            rich_extern_fns.push(RichFnSig::from(&mut ctx, &extern_fn_sig)?)
+        }
+
         Ok(RichProg {
             statements: rich_statements,
+            extern_fns: rich_extern_fns,
         })
     }
 }
@@ -130,11 +139,12 @@ mod tests {
     use crate::analyzer::AnalyzeResult;
     use crate::lexer::token::Token;
     use crate::parser::program::Program;
+    use crate::syscall::syscall::all_syscalls;
 
     fn analyze_prog(raw: &str) -> AnalyzeResult<RichProg> {
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let prog = Program::from(&mut tokens).expect("should not error");
-        RichProg::from(prog)
+        RichProg::from(prog, all_syscalls().to_vec())
     }
 
     #[test]
@@ -283,9 +293,19 @@ mod tests {
     #[test]
     fn struct_defs_with_legal_containment() {
         let raw = r#"
+            struct Person {
+                string name
+                i64 age
+            }
+            
             struct Inner {
                 i64 count
                 string msg
+                fn (string): Person get_person
+                struct {
+                    bool something
+                    Person another
+                } inline_struct_field
             }
             
             struct Outer {

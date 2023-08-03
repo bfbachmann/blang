@@ -1,4 +1,4 @@
-use std::collections::{HashSet};
+use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -53,12 +53,32 @@ impl RichStruct {
     /// Performs semantic analysis on a struct type declaration. Note that this will also
     /// recursively analyze any types contained in the struct. On success, the struct type info will
     /// be stored in the program context.
-    pub fn from(ctx: &mut ProgramContext, struct_type: &Struct) -> AnalyzeResult<Self> {
-        // Check if the struct type is already defined in the program context. This will be the case
-        // if we've already analyzed it in the process of analyzing another type that contains
-        // this type.
-        if let Some(rich_struct) = ctx.get_struct(struct_type.name.as_str()) {
-            return Ok(rich_struct.clone());
+    /// If `anon` is true, the struct type is expected to be declared inline without a type
+    /// name.
+    pub fn from(ctx: &mut ProgramContext, struct_type: &Struct, anon: bool) -> AnalyzeResult<Self> {
+        if !anon {
+            if struct_type.name.is_empty() {
+                return Err(AnalyzeError::new(
+                    ErrorKind::MissingTypeName,
+                    "struct types declared in this context must have names",
+                ));
+            }
+
+            // Check if the struct type is already defined in the program context. This will be the case
+            // if we've already analyzed it in the process of analyzing another type that contains
+            // this type.
+            if let Some(rich_struct) = ctx.get_struct(struct_type.name.as_str()) {
+                return Ok(rich_struct.clone());
+            }
+        } else if anon && !struct_type.name.is_empty() {
+            return Err(AnalyzeError::new(
+                ErrorKind::UnexpectedTypeName,
+                format!(
+                    "inline struct type definitions cannot have type names (remove type name {})",
+                    struct_type.name
+                )
+                .as_str(),
+            ));
         }
 
         // Analyze the struct fields

@@ -3,8 +3,9 @@ use std::fmt::Formatter;
 
 use crate::analyzer::cond::RichCond;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::func::RichRet;
+use crate::analyzer::func::{RichArg, RichRet};
 use crate::analyzer::prog_context::{ProgramContext, Scope, ScopeKind};
+use crate::analyzer::r#type::RichType;
 use crate::analyzer::statement::RichStatement;
 use crate::analyzer::AnalyzeResult;
 use crate::parser::arg::Argument;
@@ -13,10 +14,10 @@ use crate::parser::r#type::Type;
 use crate::util;
 
 /// Represents a semantically valid and type-rich closure.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RichClosure {
     pub statements: Vec<RichStatement>,
-    pub ret_type: Option<Type>,
+    pub ret_type: Option<RichType>,
 }
 
 impl fmt::Display for RichClosure {
@@ -33,6 +34,14 @@ impl PartialEq for RichClosure {
 }
 
 impl RichClosure {
+    /// Creates a new closure.
+    pub fn new(statements: Vec<RichStatement>, ret_type: Option<RichType>) -> Self {
+        RichClosure {
+            statements,
+            ret_type,
+        }
+    }
+
     /// Performs semantic analysis on the given closure and returns a type-rich version of it,
     /// or an error if the closure is semantically invalid.
     pub fn from(
@@ -42,8 +51,21 @@ impl RichClosure {
         args: Vec<Argument>,
         expected_ret_type: Option<Type>,
     ) -> AnalyzeResult<Self> {
+        let mut rich_args = vec![];
+        for arg in args {
+            rich_args.push(RichArg::from(ctx, &arg)?);
+        }
+
         // Add a new scope to the program context, since each closure gets its own scope.
-        ctx.push_scope(Scope::new(kind.clone(), args, expected_ret_type.clone()));
+        let scope = Scope::new(
+            kind.clone(),
+            rich_args,
+            match &expected_ret_type {
+                Some(typ) => Some(RichType::from(ctx, &typ)?),
+                None => None,
+            },
+        );
+        ctx.push_scope(scope);
 
         // Analyze all the statements in the closure and record return type.
         let mut rich_statements = vec![];
@@ -68,11 +90,17 @@ impl RichClosure {
 
         // TODO: handle closure result.
 
+        // Analyze the return type.
+        let ret_type = match &expected_ret_type {
+            Some(typ) => Some(RichType::from(ctx, &typ)?),
+            None => None,
+        };
+
         // Pop the scope from the stack before returning since we're exiting the closure scope.
         ctx.pop_scope();
         Ok(RichClosure {
             statements: rich_statements,
-            ret_type: expected_ret_type.clone(),
+            ret_type,
         })
     }
 }
@@ -80,7 +108,7 @@ impl RichClosure {
 /// Checks that the given closure returns the given type.
 pub fn check_closure_returns(
     closure: &RichClosure,
-    expected_ret_type: &Type,
+    expected_ret_type: &RichType,
     kind: &ScopeKind,
 ) -> AnalyzeResult<()> {
     // Given that there is an expected return type, one of the following return conditions must
@@ -233,7 +261,7 @@ fn cond_has_any_return(cond: &RichCond) -> bool {
 
 /// Checks that the given conditional is exhaustive and that each branch satisfies return
 /// conditions.
-fn check_cond_returns(cond: &RichCond, expected: &Type) -> AnalyzeResult<()> {
+fn check_cond_returns(cond: &RichCond, expected: &RichType) -> AnalyzeResult<()> {
     if !cond.is_exhaustive() {
         return Err(AnalyzeError::new(
             ErrorKind::MissingReturn,
@@ -253,7 +281,7 @@ fn check_cond_returns(cond: &RichCond, expected: &Type) -> AnalyzeResult<()> {
 }
 
 /// Checks that the return type matches what is expected.
-fn check_return(ret: &RichRet, expected: Option<&Type>) -> AnalyzeResult<()> {
+fn check_return(ret: &RichRet, expected: Option<&RichType>) -> AnalyzeResult<()> {
     match expected {
         Some(expected_type) => match &ret.val {
             Some(expr) => {

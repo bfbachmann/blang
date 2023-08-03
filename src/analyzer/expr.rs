@@ -3,14 +3,14 @@ use std::fmt::Formatter;
 
 use crate::analyzer::closure::RichClosure;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::func::{RichFn, RichFnCall};
+use crate::analyzer::func::{RichFn, RichFnCall, RichFnSig};
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
+use crate::analyzer::r#type::RichType;
 use crate::analyzer::AnalyzeResult;
 use crate::parser::expr::Expression;
 use crate::parser::op::Operator;
-use crate::parser::r#type::Type;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RichExprKind {
     VariableReference(String),
     BoolLiteral(bool),
@@ -61,10 +61,10 @@ impl PartialEq for RichExprKind {
 }
 
 /// Represents a semantically valid and type-rich expression.
-#[derive(PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct RichExpr {
     pub kind: RichExprKind,
-    pub typ: Type,
+    pub typ: RichType,
 }
 
 impl fmt::Display for RichExpr {
@@ -81,9 +81,9 @@ impl RichExpr {
             Expression::VariableReference(ref var_name) => {
                 // Make sure the variable being referenced exists.
                 match ctx.get_var(var_name.as_str()) {
-                    Some(var_dec) => Ok(RichExpr {
+                    Some(var_typ) => Ok(RichExpr {
                         kind: RichExprKind::VariableReference(var_name.clone()),
-                        typ: var_dec.typ.clone(),
+                        typ: var_typ.clone(),
                     }),
                     None => Err(AnalyzeError::new_from_expr(
                         ErrorKind::VariableNotDefined,
@@ -94,15 +94,15 @@ impl RichExpr {
             }
             Expression::BoolLiteral(b) => Ok(RichExpr {
                 kind: RichExprKind::BoolLiteral(b),
-                typ: Type::Bool,
+                typ: RichType::Bool,
             }),
             Expression::I64Literal(i) => Ok(RichExpr {
                 kind: RichExprKind::I64Literal(i),
-                typ: Type::I64,
+                typ: RichType::I64,
             }),
             Expression::StringLiteral(s) => Ok(RichExpr {
                 kind: RichExprKind::StringLiteral(s),
-                typ: Type::String,
+                typ: RichType::String,
             }),
             Expression::FunctionCall(fn_call) => {
                 let name = fn_call.fn_name.clone();
@@ -119,11 +119,10 @@ impl RichExpr {
                     ));
                 }
 
-                let ret_type = rich_call.ret_type.clone();
-
+                let typ = rich_call.ret_type.as_ref().unwrap().clone();
                 Ok(RichExpr {
                     kind: RichExprKind::FunctionCall(rich_call),
-                    typ: ret_type.unwrap(),
+                    typ,
                 })
             }
             Expression::AnonFunction(anon_fn) => {
@@ -139,10 +138,10 @@ impl RichExpr {
                 )?;
                 Ok(RichExpr {
                     kind: RichExprKind::AnonFunction(Box::new(RichFn {
-                        signature: anon_fn.signature.clone(),
+                        signature: RichFnSig::from(ctx, &anon_fn.signature)?,
                         body: rich_closure,
                     })),
-                    typ: Type::Function(Box::new(anon_fn.signature)),
+                    typ: RichType::Function(Box::new(RichFnSig::from(ctx, &anon_fn.signature)?)),
                 })
             }
             ref expr @ Expression::UnaryOperation(ref op, ref right_expr) => {
@@ -154,9 +153,9 @@ impl RichExpr {
                 // Make sure the expression has type bool.
                 let rich_expr = RichExpr::from(ctx, *right_expr.clone())?;
                 match &rich_expr.typ {
-                    &Type::Bool => Ok(RichExpr {
+                    &RichType::Bool => Ok(RichExpr {
                         kind: RichExprKind::UnaryOperation(Operator::Not, Box::new(rich_expr)),
-                        typ: Type::Bool,
+                        typ: RichType::Bool,
                     }),
                     other => Err(AnalyzeError::new_from_expr(
                         ErrorKind::IncompatibleTypes,
@@ -178,16 +177,18 @@ impl RichExpr {
                     | Operator::Subtract
                     | Operator::Multiply
                     | Operator::Divide
-                    | Operator::Modulo => (Some(Type::I64), Type::I64),
+                    | Operator::Modulo => (Some(RichType::I64), RichType::I64),
                     // Logical operators only work on bools.
-                    Operator::LogicalAnd | Operator::LogicalOr => (Some(Type::Bool), Type::Bool),
+                    Operator::LogicalAnd | Operator::LogicalOr => {
+                        (Some(RichType::Bool), RichType::Bool)
+                    }
                     // Equality operators work on anything.
-                    Operator::EqualTo | Operator::NotEqualTo => (None, Type::Bool),
+                    Operator::EqualTo | Operator::NotEqualTo => (None, RichType::Bool),
                     // Comparators only work on numeric types.
                     Operator::GreaterThan
                     | Operator::LessThan
                     | Operator::GreaterThanOrEqual
-                    | Operator::LessThanOrEqual => (Some(Type::I64), Type::Bool),
+                    | Operator::LessThanOrEqual => (Some(RichType::I64), RichType::Bool),
                     // If this happens, the parser is badly broken.
                     other => panic!("unexpected operator {}", other),
                 };
@@ -247,19 +248,16 @@ impl RichExpr {
 
 #[cfg(test)]
 mod tests {
+    use crate::analyzer::closure::RichClosure;
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
     use crate::analyzer::expr::{RichExpr, RichExprKind};
-    use crate::analyzer::func::RichFnCall;
+    use crate::analyzer::func::{RichArg, RichFn, RichFnCall, RichFnSig};
     use crate::analyzer::prog_context::ProgramContext;
-    use crate::parser::arg::Argument;
-    use crate::parser::closure::Closure;
+    use crate::analyzer::r#type::RichType;
     use crate::parser::expr::Expression;
-    use crate::parser::func::Function;
     use crate::parser::func_call::FunctionCall;
-    use crate::parser::func_sig::FunctionSignature;
     use crate::parser::op::Operator;
-    use crate::parser::r#type::Type;
-    use crate::parser::var_dec::VariableDeclaration;
+    
 
     #[test]
     fn analyze_i64_literal() {
@@ -270,7 +268,7 @@ mod tests {
             result,
             Ok(RichExpr {
                 kind: RichExprKind::I64Literal(1),
-                typ: Type::I64
+                typ: RichType::I64
             })
         ));
     }
@@ -284,7 +282,7 @@ mod tests {
             result,
             Ok(RichExpr {
                 kind: RichExprKind::BoolLiteral(false),
-                typ: Type::Bool
+                typ: RichType::Bool
             })
         ));
     }
@@ -298,7 +296,7 @@ mod tests {
             result,
             Ok(RichExpr {
                 kind: RichExprKind::StringLiteral(String::from("test")),
-                typ: Type::String
+                typ: RichType::String
             })
         );
     }
@@ -306,17 +304,13 @@ mod tests {
     #[test]
     fn analyze_var_ref() {
         let mut ctx = ProgramContext::new();
-        ctx.add_var(VariableDeclaration::new(
-            Type::String,
-            "myvar".to_string(),
-            Expression::StringLiteral("hello".to_string()),
-        ));
+        ctx.add_var("myvar", RichType::String);
         let result = RichExpr::from(&mut ctx, Expression::VariableReference("myvar".to_string()));
         assert_eq!(
             result,
             Ok(RichExpr {
                 kind: RichExprKind::VariableReference("myvar".to_string()),
-                typ: Type::String
+                typ: RichType::String
             })
         );
     }
@@ -337,13 +331,16 @@ mod tests {
     #[test]
     fn analyze_fn_call() {
         let mut ctx = ProgramContext::new();
-        ctx.add_fn(Function::new(
-            FunctionSignature::new(
+        ctx.add_fn(RichFn::new(
+            RichFnSig::new(
                 "do_thing",
-                vec![Argument::new("first", Type::Bool)],
-                Some(Type::String),
+                vec![RichArg {
+                    name: "first".to_string(),
+                    typ: RichType::Bool,
+                }],
+                Some(RichType::String),
             ),
-            Closure::new(vec![], None),
+            RichClosure::new(vec![], None),
         ));
         let fn_call = FunctionCall::new("do_thing", vec![Expression::BoolLiteral(true)]);
         let call_expr = Expression::FunctionCall(fn_call.clone());
@@ -355,11 +352,11 @@ mod tests {
                     fn_name: fn_call.fn_name,
                     args: vec![RichExpr {
                         kind: RichExprKind::BoolLiteral(true),
-                        typ: Type::Bool
+                        typ: RichType::Bool
                     }],
-                    ret_type: Some(Type::String),
+                    ret_type: Some(RichType::String),
                 }),
-                typ: Type::String,
+                typ: RichType::String,
             }),
         );
     }
@@ -367,9 +364,9 @@ mod tests {
     #[test]
     fn fn_call_no_return() {
         let mut ctx = ProgramContext::new();
-        ctx.add_fn(Function::new(
-            FunctionSignature::new("do_thing", vec![], None),
-            Closure::new(vec![], None),
+        ctx.add_fn(RichFn::new(
+            RichFnSig::new("do_thing", vec![], None),
+            RichClosure::new(vec![], None),
         ));
         let result = RichExpr::from(
             &mut ctx,
@@ -394,9 +391,16 @@ mod tests {
     #[test]
     fn fn_call_missing_arg() {
         let mut ctx = ProgramContext::new();
-        ctx.add_fn(Function::new(
-            FunctionSignature::new("do_thing", vec![Argument::new("arg", Type::Bool)], None),
-            Closure::new(vec![], None),
+        ctx.add_fn(RichFn::new(
+            RichFnSig::new(
+                "do_thing",
+                vec![RichArg {
+                    name: "arg".to_string(),
+                    typ: RichType::Bool,
+                }],
+                None,
+            ),
+            RichClosure::new(vec![], None),
         ));
         let result = RichExpr::from(
             &mut ctx,
@@ -421,9 +425,16 @@ mod tests {
     #[test]
     fn fn_call_invalid_arg_type() {
         let mut ctx = ProgramContext::new();
-        ctx.add_fn(Function::new(
-            FunctionSignature::new("do_thing", vec![Argument::new("arg", Type::Bool)], None),
-            Closure::new(vec![], None),
+        ctx.add_fn(RichFn::new(
+            RichFnSig::new(
+                "do_thing",
+                vec![RichArg {
+                    name: "arg".to_string(),
+                    typ: RichType::Bool,
+                }],
+                None,
+            ),
+            RichClosure::new(vec![], None),
         ));
         let result = RichExpr::from(
             &mut ctx,

@@ -8,7 +8,7 @@ use crate::analyzer::AnalyzeResult;
 use crate::parser::var_assign::VariableAssignment;
 
 /// Represents a semantically valid and type-rich variable assignment.
-#[derive(PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct RichVarAssign {
     pub name: String,
     pub val: RichExpr,
@@ -28,8 +28,8 @@ impl RichVarAssign {
         let rich_expr = RichExpr::from(ctx, assign.value)?;
 
         // Make sure the variable has been defined.
-        let decl = ctx.get_var(assign.name.as_str());
-        if let None = decl {
+        let var_type = ctx.get_var(assign.name.as_str());
+        if let None = var_type {
             return Err(AnalyzeError::new(
                 ErrorKind::VariableNotDefined,
                 format!("cannot assign to undeclared variable {}", assign.name).as_str(),
@@ -37,13 +37,13 @@ impl RichVarAssign {
         }
 
         // Make sure the variable type is the same as the expression type.
-        let decl = decl.unwrap();
-        if decl.typ != rich_expr.typ {
+        let typ = var_type.unwrap();
+        if typ != &rich_expr.typ {
             return Err(AnalyzeError::new(
                 ErrorKind::IncompatibleTypes,
                 format!(
                     "cannot assign value of type {} to variable {} of type {}",
-                    &rich_expr.typ, &assign.name, &decl.typ
+                    &rich_expr.typ, &assign.name, &typ
                 )
                 .as_str(),
             ));

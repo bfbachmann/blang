@@ -13,6 +13,7 @@ use parser::statement::Statement;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::program::RichProg;
 use crate::analyzer::statement::RichStatement;
+use crate::syscall::syscall::all_syscalls;
 use compiler::program::ProgCompiler;
 
 mod analyzer;
@@ -110,7 +111,7 @@ fn compile(
     };
 
     // Analyze the program.
-    let prog = match RichProg::from(prog) {
+    let prog = match RichProg::from(prog, all_syscalls().to_vec()) {
         Ok(rp) => rp,
         Err(e) => fatal!("{}", e),
     };

@@ -4,15 +4,15 @@ use std::fmt::Formatter;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::r#type::RichType;
 use crate::analyzer::AnalyzeResult;
-use crate::parser::r#type::Type;
 use crate::parser::statement::Statement;
 use crate::parser::var_dec::VariableDeclaration;
 
 /// Represents a semantically valid and type-rich variable declaration.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct RichVarDecl {
-    pub typ: Type,
+    pub typ: RichType,
     pub name: String,
     pub val: RichExpr,
 }
@@ -28,7 +28,7 @@ impl RichVarDecl {
     /// of it, or an error if the variable declaration is semantically invalid.
     pub fn from(ctx: &mut ProgramContext, var_decl: VariableDeclaration) -> AnalyzeResult<Self> {
         // Check if the variable is already defined in this scope.
-        if let Some(_) = ctx.get_var(var_decl.name.as_str()) {
+        if ctx.get_var(var_decl.name.as_str()).is_some() {
             return Err(AnalyzeError::new_from_statement(
                 ErrorKind::VariableAlreadyDefined,
                 &Statement::VariableDeclaration(var_decl.clone()),
@@ -40,9 +40,12 @@ impl RichVarDecl {
             ));
         }
 
+        // Analyze the variable type.
+        let var_type = RichType::from(ctx, &var_decl.typ)?;
+
         // Check the expression being assigned to this new variable.
         let rich_expr = RichExpr::from(ctx, var_decl.value.clone())?;
-        if rich_expr.typ != var_decl.typ {
+        if rich_expr.typ != var_type {
             return Err(AnalyzeError::new_from_statement(
                 ErrorKind::IncompatibleTypes,
                 &Statement::VariableDeclaration(var_decl.clone()),
@@ -55,9 +58,9 @@ impl RichVarDecl {
         }
 
         // The variable expression is valid. Add it to the program context.
-        ctx.add_var(var_decl.clone());
+        ctx.add_var(var_decl.name.as_str(), rich_expr.typ.clone());
         Ok(RichVarDecl {
-            typ: var_decl.typ,
+            typ: var_type,
             name: var_decl.name,
             val: rich_expr,
         })
@@ -69,6 +72,7 @@ mod tests {
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
     use crate::analyzer::expr::{RichExpr, RichExprKind};
     use crate::analyzer::prog_context::ProgramContext;
+    use crate::analyzer::r#type::RichType;
     use crate::analyzer::var_dec::RichVarDecl;
     use crate::parser::expr::Expression;
     use crate::parser::r#type::Type;
@@ -86,11 +90,11 @@ mod tests {
         assert_eq!(
             result,
             Ok(RichVarDecl {
-                typ: Type::String,
+                typ: RichType::String,
                 name: "my_string".to_string(),
                 val: RichExpr {
                     kind: RichExprKind::StringLiteral("bingo".to_string()),
-                    typ: Type::String,
+                    typ: RichType::String,
                 }
             })
         );

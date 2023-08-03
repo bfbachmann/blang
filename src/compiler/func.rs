@@ -16,6 +16,7 @@ use crate::analyzer::cond::RichCond;
 use crate::analyzer::expr::{RichExpr, RichExprKind};
 use crate::analyzer::func::{RichFn, RichFnCall, RichRet};
 use crate::analyzer::r#struct::RichStruct;
+use crate::analyzer::r#type::RichType;
 use crate::analyzer::statement::RichStatement;
 use crate::compiler::context::{
     BranchContext, CompilationContext, FnContext, LoopContext, StatementContext,
@@ -23,7 +24,7 @@ use crate::compiler::context::{
 use crate::compiler::convert;
 use crate::compiler::error::{CompileError, CompileResult, ErrorKind};
 use crate::parser::op::Operator;
-use crate::parser::r#type::Type;
+
 
 /// Compiles type-rich (i.e. semantically valid) functions.
 pub struct FnCompiler<'a, 'ctx> {
@@ -249,7 +250,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// Creates and initializes a new variable with the given name, type, and initial value.
     /// Panics if a variable by the same name already exists.
-    fn create_var(&mut self, name: &str, typ: &Type, val: BasicValueEnum<'ctx>) {
+    fn create_var(&mut self, name: &str, typ: &RichType, val: BasicValueEnum<'ctx>) {
         let ptr = self.create_entry_alloc(name, typ, val);
         self.builder.build_store(ptr, val);
         assert!(self.vars.insert(name.to_string(), ptr).is_none());
@@ -272,7 +273,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     fn create_entry_alloc(
         &self,
         name: &str,
-        typ: &Type,
+        typ: &RichType,
         val: BasicValueEnum<'ctx>,
     ) -> PointerValue<'ctx> {
         let entry = self.fn_value.unwrap().get_first_basic_block().unwrap();
@@ -283,7 +284,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             None => self.builder.position_at_end(entry),
         }
 
-        let val = if *typ == Type::String {
+        let val = if *typ == RichType::String {
             self.builder.build_alloca(val.get_type(), name)
         } else {
             self.builder
@@ -582,7 +583,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
                 self.builder.build_bitcast(
                     global.as_pointer_value(),
-                    convert::to_basic_type(self.context, &Type::String),
+                    convert::to_basic_type(self.context, &RichType::String),
                     "str_lit_as_i32_ptr",
                 )
             }
@@ -790,12 +791,12 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// If the given value is a pointer, it will be dereferenced as the given type. Otherwise
     /// the value is simply returned.
-    fn deref_if_ptr(&self, val: BasicValueEnum<'ctx>, typ: &Type) -> BasicValueEnum<'ctx> {
+    fn deref_if_ptr(&self, val: BasicValueEnum<'ctx>, typ: &RichType) -> BasicValueEnum<'ctx> {
         match typ {
-            Type::I64 => self.get_int(val).as_basic_value_enum(),
-            Type::Bool => self.get_bool(val).as_basic_value_enum(),
+            RichType::I64 => self.get_int(val).as_basic_value_enum(),
+            RichType::Bool => self.get_bool(val).as_basic_value_enum(),
             // Strings should already be represented as pointers.
-            Type::String => val,
+            RichType::String => val,
             other => panic!("cannot dereference pointer to value of type {other}"),
         }
     }

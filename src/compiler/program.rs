@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::analyzer::func::RichFnSig;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
@@ -15,8 +16,6 @@ use crate::analyzer::statement::RichStatement;
 use crate::compiler::convert;
 use crate::compiler::error::{CompileError, CompileResult, ErrorKind};
 use crate::compiler::func::FnCompiler;
-use crate::parser::func_sig::FunctionSignature;
-use crate::syscall::syscall::all_syscalls;
 
 /// Compiles a type-rich and semantically valid program to LLVM IR and/or bitcode.
 pub struct ProgCompiler<'a, 'ctx> {
@@ -91,9 +90,10 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
 
     /// Compiles the program.
     fn compile_program(&mut self) -> CompileResult<()> {
-        // Define external syscall functions so we can call the safely from within the module.
-        // Their actual implementations should be linked from libc when generating an executable.
-        self.define_syscalls();
+        // Define external functions (like syscalls) so we can call the safely from within the
+        // module. Their actual implementations should be linked from libc when generating an
+        // executable.
+        self.define_extern_fns();
 
         // Do one shallow pass to define all top-level functions in the module.
         for statement in &self.program.statements {
@@ -128,7 +128,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     }
 
     /// Defines the given function in the current module based on the function signature.
-    fn compile_fn_sig(&self, sig: &FunctionSignature) {
+    fn compile_fn_sig(&self, sig: &RichFnSig) {
         // Define the function in the module.
         let fn_type = self.create_fn_type(sig);
         let fn_val = self.module.add_function(sig.name.as_str(), fn_type, None);
@@ -140,7 +140,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     }
 
     /// Converts a `FunctionSignature` into an LLVM `FunctionType`.
-    fn create_fn_type(&self, sig: &FunctionSignature) -> FunctionType<'ctx> {
+    fn create_fn_type(&self, sig: &RichFnSig) -> FunctionType<'ctx> {
         // Get return type.
         let ret_type = convert::to_any_type(self.context, sig.return_type.as_ref());
 
@@ -164,12 +164,15 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
         }
     }
 
-    /// Defines external syscall functions in the current module.
-    fn define_syscalls(&mut self) {
-        for syscall in all_syscalls() {
-            let fn_type = self.create_fn_type(&syscall);
-            self.module
-                .add_function(syscall.name.as_str(), fn_type, Some(Linkage::External));
+    /// Defines external functions in the current module.
+    fn define_extern_fns(&mut self) {
+        for extern_fn_sig in &self.program.extern_fns {
+            let fn_type = self.create_fn_type(&extern_fn_sig);
+            self.module.add_function(
+                extern_fn_sig.name.as_str(),
+                fn_type,
+                Some(Linkage::External),
+            );
         }
     }
 }
@@ -182,6 +185,7 @@ mod tests {
     use crate::compiler::program::ProgCompiler;
     use crate::lexer::token::Token;
     use crate::parser::program::Program;
+    use crate::syscall::syscall::all_syscalls;
 
     #[test]
     fn basic_program() {
@@ -251,7 +255,7 @@ mod tests {
         "#;
         let mut tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
         let prog = Program::from(&mut tokens).expect("should not error");
-        let rich_prog = RichProg::from(prog).expect("should not error");
+        let rich_prog = RichProg::from(prog, all_syscalls().to_vec()).expect("should not error");
         ProgCompiler::compile(&rich_prog, None, None, None, false).expect("should not error");
     }
 }

@@ -12,7 +12,7 @@ use crate::analyzer::AnalyzeResult;
 use crate::parser::statement::Statement;
 
 /// Represents a semantically valid and type-rich statement.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum RichStatement {
     VariableDeclaration(RichVarDecl),
     VariableAssignment(RichVarAssign),
@@ -96,7 +96,7 @@ impl RichStatement {
                 Err(e) => Err(e),
             },
             Statement::StructDeclaration(s) => {
-                let rich_struct = RichStruct::from(ctx, &s)?;
+                let rich_struct = RichStruct::from(ctx, &s, false)?;
                 Ok(RichStatement::StructTypeDeclaration(rich_struct))
             }
         }

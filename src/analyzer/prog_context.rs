@@ -1,15 +1,12 @@
-use crate::analyzer::r#struct::RichStruct;
-use crate::parser::arg::Argument;
-use crate::parser::expr::Expression;
 use std::collections::hash_map::Iter;
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
 
-use crate::parser::func::Function;
-use crate::parser::func_sig::FunctionSignature;
+use crate::analyzer::func::{RichArg, RichFn, RichFnSig};
+use crate::analyzer::r#struct::RichStruct;
+use crate::analyzer::r#type::RichType;
+
 use crate::parser::r#struct::Struct;
-use crate::parser::r#type::Type;
-use crate::parser::var_dec::VariableDeclaration;
 
 #[derive(PartialEq, Clone)]
 pub enum ScopeKind {
@@ -33,28 +30,22 @@ impl fmt::Display for ScopeKind {
 /// Represents a scope in the program. Each scope corresponds to a unique closure which can
 /// be a function body, an inline closure, a branch, or a loop.
 pub struct Scope {
-    // TODO: VariableDeclaration contains potentially unnecessary expression.
-    vars: HashMap<String, VariableDeclaration>,
-    extern_fns: HashMap<String, FunctionSignature>,
-    fns: HashMap<String, Function>,
+    vars: HashMap<String, RichType>,
+    extern_fns: HashMap<String, RichFnSig>,
+    fns: HashMap<String, RichFn>,
     extern_structs: HashMap<String, Struct>,
     structs: HashMap<String, RichStruct>,
     kind: ScopeKind,
-    return_type: Option<Type>,
+    return_type: Option<RichType>,
 }
 
 impl Scope {
     /// Creates a new scope.
-    pub fn new(kind: ScopeKind, args: Vec<Argument>, return_type: Option<Type>) -> Self {
-        let mut vars = HashMap::new();
-
+    pub fn new(kind: ScopeKind, args: Vec<RichArg>, return_type: Option<RichType>) -> Self {
         // If there are args, add them to the current scope variables.
+        let mut vars = HashMap::new();
         for arg in args {
-            // TODO: don't use placeholder expression here.
-            vars.insert(
-                arg.name.clone(),
-                VariableDeclaration::new(arg.typ, arg.name.clone(), Expression::BoolLiteral(false)),
-            );
+            vars.insert(arg.name, arg.typ);
         }
 
         Scope {
@@ -71,19 +62,19 @@ impl Scope {
     // Adds the signature of the external function to the scope. If there was already a function
     // with the same name in the scope, returns the old function. Use this method to record the
     // existence of functions before their bodies are analyzed.
-    fn add_extern_fn(&mut self, sig: FunctionSignature) -> Option<FunctionSignature> {
+    fn add_extern_fn(&mut self, sig: RichFnSig) -> Option<RichFnSig> {
         self.extern_fns.insert(sig.name.to_string(), sig)
     }
 
     // Returns the external function signature with the given name from the scope, or None if no
     // such external function exists.
-    fn get_extern_fn(&self, name: &str) -> Option<&FunctionSignature> {
+    fn get_extern_fn(&self, name: &str) -> Option<&RichFnSig> {
         self.extern_fns.get(name)
     }
 
     // Adds the function to the scope. If there was already a function with the same name in the
     // scope, returns the old function.
-    fn add_fn(&mut self, func: Function) -> Option<Function> {
+    fn add_fn(&mut self, func: RichFn) -> Option<RichFn> {
         self.fns.insert(func.signature.name.to_string(), func)
     }
 
@@ -100,13 +91,13 @@ impl Scope {
     }
 
     // Adds the variable to the scope. If there was already a variable with the same name in the
-    // scope, returns the old variable.
-    fn add_var(&mut self, var_dec: VariableDeclaration) -> Option<VariableDeclaration> {
-        self.vars.insert(var_dec.name.clone(), var_dec)
+    // scope, returns the old variable type.
+    fn add_var(&mut self, name: &str, typ: RichType) -> Option<RichType> {
+        self.vars.insert(name.to_string(), typ)
     }
 
     // Returns the function with the given name from the scope, or None if no such function exists.
-    fn get_fn(&self, name: &str) -> Option<&Function> {
+    fn get_fn(&self, name: &str) -> Option<&RichFn> {
         self.fns.get(name)
     }
 
@@ -127,7 +118,7 @@ impl Scope {
     }
 
     // Returns the variable with the given name from the scope, or None if no such variable exists.
-    fn get_var(&self, name: &str) -> Option<&VariableDeclaration> {
+    fn get_var(&self, name: &str) -> Option<&RichType> {
         self.vars.get(name)
     }
 }
@@ -148,13 +139,13 @@ impl ProgramContext {
 
     /// Adds the external function signature to the context. If there was already a function with
     /// the same name, returns the old function signature.
-    pub fn add_extern_fn(&mut self, sig: FunctionSignature) -> Option<FunctionSignature> {
+    pub fn add_extern_fn(&mut self, sig: RichFnSig) -> Option<RichFnSig> {
         self.stack.back_mut().unwrap().add_extern_fn(sig)
     }
 
     /// Adds the function to the context. If there was already a function with the same name, returns
     /// the old function.
-    pub fn add_fn(&mut self, func: Function) -> Option<Function> {
+    pub fn add_fn(&mut self, func: RichFn) -> Option<RichFn> {
         self.stack.back_mut().unwrap().add_fn(func)
     }
 
@@ -171,14 +162,14 @@ impl ProgramContext {
     }
 
     /// Adds the variable to the context. If there was already a variable with the same name,
-    /// returns the old variable.
-    pub fn add_var(&mut self, var_dec: VariableDeclaration) -> Option<VariableDeclaration> {
-        self.stack.back_mut().unwrap().add_var(var_dec)
+    /// returns the old variable type.
+    pub fn add_var(&mut self, name: &str, typ: RichType) -> Option<RichType> {
+        self.stack.back_mut().unwrap().add_var(name, typ)
     }
 
     /// Attempts to locate the external function signature with the given name and returns it,
     /// if found.
-    pub fn get_extern_fn(&self, name: &str) -> Option<&FunctionSignature> {
+    pub fn get_extern_fn(&self, name: &str) -> Option<&RichFnSig> {
         // Search up the stack from the current scope.
         for scope in self.stack.iter().rev() {
             if let Some(sig) = scope.get_extern_fn(name) {
@@ -190,7 +181,7 @@ impl ProgramContext {
     }
 
     /// Attempts to locate the function with the given name and returns it, if found.
-    pub fn get_fn(&self, name: &str) -> Option<&Function> {
+    pub fn get_fn(&self, name: &str) -> Option<&RichFn> {
         // Search up the stack from the current scope.
         for scope in self.stack.iter().rev() {
             if let Some(func) = scope.get_fn(name) {
@@ -238,7 +229,7 @@ impl ProgramContext {
     }
 
     /// Attempts to locate the variable with the given name and returns it, if found.
-    pub fn get_var(&self, name: &str) -> Option<&VariableDeclaration> {
+    pub fn get_var(&self, name: &str) -> Option<&RichType> {
         // Search up the stack from the current scope.
         for scope in self.stack.iter().rev() {
             if let Some(var) = scope.get_var(name) {
@@ -285,7 +276,7 @@ impl ProgramContext {
     }
 
     /// Returns the return type of the current scope, or none if there is no return type.
-    pub fn return_type(&self) -> &Option<Type> {
+    pub fn return_type(&self) -> &Option<RichType> {
         for scope in self.stack.iter().rev() {
             if scope.kind == ScopeKind::FnBody {
                 return &scope.return_type;
