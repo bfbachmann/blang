@@ -190,7 +190,8 @@ impl FunctionSignature {
                         | TokenKind::I64
                         | TokenKind::Bool
                         | TokenKind::Function
-                        | TokenKind::Identifier(_),
+                        | TokenKind::Identifier(_)
+                        | TokenKind::Struct,
                     ..
                 }) => {
                     // The next few tokens represent an argument.
@@ -269,5 +270,13 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn inline_struct_types_in_fn_sig() {
+        let raw = r#"fn one(struct {i64 one bool two} a, i64 b): struct {string thing} {}"#;
+        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let result = Program::from(&mut tokens);
+        assert!(matches!(result, Ok(_)));
     }
 }
