@@ -4,9 +4,6 @@ use std::fmt::Formatter;
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::token::Token;
-use crate::parser::error::{ErrorKind, ParseError};
-
-use crate::parser::func_sig::FunctionSignature;
 use crate::parser::program::Program;
 use crate::parser::r#type::Type;
 use crate::parser::ParseResult;
@@ -47,7 +44,7 @@ impl Struct {
     ///     }
     ///
     /// where
-    ///  - `name` is the struct type name
+    ///  - `name` is the struct type name (optional)
     ///  - `type` is the struct field type
     ///  - `field` is the struct field name
     pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
@@ -70,66 +67,18 @@ impl Struct {
         // Parse struct fields until we reach "}".
         let mut fields = vec![];
         loop {
-            // The next token should either be the field type name or "}".
-            let field_type = match tokens.pop_front() {
-                Some(Token {
-                    kind: TokenKind::EndClosure,
-                    ..
-                }) => {
-                    // We've reached the end of the struct declaration, so we're done!
-                    break;
-                }
+            // If the next token is "}", we're done parsing the struct type declaration.
+            if let Some(Token {
+                kind: TokenKind::EndClosure,
+                ..
+            }) = tokens.front()
+            {
+                tokens.pop_front();
+                break;
+            }
 
-                Some(Token {
-                    kind: TokenKind::I64,
-                    ..
-                }) => Type::I64,
-
-                Some(Token {
-                    kind: TokenKind::Bool,
-                    ..
-                }) => Type::Bool,
-
-                Some(Token {
-                    kind: TokenKind::String,
-                    ..
-                }) => Type::String,
-
-                Some(Token {
-                    kind: TokenKind::Identifier(type_name),
-                    ..
-                }) => Type::Unresolved(type_name),
-
-                Some(
-                    token @ Token {
-                        kind: TokenKind::Function,
-                        ..
-                    },
-                ) => {
-                    tokens.push_front(token);
-                    let fn_sig = FunctionSignature::from_anon(tokens, false)?;
-                    Type::Function(Box::new(fn_sig))
-                }
-
-                Some(
-                    token @ Token {
-                        kind: TokenKind::Struct,
-                        ..
-                    },
-                ) => {
-                    tokens.push_front(token);
-                    let struct_type = Struct::from(tokens)?;
-                    Type::Struct(struct_type)
-                }
-
-                other => {
-                    return Err(ParseError::new(
-                        ErrorKind::ExpectedType,
-                        "expected struct field type",
-                        other,
-                    ))
-                }
-            };
+            // The next tokens should represent the field type.
+            let field_type = Type::from(tokens)?;
 
             // The next token should be the field name.
             let field_name = Program::parse_identifier(tokens)?;
