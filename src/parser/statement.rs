@@ -35,11 +35,15 @@ impl fmt::Display for Statement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Statement::VariableDeclaration(var_dec) => {
-                write!(
-                    f,
-                    "variable declaration {} {} = ...",
-                    var_dec.typ, var_dec.name
-                )
+                if let Some(typ) = &var_dec.typ {
+                    write!(
+                        f,
+                        "variable declaration: let {} {} = ...",
+                        typ, var_dec.name
+                    )
+                } else {
+                    write!(f, "variable declaration: let {} = ...", var_dec.name)
+                }
             }
             Statement::VariableAssignment(var_assign) => {
                 write!(f, "variable assignment {} = ...", var_assign.name)
@@ -111,13 +115,16 @@ impl Statement {
         }
 
         match (first.unwrap(), second.unwrap()) {
-            // If the first token is a type, it must be a variable declaration.
+            // If the first two tokens are "let <name>", it must be a variable declaration.
             (
                 Token {
-                    kind: TokenKind::I64 | TokenKind::String | TokenKind::Bool,
+                    kind: TokenKind::Let,
                     ..
                 },
-                _,
+                Token {
+                    kind: TokenKind::Identifier(_),
+                    ..
+                },
             ) => {
                 let var_decl = VariableDeclaration::from(tokens)?;
                 Ok(Statement::VariableDeclaration(var_decl))
@@ -245,7 +252,7 @@ impl Statement {
                     return Ok(Statement::Return(None));
                 }
 
-                let expr = Expression::from(tokens, false)?;
+                let expr = Expression::from(tokens, false, false)?;
                 Ok(Statement::Return(Some(expr)))
             }
 
@@ -278,7 +285,7 @@ mod tests {
 
     #[test]
     fn parse_var_assignment() {
-        let mut tokens = Token::tokenize_line("i64 thing = 234", 0).expect("should not error");
+        let mut tokens = Token::tokenize_line("let thing: i64 = 234", 0).expect("should not error");
         Statement::from(&mut tokens).expect("should not error");
     }
 }

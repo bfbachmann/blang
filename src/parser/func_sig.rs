@@ -274,7 +274,7 @@ mod tests {
 
     #[test]
     fn inline_struct_types_in_fn_sig() {
-        let raw = r#"fn one(struct {i64 one bool two} a, i64 b): struct {string thing} {}"#;
+        let raw = r#"fn one(struct {one: i64, two: bool} a, i64 b): struct {thing: string} {}"#;
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let result = Program::from(&mut tokens);
         assert!(matches!(result, Ok(_)));

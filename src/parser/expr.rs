@@ -1,5 +1,7 @@
 use std::collections::VecDeque;
+
 use std::fmt;
+
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::token::Token;
@@ -7,6 +9,7 @@ use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
 use crate::parser::op::Operator;
+use crate::parser::r#struct::StructInit;
 use crate::parser::ParseResult;
 
 #[derive(Debug)]
@@ -48,6 +51,7 @@ pub enum Expression {
     FunctionCall(FunctionCall),
     AnonFunction(Box<Function>),
     UnaryOperation(Operator, Box<Expression>),
+    StructInit(StructInit),
 
     // Composite expressions.
     BinaryOperation(Box<Expression>, Operator, Box<Expression>),
@@ -65,6 +69,9 @@ impl fmt::Display for Expression {
             Expression::UnaryOperation(op, expr) => write!(f, "{}{}", op, expr),
             Expression::BinaryOperation(left_expr, op, right_expr) => {
                 write!(f, "{} {} {}", left_expr, op, right_expr)
+            }
+            Expression::StructInit(struct_init) => {
+                write!(f, "struct initialization {}", struct_init)
             }
         }
     }
@@ -101,7 +108,12 @@ impl Expression {
     ///  - a literal value (includes anonymous functions)
     ///  - a function call
     ///  - a unary operator followed by a composite expression (`<unary_op> <comp_expr>`)
-    fn from_basic(tokens: &mut VecDeque<Token>, is_arg: bool) -> ParseResult<Option<Expression>> {
+    ///  - a struct initialization (see `StructInit::from`)
+    fn from_basic(
+        tokens: &mut VecDeque<Token>,
+        is_arg: bool,
+        is_cond: bool,
+    ) -> ParseResult<Option<Expression>> {
         match tokens.pop_front() {
             // If the first token is "fn", we'll assume the expression is an anonymous function.
             Some(
@@ -118,8 +130,20 @@ impl Expression {
                 Ok(Some(Expression::AnonFunction(Box::new(func))))
             }
 
-            // If the first token is an identifier, the expression can either be a function call
-            // or a variable value.
+            // If the first token is "struct", it's an inline struct initialization.
+            Some(
+                token @ Token {
+                    kind: TokenKind::Struct,
+                    ..
+                },
+            ) => {
+                tokens.push_front(token);
+                let struct_init = StructInit::from(tokens)?;
+                Ok(Some(Expression::StructInit(struct_init)))
+            }
+
+            // If the first token is an identifier, the expression can be a function call,
+            // a variable value, or a struct initialization.
             Some(
                 token @ Token {
                     kind: TokenKind::Identifier(_),
@@ -127,7 +151,7 @@ impl Expression {
                 },
             ) => {
                 match tokens.front() {
-                    // If the next token is "(", it's a function call.
+                    // If the token is "(", it's a function call.
                     Some(&Token {
                         kind: TokenKind::LeftParen,
                         ..
@@ -135,6 +159,28 @@ impl Expression {
                         tokens.push_front(token);
                         let call = FunctionCall::from(tokens)?;
                         Ok(Some(Expression::FunctionCall(call)))
+                    }
+
+                    // If the token is "{", try parse the expression as struct initialization. If
+                    // it's not valid struct initialization, we'll assume it's a variable value.
+                    Some(&Token {
+                        kind: TokenKind::BeginClosure,
+                        ..
+                    }) => {
+                        // If we're in a conditional, we can safely assume that this is a variable
+                        // reference. Otherwise, it is struct initialization.
+                        if is_cond {
+                            match token.kind {
+                                TokenKind::Identifier(name) => {
+                                    Ok(Some(Expression::VariableReference(name)))
+                                }
+                                _ => unreachable!(),
+                            }
+                        } else {
+                            tokens.push_front(token);
+                            let struct_init = StructInit::from(tokens)?;
+                            Ok(Some(Expression::StructInit(struct_init)))
+                        }
                     }
 
                     // If the next token is anything else, we'll assume it's a variable value.
@@ -162,7 +208,7 @@ impl Expression {
                 },
             ) => {
                 let op = Operator::from(&token.kind).unwrap();
-                let expr = Expression::from(tokens, is_arg)?;
+                let expr = Expression::from(tokens, is_arg, is_cond)?;
                 Ok(Some(Expression::UnaryOperation(op, Box::new(expr))))
             }
 
@@ -200,6 +246,7 @@ impl Expression {
     ///  - a literal value
     ///  - a function call
     ///  - a unary operator followed by a composite expression (`<unary_op> <comp_expr>`)
+    ///  - a struct initialization (see `StructInit::from`)
     /// whereas a composite expression can be any token sequence of the form
     ///
     ///     <basic_expr> <binary_op> <comp_expr>
@@ -212,7 +259,11 @@ impl Expression {
     /// This function implements a modified version of the shunting yard algorithm. The general
     /// structure is the same, but modifications have been made to handle negative values and
     /// function calls with arbitrary arguments.
-    pub fn from(tokens: &mut VecDeque<Token>, is_arg: bool) -> ParseResult<Expression> {
+    pub fn from(
+        tokens: &mut VecDeque<Token>,
+        is_arg: bool,
+        is_cond: bool,
+    ) -> ParseResult<Expression> {
         let mut out_q: VecDeque<OutputNode> = VecDeque::new();
         let mut op_stack: VecDeque<Token> = VecDeque::new();
         let mut last_token: Option<Token> = None;
@@ -326,7 +377,7 @@ impl Expression {
                 // Add the operator back to the token deque so it can be parsed as part of the basic
                 // expression.
                 tokens.push_front(op1_token.clone());
-                let expr = Expression::from_basic(tokens, is_arg)?;
+                let expr = Expression::from_basic(tokens, is_arg, is_cond)?;
                 out_q.push_back(OutputNode::from_basic_expr(expr.unwrap()));
                 expect_binop_or_end = true
             }
@@ -401,7 +452,7 @@ impl Expression {
                     None => {
                         // This is the beginning of the expression, so we expect a basic expression.
                         tokens.push_front(op1_token.clone());
-                        if let Some(expr) = Expression::from_basic(tokens, is_arg)? {
+                        if let Some(expr) = Expression::from_basic(tokens, is_arg, is_cond)? {
                             out_q.push_back(OutputNode::from_basic_expr(expr));
                             expect_binop_or_end = true;
                         } else {
@@ -424,7 +475,8 @@ impl Expression {
                         if let Some(last_op) = Operator::from(&last.kind) {
                             if last_op.is_binary() {
                                 tokens.push_front(op1_token.clone());
-                                if let Some(expr) = Expression::from_basic(tokens, is_arg)? {
+                                if let Some(expr) = Expression::from_basic(tokens, is_arg, is_cond)?
+                                {
                                     out_q.push_back(OutputNode::from_basic_expr(expr));
                                     expect_binop_or_end = true;
                                 } else {
@@ -497,54 +549,42 @@ mod tests {
     use crate::parser::func_call::FunctionCall;
     use crate::parser::op::Operator;
 
+    fn parse(raw: &str) -> Expression {
+        let mut tokens = Token::tokenize_line(raw, 0).expect("should not error");
+        Expression::from(&mut tokens, false, false).expect("should not error")
+    }
+
     #[test]
     fn parse_basic_var_value() {
-        let mut tokens = Token::tokenize_line(r#"my_var"#, 0).expect("should not error");
-        let result = Expression::from_basic(&mut tokens, false).expect("should not error");
         assert_eq!(
-            result,
-            Some(Expression::VariableReference("my_var".to_string()))
+            parse(r#"my_var"#),
+            Expression::VariableReference("my_var".to_string())
         );
     }
 
     #[test]
     fn parse_basic_bool_literal() {
-        let mut tokens = Token::tokenize_line("true", 0).expect("should not error");
-        let result = Expression::from_basic(&mut tokens, false).expect("should not error");
-        assert_eq!(result, Some(Expression::BoolLiteral(true)));
-
-        let mut tokens = Token::tokenize_line("false", 0).expect("should not error");
-        let result = Expression::from_basic(&mut tokens, false).expect("should not error");
-        assert_eq!(result, Some(Expression::BoolLiteral(false)));
+        assert_eq!(parse("true"), Expression::BoolLiteral(true));
+        assert_eq!(parse("false"), Expression::BoolLiteral(false));
     }
 
     #[test]
     fn parse_basic_i64_literal() {
-        let mut tokens = Token::tokenize_line("123", 0).expect("should not error");
-        let result = Expression::from_basic(&mut tokens, false).expect("should not error");
-        assert_eq!(result, Some(Expression::I64Literal(123)));
+        assert_eq!(parse("123"), Expression::I64Literal(123));
     }
 
     #[test]
     fn parse_basic_string_literal() {
-        let mut tokens =
-            Token::tokenize_line(r#""this is my \"String\"""#, 0).expect("should not error");
-        let result = Expression::from_basic(&mut tokens, false).expect("should not error");
         assert_eq!(
-            result,
-            Some(Expression::StringLiteral(
-                r#"this is my "String""#.to_string()
-            ))
+            parse(r#""this is my \"String\"""#),
+            Expression::StringLiteral(r#"this is my "String""#.to_string())
         );
     }
 
     #[test]
     fn parse_function_call() {
-        let mut tokens = Token::tokenize_line("call(3 * 2 - 2, other(!thing, 1 > var % 2))", 0)
-            .expect("should not error");
-        let result = Expression::from(&mut tokens, false).expect("should not error");
         assert_eq!(
-            result,
+            parse("call(3 * 2 - 2, other(!thing, 1 > var % 2))"),
             Expression::FunctionCall(FunctionCall::new(
                 "call",
                 vec![
@@ -582,11 +622,8 @@ mod tests {
 
     #[test]
     fn parse_i64_arithmetic() {
-        let mut tokens =
-            Token::tokenize_line("(3 + 6) / 3 - 5 + 2 * 3", 0).expect("should not error");
-        let result = Expression::from(&mut tokens, false).expect("should not error");
         assert_eq!(
-            result,
+            parse("(3 + 6) / 3 - 5 + 2 * 3"),
             Expression::BinaryOperation(
                 Box::new(Expression::BinaryOperation(
                     Box::new(Expression::BinaryOperation(
@@ -616,10 +653,8 @@ mod tests {
         let raw = r#"(var - 3) / 4 *
             (call(true) % 2) +
             5"#;
-        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        let result = Expression::from(&mut tokens, false).expect("should not error");
         assert_eq!(
-            result,
+            parse(raw),
             Expression::BinaryOperation(
                 Box::new(Expression::BinaryOperation(
                     Box::new(Expression::BinaryOperation(
@@ -651,7 +686,7 @@ mod tests {
     fn parse_unmatched_open_paren() {
         let mut tokens =
             Token::tokenize(Cursor::new("3 - 4 / (2 * 3:").lines()).expect("should not error");
-        let result = Expression::from(&mut tokens, false);
+        let result = Expression::from(&mut tokens, false, false);
         assert!(matches!(
             result,
             Err(ParseError {
@@ -670,7 +705,7 @@ mod tests {
     fn parse_composite_negative_values() {
         let mut tokens = Token::tokenize(Cursor::new("-8 - (-100 + 2) * 4 / 2 + 8").lines())
             .expect("should not error");
-        let result = Expression::from(&mut tokens, false).expect("should not error");
+        let result = Expression::from(&mut tokens, false, false).expect("should not error");
         assert_eq!(
             result,
             Expression::BinaryOperation(
@@ -708,7 +743,7 @@ mod tests {
     #[test]
     fn parse_basic_negative_values() {
         let mut tokens = Token::tokenize(Cursor::new("-8").lines()).expect("should not error");
-        let result = Expression::from(&mut tokens, false).expect("should not error");
+        let result = Expression::from(&mut tokens, false, false).expect("should not error");
         assert_eq!(
             result,
             Expression::BinaryOperation(
@@ -719,7 +754,7 @@ mod tests {
         );
 
         let mut tokens = Token::tokenize(Cursor::new("-x").lines()).expect("should not error");
-        let result = Expression::from(&mut tokens, false).expect("should not error");
+        let result = Expression::from(&mut tokens, false, false).expect("should not error");
         assert_eq!(
             result,
             Expression::BinaryOperation(
@@ -730,7 +765,7 @@ mod tests {
         );
 
         let mut tokens = Token::tokenize(Cursor::new("-f()").lines()).expect("should not error");
-        let result = Expression::from(&mut tokens, false).expect("should not error");
+        let result = Expression::from(&mut tokens, false, false).expect("should not error");
         assert_eq!(
             result,
             Expression::BinaryOperation(
@@ -754,7 +789,7 @@ mod tests {
 
         for input in inputs {
             let mut tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
-            let result = Expression::from(&mut tokens, false);
+            let result = Expression::from(&mut tokens, false, false);
             assert!(matches!(
                 result,
                 Err(ParseError {
@@ -769,7 +804,7 @@ mod tests {
     fn parse_redundant_parens() {
         let mut tokens =
             Token::tokenize(Cursor::new("(((1>0)+1))").lines()).expect("should not error");
-        let result = Expression::from(&mut tokens, false).expect("should not error");
+        let result = Expression::from(&mut tokens, false, false).expect("should not error");
         assert_eq!(
             result,
             Expression::BinaryOperation(
@@ -788,7 +823,7 @@ mod tests {
     fn parse_unexpected_end_of_expr() {
         for input in ["2 -", "ok *", "5/", "v -3 + -", "(3 % 3) +"] {
             let mut tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
-            let result = Expression::from(&mut tokens, false);
+            let result = Expression::from(&mut tokens, false, false);
             assert!(matches!(
                 result,
                 Err(ParseError {
@@ -803,7 +838,7 @@ mod tests {
     fn parse_repeated_minus() {
         let input = "--(-v--a)-2--(-100 -- call(1))";
         let mut tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
-        let result = Expression::from(&mut tokens, false);
+        let result = Expression::from(&mut tokens, false, false);
         assert!(matches!(
             result,
             Err(ParseError {
@@ -822,7 +857,7 @@ mod tests {
     fn redundant_parenthesized_negatives() {
         let input = "-(-b-(-100))";
         let mut tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
-        let result = Expression::from(&mut tokens, false).expect("should not error");
+        let result = Expression::from(&mut tokens, false, false).expect("should not error");
         assert_eq!(
             result,
             Expression::BinaryOperation(

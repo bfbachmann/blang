@@ -6,7 +6,7 @@ _A bad language (don't use it, it's bad)._
 
 ```
 fn cumulative_sum(i64 i): i64 {
-    i64 result = 0
+    let result = 0
     loop {
         if i == 0 {
             return result
@@ -25,8 +25,8 @@ fn fib(i64 n): i64 {
 }
 
 fn main() {
-    i64 cumulative_sum_50 = cumulative_sum(50)
-    i64 fib_10 = fib(10)
+    let cumulative_sum_50 = cumulative_sum(50)
+    let fib_10 = fib(10)
 }
 ```
 

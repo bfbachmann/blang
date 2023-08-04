@@ -128,7 +128,7 @@ mod tests {
     fn simple_return() {
         let raw = r#"
             fn thing(): bool {
-                bool b = true
+                let b = true
                 return b
             }
         "#;
@@ -361,9 +361,9 @@ mod tests {
     fn struct_decl() {
         let raw = r#"
             struct MyStruct {
-                i64 counter
-                bool is_even
-                string message
+                counter: i64,
+                is_even: bool,
+                message: string,
             }
         "#;
         let result = analyze_statement(raw);

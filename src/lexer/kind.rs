@@ -40,6 +40,7 @@ pub enum TokenKind {
     Struct,
 
     // Keywords and control flow
+    Let,
     If,
     Else,
     ElseIf,
@@ -88,6 +89,7 @@ impl Clone for TokenKind {
             TokenKind::StringLiteral(v) => TokenKind::StringLiteral(v.clone()),
             TokenKind::Function => TokenKind::Function,
             TokenKind::Struct => TokenKind::Struct,
+            TokenKind::Let => TokenKind::Let,
             TokenKind::If => TokenKind::If,
             TokenKind::Else => TokenKind::Else,
             TokenKind::ElseIf => TokenKind::ElseIf,
@@ -145,6 +147,7 @@ impl TokenKind {
             TokenKind::StringLiteral(v) => v.to_string(),
             TokenKind::Function => "fn".to_string(),
             TokenKind::Struct => "struct".to_string(),
+            TokenKind::Let => "let".to_string(),
             TokenKind::If => "if".to_string(),
             TokenKind::Else => "else".to_string(),
             TokenKind::ElseIf => "else if".to_string(),
@@ -213,6 +216,7 @@ impl TokenKind {
             TokenKind::LessThan,
             TokenKind::GreaterThanOrEqual,
             TokenKind::LessThanOrEqual,
+            TokenKind::Let,
             TokenKind::If,
             TokenKind::Else,
             TokenKind::ElseIf,

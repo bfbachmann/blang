@@ -36,7 +36,7 @@ impl VariableAssignment {
         Program::parse_expecting(tokens, HashSet::from([TokenKind::Equal]))?;
 
         // The next tokens should be some expression.
-        let expr = Expression::from(tokens, false)?;
+        let expr = Expression::from(tokens, false, false)?;
 
         Ok(VariableAssignment::new(name.as_str(), expr))
     }

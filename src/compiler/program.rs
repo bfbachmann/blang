@@ -191,15 +191,15 @@ mod tests {
     fn basic_program() {
         let code = r#"
             fn main() {
-                i64 val = other(2, 10)
+                let val = other(2, 10)
                 fib(val)
                 
-                string hi = "hello world!!"
+                let hi = "hello world!!"
                 string_stuff("test")
             }
             
             fn thing(bool b): bool {
-                bool a = true
+                let a = true
                 return !a || b
             }
             
@@ -216,7 +216,7 @@ mod tests {
             }
             
             fn do_thing(i64 a): i64 {
-                i64 result = 5
+                let result = 5
                 loop {
                     if a < 10 {
                         loop {
@@ -235,8 +235,8 @@ mod tests {
             }
             
             fn cum_sum(i64 n): i64 {
-                i64 i = 1
-                i64 result = 0
+                let i = 1
+                let result = 0
                 loop {
                     if i >= n {
                         return result 

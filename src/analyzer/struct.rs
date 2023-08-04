@@ -1,22 +1,25 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
-use std::fmt::Formatter;
+use std::fmt::{Display, Formatter};
 
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#type::RichType;
 use crate::analyzer::AnalyzeResult;
-use crate::parser::r#struct::Struct;
+
+use crate::parser::r#struct::{Struct, StructInit};
 use crate::parser::r#type::Type;
+use crate::util;
 
 /// Represents a semantically valid and type-rich struct field.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RichField {
     pub name: String,
     pub typ: RichType,
 }
 
-impl fmt::Display for RichField {
+impl Display for RichField {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{} {}", self.typ, self.name)
     }
@@ -29,7 +32,7 @@ pub struct RichStruct {
     pub fields: Vec<RichField>,
 }
 
-impl fmt::Display for RichStruct {
+impl Display for RichStruct {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "struct {} {{", self.name)?;
 
@@ -45,7 +48,7 @@ impl fmt::Display for RichStruct {
 
 impl PartialEq for RichStruct {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
+        self.name == other.name && util::vectors_are_equal(&self.fields, &other.fields)
     }
 }
 
@@ -141,60 +144,163 @@ impl RichStruct {
         ctx.add_struct(rich_struct.clone());
         Ok(rich_struct)
     }
-}
 
-/// Recursively checks for struct containment cycles that would imply struct types with infinite
-/// size.
-pub fn analyze_struct_containment(ctx: &ProgramContext, struct_type: &Struct) -> AnalyzeResult<()> {
-    check_containment_cycles(ctx, struct_type, &mut vec![])
-}
-
-fn check_containment_cycles(
-    ctx: &ProgramContext,
-    struct_type: &Struct,
-    hierarchy: &mut Vec<String>,
-) -> AnalyzeResult<()> {
-    hierarchy.push(struct_type.name.clone());
-
-    for field in &struct_type.fields {
-        match &field.typ {
-            Type::Unresolved(field_type_name) => {
-                if hierarchy.contains(field_type_name) {
-                    return Err(AnalyzeError::new(
-                        ErrorKind::ContainmentCycle,
-                        format!(
-                            "type {} cannot contain itself (via field {} on struct type {})",
-                            field_type_name, field.name, struct_type.name,
-                        )
-                        .as_str(),
-                    ));
-                }
-
-                hierarchy.push(field_type_name.to_string());
-                let field_struct_type = ctx.get_extern_struct(field_type_name.as_str()).unwrap();
-                check_containment_cycles(ctx, field_struct_type, hierarchy)?;
-                hierarchy.pop();
-            }
-            Type::Struct(field_struct_type) => {
-                if !field_struct_type.name.is_empty() && hierarchy.contains(&field_struct_type.name)
-                {
-                    return Err(AnalyzeError::new(
-                        ErrorKind::ContainmentCycle,
-                        format!(
-                            "type {} cannot contain itself (via struct field {} on struct type {})",
-                            field_struct_type.name, field.name, struct_type.name,
-                        )
-                        .as_str(),
-                    ));
-                }
-
-                hierarchy.push(field_struct_type.name.clone());
-                check_containment_cycles(ctx, field_struct_type, hierarchy)?;
-                hierarchy.pop();
-            }
-            Type::I64 | Type::String | Type::Bool | Type::Function(_) => {}
-        }
+    /// Recursively checks for struct containment cycles that would imply struct types with infinite
+    /// size.
+    pub fn analyze_containment(ctx: &ProgramContext, struct_type: &Struct) -> AnalyzeResult<()> {
+        RichStruct::check_containment_cycles(ctx, struct_type, &mut vec![])
     }
 
-    Ok(())
+    fn check_containment_cycles(
+        ctx: &ProgramContext,
+        struct_type: &Struct,
+        hierarchy: &mut Vec<String>,
+    ) -> AnalyzeResult<()> {
+        hierarchy.push(struct_type.name.clone());
+
+        for field in &struct_type.fields {
+            match &field.typ {
+                Type::Unresolved(field_type_name) => {
+                    if hierarchy.contains(field_type_name) {
+                        return Err(AnalyzeError::new(
+                            ErrorKind::ContainmentCycle,
+                            format!(
+                                "type {} cannot contain itself (via field {} on struct type {})",
+                                field_type_name, field.name, struct_type.name,
+                            )
+                            .as_str(),
+                        ));
+                    }
+
+                    hierarchy.push(field_type_name.to_string());
+                    let field_struct_type =
+                        ctx.get_extern_struct(field_type_name.as_str()).unwrap();
+                    RichStruct::check_containment_cycles(ctx, field_struct_type, hierarchy)?;
+                    hierarchy.pop();
+                }
+                Type::Struct(field_struct_type) => {
+                    if !field_struct_type.name.is_empty()
+                        && hierarchy.contains(&field_struct_type.name)
+                    {
+                        return Err(AnalyzeError::new(
+                            ErrorKind::ContainmentCycle,
+                            format!(
+                                "type {} cannot contain itself (via struct field {} on struct type {})",
+                                field_struct_type.name, field.name, struct_type.name,
+                            )
+                                .as_str(),
+                        ));
+                    }
+
+                    hierarchy.push(field_struct_type.name.clone());
+                    RichStruct::check_containment_cycles(ctx, field_struct_type, hierarchy)?;
+                    hierarchy.pop();
+                }
+                Type::I64 | Type::String | Type::Bool | Type::Function(_) => {}
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Returns the type of the struct field with the given name.
+    fn get_field_type(&self, name: &str) -> Option<&RichType> {
+        for field in &self.fields {
+            if field.name.as_str() == name {
+                return Some(&field.typ);
+            }
+        }
+
+        None
+    }
+}
+
+/// Represents a semantically valid struct initialization.
+#[derive(Debug, Clone)]
+pub struct RichStructInit {
+    pub typ: RichStruct,
+    /// Maps struct field names to their values.
+    pub field_values: HashMap<String, RichExpr>,
+}
+
+impl Display for RichStructInit {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {{ ... }}", self.typ)
+    }
+}
+
+impl PartialEq for RichStructInit {
+    fn eq(&self, other: &Self) -> bool {
+        self.typ == other.typ
+    }
+}
+
+impl RichStructInit {
+    /// Performs semantic analysis on struct initialization.
+    pub fn from(ctx: &mut ProgramContext, struct_init: &StructInit) -> AnalyzeResult<Self> {
+        // Resolve the struct type.
+        let struct_type = match RichType::from(ctx, &struct_init.typ)? {
+            RichType::Struct(s) => s,
+            other => {
+                panic!("found invalid struct type {}", other);
+            }
+        };
+
+        // Analyze struct field assignments.
+        let mut field_values: HashMap<String, RichExpr> = HashMap::new();
+        for (field_name, field_value) in &struct_init.field_values {
+            // Get the struct field type, or error if the struct type has no such field.
+            let field_type = match struct_type.get_field_type(field_name.as_str()) {
+                Some(typ) => typ,
+                None => {
+                    return Err(AnalyzeError::new(
+                        ErrorKind::StructFieldNotDefined,
+                        format!("struct type {} has no field {}", struct_type, field_name).as_str(),
+                    ));
+                }
+            };
+
+            // Analyze the value being assigned to the struct field.
+            let expr = RichExpr::from(ctx, field_value.clone())?;
+
+            // Make sure the value being assigned to the field has the expected type.
+            if &expr.typ != field_type {
+                return Err(AnalyzeError::new(
+                    ErrorKind::IncompatibleTypes,
+                    format!(
+                        "cannot assign expression of type {} to field {} of type {} on struct type {}",
+                        &expr.typ, &field_name, &field_type, &struct_type
+                    )
+                    .as_str(),
+                ));
+            }
+
+            // Insert the analyzed struct field value, making sure that it was not already assigned.
+            if field_values.insert(field_name.to_string(), expr).is_some() {
+                return Err(AnalyzeError::new(
+                    ErrorKind::DuplicateStructFieldName,
+                    format!("struct field {} is already assigned", &field_name).as_str(),
+                ));
+            }
+        }
+
+        // Make sure all struct fields were assigned.
+        for field in &struct_type.fields {
+            if !field_values.contains_key(field.name.as_str()) {
+                return Err(AnalyzeError::new(
+                    ErrorKind::StructFieldNotInitialized,
+                    format!(
+                        "field {} on struct type {} is uninitialized",
+                        field.name, struct_type
+                    )
+                    .as_str(),
+                ));
+            }
+        }
+
+        Ok(RichStructInit {
+            typ: struct_type,
+            field_values,
+        })
+    }
 }

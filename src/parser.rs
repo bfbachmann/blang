@@ -54,11 +54,11 @@ mod tests {
     fn parse_program() {
         let raw_code = r#"
         fn main() {
-            i64 i = 0
+            let i = 0
         
             loop {
-                string prefix = "Fibonacci number " + itoa(i) + " is: "
-                i64 result = fib(
+                let prefix = "Fibonacci number " + itoa(i) + " is: "
+                let result = fib(
                     i,
                     fn (i64 n): bool {
                         print("fib visitor sees n=" + itoa(n))
@@ -95,19 +95,19 @@ mod tests {
         Program::from(&mut tokens).expect("should not error");
 
         let mut tokens =
-            Token::tokenize_line("i64 i = 123 i64 j = 1231", 0).expect("should not error");
+            Token::tokenize_line("let i: i64 = 123 let j = 1231", 0).expect("should not error");
         let result = Program::from(&mut tokens).expect("should not error");
         assert_eq!(
             result,
             Program {
                 statements: vec![
                     Statement::VariableDeclaration(VariableDeclaration::new(
-                        Type::I64,
+                        Some(Type::I64),
                         "i".to_string(),
                         Expression::I64Literal(123),
                     )),
                     Statement::VariableDeclaration(VariableDeclaration::new(
-                        Type::I64,
+                        None,
                         "j".to_string(),
                         Expression::I64Literal(1231),
                     ))
@@ -119,7 +119,7 @@ mod tests {
     #[test]
     fn parse_function_declaration() {
         let mut tokens = Token::tokenize_line(
-            r#"fn my_fn(string arg1, i64 arg2): string { string s = "hello world!"; }"#,
+            r#"fn my_fn(string arg1, i64 arg2): string { let s = "hello world!"; }"#,
             0,
         )
         .expect("should not error");
@@ -137,7 +137,7 @@ mod tests {
                 ),
                 Closure::new(
                     vec![Statement::VariableDeclaration(VariableDeclaration::new(
-                        Type::String,
+                        None,
                         "s".to_string(),
                         Expression::StringLiteral("hello world!".to_string()),
                     )),],
@@ -200,7 +200,7 @@ mod tests {
 
     #[test]
     fn invalid_extra_comma() {
-        let raw = r#"i64 i = call(,,)"#;
+        let raw = r#"let i = call(,,)"#;
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let result = Program::from(&mut tokens);
         assert!(matches!(
@@ -219,7 +219,7 @@ mod tests {
 
     #[test]
     fn invalid_extra_close_paren() {
-        let raw = r#"i64 i = call())"#;
+        let raw = r#"let i = call())"#;
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let result = Program::from(&mut tokens);
         assert!(matches!(

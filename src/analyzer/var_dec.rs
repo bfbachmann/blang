@@ -6,6 +6,7 @@ use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#type::RichType;
 use crate::analyzer::AnalyzeResult;
+
 use crate::parser::statement::Statement;
 use crate::parser::var_dec::VariableDeclaration;
 
@@ -40,22 +41,34 @@ impl RichVarDecl {
             ));
         }
 
-        // Analyze the variable type.
-        let var_type = RichType::from(ctx, &var_decl.typ)?;
-
         // Check the expression being assigned to this new variable.
         let rich_expr = RichExpr::from(ctx, var_decl.value.clone())?;
-        if rich_expr.typ != var_type {
-            return Err(AnalyzeError::new_from_statement(
-                ErrorKind::IncompatibleTypes,
-                &Statement::VariableDeclaration(var_decl.clone()),
-                format!(
-                    "cannot assign value of type {} to variable {} of type {}",
-                    &rich_expr.typ, &var_decl.name, &var_decl.typ
-                )
-                .as_str(),
-            ));
-        }
+
+        // Analyze the variable type. It might be empty because type annotations are optional
+        // in variable declarations. If the type is not specified, it will be inferred from the
+        // assigned expression.
+        let var_type = match &var_decl.typ {
+            // If the variable was declared with a type, analyze it and make sure it matches the
+            // expression type.
+            Some(typ) => {
+                let declared_type = RichType::from(ctx, &typ)?;
+                if &rich_expr.typ != &declared_type {
+                    return Err(AnalyzeError::new_from_statement(
+                        ErrorKind::IncompatibleTypes,
+                        &Statement::VariableDeclaration(var_decl.clone()),
+                        format!(
+                            "cannot assign value of type {} to variable {} of type {}",
+                            &rich_expr.typ, &var_decl.name, &declared_type
+                        )
+                        .as_str(),
+                    ));
+                }
+
+                declared_type
+            }
+            // Otherwise, use the expression type.
+            None => rich_expr.typ.clone(),
+        };
 
         // The variable expression is valid. Add it to the program context.
         ctx.add_var(var_decl.name.as_str(), rich_expr.typ.clone());
@@ -82,7 +95,7 @@ mod tests {
     fn var_already_defined() {
         let mut ctx = ProgramContext::new();
         let var_decl = VariableDeclaration::new(
-            Type::String,
+            Some(Type::String),
             "my_string".to_string(),
             Expression::StringLiteral("bingo".to_string()),
         );
@@ -113,7 +126,7 @@ mod tests {
     fn type_mismatch() {
         let mut ctx = ProgramContext::new();
         let var_decl = VariableDeclaration::new(
-            Type::I64,
+            Some(Type::I64),
             "my_string".to_string(),
             Expression::StringLiteral("bingo".to_string()),
         );

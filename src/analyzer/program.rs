@@ -1,7 +1,7 @@
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::{analyze_fn_sig, RichFnSig};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::r#struct::analyze_struct_containment;
+use crate::analyzer::r#struct::RichStruct;
 use crate::analyzer::statement::RichStatement;
 use crate::analyzer::AnalyzeResult;
 use crate::parser::func_sig::FunctionSignature;
@@ -79,7 +79,7 @@ fn define_structs(ctx: &mut ProgramContext, prog: &Program) -> AnalyzeResult<()>
 
     // Second pass: Check for struct containment cycles.
     for struct_type in ctx.extern_structs() {
-        analyze_struct_containment(ctx, struct_type)?;
+        RichStruct::analyze_containment(ctx, struct_type)?;
     }
 
     Ok(())
@@ -172,7 +172,7 @@ mod tests {
     fn variable_assignment() {
         let raw = r#"
         fn main() {
-            i64 i = 10
+            let i: i64 = 10
             i = 11
         }
         "#;
@@ -185,7 +185,7 @@ mod tests {
         let raw = r#"
         fn main() {}
         fn test(i64 a, string b) { 
-            string s = "hello world!" 
+            let s = "hello world!" 
         }"#;
         let result = analyze_prog(raw);
         assert!(matches!(result, Ok(_)));
@@ -210,14 +210,14 @@ mod tests {
     #[test]
     fn multiple_functions() {
         let raw = r#"
-        string s = "Hello world!"
+        let s = "Hello world!"
         
         fn main() {
             do_thing()
         }
         
         fn do_thing() {
-            string v = s
+            let v = s
         }
         "#;
 
@@ -229,11 +229,11 @@ mod tests {
     fn big_program() {
         let raw = r#"
         fn main() {
-            i64 i = 0
+            let i = 0
             loop {
-                string prefix = str_concat(str_concat("Fibonacci number ", itoa(i)), " is: ")
+                let prefix = str_concat(str_concat("Fibonacci number ", itoa(i)), " is: ")
                 
-                i64 result = fib(
+                let result = fib(
                     i,
                     fn (i64 n): bool {
                         print(str_concat("fib visitor sees n=", itoa(n)))
@@ -277,11 +277,11 @@ mod tests {
         }
         
         struct MyStruct {
-            MyInnerStruct inner
+            inner: MyInnerStruct
         }
         
         struct MyInnerStruct {
-            bool cond
+            cond: bool
         }
         
         fn check_struct(MyStruct s) {}
@@ -294,23 +294,23 @@ mod tests {
     fn struct_defs_with_legal_containment() {
         let raw = r#"
             struct Person {
-                string name
-                i64 age
+                name: string,
+                age: i64,
             }
             
             struct Inner {
-                i64 count
-                string msg
-                fn (string): Person get_person
-                struct {
-                    bool something
-                    Person another
-                } inline_struct_field
+                count: i64,
+                msg: string,
+                get_person: fn (string): Person,
+                inline_struct_field: struct {
+                    something: bool,
+                    another: Person,
+                },
             }
             
             struct Outer {
-                Inner inner
-                bool cond
+                inner: Inner,
+                cond: bool,
             }
             
             struct Empty {}
@@ -325,7 +325,7 @@ mod tests {
     fn direct_struct_containment_cycle() {
         let raw = r#"
             struct Test {
-                Test inner
+                inner: Test
             }
             
             fn main() {}
@@ -344,13 +344,13 @@ mod tests {
     fn indirect_struct_containment_cycle() {
         let raw = r#"
             struct Inner {
-                i64 count
-                Outer outer
+                count: i64,
+                outer: Outer,
             }
             
             struct Outer {
-                bool cond
-                Inner inner
+                cond: bool,
+                inner: Inner,
             }
             
             fn main() {}

@@ -1,4 +1,3 @@
-
 use std::collections::{HashSet, VecDeque};
 
 use crate::lexer::kind::TokenKind;
@@ -66,6 +65,22 @@ impl Program {
                 }
             }
         }
+    }
+
+    /// Checks if the first token is one of the given kinds and, if so, pops the token and returns
+    /// it.
+    pub fn parse_optional(
+        tokens: &mut VecDeque<Token>,
+        expected: HashSet<TokenKind>,
+    ) -> Option<Token> {
+        if let Some(Token { kind, .. }) = tokens.front() {
+            let found_kind = expected.get(kind);
+            if found_kind.is_some() {
+                return tokens.pop_front();
+            }
+        }
+
+        None
     }
 
     /// Parses an identifier, returning its name.

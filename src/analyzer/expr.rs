@@ -5,6 +5,7 @@ use crate::analyzer::closure::RichClosure;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::{RichFn, RichFnCall, RichFnSig};
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
+use crate::analyzer::r#struct::RichStructInit;
 use crate::analyzer::r#type::RichType;
 use crate::analyzer::AnalyzeResult;
 use crate::parser::expr::Expression;
@@ -16,6 +17,7 @@ pub enum RichExprKind {
     BoolLiteral(bool),
     I64Literal(i64),
     StringLiteral(String),
+    StructInit(RichStructInit),
     FunctionCall(RichFnCall),
     AnonFunction(Box<RichFn>),
     UnaryOperation(Operator, Box<RichExpr>),
@@ -29,6 +31,7 @@ impl fmt::Display for RichExprKind {
             RichExprKind::BoolLiteral(b) => write!(f, "{}", b),
             RichExprKind::I64Literal(i) => write!(f, "{}", i),
             RichExprKind::StringLiteral(s) => write!(f, "{}", s),
+            RichExprKind::StructInit(s) => write!(f, "{}", s),
             RichExprKind::FunctionCall(call) => write!(f, "{}", call),
             RichExprKind::AnonFunction(func) => write!(f, "{}", *func),
             RichExprKind::UnaryOperation(op, expr) => write!(f, "{} {}", op, expr),
@@ -46,6 +49,7 @@ impl PartialEq for RichExprKind {
             (RichExprKind::BoolLiteral(b1), RichExprKind::BoolLiteral(b2)) => b1 == b2,
             (RichExprKind::I64Literal(i1), RichExprKind::I64Literal(i2)) => i1 == i2,
             (RichExprKind::StringLiteral(s1), RichExprKind::StringLiteral(s2)) => s1 == s2,
+            (RichExprKind::StructInit(s1), RichExprKind::StructInit(s2)) => s1 == s2,
             (RichExprKind::FunctionCall(f1), RichExprKind::FunctionCall(f2)) => f1 == f2,
             (RichExprKind::AnonFunction(a1), RichExprKind::AnonFunction(a2)) => a1 == a2,
             (RichExprKind::UnaryOperation(o1, e1), RichExprKind::UnaryOperation(o2, e2)) => {
@@ -104,6 +108,14 @@ impl RichExpr {
                 kind: RichExprKind::StringLiteral(s),
                 typ: RichType::String,
             }),
+            Expression::StructInit(struct_init) => {
+                let rich_init = RichStructInit::from(ctx, &struct_init)?;
+                let typ = (&rich_init.typ).clone();
+                Ok(RichExpr {
+                    kind: RichExprKind::StructInit(rich_init),
+                    typ: RichType::Struct(typ),
+                })
+            }
             Expression::FunctionCall(fn_call) => {
                 let name = fn_call.fn_name.clone();
                 let rich_call = RichFnCall::from(ctx, fn_call)?;
@@ -257,7 +269,6 @@ mod tests {
     use crate::parser::expr::Expression;
     use crate::parser::func_call::FunctionCall;
     use crate::parser::op::Operator;
-    
 
     #[test]
     fn analyze_i64_literal() {
