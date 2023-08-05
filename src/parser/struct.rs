@@ -142,7 +142,28 @@ impl StructInit {
     /// The commas after each field assignment are optional.
     pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         // Parse the struct type (either by name or inline declaration).
-        let struct_type = Type::from(tokens)?;
+        let struct_type = match tokens.pop_front() {
+            Some(
+                token @ Token {
+                    kind: TokenKind::Struct,
+                    ..
+                },
+            ) => {
+                tokens.push_front(token);
+                Type::Struct(Struct::from(tokens)?)
+            }
+            Some(Token {
+                kind: TokenKind::Identifier(type_name),
+                ..
+            }) => Type::Unresolved(type_name),
+            other => {
+                return Err(ParseError::new(
+                    ErrorKind::ExpectedType,
+                    "expected struct type",
+                    other,
+                ))
+            }
+        };
 
         // Parse "{".
         Program::parse_expecting(tokens, HashSet::from([TokenKind::BeginClosure]))?;

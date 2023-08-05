@@ -34,15 +34,17 @@ pub struct RichStruct {
 
 impl Display for RichStruct {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "struct {} {{", self.name)?;
+        if self.name == "" {
+            write!(f, "struct {{")?;
 
-        if !self.fields.is_empty() {
             for field in &self.fields {
                 write!(f, "{}", field)?;
             }
-        }
 
-        return write!(f, "}}");
+            write!(f, "}}")
+        } else {
+            write!(f, "{}", self.name)
+        }
     }
 }
 
@@ -264,7 +266,7 @@ impl RichStructInit {
             let expr = RichExpr::from(ctx, field_value.clone())?;
 
             // Make sure the value being assigned to the field has the expected type.
-            if &expr.typ != field_type {
+            if !expr.typ.is_compatible_with(field_type) {
                 return Err(AnalyzeError::new(
                     ErrorKind::IncompatibleTypes,
                     format!(

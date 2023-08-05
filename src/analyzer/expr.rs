@@ -83,17 +83,28 @@ impl RichExpr {
     pub fn from(ctx: &mut ProgramContext, expr: Expression) -> AnalyzeResult<RichExpr> {
         match expr {
             Expression::VariableReference(ref var_name) => {
-                // Make sure the variable being referenced exists.
-                match ctx.get_var(var_name.as_str()) {
-                    Some(var_typ) => Ok(RichExpr {
+                // Make sure the variable being referenced exists. Note that it might be a function.
+                if let Some(var_typ) = ctx.get_var(var_name.as_str()) {
+                    Ok(RichExpr {
                         kind: RichExprKind::VariableReference(var_name.clone()),
                         typ: var_typ.clone(),
-                    }),
-                    None => Err(AnalyzeError::new_from_expr(
+                    })
+                } else if let Some(func) = ctx.get_fn(var_name.as_str()) {
+                    Ok(RichExpr {
+                        kind: RichExprKind::VariableReference(var_name.clone()),
+                        typ: RichType::Function(Box::new(func.signature.clone())),
+                    })
+                } else if let Some(fn_sig) = ctx.get_extern_fn(var_name.as_str()) {
+                    Ok(RichExpr {
+                        kind: RichExprKind::VariableReference(var_name.clone()),
+                        typ: RichType::Function(Box::new(fn_sig.clone())),
+                    })
+                } else {
+                    Err(AnalyzeError::new_from_expr(
                         ErrorKind::VariableNotDefined,
                         &expr,
                         format!("variable {} does not exist", &var_name).as_str(),
-                    )),
+                    ))
                 }
             }
             Expression::BoolLiteral(b) => Ok(RichExpr {

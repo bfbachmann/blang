@@ -2,7 +2,6 @@ use std::collections::VecDeque;
 
 use std::fmt;
 
-
 use crate::lexer::kind::TokenKind;
 use crate::lexer::token::Token;
 use crate::parser::error::{ErrorKind, ParseError};
@@ -279,18 +278,10 @@ impl Expression {
                 ..
             } = op1_token
             {
-                if is_arg {
-                    // Add the "," back to the token sequence because it's expected during
-                    // function argument parsing.
-                    tokens.push_front(op1_token);
-                    break;
-                }
-
-                return Err(ParseError::new(
-                    ErrorKind::UnexpectedExprToken,
-                    "unexpected token in expression",
-                    Some(op1_token),
-                ));
+                // Add the "," back to the token sequence because it's expected during
+                // function argument parsing.
+                tokens.push_front(op1_token);
+                break;
             }
             // Check if the token is "(".
             else if let Some(Operator::LeftParen) = Operator::from(&op1_token.kind) {

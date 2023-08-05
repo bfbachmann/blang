@@ -4,7 +4,7 @@ use std::io::{stdin, stdout, BufRead, BufReader, Error, ErrorKind, Result, Write
 use std::process;
 
 use clap::{arg, Command};
-use log::{error, info, set_max_level, Level};
+use colored::*;
 
 use compiler::program::ProgCompiler;
 use lexer::token::Token;
@@ -30,11 +30,14 @@ macro_rules! fatal {
     }};
 }
 
-fn main() {
-    // Set log level.
-    env_logger::init();
-    set_max_level(Level::Debug.to_level_filter());
+macro_rules! error {
+    ($($arg:tt)*) => {{
+        print!("{}", "error: ".red().bold());
+        println!($($arg)*);
+    }};
+}
 
+fn main() {
     // Define the root command.
     let cmd = Command::new("blang")
         .version(env!("CARGO_PKG_VERSION"))
@@ -67,7 +70,7 @@ fn main() {
             .arg(arg!([SRC_PATH]).required(true)),
     );
 
-    // Get file name from command line argument. If there is none, start a repl.
+    // Handle the command.
     match cmd.get_matches().subcommand() {
         Some(("build", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(file_path) => {
@@ -144,8 +147,8 @@ fn compile(
 /// Starts a REPL. The REPL will prompt for input and try to interpret it as a statement, then
 /// print the result of the statement.
 fn repl() {
-    info!("Starting REPL.");
-    info!("Use ^C to exit. Enter two successive newlines to commit statements.");
+    println!("Starting REPL.");
+    println!("Use ^C to exit. Enter two successive newlines to commit statements.");
 
     let mut ctx = ProgramContext::new();
 
@@ -181,7 +184,7 @@ fn repl() {
 /// in a row).
 fn repl_collect_tokens() -> Result<VecDeque<Token>> {
     let mut tokens = VecDeque::new();
-    let mut line_num = 0;
+    let mut line_num = 1;
     let mut out = stdout();
 
     out.write("----------------\n".as_bytes())?;
@@ -189,7 +192,7 @@ fn repl_collect_tokens() -> Result<VecDeque<Token>> {
     loop {
         // Print a prompt based on whether this is the beginning of a new sequence or a continuation
         // of the last one.
-        out.write_all(format!("{} > ", line_num).as_bytes())?;
+        out.write_all(format!("{}", format!("{} > ", line_num).bold()).as_bytes())?;
         out.flush()?;
         line_num += 1;
 

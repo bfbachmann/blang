@@ -315,7 +315,30 @@ mod tests {
             
             struct Empty {}
             
-            fn main() {}
+            fn get_person(string name): Person {
+                return Person{
+                    name: "dave",
+                    age: 43,
+                }
+            }
+            
+            fn main() {
+                let a = Outer{
+                    inner: Inner{
+                        count: 1,
+                        msg: "test",
+                        get_person: get_person,
+                        inline_struct_field: struct {
+                            something: bool,
+                            another: Person,
+                        } {
+                            something: true,
+                            another: get_person(""),
+                        }
+                    },
+                    cond: false
+                }
+            }
         "#;
         let result = analyze_prog(raw);
         assert!(matches!(result, Ok(_)));
