@@ -12,8 +12,10 @@ use llvm_sys::core::LLVMFunctionType;
 use llvm_sys::prelude::LLVMTypeRef;
 
 use crate::analyzer::program::RichProg;
+use crate::analyzer::r#type::RichType;
 use crate::analyzer::statement::RichStatement;
 use crate::compiler::convert;
+use crate::compiler::convert::to_basic_type;
 use crate::compiler::error::{CompileError, CompileResult, ErrorKind};
 use crate::compiler::func::FnCompiler;
 
@@ -111,8 +113,8 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
                 RichStatement::FunctionDeclaration(func) => {
                     FnCompiler::compile(self.context, self.builder, self.fpm, self.module, func)?;
                 }
-                RichStatement::StructTypeDeclaration(_s) => {
-                    // TODO
+                RichStatement::StructTypeDeclaration(_) => {
+                    // Nothing to do here because struct types are compiled only when they're used.
                 }
                 other => {
                     panic!("top-level statement {other} not implemented");

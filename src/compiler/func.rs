@@ -6,8 +6,10 @@ use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::passes::PassManager;
 
+use inkwell::types::BasicTypeEnum;
 use inkwell::values::{
     BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue,
+    StructValue,
 };
 use inkwell::IntPredicate;
 
@@ -15,7 +17,7 @@ use crate::analyzer::closure::RichClosure;
 use crate::analyzer::cond::RichCond;
 use crate::analyzer::expr::{RichExpr, RichExprKind};
 use crate::analyzer::func::{RichFn, RichFnCall, RichRet};
-use crate::analyzer::r#struct::RichStruct;
+use crate::analyzer::r#struct::{RichStruct, RichStructInit};
 use crate::analyzer::r#type::RichType;
 use crate::analyzer::statement::RichStatement;
 use crate::compiler::context::{
@@ -24,7 +26,6 @@ use crate::compiler::context::{
 use crate::compiler::convert;
 use crate::compiler::error::{CompileError, CompileResult, ErrorKind};
 use crate::parser::op::Operator;
-
 
 /// Compiles type-rich (i.e. semantically valid) functions.
 pub struct FnCompiler<'a, 'ctx> {
@@ -331,8 +332,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 // Create and initialize the variable.
                 self.create_var(decl.name.as_str(), &decl.typ, val);
             }
-            RichStatement::StructTypeDeclaration(struct_type) => {
-                self.compile_struct_type_decl(struct_type);
+            RichStatement::StructTypeDeclaration(_) => {
+                // Nothing to do here. Struct types are compiled upon initialization.
             }
             RichStatement::VariableAssignment(assign) => {
                 let val = self.compile_expr(&assign.val);
@@ -365,18 +366,6 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         };
 
         Ok(())
-    }
-
-    /// Compiles a struct type declaration.
-    fn compile_struct_type_decl(&mut self, _struct_decl: &RichStruct) {
-        // let field_types: Vec<BasicTypeEnum> = struct_decl
-        //     .fields
-        //     .iter()
-        //     .map(|field| convert::to_basic_type(self.context, &field.typ))
-        //     .collect();
-        // let struct_type = self.context.struct_type(field_types.as_slice(), false);
-
-        // TODO: continue
     }
 
     /// Compiles a break statement.
@@ -598,6 +587,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 self.compile_bin_op(left_expr, op, right_expr)
             }
 
+            RichExprKind::StructInit(struct_init) => self.compile_struct_init(struct_init),
+
             other => {
                 panic!("{other} not implemented");
             }
@@ -605,6 +596,20 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
         // Dereference the result if it's a pointer.
         self.deref_if_ptr(result, &expr.typ)
+    }
+
+    /// Compiles a struct initialization.
+    fn compile_struct_init(&self, struct_init: &RichStructInit) -> BasicValueEnum<'ctx> {
+        // Specify the field values in the same order as they're defined in the type.
+        let mut field_vals = vec![];
+        for field in &struct_init.typ.fields {
+            let field_val = struct_init.field_values.get(field.name.as_str()).unwrap();
+            field_vals.push(self.compile_expr(field_val));
+        }
+
+        self.context
+            .const_struct(field_vals.as_slice(), false)
+            .as_basic_value_enum()
     }
 
     /// Compiles a function call, returning the result if one exists.
@@ -789,6 +794,15 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
     }
 
+    // TODO: Doc!
+    fn get_struct(&self, val: BasicValueEnum<'ctx>) -> StructValue<'ctx> {
+        // if val.is_pointer_value() {
+        //     self.builder.build_pointer_cast()
+        // } else {
+        val.into_struct_value()
+        // }
+    }
+
     /// If the given value is a pointer, it will be dereferenced as the given type. Otherwise
     /// the value is simply returned.
     fn deref_if_ptr(&self, val: BasicValueEnum<'ctx>, typ: &RichType) -> BasicValueEnum<'ctx> {
@@ -797,6 +811,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             RichType::Bool => self.get_bool(val).as_basic_value_enum(),
             // Strings should already be represented as pointers.
             RichType::String => val,
+            RichType::Struct(_) => self.get_struct(val).as_basic_value_enum(),
             other => panic!("cannot dereference pointer to value of type {other}"),
         }
     }
