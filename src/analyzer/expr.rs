@@ -353,17 +353,20 @@ mod tests {
     #[test]
     fn analyze_fn_call() {
         let mut ctx = ProgramContext::new();
-        ctx.add_fn(RichFn::new(
-            RichFnSig::new(
-                "do_thing",
-                vec![RichArg {
+        ctx.add_fn(RichFn {
+            signature: RichFnSig {
+                name: "do_thing".to_string(),
+                args: vec![RichArg {
                     name: "first".to_string(),
                     typ: RichType::Bool,
                 }],
-                Some(RichType::String),
-            ),
-            RichClosure::new(vec![], None),
-        ));
+                return_type: Some(RichType::String),
+            },
+            body: RichClosure {
+                statements: vec![],
+                ret_type: None,
+            },
+        });
         let fn_call = FunctionCall::new("do_thing", vec![Expression::BoolLiteral(true)]);
         let call_expr = Expression::FunctionCall(fn_call.clone());
         let result = RichExpr::from(&mut ctx, call_expr);
@@ -386,10 +389,17 @@ mod tests {
     #[test]
     fn fn_call_no_return() {
         let mut ctx = ProgramContext::new();
-        ctx.add_fn(RichFn::new(
-            RichFnSig::new("do_thing", vec![], None),
-            RichClosure::new(vec![], None),
-        ));
+        ctx.add_fn(RichFn {
+            signature: RichFnSig {
+                name: "do_thing".to_string(),
+                args: vec![],
+                return_type: None,
+            },
+            body: RichClosure {
+                statements: vec![],
+                ret_type: None,
+            },
+        });
         let result = RichExpr::from(
             &mut ctx,
             Expression::BinaryOperation(
@@ -413,17 +423,20 @@ mod tests {
     #[test]
     fn fn_call_missing_arg() {
         let mut ctx = ProgramContext::new();
-        ctx.add_fn(RichFn::new(
-            RichFnSig::new(
-                "do_thing",
-                vec![RichArg {
+        ctx.add_fn(RichFn {
+            signature: RichFnSig {
+                name: "do_thing".to_string(),
+                args: vec![RichArg {
                     name: "arg".to_string(),
                     typ: RichType::Bool,
                 }],
-                None,
-            ),
-            RichClosure::new(vec![], None),
-        ));
+                return_type: None,
+            },
+            body: RichClosure {
+                statements: vec![],
+                ret_type: None,
+            },
+        });
         let result = RichExpr::from(
             &mut ctx,
             Expression::BinaryOperation(
@@ -447,17 +460,20 @@ mod tests {
     #[test]
     fn fn_call_invalid_arg_type() {
         let mut ctx = ProgramContext::new();
-        ctx.add_fn(RichFn::new(
-            RichFnSig::new(
-                "do_thing",
-                vec![RichArg {
+        ctx.add_fn(RichFn {
+            signature: RichFnSig {
+                name: "do_thing".to_string(),
+                args: vec![RichArg {
                     name: "arg".to_string(),
                     typ: RichType::Bool,
                 }],
-                None,
-            ),
-            RichClosure::new(vec![], None),
-        ));
+                return_type: None,
+            },
+            body: RichClosure {
+                statements: vec![],
+                ret_type: None,
+            },
+        });
         let result = RichExpr::from(
             &mut ctx,
             Expression::BinaryOperation(

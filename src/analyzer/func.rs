@@ -94,15 +94,6 @@ impl fmt::Display for RichFnSig {
 }
 
 impl RichFnSig {
-    /// Creates a new function signature.
-    pub fn new(name: &str, args: Vec<RichArg>, return_type: Option<RichType>) -> Self {
-        RichFnSig {
-            name: name.to_string(),
-            args,
-            return_type,
-        }
-    }
-
     /// Analyzes a function signature and returns a semantically valid, type-rich function
     /// signature.
     pub fn from(ctx: &mut ProgramContext, sig: &FunctionSignature) -> AnalyzeResult<Self> {
@@ -139,11 +130,6 @@ impl fmt::Display for RichFn {
 }
 
 impl RichFn {
-    /// Creates a new function.
-    pub fn new(signature: RichFnSig, body: RichClosure) -> Self {
-        RichFn { signature, body }
-    }
-
     /// Performs semantic analysis on the given function and returns a type-rich version of it,
     /// or an error if the function is semantically invalid.
     pub fn from(ctx: &mut ProgramContext, func: Function) -> AnalyzeResult<Self> {

@@ -34,14 +34,6 @@ impl PartialEq for RichClosure {
 }
 
 impl RichClosure {
-    /// Creates a new closure.
-    pub fn new(statements: Vec<RichStatement>, ret_type: Option<RichType>) -> Self {
-        RichClosure {
-            statements,
-            ret_type,
-        }
-    }
-
     /// Performs semantic analysis on the given closure and returns a type-rich version of it,
     /// or an error if the closure is semantically invalid.
     pub fn from(
