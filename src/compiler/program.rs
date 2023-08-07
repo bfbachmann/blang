@@ -160,9 +160,17 @@ mod tests {
     use crate::parser::program::Program;
     use crate::syscall::syscall::all_syscalls;
 
+    fn assert_compiles(code: &str) {
+        let mut tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
+        let prog = Program::from(&mut tokens).expect("should not error");
+        let rich_prog = RichProg::from(prog, all_syscalls().to_vec()).expect("should not error");
+        ProgCompiler::compile(&rich_prog, None, None, None, false).expect("should not error");
+    }
+
     #[test]
     fn basic_program() {
-        let code = r#"
+        assert_compiles(
+            r#"
             fn main() {
                 let val = other(2, 10)
                 fib(val)
@@ -225,10 +233,42 @@ mod tests {
             fn string_stuff(string s): string {
                 return "test"
             }
-        "#;
-        let mut tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
-        let prog = Program::from(&mut tokens).expect("should not error");
-        let rich_prog = RichProg::from(prog, all_syscalls().to_vec()).expect("should not error");
-        ProgCompiler::compile(&rich_prog, None, None, None, false).expect("should not error");
+        "#,
+        );
+    }
+
+    #[test]
+    fn struct_init() {
+        assert_compiles(
+            r#"
+            struct Person {
+                name: string,
+                age: i64,
+                do_thing: fn(string): i64,
+            }
+            
+            fn new_person(string name, i64 age): Person {
+                return Person{
+                    name: name,
+                    age: age,
+                    do_thing: test
+                }
+            }
+            
+            fn test(string s): i64 {
+                return 1
+            }
+            
+            fn main() {
+                let p = Person{
+                    name: "test",
+                    age: 12,
+                    do_thing: test,
+                }
+            
+                let pp = new_person("guy", 32)
+            }
+        "#,
+        );
     }
 }
