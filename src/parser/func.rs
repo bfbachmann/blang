@@ -26,8 +26,8 @@ impl Function {
 
     /// Parses function declarations. Expects token sequences of the form
     ///
-    ///      fn <fn_name>(<arg_type> <arg_name>, ...): <return_type> { <body> }
-    ///      fn <fn_name>(<arg_type> <arg_name>, ...) { <body> }
+    ///      fn <fn_name>(<arg_name>: <arg_type>, ...): <return_type> { <body> }
+    ///      fn <fn_name>(<arg_name>: <arg_type>, ...) { <body> }
     ///
     /// where
     ///  - `fn_name` is an identifier representing the name of the function

@@ -11,7 +11,7 @@ pub fn all_syscalls() -> [FunctionSignature; 2] {
 ///
 /// Blang:
 ///
-///     exit(i64 status)
+///     exit(status: i64)
 ///
 /// Libc:
 ///
@@ -25,7 +25,7 @@ pub fn sys_exit() -> FunctionSignature {
 ///
 /// Blang:
 ///
-///     write(i64 file_desc, string buf, i64 count): i64
+///     write(file_desc: i64, buf: string, count: i64): i64
 ///
 /// Libc:
 ///

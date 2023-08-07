@@ -184,7 +184,7 @@ mod tests {
     fn fn_decl() {
         let raw = r#"
         fn main() {}
-        fn test(i64 a, string b) { 
+        fn test(a: i64, b: string) { 
             let s = "hello world!" 
         }"#;
         let result = analyze_prog(raw);
@@ -195,7 +195,7 @@ mod tests {
     fn fn_already_defined() {
         let raw = r#"
         fn test() {}
-        fn test(string thing) {}
+        fn test(thing: string) {}
         "#;
         let result = analyze_prog(raw);
         assert!(matches!(
@@ -235,7 +235,7 @@ mod tests {
                 
                 let result = fib(
                     i,
-                    fn (i64 n): bool {
+                    fn (n: i64): bool {
                         print(str_concat("fib visitor sees n=", itoa(n)))
                         return n % 2 == 0
                     },
@@ -256,7 +256,7 @@ mod tests {
         }
         
         // Calls `visitor_fn` with n and returns the n'th Fibonacci number.
-        fn fib(i64 n, fn (i64): bool visitor_fn): i64 {
+        fn fib(n: i64, visitor_fn: fn (i64): bool): i64 {
             if visitor_fn(n) {
                 print("visitor returned true")
             }
@@ -266,13 +266,13 @@ mod tests {
             return fib(n-1, visitor_fn) + fib(n-2, visitor_fn)
         }
         
-        fn print(string s) {}
+        fn print(s: string) {}
         
-        fn str_concat(string a, string b): string {
+        fn str_concat(a: string, b: string): string {
             return a
         }
         
-        fn itoa(i64 i): string {
+        fn itoa(i: i64): string {
             return "fake"
         }
         
@@ -284,7 +284,7 @@ mod tests {
             cond: bool
         }
         
-        fn check_struct(MyStruct s) {}
+        fn check_struct(s: MyStruct) {}
         "#;
         let result = analyze_prog(raw);
         assert!(matches!(result, Ok(_)));
@@ -315,7 +315,7 @@ mod tests {
             
             struct Empty {}
             
-            fn get_person(string name): Person {
+            fn get_person(name: string): Person {
                 return Person{
                     name: "dave",
                     age: 43,

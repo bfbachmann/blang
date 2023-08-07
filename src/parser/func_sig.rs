@@ -65,8 +65,8 @@ impl FunctionSignature {
 
     /// Parses function signatures. Expects token sequences of the forms
     ///
-    ///      fn <fn_name>(<arg_type> <arg_name>, ...): (<return_type>, ...)
-    ///      fn <fn_name>(<arg_type> <arg_name>, ...)
+    ///      fn <fn_name>(<arg_name>: <arg_type>, ...): (<return_type>, ...)
+    ///      fn <fn_name>(<arg_name>: <arg_type>, ...)
     ///
     /// where
     ///  - `fn_name` is an identifier representing the name of the function
@@ -93,8 +93,8 @@ impl FunctionSignature {
     /// Parses anonymous function signatures. If `named` is true, expects token sequences of the
     /// forms
     ///
-    ///      fn (<arg_type> <arg_name>, ...): <return_type>
-    ///      fn (<arg_type> <arg_name>, ...)
+    ///      fn (<arg_name>: <arg_type>, ...): <return_type>
+    ///      fn (<arg_name>: <arg_type>, ...)
     ///
     /// Otherwise, expects token sequences of the forms
     ///
@@ -117,8 +117,8 @@ impl FunctionSignature {
     /// Parses function arguments and return value from a function signature. If `named` is true,
     /// expects token sequences of the forms
     ///
-    ///     (<arg_type> <arg_name>, ...): <return_type>
-    ///     (<arg_type> <arg_name>, ...)
+    ///     (<arg_name>: <arg_type>, ...): <return_type>
+    ///     (<arg_name>: <arg_type>, ...)
     ///
     /// Otherwise, expects token sequences of the form
     ///
@@ -153,7 +153,7 @@ impl FunctionSignature {
     /// Parses argument declarations in function declarations. If `named` is true, expects token
     /// sequences of the form
     ///
-    ///      (<arg_type> <arg_name>, ...)
+    ///      (<arg_name>: <arg_type>, ...)
     ///
     /// Otherwise, expects token sequences of the form
     ///
@@ -260,7 +260,7 @@ mod tests {
 
     #[test]
     fn duplicate_arg_name() {
-        let raw = r#"fn one(i64 a, i64 b, i64 a) {}"#;
+        let raw = r#"fn one(a: i64, b: i64, a: i64) {}"#;
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let result = Program::from(&mut tokens);
         assert!(matches!(
@@ -274,7 +274,7 @@ mod tests {
 
     #[test]
     fn inline_struct_types_in_fn_sig() {
-        let raw = r#"fn one(struct {one: i64, two: bool} a, i64 b): struct {thing: string} {}"#;
+        let raw = r#"fn one(a: struct {one: i64, two: bool}, b: i64): struct {thing: string} {}"#;
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let result = Program::from(&mut tokens);
         assert!(matches!(result, Ok(_)));

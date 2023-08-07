@@ -5,7 +5,7 @@ _A bad language (don't use it, it's bad)._
 ## Example program
 
 ```
-fn cumulative_sum(i64 i): i64 {
+fn cumulative_sum(i: i64): i64 {
     let result = 0
     loop {
         if i == 0 {
@@ -17,7 +17,7 @@ fn cumulative_sum(i64 i): i64 {
     }
 }
 
-fn fib(i64 n): i64 {
+fn fib(n: i64): i64 {
     if n <= 2 {
         return 1
     }

@@ -60,7 +60,7 @@ mod tests {
                 let prefix = "Fibonacci number " + itoa(i) + " is: "
                 let result = fib(
                     i,
-                    fn (i64 n): bool {
+                    fn (n: i64): bool {
                         print("fib visitor sees n=" + itoa(n))
                         return n % 2 == 0
                     },
@@ -75,7 +75,7 @@ mod tests {
         }
         
         // Calls `visitor_fn` with n and returns the n'th Fibonacci number.
-        fn fib(i64 n, fn (i64): bool visitor_fn): i64 {
+        fn fib(n: i64, visitor_fn: fn (i64): bool): i64 {
             if visitor_fn(n) {
                 print("visitor returned true")
             }
@@ -119,7 +119,7 @@ mod tests {
     #[test]
     fn parse_function_declaration() {
         let mut tokens = Token::tokenize_line(
-            r#"fn my_fn(string arg1, i64 arg2): string { let s = "hello world!"; }"#,
+            r#"fn my_fn(arg1: string, arg2: i64): string { let s = "hello world!"; }"#,
             0,
         )
         .expect("should not error");
@@ -147,7 +147,7 @@ mod tests {
         );
 
         let mut tokens = Token::tokenize_line(
-            "fn bigboi(fn (string, i64): bool f, i64 i): fn (bool): string {}",
+            "fn bigboi(f: fn (string, i64): bool, i: i64): fn (bool): string {}",
             0,
         )
         .expect("should not error");
@@ -272,7 +272,7 @@ mod tests {
 
     #[test]
     fn empty_fn_return() {
-        let raw = r#"fn my_func(string s) {
+        let raw = r#"fn my_func(s: string) {
             if s == "dog" {
                 return
             }

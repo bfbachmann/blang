@@ -173,6 +173,8 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
 
         for attr in attrs {
             let attr_kind = Attribute::get_named_enum_kind_id(attr);
+            // Make sure the attribute is properly defined.
+            assert_ne!(attr_kind, 0);
             let attr = self.context.create_type_attribute(attr_kind, param_type);
             fn_val.add_attribute(AttributeLoc::Param(0), attr);
         }
@@ -220,16 +222,16 @@ mod tests {
                 string_stuff("test")
             }
             
-            fn thing(bool b): bool {
+            fn thing(b: bool): bool {
                 let a = true
                 return !a || b
             }
             
-            fn other(i64 a, i64 b): i64 {
+            fn other(a: i64, b: i64): i64 {
                 return a * b + a / 2 - 1
             }
             
-            fn fib(i64 n): i64 {
+            fn fib(n: i64): i64 {
                 if n < 2 {
                     return 1
                 }
@@ -237,7 +239,7 @@ mod tests {
                 return fib(n-1) + fib(n-2)
             }
             
-            fn do_thing(i64 a): i64 {
+            fn do_thing(a: i64): i64 {
                 let result = 5
                 loop {
                     if a < 10 {
@@ -256,7 +258,7 @@ mod tests {
                 }
             }
             
-            fn cum_sum(i64 n): i64 {
+            fn cum_sum(n: i64): i64 {
                 let i = 1
                 let result = 0
                 loop {
@@ -271,7 +273,7 @@ mod tests {
                 }
             }
             
-            fn string_stuff(string s): string {
+            fn string_stuff(s: string): string {
                 return "test"
             }
         "#,
@@ -288,7 +290,7 @@ mod tests {
                 do_thing: fn(string): i64,
             }
             
-            fn new_person(string name, i64 age): Person {
+            fn new_person(name: string, age: i64): Person {
                 return Person{
                     name: name,
                     age: age,
@@ -296,7 +298,7 @@ mod tests {
                 }
             }
             
-            fn test(string s): i64 {
+            fn test(s: string): i64 {
                 return 1
             }
             

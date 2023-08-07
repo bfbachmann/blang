@@ -1,13 +1,11 @@
-
 use inkwell::context::Context;
+use inkwell::types::AsTypeRef;
 use inkwell::types::{
     AnyType, AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType,
 };
-use inkwell::types::{AsTypeRef};
 use inkwell::AddressSpace;
 use llvm_sys::core::LLVMFunctionType;
 use llvm_sys::prelude::LLVMTypeRef;
-
 
 use crate::analyzer::func::RichFnSig;
 use crate::analyzer::r#struct::RichStruct;
