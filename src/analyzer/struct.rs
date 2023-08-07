@@ -86,7 +86,7 @@ impl RichStruct {
             ));
         }
 
-        // Analyze the struct fields
+        // Analyze the struct fields.
         let mut fields = vec![];
         let mut field_names = HashSet::new();
         for field in &struct_type.fields {

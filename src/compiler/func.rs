@@ -199,6 +199,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     fn compile_fn(&mut self, func: &RichFn) -> CompileResult<FunctionValue<'ctx>> {
         // Retrieve the function and create a new "entry" block at the start of the function
         // body.
+        // TODO: This will panic when accessing nested functions.
         let fn_val = self
             .module
             .get_function(func.signature.name.as_str())

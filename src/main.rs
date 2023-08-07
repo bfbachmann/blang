@@ -1,9 +1,10 @@
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{stdin, stdout, BufRead, BufReader, Error, ErrorKind, Result, Write};
+use std::path::{Path, PathBuf};
 use std::process;
 
-use clap::{arg, Command};
+use clap::{arg, ArgAction, Command};
 use colored::*;
 
 use compiler::program::ProgCompiler;
@@ -23,6 +24,7 @@ mod parser;
 mod syscall;
 mod util;
 
+/// Prints an error message and exits with code 1.
 macro_rules! fatal {
     ($($arg:tt)*) => {{
         error!($($arg)*);
@@ -30,6 +32,7 @@ macro_rules! fatal {
     }};
 }
 
+/// Prints an error message.
 macro_rules! error {
     ($($arg:tt)*) => {{
         print!("{}", "error: ".red().bold());
@@ -49,15 +52,20 @@ fn main() {
     // Add the "build" subcommand for compiling.
     let cmd = cmd.subcommand(
         Command::new("build")
-            .about("Builds a binary from Blang source code")
+            .about("Builds Blang source code")
             .arg(arg!([SRC_PATH]).required(true))
             .arg(
                 arg!(-u --unoptimized ... "Prevents simplification of generated LLVM IR")
-                    .required(false),
+                    .required(false)
+                    .action(ArgAction::SetTrue),
             )
             .arg(arg!(-t --target <TARGET> "Specifies target ISA triple").required(false))
-            .arg(arg!(-b --bitcode <BC_PATH> "Specifies bitcode output file path").required(false))
-            .arg(arg!(-i --ir <LL_PATH> "Specifies LLVM IR output file path").required(false)),
+            .arg(
+                arg!(-b --bitcode "Output LLVM bitcode")
+                    .required(false)
+                    .action(ArgAction::SetTrue),
+            )
+            .arg(arg!(-o --out <OUTPUT_PATH> "Output file path").required(false)),
     );
 
     // Add the "repl" subcommand for running a REPL.
@@ -73,12 +81,12 @@ fn main() {
     // Handle the command.
     match cmd.get_matches().subcommand() {
         Some(("build", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
-            Some(file_path) => {
+            Some(src_path) => {
                 let target = sub_matches.get_one::<String>("target");
-                let bc_path = sub_matches.get_one::<String>("bitcode");
-                let ir_path = sub_matches.get_one::<String>("ir");
-                let simplify_ir = *sub_matches.get_one::<u8>("unoptimized").unwrap() == 0;
-                compile(file_path, bc_path, ir_path, target, simplify_ir);
+                let as_bitcode = sub_matches.get_flag("bitcode");
+                let dst_path = sub_matches.get_one::<String>("out");
+                let simplify_ir = !sub_matches.get_flag("unoptimized");
+                compile(src_path, dst_path, as_bitcode, target, simplify_ir);
             }
             _ => fatal!("expected source path"),
         },
@@ -129,17 +137,26 @@ fn analyze(input_path: &str) -> RichProg {
 /// Compiles a source file for the given target ISA. If there is no target, infers configuration
 /// for the current system.
 fn compile(
-    input_path: &str,
-    bc_path: Option<&String>,
-    ll_path: Option<&String>,
+    src_path: &str,
+    dst_path: Option<&String>,
+    as_bitcode: bool,
     target: Option<&String>,
     simplify_ir: bool,
 ) {
     // Read and analyze the program.
-    let prog = analyze(input_path);
+    let prog = analyze(src_path);
+
+    // If no output path was specified, just use the source file name.
+    let src = Path::new(src_path);
+    let dst = if let Some(path) = dst_path {
+        PathBuf::from(path)
+    } else {
+        let file_stem = src.file_stem().unwrap_or_default();
+        src.with_file_name(file_stem).with_extension(".ll")
+    };
 
     // Compile the program.
-    if let Err(e) = ProgCompiler::compile(&prog, target, bc_path, ll_path, simplify_ir) {
+    if let Err(e) = ProgCompiler::compile(&prog, target, as_bitcode, dst.as_path(), simplify_ir) {
         fatal!("{}", e);
     }
 }

@@ -32,8 +32,8 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     pub fn compile(
         program: &RichProg,
         target_triple: Option<&String>,
-        bitcode_output_path: Option<&String>,
-        ir_output_path: Option<&String>,
+        as_bitcode: bool,
+        output_path: &Path,
         simplify_ir: bool,
     ) -> CompileResult<()> {
         let ctx = Context::create();
@@ -70,14 +70,11 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
 
         compiler.compile_program()?;
 
-        // Optionally write output as bitcode to file.
-        if let Some(path) = bitcode_output_path {
-            compiler.module.write_bitcode_to_path(Path::new(path));
-        }
-
-        // Optionally write output as IR to file.
-        if let Some(path) = ir_output_path {
-            if let Err(e) = compiler.module.print_to_file(Path::new(path)) {
+        // Write output as to file.
+        if as_bitcode {
+            compiler.module.write_bitcode_to_path(output_path);
+        } else {
+            if let Err(e) = compiler.module.print_to_file(output_path) {
                 return Err(CompileError::new(
                     ErrorKind::WriteOutFailed,
                     e.to_string().as_str(),
@@ -196,6 +193,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
 #[cfg(test)]
 mod tests {
     use std::io::{BufRead, Cursor};
+    use std::path::Path;
 
     use crate::analyzer::program::RichProg;
     use crate::compiler::program::ProgCompiler;
@@ -207,7 +205,8 @@ mod tests {
         let mut tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
         let prog = Program::from(&mut tokens).expect("should not error");
         let rich_prog = RichProg::from(prog, all_syscalls().to_vec()).expect("should not error");
-        ProgCompiler::compile(&rich_prog, None, None, None, false).expect("should not error");
+        ProgCompiler::compile(&rich_prog, None, false, Path::new("/dev/null"), false)
+            .expect("should not error");
     }
 
     #[test]
