@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
@@ -861,9 +861,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             RichType::String | RichType::Struct(_) => val,
             RichType::I64 => self.get_int(val).as_basic_value_enum(),
             RichType::Bool => self.get_bool(val).as_basic_value_enum(),
-            RichType::Struct(_) => val.as_basic_value_enum(),
             RichType::Function(_) => val.as_basic_value_enum(),
-            other => panic!("cannot dereference pointer to value of type {other}"),
         }
     }
 }

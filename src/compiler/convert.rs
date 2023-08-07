@@ -26,9 +26,6 @@ pub fn to_basic_type<'a>(context: &'a Context, typ: &RichType) -> BasicTypeEnum<
         RichType::Function(fn_sig) => to_fn_type(context, fn_sig)
             .ptr_type(AddressSpace::default())
             .as_basic_type_enum(),
-        other => {
-            panic!("invalid basic type {other}");
-        }
     }
 }
 
