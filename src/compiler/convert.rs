@@ -1,13 +1,13 @@
-use inkwell::attributes::Attribute;
+
 use inkwell::context::Context;
-use inkwell::types::AsTypeRef;
 use inkwell::types::{
     AnyType, AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType,
 };
+use inkwell::types::{AsTypeRef};
 use inkwell::AddressSpace;
 use llvm_sys::core::LLVMFunctionType;
 use llvm_sys::prelude::LLVMTypeRef;
-use std::collections::VecDeque;
+
 
 use crate::analyzer::func::RichFnSig;
 use crate::analyzer::r#struct::RichStruct;
@@ -33,13 +33,7 @@ pub fn to_basic_type<'a>(context: &'a Context, typ: &RichType) -> BasicTypeEnum<
 pub fn to_fn_type<'a>(context: &'a Context, sig: &RichFnSig) -> FunctionType<'a> {
     // Get return type.
     let mut ret_type = to_any_type(context, sig.return_type.as_ref());
-
-    // Get arg types.
-    let mut arg_types: VecDeque<BasicMetadataTypeEnum> = sig
-        .args
-        .iter()
-        .map(|a| to_metadata_type_enum(context, &a.typ))
-        .collect();
+    let mut arg_types: Vec<BasicMetadataTypeEnum> = vec![];
 
     // If the return type is a structured type, we need to add an extra argument to the beginning
     // of the arguments list. This argument will be a pointer of the same type as the function
@@ -53,24 +47,18 @@ pub fn to_fn_type<'a>(context: &'a Context, sig: &RichFnSig) -> FunctionType<'a>
     //      fn new_person(Person* person)
     //
     // and the `person` pointer will be written to when assigning the return value.
-    let type_attr: Attribute;
-    if let Some(struct_type @ RichType::Struct(_)) = &sig.return_type {
+    if let Some(RichType::Struct(struct_type)) = &sig.return_type {
         // Change the return type to void because, on return, we'll just be writing to the
         // pointer passed in the first argument.
         ret_type = context.void_type().as_any_type_enum();
+        let llvm_struct_type = to_struct_type(context, struct_type);
+        let arg_type = llvm_struct_type.ptr_type(AddressSpace::default());
+        arg_types.push(arg_type.into());
+    }
 
-        // Add the pointer as the first argument. We're giving this argument the "sret" attribute
-        // to tell LLVM that it will contain the function's return value upon return.
-        let sret_attr = Attribute::get_named_enum_kind_id("sret");
-        let arg_type = to_any_type(context, Some(struct_type));
-        type_attr = context.create_type_attribute(
-            sret_attr,
-            arg_type
-                .into_struct_type()
-                .ptr_type(AddressSpace::default())
-                .as_any_type_enum(),
-        );
-        arg_types.push_front(type_attr.get_type_value().into_pointer_type().into());
+    // Get arg types.
+    for arg in &sig.args {
+        arg_types.push(to_metadata_type_enum(context, &arg.typ));
     }
 
     // Create the function type.

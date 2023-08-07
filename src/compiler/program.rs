@@ -1,3 +1,4 @@
+use inkwell::attributes::{Attribute, AttributeLoc};
 use std::path::Path;
 
 use inkwell::builder::Builder;
@@ -5,6 +6,7 @@ use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::passes::PassManager;
 use inkwell::targets::TargetTriple;
+use inkwell::types::AnyType;
 
 use inkwell::values::FunctionValue;
 
@@ -132,8 +134,48 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
         let fn_val = self.module.add_function(sig.name.as_str(), fn_type, None);
 
         // Set arg names.
-        for (arg_val, arg) in fn_val.get_param_iter().zip(sig.args.iter()) {
-            arg_val.set_name(arg.name.as_str());
+        if fn_val.count_params() == sig.args.len() as u32 {
+            // The compiled function arguments match those of the original function signature, so
+            // just assign arg names normally.
+            for (arg_val, arg) in fn_val.get_param_iter().zip(sig.args.iter()) {
+                arg_val.set_name(arg.name.as_str());
+            }
+        } else {
+            // The compiled function arguments do not match those of the original function
+            // signature. This means the function is taking an additional pointer as its first
+            // argument, to which the result will be written. This is done for functions that
+            // return structured types.
+            let first_param = fn_val.get_first_param().unwrap();
+            let _first_param_type = first_param.get_type().as_any_type_enum();
+            first_param.set_name("ret_val_ptr");
+
+            // Add the "sret" attribute to the first argument to tell LLVM that it is being used to
+            // pass the return value.
+            // Add the "noalias" attribute to the first argument to indicate that we're only
+            // accessing memory pointed to by the pointer via the argument and nothing else.
+            // Add the "nofree" attribute to the first argument to indicate that we won't free the
+            // memory it points to.
+            self.add_fn_arg_attrs(fn_val, 0, vec!["sret", "noalias", "nofree"]);
+
+            // Name the remaining function arguments normally.
+            for i in 1..fn_val.count_params() {
+                fn_val
+                    .get_nth_param(i)
+                    .unwrap()
+                    .set_name(sig.args.get((i - 1) as usize).unwrap().name.as_str());
+            }
+        }
+    }
+
+    /// Adds the given attributes to the function argument at the given index.
+    fn add_fn_arg_attrs(&self, fn_val: FunctionValue<'ctx>, arg_index: u32, attrs: Vec<&str>) {
+        let param = fn_val.get_nth_param(arg_index).unwrap();
+        let param_type = param.get_type().as_any_type_enum();
+
+        for attr in attrs {
+            let attr_kind = Attribute::get_named_enum_kind_id(attr);
+            let attr = self.context.create_type_attribute(attr_kind, param_type);
+            fn_val.add_attribute(AttributeLoc::Param(0), attr);
         }
     }
 
