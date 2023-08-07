@@ -1,21 +1,17 @@
 use std::path::Path;
 
-use crate::analyzer::func::RichFnSig;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::passes::PassManager;
 use inkwell::targets::TargetTriple;
-use inkwell::types::{AsTypeRef, BasicMetadataTypeEnum, FunctionType};
-use inkwell::values::FunctionValue;
-use llvm_sys::core::LLVMFunctionType;
-use llvm_sys::prelude::LLVMTypeRef;
 
+use inkwell::values::FunctionValue;
+
+use crate::analyzer::func::RichFnSig;
 use crate::analyzer::program::RichProg;
-use crate::analyzer::r#type::RichType;
 use crate::analyzer::statement::RichStatement;
 use crate::compiler::convert;
-use crate::compiler::convert::to_basic_type;
 use crate::compiler::error::{CompileError, CompileResult, ErrorKind};
 use crate::compiler::func::FnCompiler;
 
@@ -132,7 +128,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     /// Defines the given function in the current module based on the function signature.
     fn compile_fn_sig(&self, sig: &RichFnSig) {
         // Define the function in the module.
-        let fn_type = self.create_fn_type(sig);
+        let fn_type = convert::to_fn_type(self.context, sig);
         let fn_val = self.module.add_function(sig.name.as_str(), fn_type, None);
 
         // Set arg names.
@@ -141,35 +137,10 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
         }
     }
 
-    /// Converts a `FunctionSignature` into an LLVM `FunctionType`.
-    fn create_fn_type(&self, sig: &RichFnSig) -> FunctionType<'ctx> {
-        // Get return type.
-        let ret_type = convert::to_any_type(self.context, sig.return_type.as_ref());
-
-        // Get arg types.
-        let arg_types = sig
-            .args
-            .iter()
-            .map(|a| convert::to_metadata_type_enum(self.context, &a.typ))
-            .collect::<Vec<BasicMetadataTypeEnum>>();
-
-        // Create the function type.
-        let mut param_types: Vec<LLVMTypeRef> =
-            arg_types.iter().map(|val| val.as_type_ref()).collect();
-        unsafe {
-            FunctionType::new(LLVMFunctionType(
-                ret_type.as_type_ref(),
-                param_types.as_mut_ptr(),
-                param_types.len() as u32,
-                false as i32,
-            ))
-        }
-    }
-
     /// Defines external functions in the current module.
     fn define_extern_fns(&mut self) {
         for extern_fn_sig in &self.program.extern_fns {
-            let fn_type = self.create_fn_type(&extern_fn_sig);
+            let fn_type = convert::to_fn_type(self.context, &extern_fn_sig);
             self.module.add_function(
                 extern_fn_sig.name.as_str(),
                 fn_type,

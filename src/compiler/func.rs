@@ -1,15 +1,12 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::passes::PassManager;
-
-use inkwell::types::BasicTypeEnum;
 use inkwell::values::{
     BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue,
-    StructValue,
 };
 use inkwell::IntPredicate;
 
@@ -17,7 +14,7 @@ use crate::analyzer::closure::RichClosure;
 use crate::analyzer::cond::RichCond;
 use crate::analyzer::expr::{RichExpr, RichExprKind};
 use crate::analyzer::func::{RichFn, RichFnCall, RichRet};
-use crate::analyzer::r#struct::{RichStruct, RichStructInit};
+use crate::analyzer::r#struct::RichStructInit;
 use crate::analyzer::r#type::RichType;
 use crate::analyzer::statement::RichStatement;
 use crate::compiler::context::{
@@ -263,11 +260,20 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         self.builder.build_store(*var, val);
     }
 
-    /// Gets the value of the variable with the given name. Panics if no such variable exists.
+    /// Gets the value of the variable with the given name. Panics if no such variable (or function)
+    /// exists.
     fn get_var(&self, name: &str) -> BasicValueEnum<'ctx> {
-        let var = self.vars.get(name).unwrap();
-        let val = self.builder.build_load(var.get_type(), *var, name);
-        val
+        // Try look up the symbol as a variable.
+        if let Some(var) = self.vars.get(name) {
+            return self.builder.build_load(var.get_type(), *var, name);
+        }
+
+        // The symbol was not a variable, so try look it up as a function.
+        if let Some(func) = self.module.get_function(name) {
+            return func.as_global_value().as_basic_value_enum();
+        }
+
+        panic!("failed to resolve variable {}", name);
     }
 
     /// Creates a new stack allocation instruction in the entry block of the current function.
@@ -522,10 +528,23 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         self.set_loop_contains_return(true);
 
         match &ret.val {
+            // Compile the return expression.
             Some(expr) => {
                 let result = self.compile_expr(expr);
-                self.builder.build_return(Some(&result));
+
+                // If the value being returned is some structured type, we need to copy it to the
+                // memory pointed to by the first argument and return void.
+                if let RichType::Struct(_) = expr.typ {
+                    let ret_ptr = self.fn_value.unwrap().get_first_param().unwrap();
+                    self.builder
+                        .build_store(ret_ptr.into_pointer_value(), result.into_pointer_value());
+                    self.builder.build_return(None);
+                } else {
+                    self.builder.build_return(Some(&result));
+                }
             }
+
+            // The function has no return type, so return void.
             None => {
                 self.builder.build_return(None);
             }
@@ -600,25 +619,49 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// Compiles a struct initialization.
     fn compile_struct_init(&self, struct_init: &RichStructInit) -> BasicValueEnum<'ctx> {
-        // Specify the field values in the same order as they're defined in the type.
-        let mut field_vals = vec![];
-        for field in &struct_init.typ.fields {
-            let field_val = struct_init.field_values.get(field.name.as_str()).unwrap();
-            field_vals.push(self.compile_expr(field_val));
+        // Assemble the LLVM struct type and initialize with with zero values.
+        let struct_type = convert::to_struct_type(self.context, &struct_init.typ);
+        let struct_val = struct_type.const_zero();
+
+        // Allocate space for the struct on the stack and store the zero-valued struct there.
+        let ptr = self.builder.build_alloca(struct_type, "struct_init");
+        self.builder
+            .build_store(ptr, struct_val.as_basic_value_enum());
+
+        // Assign values to initialized struct fields.
+        for (i, field) in struct_init.typ.fields.iter().enumerate() {
+            if let Some(field_val) = struct_init.field_values.get(field.name.as_str()) {
+                let field_ptr = self
+                    .builder
+                    .build_struct_gep(struct_type, ptr, i as u32, field.name.as_str())
+                    .unwrap();
+                self.builder
+                    .build_store(field_ptr, self.compile_expr(field_val));
+            }
         }
 
-        self.context
-            .const_struct(field_vals.as_slice(), false)
-            .as_basic_value_enum()
+        ptr.as_basic_value_enum()
     }
 
     /// Compiles a function call, returning the result if one exists.
     fn compile_call(&self, call: &RichFnCall) -> Option<BasicValueEnum<'ctx>> {
         // Get the function value from the module.
         let func = self.module.get_function(call.fn_name.as_str()).unwrap();
+        let mut args: Vec<BasicMetadataValueEnum> = vec![];
+
+        // Check if we're short one argument. If so, it means the function signature expects
+        // the return value to be written to the address pointed to by the first argument, so we
+        // need to add that argument. This should only be the case for functions that return
+        // structured types.
+        if func.count_params() == call.args.len() as u32 + 1 {
+            let ptr = self.builder.build_alloca(
+                convert::to_basic_type(self.context, &call.ret_type.as_ref().unwrap()),
+                "ret_val_ptr",
+            );
+            args.push(ptr.into());
+        }
 
         // Compile call args.
-        let mut args: Vec<BasicMetadataValueEnum> = vec![];
         for arg in &call.args {
             // Compile the argument expression, making sure to dereference any pointers
             // if necessary.
@@ -627,10 +670,26 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
 
         // Compile the function call and return the result.
-        self.builder
+        let result = self
+            .builder
             .build_call(func, args.as_slice(), call.fn_name.as_str())
-            .try_as_basic_value()
-            .left()
+            .try_as_basic_value();
+
+        // If there is a return value, return it. Otherwise, check if this function has a defined
+        // return type. If the function has a return type and the call had no return value, it means
+        // the return value was written to the address pointed to by the first function argument.
+        if result.left().is_some() {
+            result.left()
+        } else if call.ret_type.is_some() {
+            Some(
+                args.first()
+                    .unwrap()
+                    .into_pointer_value()
+                    .as_basic_value_enum(),
+            )
+        } else {
+            None
+        }
     }
 
     /// Compiles a unary operation expression.
@@ -794,24 +853,16 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
     }
 
-    // TODO: Doc!
-    fn get_struct(&self, val: BasicValueEnum<'ctx>) -> StructValue<'ctx> {
-        // if val.is_pointer_value() {
-        //     self.builder.build_pointer_cast()
-        // } else {
-        val.into_struct_value()
-        // }
-    }
-
     /// If the given value is a pointer, it will be dereferenced as the given type. Otherwise
     /// the value is simply returned.
     fn deref_if_ptr(&self, val: BasicValueEnum<'ctx>, typ: &RichType) -> BasicValueEnum<'ctx> {
         match typ {
+            // Strings an structs should already be represented as pointers.
+            RichType::String | RichType::Struct(_) => val,
             RichType::I64 => self.get_int(val).as_basic_value_enum(),
             RichType::Bool => self.get_bool(val).as_basic_value_enum(),
-            // Strings should already be represented as pointers.
-            RichType::String => val,
-            RichType::Struct(_) => self.get_struct(val).as_basic_value_enum(),
+            RichType::Struct(_) => val.as_basic_value_enum(),
+            RichType::Function(_) => val.as_basic_value_enum(),
             other => panic!("cannot dereference pointer to value of type {other}"),
         }
     }
