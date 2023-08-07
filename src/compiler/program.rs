@@ -146,7 +146,6 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
             // argument, to which the result will be written. This is done for functions that
             // return structured types.
             let first_param = fn_val.get_first_param().unwrap();
-            let _first_param_type = first_param.get_type().as_any_type_enum();
             first_param.set_name("ret_val_ptr");
 
             // Add the "sret" attribute to the first argument to tell LLVM that it is being used to
