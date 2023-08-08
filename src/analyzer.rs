@@ -2,7 +2,7 @@ use crate::analyzer::error::AnalyzeError;
 
 pub mod closure;
 pub mod cond;
-mod error;
+pub mod error;
 pub mod expr;
 pub mod func;
 pub mod prog_context;

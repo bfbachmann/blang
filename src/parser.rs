@@ -5,7 +5,7 @@ pub mod arg;
 pub mod branch;
 pub mod closure;
 pub mod cond;
-mod error;
+pub mod error;
 pub mod expr;
 pub mod func;
 pub mod func_call;

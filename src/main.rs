@@ -7,6 +7,7 @@ use std::process;
 use clap::{arg, ArgAction, Command};
 use colored::*;
 
+use crate::analyzer::error::AnalyzeError;
 use compiler::program::ProgCompiler;
 use lexer::token::Token;
 use parser::program::Program;
@@ -15,6 +16,8 @@ use parser::statement::Statement;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::program::RichProg;
 use crate::analyzer::statement::RichStatement;
+use crate::lexer::error::LexError;
+use crate::parser::error::ParseError;
 use crate::syscall::syscall::all_syscalls;
 
 mod analyzer;
@@ -25,15 +28,15 @@ mod syscall;
 mod util;
 
 /// Prints an error message and exits with code 1.
-macro_rules! fatal {
+macro_rules! fatalln {
     ($($arg:tt)*) => {{
-        error!($($arg)*);
+        errorln!($($arg)*);
         process::exit(1);
     }};
 }
 
 /// Prints an error message.
-macro_rules! error {
+macro_rules! errorln {
     ($($arg:tt)*) => {{
         print!("{}", "error: ".red().bold());
         println!($($arg)*);
@@ -88,14 +91,14 @@ fn main() {
                 let simplify_ir = !sub_matches.get_flag("unoptimized");
                 compile(src_path, dst_path, as_bitcode, target, simplify_ir);
             }
-            _ => fatal!("expected source path"),
+            _ => fatalln!("expected source path"),
         },
         Some(("repl", _)) => repl(),
         Some(("check", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(file_path) => {
                 analyze(file_path);
             }
-            _ => fatal!("expected source path"),
+            _ => fatalln!("expected source path"),
         },
         _ => unreachable!("no subcommand"),
     };
@@ -112,25 +115,61 @@ fn analyze(input_path: &str) -> RichProg {
     // Get a reader from the source file.
     let reader = match open_file(input_path) {
         Ok(r) => r,
-        Err(err) => fatal!(r#"error opening file "{}": {}"#, input_path, err),
+        Err(err) => fatalln!(r#"error opening file "{}": {}"#, input_path, err),
     };
 
     // Break the file into tokens.
     let mut tokens = match Token::tokenize(reader.lines()) {
         Ok(tokens) => tokens,
-        Err(e) => fatal!("{}", e),
+        Err(LexError { message, line, col }) => {
+            fatalln!(
+                "{}[{}:{}]: {}",
+                input_path.bright_black(),
+                line,
+                col,
+                message.bold(),
+            )
+        }
     };
 
     // Parse the program.
     let prog = match Program::from(&mut tokens) {
-        Err(e) => fatal!("{}", e),
+        Err(ParseError {
+            kind: _,
+            message,
+            token: maybe_token,
+        }) => {
+            if let Some(Token { kind: _, start, .. }) = maybe_token {
+                fatalln!(
+                    "{}: {}",
+                    format_file_loc(input_path, Some(start.line), Some(start.col)),
+                    message.bold(),
+                );
+            } else {
+                fatalln!(
+                    "{}: {}",
+                    format_file_loc(input_path, None, None),
+                    message.bold(),
+                );
+            }
+        }
         Ok(p) => p,
     };
 
     // Analyze the program.
     match RichProg::from(prog, all_syscalls().to_vec()) {
         Ok(rp) => rp,
-        Err(e) => fatal!("{}", e),
+        Err(AnalyzeError {
+            kind: _,
+            message,
+            detail: maybe_detail,
+        }) => {
+            if let Some(detail) = maybe_detail {
+                fatalln!("{}\n  {}", message.bold(), detail)
+            } else {
+                fatalln!("{}", message.bold())
+            }
+        }
     }
 }
 
@@ -157,7 +196,7 @@ fn compile(
 
     // Compile the program.
     if let Err(e) = ProgCompiler::compile(&prog, target, as_bitcode, dst.as_path(), simplify_ir) {
-        fatal!("{}", e);
+        fatalln!("{}", e);
     }
 }
 
@@ -178,12 +217,12 @@ fn repl() {
                         Ok(statement) => match RichStatement::from(&mut ctx, statement) {
                             Ok(s) => s,
                             Err(e) => {
-                                error!("{}", e);
+                                errorln!("{}", e);
                                 break;
                             }
                         },
                         Err(e) => {
-                            error!("{}", e);
+                            errorln!("{}", e);
                             break;
                         }
                     };
@@ -192,7 +231,7 @@ fn repl() {
                     // TODO: generate IR
                 }
             }
-            Err(e) => error!("{}", e),
+            Err(e) => errorln!("{}", e),
         };
     }
 }
@@ -232,4 +271,12 @@ fn repl_collect_tokens() -> Result<VecDeque<Token>> {
     }
 
     Ok(tokens)
+}
+
+/// Formats the file location has a colored string.
+fn format_file_loc(path: &str, line: Option<usize>, col: Option<usize>) -> ColoredString {
+    match (line, col) {
+        (Some(l), Some(c)) => format!("{}[{}:{}]", path, l, c).bright_black(),
+        _ => format!("{}", path).bright_black(),
+    }
 }

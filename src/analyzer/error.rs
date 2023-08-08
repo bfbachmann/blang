@@ -63,6 +63,7 @@ impl fmt::Display for ErrorKind {
 pub struct AnalyzeError {
     pub kind: ErrorKind,
     pub message: String,
+    pub detail: Option<String>,
 }
 
 impl fmt::Display for AnalyzeError {
@@ -76,20 +77,23 @@ impl AnalyzeError {
         AnalyzeError {
             kind,
             message: message.to_string(),
+            detail: None,
         }
     }
 
     pub fn new_from_expr(kind: ErrorKind, expr: &Expression, message: &str) -> Self {
         AnalyzeError {
             kind,
-            message: format!("invalid expression {}: {}", expr, message),
+            message: message.to_string(),
+            detail: Some(format!("{}", expr)),
         }
     }
 
     pub fn new_from_statement(kind: ErrorKind, statement: &Statement, message: &str) -> Self {
         AnalyzeError {
             kind,
-            message: format!("invalid statement {}: {}", statement, message),
+            message: message.to_string(),
+            detail: Some(format!("{}", statement)),
         }
     }
 }
