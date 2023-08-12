@@ -17,7 +17,7 @@ pub struct StringLit {
 
 impl Display for StringLit {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value)
+        write!(f, r#""{}""#, self.value)
     }
 }
 
