@@ -14,8 +14,19 @@ impl fmt::Display for Position {
     }
 }
 
+impl Default for Position {
+    fn default() -> Self {
+        Position { line: 1, col: 1 }
+    }
+}
+
 impl Position {
     pub fn new(line: usize, col: usize) -> Self {
         Position { line, col }
     }
+}
+
+pub trait Locatable {
+    fn start_pos(&self) -> &Position;
+    fn end_pos(&self) -> &Position;
 }

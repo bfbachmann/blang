@@ -1,3 +1,4 @@
+use crate::lexer::pos::{Locatable, Position};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
@@ -19,7 +20,7 @@ pub enum ErrorKind {
     UnexpectedEndOfExpr,
     UnexpectedEndOfArgs,
     UnexpectedToken,
-    UnexpectedEndOfStatement,
+    UnexpectedEOF,
     InvalidStatement,
     UseOfDoubleNegative,
     DuplicateArgName,
@@ -44,7 +45,7 @@ impl Display for ErrorKind {
             ErrorKind::UnexpectedEndOfExpr => write!(f, "unexpected end of expression"),
             ErrorKind::UnexpectedEndOfArgs => write!(f, "unexpected end of arguments"),
             ErrorKind::UnexpectedToken => write!(f, "unexpected token"),
-            ErrorKind::UnexpectedEndOfStatement => write!(f, "unexpected end of statement"),
+            ErrorKind::UnexpectedEOF => write!(f, "unexpected EOF"),
             ErrorKind::InvalidStatement => write!(f, "invalid statement"),
             ErrorKind::UseOfDoubleNegative => write!(f, "use of double negative"),
             ErrorKind::DuplicateArgName => write!(f, "duplicate argument name"),
@@ -58,6 +59,8 @@ pub struct ParseError {
     pub kind: ErrorKind,
     pub message: String,
     pub token: Option<Token>,
+    pub start_pos: Position,
+    pub end_pos: Position,
 }
 
 impl Display for ParseError {
@@ -70,11 +73,41 @@ impl Display for ParseError {
 }
 
 impl ParseError {
-    pub fn new(kind: ErrorKind, message: &str, token: Option<Token>) -> Self {
+    pub fn new(
+        kind: ErrorKind,
+        message: &str,
+        token: Option<Token>,
+        start_pos: Position,
+        end_pos: Position,
+    ) -> Self {
         ParseError {
             kind,
             message: message.to_string(),
             token,
+            start_pos,
+            end_pos,
         }
+    }
+
+    pub fn new_with_token(kind: ErrorKind, message: &str, token: Token) -> Self {
+        let start_pos = token.start.clone();
+        let end_pos = token.end.clone();
+        ParseError {
+            kind,
+            message: message.to_string(),
+            token: Some(token),
+            start_pos,
+            end_pos,
+        }
+    }
+}
+
+impl Locatable for ParseError {
+    fn start_pos(&self) -> &Position {
+        &self.start_pos
+    }
+
+    fn end_pos(&self) -> &Position {
+        &self.end_pos
     }
 }

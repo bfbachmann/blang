@@ -2,22 +2,29 @@ use error::ParseError;
 use r#type::Type;
 
 pub mod arg;
+pub mod bool_lit;
 pub mod branch;
+pub mod r#break;
 pub mod closure;
 pub mod cond;
+pub mod cont;
 pub mod error;
 pub mod expr;
 pub mod func;
 pub mod func_call;
 pub mod func_sig;
+pub mod i64_lit;
 pub mod r#loop;
 pub mod op;
 pub mod program;
+pub mod ret;
 pub mod statement;
+pub mod string_lit;
 pub mod r#struct;
 pub mod r#type;
 pub mod var_assign;
 pub mod var_dec;
+pub mod var_ref;
 
 type ParseResult<T> = Result<T, ParseError>;
 
@@ -29,6 +36,7 @@ mod tests {
     use crate::lexer::pos::Position;
     use crate::lexer::token::Token;
     use crate::parser::arg::Argument;
+    use crate::parser::bool_lit::BoolLit;
     use crate::parser::branch::Branch;
     use crate::parser::closure::Closure;
     use crate::parser::cond::Conditional;
@@ -37,11 +45,15 @@ mod tests {
     use crate::parser::func::Function;
     use crate::parser::func_call::FunctionCall;
     use crate::parser::func_sig::FunctionSignature;
+    use crate::parser::i64_lit::I64Lit;
     use crate::parser::op::Operator;
     use crate::parser::program::Program;
     use crate::parser::r#type::Type;
+    use crate::parser::ret::Ret;
     use crate::parser::statement::Statement;
+    use crate::parser::string_lit::StringLit;
     use crate::parser::var_dec::VariableDeclaration;
+    use crate::parser::var_ref::VarRef;
 
     #[test]
     fn parse_identifier() {
@@ -95,7 +107,7 @@ mod tests {
         Program::from(&mut tokens).expect("should not error");
 
         let mut tokens =
-            Token::tokenize_line("let i: i64 = 123 let j = 1231", 0).expect("should not error");
+            Token::tokenize_line("let i: i64 = 123 let j = 1231", 1).expect("should not error");
         let result = Program::from(&mut tokens).expect("should not error");
         assert_eq!(
             result,
@@ -104,12 +116,24 @@ mod tests {
                     Statement::VariableDeclaration(VariableDeclaration::new(
                         Some(Type::I64),
                         "i".to_string(),
-                        Expression::I64Literal(123),
+                        Expression::I64Literal(I64Lit {
+                            value: 123,
+                            start_pos: Position::new(1, 14),
+                            end_pos: Position::new(1, 17),
+                        }),
+                        Position::new(1, 1),
+                        Position::new(1, 17),
                     )),
                     Statement::VariableDeclaration(VariableDeclaration::new(
                         None,
                         "j".to_string(),
-                        Expression::I64Literal(1231),
+                        Expression::I64Literal(I64Lit {
+                            value: 1231,
+                            start_pos: Position::new(1, 26),
+                            end_pos: Position::new(1, 30),
+                        }),
+                        Position::new(1, 18),
+                        Position::new(1, 30),
                     ))
                 ]
             }
@@ -120,7 +144,7 @@ mod tests {
     fn parse_function_declaration() {
         let mut tokens = Token::tokenize_line(
             r#"fn my_fn(arg1: string, arg2: i64): string { let s = "hello world!"; }"#,
-            0,
+            1,
         )
         .expect("should not error");
         let result = Function::from(&mut tokens).expect("should not error");
@@ -134,21 +158,31 @@ mod tests {
                         Argument::new("arg2", Type::I64)
                     ],
                     Some(Type::String),
+                    Position::new(1, 1),
+                    Position::new(1, 34),
                 ),
                 Closure::new(
                     vec![Statement::VariableDeclaration(VariableDeclaration::new(
                         None,
                         "s".to_string(),
-                        Expression::StringLiteral("hello world!".to_string()),
-                    )),],
-                    None
+                        Expression::StringLiteral(StringLit {
+                            value: "hello world!".to_string(),
+                            start_pos: Position::new(1, 53),
+                            end_pos: Position::new(1, 67),
+                        }),
+                        Position::new(1, 45),
+                        Position::new(1, 67),
+                    ))],
+                    None,
+                    Position::new(1, 43),
+                    Position::new(1, 70),
                 ),
             )
         );
 
         let mut tokens = Token::tokenize_line(
             "fn bigboi(f: fn (string, i64): bool, i: i64): fn (bool): string {}",
-            0,
+            1,
         )
         .expect("should not error");
         let result = Function::from(&mut tokens).expect("should not error");
@@ -166,6 +200,8 @@ mod tests {
                                     Argument::new("", Type::I64)
                                 ],
                                 Some(Type::Bool),
+                                Position::new(1, 14),
+                                Position::new(1, 30),
                             ))),
                         ),
                         Argument::new("i", Type::I64)
@@ -173,9 +209,13 @@ mod tests {
                     Some(Type::Function(Box::new(FunctionSignature::new_anon(
                         vec![Argument::new("", Type::Bool)],
                         Some(Type::String),
+                        Position::new(1, 47),
+                        Position::new(1, 56),
                     )))),
+                    Position::new(1, 1),
+                    Position::new(1, 45),
                 ),
-                Closure::new(vec![], None),
+                Closure::new(vec![], None, Position::new(1, 65), Position::new(1, 67)),
             )
         );
     }
@@ -183,17 +223,31 @@ mod tests {
     #[test]
     fn parse_function_call() {
         let mut tokens =
-            Token::tokenize_line(r#"do_thing("one", "two", true)"#, 0).expect("should not error");
+            Token::tokenize_line(r#"do_thing("one", "two", true)"#, 1).expect("should not error");
         let result = FunctionCall::from(&mut tokens).expect("should not error");
         assert_eq!(
             result,
             FunctionCall::new(
                 "do_thing",
                 vec![
-                    Expression::StringLiteral("one".to_string()),
-                    Expression::StringLiteral("two".to_string()),
-                    Expression::BoolLiteral(true),
-                ]
+                    Expression::StringLiteral(StringLit {
+                        value: "one".to_string(),
+                        start_pos: Position::new(1, 10),
+                        end_pos: Position::new(1, 15),
+                    }),
+                    Expression::StringLiteral(StringLit {
+                        value: "two".to_string(),
+                        start_pos: Position::new(1, 17),
+                        end_pos: Position::new(1, 22),
+                    }),
+                    Expression::BoolLiteral(BoolLit {
+                        value: true,
+                        start_pos: Position::new(1, 24),
+                        end_pos: Position::new(1, 28),
+                    }),
+                ],
+                Position::new(1, 1),
+                Position::new(1, 29),
             )
         );
     }
@@ -210,9 +264,11 @@ mod tests {
                 message: _,
                 token: Some(Token {
                     kind: TokenKind::Comma,
-                    start: Position { line: 0, col: 13 },
-                    end: Position { line: 0, col: 14 },
+                    start: Position { line: 1, col: 14 },
+                    end: Position { line: 1, col: 15 },
                 }),
+                start_pos: Position { line: 1, col: 14 },
+                end_pos: Position { line: 1, col: 15 },
             })
         ));
     }
@@ -229,9 +285,11 @@ mod tests {
                 message: _,
                 token: Some(Token {
                     kind: TokenKind::RightParen,
-                    start: Position { line: 0, col: 14 },
-                    end: Position { line: 0, col: 15 },
+                    start: Position { line: 1, col: 15 },
+                    end: Position { line: 1, col: 16 },
                 }),
+                start_pos: Position { line: 1, col: 15 },
+                end_pos: Position { line: 1, col: 16 },
             })
         ));
     }
@@ -244,9 +302,11 @@ mod tests {
         assert!(matches!(
             result,
             Err(ParseError {
-                kind: ErrorKind::UnexpectedEndOfArgs,
+                kind: ErrorKind::UnexpectedEOF,
                 message: _,
                 token: None,
+                start_pos: Position { line: 1, col: 1 },
+                ..
             })
         ));
     }
@@ -263,45 +323,80 @@ mod tests {
                 message: _,
                 token: Some(Token {
                     kind: TokenKind::LogicalAnd,
-                    start: Position { line: 0, col: 3 },
-                    end: Position { line: 0, col: 5 },
+                    start: Position { line: 1, col: 4 },
+                    end: Position { line: 1, col: 6 },
                 }),
+                start_pos: Position { line: 1, col: 4 },
+                end_pos: Position { line: 1, col: 6 },
             })
         ));
     }
 
     #[test]
     fn empty_fn_return() {
-        let raw = r#"fn my_func(s: string) {
-            if s == "dog" {
+        let raw = "fn my_func(s: string) {
+            if s == \"dog\" {
                 return
             }
-            
-            print("not dog")
-        }"#;
+           
+            print(\"not dog\")
+        }";
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let result = Program::from(&mut tokens).expect("should not error");
         assert_eq!(
             result,
             Program {
                 statements: vec![Statement::FunctionDeclaration(Function::new(
-                    FunctionSignature::new("my_func", vec![Argument::new("s", Type::String)], None),
+                    FunctionSignature::new(
+                        "my_func",
+                        vec![Argument::new("s", Type::String)],
+                        None,
+                        Position::new(1, 1),
+                        Position::new(1, 22)
+                    ),
                     Closure::new(
                         vec![
                             Statement::Conditional(Conditional::new(vec![Branch::new(
                                 Some(Expression::BinaryOperation(
-                                    Box::new(Expression::VariableReference("s".to_string())),
+                                    Box::new(Expression::VariableReference(VarRef {
+                                        var_name: "s".to_string(),
+                                        start_pos: Position::new(2, 16),
+                                        end_pos: Position::new(2, 17),
+                                    })),
                                     Operator::EqualTo,
-                                    Box::new(Expression::StringLiteral("dog".to_string())),
+                                    Box::new(Expression::StringLiteral(StringLit {
+                                        value: "dog".to_string(),
+                                        start_pos: Position::new(2, 21),
+                                        end_pos: Position::new(2, 26),
+                                    })),
                                 )),
-                                Closure::new(vec![Statement::Return(None)], None),
+                                Closure::new(
+                                    vec![Statement::Return(Ret::new(
+                                        None,
+                                        Position::new(3, 17),
+                                        Position::new(3, 23)
+                                    ))],
+                                    None,
+                                    Position::new(2, 27),
+                                    Position::new(4, 14)
+                                ),
+                                Position::new(2, 16),
+                                Position::new(4, 14),
                             )])),
                             Statement::FunctionCall(FunctionCall::new(
                                 "print",
-                                vec![Expression::StringLiteral("not dog".to_string())]
+                                vec![Expression::StringLiteral(StringLit {
+                                    value: "not dog".to_string(),
+                                    start_pos: Position::new(6, 19),
+                                    end_pos: Position::new(6, 28),
+                                })],
+                                Position::new(6, 13),
+                                Position::new(6, 29),
                             ))
                         ],
                         None,
+                        Position::new(1, 23),
+                        Position::new(7, 10),
                     )
                 ))]
             }
@@ -318,9 +413,10 @@ mod tests {
         assert!(matches!(
             result,
             Err(ParseError {
-                kind: ErrorKind::UnexpectedEndOfStatement,
+                kind: ErrorKind::UnexpectedEOF,
                 message: _,
                 token: None,
+                ..
             })
         ));
     }

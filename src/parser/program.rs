@@ -1,6 +1,7 @@
 use std::collections::{HashSet, VecDeque};
 
 use crate::lexer::kind::TokenKind;
+use crate::lexer::pos::Position;
 use crate::lexer::token::Token;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::statement::Statement;
@@ -39,24 +40,30 @@ impl Program {
         Ok(Program { statements })
     }
 
-    /// Returns an error if the next token is not any of the given kinds, or the kind otherwise.
+    /// Returns an error if the next token is not any of the given kinds, or the token otherwise.
     pub fn parse_expecting(
         tokens: &mut VecDeque<Token>,
         expected: HashSet<TokenKind>,
-    ) -> ParseResult<TokenKind> {
+    ) -> ParseResult<Token> {
         match tokens.pop_front() {
             None => {
                 return Err(ParseError::new(
-                    ErrorKind::UnexpectedToken,
-                    format!(r#"expected one of {}"#, util::hashset_to_string(expected)).as_str(),
+                    ErrorKind::UnexpectedEOF,
+                    format!(
+                        r#"expected one of {}, but found EOF"#,
+                        util::hashset_to_string(expected)
+                    )
+                    .as_str(),
                     None,
+                    Position::default(),
+                    Position::default(),
                 ))
             }
             Some(token) => {
                 if expected.contains(&token.kind) {
-                    Ok(token.kind)
+                    Ok(token)
                 } else {
-                    Err(ParseError::new(
+                    Err(ParseError::new_with_token(
                         ErrorKind::UnexpectedToken,
                         format!(
                             r#"expected one of {}, but found "{}"#,
@@ -64,7 +71,7 @@ impl Program {
                             token
                         )
                         .as_str(),
-                        Some(token),
+                        token,
                     ))
                 }
             }
@@ -96,18 +103,31 @@ impl Program {
             }) => Ok(name),
             None => {
                 return Err(ParseError::new(
-                    ErrorKind::ExpectedIdent,
-                    "expected identifier",
+                    ErrorKind::UnexpectedEOF,
+                    "expected identifier, but found EOF",
                     None,
+                    Position::default(),
+                    Position::default(),
                 ))
             }
             Some(other) => {
-                return Err(ParseError::new(
+                return Err(ParseError::new_with_token(
                     ErrorKind::ExpectedIdent,
                     format!(r#"expected identifier, but found "{}""#, other).as_str(),
-                    Some(other),
+                    other,
                 ))
             }
+        }
+    }
+
+    /// Returns the current position in the file based on the head of the token deque.
+    pub fn current_position(tokens: &VecDeque<Token>) -> Position {
+        match tokens.front() {
+            Some(Token { kind: _, start, .. }) => Position {
+                line: start.line,
+                col: start.col,
+            },
+            None => Position::new(0, 0),
         }
     }
 }

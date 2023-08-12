@@ -3,9 +3,9 @@ use std::fmt;
 use std::io::{BufRead, Lines};
 
 use crate::lexer::error::LexError;
+use crate::lexer::error::LexResult;
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::Position;
-use crate::lexer::LexResult;
 
 /// A token has a kind and a start and end position (in the file).
 #[derive(Clone, Debug, PartialEq)]
@@ -35,13 +35,16 @@ impl Token {
     pub fn tokenize<B: BufRead>(lines: Lines<B>) -> LexResult<VecDeque<Token>> {
         let mut tokens = VecDeque::new();
         for (line_num, line) in lines.enumerate() {
+            // Line numbers should start from 1.
+            let line_num = line_num + 1;
+
             let line = match line {
                 Ok(l) => l,
                 Err(err) => {
                     return Err(LexError::new(
                         format!("error reading line {}: {}", line_num, err).as_str(),
                         line_num,
-                        0,
+                        1,
                     ))
                 }
             };
@@ -71,9 +74,11 @@ impl Token {
 
                 // The current subsegment begins with (or is entirely) a valid token. Store it and
                 // record its end index so we can start the next search at the end of the current
-                // token.
-                let token_start = search_start + whitespace_prefix_size(subseg);
-                let token_end = search_start + end_col - whitespace_suffix_size(&subseg[..end_col]);
+                // token. Note that indexes for line and column numbers start from 1.
+                let token_start = search_start + whitespace_prefix_size(subseg) + 1;
+                let token_end =
+                    search_start + end_col - whitespace_suffix_size(&subseg[..end_col]) + 1;
+
                 tokens.push_back(Token::new(kind, line_num, token_start, token_end));
                 search_start += end_col;
             } else if subseg.trim().is_empty() {
@@ -86,7 +91,7 @@ impl Token {
                 return Err(LexError::new(
                     format!(r#"expected valid token, but found {}"#, subseg).as_str(),
                     line_num,
-                    search_start,
+                    search_start + 1,
                 ));
             }
         }

@@ -67,7 +67,6 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
             module: &module,
             program,
         };
-
         compiler.compile_program()?;
 
         // Write output as to file.

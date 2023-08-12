@@ -6,6 +6,7 @@ use crate::analyzer::func::RichFnSig;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#struct::RichStruct;
 use crate::analyzer::AnalyzeResult;
+use crate::lexer::pos::Position;
 use crate::parser::r#type::Type;
 
 /// Represents a semantically valid and fully resolved type.
@@ -70,6 +71,9 @@ impl RichType {
                 return Err(AnalyzeError::new(
                     ErrorKind::TypeNotDefined,
                     format!("type {} is not defined", type_name).as_str(),
+                    // TODO: Fill in proper position.
+                    Position::default(),
+                    Position::default(),
                 ));
             }
 

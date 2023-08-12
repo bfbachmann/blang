@@ -1,4 +1,5 @@
 use crate::lexer::kind::TokenKind;
+use crate::lexer::pos::{Locatable, Position};
 use std::collections::{HashSet, VecDeque};
 
 use crate::lexer::token::Token;
@@ -15,11 +16,35 @@ pub struct VariableDeclaration {
     pub typ: Option<Type>,
     pub name: String,
     pub value: Expression,
+    pub start_pos: Position,
+    pub end_pos: Position,
+}
+
+impl Locatable for VariableDeclaration {
+    fn start_pos(&self) -> &Position {
+        &self.start_pos
+    }
+
+    fn end_pos(&self) -> &Position {
+        &self.end_pos
+    }
 }
 
 impl VariableDeclaration {
-    pub fn new(typ: Option<Type>, name: String, value: Expression) -> Self {
-        VariableDeclaration { typ, name, value }
+    pub fn new(
+        typ: Option<Type>,
+        name: String,
+        value: Expression,
+        start_pos: Position,
+        end_pos: Position,
+    ) -> Self {
+        VariableDeclaration {
+            typ,
+            name,
+            value,
+            start_pos,
+            end_pos,
+        }
     }
 
     /// Parses variable declarations. Expects token sequences of the forms
@@ -33,7 +58,7 @@ impl VariableDeclaration {
     ///  - `expr` is an expression representing the value assigned to the variable
     pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         // The first token should be "let".
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::Let]))?;
+        let start_token = Program::parse_expecting(tokens, HashSet::from([TokenKind::Let]))?;
 
         // The second token should be the variable name.
         let name = Program::parse_identifier(tokens)?;
@@ -48,7 +73,14 @@ impl VariableDeclaration {
         // The remaining tokens should be "=" followed by the variable value.
         Program::parse_expecting(tokens, HashSet::from([TokenKind::Equal]))?;
         let value = Expression::from(tokens, false, false)?;
+        let end_pos = value.end_pos().clone();
 
-        Ok(VariableDeclaration::new(typ, name, value))
+        Ok(VariableDeclaration::new(
+            typ,
+            name,
+            value,
+            start_token.start,
+            end_pos,
+        ))
     }
 }

@@ -3,6 +3,7 @@ use std::fmt;
 use std::fmt::Formatter;
 
 use crate::lexer::kind::TokenKind;
+use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::parser::branch::Branch;
 use crate::parser::program::Program;
@@ -13,6 +14,8 @@ use crate::util;
 #[derive(Debug, Clone)]
 pub struct Conditional {
     pub branches: Vec<Branch>,
+    pub start_pos: Position,
+    pub end_pos: Position,
 }
 
 impl fmt::Display for Conditional {
@@ -25,12 +28,38 @@ impl fmt::Display for Conditional {
 impl PartialEq for Conditional {
     fn eq(&self, other: &Self) -> bool {
         util::vectors_are_equal(&self.branches, &other.branches)
+            && self.start_pos == other.start_pos
+            && self.end_pos == other.end_pos
+    }
+}
+
+impl Locatable for Conditional {
+    fn start_pos(&self) -> &Position {
+        &self.start_pos
+    }
+
+    fn end_pos(&self) -> &Position {
+        &self.end_pos
     }
 }
 
 impl Conditional {
+    /// Creates a new conditional.
     pub fn new(branches: Vec<Branch>) -> Self {
-        Conditional { branches }
+        let start_pos = branches
+            .first()
+            .unwrap()
+            .condition
+            .as_ref()
+            .unwrap()
+            .start_pos()
+            .clone();
+        let end_pos = branches.last().unwrap().body.end_pos().clone();
+        Conditional {
+            branches,
+            start_pos,
+            end_pos,
+        }
     }
 
     /// Parses conditionals. Expects token sequences of the forms

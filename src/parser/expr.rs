@@ -1,14 +1,19 @@
 use std::collections::VecDeque;
-
 use std::fmt;
 
 use crate::lexer::kind::TokenKind;
+use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::parser::bool_lit::BoolLit;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
+use crate::parser::i64_lit::I64Lit;
 use crate::parser::op::Operator;
+use crate::parser::program::Program;
 use crate::parser::r#struct::StructInit;
+use crate::parser::string_lit::StringLit;
+use crate::parser::var_ref::VarRef;
 use crate::parser::ParseResult;
 
 #[derive(Debug)]
@@ -43,10 +48,10 @@ impl OutputNode {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
     // Basic expressions.
-    VariableReference(String),
-    BoolLiteral(bool),
-    I64Literal(i64),
-    StringLiteral(String),
+    VariableReference(VarRef),
+    BoolLiteral(BoolLit),
+    I64Literal(I64Lit),
+    StringLiteral(StringLit),
     FunctionCall(FunctionCall),
     AnonFunction(Box<Function>),
     UnaryOperation(Operator, Box<Expression>),
@@ -76,6 +81,36 @@ impl fmt::Display for Expression {
     }
 }
 
+impl Locatable for Expression {
+    fn start_pos(&self) -> &Position {
+        match self {
+            Expression::VariableReference(var_ref) => var_ref.start_pos(),
+            Expression::BoolLiteral(bool_lit) => bool_lit.start_pos(),
+            Expression::I64Literal(i64_lit) => i64_lit.start_pos(),
+            Expression::StringLiteral(string_lit) => string_lit.start_pos(),
+            Expression::FunctionCall(fn_call) => fn_call.start_pos(),
+            Expression::AnonFunction(func) => func.start_pos(),
+            Expression::UnaryOperation(_, expr) => expr.start_pos(),
+            Expression::StructInit(struct_init) => struct_init.start_pos(),
+            Expression::BinaryOperation(left, _, _) => left.start_pos(),
+        }
+    }
+
+    fn end_pos(&self) -> &Position {
+        match self {
+            Expression::VariableReference(var_ref) => var_ref.end_pos(),
+            Expression::BoolLiteral(bool_lit) => bool_lit.end_pos(),
+            Expression::I64Literal(i64_lit) => i64_lit.end_pos(),
+            Expression::StringLiteral(string_lit) => string_lit.end_pos(),
+            Expression::FunctionCall(fn_call) => fn_call.end_pos(),
+            Expression::AnonFunction(func) => func.end_pos(),
+            Expression::UnaryOperation(_, expr) => expr.end_pos(),
+            Expression::StructInit(struct_init) => struct_init.end_pos(),
+            Expression::BinaryOperation(left, _, _) => left.end_pos(),
+        }
+    }
+}
+
 impl Expression {
     /// Parses an expression tree from reverse Polish notation.
     fn from_rpn(q: &mut VecDeque<OutputNode>) -> ParseResult<Self> {
@@ -95,9 +130,11 @@ impl Expression {
             // The queue should not be empty. If this happens, it means that the queue passed to
             // this function was not valid RPN.
             None => Err(ParseError::new(
-                ErrorKind::UnexpectedEndOfExpr,
+                ErrorKind::UnexpectedEOF,
                 "unexpected end of expression",
                 None,
+                Position::default(),
+                Position::default(),
             )),
         }
     }
@@ -168,15 +205,11 @@ impl Expression {
                     }) => {
                         // If we're in a conditional, we can safely assume that this is a variable
                         // reference. Otherwise, it is struct initialization.
+                        tokens.push_front(token);
                         if is_cond {
-                            match token.kind {
-                                TokenKind::Identifier(name) => {
-                                    Ok(Some(Expression::VariableReference(name)))
-                                }
-                                _ => unreachable!(),
-                            }
+                            let var_ref = VarRef::from(tokens)?;
+                            Ok(Some(Expression::VariableReference(var_ref)))
                         } else {
-                            tokens.push_front(token);
                             let struct_init = StructInit::from(tokens)?;
                             Ok(Some(Expression::StructInit(struct_init)))
                         }
@@ -184,16 +217,9 @@ impl Expression {
 
                     // If the next token is anything else, we'll assume it's a variable value.
                     _ => {
-                        if let Token {
-                            kind: TokenKind::Identifier(var_name),
-                            ..
-                        } = token
-                        {
-                            Ok(Some(Expression::VariableReference(var_name)))
-                        } else {
-                            // This should be impossible because we know the token is an identifier.
-                            panic!("expected identifier");
-                        }
+                        tokens.push_front(token);
+                        let var_ref = VarRef::from(tokens)?;
+                        Ok(Some(Expression::VariableReference(var_ref)))
                     }
                 }
             }
@@ -212,22 +238,40 @@ impl Expression {
             }
 
             // Check if it's a bool literal.
-            Some(Token {
-                kind: TokenKind::BoolLiteral(b),
-                ..
-            }) => Ok(Some(Expression::BoolLiteral(b))),
+            Some(
+                token @ Token {
+                    kind: TokenKind::BoolLiteral(_),
+                    ..
+                },
+            ) => {
+                tokens.push_front(token);
+                let bool_lit = BoolLit::from(tokens)?;
+                Ok(Some(Expression::BoolLiteral(bool_lit)))
+            }
 
             // Check if it's an integer literal.
-            Some(Token {
-                kind: TokenKind::I64Literal(i),
-                ..
-            }) => Ok(Some(Expression::I64Literal(i))),
+            Some(
+                token @ Token {
+                    kind: TokenKind::I64Literal(_),
+                    ..
+                },
+            ) => {
+                tokens.push_front(token);
+                let i64_lit = I64Lit::from(tokens)?;
+                Ok(Some(Expression::I64Literal(i64_lit)))
+            }
 
             // Check if it's a string literal.
-            Some(Token {
-                kind: TokenKind::StringLiteral(s),
-                ..
-            }) => Ok(Some(Expression::StringLiteral(s))),
+            Some(
+                token @ Token {
+                    kind: TokenKind::StringLiteral(_),
+                    ..
+                },
+            ) => {
+                tokens.push_front(token);
+                let string_lit = StringLit::from(tokens)?;
+                Ok(Some(Expression::StringLiteral(string_lit)))
+            }
 
             // If the token is anything else, we assume there is no basic expression here.
             Some(token) => {
@@ -263,6 +307,7 @@ impl Expression {
         is_arg: bool,
         is_cond: bool,
     ) -> ParseResult<Expression> {
+        let start_pos = Program::current_position(tokens);
         let mut out_q: VecDeque<OutputNode> = VecDeque::new();
         let mut op_stack: VecDeque<Token> = VecDeque::new();
         let mut last_token: Option<Token> = None;
@@ -288,10 +333,10 @@ impl Expression {
                 // We should not be here if we we're expecting a binary operator or the end of the
                 // expression.
                 if expect_binop_or_end {
-                    return Err(ParseError::new(
+                    return Err(ParseError::new_with_token(
                         ErrorKind::ExpectedBinOpOrEndOfExpr,
                         "expected binary operator or end of expression",
-                        Some(op1_token),
+                        op1_token,
                     ));
                 }
 
@@ -321,10 +366,10 @@ impl Expression {
                                 break 'outer;
                             }
 
-                            return Err(ParseError::new(
+                            return Err(ParseError::new_with_token(
                                 ErrorKind::UnmatchedCloseParen,
                                 "unmatched closing parenthesis in expression",
-                                Some(op1_token),
+                                op1_token,
                             ));
                         }
                         // Otherwise, we just pop the operator from the stack and add it to the
@@ -346,10 +391,10 @@ impl Expression {
                     // Pop the "(" from the operator stack and discard it
                     op_stack.pop_back();
                 } else {
-                    return Err(ParseError::new(
+                    return Err(ParseError::new_with_token(
                         ErrorKind::UnmatchedCloseParen,
                         "unmatched closing parenthesis in expression",
-                        Some(op1_token),
+                        op1_token,
                     ));
                 }
             }
@@ -358,10 +403,10 @@ impl Expression {
                 // We should not be here if we we're expecting a binary operator or the end of the
                 // expression.
                 if expect_binop_or_end {
-                    return Err(ParseError::new(
+                    return Err(ParseError::new_with_token(
                         ErrorKind::ExpectedBinOpOrEndOfExpr,
                         "expected binary operator or end of expression",
-                        Some(op1_token),
+                        op1_token,
                     ));
                 }
 
@@ -410,19 +455,23 @@ impl Expression {
                             ErrorKind::UseOfDoubleNegative,
                             "use of double negative in expression",
                             Some(token),
+                            start_pos,
+                            op1_token.end.clone(),
                         ));
                     }
 
                     // We have a negative value here, so we're going to represent it as the value
                     // multiplied by -1. Push -1 to the output queue and push * to the operator
                     // stack.
-                    out_q.push_back(OutputNode::from_basic_expr(Expression::I64Literal(-1)));
+                    out_q.push_back(OutputNode::from_basic_expr(Expression::I64Literal(
+                        I64Lit::new_with_default_pos(-1),
+                    )));
                     op_stack.push_back(Token::new(TokenKind::Multiply, 0, 0, 0));
                 } else {
-                    return Err(ParseError::new(
+                    return Err(ParseError::new_with_token(
                         ErrorKind::UnexpectedOperator,
                         "unexpected operator",
-                        Some(op1_token),
+                        op1_token,
                     ));
                 }
             }
@@ -447,14 +496,14 @@ impl Expression {
                             out_q.push_back(OutputNode::from_basic_expr(expr));
                             expect_binop_or_end = true;
                         } else {
-                            return Err(ParseError::new(
+                            return Err(ParseError::new_with_token(
                                 ErrorKind::ExpectedBeginExpr,
                                 format!(
                                     "expected beginning of expression, but found {}",
                                     op1_token
                                 )
                                 .as_str(),
-                                Some(op1_token),
+                                op1_token,
                             ));
                         }
                     }
@@ -471,22 +520,22 @@ impl Expression {
                                     out_q.push_back(OutputNode::from_basic_expr(expr));
                                     expect_binop_or_end = true;
                                 } else {
-                                    return Err(ParseError::new(
+                                    return Err(ParseError::new_with_token(
                                         ErrorKind::ExpectedBasicExpr,
                                         format!(
                                             "expected basic expression, but found {}",
                                             op1_token
                                         )
                                         .as_str(),
-                                        Some(op1_token),
+                                        op1_token,
                                     ));
                                 }
                             } else {
-                                return Err(ParseError::new(
+                                return Err(ParseError::new_with_token(
                                     ErrorKind::ExpectedExpr,
                                     format!("expected expression, but found {}", op1_token)
                                         .as_str(),
-                                    Some(op1_token),
+                                    op1_token,
                                 ));
                             }
                         } else {
@@ -507,13 +556,16 @@ impl Expression {
             // Assert the operator on top of the stack is not "(".
             if let token @ Token {
                 kind: TokenKind::LeftParen,
-                ..
+                start: _,
+                end,
             } = op
             {
                 return Err(ParseError::new(
                     ErrorKind::UnmatchedOpenParen,
                     "unmatched opening parenthesis in expression",
                     Some(token),
+                    start_pos,
+                    end,
                 ));
             }
 
@@ -535,13 +587,17 @@ mod tests {
     use crate::lexer::kind::TokenKind;
     use crate::lexer::pos::Position;
     use crate::lexer::token::Token;
+    use crate::parser::bool_lit::BoolLit;
     use crate::parser::error::{ErrorKind, ParseError};
     use crate::parser::expr::Expression;
     use crate::parser::func_call::FunctionCall;
+    use crate::parser::i64_lit::I64Lit;
     use crate::parser::op::Operator;
+    use crate::parser::string_lit::StringLit;
+    use crate::parser::var_ref::VarRef;
 
     fn parse(raw: &str) -> Expression {
-        let mut tokens = Token::tokenize_line(raw, 0).expect("should not error");
+        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         Expression::from(&mut tokens, false, false).expect("should not error")
     }
 
@@ -549,26 +605,51 @@ mod tests {
     fn parse_basic_var_value() {
         assert_eq!(
             parse(r#"my_var"#),
-            Expression::VariableReference("my_var".to_string())
+            Expression::VariableReference(VarRef {
+                var_name: "my_var".to_string(),
+                start_pos: Position::new(1, 1),
+                end_pos: Position::new(1, 7),
+            })
         );
     }
 
     #[test]
     fn parse_basic_bool_literal() {
-        assert_eq!(parse("true"), Expression::BoolLiteral(true));
-        assert_eq!(parse("false"), Expression::BoolLiteral(false));
+        assert_eq!(
+            parse("true"),
+            Expression::BoolLiteral(BoolLit::new(true, Position::new(1, 1), Position::new(1, 5)))
+        );
+        assert_eq!(
+            parse("false"),
+            Expression::BoolLiteral(BoolLit::new(
+                false,
+                Position::new(1, 1),
+                Position::new(1, 6)
+            ))
+        );
     }
 
     #[test]
     fn parse_basic_i64_literal() {
-        assert_eq!(parse("123"), Expression::I64Literal(123));
+        assert_eq!(
+            parse("123"),
+            Expression::I64Literal(I64Lit {
+                value: 123,
+                start_pos: Position::new(1, 1),
+                end_pos: Position::new(1, 4),
+            })
+        );
     }
 
     #[test]
     fn parse_basic_string_literal() {
         assert_eq!(
             parse(r#""this is my \"String\"""#),
-            Expression::StringLiteral(r#"this is my "String""#.to_string())
+            Expression::StringLiteral(StringLit {
+                value: r#"this is my "String""#.to_string(),
+                start_pos: Position::new(1, 1),
+                end_pos: Position::new(1, 24),
+            })
         );
     }
 
@@ -581,32 +662,64 @@ mod tests {
                 vec![
                     Expression::BinaryOperation(
                         Box::new(Expression::BinaryOperation(
-                            Box::new(Expression::I64Literal(3)),
+                            Box::new(Expression::I64Literal(I64Lit {
+                                value: 3,
+                                start_pos: Position::new(1, 6),
+                                end_pos: Position::new(1, 7),
+                            })),
                             Operator::Multiply,
-                            Box::new(Expression::I64Literal(2))
+                            Box::new(Expression::I64Literal(I64Lit {
+                                value: 2,
+                                start_pos: Position::new(1, 10),
+                                end_pos: Position::new(1, 11),
+                            }))
                         )),
                         Operator::Subtract,
-                        Box::new(Expression::I64Literal(2))
+                        Box::new(Expression::I64Literal(I64Lit {
+                            value: 2,
+                            start_pos: Position::new(1, 14),
+                            end_pos: Position::new(1, 15),
+                        }))
                     ),
                     Expression::FunctionCall(FunctionCall::new(
                         "other",
                         vec![
                             Expression::UnaryOperation(
                                 Operator::Not,
-                                Box::new(Expression::VariableReference("thing".to_string()))
+                                Box::new(Expression::VariableReference(VarRef {
+                                    var_name: "thing".to_string(),
+                                    start_pos: Position::new(1, 24),
+                                    end_pos: Position::new(1, 29),
+                                }))
                             ),
                             Expression::BinaryOperation(
-                                Box::new(Expression::I64Literal(1)),
+                                Box::new(Expression::I64Literal(I64Lit {
+                                    value: 1,
+                                    start_pos: Position::new(1, 31),
+                                    end_pos: Position::new(1, 32),
+                                })),
                                 Operator::GreaterThan,
                                 Box::new(Expression::BinaryOperation(
-                                    Box::new(Expression::VariableReference("var".to_string())),
+                                    Box::new(Expression::VariableReference(VarRef {
+                                        var_name: "var".to_string(),
+                                        start_pos: Position::new(1, 35),
+                                        end_pos: Position::new(1, 38),
+                                    })),
                                     Operator::Modulo,
-                                    Box::new(Expression::I64Literal(2))
+                                    Box::new(Expression::I64Literal(I64Lit {
+                                        value: 2,
+                                        start_pos: Position::new(1, 41),
+                                        end_pos: Position::new(1, 42),
+                                    }))
                                 ))
                             )
-                        ]
+                        ],
+                        Position::new(1, 17),
+                        Position::new(1, 43)
                     ))
-                ]
+                ],
+                Position::new(1, 1),
+                Position::new(1, 44),
             ))
         );
     }
@@ -614,26 +727,50 @@ mod tests {
     #[test]
     fn parse_i64_arithmetic() {
         assert_eq!(
-            parse("(3 + 6) / 3 - 5 + 2 * 3"),
+            parse("(3 + 6) / 3 - 5 + 298 * 3"),
             Expression::BinaryOperation(
                 Box::new(Expression::BinaryOperation(
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::BinaryOperation(
-                            Box::new(Expression::I64Literal(3)),
+                            Box::new(Expression::I64Literal(I64Lit {
+                                value: 3,
+                                start_pos: Position::new(1, 2),
+                                end_pos: Position::new(1, 3),
+                            })),
                             Operator::Add,
-                            Box::new(Expression::I64Literal(6))
+                            Box::new(Expression::I64Literal(I64Lit {
+                                value: 6,
+                                start_pos: Position::new(1, 6),
+                                end_pos: Position::new(1, 7),
+                            }))
                         )),
                         Operator::Divide,
-                        Box::new(Expression::I64Literal(3))
+                        Box::new(Expression::I64Literal(I64Lit {
+                            value: 3,
+                            start_pos: Position::new(1, 11),
+                            end_pos: Position::new(1, 12),
+                        }))
                     )),
                     Operator::Subtract,
-                    Box::new(Expression::I64Literal(5))
+                    Box::new(Expression::I64Literal(I64Lit {
+                        value: 5,
+                        start_pos: Position::new(1, 15),
+                        end_pos: Position::new(1, 16),
+                    }))
                 )),
                 Operator::Add,
                 Box::new(Expression::BinaryOperation(
-                    Box::new(Expression::I64Literal(2)),
+                    Box::new(Expression::I64Literal(I64Lit {
+                        value: 298,
+                        start_pos: Position::new(1, 19),
+                        end_pos: Position::new(1, 22),
+                    })),
                     Operator::Multiply,
-                    Box::new(Expression::I64Literal(3))
+                    Box::new(Expression::I64Literal(I64Lit {
+                        value: 3,
+                        start_pos: Position::new(1, 25),
+                        end_pos: Position::new(1, 26),
+                    }))
                 ))
             )
         )
@@ -641,34 +778,58 @@ mod tests {
 
     #[test]
     fn parse_multiline() {
-        let raw = r#"(var - 3) / 4 *
-            (call(true) % 2) +
-            5"#;
+        let raw = "(var - 3) / 4 * \n(call(true) % 2) + \n5";
         assert_eq!(
             parse(raw),
             Expression::BinaryOperation(
                 Box::new(Expression::BinaryOperation(
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::BinaryOperation(
-                            Box::new(Expression::VariableReference("var".to_string(),)),
+                            Box::new(Expression::VariableReference(VarRef {
+                                var_name: "var".to_string(),
+                                start_pos: Position::new(1, 2),
+                                end_pos: Position::new(1, 5),
+                            })),
                             Operator::Subtract,
-                            Box::new(Expression::I64Literal(3,)),
+                            Box::new(Expression::I64Literal(I64Lit {
+                                value: 3,
+                                start_pos: Position::new(1, 8),
+                                end_pos: Position::new(1, 9)
+                            })),
                         )),
                         Operator::Divide,
-                        Box::new(Expression::I64Literal(4)),
+                        Box::new(Expression::I64Literal(I64Lit {
+                            value: 4,
+                            start_pos: Position::new(1, 13),
+                            end_pos: Position::new(1, 14)
+                        })),
                     )),
                     Operator::Multiply,
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::FunctionCall(FunctionCall::new(
                             "call",
-                            vec![Expression::BoolLiteral(true)],
+                            vec![Expression::BoolLiteral(BoolLit {
+                                value: true,
+                                start_pos: Position::new(2, 7),
+                                end_pos: Position::new(2, 11)
+                            })],
+                            Position::new(2, 2),
+                            Position::new(2, 12)
                         ))),
                         Operator::Modulo,
-                        Box::new(Expression::I64Literal(2)),
+                        Box::new(Expression::I64Literal(I64Lit {
+                            value: 2,
+                            start_pos: Position::new(2, 15),
+                            end_pos: Position::new(2, 16)
+                        })),
                     )),
                 )),
                 Operator::Add,
-                Box::new(Expression::I64Literal(5)),
+                Box::new(Expression::I64Literal(I64Lit {
+                    value: 5,
+                    start_pos: Position::new(3, 1),
+                    end_pos: Position::new(3, 2)
+                })),
             )
         );
     }
@@ -685,9 +846,11 @@ mod tests {
                 message: _,
                 token: Some(Token {
                     kind: TokenKind::LeftParen,
-                    start: Position { line: 0, col: 8 },
-                    end: Position { line: 0, col: 9 }
-                })
+                    start: Position { line: 1, col: 9 },
+                    end: Position { line: 1, col: 10 },
+                }),
+                start_pos: Position { line: 1, col: 1 },
+                end_pos: Position { line: 1, col: 10 },
             })
         ));
     }
@@ -702,31 +865,59 @@ mod tests {
             Expression::BinaryOperation(
                 Box::new(Expression::BinaryOperation(
                     Box::new(Expression::BinaryOperation(
-                        Box::new(Expression::I64Literal(-1)),
+                        Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
                         Operator::Multiply,
-                        Box::new(Expression::I64Literal(8)),
+                        Box::new(Expression::I64Literal(I64Lit {
+                            value: 8,
+                            start_pos: Position::new(1, 2),
+                            end_pos: Position::new(1, 3),
+                        })),
                     )),
                     Operator::Subtract,
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::BinaryOperation(
                             Box::new(Expression::BinaryOperation(
                                 Box::new(Expression::BinaryOperation(
-                                    Box::new(Expression::I64Literal(-1)),
+                                    Box::new(Expression::I64Literal(I64Lit {
+                                        value: -1,
+                                        start_pos: Position::default(),
+                                        end_pos: Position::default(),
+                                    })),
                                     Operator::Multiply,
-                                    Box::new(Expression::I64Literal(100))
+                                    Box::new(Expression::I64Literal(I64Lit {
+                                        value: 100,
+                                        start_pos: Position::new(1, 8),
+                                        end_pos: Position::new(1, 11),
+                                    }))
                                 )),
                                 Operator::Add,
-                                Box::new(Expression::I64Literal(2)),
+                                Box::new(Expression::I64Literal(I64Lit {
+                                    value: 2,
+                                    start_pos: Position::new(1, 14),
+                                    end_pos: Position::new(1, 15)
+                                })),
                             )),
                             Operator::Multiply,
-                            Box::new(Expression::I64Literal(4)),
+                            Box::new(Expression::I64Literal(I64Lit {
+                                value: 4,
+                                start_pos: Position::new(1, 19),
+                                end_pos: Position::new(1, 20)
+                            })),
                         )),
                         Operator::Divide,
-                        Box::new(Expression::I64Literal(2)),
+                        Box::new(Expression::I64Literal(I64Lit {
+                            value: 2,
+                            start_pos: Position::new(1, 23),
+                            end_pos: Position::new(1, 24)
+                        })),
                     )),
                 )),
                 Operator::Add,
-                Box::new(Expression::I64Literal(8)),
+                Box::new(Expression::I64Literal(I64Lit {
+                    value: 8,
+                    start_pos: Position::new(1, 27),
+                    end_pos: Position::new(1, 28)
+                })),
             )
         );
     }
@@ -738,9 +929,13 @@ mod tests {
         assert_eq!(
             result,
             Expression::BinaryOperation(
-                Box::new(Expression::I64Literal(-1)),
+                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
                 Operator::Multiply,
-                Box::new(Expression::I64Literal(8)),
+                Box::new(Expression::I64Literal(I64Lit {
+                    value: 8,
+                    start_pos: Position::new(1, 2),
+                    end_pos: Position::new(1, 3),
+                })),
             )
         );
 
@@ -749,9 +944,13 @@ mod tests {
         assert_eq!(
             result,
             Expression::BinaryOperation(
-                Box::new(Expression::I64Literal(-1)),
+                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
                 Operator::Multiply,
-                Box::new(Expression::VariableReference("x".to_string())),
+                Box::new(Expression::VariableReference(VarRef {
+                    var_name: "x".to_string(),
+                    start_pos: Position::new(1, 2),
+                    end_pos: Position::new(1, 3),
+                })),
             )
         );
 
@@ -760,9 +959,14 @@ mod tests {
         assert_eq!(
             result,
             Expression::BinaryOperation(
-                Box::new(Expression::I64Literal(-1)),
+                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
                 Operator::Multiply,
-                Box::new(Expression::FunctionCall(FunctionCall::new("f", vec![]))),
+                Box::new(Expression::FunctionCall(FunctionCall::new(
+                    "f",
+                    vec![],
+                    Position::new(1, 2),
+                    Position::new(1, 5)
+                ))),
             )
         );
     }
@@ -800,12 +1004,24 @@ mod tests {
             result,
             Expression::BinaryOperation(
                 Box::new(Expression::BinaryOperation(
-                    Box::new(Expression::I64Literal(1)),
+                    Box::new(Expression::I64Literal(I64Lit {
+                        value: 1,
+                        start_pos: Position::new(1, 4),
+                        end_pos: Position::new(1, 5)
+                    })),
                     Operator::GreaterThan,
-                    Box::new(Expression::I64Literal(0)),
+                    Box::new(Expression::I64Literal(I64Lit {
+                        value: 0,
+                        start_pos: Position::new(1, 6),
+                        end_pos: Position::new(1, 7)
+                    })),
                 )),
                 Operator::Add,
-                Box::new(Expression::I64Literal(1)),
+                Box::new(Expression::I64Literal(I64Lit {
+                    value: 1,
+                    start_pos: Position::new(1, 9),
+                    end_pos: Position::new(1, 10)
+                })),
             )
         )
     }
@@ -818,7 +1034,7 @@ mod tests {
             assert!(matches!(
                 result,
                 Err(ParseError {
-                    kind: ErrorKind::UnexpectedEndOfExpr,
+                    kind: ErrorKind::UnexpectedEOF,
                     ..
                 })
             ))
@@ -837,9 +1053,11 @@ mod tests {
                 message: _,
                 token: Some(Token {
                     kind: TokenKind::Subtract,
-                    start: Position { line: 0, col: 0 },
-                    end: Position { line: 0, col: 1 }
-                })
+                    start: Position { line: 1, col: 1 },
+                    end: Position { line: 1, col: 2 },
+                }),
+                start_pos: Position { line: 1, col: 1 },
+                end_pos: Position { line: 1, col: 3 },
             })
         ))
     }
@@ -852,19 +1070,27 @@ mod tests {
         assert_eq!(
             result,
             Expression::BinaryOperation(
-                Box::new(Expression::I64Literal(-1)),
+                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
                 Operator::Multiply,
                 Box::new(Expression::BinaryOperation(
                     Box::new(Expression::BinaryOperation(
-                        Box::new(Expression::I64Literal(-1)),
+                        Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
                         Operator::Multiply,
-                        Box::new(Expression::VariableReference("b".to_string())),
+                        Box::new(Expression::VariableReference(VarRef {
+                            var_name: "b".to_string(),
+                            start_pos: Position::new(1, 4),
+                            end_pos: Position::new(1, 5),
+                        })),
                     )),
                     Operator::Subtract,
                     Box::new(Expression::BinaryOperation(
-                        Box::new(Expression::I64Literal(-1)),
+                        Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
                         Operator::Multiply,
-                        Box::new(Expression::I64Literal(100)),
+                        Box::new(Expression::I64Literal(I64Lit {
+                            value: 100,
+                            start_pos: Position::new(1, 8),
+                            end_pos: Position::new(1, 11),
+                        })),
                     )),
                 )),
             )

@@ -83,15 +83,15 @@ impl RichStatement {
                     Err(e) => Err(e),
                 }
             }
-            Statement::Break => match analyze_break(ctx) {
+            Statement::Break(br) => match analyze_break(ctx, br) {
                 Ok(_) => Ok(RichStatement::Break),
                 Err(e) => Err(e),
             },
-            Statement::Continue => match analyze_continue(ctx) {
+            Statement::Continue(cont) => match analyze_continue(ctx, cont) {
                 Ok(_) => Ok(RichStatement::Continue),
                 Err(e) => Err(e),
             },
-            Statement::Return(expr) => match RichRet::from(ctx, expr) {
+            Statement::Return(ret) => match RichRet::from(ctx, ret) {
                 Ok(rr) => Ok(RichStatement::Return(rr)),
                 Err(e) => Err(e),
             },

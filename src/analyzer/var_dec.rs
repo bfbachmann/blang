@@ -6,7 +6,6 @@ use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#type::RichType;
 use crate::analyzer::AnalyzeResult;
-
 use crate::parser::statement::Statement;
 use crate::parser::var_dec::VariableDeclaration;
 
@@ -87,8 +86,10 @@ mod tests {
     use crate::analyzer::prog_context::ProgramContext;
     use crate::analyzer::r#type::RichType;
     use crate::analyzer::var_dec::RichVarDecl;
+    use crate::lexer::pos::Position;
     use crate::parser::expr::Expression;
     use crate::parser::r#type::Type;
+    use crate::parser::string_lit::StringLit;
     use crate::parser::var_dec::VariableDeclaration;
 
     #[test]
@@ -97,7 +98,9 @@ mod tests {
         let var_decl = VariableDeclaration::new(
             Some(Type::String),
             "my_string".to_string(),
-            Expression::StringLiteral("bingo".to_string()),
+            Expression::StringLiteral(StringLit::new_with_default_pos("bingo")),
+            Position::default(),
+            Position::default(),
         );
         let result = RichVarDecl::from(&mut ctx, var_decl.clone());
         assert_eq!(
@@ -128,7 +131,9 @@ mod tests {
         let var_decl = VariableDeclaration::new(
             Some(Type::I64),
             "my_string".to_string(),
-            Expression::StringLiteral("bingo".to_string()),
+            Expression::StringLiteral(StringLit::new_with_default_pos("bingo")),
+            Position::default(),
+            Default::default(),
         );
         let result = RichVarDecl::from(&mut ctx, var_decl);
         assert!(matches!(

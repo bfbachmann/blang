@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 use std::fmt;
 
 use crate::lexer::kind::TokenKind;
+use crate::lexer::pos::Position;
 use crate::lexer::token::Token;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::func_sig::FunctionSignature;
@@ -108,19 +109,23 @@ impl Type {
                 ..
             }) => Ok(Type::Unresolved(type_name)),
 
-            None => {
-                return Err(ParseError::new(
-                    ErrorKind::ExpectedType,
-                    "expected type",
-                    None,
-                ))
-            }
-
             Some(other) => {
                 return Err(ParseError::new(
                     ErrorKind::ExpectedType,
                     format!(r#"expected type, but found "{}""#, other).as_str(),
-                    Some(other),
+                    Some(other.clone()),
+                    other.start,
+                    other.end,
+                ))
+            }
+
+            None => {
+                return Err(ParseError::new(
+                    ErrorKind::UnexpectedEOF,
+                    "expected type, but found EOF",
+                    None,
+                    Position::default(),
+                    Position::default(),
                 ))
             }
         }

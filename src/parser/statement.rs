@@ -2,15 +2,19 @@ use std::collections::VecDeque;
 use std::fmt;
 
 use crate::lexer::kind::TokenKind;
+use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::parser::closure::Closure;
 use crate::parser::cond::Conditional;
+use crate::parser::cont::Continue;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::expr::Expression;
 use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
+use crate::parser::r#break::Break;
 use crate::parser::r#loop::Loop;
 use crate::parser::r#struct::Struct;
+use crate::parser::ret::Ret;
 use crate::parser::var_assign::VariableAssignment;
 use crate::parser::var_dec::VariableDeclaration;
 use crate::parser::ParseResult;
@@ -25,9 +29,9 @@ pub enum Statement {
     FunctionCall(FunctionCall),
     Conditional(Conditional),
     Loop(Loop),
-    Break,
-    Continue,
-    Return(Option<Expression>),
+    Break(Break),
+    Continue(Continue),
+    Return(Ret),
     StructDeclaration(Struct),
 }
 
@@ -63,10 +67,10 @@ impl fmt::Display for Statement {
             Statement::Loop(_) => {
                 write!(f, "loop")
             }
-            Statement::Break => {
+            Statement::Break(_) => {
                 write!(f, "break")
             }
-            Statement::Continue => {
+            Statement::Continue(_) => {
                 write!(f, "continue")
             }
             Statement::Return(_) => {
@@ -75,6 +79,40 @@ impl fmt::Display for Statement {
             Statement::StructDeclaration(s) => {
                 write!(f, "{}", s)
             }
+        }
+    }
+}
+
+impl Locatable for Statement {
+    fn start_pos(&self) -> &Position {
+        match self {
+            Statement::VariableDeclaration(var_dec) => var_dec.start_pos(),
+            Statement::VariableAssignment(var_assign) => var_assign.start_pos(),
+            Statement::FunctionDeclaration(func) => func.start_pos(),
+            Statement::Closure(closure) => closure.start_pos(),
+            Statement::FunctionCall(call) => call.start_pos(),
+            Statement::Conditional(cond) => cond.start_pos(),
+            Statement::Loop(l) => l.start_pos(),
+            Statement::Break(br) => br.start_pos(),
+            Statement::Continue(cont) => cont.start_pos(),
+            Statement::Return(ret) => ret.start_pos(),
+            Statement::StructDeclaration(s) => s.start_pos(),
+        }
+    }
+
+    fn end_pos(&self) -> &Position {
+        match self {
+            Statement::VariableDeclaration(var_dec) => var_dec.end_pos(),
+            Statement::VariableAssignment(var_assign) => var_assign.end_pos(),
+            Statement::FunctionDeclaration(func) => func.end_pos(),
+            Statement::Closure(closure) => closure.end_pos(),
+            Statement::FunctionCall(call) => call.end_pos(),
+            Statement::Conditional(cond) => cond.end_pos(),
+            Statement::Loop(l) => l.end_pos(),
+            Statement::Break(br) => br.end_pos(),
+            Statement::Continue(cont) => cont.end_pos(),
+            Statement::Return(ret) => ret.end_pos(),
+            Statement::StructDeclaration(s) => s.end_pos(),
         }
     }
 }
@@ -99,16 +137,20 @@ impl Statement {
         match (&first, &second) {
             (None, None) => {
                 return Err(ParseError::new(
-                    ErrorKind::UnexpectedEndOfStatement,
-                    "unexpected end of of statement",
+                    ErrorKind::UnexpectedEOF,
+                    "expected statement, but found EOF",
                     None,
+                    Position::default(),
+                    Position::default(),
                 ))
             }
             (None, Some(&ref token)) | (Some(&ref token), None) => {
                 return Err(ParseError::new(
-                    ErrorKind::UnexpectedEndOfStatement,
-                    "unexpected end of of statement",
+                    ErrorKind::UnexpectedEOF,
+                    "expected statement, but found EOF",
                     Some(token.clone()),
+                    Position::default(),
+                    Position::default(),
                 ))
             }
             _ => {}
@@ -216,8 +258,8 @@ impl Statement {
                 },
                 _,
             ) => {
-                tokens.pop_front();
-                Ok(Statement::Break)
+                let br = Break::from(tokens)?;
+                Ok(Statement::Break(br))
             }
 
             // If the first token is "continue", it must be a loop continue.
@@ -228,8 +270,8 @@ impl Statement {
                 },
                 _,
             ) => {
-                tokens.pop_front();
-                Ok(Statement::Continue)
+                let cont = Continue::from(tokens)?;
+                Ok(Statement::Continue(cont))
             }
 
             // If the first token is "return", it must be a return statement.
@@ -240,7 +282,7 @@ impl Statement {
                 },
                 _,
             ) => {
-                tokens.pop_front();
+                let ret_token = tokens.pop_front().unwrap();
 
                 // If the next token is "}", it's an empty return. Otherwise, we expect an
                 // expression.
@@ -249,11 +291,19 @@ impl Statement {
                     ..
                 }) = tokens.front()
                 {
-                    return Ok(Statement::Return(None));
+                    return Ok(Statement::Return(Ret::new(
+                        None,
+                        ret_token.start.clone(),
+                        ret_token.end.clone(),
+                    )));
                 }
 
                 let expr = Expression::from(tokens, false, false)?;
-                Ok(Statement::Return(Some(expr)))
+                Ok(Statement::Return(Ret::new(
+                    Some(expr.clone()),
+                    ret_token.start.clone(),
+                    *expr.end_pos(),
+                )))
             }
 
             // If the first token is "struct" it must be a struct declaration.
@@ -269,10 +319,10 @@ impl Statement {
             }
 
             // If the tokens are anything else, we error because it's an invalid statement.
-            (&ref token, _) => Err(ParseError::new(
+            (&ref token, _) => Err(ParseError::new_with_token(
                 ErrorKind::InvalidStatement,
                 "invalid statement",
-                Some(token.clone()),
+                token.clone(),
             )),
         }
     }

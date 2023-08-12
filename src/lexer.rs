@@ -1,13 +1,7 @@
-use std::result::Result;
-
-use error::LexError;
-
 pub mod error;
 pub mod kind;
 pub mod pos;
 pub mod token;
-
-type LexResult<T> = Result<T, LexError>;
 
 #[cfg(test)]
 mod tests {
@@ -141,18 +135,18 @@ mod tests {
 
     #[test]
     fn tokenize_line() {
-        let result = Token::tokenize_line(r#"thing = 234 "onetwo" "three"four"" "\\\\\\""#, 0);
+        let result = Token::tokenize_line(r#"thing = 234 "onetwo" "three"four"" "\\\\\\""#, 1);
         assert_eq!(
             result,
             Ok(VecDeque::from(vec![
-                Token::new(TokenKind::Identifier(String::from("thing")), 0, 0, 5),
-                Token::new(TokenKind::Equal, 0, 6, 7),
-                Token::new(TokenKind::I64Literal(234), 0, 8, 11),
-                Token::new(TokenKind::StringLiteral(String::from("onetwo")), 0, 12, 20),
-                Token::new(TokenKind::StringLiteral(String::from("three")), 0, 21, 28),
-                Token::new(TokenKind::Identifier(String::from("four")), 0, 28, 32),
-                Token::new(TokenKind::StringLiteral(String::from("")), 0, 32, 34),
-                Token::new(TokenKind::StringLiteral(String::from(r#"\\\"#)), 0, 35, 43),
+                Token::new(TokenKind::Identifier(String::from("thing")), 1, 1, 6),
+                Token::new(TokenKind::Equal, 1, 7, 8),
+                Token::new(TokenKind::I64Literal(234), 1, 9, 12),
+                Token::new(TokenKind::StringLiteral(String::from("onetwo")), 1, 13, 21),
+                Token::new(TokenKind::StringLiteral(String::from("three")), 1, 22, 29),
+                Token::new(TokenKind::Identifier(String::from("four")), 1, 29, 33),
+                Token::new(TokenKind::StringLiteral(String::from("")), 1, 33, 35),
+                Token::new(TokenKind::StringLiteral(String::from(r#"\\\"#)), 1, 36, 44),
             ])),
         );
 
@@ -160,30 +154,28 @@ mod tests {
         assert_eq!(
             result,
             Ok(VecDeque::from(vec![
-                Token::new(TokenKind::If, 100, 0, 2),
-                Token::new(TokenKind::BeginClosure, 100, 3, 4),
-                Token::new(TokenKind::EndClosure, 100, 4, 5),
-                Token::new(TokenKind::ElseIf, 100, 6, 13),
-                Token::new(TokenKind::BeginClosure, 100, 14, 15),
-                Token::new(TokenKind::EndClosure, 100, 15, 16),
-                Token::new(TokenKind::Else, 100, 17, 21),
-                Token::new(TokenKind::BeginClosure, 100, 22, 23),
-                Token::new(TokenKind::EndClosure, 100, 23, 24),
-                Token::new(TokenKind::Identifier(String::from("elser")), 100, 25, 30),
-                Token::new(TokenKind::Identifier(String::from("iff")), 100, 31, 34),
+                Token::new(TokenKind::If, 100, 1, 3),
+                Token::new(TokenKind::BeginClosure, 100, 4, 5),
+                Token::new(TokenKind::EndClosure, 100, 5, 6),
+                Token::new(TokenKind::ElseIf, 100, 7, 14),
+                Token::new(TokenKind::BeginClosure, 100, 15, 16),
+                Token::new(TokenKind::EndClosure, 100, 16, 17),
+                Token::new(TokenKind::Else, 100, 18, 22),
+                Token::new(TokenKind::BeginClosure, 100, 23, 24),
+                Token::new(TokenKind::EndClosure, 100, 24, 25),
+                Token::new(TokenKind::Identifier(String::from("elser")), 100, 26, 31),
+                Token::new(TokenKind::Identifier(String::from("iff")), 100, 32, 35),
             ])),
         );
 
-        let result = Token::tokenize_line(r#"<?>"#, 0);
-        if let Err(LexError {
-            message: _,
-            line: _,
-            col,
-        }) = result
-        {
-            assert_eq!(col, 1);
-        } else {
-            panic!("expected TokenizeError");
-        }
+        let result = Token::tokenize_line(r#"<?>"#, 1);
+        assert!(matches!(
+            result,
+            Err(LexError {
+                message: _,
+                line: _,
+                col: 2,
+            })
+        ));
     }
 }

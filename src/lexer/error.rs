@@ -1,6 +1,8 @@
 use std::error::Error;
 use std::fmt;
 
+pub type LexResult<T> = Result<T, LexError>;
+
 /// Represents any fatal error that occurs during lexing.
 #[derive(Debug, PartialEq)]
 pub struct LexError {

@@ -1,3 +1,4 @@
+use crate::lexer::pos::{Locatable, Position};
 use std::collections::VecDeque;
 use std::fmt;
 
@@ -16,6 +17,16 @@ pub struct Function {
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {{ ... }}", self.signature)
+    }
+}
+
+impl Locatable for Function {
+    fn start_pos(&self) -> &Position {
+        &self.signature.start_pos()
+    }
+
+    fn end_pos(&self) -> &Position {
+        &self.body.end_pos()
     }
 }
 

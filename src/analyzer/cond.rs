@@ -7,6 +7,8 @@ use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#type::RichType;
 use crate::analyzer::AnalyzeResult;
+use crate::lexer::pos::{Locatable, Position};
+use crate::parser::branch::Branch;
 use crate::parser::cond::Conditional;
 use crate::util;
 
@@ -15,11 +17,22 @@ use crate::util;
 pub struct RichBranch {
     pub cond: Option<RichExpr>,
     pub body: RichClosure,
+    original: Branch,
 }
 
 impl PartialEq for RichBranch {
     fn eq(&self, other: &Self) -> bool {
         util::optionals_are_equal(&self.cond, &other.cond) && self.body == other.body
+    }
+}
+
+impl Locatable for RichBranch {
+    fn start_pos(&self) -> &Position {
+        self.original.start_pos()
+    }
+
+    fn end_pos(&self) -> &Position {
+        self.original.end_pos()
     }
 }
 
@@ -44,6 +57,16 @@ impl PartialEq for RichCond {
     }
 }
 
+impl Locatable for RichCond {
+    fn start_pos(&self) -> &Position {
+        self.branches.first().unwrap().start_pos()
+    }
+
+    fn end_pos(&self) -> &Position {
+        self.branches.last().unwrap().end_pos()
+    }
+}
+
 impl RichCond {
     /// Performs semantic analysis on the given conditional and returns a type-rich version of it,
     /// or an error if the conditional is semantically invalid.
@@ -55,13 +78,14 @@ impl RichCond {
                 Some(branch_cond) => {
                     let rich_expr = RichExpr::from(ctx, branch_cond.clone())?;
                     if rich_expr.typ != RichType::Bool {
-                        return Err(AnalyzeError::new(
+                        return Err(AnalyzeError::new_with_locatable(
                             ErrorKind::IncompatibleTypes,
                             format!(
                                 "expected branch condition to have type bool, but found type {}",
                                 &rich_expr.typ
                             )
                             .as_str(),
+                            Box::new(branch_cond.clone()),
                         ));
                     }
 
@@ -73,11 +97,12 @@ impl RichCond {
             // Analyze the branch body and record the return type if the body is guaranteed to end in a
             // return statement.
             let rich_closure =
-                RichClosure::from(ctx, branch.body, ScopeKind::Branch, vec![], None)?;
+                RichClosure::from(ctx, branch.body.clone(), ScopeKind::Branch, vec![], None)?;
 
             rich_branches.push(RichBranch {
                 cond: rich_expr,
                 body: rich_closure,
+                original: branch,
             });
         }
 

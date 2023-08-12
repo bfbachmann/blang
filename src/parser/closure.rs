@@ -1,6 +1,7 @@
 use std::collections::{HashSet, VecDeque};
 
 use crate::lexer::kind::TokenKind;
+use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
@@ -13,17 +14,54 @@ use crate::util;
 pub struct Closure {
     pub statements: Vec<Statement>,
     pub result: Option<Expression>,
+    pub start_pos: Position,
+    pub end_pos: Position,
 }
 
 impl PartialEq for Closure {
     fn eq(&self, other: &Self) -> bool {
-        util::vectors_are_equal(&self.statements, &other.statements) && self.result == other.result
+        util::vectors_are_equal(&self.statements, &other.statements)
+            && self.result == other.result
+            && self.start_pos == other.start_pos
+            && self.end_pos == other.end_pos
+    }
+}
+
+impl Locatable for Closure {
+    fn start_pos(&self) -> &Position {
+        &self.start_pos
+    }
+
+    fn end_pos(&self) -> &Position {
+        &self.end_pos
     }
 }
 
 impl Closure {
-    pub fn new(statements: Vec<Statement>, result: Option<Expression>) -> Self {
-        Closure { statements, result }
+    /// Creates a new empty closure with default (zero) start and end positions.
+    #[cfg(test)]
+    pub fn new_empty() -> Self {
+        Closure {
+            statements: vec![],
+            result: None,
+            start_pos: Position::default(),
+            end_pos: Position::default(),
+        }
+    }
+
+    /// Creates a new closure.
+    pub fn new(
+        statements: Vec<Statement>,
+        result: Option<Expression>,
+        start_pos: Position,
+        end_pos: Position,
+    ) -> Self {
+        Closure {
+            statements,
+            result,
+            start_pos,
+            end_pos,
+        }
     }
 
     /// Parses closures. Expects token sequences of the form
@@ -33,6 +71,10 @@ impl Closure {
     /// where
     /// - `statement` is any valid statement (see `Statement::from`)
     pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+        // Record the closure starting position.
+        let start_pos = Program::current_position(tokens);
+        let end_pos: Position;
+
         // The first token should be "{".
         Program::parse_expecting(tokens, HashSet::from([TokenKind::BeginClosure]))?;
 
@@ -46,7 +88,10 @@ impl Closure {
                     ..
                 }) => {
                     // We've reached the end of the closure. Pop the "}" and break the loop.
-                    tokens.pop_front();
+                    let end_token = tokens.pop_front().unwrap();
+
+                    // Record the closure ending position.
+                    end_pos = end_token.end;
                     break;
                 }
 
@@ -68,8 +113,8 @@ impl Closure {
         }
 
         // If the last statement is an expression, we use it as the return type.
-        // TODO.
+        // TODO
 
-        Ok(Closure::new(statements, None))
+        Ok(Closure::new(statements, None, start_pos, end_pos))
     }
 }

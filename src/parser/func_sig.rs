@@ -2,6 +2,7 @@ use std::collections::{HashSet, VecDeque};
 use std::fmt;
 
 use crate::lexer::kind::TokenKind;
+use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::parser::arg::Argument;
 use crate::parser::error::{ErrorKind, ParseError};
@@ -16,6 +17,8 @@ pub struct FunctionSignature {
     pub name: String,
     pub args: Vec<Argument>,
     pub return_type: Option<Type>,
+    start_pos: Position,
+    end_pos: Position,
 }
 
 impl fmt::Display for FunctionSignature {
@@ -43,23 +46,67 @@ impl PartialEq for FunctionSignature {
         self.name == other.name
             && util::vectors_are_equal(&self.args, &other.args)
             && self.return_type == other.return_type
+            && self.start_pos == other.start_pos
+            && self.end_pos == other.end_pos
+    }
+}
+
+impl Locatable for FunctionSignature {
+    fn start_pos(&self) -> &Position {
+        &self.start_pos
+    }
+
+    fn end_pos(&self) -> &Position {
+        &self.end_pos
     }
 }
 
 impl FunctionSignature {
-    pub fn new(name: &str, args: Vec<Argument>, return_type: Option<Type>) -> Self {
+    /// Creates a new function signature with default start and end positions.
+    pub fn new_with_default_pos(
+        name: &str,
+        args: Vec<Argument>,
+        return_type: Option<Type>,
+    ) -> Self {
         FunctionSignature {
             name: name.to_string(),
             args,
             return_type,
+            start_pos: Position::default(),
+            end_pos: Position::default(),
         }
     }
 
-    pub fn new_anon(args: Vec<Argument>, return_type: Option<Type>) -> Self {
+    /// Creates a new function signature for a named function.
+    pub fn new(
+        name: &str,
+        args: Vec<Argument>,
+        return_type: Option<Type>,
+        start_pos: Position,
+        end_pos: Position,
+    ) -> Self {
+        FunctionSignature {
+            name: name.to_string(),
+            args,
+            return_type,
+            start_pos,
+            end_pos,
+        }
+    }
+
+    /// Creates a new function signature for an anonymous function.
+    pub fn new_anon(
+        args: Vec<Argument>,
+        return_type: Option<Type>,
+        start_pos: Position,
+        end_pos: Position,
+    ) -> Self {
         FunctionSignature {
             name: "".to_string(),
             args,
             return_type,
+            start_pos,
+            end_pos,
         }
     }
 
@@ -74,6 +121,9 @@ impl FunctionSignature {
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return type
     pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+        // Record the function signature starting position.
+        let start_pos = Program::current_position(tokens);
+
         // The first token should be "fn".
         Program::parse_expecting(tokens, HashSet::from([TokenKind::Function]))?;
 
@@ -87,6 +137,8 @@ impl FunctionSignature {
             fn_name.as_str(),
             fn_sig.args,
             fn_sig.return_type,
+            start_pos,
+            fn_sig.end_pos,
         ))
     }
 
@@ -130,7 +182,7 @@ impl FunctionSignature {
     ///  - `return_type` is the type of the optional return value
     fn from_args_and_return(tokens: &mut VecDeque<Token>, named: bool) -> ParseResult<Self> {
         // The next tokens should represent function arguments.
-        let args = FunctionSignature::arg_declarations_from(tokens, named)?;
+        let (args, args_end_pos) = FunctionSignature::arg_declarations_from(tokens, named)?;
 
         // The next token should be ":" if there is a return type. Otherwise, there is no return
         // type and we're done.
@@ -147,7 +199,14 @@ impl FunctionSignature {
             _ => {}
         }
 
-        Ok(FunctionSignature::new_anon(args, return_type))
+        Ok(FunctionSignature::new_anon(
+            args,
+            return_type,
+            // We can leave the start position as default here because it will be set by the caller.
+            Position::default(),
+            // TODO: technically, this position is wrong.
+            args_end_pos,
+        ))
     }
 
     /// Parses argument declarations in function declarations. If `named` is true, expects token
@@ -165,7 +224,11 @@ impl FunctionSignature {
     fn arg_declarations_from(
         tokens: &mut VecDeque<Token>,
         named: bool,
-    ) -> ParseResult<Vec<Argument>> {
+    ) -> ParseResult<(Vec<Argument>, Position)> {
+        // Record the starting position of the arguments.
+        let start_pos = Program::current_position(tokens);
+        let end_pos: Position;
+
         // The first token should be the opening parenthesis.
         Program::parse_expecting(tokens, HashSet::from([TokenKind::LeftParen]))?;
 
@@ -176,11 +239,14 @@ impl FunctionSignature {
             // The next token should be an argument, or ")".
             let token = tokens.pop_front();
             match token {
-                Some(Token {
-                    kind: TokenKind::RightParen,
-                    ..
-                }) => {
-                    // We're done assembling arguments.
+                Some(
+                    token @ Token {
+                        kind: TokenKind::RightParen,
+                        ..
+                    },
+                ) => {
+                    // We're done assembling arguments. Record the ending position of the arguments.
+                    end_pos = token.end;
                     break;
                 }
 
@@ -201,10 +267,10 @@ impl FunctionSignature {
 
                         // Make sure the arg name isn't already used.
                         if !arg_names.insert(arg.name.clone()) {
-                            return Err(ParseError::new(
+                            return Err(ParseError::new_with_token(
                                 ErrorKind::DuplicateArgName,
                                 format!("duplicate argument name {}", arg.name).as_str(),
-                                token,
+                                token.unwrap(),
                             ));
                         }
 
@@ -218,34 +284,47 @@ impl FunctionSignature {
 
                 None => {
                     return Err(ParseError::new(
-                        ErrorKind::ExpectedArgOrEndOfArgs,
-                        r#"expected argument or ")""#,
+                        ErrorKind::UnexpectedEOF,
+                        r#"expected argument or ")", but found EOF"#,
                         None,
-                    ))
+                        // TODO: These positions are technically wrong.
+                        start_pos,
+                        start_pos.clone(),
+                    ));
                 }
 
                 Some(other) => {
-                    return Err(ParseError::new(
+                    return Err(ParseError::new_with_token(
                         ErrorKind::ExpectedArgOrEndOfArgs,
                         format!(r#"expected argument or ")", but found "{}""#, other).as_str(),
-                        Some(other),
+                        other,
                     ))
                 }
             };
 
             // After the argument, the next token should be "," or ")".
-            let kind = Program::parse_expecting(
+            let token = Program::parse_expecting(
                 tokens,
                 HashSet::from([TokenKind::Comma, TokenKind::RightParen]),
             )?;
-            match kind {
-                TokenKind::Comma => {} // Nothing to do here. Just move onto the next arg.
-                TokenKind::RightParen => break, // We're done parsing args.
+            match token {
+                Token {
+                    kind: TokenKind::Comma,
+                    ..
+                } => {} // Nothing to do here. Just move onto the next arg.
+                token @ Token {
+                    kind: TokenKind::RightParen,
+                    ..
+                } => {
+                    // We're done parsing args. Record the position of the ")".
+                    end_pos = token.end;
+                    break;
+                }
                 _ => panic!("this should be impossible"),
             }
         }
 
-        Ok(args)
+        Ok((args, end_pos))
     }
 }
 

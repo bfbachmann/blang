@@ -4,6 +4,7 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#struct::RichStruct;
 use crate::analyzer::statement::RichStatement;
 use crate::analyzer::AnalyzeResult;
+use crate::lexer::pos::Position;
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::program::Program;
 use crate::parser::statement::Statement;
@@ -62,14 +63,15 @@ fn define_structs(ctx: &mut ProgramContext, prog: &Program) -> AnalyzeResult<()>
     for statement in &prog.statements {
         match statement {
             Statement::StructDeclaration(struct_type) => {
-                if let Some(_) = ctx.add_extern_struct(struct_type.clone()) {
-                    return Err(AnalyzeError::new(
+                if ctx.add_extern_struct(struct_type.clone()).is_some() {
+                    return Err(AnalyzeError::new_with_locatable(
                         ErrorKind::TypeAlreadyDefined,
                         format!(
                             "another type with the name {} already exists",
                             struct_type.name
                         )
                         .as_str(),
+                        Box::new(struct_type.clone()),
                     ));
                 }
             }
@@ -106,16 +108,18 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) -> AnalyzeResult<()> {
         Some(main_sig) => {
             // Make sure main has no args or return.
             if main_sig.args.len() != 0 {
-                return Err(AnalyzeError::new(
+                return Err(AnalyzeError::new_with_locatable(
                     ErrorKind::InvalidMain,
                     "function main cannot have arguments",
+                    Box::new(main_sig.clone()),
                 ));
             }
 
-            if let Some(_) = main_sig.return_type {
-                return Err(AnalyzeError::new(
+            if main_sig.return_type.is_some() {
+                return Err(AnalyzeError::new_with_locatable(
                     ErrorKind::InvalidMain,
                     "function main cannot have a return type",
+                    Box::new(main_sig.clone()),
                 ));
             }
         }
@@ -123,6 +127,8 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) -> AnalyzeResult<()> {
             return Err(AnalyzeError::new(
                 ErrorKind::MissingMain,
                 "missing main function",
+                Position::default(),
+                Position::default(),
             ));
         }
     }

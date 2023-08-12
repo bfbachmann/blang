@@ -82,21 +82,23 @@ impl RichExpr {
     /// or an error if the expression is semantically invalid.
     pub fn from(ctx: &mut ProgramContext, expr: Expression) -> AnalyzeResult<RichExpr> {
         match expr {
-            Expression::VariableReference(ref var_name) => {
+            Expression::VariableReference(ref var_ref) => {
+                let var_name = var_ref.var_name.clone();
+
                 // Make sure the variable being referenced exists. Note that it might be a function.
                 if let Some(var_typ) = ctx.get_var(var_name.as_str()) {
                     Ok(RichExpr {
-                        kind: RichExprKind::VariableReference(var_name.clone()),
+                        kind: RichExprKind::VariableReference(var_name),
                         typ: var_typ.clone(),
                     })
                 } else if let Some(func) = ctx.get_fn(var_name.as_str()) {
                     Ok(RichExpr {
-                        kind: RichExprKind::VariableReference(var_name.clone()),
+                        kind: RichExprKind::VariableReference(var_name),
                         typ: RichType::Function(Box::new(func.signature.clone())),
                     })
                 } else if let Some(fn_sig) = ctx.get_extern_fn(var_name.as_str()) {
                     Ok(RichExpr {
-                        kind: RichExprKind::VariableReference(var_name.clone()),
+                        kind: RichExprKind::VariableReference(var_name),
                         typ: RichType::Function(Box::new(fn_sig.clone())),
                     })
                 } else {
@@ -108,15 +110,15 @@ impl RichExpr {
                 }
             }
             Expression::BoolLiteral(b) => Ok(RichExpr {
-                kind: RichExprKind::BoolLiteral(b),
+                kind: RichExprKind::BoolLiteral(b.value),
                 typ: RichType::Bool,
             }),
             Expression::I64Literal(i) => Ok(RichExpr {
-                kind: RichExprKind::I64Literal(i),
+                kind: RichExprKind::I64Literal(i.value),
                 typ: RichType::I64,
             }),
             Expression::StringLiteral(s) => Ok(RichExpr {
-                kind: RichExprKind::StringLiteral(s),
+                kind: RichExprKind::StringLiteral(s.value),
                 typ: RichType::String,
             }),
             Expression::StructInit(struct_init) => {
@@ -128,17 +130,17 @@ impl RichExpr {
                 })
             }
             Expression::FunctionCall(fn_call) => {
-                let name = fn_call.fn_name.clone();
-                let rich_call = RichFnCall::from(ctx, fn_call)?;
+                let rich_call = RichFnCall::from(ctx, fn_call.clone())?;
                 if rich_call.ret_type.is_none() {
-                    return Err(AnalyzeError::new(
+                    return Err(AnalyzeError::new_with_locatable(
                         ErrorKind::ExpectedValue,
                         format!(
                             r#"function {} has no return value, but was used in an expression \
                             where a value is expected"#,
-                            name,
+                            fn_call.fn_name.clone(),
                         )
                         .as_str(),
+                        Box::new(fn_call),
                     ));
                 }
 
@@ -225,8 +227,7 @@ impl RichExpr {
                             ErrorKind::IncompatibleTypes,
                             &expr,
                             format!(
-                                r#"cannot apply operator {} to left-side \
-                                expression of type {}"#,
+                                r#"cannot apply operator {} to left-side expression of type {}"#,
                                 &op, &rich_left.typ
                             )
                             .as_str(),
@@ -273,18 +274,25 @@ impl RichExpr {
 mod tests {
     use crate::analyzer::closure::RichClosure;
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
+    use crate::analyzer::expr::RichExprKind::BoolLiteral;
     use crate::analyzer::expr::{RichExpr, RichExprKind};
     use crate::analyzer::func::{RichArg, RichFn, RichFnCall, RichFnSig};
     use crate::analyzer::prog_context::ProgramContext;
     use crate::analyzer::r#type::RichType;
+    use crate::lexer::pos::Position;
+    use crate::parser::bool_lit::BoolLit;
+    use crate::parser::closure::Closure;
     use crate::parser::expr::Expression;
     use crate::parser::func_call::FunctionCall;
+    use crate::parser::i64_lit::I64Lit;
     use crate::parser::op::Operator;
+    use crate::parser::string_lit::StringLit;
+    use crate::parser::var_ref::VarRef;
 
     #[test]
     fn analyze_i64_literal() {
         let mut ctx = ProgramContext::new();
-        let expr = Expression::I64Literal(1);
+        let expr = Expression::I64Literal(I64Lit::new_with_default_pos(1));
         let result = RichExpr::from(&mut ctx, expr);
         assert!(matches!(
             result,
@@ -298,7 +306,7 @@ mod tests {
     #[test]
     fn analyze_bool_literal() {
         let mut ctx = ProgramContext::new();
-        let expr = Expression::BoolLiteral(false);
+        let expr = Expression::BoolLiteral(BoolLit::new_with_default_pos(false));
         let result = RichExpr::from(&mut ctx, expr);
         assert!(matches!(
             result,
@@ -312,7 +320,7 @@ mod tests {
     #[test]
     fn analyze_string_literal() {
         let mut ctx = ProgramContext::new();
-        let expr = Expression::StringLiteral("test".to_string());
+        let expr = Expression::StringLiteral(StringLit::new_with_default_pos("test"));
         let result = RichExpr::from(&mut ctx, expr);
         assert_eq!(
             result,
@@ -327,7 +335,10 @@ mod tests {
     fn analyze_var_ref() {
         let mut ctx = ProgramContext::new();
         ctx.add_var("myvar", RichType::String);
-        let result = RichExpr::from(&mut ctx, Expression::VariableReference("myvar".to_string()));
+        let result = RichExpr::from(
+            &mut ctx,
+            Expression::VariableReference(VarRef::new_with_default_pos("myvar")),
+        );
         assert_eq!(
             result,
             Ok(RichExpr {
@@ -340,7 +351,10 @@ mod tests {
     #[test]
     fn analyze_invalid_var_ref() {
         let mut ctx = ProgramContext::new();
-        let result = RichExpr::from(&mut ctx, Expression::VariableReference("myvar".to_string()));
+        let result = RichExpr::from(
+            &mut ctx,
+            Expression::VariableReference(VarRef::new_with_default_pos("myvar")),
+        );
         assert!(matches!(
             result,
             Err(AnalyzeError {
@@ -365,9 +379,13 @@ mod tests {
             body: RichClosure {
                 statements: vec![],
                 ret_type: None,
+                original: Closure::new_empty(),
             },
         });
-        let fn_call = FunctionCall::new("do_thing", vec![Expression::BoolLiteral(true)]);
+        let fn_call = FunctionCall::new_with_default_pos(
+            "do_thing",
+            vec![Expression::BoolLiteral(BoolLit::new_with_default_pos(true))],
+        );
         let call_expr = Expression::FunctionCall(fn_call.clone());
         let result = RichExpr::from(&mut ctx, call_expr);
         assert_eq!(
@@ -398,17 +416,17 @@ mod tests {
             body: RichClosure {
                 statements: vec![],
                 ret_type: None,
+                original: Closure::new_empty(),
             },
         });
         let result = RichExpr::from(
             &mut ctx,
             Expression::BinaryOperation(
-                Box::new(Expression::I64Literal(1)),
+                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
                 Operator::Add,
-                Box::new(Expression::FunctionCall(FunctionCall::new(
-                    "do_thing",
-                    vec![],
-                ))),
+                Box::new(Expression::FunctionCall(
+                    FunctionCall::new_with_default_pos("do_thing", vec![]),
+                )),
             ),
         );
         assert!(matches!(
@@ -435,17 +453,17 @@ mod tests {
             body: RichClosure {
                 statements: vec![],
                 ret_type: None,
+                original: Closure::new_empty(),
             },
         });
         let result = RichExpr::from(
             &mut ctx,
             Expression::BinaryOperation(
-                Box::new(Expression::I64Literal(1)),
+                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
                 Operator::Add,
-                Box::new(Expression::FunctionCall(FunctionCall::new(
-                    "do_thing",
-                    vec![],
-                ))),
+                Box::new(Expression::FunctionCall(
+                    FunctionCall::new_with_default_pos("do_thing", vec![]),
+                )),
             ),
         );
         assert!(matches!(
@@ -472,17 +490,20 @@ mod tests {
             body: RichClosure {
                 statements: vec![],
                 ret_type: None,
+                original: Closure::new_empty(),
             },
         });
         let result = RichExpr::from(
             &mut ctx,
             Expression::BinaryOperation(
-                Box::new(Expression::I64Literal(1)),
+                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
                 Operator::Add,
-                Box::new(Expression::FunctionCall(FunctionCall::new(
-                    "do_thing",
-                    vec![Expression::I64Literal(1)],
-                ))),
+                Box::new(Expression::FunctionCall(
+                    FunctionCall::new_with_default_pos(
+                        "do_thing",
+                        vec![Expression::I64Literal(I64Lit::new_with_default_pos(1))],
+                    ),
+                )),
             ),
         );
         assert!(matches!(
@@ -500,9 +521,11 @@ mod tests {
         let result = RichExpr::from(
             &mut ctx,
             Expression::BinaryOperation(
-                Box::new(Expression::I64Literal(1)),
+                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
                 Operator::Add,
-                Box::new(Expression::StringLiteral("asdf".to_string())),
+                Box::new(Expression::StringLiteral(StringLit::new_with_default_pos(
+                    "asdf",
+                ))),
             ),
         );
         assert!(matches!(
@@ -516,9 +539,11 @@ mod tests {
         let result = RichExpr::from(
             &mut ctx,
             Expression::BinaryOperation(
-                Box::new(Expression::StringLiteral("asdf".to_string())),
+                Box::new(Expression::StringLiteral(StringLit::new_with_default_pos(
+                    "asdf",
+                ))),
                 Operator::Add,
-                Box::new(Expression::I64Literal(1)),
+                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
             ),
         );
         assert!(matches!(
@@ -532,9 +557,9 @@ mod tests {
         let result = RichExpr::from(
             &mut ctx,
             Expression::BinaryOperation(
-                Box::new(Expression::I64Literal(2)),
+                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(2))),
                 Operator::LogicalOr,
-                Box::new(Expression::I64Literal(1)),
+                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
             ),
         );
         assert!(matches!(
@@ -551,7 +576,10 @@ mod tests {
         let mut ctx = ProgramContext::new();
         let result = RichExpr::from(
             &mut ctx,
-            Expression::UnaryOperation(Operator::Not, Box::new(Expression::I64Literal(1))),
+            Expression::UnaryOperation(
+                Operator::Not,
+                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
+            ),
         );
         assert!(matches!(
             result,
@@ -569,7 +597,9 @@ mod tests {
             &mut ctx,
             Expression::UnaryOperation(
                 Operator::Not,
-                Box::new(Expression::StringLiteral("s".to_string())),
+                Box::new(Expression::StringLiteral(StringLit::new_with_default_pos(
+                    "s",
+                ))),
             ),
         );
         assert!(matches!(

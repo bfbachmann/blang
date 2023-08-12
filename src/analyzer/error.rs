@@ -1,5 +1,6 @@
 use std::fmt;
 
+use crate::lexer::pos::{Locatable, Position};
 use crate::parser::expr::Expression;
 use crate::parser::statement::Statement;
 
@@ -64,6 +65,8 @@ pub struct AnalyzeError {
     pub kind: ErrorKind,
     pub message: String,
     pub detail: Option<String>,
+    pub start_pos: Position,
+    pub end_pos: Position,
 }
 
 impl fmt::Display for AnalyzeError {
@@ -73,11 +76,23 @@ impl fmt::Display for AnalyzeError {
 }
 
 impl AnalyzeError {
-    pub fn new(kind: ErrorKind, message: &str) -> Self {
+    pub fn new(kind: ErrorKind, message: &str, start_pos: Position, end_pos: Position) -> Self {
         AnalyzeError {
             kind,
             message: message.to_string(),
             detail: None,
+            start_pos,
+            end_pos,
+        }
+    }
+
+    pub fn new_with_locatable(kind: ErrorKind, message: &str, loc: Box<dyn Locatable>) -> Self {
+        AnalyzeError {
+            kind,
+            message: message.to_string(),
+            detail: None,
+            start_pos: loc.start_pos().clone(),
+            end_pos: loc.end_pos().clone(),
         }
     }
 
@@ -85,7 +100,9 @@ impl AnalyzeError {
         AnalyzeError {
             kind,
             message: message.to_string(),
-            detail: Some(format!("{}", expr)),
+            detail: Some(format!("invalid expression {}", expr)),
+            start_pos: expr.start_pos().clone(),
+            end_pos: expr.end_pos().clone(),
         }
     }
 
@@ -93,7 +110,9 @@ impl AnalyzeError {
         AnalyzeError {
             kind,
             message: message.to_string(),
-            detail: Some(format!("{}", statement)),
+            detail: Some(format!("invalid {}", statement)),
+            start_pos: statement.start_pos().clone(),
+            end_pos: statement.end_pos().clone(),
         }
     }
 }

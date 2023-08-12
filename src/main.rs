@@ -137,21 +137,15 @@ fn analyze(input_path: &str) -> RichProg {
         Err(ParseError {
             kind: _,
             message,
-            token: maybe_token,
+            token: _,
+            start_pos,
+            ..
         }) => {
-            if let Some(Token { kind: _, start, .. }) = maybe_token {
-                fatalln!(
-                    "{}: {}",
-                    format_file_loc(input_path, Some(start.line), Some(start.col)),
-                    message.bold(),
-                );
-            } else {
-                fatalln!(
-                    "{}: {}",
-                    format_file_loc(input_path, None, None),
-                    message.bold(),
-                );
-            }
+            fatalln!(
+                "{}: {}",
+                format_file_loc(input_path, Some(start_pos.line), Some(start_pos.col)),
+                message.bold(),
+            );
         }
         Ok(p) => p,
     };
@@ -163,11 +157,22 @@ fn analyze(input_path: &str) -> RichProg {
             kind: _,
             message,
             detail: maybe_detail,
+            start_pos,
+            ..
         }) => {
             if let Some(detail) = maybe_detail {
-                fatalln!("{}\n  {}", message.bold(), detail)
+                fatalln!(
+                    "{}: {}\n  {}",
+                    format_file_loc(input_path, Some(start_pos.line), Some(start_pos.col)),
+                    message.bold(),
+                    detail
+                )
             } else {
-                fatalln!("{}", message.bold())
+                fatalln!(
+                    "{}: {}",
+                    format_file_loc(input_path, Some(start_pos.line), Some(start_pos.col)),
+                    message.bold()
+                )
             }
         }
     }
@@ -276,7 +281,7 @@ fn repl_collect_tokens() -> Result<VecDeque<Token>> {
 /// Formats the file location has a colored string.
 fn format_file_loc(path: &str, line: Option<usize>, col: Option<usize>) -> ColoredString {
     match (line, col) {
-        (Some(l), Some(c)) => format!("{}[{}:{}]", path, l, c).bright_black(),
+        (Some(l), Some(c)) => format!("{}:{}:{}", path, l, c).bright_black(),
         _ => format!("{}", path).bright_black(),
     }
 }

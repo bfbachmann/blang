@@ -1,13 +1,12 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#type::RichType;
 use crate::analyzer::AnalyzeResult;
-
 use crate::parser::r#struct::{Struct, StructInit};
 use crate::parser::r#type::Type;
 use crate::util;
@@ -63,9 +62,10 @@ impl RichStruct {
     pub fn from(ctx: &mut ProgramContext, struct_type: &Struct, anon: bool) -> AnalyzeResult<Self> {
         if !anon {
             if struct_type.name.is_empty() {
-                return Err(AnalyzeError::new(
+                return Err(AnalyzeError::new_with_locatable(
                     ErrorKind::MissingTypeName,
                     "struct types declared in this context must have names",
+                    Box::new(struct_type.clone()),
                 ));
             }
 
@@ -76,13 +76,14 @@ impl RichStruct {
                 return Ok(rich_struct.clone());
             }
         } else if anon && !struct_type.name.is_empty() {
-            return Err(AnalyzeError::new(
+            return Err(AnalyzeError::new_with_locatable(
                 ErrorKind::UnexpectedTypeName,
                 format!(
                     "inline struct type definitions cannot have type names (remove type name {})",
                     struct_type.name
                 )
                 .as_str(),
+                Box::new(struct_type.clone()),
             ));
         }
 
@@ -92,13 +93,14 @@ impl RichStruct {
         for field in &struct_type.fields {
             // Check for duplicated field name.
             if !field_names.insert(field.name.clone()) {
-                return Err(AnalyzeError::new(
+                return Err(AnalyzeError::new_with_locatable(
                     ErrorKind::DuplicateStructFieldName,
                     format!(
                         "struct type {} cannot have multiple fields named {}",
                         struct_type.name, field.name,
                     )
                     .as_str(),
+                    Box::new(field.clone()),
                 ));
             }
 
@@ -106,13 +108,14 @@ impl RichStruct {
             // containment cycles causing types of infinite size.
             if let Type::Unresolved(field_type_name) = &field.typ {
                 if field_type_name == &struct_type.name {
-                    return Err(AnalyzeError::new(
+                    return Err(AnalyzeError::new_with_locatable(
                         ErrorKind::ContainmentCycle,
                         format!(
                             "struct {} cannot directly contain itself (at field {})",
                             struct_type.name, field_type_name
                         )
                         .as_str(),
+                        Box::new(field.clone()),
                     ));
                 }
             }
@@ -133,13 +136,14 @@ impl RichStruct {
         // Make sure the struct doesn't contain itself via other types.
         let rich_struct_type = RichType::Struct(rich_struct.clone());
         if rich_struct_type.contains_type(&rich_struct_type) {
-            return Err(AnalyzeError::new(
+            return Err(AnalyzeError::new_with_locatable(
                 ErrorKind::ContainmentCycle,
                 format!(
                     "struct {} cannot contain itself via any of its field types",
                     rich_struct.name
                 )
                 .as_str(),
+                Box::new(struct_type.clone()),
             ));
         }
 
@@ -164,13 +168,14 @@ impl RichStruct {
             match &field.typ {
                 Type::Unresolved(field_type_name) => {
                     if hierarchy.contains(field_type_name) {
-                        return Err(AnalyzeError::new(
+                        return Err(AnalyzeError::new_with_locatable(
                             ErrorKind::ContainmentCycle,
                             format!(
                                 "type {} cannot contain itself (via field {} on struct type {})",
                                 field_type_name, field.name, struct_type.name,
                             )
                             .as_str(),
+                            Box::new(field.clone()),
                         ));
                     }
 
@@ -184,13 +189,14 @@ impl RichStruct {
                     if !field_struct_type.name.is_empty()
                         && hierarchy.contains(&field_struct_type.name)
                     {
-                        return Err(AnalyzeError::new(
+                        return Err(AnalyzeError::new_with_locatable(
                             ErrorKind::ContainmentCycle,
                             format!(
                                 "type {} cannot contain itself (via struct field {} on struct type {})",
                                 field_struct_type.name, field.name, struct_type.name,
                             )
                                 .as_str(),
+                            Box::new(field.clone())
                         ));
                     }
 
@@ -255,9 +261,12 @@ impl RichStructInit {
             let field_type = match struct_type.get_field_type(field_name.as_str()) {
                 Some(typ) => typ,
                 None => {
-                    return Err(AnalyzeError::new(
+                    return Err(AnalyzeError::new_with_locatable(
                         ErrorKind::StructFieldNotDefined,
                         format!("struct type {} has no field {}", struct_type, field_name).as_str(),
+                        // TODO: This should be the location of the bad field instead of the entire
+                        // struct init.
+                        Box::new(struct_init.clone()),
                     ));
                 }
             };
@@ -267,21 +276,27 @@ impl RichStructInit {
 
             // Make sure the value being assigned to the field has the expected type.
             if !expr.typ.is_compatible_with(field_type) {
-                return Err(AnalyzeError::new(
+                return Err(AnalyzeError::new_with_locatable(
                     ErrorKind::IncompatibleTypes,
                     format!(
                         "cannot assign expression of type {} to field {} of type {} on struct type {}",
                         &expr.typ, &field_name, &field_type, &struct_type
                     )
                     .as_str(),
+                    // TODO: This should be the location of the bad field instead of the entire
+                    // struct init.
+                    Box::new(struct_init.clone()),
                 ));
             }
 
             // Insert the analyzed struct field value, making sure that it was not already assigned.
             if field_values.insert(field_name.to_string(), expr).is_some() {
-                return Err(AnalyzeError::new(
+                return Err(AnalyzeError::new_with_locatable(
                     ErrorKind::DuplicateStructFieldName,
                     format!("struct field {} is already assigned", &field_name).as_str(),
+                    // TODO: This should be the location of the bad field instead of the entire
+                    // struct init.
+                    Box::new(struct_init.clone()),
                 ));
             }
         }
@@ -289,13 +304,14 @@ impl RichStructInit {
         // Make sure all struct fields were assigned.
         for field in &struct_type.fields {
             if !field_values.contains_key(field.name.as_str()) {
-                return Err(AnalyzeError::new(
+                return Err(AnalyzeError::new_with_locatable(
                     ErrorKind::StructFieldNotInitialized,
                     format!(
                         "field {} on struct type {} is uninitialized",
                         field.name, struct_type
                     )
                     .as_str(),
+                    Box::new(struct_init.clone()),
                 ));
             }
         }
