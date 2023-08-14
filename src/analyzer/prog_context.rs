@@ -1,12 +1,15 @@
 use std::collections::hash_map::Iter;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;
 
+use crate::analyzer::error::AnalyzeError;
 use crate::analyzer::func::{RichArg, RichFn, RichFnSig};
 use crate::analyzer::r#struct::RichStruct;
 use crate::analyzer::r#type::RichType;
-
-use crate::parser::r#struct::Struct;
+use crate::analyzer::warn::Warning;
+use crate::analyzer::AnalyzeResult;
+use crate::lexer::pos::Position;
+use crate::parser::r#struct::StructType;
 
 #[derive(PartialEq, Clone)]
 pub enum ScopeKind {
@@ -31,10 +34,15 @@ impl fmt::Display for ScopeKind {
 /// be a function body, an inline closure, a branch, or a loop.
 pub struct Scope {
     vars: HashMap<String, RichType>,
+    /// Extern functions are functions that are defined outside the program and linked to it
+    /// after compilation.
     extern_fns: HashMap<String, RichFnSig>,
     fns: HashMap<String, RichFn>,
-    extern_structs: HashMap<String, Struct>,
+    /// Extern structs are structs that have been detected but not yet analyzed.
+    extern_structs: HashMap<String, StructType>,
     structs: HashMap<String, RichStruct>,
+    /// Invalid types are types that failed semantic analysis.
+    invalid_types: HashSet<String>,
     kind: ScopeKind,
     return_type: Option<RichType>,
 }
@@ -54,9 +62,15 @@ impl Scope {
             fns: HashMap::new(),
             extern_structs: HashMap::new(),
             structs: HashMap::new(),
+            invalid_types: HashSet::new(),
             kind,
             return_type,
         }
+    }
+
+    /// Adds the given name to the set of invalid types in the scope.
+    fn add_invalid_type(&mut self, name: &str) -> bool {
+        self.invalid_types.insert(name.to_string())
     }
 
     // Adds the signature of the external function to the scope. If there was already a function
@@ -80,8 +94,13 @@ impl Scope {
 
     // Adds the external struct type to the scope. If there was already a struct type with the same
     // name in the scope, returns the old type.
-    fn add_extern_struct(&mut self, s: Struct) -> Option<Struct> {
+    fn add_extern_struct(&mut self, s: StructType) -> Option<StructType> {
         self.extern_structs.insert(s.name.to_string(), s)
+    }
+
+    /// Removes the extern struct type with the given name from the scope.
+    pub fn remove_extern_struct(&mut self, name: &str) {
+        self.extern_structs.remove(name);
     }
 
     // Adds the struct type to the scope. If there was already a struct type with the same name in
@@ -96,6 +115,11 @@ impl Scope {
         self.vars.insert(name.to_string(), typ)
     }
 
+    // Returns the invalid type with the given name from the scope, if it exists.
+    fn get_invalid_type(&self, name: &str) -> Option<&String> {
+        self.invalid_types.get(name)
+    }
+
     // Returns the function with the given name from the scope, or None if no such function exists.
     fn get_fn(&self, name: &str) -> Option<&RichFn> {
         self.fns.get(name)
@@ -103,12 +127,12 @@ impl Scope {
 
     // Returns the extern struct type with the given name from the scope, or None if no such type
     // exists.
-    fn get_extern_struct(&self, name: &str) -> Option<&Struct> {
+    fn get_extern_struct(&self, name: &str) -> Option<&StructType> {
         self.extern_structs.get(name)
     }
 
     /// Returns an iterator over all extern structs in this scope.
-    fn extern_structs(&self) -> Iter<String, Struct> {
+    fn extern_structs(&self) -> Iter<String, StructType> {
         self.extern_structs.iter()
     }
 
@@ -126,6 +150,8 @@ impl Scope {
 /// Represents the current program stack and analysis state.
 pub struct ProgramContext {
     stack: VecDeque<Scope>,
+    errors: HashMap<Position, AnalyzeError>,
+    warnings: HashMap<Position, Warning>,
 }
 
 impl ProgramContext {
@@ -134,7 +160,54 @@ impl ProgramContext {
     pub fn new() -> Self {
         ProgramContext {
             stack: VecDeque::from([Scope::new(ScopeKind::Inline, vec![], None)]),
+            errors: HashMap::new(),
+            warnings: HashMap::new(),
         }
+    }
+
+    /// Returns all errors that have occurred during semantic analysis.
+    pub fn errors(&self) -> Vec<AnalyzeError> {
+        let mut errors: Vec<(Position, AnalyzeError)> = self
+            .errors
+            .iter()
+            .map(|(p, e)| (p.clone(), e.clone()))
+            .collect();
+        errors.sort_by(|(pos1, _), (pos2, _)| pos1.cmp(pos2));
+        errors.into_iter().map(|(_, err)| err).collect()
+    }
+
+    /// If the given result is an error, consumes and stores the error, returning None. Otherwise,
+    /// returns the result.
+    pub fn consume_error<T>(&mut self, result: AnalyzeResult<T>) -> Option<T> {
+        match result {
+            Ok(v) => Some(v),
+            Err(e) => {
+                self.add_err(e);
+                None
+            }
+        }
+    }
+
+    /// Add the given error to the program context.
+    pub fn add_err(&mut self, err: AnalyzeError) {
+        self.errors.insert(err.start_pos.clone(), err);
+    }
+
+    /// Returns all warnings that have occurred during semantic analysis.
+    pub fn warnings(self) -> Vec<Warning> {
+        let mut warnings: Vec<(Position, Warning)> = self.warnings.into_iter().collect();
+        warnings.sort_by(|(pos1, _), (pos2, _)| pos1.cmp(&pos2));
+        warnings.into_iter().map(|(_, err)| err).collect()
+    }
+
+    /// Add the given warning to the program context.
+    pub fn add_warn(&mut self, warn: Warning) {
+        self.warnings.insert(warn.start_pos.clone(), warn);
+    }
+
+    /// Adds the given name to the set of invalid types in the program context.
+    pub fn add_invalid_type(&mut self, name: &str) -> bool {
+        self.stack.back_mut().unwrap().add_invalid_type(name)
     }
 
     /// Adds the external function signature to the context. If there was already a function with
@@ -151,8 +224,13 @@ impl ProgramContext {
 
     /// Adds the external struct type to the context. If there was already a struct type with the
     /// same name, returns the old type.
-    pub fn add_extern_struct(&mut self, s: Struct) -> Option<Struct> {
+    pub fn add_extern_struct(&mut self, s: StructType) -> Option<StructType> {
         self.stack.back_mut().unwrap().add_extern_struct(s)
+    }
+
+    /// Removes the extern struct type with the given name from the program context.
+    pub fn remove_extern_struct(&mut self, name: &str) {
+        self.stack.back_mut().unwrap().remove_extern_struct(name);
     }
 
     /// Adds the struct type to the context. If there was already a struct type with the same name,
@@ -165,6 +243,18 @@ impl ProgramContext {
     /// returns the old variable type.
     pub fn add_var(&mut self, name: &str, typ: RichType) -> Option<RichType> {
         self.stack.back_mut().unwrap().add_var(name, typ)
+    }
+
+    /// Attempts to locate the invalid type with the given name and returns it, if found.
+    pub fn get_invalid_type(&self, name: &str) -> Option<&String> {
+        // Search up the stack from the current scope.
+        for scope in self.stack.iter().rev() {
+            if let Some(sig) = scope.get_invalid_type(name) {
+                return Some(sig);
+            }
+        }
+
+        None
     }
 
     /// Attempts to locate the external function signature with the given name and returns it,
@@ -193,7 +283,7 @@ impl ProgramContext {
     }
 
     /// Attempts to locate the extern struct type with the given name and returns it, if found.
-    pub fn get_extern_struct(&self, name: &str) -> Option<&Struct> {
+    pub fn get_extern_struct(&self, name: &str) -> Option<&StructType> {
         // Search up the stack from the current scope.
         for scope in self.stack.iter().rev() {
             if let Some(s) = scope.get_extern_struct(name) {
@@ -217,7 +307,7 @@ impl ProgramContext {
     }
 
     /// Returns all extern structs in the program context.
-    pub fn extern_structs(&self) -> Vec<&Struct> {
+    pub fn extern_structs(&self) -> Vec<&StructType> {
         let mut extern_structs = vec![];
         for scope in self.stack.iter() {
             for (_, struct_type) in scope.extern_structs() {

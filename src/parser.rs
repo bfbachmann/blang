@@ -2,6 +2,7 @@ use error::ParseError;
 use r#type::Type;
 
 pub mod arg;
+pub mod bool;
 pub mod bool_lit;
 pub mod branch;
 pub mod r#break;
@@ -13,15 +14,18 @@ pub mod expr;
 pub mod func;
 pub mod func_call;
 pub mod func_sig;
+pub mod i64;
 pub mod i64_lit;
 pub mod r#loop;
 pub mod op;
 pub mod program;
 pub mod ret;
 pub mod statement;
+pub mod string;
 pub mod string_lit;
 pub mod r#struct;
 pub mod r#type;
+pub mod unresolved;
 pub mod var_assign;
 pub mod var_dec;
 pub mod var_ref;
@@ -114,7 +118,7 @@ mod tests {
             Program {
                 statements: vec![
                     Statement::VariableDeclaration(VariableDeclaration::new(
-                        Some(Type::I64),
+                        Some(Type::i64()),
                         "i".to_string(),
                         Expression::I64Literal(I64Lit {
                             value: 123,
@@ -154,10 +158,10 @@ mod tests {
                 FunctionSignature::new(
                     "my_fn",
                     vec![
-                        Argument::new("arg1", Type::String),
-                        Argument::new("arg2", Type::I64)
+                        Argument::new("arg1", Type::string()),
+                        Argument::new("arg2", Type::i64())
                     ],
-                    Some(Type::String),
+                    Some(Type::string()),
                     Position::new(1, 1),
                     Position::new(1, 34),
                 ),
@@ -196,19 +200,19 @@ mod tests {
                             "f",
                             Type::Function(Box::new(FunctionSignature::new_anon(
                                 vec![
-                                    Argument::new("", Type::String),
-                                    Argument::new("", Type::I64)
+                                    Argument::new("", Type::string()),
+                                    Argument::new("", Type::i64())
                                 ],
-                                Some(Type::Bool),
+                                Some(Type::bool()),
                                 Position::new(1, 14),
                                 Position::new(1, 30),
                             ))),
                         ),
-                        Argument::new("i", Type::I64)
+                        Argument::new("i", Type::i64())
                     ],
                     Some(Type::Function(Box::new(FunctionSignature::new_anon(
-                        vec![Argument::new("", Type::Bool)],
-                        Some(Type::String),
+                        vec![Argument::new("", Type::bool())],
+                        Some(Type::string()),
                         Position::new(1, 47),
                         Position::new(1, 56),
                     )))),
@@ -349,7 +353,7 @@ mod tests {
                 statements: vec![Statement::FunctionDeclaration(Function::new(
                     FunctionSignature::new(
                         "my_func",
-                        vec![Argument::new("s", Type::String)],
+                        vec![Argument::new("s", Type::string())],
                         None,
                         Position::new(1, 1),
                         Position::new(1, 22)

@@ -1,3 +1,4 @@
+use colored::Colorize;
 use std::collections::VecDeque;
 use std::fmt::{Display, Formatter};
 
@@ -55,7 +56,11 @@ impl I64Lit {
             }),
             Some(other) => Err(ParseError::new(
                 ErrorKind::UnexpectedToken,
-                format!("expected i64 literal, but found {}", other).as_str(),
+                format!(
+                    "expected i64 literal, but found `{}`",
+                    format!("{}", other).blue()
+                )
+                .as_str(),
                 Some(other.clone()),
                 other.start,
                 other.end,

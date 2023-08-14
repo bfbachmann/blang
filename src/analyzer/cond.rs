@@ -1,6 +1,8 @@
 use std::fmt;
 use std::fmt::Formatter;
 
+use colored::Colorize;
+
 use crate::analyzer::closure::RichClosure;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
@@ -78,11 +80,11 @@ impl RichCond {
                 Some(branch_cond) => {
                     let rich_expr = RichExpr::from(ctx, branch_cond.clone())?;
                     if rich_expr.typ != RichType::Bool {
-                        return Err(AnalyzeError::new_with_locatable(
+                        ctx.add_err(AnalyzeError::new_with_locatable(
                             ErrorKind::IncompatibleTypes,
                             format!(
-                                "expected branch condition to have type bool, but found type {}",
-                                &rich_expr.typ
+                                "expected branch condition to have type bool, but found type `{}`",
+                                format!("{}", &rich_expr.typ).blue()
                             )
                             .as_str(),
                             Box::new(branch_cond.clone()),

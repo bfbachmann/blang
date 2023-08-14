@@ -1,13 +1,15 @@
 use std::fmt;
 
+use colored::*;
+
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::expr::Expression;
 use crate::parser::statement::Statement;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum ErrorKind {
     IncompatibleTypes,
-    ExpectedValue,
+    ExpectedReturnValue,
     FunctionNotDefined,
     FunctionAlreadyDefined,
     TypeAlreadyDefined,
@@ -21,11 +23,10 @@ pub enum ErrorKind {
     UnexpectedBreak,
     UnexpectedContinue,
     UnexpectedReturn,
-    MissingMain,
     CallToMain,
     MissingReturn,
     InvalidMain,
-    ContainmentCycle,
+    InfiniteSizedType,
     MissingTypeName,
     UnexpectedTypeName,
 }
@@ -34,7 +35,7 @@ impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ErrorKind::IncompatibleTypes => write!(f, "incompatible types"),
-            ErrorKind::ExpectedValue => write!(f, "expected value"),
+            ErrorKind::ExpectedReturnValue => write!(f, "expected return value"),
             ErrorKind::FunctionNotDefined => write!(f, "function not defined"),
             ErrorKind::FunctionAlreadyDefined => write!(f, "function already defined"),
             ErrorKind::TypeAlreadyDefined => write!(f, "type already defined"),
@@ -48,11 +49,10 @@ impl fmt::Display for ErrorKind {
             ErrorKind::UnexpectedBreak => write!(f, "unexpected break"),
             ErrorKind::UnexpectedContinue => write!(f, "unexpected continue"),
             ErrorKind::UnexpectedReturn => write!(f, "unexpected return"),
-            ErrorKind::MissingMain => write!(f, "missing main"),
             ErrorKind::CallToMain => write!(f, "call to main"),
-            ErrorKind::MissingReturn => write!(f, "missing return"),
-            ErrorKind::InvalidMain => write!(f, "invalid main"),
-            ErrorKind::ContainmentCycle => write!(f, "containment cycle"),
+            ErrorKind::MissingReturn => write!(f, "missing function return"),
+            ErrorKind::InvalidMain => write!(f, "invalid main function"),
+            ErrorKind::InfiniteSizedType => write!(f, "infinite-sized type"),
             ErrorKind::MissingTypeName => write!(f, "missing type name"),
             ErrorKind::UnexpectedTypeName => write!(f, "unexpected type name"),
         }
@@ -60,11 +60,12 @@ impl fmt::Display for ErrorKind {
 }
 
 /// Represents any fatal error that occurs during program analysis.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct AnalyzeError {
     pub kind: ErrorKind,
     pub message: String,
     pub detail: Option<String>,
+    pub hint: Option<String>,
     pub start_pos: Position,
     pub end_pos: Position,
 }
@@ -76,21 +77,12 @@ impl fmt::Display for AnalyzeError {
 }
 
 impl AnalyzeError {
-    pub fn new(kind: ErrorKind, message: &str, start_pos: Position, end_pos: Position) -> Self {
-        AnalyzeError {
-            kind,
-            message: message.to_string(),
-            detail: None,
-            start_pos,
-            end_pos,
-        }
-    }
-
     pub fn new_with_locatable(kind: ErrorKind, message: &str, loc: Box<dyn Locatable>) -> Self {
         AnalyzeError {
             kind,
             message: message.to_string(),
             detail: None,
+            hint: None,
             start_pos: loc.start_pos().clone(),
             end_pos: loc.end_pos().clone(),
         }
@@ -100,7 +92,11 @@ impl AnalyzeError {
         AnalyzeError {
             kind,
             message: message.to_string(),
-            detail: Some(format!("invalid expression {}", expr)),
+            detail: Some(format!(
+                "invalid expression: {}",
+                format!("{}", expr).as_str().underline()
+            )),
+            hint: None,
             start_pos: expr.start_pos().clone(),
             end_pos: expr.end_pos().clone(),
         }
@@ -110,9 +106,35 @@ impl AnalyzeError {
         AnalyzeError {
             kind,
             message: message.to_string(),
-            detail: Some(format!("invalid {}", statement)),
+            detail: Some(format!(
+                "invalid statement: {}",
+                format!("{}", statement).as_str().underline()
+            )),
+            hint: None,
             start_pos: statement.start_pos().clone(),
             end_pos: statement.end_pos().clone(),
+        }
+    }
+
+    pub fn with_detail(self, detail: &str) -> Self {
+        AnalyzeError {
+            kind: self.kind,
+            message: self.message,
+            detail: Some(detail.to_string()),
+            hint: self.hint,
+            start_pos: self.start_pos,
+            end_pos: self.end_pos,
+        }
+    }
+
+    pub fn with_hint(self, hint: &str) -> Self {
+        AnalyzeError {
+            kind: self.kind,
+            message: self.message,
+            detail: self.detail,
+            hint: Some(hint.to_string()),
+            start_pos: self.start_pos,
+            end_pos: self.end_pos,
         }
     }
 }

@@ -12,5 +12,6 @@ pub mod r#struct;
 pub mod r#type;
 pub mod var_assign;
 pub mod var_dec;
+pub mod warn;
 
 type AnalyzeResult<T> = Result<T, AnalyzeError>;

@@ -1,12 +1,14 @@
 use core::fmt;
-use std::fmt::Formatter;
+use std::fmt::{Formatter};
+
+use colored::*;
 
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::RichFnSig;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#struct::RichStruct;
 use crate::analyzer::AnalyzeResult;
-use crate::lexer::pos::Position;
+
 use crate::parser::r#type::Type;
 
 /// Represents a semantically valid and fully resolved type.
@@ -17,6 +19,8 @@ pub enum RichType {
     I64,
     Struct(RichStruct),
     Function(Box<RichFnSig>),
+    /// Represents a type that did not pass semantic analysis and thus was never properly resolved.
+    Unknown(String),
 }
 
 impl fmt::Display for RichType {
@@ -27,6 +31,7 @@ impl fmt::Display for RichType {
             RichType::I64 => write!(f, "i64"),
             RichType::Struct(s) => write!(f, "{}", s),
             RichType::Function(func) => write!(f, "{}", func),
+            RichType::Unknown(name) => write!(f, "{}", name),
         }
     }
 }
@@ -49,7 +54,15 @@ impl RichType {
     /// type information in the program context.
     pub fn from(ctx: &mut ProgramContext, typ: &Type) -> AnalyzeResult<Self> {
         return match typ {
-            Type::Unresolved(type_name) => {
+            Type::Unresolved(unresolved_type) => {
+                let type_name = unresolved_type.name.as_str();
+
+                // Check if the type has already been marked as invalid. If so, we should avoid
+                // trying to resolve it and simply return an unknown type.
+                if ctx.get_invalid_type(type_name).is_some() {
+                    return Ok(RichType::Unknown(type_name.to_string()));
+                }
+
                 // If the type has already been analyzed, just return it.
                 if let Some(rich_struct_type) = ctx.get_struct(type_name) {
                     return Ok(RichType::Struct(rich_struct_type.clone()));
@@ -68,20 +81,20 @@ impl RichType {
                     return Ok(RichType::Struct(rich_struct_type));
                 }
 
-                return Err(AnalyzeError::new(
+                ctx.add_err(AnalyzeError::new_with_locatable(
                     ErrorKind::TypeNotDefined,
-                    format!("type {} is not defined", type_name).as_str(),
-                    // TODO: Fill in proper position.
-                    Position::default(),
-                    Position::default(),
+                    format!("type `{}` is not defined", type_name.blue()).as_str(),
+                    Box::new(unresolved_type.clone()),
                 ));
+
+                return Ok(RichType::Unknown("<unknown>".to_string()));
             }
 
-            Type::I64 => Ok(RichType::I64),
+            Type::I64(_) => Ok(RichType::I64),
 
-            Type::Bool => Ok(RichType::Bool),
+            Type::Bool(_) => Ok(RichType::Bool),
 
-            Type::String => Ok(RichType::String),
+            Type::String(_) => Ok(RichType::String),
 
             Type::Function(sig) => Ok(RichType::Function(Box::new(RichFnSig::from(ctx, &*sig)?))),
 
@@ -92,14 +105,45 @@ impl RichType {
         };
     }
 
-    /// Returns true if this type contains the given type. For this to be the case, this type must
-    /// be a container (struct, vector, array, etc).
-    pub fn contains_type(&self, typ: &RichType) -> bool {
+    /// Returns true if this type is unknown.
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, RichType::Unknown(_))
+    }
+
+    /// If this type contains the given type, returns some vector of types representing the type
+    /// hierarchy. For example, if type A contains B, and B contains C, then
+    ///
+    ///     A.contains_type(C)
+    ///
+    /// returns the hierarchy
+    ///
+    ///     Some(vec![A, B, C])
+    pub fn contains_type(&self, typ: &RichType) -> Option<Vec<&RichType>> {
+        let mut hierarchy = vec![];
+        if self.get_type_hierarchy(typ, &mut hierarchy) {
+            Some(hierarchy)
+        } else {
+            None
+        }
+    }
+
+    /// Returns true if this type contains the given type. If true, the given `hierarchy` Vec will
+    /// be filled with the hierarchy from `self` to `typ`.
+    fn get_type_hierarchy<'a>(&'a self, typ: &RichType, hierarchy: &mut Vec<&'a RichType>) -> bool {
+        hierarchy.push(&self);
+
         return match self {
-            RichType::Bool | RichType::I64 | RichType::String | RichType::Function(_) => false,
+            RichType::Bool
+            | RichType::I64
+            | RichType::String
+            | RichType::Function(_)
+            | RichType::Unknown(_) => false,
             RichType::Struct(s) => {
                 for field in &s.fields {
-                    if &field.typ == typ || field.typ.contains_type(typ) {
+                    if &field.typ == typ {
+                        hierarchy.push(&field.typ);
+                        return true;
+                    } else if field.typ.get_type_hierarchy(typ, hierarchy) {
                         return true;
                     }
                 }
@@ -107,6 +151,22 @@ impl RichType {
                 false
             }
         };
+    }
+
+    /// Formats the given type hierarchy like this
+    ///
+    ///     `A` -> `B` -> `C`
+    pub fn hierarchy_to_string(hierarchy: Vec<String>) -> String {
+        let mut s = String::from("");
+        for (i, type_name) in hierarchy.iter().enumerate() {
+            if i == 0 {
+                s.push_str(format!("`{}`", type_name).blue().to_string().as_str());
+            } else {
+                s.push_str(format!(" -> `{}`", type_name).blue().to_string().as_str())
+            }
+        }
+
+        s.to_string()
     }
 
     /// Returns true if both types are compatible (i.e. they have the same representation in

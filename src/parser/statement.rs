@@ -13,7 +13,7 @@ use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
 use crate::parser::r#break::Break;
 use crate::parser::r#loop::Loop;
-use crate::parser::r#struct::Struct;
+use crate::parser::r#struct::StructType;
 use crate::parser::ret::Ret;
 use crate::parser::var_assign::VariableAssignment;
 use crate::parser::var_dec::VariableDeclaration;
@@ -32,7 +32,7 @@ pub enum Statement {
     Break(Break),
     Continue(Continue),
     Return(Ret),
-    StructDeclaration(Struct),
+    StructDeclaration(StructType),
 }
 
 impl fmt::Display for Statement {
@@ -40,32 +40,28 @@ impl fmt::Display for Statement {
         match self {
             Statement::VariableDeclaration(var_dec) => {
                 if let Some(typ) = &var_dec.typ {
-                    write!(
-                        f,
-                        "variable declaration: let {} {} = ...",
-                        typ, var_dec.name
-                    )
+                    write!(f, "let {} {} = ...", typ, var_dec.name)
                 } else {
-                    write!(f, "variable declaration: let {} = ...", var_dec.name)
+                    write!(f, "let {} = ...", var_dec.name)
                 }
             }
             Statement::VariableAssignment(var_assign) => {
-                write!(f, "variable assignment {} = ...", var_assign.name)
+                write!(f, "{} = ...", var_assign.name)
             }
             Statement::FunctionDeclaration(func) => {
-                write!(f, "function declaration {}", func.signature)
+                write!(f, "{}", func.signature)
             }
             Statement::Closure(_) => {
-                write!(f, "closure")
+                write!(f, "{{ ... }}")
             }
             Statement::FunctionCall(call) => {
-                write!(f, "function call {}(...)", call.fn_name)
+                write!(f, "{}(...)", call.fn_name)
             }
             Statement::Conditional(_) => {
-                write!(f, "conditional")
+                write!(f, "if ...")
             }
             Statement::Loop(_) => {
-                write!(f, "loop")
+                write!(f, "loop {{ ... }}")
             }
             Statement::Break(_) => {
                 write!(f, "break")
@@ -73,8 +69,12 @@ impl fmt::Display for Statement {
             Statement::Continue(_) => {
                 write!(f, "continue")
             }
-            Statement::Return(_) => {
-                write!(f, "return")
+            Statement::Return(ret) => {
+                if let Some(val) = &ret.value {
+                    write!(f, "return {}", val)
+                } else {
+                    write!(f, "return")
+                }
             }
             Statement::StructDeclaration(s) => {
                 write!(f, "{}", s)
@@ -314,7 +314,7 @@ impl Statement {
                 },
                 _,
             ) => {
-                let struct_decl = Struct::from(tokens)?;
+                let struct_decl = StructType::from(tokens)?;
                 Ok(Statement::StructDeclaration(struct_decl))
             }
 

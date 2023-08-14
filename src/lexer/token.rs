@@ -1,3 +1,4 @@
+use colored::Colorize;
 use std::collections::VecDeque;
 use std::fmt;
 use std::io::{BufRead, Lines};
@@ -17,7 +18,7 @@ pub struct Token {
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} to {}: {}", self.start, self.end, self.kind)
+        write!(f, "{}", self.kind)
     }
 }
 
@@ -89,7 +90,7 @@ impl Token {
                 // The subsegment does not begin with a valid token. This means the segment is
                 // syntactically invalid.
                 return Err(LexError::new(
-                    format!(r#"expected valid token, but found {}"#, subseg).as_str(),
+                    format!("expected valid token, but found `{}`", subseg.blue()).as_str(),
                     line_num,
                     search_start + 1,
                 ));

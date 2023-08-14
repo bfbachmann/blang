@@ -1,3 +1,4 @@
+use colored::Colorize;
 use core::fmt;
 use std::fmt::Formatter;
 
@@ -29,25 +30,26 @@ impl RichVarAssign {
 
         // Make sure the variable has been defined.
         let var_type = ctx.get_var(assign.name.as_str());
-        if let None = var_type {
-            return Err(AnalyzeError::new_with_locatable(
+        if let Some(typ) = var_type {
+            // Make sure the variable type is the same as the expression type.
+            if typ != &rich_expr.typ {
+                ctx.add_err(AnalyzeError::new_with_locatable(
+                    ErrorKind::IncompatibleTypes,
+                    format!(
+                        "cannot assign value of type `{}` to variable `{}: {}`",
+                        format!("{}", &rich_expr.typ).blue(),
+                        format!("{}", &assign.name).blue(),
+                        format!("{}", &typ).blue(),
+                    )
+                    .as_str(),
+                    Box::new(assign.value.clone()),
+                ));
+            }
+        } else {
+            ctx.add_err(AnalyzeError::new_with_locatable(
                 ErrorKind::VariableNotDefined,
                 format!("cannot assign to undeclared variable {}", assign.name).as_str(),
                 Box::new(assign.clone()),
-            ));
-        }
-
-        // Make sure the variable type is the same as the expression type.
-        let typ = var_type.unwrap();
-        if typ != &rich_expr.typ {
-            return Err(AnalyzeError::new_with_locatable(
-                ErrorKind::IncompatibleTypes,
-                format!(
-                    "cannot assign value of type {} to variable {} of type {}",
-                    &rich_expr.typ, &assign.name, &typ
-                )
-                .as_str(),
-                Box::new(assign.value.clone()),
             ));
         }
 

@@ -1,11 +1,13 @@
+use colored::Colorize;
 use std::fmt;
 use std::fmt::Formatter;
 
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::expr::RichExpr;
+use crate::analyzer::expr::{RichExpr};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#type::RichType;
 use crate::analyzer::AnalyzeResult;
+
 use crate::parser::statement::Statement;
 use crate::parser::var_dec::VariableDeclaration;
 
@@ -29,12 +31,12 @@ impl RichVarDecl {
     pub fn from(ctx: &mut ProgramContext, var_decl: VariableDeclaration) -> AnalyzeResult<Self> {
         // Check if the variable is already defined in this scope.
         if ctx.get_var(var_decl.name.as_str()).is_some() {
-            return Err(AnalyzeError::new_from_statement(
+            ctx.add_err(AnalyzeError::new_from_statement(
                 ErrorKind::VariableAlreadyDefined,
                 &Statement::VariableDeclaration(var_decl.clone()),
                 format!(
-                    "variable {} was already defined in this scope",
-                    var_decl.name,
+                    "variable `{}` was already defined in this scope",
+                    var_decl.name.blue(),
                 )
                 .as_str(),
             ));
@@ -52,12 +54,14 @@ impl RichVarDecl {
             Some(typ) => {
                 let declared_type = RichType::from(ctx, &typ)?;
                 if &rich_expr.typ != &declared_type {
-                    return Err(AnalyzeError::new_from_statement(
+                    ctx.add_err(AnalyzeError::new_from_statement(
                         ErrorKind::IncompatibleTypes,
                         &Statement::VariableDeclaration(var_decl.clone()),
                         format!(
-                            "cannot assign value of type {} to variable {} of type {}",
-                            &rich_expr.typ, &var_decl.name, &declared_type
+                            "cannot assign value of type `{}` to variable `{}: {}`",
+                            format!("{}", &rich_expr.typ).blue(),
+                            format!("{}", &var_decl.name).blue(),
+                            format!("{}", &declared_type).blue(),
                         )
                         .as_str(),
                     ));
@@ -96,7 +100,7 @@ mod tests {
     fn var_already_defined() {
         let mut ctx = ProgramContext::new();
         let var_decl = VariableDeclaration::new(
-            Some(Type::String),
+            Some(Type::string()),
             "my_string".to_string(),
             Expression::StringLiteral(StringLit::new_with_default_pos("bingo")),
             Position::default(),
@@ -116,12 +120,13 @@ mod tests {
         );
 
         let result = RichVarDecl::from(&mut ctx, var_decl);
+        assert!(result.is_ok());
         assert!(matches!(
-            result,
-            Err(AnalyzeError {
+            ctx.errors().remove(0),
+            AnalyzeError {
                 kind: ErrorKind::VariableAlreadyDefined,
                 ..
-            })
+            }
         ));
     }
 
@@ -129,19 +134,20 @@ mod tests {
     fn type_mismatch() {
         let mut ctx = ProgramContext::new();
         let var_decl = VariableDeclaration::new(
-            Some(Type::I64),
+            Some(Type::i64()),
             "my_string".to_string(),
             Expression::StringLiteral(StringLit::new_with_default_pos("bingo")),
             Position::default(),
             Default::default(),
         );
         let result = RichVarDecl::from(&mut ctx, var_decl);
+        assert!(result.is_ok());
         assert!(matches!(
-            result,
-            Err(AnalyzeError {
+            ctx.errors().remove(0),
+            AnalyzeError {
                 kind: ErrorKind::IncompatibleTypes,
                 ..
-            })
+            }
         ));
     }
 }

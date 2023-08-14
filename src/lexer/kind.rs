@@ -113,11 +113,11 @@ impl Clone for TokenKind {
 impl fmt::Display for TokenKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            TokenKind::BoolLiteral(b) => write!(f, "boolean literal {}", b.to_string()),
-            TokenKind::I64Literal(i) => write!(f, "i64 literal {}", i.to_string()),
-            TokenKind::StringLiteral(s) => write!(f, r#"string literal "{}""#, s),
-            TokenKind::Identifier(s) => write!(f, r#"identifier "{}""#, s),
-            other => write!(f, r#""{}""#, other.to_string()),
+            TokenKind::BoolLiteral(b) => write!(f, "{}", b),
+            TokenKind::I64Literal(i) => write!(f, "{}", i),
+            TokenKind::StringLiteral(s) => write!(f, r#""{}""#, s),
+            TokenKind::Identifier(s) => write!(f, "{}", s),
+            other => write!(f, "{}", other.to_string()),
         }
     }
 }

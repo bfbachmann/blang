@@ -1,7 +1,7 @@
-use crate::lexer::pos::{Locatable, Position};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
+use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 
 #[derive(Debug)]
@@ -18,7 +18,6 @@ pub enum ErrorKind {
     UnmatchedCloseParen,
     UnmatchedOpenParen,
     UnexpectedEndOfExpr,
-    UnexpectedEndOfArgs,
     UnexpectedToken,
     UnexpectedEOF,
     InvalidStatement,
@@ -43,7 +42,6 @@ impl Display for ErrorKind {
             ErrorKind::UnmatchedCloseParen => write!(f, "unexpected )"),
             ErrorKind::UnmatchedOpenParen => write!(f, "unexpected ("),
             ErrorKind::UnexpectedEndOfExpr => write!(f, "unexpected end of expression"),
-            ErrorKind::UnexpectedEndOfArgs => write!(f, "unexpected end of arguments"),
             ErrorKind::UnexpectedToken => write!(f, "unexpected token"),
             ErrorKind::UnexpectedEOF => write!(f, "unexpected EOF"),
             ErrorKind::InvalidStatement => write!(f, "invalid statement"),

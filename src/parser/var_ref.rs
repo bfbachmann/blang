@@ -1,3 +1,4 @@
+use colored::Colorize;
 use std::collections::VecDeque;
 use std::fmt::{Display, Formatter};
 
@@ -56,7 +57,11 @@ impl VarRef {
             }),
             Some(other) => Err(ParseError::new(
                 ErrorKind::ExpectedIdent,
-                format!("expected identifier, but found {}", other).as_str(),
+                format!(
+                    "expected identifier, but found `{}`",
+                    format!("{}", other).blue()
+                )
+                .as_str(),
                 Some(other.clone()),
                 other.start,
                 other.end,

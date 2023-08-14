@@ -31,6 +31,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     /// the host system.
     pub fn compile(
         program: &RichProg,
+        extern_fns: Vec<RichFnSig>,
         target_triple: Option<&String>,
         as_bitcode: bool,
         output_path: &Path,
@@ -67,7 +68,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
             module: &module,
             program,
         };
-        compiler.compile_program()?;
+        compiler.compile_program(extern_fns)?;
 
         // Write output as to file.
         if as_bitcode {
@@ -85,11 +86,11 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     }
 
     /// Compiles the program.
-    fn compile_program(&mut self) -> CompileResult<()> {
+    fn compile_program(&mut self, extern_fn_sigs: Vec<RichFnSig>) -> CompileResult<()> {
         // Define external functions (like syscalls) so we can call the safely from within the
         // module. Their actual implementations should be linked from libc when generating an
         // executable.
-        self.define_extern_fns();
+        self.define_extern_fns(extern_fn_sigs);
 
         // Do one shallow pass to define all top-level functions in the module.
         for statement in &self.program.statements {
@@ -177,8 +178,8 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     }
 
     /// Defines external functions in the current module.
-    fn define_extern_fns(&mut self) {
-        for extern_fn_sig in &self.program.extern_fns {
+    fn define_extern_fns(&mut self, extern_fns: Vec<RichFnSig>) {
+        for extern_fn_sig in &extern_fns {
             let fn_type = convert::to_fn_type(self.context, &extern_fn_sig);
             self.module.add_function(
                 extern_fn_sig.name.as_str(),
@@ -203,9 +204,16 @@ mod tests {
     fn assert_compiles(code: &str) {
         let mut tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
         let prog = Program::from(&mut tokens).expect("should not error");
-        let rich_prog = RichProg::from(prog, all_syscalls().to_vec()).expect("should not error");
-        ProgCompiler::compile(&rich_prog, None, false, Path::new("/dev/null"), false)
-            .expect("should not error");
+        let analysis = RichProg::analyze(prog, all_syscalls().to_vec());
+        ProgCompiler::compile(
+            &analysis.prog,
+            vec![],
+            None,
+            false,
+            Path::new("/dev/null"),
+            false,
+        )
+        .expect("should not error");
     }
 
     #[test]

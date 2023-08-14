@@ -1,7 +1,7 @@
 use std::fmt;
 
 /// Represents the position (line and column) within a file.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash)]
 pub struct Position {
     pub line: usize,
     pub col: usize,

@@ -1,3 +1,4 @@
+use colored::Colorize;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -9,6 +10,7 @@ use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
 use crate::parser::r#type::Type;
+use crate::parser::unresolved::UnresolvedType;
 use crate::parser::ParseResult;
 use crate::util;
 
@@ -33,20 +35,24 @@ impl Locatable for StructField {
 
 /// Represents a struct with a set of named fields.
 #[derive(Debug, Clone)]
-pub struct Struct {
+pub struct StructType {
     pub name: String,
     pub fields: Vec<StructField>,
     start_pos: Position,
     end_pos: Position,
 }
 
-impl Display for Struct {
+impl Display for StructType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "struct {} {{ ... }}", self.name)
+        if self.name.is_empty() {
+            write!(f, "struct {{ ... }}")
+        } else {
+            write!(f, "struct {} {{ ... }}", self.name)
+        }
     }
 }
 
-impl PartialEq for Struct {
+impl PartialEq for StructType {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && util::vectors_are_equal(&self.fields, &other.fields)
@@ -55,7 +61,7 @@ impl PartialEq for Struct {
     }
 }
 
-impl Locatable for Struct {
+impl Locatable for StructType {
     fn start_pos(&self) -> &Position {
         &self.start_pos
     }
@@ -65,7 +71,7 @@ impl Locatable for Struct {
     }
 }
 
-impl Struct {
+impl StructType {
     /// Parses a struct declaration. Expects token sequences of the form
     ///
     ///     struct <name> {
@@ -143,7 +149,7 @@ impl Struct {
             });
         }
 
-        Ok(Struct {
+        Ok(StructType {
             name,
             fields,
             start_pos,
@@ -217,18 +223,28 @@ impl StructInit {
                 },
             ) => {
                 tokens.push_front(token);
-                Type::Struct(Struct::from(tokens)?)
+                Type::Struct(StructType::from(tokens)?)
             }
 
-            Some(Token {
-                kind: TokenKind::Identifier(type_name),
-                ..
-            }) => Type::Unresolved(type_name),
+            Some(
+                ref token @ Token {
+                    kind: TokenKind::Identifier(ref type_name),
+                    ..
+                },
+            ) => Type::Unresolved(UnresolvedType::new(
+                type_name.as_str(),
+                token.start,
+                token.end,
+            )),
 
             Some(other) => {
                 return Err(ParseError::new(
                     ErrorKind::ExpectedType,
-                    format!("expected struct type, but found {}", &other).as_str(),
+                    format!(
+                        "expected struct type, but found `{}`",
+                        format!("{}", &other).blue()
+                    )
+                    .as_str(),
                     Some(other.clone()),
                     other.start,
                     other.end,

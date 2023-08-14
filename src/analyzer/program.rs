@@ -3,68 +3,86 @@ use crate::analyzer::func::{analyze_fn_sig, RichFnSig};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#struct::RichStruct;
 use crate::analyzer::statement::RichStatement;
-use crate::analyzer::AnalyzeResult;
-use crate::lexer::pos::Position;
+use crate::analyzer::warn::Warning;
+
+
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::program::Program;
+
 use crate::parser::statement::Statement;
-use crate::syscall::syscall::all_syscalls;
+
+use colored::Colorize;
 
 /// Represents a semantically valid and type-rich program.
 #[derive(Debug)]
 pub struct RichProg {
     pub statements: Vec<RichStatement>,
+}
+
+/// Represents the result of semantic analysis on a program.
+pub struct ProgramAnalysis {
+    pub prog: RichProg,
     pub extern_fns: Vec<RichFnSig>,
+    pub errors: Vec<AnalyzeError>,
+    pub warnings: Vec<Warning>,
 }
 
 impl RichProg {
-    /// Performs semantic analysis on the given program and returns a type-rich version of it,
-    /// or an error if the program is semantically invalid.
-    pub fn from(prog: Program, extern_fn_sigs: Vec<FunctionSignature>) -> AnalyzeResult<Self> {
+    /// Performs semantic analysis on the given program and extern functions.
+    pub fn analyze(prog: Program, extern_fn_sigs: Vec<FunctionSignature>) -> ProgramAnalysis {
         let mut ctx = ProgramContext::new();
-
-        // Define built-in syscall functions.
-        for syscall in all_syscalls() {
-            analyze_fn_sig(&mut ctx, &syscall)?;
-        }
-
-        // Analyze top-level struct declarations.
-        define_structs(&mut ctx, &prog)?;
-
-        // Analyze top-level function declarations.
-        define_fns(&mut ctx, &prog)?;
-
-        // Analyze each statement in the program and collect the results.
-        let mut rich_statements = vec![];
-        for statement in prog.statements {
-            let rich_statement = RichStatement::from(&mut ctx, statement)?;
-            rich_statements.push(rich_statement);
-        }
 
         // Analyze external functions to be added to the program.
         let mut rich_extern_fns = vec![];
         for extern_fn_sig in extern_fn_sigs {
-            rich_extern_fns.push(RichFnSig::from(&mut ctx, &extern_fn_sig)?)
+            let fn_sig_result = RichFnSig::from(&mut ctx, &extern_fn_sig);
+            if let Some(rich_fn_sig) = ctx.consume_error(fn_sig_result) {
+                rich_extern_fns.push(rich_fn_sig);
+            }
         }
 
-        Ok(RichProg {
-            statements: rich_statements,
+        ProgramAnalysis {
+            prog: RichProg::from(&mut ctx, prog),
             extern_fns: rich_extern_fns,
-        })
+            errors: ctx.errors(),
+            warnings: ctx.warnings(),
+        }
+    }
+
+    /// Performs semantic analysis on the given program and returns a type-rich version of it.
+    pub fn from(ctx: &mut ProgramContext, prog: Program) -> Self {
+        // Analyze top-level struct declarations.
+        define_structs(ctx, &prog);
+
+        // Analyze top-level function declarations.
+        define_fns(ctx, &prog);
+
+        // Analyze each statement in the program and collect the results.
+        let mut rich_statements = vec![];
+        for statement in prog.statements {
+            let rich_statement_result = RichStatement::from(ctx, statement);
+            if let Some(rich_statement) = ctx.consume_error(rich_statement_result) {
+                rich_statements.push(rich_statement);
+            }
+        }
+
+        RichProg {
+            statements: rich_statements,
+        }
     }
 }
 
 /// Defines top-level struct types in the program context without deeply analyzing their fields, so
 /// they can be referenced later. This will simply check for struct type name collisions and
-/// containment cycles.
-fn define_structs(ctx: &mut ProgramContext, prog: &Program) -> AnalyzeResult<()> {
+/// containment cycles. We do this before fully analyzing types to prevent infinite recursion.
+fn define_structs(ctx: &mut ProgramContext, prog: &Program) {
     // First pass: Define all structs without analyzing their fields. In this pass, we will only
     // check that there are no struct name collisions.
     for statement in &prog.statements {
         match statement {
             Statement::StructDeclaration(struct_type) => {
                 if ctx.add_extern_struct(struct_type.clone()).is_some() {
-                    return Err(AnalyzeError::new_with_locatable(
+                    ctx.add_err(AnalyzeError::new_with_locatable(
                         ErrorKind::TypeAlreadyDefined,
                         format!(
                             "another type with the name {} already exists",
@@ -80,60 +98,56 @@ fn define_structs(ctx: &mut ProgramContext, prog: &Program) -> AnalyzeResult<()>
     }
 
     // Second pass: Check for struct containment cycles.
-    for struct_type in ctx.extern_structs() {
-        RichStruct::analyze_containment(ctx, struct_type)?;
+    let extern_structs = ctx.extern_structs();
+    let mut results = vec![];
+    for struct_type in extern_structs {
+        let result = RichStruct::analyze_containment(ctx, struct_type);
+        results.push((result, struct_type.name.clone()));
     }
 
-    Ok(())
+    // Remove struct types that have containment cycles from the program context and add them as
+    // invalid types instead. We do this so we can safely continue with semantic analysis without
+    // having to worry about stack overflows during recursive type resolution.
+    for (result, struct_type_name) in results {
+        if ctx.consume_error(result).is_none() {
+            ctx.remove_extern_struct(struct_type_name.as_str());
+            ctx.add_invalid_type(struct_type_name.as_str());
+        }
+    }
 }
 
 /// Analyzes all top-level function signatures and defines them in the program context so they
 /// can be referenced later. This will not perform any analysis of function bodies.
-fn define_fns(ctx: &mut ProgramContext, prog: &Program) -> AnalyzeResult<()> {
-    let mut main_fn = None;
+fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
     for statement in &prog.statements {
         match statement {
             Statement::FunctionDeclaration(func) => {
-                analyze_fn_sig(ctx, &func.signature)?;
+                let result = analyze_fn_sig(ctx, &func.signature);
+                ctx.consume_error(result);
+
                 if func.signature.name == "main" {
-                    main_fn = Some(&func.signature)
+                    // Make sure main has no args or return.
+                    if func.signature.args.len() != 0 {
+                        ctx.add_err(AnalyzeError::new_with_locatable(
+                            ErrorKind::InvalidMain,
+                            format!("function `{}` cannot have arguments", "main".blue()).as_str(),
+                            Box::new(func.signature.clone()),
+                        ));
+                    }
+
+                    if func.signature.return_type.is_some() {
+                        ctx.add_err(AnalyzeError::new_with_locatable(
+                            ErrorKind::InvalidMain,
+                            format!("function `{}` cannot have a return type", "main".blue())
+                                .as_str(),
+                            Box::new(func.signature.clone()),
+                        ));
+                    }
                 }
             }
             _ => {}
         }
     }
-
-    // Make sure a main function was declared.
-    match main_fn {
-        Some(main_sig) => {
-            // Make sure main has no args or return.
-            if main_sig.args.len() != 0 {
-                return Err(AnalyzeError::new_with_locatable(
-                    ErrorKind::InvalidMain,
-                    "function main cannot have arguments",
-                    Box::new(main_sig.clone()),
-                ));
-            }
-
-            if main_sig.return_type.is_some() {
-                return Err(AnalyzeError::new_with_locatable(
-                    ErrorKind::InvalidMain,
-                    "function main cannot have a return type",
-                    Box::new(main_sig.clone()),
-                ));
-            }
-        }
-        None => {
-            return Err(AnalyzeError::new(
-                ErrorKind::MissingMain,
-                "missing main function",
-                Position::default(),
-                Position::default(),
-            ));
-        }
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -145,12 +159,17 @@ mod tests {
     use crate::analyzer::AnalyzeResult;
     use crate::lexer::token::Token;
     use crate::parser::program::Program;
-    use crate::syscall::syscall::all_syscalls;
+    
 
     fn analyze_prog(raw: &str) -> AnalyzeResult<RichProg> {
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let prog = Program::from(&mut tokens).expect("should not error");
-        RichProg::from(prog, all_syscalls().to_vec())
+        let mut analysis = RichProg::analyze(prog, vec![]);
+        if analysis.errors.is_empty() {
+            Ok(analysis.prog)
+        } else {
+            Err(analysis.errors.remove(0))
+        }
     }
 
     #[test]
@@ -356,14 +375,12 @@ mod tests {
             struct Test {
                 inner: Test
             }
-            
-            fn main() {}
         "#;
         let result = analyze_prog(raw);
         assert!(matches!(
             result,
             Err(AnalyzeError {
-                kind: ErrorKind::ContainmentCycle,
+                kind: ErrorKind::InfiniteSizedType,
                 ..
             })
         ));
@@ -381,14 +398,12 @@ mod tests {
                 cond: bool,
                 inner: Inner,
             }
-            
-            fn main() {}
         "#;
         let result = analyze_prog(raw);
         assert!(matches!(
             result,
             Err(AnalyzeError {
-                kind: ErrorKind::ContainmentCycle,
+                kind: ErrorKind::InfiniteSizedType,
                 ..
             })
         ));

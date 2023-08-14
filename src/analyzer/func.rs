@@ -1,17 +1,21 @@
 use std::fmt;
-use std::fmt::Formatter;
+use std::fmt::{Formatter};
+
+use colored::Colorize;
 
 use crate::analyzer::closure::{check_closure_returns, RichClosure};
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#type::RichType;
+
 use crate::analyzer::AnalyzeResult;
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::arg::Argument;
 use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
 use crate::parser::func_sig::FunctionSignature;
+
 use crate::parser::ret::Ret;
 use crate::util;
 
@@ -24,7 +28,11 @@ pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) -> Anal
     if let Some(_) = ctx.add_extern_fn(rich_fn_sig) {
         return Err(AnalyzeError::new_with_locatable(
             ErrorKind::FunctionAlreadyDefined,
-            format!("function {} was already defined in this scope", sig.name).as_str(),
+            format!(
+                "function `{}` was already defined in this scope",
+                sig.name.blue()
+            )
+            .as_str(),
             Box::new(sig.clone()),
         ));
     }
@@ -40,7 +48,7 @@ pub struct RichArg {
 }
 
 impl fmt::Display for RichArg {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         if self.name.is_empty() {
             write!(f, "{}", self.typ)
         } else {
@@ -137,11 +145,11 @@ impl RichFn {
     pub fn from(ctx: &mut ProgramContext, func: Function) -> AnalyzeResult<Self> {
         // Make sure the function is not already defined.
         if let Some(_) = ctx.get_fn(func.signature.name.as_str()) {
-            return Err(AnalyzeError::new_with_locatable(
+            ctx.add_err(AnalyzeError::new_with_locatable(
                 ErrorKind::FunctionAlreadyDefined,
                 format!(
-                    "function {} was already defined in this scope",
-                    func.signature.name
+                    "function `{}` was already defined in this scope",
+                    func.signature.name.blue()
                 )
                 .as_str(),
                 Box::new(func.clone()),
@@ -160,7 +168,7 @@ impl RichFn {
         // Make sure the function return conditions are satisfied by the closure.
         if let Some(ret_type) = &func.signature.return_type {
             let rich_ret_type = RichType::from(ctx, &ret_type)?;
-            check_closure_returns(&rich_closure, &rich_ret_type, &ScopeKind::FnBody)?;
+            check_closure_returns(ctx, &rich_closure, &rich_ret_type, &ScopeKind::FnBody);
         }
 
         // Add the function to the program context so we can reference it later.
@@ -208,7 +216,7 @@ impl RichFnCall {
     pub fn from(ctx: &mut ProgramContext, call: FunctionCall) -> AnalyzeResult<Self> {
         // Calls to "main" should not be allowed.
         if call.fn_name == "main" {
-            return Err(AnalyzeError::new_with_locatable(
+            ctx.add_err(AnalyzeError::new_with_locatable(
                 ErrorKind::CallToMain,
                 "cannot call entrypoint main",
                 Box::new(call.clone()),
@@ -231,23 +239,34 @@ impl RichFnCall {
                 None => match ctx.get_var(call.fn_name.as_str()) {
                     Some(&RichType::Function(ref func)) => func,
                     _ => {
-                        return Err(AnalyzeError::new_with_locatable(
+                        // The function is not defined, so add an error and return a zero value.
+                        ctx.add_err(AnalyzeError::new_with_locatable(
                             ErrorKind::FunctionNotDefined,
-                            format!("function {} does not exist", call.fn_name).as_str(),
+                            format!("function `{}` does not exist", call.fn_name.blue()).as_str(),
                             Box::new(call.clone()),
                         ));
+
+                        return Ok(RichFnCall {
+                            fn_name: call.fn_name.clone(),
+                            args: vec![],
+                            ret_type: Some(RichType::Unknown("<unknown>".to_string())),
+                        });
                     }
                 },
             },
         };
 
+        let ret_type = fn_sig.return_type.clone();
+        let fn_name = fn_sig.name.clone();
+        let fn_args = fn_sig.args.clone();
+
         // Make sure the right number of arguments were passed.
         if rich_args.len() != fn_sig.args.len() {
-            return Err(AnalyzeError::new_with_locatable(
+            ctx.add_err(AnalyzeError::new_with_locatable(
                 ErrorKind::WrongNumberOfArgs,
                 format!(
-                    "function {} takes {} args, but {} were provided",
-                    fn_sig.name,
+                    "function `{}` takes {} arguments, but {} were provided",
+                    fn_sig.name.blue(),
                     fn_sig.args.len(),
                     rich_args.len()
                 )
@@ -257,24 +276,22 @@ impl RichFnCall {
         }
 
         // Make sure the arguments are of the right types.
-        for (i, (passed_type, defined)) in rich_args
-            .iter()
-            .map(|a| &a.typ)
-            .zip(&fn_sig.args)
-            .enumerate()
+        for (i, (passed_type, defined)) in
+            rich_args.iter().map(|a| &a.typ).zip(&fn_args).enumerate()
         {
             if !passed_type.is_compatible_with(&defined.typ) {
                 let original_arg = call.args.get(i).unwrap();
-                return Err(AnalyzeError::new(
+                ctx.add_err(AnalyzeError::new_with_locatable(
                     ErrorKind::IncompatibleTypes,
                     format!(
-                        r#"argument {} of function {} has type {}, but a value of type {} was \
-                        provided"#,
-                        &defined.name, &fn_sig.name, &defined.typ, &passed_type
+                        "cannot use value of type `{}` as argument `{}: {}` to function `{}`",
+                        format!("{}", &passed_type).blue(),
+                        format!("{}", &defined.name).blue(),
+                        format!("{}", &defined.typ).blue(),
+                        format!("{}", &fn_name).blue(),
                     )
                     .as_str(),
-                    original_arg.start_pos().clone(),
-                    original_arg.end_pos().clone(),
+                    Box::new(original_arg.clone()),
                 ));
             }
         }
@@ -282,7 +299,7 @@ impl RichFnCall {
         Ok(RichFnCall {
             fn_name: call.fn_name,
             args: rich_args,
-            ret_type: fn_sig.return_type.clone(),
+            ret_type,
         })
     }
 }
@@ -322,17 +339,23 @@ impl Locatable for RichRet {
 
 impl RichRet {
     pub fn from(ctx: &mut ProgramContext, ret: Ret) -> AnalyzeResult<Self> {
+        let start_pos = ret.start_pos().clone();
+        let end_pos = ret.start_pos().clone();
+
         // Make sure we are inside a function body.
         if !ctx.is_in_fn() {
-            return Err(AnalyzeError::new_with_locatable(
+            ctx.add_err(AnalyzeError::new_with_locatable(
                 ErrorKind::UnexpectedReturn,
                 "cannot return from outside function body",
                 Box::new(ret.clone()),
             ));
-        }
 
-        let start_pos = ret.start_pos().clone();
-        let end_pos = ret.start_pos().clone();
+            return Ok(RichRet {
+                val: None,
+                start_pos,
+                end_pos,
+            });
+        }
 
         match ret.value {
             Some(expr) => {
@@ -340,53 +363,62 @@ impl RichRet {
                 let rich_expr = RichExpr::from(ctx, expr.clone())?;
                 match ctx.return_type() {
                     Some(expected) => {
-                        if expected != &rich_expr.typ {
-                            Err(AnalyzeError::new_with_locatable(
+                        // Skip the type check if either type is unknown. This will be the case if
+                        // semantic analysis on either type already failed.
+                        if !expected.is_unknown()
+                            && !rich_expr.typ.is_unknown()
+                            && expected != &rich_expr.typ
+                        {
+                            ctx.add_err(AnalyzeError::new_with_locatable(
                                 ErrorKind::IncompatibleTypes,
                                 format!(
-                                    "cannot return value of type {} from function with return type {}",
-                                    &rich_expr.typ, &expected
+                                    "cannot return value of type `{}` from function with return \
+                                    type `{}`",
+                                    format!("{}", &rich_expr.typ).blue(),
+                                    format!("{}", &expected).blue(),
                                 )
                                 .as_str(),
                                 Box::new(expr),
-                            ))
-                        } else {
-                            Ok(RichRet {
-                                val: Some(rich_expr),
-                                start_pos,
-                                end_pos,
-                            })
+                            ));
                         }
                     }
-                    None => Err(AnalyzeError::new_with_locatable(
-                        ErrorKind::IncompatibleTypes,
-                        format!(
-                            "cannot return value of type {} from function with no return type",
-                            rich_expr.typ
-                        )
-                        .as_str(),
-                        Box::new(expr.clone()),
-                    )),
-                }
+                    None => {
+                        ctx.add_err(AnalyzeError::new_with_locatable(
+                            ErrorKind::IncompatibleTypes,
+                            "cannot return value from function with no return type",
+                            Box::new(expr.clone()),
+                        ));
+                    }
+                };
+
+                Ok(RichRet {
+                    val: Some(rich_expr),
+                    start_pos,
+                    end_pos,
+                })
             }
             None => {
                 // This is an empty return. Make sure we're not expecting a return type.
                 match ctx.return_type() {
-                    Some(expected) => Err(AnalyzeError::new_with_locatable(
-                        ErrorKind::IncompatibleTypes,
-                        format!(
-                            "expected return value of type {}, but found empty return",
-                            expected
-                        )
-                        .as_str(),
-                        Box::new(ret),
-                    )),
-                    None => Ok(RichRet {
-                        val: None,
-                        start_pos,
-                        end_pos,
-                    }),
-                }
+                    Some(expected) => {
+                        ctx.add_err(AnalyzeError::new_with_locatable(
+                            ErrorKind::IncompatibleTypes,
+                            format!(
+                                "expected return value of type `{}`, but found empty return",
+                                format!("{}", expected).blue(),
+                            )
+                            .as_str(),
+                            Box::new(ret),
+                        ));
+                    }
+                    None => {}
+                };
+
+                Ok(RichRet {
+                    val: None,
+                    start_pos,
+                    end_pos,
+                })
             }
         }
     }

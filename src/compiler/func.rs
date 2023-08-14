@@ -863,6 +863,9 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             RichType::I64 => self.get_int(val).as_basic_value_enum(),
             RichType::Bool => self.get_bool(val).as_basic_value_enum(),
             RichType::Function(_) => val.as_basic_value_enum(),
+            RichType::Unknown(name) => {
+                panic!("encountered unknown type {}", name)
+            }
         }
     }
 }

@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+
 use std::fs::File;
 use std::io::{stdin, stdout, BufRead, BufReader, Error, ErrorKind, Result, Write};
 use std::path::{Path, PathBuf};
@@ -7,7 +8,7 @@ use std::process;
 use clap::{arg, ArgAction, Command};
 use colored::*;
 
-use crate::analyzer::error::AnalyzeError;
+use crate::analyzer::func::RichFnSig;
 use compiler::program::ProgCompiler;
 use lexer::token::Token;
 use parser::program::Program;
@@ -39,6 +40,14 @@ macro_rules! fatalln {
 macro_rules! errorln {
     ($($arg:tt)*) => {{
         print!("{}", "error: ".red().bold());
+        println!($($arg)*);
+    }};
+}
+
+/// Prints a warning message.
+macro_rules! warnln {
+    ($($arg:tt)*) => {{
+        print!("{}", "warning: ".yellow().bold());
         println!($($arg)*);
     }};
 }
@@ -111,7 +120,7 @@ fn open_file(file_path: &str) -> Result<BufReader<File>> {
 }
 
 /// Performs static analysis on the source code at the given path.
-fn analyze(input_path: &str) -> RichProg {
+fn analyze(input_path: &str) -> Option<(RichProg, Vec<RichFnSig>)> {
     // Get a reader from the source file.
     let reader = match open_file(input_path) {
         Ok(r) => r,
@@ -123,11 +132,9 @@ fn analyze(input_path: &str) -> RichProg {
         Ok(tokens) => tokens,
         Err(LexError { message, line, col }) => {
             fatalln!(
-                "{}[{}:{}]: {}",
-                input_path.bright_black(),
-                line,
-                col,
+                "{}\n  {}",
                 message.bold(),
+                format_file_loc(input_path, Some(line), Some(col)),
             )
         }
     };
@@ -142,40 +149,57 @@ fn analyze(input_path: &str) -> RichProg {
             ..
         }) => {
             fatalln!(
-                "{}: {}",
-                format_file_loc(input_path, Some(start_pos.line), Some(start_pos.col)),
+                "{}\n  {}",
                 message.bold(),
+                format_file_loc(input_path, Some(start_pos.line), Some(start_pos.col)),
             );
         }
         Ok(p) => p,
     };
 
     // Analyze the program.
-    match RichProg::from(prog, all_syscalls().to_vec()) {
-        Ok(rp) => rp,
-        Err(AnalyzeError {
-            kind: _,
-            message,
-            detail: maybe_detail,
-            start_pos,
-            ..
-        }) => {
-            if let Some(detail) = maybe_detail {
-                fatalln!(
-                    "{}: {}\n  {}",
-                    format_file_loc(input_path, Some(start_pos.line), Some(start_pos.col)),
-                    message.bold(),
-                    detail
-                )
-            } else {
-                fatalln!(
-                    "{}: {}",
-                    format_file_loc(input_path, Some(start_pos.line), Some(start_pos.col)),
-                    message.bold()
-                )
-            }
-        }
+    let analysis = RichProg::analyze(prog, all_syscalls().to_vec());
+    if analysis.errors.is_empty() {
+        return Some((analysis.prog, analysis.extern_fns));
     }
+
+    // Print warnings.
+    for warn in analysis.warnings {
+        warnln!(
+            "{}\n  {}\n",
+            format!("{}", warn.message).bold(),
+            format_file_loc(
+                input_path,
+                Some(warn.start_pos.line),
+                Some(warn.start_pos.col)
+            ),
+        );
+    }
+
+    // Print errors.
+    for err in analysis.errors {
+        errorln!(
+            "{}\n  {}",
+            format!("{}: {}", err.kind, err.message).bold(),
+            format_file_loc(
+                input_path,
+                Some(err.start_pos.line),
+                Some(err.start_pos.col)
+            ),
+        );
+
+        if let Some(detail) = err.detail {
+            println!("  {}", detail);
+        }
+
+        if let Some(hint) = err.hint {
+            println!("  {} {}", "hint:".green(), hint);
+        }
+
+        println!();
+    }
+
+    None
 }
 
 /// Compiles a source file for the given target ISA. If there is no target, infers configuration
@@ -188,7 +212,10 @@ fn compile(
     simplify_ir: bool,
 ) {
     // Read and analyze the program.
-    let prog = analyze(src_path);
+    let (prog, extern_fns) = match analyze(src_path) {
+        Some(v) => v,
+        None => return,
+    };
 
     // If no output path was specified, just use the source file name.
     let src = Path::new(src_path);
@@ -200,7 +227,14 @@ fn compile(
     };
 
     // Compile the program.
-    if let Err(e) = ProgCompiler::compile(&prog, target, as_bitcode, dst.as_path(), simplify_ir) {
+    if let Err(e) = ProgCompiler::compile(
+        &prog,
+        extern_fns,
+        target,
+        as_bitcode,
+        dst.as_path(),
+        simplify_ir,
+    ) {
         fatalln!("{}", e);
     }
 }
@@ -281,7 +315,7 @@ fn repl_collect_tokens() -> Result<VecDeque<Token>> {
 /// Formats the file location has a colored string.
 fn format_file_loc(path: &str, line: Option<usize>, col: Option<usize>) -> ColoredString {
     match (line, col) {
-        (Some(l), Some(c)) => format!("{}:{}:{}", path, l, c).bright_black(),
-        _ => format!("{}", path).bright_black(),
+        (Some(l), Some(c)) => format!("--> {}:{}:{}", path, l, c).bright_black().bold(),
+        _ => format!("--> {}", path).bright_black(),
     }
 }

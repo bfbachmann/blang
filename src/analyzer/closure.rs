@@ -1,5 +1,7 @@
 use std::fmt;
-use std::fmt::Formatter;
+use std::fmt::{Formatter};
+
+use colored::*;
 
 use crate::analyzer::cond::RichCond;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
@@ -7,6 +9,7 @@ use crate::analyzer::func::{RichArg, RichRet};
 use crate::analyzer::prog_context::{ProgramContext, Scope, ScopeKind};
 use crate::analyzer::r#type::RichType;
 use crate::analyzer::statement::RichStatement;
+use crate::analyzer::warn::Warning;
 use crate::analyzer::AnalyzeResult;
 use crate::parser::arg::Argument;
 use crate::parser::closure::Closure;
@@ -68,21 +71,21 @@ impl RichClosure {
         let num_statements = closure.statements.len();
         for (i, statement) in closure.statements.into_iter().enumerate() {
             let rich_statement = RichStatement::from(ctx, statement.clone())?;
+            rich_statements.push(rich_statement);
 
             // If the statement is a return, make sure the return type is correct and that there
             // are no more statements in this closure.
-            if let RichStatement::Return(ret) = &rich_statement {
-                check_return(&ret, ctx.return_type().as_ref())?;
+            if let RichStatement::Return(ret) = rich_statements.last().unwrap() {
+                let result = check_return(&ret, ctx.return_type().as_ref());
+                ctx.consume_error(result);
                 if i + 1 != num_statements {
-                    return Err(AnalyzeError::new_from_statement(
-                        ErrorKind::UnexpectedReturn,
-                        &statement,
+                    ctx.add_warn(Warning::new_from_locatable(
                         "statements following unconditional return would never be executed",
+                        Box::new(statement.clone()),
                     ));
+                    break;
                 }
             }
-
-            rich_statements.push(rich_statement);
         }
 
         // TODO: handle closure result.
@@ -105,10 +108,11 @@ impl RichClosure {
 
 /// Checks that the given closure returns the given type.
 pub fn check_closure_returns(
+    ctx: &mut ProgramContext,
     closure: &RichClosure,
     expected_ret_type: &RichType,
     kind: &ScopeKind,
-) -> AnalyzeResult<()> {
+) {
     // Given that there is an expected return type, one of the following return conditions must
     // be satisfied by the final statement in the closure.
     //  1. It is a return statement returning a value of the right type.
@@ -122,44 +126,36 @@ pub fn check_closure_returns(
         // If this closure is a function body, branch body, or inline closure, we need to ensure
         // that the final statement satisfies the return conditions.
         ScopeKind::FnBody | ScopeKind::Branch | ScopeKind::Inline => {
-            let last_statement = match closure.statements.last() {
-                Some(statement) => statement,
-                None => {
-                    return Err(AnalyzeError::new_with_locatable(
-                        ErrorKind::MissingReturn,
-                        format!("expected return value of type {}", expected_ret_type).as_str(),
-                        Box::new(closure.original.clone()),
-                    ))
-                }
-            };
-
-            match last_statement {
+            match closure.statements.last() {
                 // If it's a return, make sure the return type is correct.
-                RichStatement::Return(ret) => check_return(ret, Some(expected_ret_type))?,
+                Some(RichStatement::Return(ret)) => {
+                    let result = check_return(&ret, Some(expected_ret_type));
+                    ctx.consume_error(result);
+                }
 
                 // If it's a conditional, make sure it is exhaustive and recurse on each branch.
-                RichStatement::Conditional(cond) => {
-                    check_cond_returns(cond, expected_ret_type)?;
+                Some(RichStatement::Conditional(cond)) => {
+                    check_cond_returns(ctx, &cond, expected_ret_type);
                 }
 
                 // If it's a loop, recurse on the loop body.
-                RichStatement::Loop(closure) => {
-                    check_closure_returns(closure, expected_ret_type, &ScopeKind::Loop)?;
+                Some(RichStatement::Loop(closure)) => {
+                    check_closure_returns(ctx, &closure, expected_ret_type, &ScopeKind::Loop);
                 }
 
                 // If it's an inline closure, recurse on the closure.
-                RichStatement::Closure(closure) => {
-                    check_closure_returns(closure, expected_ret_type, &ScopeKind::Inline)?;
+                Some(RichStatement::Closure(closure)) => {
+                    check_closure_returns(ctx, &closure, expected_ret_type, &ScopeKind::Inline);
                 }
 
                 _ => {
-                    return Err(AnalyzeError::new_with_locatable(
+                    ctx.add_err(AnalyzeError::new_with_locatable(
                         ErrorKind::MissingReturn,
-                        format!("missing return value of type {}", expected_ret_type).as_str(),
+                        "missing return statement",
                         Box::new(closure.original.clone()),
                     ));
                 }
-            }
+            };
         }
 
         // If this closure is a loop, we need to check that it contains a return anywhere
@@ -169,19 +165,20 @@ pub fn check_closure_returns(
             for statement in &closure.statements {
                 match statement {
                     RichStatement::Break => {
-                        return Err(AnalyzeError::new_with_locatable(
-                            ErrorKind::MissingReturn,
-                            format!(
-                                "missing return value of type {} (final statement is \
-                                    a loop that contains break statements)",
-                                expected_ret_type
+                        ctx.add_err(
+                            AnalyzeError::new_with_locatable(
+                                ErrorKind::MissingReturn,
+                                "missing return statement",
+                                Box::new(closure.original.clone()),
                             )
-                            .as_str(),
-                            Box::new(closure.original.clone()),
-                        ));
+                            .with_detail(
+                                "final statement is a loop that contains break statements",
+                            ),
+                        );
                     }
                     RichStatement::Return(ret) => {
-                        check_return(ret, Some(expected_ret_type))?;
+                        let result = check_return(ret, Some(expected_ret_type));
+                        ctx.consume_error(result);
                         contains_return = true;
                     }
                     RichStatement::Conditional(cond) => {
@@ -204,21 +201,17 @@ pub fn check_closure_returns(
             }
 
             if !contains_return {
-                return Err(AnalyzeError::new_with_locatable(
-                    ErrorKind::MissingReturn,
-                    format!(
-                        "missing return value of type {} (final statement is \
-                            a loop that does not return)",
-                        expected_ret_type
+                ctx.add_err(
+                    AnalyzeError::new_with_locatable(
+                        ErrorKind::MissingReturn,
+                        "missing return statement",
+                        Box::new(closure.original.clone()),
                     )
-                    .as_str(),
-                    Box::new(closure.original.clone()),
-                ));
+                    .with_detail("final statement is a loop that does not return"),
+                );
             }
         }
-    }
-
-    Ok(())
+    };
 }
 
 /// Returns true if the closure contains a return at any level.
@@ -263,24 +256,22 @@ fn cond_has_any_return(cond: &RichCond) -> bool {
 
 /// Checks that the given conditional is exhaustive and that each branch satisfies return
 /// conditions.
-fn check_cond_returns(cond: &RichCond, expected: &RichType) -> AnalyzeResult<()> {
+fn check_cond_returns(ctx: &mut ProgramContext, cond: &RichCond, expected: &RichType) {
     if !cond.is_exhaustive() {
-        return Err(AnalyzeError::new_with_locatable(
-            ErrorKind::MissingReturn,
-            format!(
-                "missing return value of type {} (final statement is \
-                a conditional that is not exhaustive))",
-                expected
+        ctx.add_err(
+            AnalyzeError::new_with_locatable(
+                ErrorKind::MissingReturn,
+                "missing return statement",
+                Box::new(cond.clone()),
             )
-            .as_str(),
-            Box::new(cond.clone()),
-        ));
+            .with_detail("final statement is a conditional that is not exhaustive"),
+        );
+        return;
     }
 
     for branch in &cond.branches {
-        check_closure_returns(&branch.body, expected, &ScopeKind::Branch)?;
+        check_closure_returns(ctx, &branch.body, expected, &ScopeKind::Branch);
     }
-    Ok(())
 }
 
 /// Checks that the return type matches what is expected.
@@ -288,12 +279,18 @@ fn check_return(ret: &RichRet, expected: Option<&RichType>) -> AnalyzeResult<()>
     match expected {
         Some(expected_type) => match &ret.val {
             Some(expr) => {
-                if &expr.typ != expected_type {
+                // Skip the type check if either type is unknown. This will happen if semantic
+                // analysis on either type already failed.
+                if !expr.typ.is_unknown()
+                    && !expected_type.is_unknown()
+                    && &expr.typ != expected_type
+                {
                     return Err(AnalyzeError::new_with_locatable(
                         ErrorKind::IncompatibleTypes,
                         format!(
-                            "expected return value of type {}, but found {}",
-                            expected_type, &expr.typ
+                            "expected return value of type `{}`, but found `{}`",
+                            format!("{}", expected_type).blue(),
+                            format!("{}", &expr.typ).blue(),
                         )
                         .as_str(),
                         Box::new(ret.clone()),
@@ -303,9 +300,13 @@ fn check_return(ret: &RichRet, expected: Option<&RichType>) -> AnalyzeResult<()>
             None => {
                 return Err(AnalyzeError::new_with_locatable(
                     ErrorKind::MissingReturn,
-                    format!("missing return value of type {}", expected_type).as_str(),
+                    format!(
+                        "return statement is missing a required value of type `{}`",
+                        format!("{}", expected_type).blue()
+                    )
+                    .as_str(),
                     Box::new(ret.clone()),
-                ));
+                ))
             }
         },
         None => {
@@ -324,29 +325,25 @@ fn check_return(ret: &RichRet, expected: Option<&RichType>) -> AnalyzeResult<()>
 }
 
 /// Performs semantic analysis on a break statement.
-pub fn analyze_break(ctx: &mut ProgramContext, br: Break) -> AnalyzeResult<()> {
+pub fn analyze_break(ctx: &mut ProgramContext, br: &Break) {
     // Make sure we are inside a loop closure.
-    if ctx.is_in_loop() {
-        return Ok(());
+    if !ctx.is_in_loop() {
+        ctx.add_err(AnalyzeError::new_with_locatable(
+            ErrorKind::UnexpectedBreak,
+            "cannot break from outside a loop",
+            Box::new(br.clone()),
+        ));
     }
-
-    Err(AnalyzeError::new_with_locatable(
-        ErrorKind::UnexpectedBreak,
-        "cannot break from outside a loop",
-        Box::new(br.clone()),
-    ))
 }
 
 /// Performs semantic analysis on a continue statement.
-pub fn analyze_continue(ctx: &mut ProgramContext, cont: Continue) -> AnalyzeResult<()> {
+pub fn analyze_continue(ctx: &mut ProgramContext, cont: &Continue) {
     // Make sure we are inside a loop closure.
-    if ctx.is_in_loop() {
-        return Ok(());
+    if !ctx.is_in_loop() {
+        ctx.add_err(AnalyzeError::new_with_locatable(
+            ErrorKind::UnexpectedContinue,
+            "cannot continue from outside a loop",
+            Box::new(cont.clone()),
+        ));
     }
-
-    Err(AnalyzeError::new_with_locatable(
-        ErrorKind::UnexpectedContinue,
-        "cannot continue from outside a loop",
-        Box::new(cont.clone()),
-    ))
 }

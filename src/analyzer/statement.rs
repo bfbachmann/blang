@@ -83,18 +83,18 @@ impl RichStatement {
                     Err(e) => Err(e),
                 }
             }
-            Statement::Break(br) => match analyze_break(ctx, br) {
-                Ok(_) => Ok(RichStatement::Break),
-                Err(e) => Err(e),
-            },
-            Statement::Continue(cont) => match analyze_continue(ctx, cont) {
-                Ok(_) => Ok(RichStatement::Continue),
-                Err(e) => Err(e),
-            },
-            Statement::Return(ret) => match RichRet::from(ctx, ret) {
-                Ok(rr) => Ok(RichStatement::Return(rr)),
-                Err(e) => Err(e),
-            },
+            Statement::Break(br) => {
+                analyze_break(ctx, &br);
+                Ok(RichStatement::Break)
+            }
+            Statement::Continue(cont) => {
+                analyze_continue(ctx, &cont);
+                Ok(RichStatement::Continue)
+            }
+            Statement::Return(ret) => {
+                let rich_ret = RichRet::from(ctx, ret)?;
+                Ok(RichStatement::Return(rich_ret))
+            }
             Statement::StructDeclaration(s) => {
                 let rich_struct = RichStruct::from(ctx, &s, false)?;
                 Ok(RichStatement::StructTypeDeclaration(rich_struct))
@@ -112,16 +112,16 @@ mod tests {
     use crate::analyzer::r#struct::{RichField, RichStruct};
     use crate::analyzer::r#type::RichType;
     use crate::analyzer::statement::RichStatement;
+    use crate::analyzer::warn::Warning;
     use crate::analyzer::AnalyzeError;
     use crate::analyzer::AnalyzeResult;
     use crate::lexer::token::Token;
     use crate::parser::statement::Statement;
 
-    fn analyze_statement(raw: &str) -> AnalyzeResult<RichStatement> {
+    fn analyze_statement(raw: &str, ctx: &mut ProgramContext) -> AnalyzeResult<RichStatement> {
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let statement = Statement::from(&mut tokens).expect("should not error");
-        let mut ctx = ProgramContext::new();
-        RichStatement::from(&mut ctx, statement)
+        RichStatement::from(ctx, statement)
     }
 
     #[test]
@@ -132,8 +132,10 @@ mod tests {
                 return b
             }
         "#;
-        let result = analyze_statement(raw);
+        let mut ctx = ProgramContext::new();
+        let result = analyze_statement(raw, &mut ctx);
         assert!(result.is_ok());
+        assert!(ctx.errors().is_empty());
     }
 
     #[test]
@@ -150,8 +152,10 @@ mod tests {
                 }
             }
         "#;
-        let result = analyze_statement(raw);
+        let mut ctx = ProgramContext::new();
+        let result = analyze_statement(raw, &mut ctx);
         assert!(result.is_ok());
+        assert!(ctx.errors().is_empty());
     }
 
     #[test]
@@ -168,8 +172,16 @@ mod tests {
                 }
             }
         "#;
-        let result = analyze_statement(raw);
-        assert!(result.is_err());
+        let mut ctx = ProgramContext::new();
+        let result = analyze_statement(raw, &mut ctx);
+        assert!(result.is_ok());
+        assert!(matches!(
+            ctx.errors().remove(0),
+            AnalyzeError {
+                kind: ErrorKind::MissingReturn,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -184,8 +196,16 @@ mod tests {
                 }
             }
         "#;
-        let result = analyze_statement(raw);
-        assert!(result.is_err());
+        let mut ctx = ProgramContext::new();
+        let result = analyze_statement(raw, &mut ctx);
+        assert!(result.is_ok());
+        assert!(matches!(
+            ctx.errors().remove(0),
+            AnalyzeError {
+                kind: ErrorKind::MissingReturn,
+                ..
+            }
+        ))
     }
 
     #[test]
@@ -207,8 +227,10 @@ mod tests {
                 }
             }
         "#;
-        let result = analyze_statement(raw);
+        let mut ctx = ProgramContext::new();
+        let result = analyze_statement(raw, &mut ctx);
         assert!(result.is_ok());
+        assert!(ctx.errors().is_empty());
     }
 
     #[test]
@@ -227,13 +249,15 @@ mod tests {
                 }
             }
         "#;
-        let result = analyze_statement(raw);
+        let mut ctx = ProgramContext::new();
+        let result = analyze_statement(raw, &mut ctx);
+        assert!(result.is_ok());
         assert!(matches!(
-            result,
-            Err(AnalyzeError {
+            ctx.errors().remove(0),
+            AnalyzeError {
                 kind: ErrorKind::MissingReturn,
                 ..
-            })
+            }
         ));
     }
 
@@ -246,8 +270,10 @@ mod tests {
                 }
             }
         "#;
-        let result = analyze_statement(raw);
+        let mut ctx = ProgramContext::new();
+        let result = analyze_statement(raw, &mut ctx);
         assert!(result.is_ok());
+        assert!(ctx.errors().is_empty());
     }
 
     #[test]
@@ -261,8 +287,10 @@ mod tests {
                 }
             }
         "#;
-        let result = analyze_statement(raw);
+        let mut ctx = ProgramContext::new();
+        let result = analyze_statement(raw, &mut ctx);
         assert!(result.is_ok());
+        assert!(ctx.errors().is_empty());
     }
 
     #[test]
@@ -278,8 +306,10 @@ mod tests {
                 }
             }
         "#;
-        let result = analyze_statement(raw);
+        let mut ctx = ProgramContext::new();
+        let result = analyze_statement(raw, &mut ctx);
         assert!(result.is_ok());
+        assert!(ctx.errors().is_empty());
     }
 
     #[test]
@@ -296,8 +326,10 @@ mod tests {
                 }
             }
         "#;
-        let result = analyze_statement(raw);
+        let mut ctx = ProgramContext::new();
+        let result = analyze_statement(raw, &mut ctx);
         assert!(result.is_ok());
+        assert!(ctx.errors().is_empty());
     }
 
     #[test]
@@ -309,26 +341,25 @@ mod tests {
                 return false
             }
         "#;
-        let result = analyze_statement(raw);
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::UnexpectedReturn,
-                ..
-            })
-        ));
+        let mut ctx = ProgramContext::new();
+        let result = analyze_statement(raw, &mut ctx);
+        assert!(result.is_ok());
+        assert!(ctx.errors().is_empty());
+        assert!(matches!(ctx.warnings().remove(0), Warning { .. }));
     }
 
     #[test]
     fn return_outside_fn() {
         let raw = "return 1";
-        let result = analyze_statement(raw);
+        let mut ctx = ProgramContext::new();
+        let result = analyze_statement(raw, &mut ctx);
+        assert!(result.is_ok());
         assert!(matches!(
-            result,
-            Err(AnalyzeError {
+            ctx.errors().remove(0),
+            AnalyzeError {
                 kind: ErrorKind::UnexpectedReturn,
                 ..
-            })
+            }
         ));
     }
 
@@ -347,13 +378,15 @@ mod tests {
                 }
             }
         "#;
-        let result = analyze_statement(raw);
+        let mut ctx = ProgramContext::new();
+        let result = analyze_statement(raw, &mut ctx);
+        assert!(result.is_ok());
         assert!(matches!(
-            result,
-            Err(AnalyzeError {
+            ctx.errors().remove(0),
+            AnalyzeError {
                 kind: ErrorKind::MissingReturn,
                 ..
-            })
+            }
         ));
     }
 
@@ -366,7 +399,9 @@ mod tests {
                 message: string,
             }
         "#;
-        let result = analyze_statement(raw);
+        let mut ctx = ProgramContext::new();
+        let result = analyze_statement(raw, &mut ctx);
+        assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
             Ok(RichStatement::StructTypeDeclaration(RichStruct {

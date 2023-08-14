@@ -1,3 +1,4 @@
+use colored::Colorize;
 use std::collections::VecDeque;
 use std::fmt;
 
@@ -470,7 +471,11 @@ impl Expression {
                 } else {
                     return Err(ParseError::new_with_token(
                         ErrorKind::UnexpectedOperator,
-                        "unexpected operator",
+                        format!(
+                            "unexpected operator `{}`",
+                            format!("{}", op1_token).as_str().blue()
+                        )
+                        .as_str(),
                         op1_token,
                     ));
                 }
@@ -499,8 +504,8 @@ impl Expression {
                             return Err(ParseError::new_with_token(
                                 ErrorKind::ExpectedBeginExpr,
                                 format!(
-                                    "expected beginning of expression, but found {}",
-                                    op1_token
+                                    "expected beginning of expression, but found `{}`",
+                                    format!("{}", op1_token).blue()
                                 )
                                 .as_str(),
                                 op1_token,
@@ -523,8 +528,8 @@ impl Expression {
                                     return Err(ParseError::new_with_token(
                                         ErrorKind::ExpectedBasicExpr,
                                         format!(
-                                            "expected basic expression, but found {}",
-                                            op1_token
+                                            "expected basic expression, but found `{}`",
+                                            format!("{}", op1_token).blue(),
                                         )
                                         .as_str(),
                                         op1_token,
@@ -533,8 +538,11 @@ impl Expression {
                             } else {
                                 return Err(ParseError::new_with_token(
                                     ErrorKind::ExpectedExpr,
-                                    format!("expected expression, but found {}", op1_token)
-                                        .as_str(),
+                                    format!(
+                                        "expected expression, but found `{}`",
+                                        format!("{}", op1_token).blue(),
+                                    )
+                                    .as_str(),
                                     op1_token,
                                 ));
                             }

@@ -17,7 +17,11 @@ pub fn all_syscalls() -> [FunctionSignature; 2] {
 ///
 ///     void exit(int status)
 pub fn sys_exit() -> FunctionSignature {
-    FunctionSignature::new_with_default_pos("exit", vec![Argument::new("status", Type::I64)], None)
+    FunctionSignature::new_with_default_pos(
+        "exit",
+        vec![Argument::new("status", Type::i64())],
+        None,
+    )
 }
 
 /// The write system call signature. Tries to write `count` characters to the file descriptor from
@@ -34,10 +38,10 @@ pub fn sys_write() -> FunctionSignature {
     FunctionSignature::new_with_default_pos(
         "write",
         vec![
-            Argument::new("file_desc", Type::I64),
-            Argument::new("buf", Type::String),
-            Argument::new("count", Type::I64),
+            Argument::new("file_desc", Type::i64()),
+            Argument::new("buf", Type::string()),
+            Argument::new("count", Type::i64()),
         ],
-        Some(Type::I64),
+        Some(Type::i64()),
     )
 }
