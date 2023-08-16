@@ -6,6 +6,8 @@ use crate::lexer::pos::{Locatable, Position};
 use crate::parser::expr::Expression;
 use crate::parser::statement::Statement;
 
+pub type AnalyzeResult<T> = Result<T, AnalyzeError>;
+
 #[derive(PartialEq, Debug, Clone)]
 pub enum ErrorKind {
     IncompatibleTypes,

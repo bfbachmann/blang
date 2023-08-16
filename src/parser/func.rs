@@ -4,8 +4,8 @@ use std::fmt;
 
 use crate::lexer::token::Token;
 use crate::parser::closure::Closure;
+use crate::parser::error::ParseResult;
 use crate::parser::func_sig::FunctionSignature;
-use crate::parser::ParseResult;
 
 /// Represents a function declaration.
 #[derive(Debug, PartialEq, Clone)]

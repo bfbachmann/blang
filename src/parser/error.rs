@@ -4,6 +4,8 @@ use std::fmt::{Display, Formatter};
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 
+pub type ParseResult<T> = Result<T, ParseError>;
+
 #[derive(Debug)]
 pub enum ErrorKind {
     ExpectedExpr,

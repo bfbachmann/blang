@@ -3,10 +3,10 @@ use std::collections::{HashSet, VecDeque};
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::Position;
 use crate::lexer::token::Token;
+use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::statement::Statement;
-use crate::parser::ParseResult;
-use crate::util;
+use crate::{fmt, util};
 
 /// Represents a complete and syntactically valid (but not necessarily semantically valid) program.
 #[derive(Debug)]
@@ -51,7 +51,7 @@ impl Program {
                     ErrorKind::UnexpectedEOF,
                     format!(
                         r#"expected one of {}, but found EOF"#,
-                        util::hashset_to_string(expected)
+                        fmt::hashset_to_string(expected)
                     )
                     .as_str(),
                     None,
@@ -67,7 +67,7 @@ impl Program {
                         ErrorKind::UnexpectedToken,
                         format!(
                             r#"expected one of {}, but found "{}"#,
-                            util::hashset_to_string(expected),
+                            fmt::hashset_to_string(expected),
                             token
                         )
                         .as_str(),

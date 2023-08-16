@@ -6,8 +6,8 @@ use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::parser::branch::Branch;
+use crate::parser::error::ParseResult;
 use crate::parser::program::Program;
-use crate::parser::ParseResult;
 use crate::util;
 
 /// Represents a conditional (i.e. branching if/else if/else statements).

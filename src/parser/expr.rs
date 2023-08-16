@@ -6,6 +6,7 @@ use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::parser::bool_lit::BoolLit;
+use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
@@ -15,7 +16,6 @@ use crate::parser::program::Program;
 use crate::parser::r#struct::StructInit;
 use crate::parser::string_lit::StringLit;
 use crate::parser::var_ref::VarRef;
-use crate::parser::ParseResult;
 
 #[derive(Debug)]
 enum OutputNode {

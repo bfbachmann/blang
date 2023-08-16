@@ -1,13 +1,13 @@
 use core::fmt;
-use std::fmt::{Formatter};
+use std::fmt::Formatter;
 
 use colored::*;
 
+use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::RichFnSig;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#struct::RichStruct;
-use crate::analyzer::AnalyzeResult;
 
 use crate::parser::r#type::Type;
 

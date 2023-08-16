@@ -5,8 +5,8 @@ use std::fmt::{Display, Formatter};
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
-use crate::parser::ParseResult;
 
 /// Represents a variable reference.
 #[derive(Debug, PartialEq, Clone)]

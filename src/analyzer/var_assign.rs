@@ -2,10 +2,10 @@ use colored::Colorize;
 use core::fmt;
 use std::fmt::Formatter;
 
+use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::AnalyzeResult;
 use crate::parser::var_assign::VariableAssignment;
 
 /// Represents a semantically valid and type-rich variable assignment.

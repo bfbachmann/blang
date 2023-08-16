@@ -1,4 +1,3 @@
-use error::ParseError;
 use r#type::Type;
 
 pub mod arg;
@@ -29,8 +28,6 @@ pub mod unresolved;
 pub mod var_assign;
 pub mod var_dec;
 pub mod var_ref;
-
-type ParseResult<T> = Result<T, ParseError>;
 
 #[cfg(test)]
 mod tests {

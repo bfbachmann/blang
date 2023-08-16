@@ -5,13 +5,13 @@ use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::parser::bool::BoolType;
+use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::i64::I64Type;
 use crate::parser::r#struct::StructType;
 use crate::parser::string::StringType;
 use crate::parser::unresolved::UnresolvedType;
-use crate::parser::ParseResult;
 use crate::util;
 
 /// Represents a type referenced in a program.

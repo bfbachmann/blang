@@ -1,5 +1,4 @@
 use std::collections::VecDeque;
-
 use std::fs::File;
 use std::io::{stdin, stdout, BufRead, BufReader, Error, ErrorKind, Result, Write};
 use std::path::{Path, PathBuf};
@@ -8,12 +7,12 @@ use std::process;
 use clap::{arg, ArgAction, Command};
 use colored::*;
 
-use crate::analyzer::func::RichFnSig;
 use compiler::program::ProgCompiler;
 use lexer::token::Token;
 use parser::program::Program;
 use parser::statement::Statement;
 
+use crate::analyzer::func::RichFnSig;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::program::RichProg;
 use crate::analyzer::statement::RichStatement;
@@ -23,34 +22,12 @@ use crate::syscall::syscall::all_syscalls;
 
 mod analyzer;
 mod compiler;
+#[macro_use]
+mod fmt;
 mod lexer;
 mod parser;
 mod syscall;
 mod util;
-
-/// Prints an error message and exits with code 1.
-macro_rules! fatalln {
-    ($($arg:tt)*) => {{
-        errorln!($($arg)*);
-        process::exit(1);
-    }};
-}
-
-/// Prints an error message.
-macro_rules! errorln {
-    ($($arg:tt)*) => {{
-        print!("{}", "error: ".red().bold());
-        println!($($arg)*);
-    }};
-}
-
-/// Prints a warning message.
-macro_rules! warnln {
-    ($($arg:tt)*) => {{
-        print!("{}", "warning: ".yellow().bold());
-        println!($($arg)*);
-    }};
-}
 
 fn main() {
     // Define the root command.

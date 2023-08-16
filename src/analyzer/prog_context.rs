@@ -3,11 +3,11 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;
 
 use crate::analyzer::error::AnalyzeError;
+use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::func::{RichArg, RichFn, RichFnSig};
 use crate::analyzer::r#struct::RichStruct;
 use crate::analyzer::r#type::RichType;
 use crate::analyzer::warn::Warning;
-use crate::analyzer::AnalyzeResult;
 use crate::lexer::pos::Position;
 use crate::parser::r#struct::StructType;
 

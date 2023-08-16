@@ -6,12 +6,12 @@ use std::fmt::{Display, Formatter};
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
 use crate::parser::r#type::Type;
 use crate::parser::unresolved::UnresolvedType;
-use crate::parser::ParseResult;
 use crate::util;
 
 /// Represents a field in a struct with a type and a name.

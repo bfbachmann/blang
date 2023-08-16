@@ -4,10 +4,10 @@ use std::fmt;
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
-use crate::parser::ParseResult;
 use crate::util;
 
 /// Represents the calling of a function.

@@ -4,11 +4,11 @@ use std::fmt::{Debug, Display, Formatter};
 
 use colored::Colorize;
 
+use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#type::RichType;
-use crate::analyzer::AnalyzeResult;
 use crate::parser::r#struct::{StructInit, StructType};
 use crate::parser::r#type::Type;
 use crate::util;

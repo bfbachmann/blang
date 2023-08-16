@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// Returns true if the vectors have the same length and the same elements in the same positions.
 pub fn vectors_are_equal<T: PartialEq>(a: &Vec<T>, b: &Vec<T>) -> bool {
@@ -37,22 +37,4 @@ where
     }
 
     true
-}
-
-/// Returns the contents of a HashSet as a string of the form `<value1>, <value2>, ...`.
-pub fn hashset_to_string<T>(set: HashSet<T>) -> String
-where
-    T: ToString,
-{
-    let mut count = set.len();
-    let mut s = "".to_string();
-    for v in set {
-        s += v.to_string().as_str();
-        if count > 1 {
-            s += ", ";
-        }
-        count -= 1;
-    }
-
-    return s;
 }

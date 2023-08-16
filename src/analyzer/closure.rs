@@ -1,16 +1,16 @@
 use std::fmt;
-use std::fmt::{Formatter};
+use std::fmt::Formatter;
 
 use colored::*;
 
 use crate::analyzer::cond::RichCond;
+use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::{RichArg, RichRet};
 use crate::analyzer::prog_context::{ProgramContext, Scope, ScopeKind};
 use crate::analyzer::r#type::RichType;
 use crate::analyzer::statement::RichStatement;
 use crate::analyzer::warn::Warning;
-use crate::analyzer::AnalyzeResult;
 use crate::parser::arg::Argument;
 use crate::parser::closure::Closure;
 use crate::parser::cont::Continue;

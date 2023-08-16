@@ -3,8 +3,9 @@ use std::collections::{HashSet, VecDeque};
 use std::fmt;
 
 use crate::lexer::token::Token;
+use crate::parser::error::ParseResult;
 use crate::parser::program::Program;
-use crate::parser::{ParseResult, Type};
+use crate::parser::Type;
 
 /// Represents a function argument declaration.
 #[derive(Debug, PartialEq, Clone)]

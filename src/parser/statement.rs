@@ -7,6 +7,7 @@ use crate::lexer::token::Token;
 use crate::parser::closure::Closure;
 use crate::parser::cond::Conditional;
 use crate::parser::cont::Continue;
+use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::expr::Expression;
 use crate::parser::func::Function;
@@ -17,7 +18,6 @@ use crate::parser::r#struct::StructType;
 use crate::parser::ret::Ret;
 use crate::parser::var_assign::VariableAssignment;
 use crate::parser::var_dec::VariableDeclaration;
-use crate::parser::ParseResult;
 
 /// Represents a statement.
 #[derive(Debug, PartialEq, Clone)]

@@ -4,11 +4,11 @@ use std::fmt::Formatter;
 use colored::Colorize;
 
 use crate::analyzer::closure::RichClosure;
+use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#type::RichType;
-use crate::analyzer::AnalyzeResult;
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::branch::Branch;
 use crate::parser::cond::Conditional;

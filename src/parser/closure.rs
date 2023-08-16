@@ -3,10 +3,10 @@ use std::collections::{HashSet, VecDeque};
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
 use crate::parser::statement::Statement;
-use crate::parser::ParseResult;
 use crate::util;
 
 /// Represents a closure, which is just a series of statements with their own scope.

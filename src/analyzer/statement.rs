@@ -3,12 +3,12 @@ use std::fmt::Formatter;
 
 use crate::analyzer::closure::{analyze_break, analyze_continue, RichClosure};
 use crate::analyzer::cond::RichCond;
+use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::func::{RichFn, RichFnCall, RichRet};
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#struct::RichStruct;
 use crate::analyzer::var_assign::RichVarAssign;
 use crate::analyzer::var_dec::RichVarDecl;
-use crate::analyzer::AnalyzeResult;
 use crate::parser::statement::Statement;
 
 /// Represents a semantically valid and type-rich statement.
@@ -107,14 +107,14 @@ impl RichStatement {
 mod tests {
     use std::io::{BufRead, Cursor};
 
+    use crate::analyzer::error::AnalyzeError;
+    use crate::analyzer::error::AnalyzeResult;
     use crate::analyzer::error::ErrorKind;
     use crate::analyzer::prog_context::ProgramContext;
     use crate::analyzer::r#struct::{RichField, RichStruct};
     use crate::analyzer::r#type::RichType;
     use crate::analyzer::statement::RichStatement;
     use crate::analyzer::warn::Warning;
-    use crate::analyzer::AnalyzeError;
-    use crate::analyzer::AnalyzeResult;
     use crate::lexer::token::Token;
     use crate::parser::statement::Statement;
 

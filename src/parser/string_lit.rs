@@ -5,8 +5,8 @@ use std::fmt::{Display, Formatter};
 
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
-use crate::parser::ParseResult;
 
 /// Represents a string literal.
 #[derive(Debug, PartialEq, Clone)]

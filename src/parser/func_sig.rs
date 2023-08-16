@@ -5,9 +5,9 @@ use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::parser::arg::Argument;
-use crate::parser::error::{ErrorKind, ParseError};
+use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::program::Program;
-use crate::parser::{ParseResult, Type};
+use crate::parser::Type;
 use crate::util;
 
 /// Represents the name, arguments, and return type of a function. Anonymous functions have empty

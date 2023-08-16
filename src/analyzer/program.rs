@@ -5,7 +5,6 @@ use crate::analyzer::r#struct::RichStruct;
 use crate::analyzer::statement::RichStatement;
 use crate::analyzer::warn::Warning;
 
-
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::program::Program;
 
@@ -154,12 +153,11 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
 mod tests {
     use std::io::{BufRead, Cursor};
 
+    use crate::analyzer::error::AnalyzeResult;
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
     use crate::analyzer::program::RichProg;
-    use crate::analyzer::AnalyzeResult;
     use crate::lexer::token::Token;
     use crate::parser::program::Program;
-    
 
     fn analyze_prog(raw: &str) -> AnalyzeResult<RichProg> {
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");

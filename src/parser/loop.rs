@@ -4,8 +4,8 @@ use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::parser::closure::Closure;
+use crate::parser::error::ParseResult;
 use crate::parser::program::Program;
-use crate::parser::ParseResult;
 
 /// Represents a closure that is executed repeatedly.
 #[derive(Debug, PartialEq, Clone)]

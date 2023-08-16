@@ -3,9 +3,9 @@ use std::collections::VecDeque;
 
 use crate::lexer::token::Token;
 use crate::parser::closure::Closure;
+use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
-use crate::parser::ParseResult;
 
 /// Represents a branch in a conditional. "if" and "else if" branches must have condition
 /// expressions, but "else" branches must not.

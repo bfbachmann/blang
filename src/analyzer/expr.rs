@@ -3,12 +3,12 @@ use std::fmt;
 use std::fmt::Formatter;
 
 use crate::analyzer::closure::RichClosure;
+use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::{RichFn, RichFnCall, RichFnSig};
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#struct::{RichStruct, RichStructInit};
 use crate::analyzer::r#type::RichType;
-use crate::analyzer::AnalyzeResult;
 use crate::parser::closure::Closure;
 use crate::parser::expr::Expression;
 use crate::parser::op::Operator;
