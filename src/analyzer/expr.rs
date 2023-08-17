@@ -1,9 +1,9 @@
-use colored::Colorize;
 use std::fmt;
 use std::fmt::Formatter;
 
+use colored::Colorize;
+
 use crate::analyzer::closure::RichClosure;
-use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::{RichFn, RichFnCall, RichFnSig};
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
@@ -88,27 +88,27 @@ impl fmt::Display for RichExpr {
 impl RichExpr {
     /// Performs semantic analysis on the given expression and returns a type-rich version of it,
     /// or an error if the expression is semantically invalid.
-    pub fn from(ctx: &mut ProgramContext, expr: Expression) -> AnalyzeResult<RichExpr> {
+    pub fn from(ctx: &mut ProgramContext, expr: Expression) -> RichExpr {
         match expr {
             Expression::VariableReference(ref var_ref) => {
                 let var_name = var_ref.var_name.clone();
 
                 // Make sure the variable being referenced exists. Note that it might be a function.
                 if let Some(var_typ) = ctx.get_var(var_name.as_str()) {
-                    Ok(RichExpr {
+                    RichExpr {
                         kind: RichExprKind::VariableReference(var_name),
                         typ: var_typ.clone(),
-                    })
+                    }
                 } else if let Some(func) = ctx.get_fn(var_name.as_str()) {
-                    Ok(RichExpr {
+                    RichExpr {
                         kind: RichExprKind::VariableReference(var_name),
                         typ: RichType::Function(Box::new(func.signature.clone())),
-                    })
+                    }
                 } else if let Some(fn_sig) = ctx.get_extern_fn(var_name.as_str()) {
-                    Ok(RichExpr {
+                    RichExpr {
                         kind: RichExprKind::VariableReference(var_name),
                         typ: RichType::Function(Box::new(fn_sig.clone())),
-                    })
+                    }
                 } else {
                     // The variable was not defined, so record the error and return a zero-valued
                     // expression instead.
@@ -122,39 +122,37 @@ impl RichExpr {
                         .as_str(),
                     ));
 
-                    Ok(RichExpr::new_zero_value(Type::Unresolved(
-                        UnresolvedType::unknown(),
-                    )))
+                    RichExpr::new_zero_value(Type::Unresolved(UnresolvedType::unknown()))
                 }
             }
-            Expression::BoolLiteral(b) => Ok(RichExpr {
+            Expression::BoolLiteral(b) => RichExpr {
                 kind: RichExprKind::BoolLiteral(b.value),
                 typ: RichType::Bool,
-            }),
-            Expression::I64Literal(i) => Ok(RichExpr {
+            },
+            Expression::I64Literal(i) => RichExpr {
                 kind: RichExprKind::I64Literal(i.value),
                 typ: RichType::I64,
-            }),
-            Expression::StringLiteral(s) => Ok(RichExpr {
+            },
+            Expression::StringLiteral(s) => RichExpr {
                 kind: RichExprKind::StringLiteral(s.value),
                 typ: RichType::String,
-            }),
+            },
             Expression::StructInit(struct_init) => {
-                let rich_init = RichStructInit::from(ctx, &struct_init)?;
+                let rich_init = RichStructInit::from(ctx, &struct_init);
                 let typ = (&rich_init.typ).clone();
-                Ok(RichExpr {
+                RichExpr {
                     kind: RichExprKind::StructInit(rich_init),
                     typ: RichType::Struct(typ),
-                })
+                }
             }
             Expression::FunctionCall(fn_call) => {
                 // Analyze the function call and ensure it has a return type.
-                let rich_call = RichFnCall::from(ctx, fn_call.clone())?;
+                let rich_call = RichFnCall::from(ctx, fn_call.clone());
                 if let Some(typ) = rich_call.ret_type.clone() {
-                    return Ok(RichExpr {
+                    return RichExpr {
                         kind: RichExprKind::FunctionCall(rich_call),
                         typ,
-                    });
+                    };
                 }
 
                 // The function does not have a return value. Record the error and return some
@@ -170,9 +168,7 @@ impl RichExpr {
                     Box::new(fn_call),
                 ));
 
-                Ok(RichExpr::new_zero_value(Type::Unresolved(
-                    UnresolvedType::none(),
-                )))
+                RichExpr::new_zero_value(Type::Unresolved(UnresolvedType::none()))
             }
             Expression::AnonFunction(anon_fn) => {
                 // We don't need to analyze the function signature, since it has no name. Just analyze
@@ -184,14 +180,14 @@ impl RichExpr {
                     ScopeKind::FnBody,
                     sig.args.clone(),
                     sig.return_type.clone(),
-                )?;
-                Ok(RichExpr {
+                );
+                RichExpr {
                     kind: RichExprKind::AnonFunction(Box::new(RichFn {
-                        signature: RichFnSig::from(ctx, &anon_fn.signature)?,
+                        signature: RichFnSig::from(ctx, &anon_fn.signature),
                         body: rich_closure,
                     })),
-                    typ: RichType::Function(Box::new(RichFnSig::from(ctx, &anon_fn.signature)?)),
-                })
+                    typ: RichType::Function(Box::new(RichFnSig::from(ctx, &anon_fn.signature))),
+                }
             }
             ref expr @ Expression::UnaryOperation(ref op, ref right_expr) => {
                 if *op != Operator::Not {
@@ -200,12 +196,12 @@ impl RichExpr {
                 }
 
                 // Make sure the expression has type bool.
-                let rich_expr = RichExpr::from(ctx, *right_expr.clone())?;
+                let rich_expr = RichExpr::from(ctx, *right_expr.clone());
                 match &rich_expr.typ {
-                    &RichType::Bool => Ok(RichExpr {
+                    &RichType::Bool => RichExpr {
                         kind: RichExprKind::UnaryOperation(Operator::Not, Box::new(rich_expr)),
                         typ: RichType::Bool,
-                    }),
+                    },
                     other => {
                         // The expression has the wrong type. Record the error and insert a
                         // zero-value instead.
@@ -213,20 +209,21 @@ impl RichExpr {
                             ErrorKind::IncompatibleTypes,
                             &expr,
                             format!(
-                                "unary operator ! cannot be applied to value of type `{}`",
-                                format!("{}", other),
+                                "unary operator `{}` cannot be applied to value of type `{}`",
+                                "!".blue(),
+                                format!("{}", other).blue(),
                             )
                             .as_str(),
                         ));
 
-                        Ok(RichExpr::new_zero_value(Type::bool()))
+                        RichExpr::new_zero_value(Type::bool())
                     }
                 }
             }
             ref expr @ Expression::BinaryOperation(ref left_expr, ref op, ref right_expr) => {
                 // Analyze the left and right operands.
-                let rich_left = RichExpr::from(ctx, *left_expr.clone())?;
-                let rich_right = RichExpr::from(ctx, *right_expr.clone())?;
+                let rich_left = RichExpr::from(ctx, *left_expr.clone());
+                let rich_right = RichExpr::from(ctx, *right_expr.clone());
 
                 // Determine the expected operand types and result type based on the operator.
                 let (expected_type, result_type) = match op {
@@ -254,14 +251,14 @@ impl RichExpr {
                 // If we couldn't resolve both of the operand types, we'll skip any further
                 // type checks by returning early.
                 if rich_left.typ.is_unknown() || rich_right.typ.is_unknown() {
-                    return Ok(RichExpr {
+                    return RichExpr {
                         kind: RichExprKind::BinaryOperation(
                             Box::new(rich_left),
                             op.clone(),
                             Box::new(rich_right),
                         ),
                         typ: result_type,
-                    });
+                    };
                 }
 
                 // If there is an expected type, make sure the left and right expressions match the
@@ -309,14 +306,14 @@ impl RichExpr {
                     ));
                 }
 
-                Ok(RichExpr {
+                RichExpr {
                     kind: RichExprKind::BinaryOperation(
                         Box::new(rich_left),
                         op.clone(),
                         Box::new(rich_right),
                     ),
                     typ: result_type,
-                })
+                }
             }
         }
     }
@@ -403,13 +400,14 @@ mod tests {
         let mut ctx = ProgramContext::new();
         let expr = Expression::I64Literal(I64Lit::new_with_default_pos(1));
         let result = RichExpr::from(&mut ctx, expr);
-        assert!(matches!(
+        assert!(ctx.errors().is_empty());
+        assert_eq!(
             result,
-            Ok(RichExpr {
+            RichExpr {
                 kind: RichExprKind::I64Literal(1),
                 typ: RichType::I64
-            })
-        ));
+            }
+        );
     }
 
     #[test]
@@ -417,13 +415,14 @@ mod tests {
         let mut ctx = ProgramContext::new();
         let expr = Expression::BoolLiteral(BoolLit::new_with_default_pos(false));
         let result = RichExpr::from(&mut ctx, expr);
-        assert!(matches!(
+        assert!(ctx.errors().is_empty());
+        assert_eq!(
             result,
-            Ok(RichExpr {
+            RichExpr {
                 kind: RichExprKind::BoolLiteral(false),
-                typ: RichType::Bool
-            })
-        ));
+                typ: RichType::Bool,
+            },
+        );
     }
 
     #[test]
@@ -431,12 +430,13 @@ mod tests {
         let mut ctx = ProgramContext::new();
         let expr = Expression::StringLiteral(StringLit::new_with_default_pos("test"));
         let result = RichExpr::from(&mut ctx, expr);
+        assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
-            Ok(RichExpr {
+            RichExpr {
                 kind: RichExprKind::StringLiteral(String::from("test")),
                 typ: RichType::String
-            })
+            }
         );
     }
 
@@ -448,12 +448,13 @@ mod tests {
             &mut ctx,
             Expression::VariableReference(VarRef::new_with_default_pos("myvar")),
         );
+        assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
-            Ok(RichExpr {
+            RichExpr {
                 kind: RichExprKind::VariableReference("myvar".to_string()),
                 typ: RichType::String
-            })
+            }
         );
     }
 
@@ -464,7 +465,13 @@ mod tests {
             &mut ctx,
             Expression::VariableReference(VarRef::new_with_default_pos("myvar")),
         );
-        assert!(result.is_ok());
+        assert!(matches!(
+            result,
+            RichExpr {
+                kind: RichExprKind::Unknown,
+                typ: RichType::Unknown(_),
+            }
+        ));
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {
@@ -498,9 +505,10 @@ mod tests {
         );
         let call_expr = Expression::FunctionCall(fn_call.clone());
         let result = RichExpr::from(&mut ctx, call_expr);
+        assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
-            Ok(RichExpr {
+            RichExpr {
                 kind: RichExprKind::FunctionCall(RichFnCall {
                     fn_name: fn_call.fn_name,
                     args: vec![RichExpr {
@@ -510,7 +518,7 @@ mod tests {
                     ret_type: Some(RichType::String),
                 }),
                 typ: RichType::String,
-            }),
+            },
         );
     }
 
@@ -539,7 +547,30 @@ mod tests {
                 )),
             ),
         );
-        assert!(result.is_ok());
+
+        match result {
+            RichExpr {
+                kind: RichExprKind::BinaryOperation(left, Operator::Add, right),
+                typ: RichType::I64,
+            } => {
+                assert!(matches!(
+                    *left,
+                    RichExpr {
+                        kind: RichExprKind::I64Literal(1),
+                        typ: RichType::I64,
+                    }
+                ));
+                assert!(matches!(
+                    *right,
+                    RichExpr {
+                        kind: RichExprKind::Unknown,
+                        typ: RichType::Unknown(_),
+                    }
+                ));
+            }
+            other => panic!("incorrect result {}", other),
+        }
+
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {
@@ -555,10 +586,16 @@ mod tests {
         ctx.add_fn(RichFn {
             signature: RichFnSig {
                 name: "do_thing".to_string(),
-                args: vec![RichArg {
-                    name: "arg".to_string(),
-                    typ: RichType::Bool,
-                }],
+                args: vec![
+                    RichArg {
+                        name: "arg1".to_string(),
+                        typ: RichType::Bool,
+                    },
+                    RichArg {
+                        name: "arg2".to_string(),
+                        typ: RichType::I64,
+                    },
+                ],
                 return_type: Some(RichType::Bool),
             },
             body: RichClosure {
@@ -569,9 +606,36 @@ mod tests {
         });
         let result = RichExpr::from(
             &mut ctx,
-            Expression::FunctionCall(FunctionCall::new_with_default_pos("do_thing", vec![])),
+            Expression::FunctionCall(FunctionCall::new_with_default_pos(
+                "do_thing",
+                vec![Expression::BoolLiteral(BoolLit::new_with_default_pos(true))],
+            )),
         );
-        assert!(result.is_ok());
+
+        assert!(matches!(
+            result,
+            RichExpr {
+                kind: RichExprKind::FunctionCall(_),
+                typ: RichType::Bool,
+            }
+        ));
+
+        match result.kind {
+            RichExprKind::FunctionCall(call) => {
+                assert_eq!(call.fn_name, "do_thing");
+                assert_eq!(call.ret_type, Some(RichType::Bool));
+                assert_eq!(call.args.len(), 1);
+                assert_eq!(
+                    call.args.get(0),
+                    Some(&RichExpr {
+                        kind: RichExprKind::BoolLiteral(true),
+                        typ: RichType::Bool,
+                    })
+                );
+            }
+            _ => unreachable!(),
+        };
+
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {
@@ -606,7 +670,31 @@ mod tests {
                 vec![Expression::I64Literal(I64Lit::new_with_default_pos(1))],
             )),
         );
-        assert!(result.is_ok());
+
+        assert!(matches!(
+            result,
+            RichExpr {
+                kind: RichExprKind::FunctionCall(_),
+                typ: RichType::Bool,
+            }
+        ));
+
+        match result.kind {
+            RichExprKind::FunctionCall(call) => {
+                assert_eq!(call.fn_name, "do_thing");
+                assert_eq!(call.ret_type, Some(RichType::Bool));
+                assert_eq!(call.args.len(), 1);
+                assert_eq!(
+                    call.args.get(0).unwrap(),
+                    &RichExpr {
+                        kind: RichExprKind::I64Literal(1),
+                        typ: RichType::I64,
+                    }
+                );
+            }
+            _ => unreachable!(),
+        };
+
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {
@@ -629,7 +717,25 @@ mod tests {
                 ))),
             ),
         );
-        assert!(result.is_ok());
+
+        assert!(matches!(
+            result,
+            RichExpr {
+                kind: RichExprKind::BinaryOperation(_, Operator::Add, _),
+                typ: RichType::I64,
+            }
+        ));
+
+        match result.kind {
+            RichExprKind::BinaryOperation(left, Operator::Add, right) => {
+                assert_eq!(left.typ, RichType::I64);
+                assert_eq!(right.typ, RichType::String);
+                assert_eq!(left.kind, RichExprKind::I64Literal(1));
+                assert_eq!(right.kind, RichExprKind::StringLiteral("asdf".to_string()));
+            }
+            _ => unreachable!(),
+        };
+
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {
@@ -638,6 +744,7 @@ mod tests {
             }
         ));
 
+        let mut ctx = ProgramContext::new();
         let result = RichExpr::from(
             &mut ctx,
             Expression::BinaryOperation(
@@ -648,24 +755,25 @@ mod tests {
                 Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
             ),
         );
-        assert!(result.is_ok());
+
         assert!(matches!(
-            ctx.errors().remove(0),
-            AnalyzeError {
-                kind: ErrorKind::IncompatibleTypes,
-                ..
+            result,
+            RichExpr {
+                kind: RichExprKind::BinaryOperation(_, Operator::Add, _),
+                typ: RichType::I64,
             }
         ));
 
-        let result = RichExpr::from(
-            &mut ctx,
-            Expression::BinaryOperation(
-                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(2))),
-                Operator::LogicalOr,
-                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
-            ),
-        );
-        assert!(result.is_ok());
+        match result.kind {
+            RichExprKind::BinaryOperation(left, Operator::Add, right) => {
+                assert_eq!(left.typ, RichType::String);
+                assert_eq!(right.typ, RichType::I64);
+                assert_eq!(left.kind, RichExprKind::StringLiteral("asdf".to_string()));
+                assert_eq!(right.kind, RichExprKind::I64Literal(1));
+            }
+            other => panic!("incorrect result kind {}", other),
+        };
+
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {
@@ -685,7 +793,15 @@ mod tests {
                 Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
             ),
         );
-        assert!(result.is_ok());
+
+        assert!(matches!(
+            result,
+            RichExpr {
+                kind: RichExprKind::BoolLiteral(false),
+                typ: RichType::Bool,
+            }
+        ));
+
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {
@@ -707,7 +823,15 @@ mod tests {
                 ))),
             ),
         );
-        assert!(result.is_ok());
+
+        assert!(matches!(
+            result,
+            RichExpr {
+                kind: RichExprKind::BoolLiteral(false),
+                typ: RichType::Bool,
+            }
+        ));
+
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {

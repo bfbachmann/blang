@@ -48,10 +48,10 @@ impl RichClosure {
         kind: ScopeKind,
         args: Vec<Argument>,
         expected_ret_type: Option<Type>,
-    ) -> AnalyzeResult<Self> {
+    ) -> Self {
         let mut rich_args = vec![];
         for arg in args {
-            rich_args.push(RichArg::from(ctx, &arg)?);
+            rich_args.push(RichArg::from(ctx, &arg));
         }
 
         // Add a new scope to the program context, since each closure gets its own scope.
@@ -59,7 +59,7 @@ impl RichClosure {
             kind.clone(),
             rich_args,
             match &expected_ret_type {
-                Some(typ) => Some(RichType::from(ctx, &typ)?),
+                Some(typ) => Some(RichType::from(ctx, &typ)),
                 None => None,
             },
         );
@@ -70,7 +70,7 @@ impl RichClosure {
         let mut rich_statements = vec![];
         let num_statements = closure.statements.len();
         for (i, statement) in closure.statements.into_iter().enumerate() {
-            let rich_statement = RichStatement::from(ctx, statement.clone())?;
+            let rich_statement = RichStatement::from(ctx, statement.clone());
             rich_statements.push(rich_statement);
 
             // If the statement is a return, make sure the return type is correct and that there
@@ -92,17 +92,17 @@ impl RichClosure {
 
         // Analyze the return type.
         let ret_type = match &expected_ret_type {
-            Some(typ) => Some(RichType::from(ctx, &typ)?),
+            Some(typ) => Some(RichType::from(ctx, &typ)),
             None => None,
         };
 
         // Pop the scope from the stack before returning since we're exiting the closure scope.
         ctx.pop_scope();
-        Ok(RichClosure {
+        RichClosure {
             statements: rich_statements,
             ret_type,
             original,
-        })
+        }
     }
 }
 

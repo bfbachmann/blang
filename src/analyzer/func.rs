@@ -8,25 +8,22 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#type::RichType;
-
-use crate::analyzer::error::AnalyzeResult;
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::arg::Argument;
 use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
 use crate::parser::func_sig::FunctionSignature;
-
 use crate::parser::ret::Ret;
 use crate::util;
 
 /// Performs semantic analysis on the function signature, ensuring it doesn't match any other
 /// function signature in the ProgramContext.
-pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) -> AnalyzeResult<()> {
+pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) {
     // Add the function to the program context with an empty body, making sure it doesn't already
     // exist. We'll replace the function body when we analyze it later.
-    let rich_fn_sig = RichFnSig::from(ctx, &sig)?;
-    if let Some(_) = ctx.add_extern_fn(rich_fn_sig) {
-        return Err(AnalyzeError::new_with_locatable(
+    let rich_fn_sig = RichFnSig::from(ctx, &sig);
+    if ctx.add_extern_fn(rich_fn_sig).is_some() {
+        ctx.add_err(AnalyzeError::new_with_locatable(
             ErrorKind::FunctionAlreadyDefined,
             format!(
                 "function `{}` was already defined in this scope",
@@ -36,8 +33,6 @@ pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) -> Anal
             Box::new(sig.clone()),
         ));
     }
-
-    Ok(())
 }
 
 /// Represents a semantically valid function argument.
@@ -59,11 +54,11 @@ impl fmt::Display for RichArg {
 
 impl RichArg {
     /// Performs semantic analysis on the argument and returns an analyzed version of it.
-    pub fn from(ctx: &mut ProgramContext, arg: &Argument) -> AnalyzeResult<Self> {
-        Ok(RichArg {
+    pub fn from(ctx: &mut ProgramContext, arg: &Argument) -> Self {
+        RichArg {
             name: arg.name.to_string(),
-            typ: RichType::from(ctx, &arg.typ)?,
-        })
+            typ: RichType::from(ctx, &arg.typ),
+        }
     }
 }
 
@@ -106,23 +101,23 @@ impl fmt::Display for RichFnSig {
 impl RichFnSig {
     /// Analyzes a function signature and returns a semantically valid, type-rich function
     /// signature.
-    pub fn from(ctx: &mut ProgramContext, sig: &FunctionSignature) -> AnalyzeResult<Self> {
+    pub fn from(ctx: &mut ProgramContext, sig: &FunctionSignature) -> Self {
         let mut args = vec![];
         for arg in &sig.args {
-            let rich_arg = RichArg::from(ctx, &arg)?;
+            let rich_arg = RichArg::from(ctx, &arg);
             args.push(rich_arg);
         }
 
         let return_type = match &sig.return_type {
-            Some(typ) => Some(RichType::from(ctx, typ)?),
+            Some(typ) => Some(RichType::from(ctx, typ)),
             None => None,
         };
 
-        Ok(RichFnSig {
+        RichFnSig {
             name: sig.name.to_string(),
             args,
             return_type,
-        })
+        }
     }
 }
 
@@ -142,7 +137,7 @@ impl fmt::Display for RichFn {
 impl RichFn {
     /// Performs semantic analysis on the given function and returns a type-rich version of it,
     /// or an error if the function is semantically invalid.
-    pub fn from(ctx: &mut ProgramContext, func: Function) -> AnalyzeResult<Self> {
+    pub fn from(ctx: &mut ProgramContext, func: Function) -> Self {
         // Make sure the function is not already defined.
         if let Some(_) = ctx.get_fn(func.signature.name.as_str()) {
             ctx.add_err(AnalyzeError::new_with_locatable(
@@ -163,21 +158,21 @@ impl RichFn {
             ScopeKind::FnBody,
             func.signature.args.clone(),
             func.signature.return_type.clone(),
-        )?;
+        );
 
         // Make sure the function return conditions are satisfied by the closure.
         if let Some(ret_type) = &func.signature.return_type {
-            let rich_ret_type = RichType::from(ctx, &ret_type)?;
+            let rich_ret_type = RichType::from(ctx, &ret_type);
             check_closure_returns(ctx, &rich_closure, &rich_ret_type, &ScopeKind::FnBody);
         }
 
         // Add the function to the program context so we can reference it later.
         let rich_fn = RichFn {
-            signature: RichFnSig::from(ctx, &func.signature)?,
+            signature: RichFnSig::from(ctx, &func.signature),
             body: rich_closure,
         };
         ctx.add_fn(rich_fn.clone());
-        Ok(rich_fn)
+        rich_fn
     }
 }
 
@@ -213,7 +208,7 @@ impl PartialEq for RichFnCall {
 }
 
 impl RichFnCall {
-    pub fn from(ctx: &mut ProgramContext, call: FunctionCall) -> AnalyzeResult<Self> {
+    pub fn from(ctx: &mut ProgramContext, call: FunctionCall) -> Self {
         // Calls to "main" should not be allowed.
         if call.fn_name == "main" {
             ctx.add_err(AnalyzeError::new_with_locatable(
@@ -226,7 +221,7 @@ impl RichFnCall {
         // Extract type information from args.
         let mut rich_args = vec![];
         for arg in &call.args {
-            let rich_arg = RichExpr::from(ctx, arg.clone())?;
+            let rich_arg = RichExpr::from(ctx, arg.clone());
             rich_args.push(rich_arg);
         }
 
@@ -246,11 +241,11 @@ impl RichFnCall {
                             Box::new(call.clone()),
                         ));
 
-                        return Ok(RichFnCall {
+                        return RichFnCall {
                             fn_name: call.fn_name.clone(),
                             args: vec![],
                             ret_type: Some(RichType::Unknown("<unknown>".to_string())),
-                        });
+                        };
                     }
                 },
             },
@@ -296,11 +291,11 @@ impl RichFnCall {
             }
         }
 
-        Ok(RichFnCall {
+        RichFnCall {
             fn_name: call.fn_name,
             args: rich_args,
             ret_type,
-        })
+        }
     }
 }
 
@@ -338,11 +333,12 @@ impl Locatable for RichRet {
 }
 
 impl RichRet {
-    pub fn from(ctx: &mut ProgramContext, ret: Ret) -> AnalyzeResult<Self> {
+    pub fn from(ctx: &mut ProgramContext, ret: Ret) -> Self {
         let start_pos = ret.start_pos().clone();
         let end_pos = ret.start_pos().clone();
 
-        // Make sure we are inside a function body.
+        // Make sure we are inside a function body. If not, record the error and return a dummy
+        // value.
         if !ctx.is_in_fn() {
             ctx.add_err(AnalyzeError::new_with_locatable(
                 ErrorKind::UnexpectedReturn,
@@ -350,17 +346,17 @@ impl RichRet {
                 Box::new(ret.clone()),
             ));
 
-            return Ok(RichRet {
+            return RichRet {
                 val: None,
                 start_pos,
                 end_pos,
-            });
+            };
         }
 
         match ret.value {
             Some(expr) => {
                 // We're returning a value. Make sure the value is of the expected type.
-                let rich_expr = RichExpr::from(ctx, expr.clone())?;
+                let rich_expr = RichExpr::from(ctx, expr.clone());
                 match ctx.return_type() {
                     Some(expected) => {
                         // Skip the type check if either type is unknown. This will be the case if
@@ -391,11 +387,11 @@ impl RichRet {
                     }
                 };
 
-                Ok(RichRet {
+                RichRet {
                     val: Some(rich_expr),
                     start_pos,
                     end_pos,
-                })
+                }
             }
             None => {
                 // This is an empty return. Make sure we're not expecting a return type.
@@ -414,11 +410,11 @@ impl RichRet {
                     None => {}
                 };
 
-                Ok(RichRet {
+                RichRet {
                     val: None,
                     start_pos,
                     end_pos,
-                })
+                }
             }
         }
     }

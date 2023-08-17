@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 
-
 /// Prints an error message and exits with code 1.
 #[macro_export]
 macro_rules! fatalln {

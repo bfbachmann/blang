@@ -3,12 +3,10 @@ use std::fmt::Formatter;
 
 use colored::*;
 
-use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::RichFnSig;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#struct::RichStruct;
-
 use crate::parser::r#type::Type;
 
 /// Represents a semantically valid and fully resolved type.
@@ -52,7 +50,7 @@ impl PartialEq for RichType {
 impl RichType {
     /// Analyzes and resolves the given type (if unresolved) and returns it. This will also store
     /// type information in the program context.
-    pub fn from(ctx: &mut ProgramContext, typ: &Type) -> AnalyzeResult<Self> {
+    pub fn from(ctx: &mut ProgramContext, typ: &Type) -> Self {
         return match typ {
             Type::Unresolved(unresolved_type) => {
                 let type_name = unresolved_type.name.as_str();
@@ -60,25 +58,25 @@ impl RichType {
                 // Check if the type has already been marked as invalid. If so, we should avoid
                 // trying to resolve it and simply return an unknown type.
                 if ctx.get_invalid_type(type_name).is_some() {
-                    return Ok(RichType::Unknown(type_name.to_string()));
+                    return RichType::Unknown(type_name.to_string());
                 }
 
                 // If the type has already been analyzed, just return it.
                 if let Some(rich_struct_type) = ctx.get_struct(type_name) {
-                    return Ok(RichType::Struct(rich_struct_type.clone()));
+                    return RichType::Struct(rich_struct_type.clone());
                 }
                 if let Some(fn_sig) = ctx.get_extern_fn(type_name) {
-                    return Ok(RichType::Function(Box::new(fn_sig.clone())));
+                    return RichType::Function(Box::new(fn_sig.clone()));
                 }
                 if let Some(fn_type) = ctx.get_fn(type_name) {
-                    return Ok(RichType::Function(Box::new(fn_type.signature.clone())));
+                    return RichType::Function(Box::new(fn_type.signature.clone()));
                 }
 
                 // The type has not yet been analyzed, so make sure the type has at least been
                 // declared somewhere and analyze it.
                 if let Some(struct_type) = ctx.get_extern_struct(type_name) {
-                    let rich_struct_type = RichStruct::from(ctx, &struct_type.clone(), false)?;
-                    return Ok(RichType::Struct(rich_struct_type));
+                    let rich_struct_type = RichStruct::from(ctx, &struct_type.clone(), false);
+                    return RichType::Struct(rich_struct_type);
                 }
 
                 ctx.add_err(AnalyzeError::new_with_locatable(
@@ -87,20 +85,20 @@ impl RichType {
                     Box::new(unresolved_type.clone()),
                 ));
 
-                return Ok(RichType::Unknown("<unknown>".to_string()));
+                return RichType::Unknown("<unknown>".to_string());
             }
 
-            Type::I64(_) => Ok(RichType::I64),
+            Type::I64(_) => RichType::I64,
 
-            Type::Bool(_) => Ok(RichType::Bool),
+            Type::Bool(_) => RichType::Bool,
 
-            Type::String(_) => Ok(RichType::String),
+            Type::String(_) => RichType::String,
 
-            Type::Function(sig) => Ok(RichType::Function(Box::new(RichFnSig::from(ctx, &*sig)?))),
+            Type::Function(sig) => RichType::Function(Box::new(RichFnSig::from(ctx, &*sig))),
 
             Type::Struct(struct_type) => {
-                let rich_struct_type = RichStruct::from(ctx, struct_type, true)?;
-                return Ok(RichType::Struct(rich_struct_type));
+                let rich_struct_type = RichStruct::from(ctx, struct_type, true);
+                return RichType::Struct(rich_struct_type);
             }
         };
     }

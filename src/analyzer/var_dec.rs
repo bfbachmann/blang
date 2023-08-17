@@ -1,13 +1,12 @@
-use colored::Colorize;
 use std::fmt;
 use std::fmt::Formatter;
 
-use crate::analyzer::error::AnalyzeResult;
+use colored::Colorize;
+
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#type::RichType;
-
 use crate::parser::statement::Statement;
 use crate::parser::var_dec::VariableDeclaration;
 
@@ -28,7 +27,7 @@ impl fmt::Display for RichVarDecl {
 impl RichVarDecl {
     /// Performs semantic analysis on the given variable declaration and returns a type-rich version
     /// of it, or an error if the variable declaration is semantically invalid.
-    pub fn from(ctx: &mut ProgramContext, var_decl: VariableDeclaration) -> AnalyzeResult<Self> {
+    pub fn from(ctx: &mut ProgramContext, var_decl: VariableDeclaration) -> Self {
         // Check if the variable is already defined in this scope.
         if ctx.get_var(var_decl.name.as_str()).is_some() {
             ctx.add_err(AnalyzeError::new_from_statement(
@@ -43,7 +42,7 @@ impl RichVarDecl {
         }
 
         // Check the expression being assigned to this new variable.
-        let rich_expr = RichExpr::from(ctx, var_decl.value.clone())?;
+        let rich_expr = RichExpr::from(ctx, var_decl.value.clone());
 
         // Analyze the variable type. It might be empty because type annotations are optional
         // in variable declarations. If the type is not specified, it will be inferred from the
@@ -52,7 +51,7 @@ impl RichVarDecl {
             // If the variable was declared with a type, analyze it and make sure it matches the
             // expression type.
             Some(typ) => {
-                let declared_type = RichType::from(ctx, &typ)?;
+                let declared_type = RichType::from(ctx, &typ);
                 if &rich_expr.typ != &declared_type {
                     ctx.add_err(AnalyzeError::new_from_statement(
                         ErrorKind::IncompatibleTypes,
@@ -75,11 +74,11 @@ impl RichVarDecl {
 
         // The variable expression is valid. Add it to the program context.
         ctx.add_var(var_decl.name.as_str(), rich_expr.typ.clone());
-        Ok(RichVarDecl {
+        RichVarDecl {
             typ: var_type,
             name: var_decl.name,
             val: rich_expr,
-        })
+        }
     }
 }
 
@@ -107,20 +106,20 @@ mod tests {
             Position::default(),
         );
         let result = RichVarDecl::from(&mut ctx, var_decl.clone());
+        assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
-            Ok(RichVarDecl {
+            RichVarDecl {
                 typ: RichType::String,
                 name: "my_string".to_string(),
                 val: RichExpr {
                     kind: RichExprKind::StringLiteral("bingo".to_string()),
                     typ: RichType::String,
                 }
-            })
+            }
         );
 
-        let result = RichVarDecl::from(&mut ctx, var_decl);
-        assert!(result.is_ok());
+        RichVarDecl::from(&mut ctx, var_decl);
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {
@@ -140,8 +139,7 @@ mod tests {
             Position::default(),
             Default::default(),
         );
-        let result = RichVarDecl::from(&mut ctx, var_decl);
-        assert!(result.is_ok());
+        RichVarDecl::from(&mut ctx, var_decl);
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {

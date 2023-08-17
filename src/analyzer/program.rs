@@ -1,16 +1,14 @@
+use colored::Colorize;
+
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::{analyze_fn_sig, RichFnSig};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#struct::RichStruct;
 use crate::analyzer::statement::RichStatement;
 use crate::analyzer::warn::Warning;
-
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::program::Program;
-
 use crate::parser::statement::Statement;
-
-use colored::Colorize;
 
 /// Represents a semantically valid and type-rich program.
 #[derive(Debug)]
@@ -34,10 +32,7 @@ impl RichProg {
         // Analyze external functions to be added to the program.
         let mut rich_extern_fns = vec![];
         for extern_fn_sig in extern_fn_sigs {
-            let fn_sig_result = RichFnSig::from(&mut ctx, &extern_fn_sig);
-            if let Some(rich_fn_sig) = ctx.consume_error(fn_sig_result) {
-                rich_extern_fns.push(rich_fn_sig);
-            }
+            rich_extern_fns.push(RichFnSig::from(&mut ctx, &extern_fn_sig));
         }
 
         ProgramAnalysis {
@@ -59,10 +54,7 @@ impl RichProg {
         // Analyze each statement in the program and collect the results.
         let mut rich_statements = vec![];
         for statement in prog.statements {
-            let rich_statement_result = RichStatement::from(ctx, statement);
-            if let Some(rich_statement) = ctx.consume_error(rich_statement_result) {
-                rich_statements.push(rich_statement);
-            }
+            rich_statements.push(RichStatement::from(ctx, statement));
         }
 
         RichProg {
@@ -119,32 +111,27 @@ fn define_structs(ctx: &mut ProgramContext, prog: &Program) {
 /// can be referenced later. This will not perform any analysis of function bodies.
 fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
     for statement in &prog.statements {
-        match statement {
-            Statement::FunctionDeclaration(func) => {
-                let result = analyze_fn_sig(ctx, &func.signature);
-                ctx.consume_error(result);
+        if let Statement::FunctionDeclaration(func) = statement {
+            analyze_fn_sig(ctx, &func.signature);
 
-                if func.signature.name == "main" {
-                    // Make sure main has no args or return.
-                    if func.signature.args.len() != 0 {
-                        ctx.add_err(AnalyzeError::new_with_locatable(
-                            ErrorKind::InvalidMain,
-                            format!("function `{}` cannot have arguments", "main".blue()).as_str(),
-                            Box::new(func.signature.clone()),
-                        ));
-                    }
+            if func.signature.name == "main" {
+                // Make sure main has no args or return.
+                if func.signature.args.len() != 0 {
+                    ctx.add_err(AnalyzeError::new_with_locatable(
+                        ErrorKind::InvalidMain,
+                        format!("function `{}` cannot have arguments", "main".blue()).as_str(),
+                        Box::new(func.signature.clone()),
+                    ));
+                }
 
-                    if func.signature.return_type.is_some() {
-                        ctx.add_err(AnalyzeError::new_with_locatable(
-                            ErrorKind::InvalidMain,
-                            format!("function `{}` cannot have a return type", "main".blue())
-                                .as_str(),
-                            Box::new(func.signature.clone()),
-                        ));
-                    }
+                if func.signature.return_type.is_some() {
+                    ctx.add_err(AnalyzeError::new_with_locatable(
+                        ErrorKind::InvalidMain,
+                        format!("function `{}` cannot have a return type", "main".blue()).as_str(),
+                        Box::new(func.signature.clone()),
+                    ));
                 }
             }
-            _ => {}
         }
     }
 }

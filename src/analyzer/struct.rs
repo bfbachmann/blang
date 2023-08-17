@@ -61,11 +61,7 @@ impl RichStruct {
     /// be stored in the program context.
     /// If `anon` is true, the struct type is expected to be declared inline without a type
     /// name.
-    pub fn from(
-        ctx: &mut ProgramContext,
-        struct_type: &StructType,
-        anon: bool,
-    ) -> AnalyzeResult<Self> {
+    pub fn from(ctx: &mut ProgramContext, struct_type: &StructType, anon: bool) -> Self {
         if !anon {
             if struct_type.name.is_empty() {
                 ctx.add_err(AnalyzeError::new_with_locatable(
@@ -79,7 +75,7 @@ impl RichStruct {
             // if we've already analyzed it in the process of analyzing another type that contains
             // this type.
             if let Some(rich_struct) = ctx.get_struct(struct_type.name.as_str()) {
-                return Ok(rich_struct.clone());
+                return rich_struct.clone();
             }
         } else if anon && !struct_type.name.is_empty() {
             ctx.add_err(AnalyzeError::new_with_locatable(
@@ -142,11 +138,10 @@ impl RichStruct {
                 }
             }
 
-            // Resolve the struct field type.
-            let struct_field_type = RichType::from(ctx, &field.typ)?;
+            // Resolve the struct field type and add it to the list of analyzed fields.
             fields.push(RichField {
                 name: field.name.clone(),
-                typ: struct_field_type,
+                typ: RichType::from(ctx, &field.typ),
             });
         }
 
@@ -182,7 +177,7 @@ impl RichStruct {
         }
 
         ctx.add_struct(rich_struct.clone());
-        Ok(rich_struct)
+        rich_struct
     }
 
     /// Recursively checks for struct containment cycles that would imply struct types with infinite
@@ -318,20 +313,20 @@ impl PartialEq for RichStructInit {
 
 impl RichStructInit {
     /// Performs semantic analysis on struct initialization.
-    pub fn from(ctx: &mut ProgramContext, struct_init: &StructInit) -> AnalyzeResult<Self> {
+    pub fn from(ctx: &mut ProgramContext, struct_init: &StructInit) -> Self {
         // Resolve the struct type.
-        let struct_type = match RichType::from(ctx, &struct_init.typ)? {
+        let struct_type = match RichType::from(ctx, &struct_init.typ) {
             RichType::Struct(s) => s,
             RichType::Unknown(type_name) => {
                 // The struct type has already failed semantic analysis, so we should avoid
                 // analyzing its initialization and just return some zero-value placeholder instead.
-                return Ok(RichStructInit {
+                return RichStructInit {
                     typ: RichStruct {
                         name: type_name,
                         fields: vec![],
                     },
                     field_values: Default::default(),
-                });
+                };
             }
             other => {
                 panic!("found invalid struct type {}", other);
@@ -345,7 +340,7 @@ impl RichStructInit {
             let field_type = match struct_type.get_field_type(field_name.as_str()) {
                 Some(typ) => typ,
                 None => {
-                    return Err(AnalyzeError::new_with_locatable(
+                    ctx.add_err(AnalyzeError::new_with_locatable(
                         ErrorKind::StructFieldNotDefined,
                         format!(
                             "struct type `{}` has no field `{}`",
@@ -357,15 +352,18 @@ impl RichStructInit {
                         // struct init.
                         Box::new(struct_init.clone()),
                     ));
+
+                    // Skip this struct field since it's invalid.
+                    continue;
                 }
             };
 
             // Analyze the value being assigned to the struct field.
-            let expr = RichExpr::from(ctx, field_value.clone())?;
+            let expr = RichExpr::from(ctx, field_value.clone());
 
             // Make sure the value being assigned to the field has the expected type.
             if !expr.typ.is_compatible_with(field_type) {
-                return Err(AnalyzeError::new_with_locatable(
+                ctx.add_err(AnalyzeError::new_with_locatable(
                     ErrorKind::IncompatibleTypes,
                     format!(
                         "cannot assign expression of type `{}` to field `{}: {}` on struct type \
@@ -382,7 +380,7 @@ impl RichStructInit {
 
             // Insert the analyzed struct field value, making sure that it was not already assigned.
             if field_values.insert(field_name.to_string(), expr).is_some() {
-                return Err(AnalyzeError::new_with_locatable(
+                ctx.add_err(AnalyzeError::new_with_locatable(
                     ErrorKind::DuplicateStructFieldName,
                     format!("struct field `{}` is already assigned", &field_name.blue()).as_str(),
                     Box::new(field_value.clone()),
@@ -393,7 +391,7 @@ impl RichStructInit {
         // Make sure all struct fields were assigned.
         for field in &struct_type.fields {
             if !field_values.contains_key(field.name.as_str()) {
-                return Err(AnalyzeError::new_with_locatable(
+                ctx.add_err(AnalyzeError::new_with_locatable(
                     ErrorKind::StructFieldNotInitialized,
                     format!(
                         "field `{}` on struct type `{}` is uninitialized",
@@ -406,9 +404,9 @@ impl RichStructInit {
             }
         }
 
-        Ok(RichStructInit {
+        RichStructInit {
             typ: struct_type,
             field_values,
-        })
+        }
     }
 }

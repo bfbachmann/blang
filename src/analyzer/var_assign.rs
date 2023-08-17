@@ -1,8 +1,8 @@
-use colored::Colorize;
 use core::fmt;
 use std::fmt::Formatter;
 
-use crate::analyzer::error::AnalyzeResult;
+use colored::Colorize;
+
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
@@ -23,10 +23,10 @@ impl fmt::Display for RichVarAssign {
 
 impl RichVarAssign {
     /// Performs semantic analysis on the given variable assignment and returns a type-rich version
-    /// of it, or an error if the statement is variable assignment invalid.
-    pub fn from(ctx: &mut ProgramContext, assign: VariableAssignment) -> AnalyzeResult<Self> {
+    /// of it.
+    pub fn from(ctx: &mut ProgramContext, assign: VariableAssignment) -> Self {
         // Analyze the expression representing the value assigned to the variable.
-        let rich_expr = RichExpr::from(ctx, assign.value.clone())?;
+        let rich_expr = RichExpr::from(ctx, assign.value.clone());
 
         // Make sure the variable has been defined.
         let var_type = ctx.get_var(assign.name.as_str());
@@ -53,9 +53,9 @@ impl RichVarAssign {
             ));
         }
 
-        Ok(RichVarAssign {
+        RichVarAssign {
             name: assign.name,
             val: rich_expr,
-        })
+        }
     }
 }

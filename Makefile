@@ -4,11 +4,6 @@ export RUST_LOG=trace
 # Enable stack traces.
 export RUST_BACKTRACE=full
 
-# Run the REPL.
-.PHONY: repl
-repl:
-	cargo run -- repl
-
 # Run tests.
 .PHONY: test
 test:

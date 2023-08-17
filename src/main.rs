@@ -1,6 +1,5 @@
-use std::collections::VecDeque;
 use std::fs::File;
-use std::io::{stdin, stdout, BufRead, BufReader, Error, ErrorKind, Result, Write};
+use std::io::{BufRead, BufReader, Result};
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -10,12 +9,9 @@ use colored::*;
 use compiler::program::ProgCompiler;
 use lexer::token::Token;
 use parser::program::Program;
-use parser::statement::Statement;
 
 use crate::analyzer::func::RichFnSig;
-use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::program::RichProg;
-use crate::analyzer::statement::RichStatement;
 use crate::lexer::error::LexError;
 use crate::parser::error::ParseError;
 use crate::syscall::syscall::all_syscalls;
@@ -41,14 +37,14 @@ fn main() {
     // Add the "build" subcommand for compiling.
     let cmd = cmd.subcommand(
         Command::new("build")
-            .about("Builds Blang source code")
+            .about("Build Blang source code")
             .arg(arg!([SRC_PATH]).required(true))
             .arg(
-                arg!(-u --unoptimized ... "Prevents simplification of generated LLVM IR")
+                arg!(-u --unoptimized ... "Prevent simplification of generated LLVM IR")
                     .required(false)
                     .action(ArgAction::SetTrue),
             )
-            .arg(arg!(-t --target <TARGET> "Specifies target ISA triple").required(false))
+            .arg(arg!(-t --target <TARGET> "Target ISA triple").required(false))
             .arg(
                 arg!(-b --bitcode "Output LLVM bitcode")
                     .required(false)
@@ -57,13 +53,10 @@ fn main() {
             .arg(arg!(-o --out <OUTPUT_PATH> "Output file path").required(false)),
     );
 
-    // Add the "repl" subcommand for running a REPL.
-    let cmd = cmd.subcommand(Command::new("repl").about("Runs a REPL"));
-
     // Add the "check" subcommand for performing static analysis.
     let cmd = cmd.subcommand(
         Command::new("check")
-            .about("Performs static analysis")
+            .about("Perform static analysis only")
             .arg(arg!([SRC_PATH]).required(true)),
     );
 
@@ -79,7 +72,6 @@ fn main() {
             }
             _ => fatalln!("expected source path"),
         },
-        Some(("repl", _)) => repl(),
         Some(("check", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(file_path) => {
                 analyze(file_path);
@@ -214,79 +206,6 @@ fn compile(
     ) {
         fatalln!("{}", e);
     }
-}
-
-/// Starts a REPL. The REPL will prompt for input and try to interpret it as a statement, then
-/// print the result of the statement.
-fn repl() {
-    println!("Starting REPL.");
-    println!("Use ^C to exit. Enter two successive newlines to commit statements.");
-
-    let mut ctx = ProgramContext::new();
-
-    loop {
-        match repl_collect_tokens() {
-            Ok(tokens) => {
-                let mut tokens = tokens;
-                while !tokens.is_empty() {
-                    let statement = match Statement::from(&mut tokens) {
-                        Ok(statement) => match RichStatement::from(&mut ctx, statement) {
-                            Ok(s) => s,
-                            Err(e) => {
-                                errorln!("{}", e);
-                                break;
-                            }
-                        },
-                        Err(e) => {
-                            errorln!("{}", e);
-                            break;
-                        }
-                    };
-
-                    dbg!(&statement);
-                    // TODO: generate IR
-                }
-            }
-            Err(e) => errorln!("{}", e),
-        };
-    }
-}
-
-/// Collects tokens from stdin until the user is done with input (i.e. until they've hit enter twice
-/// in a row).
-fn repl_collect_tokens() -> Result<VecDeque<Token>> {
-    let mut tokens = VecDeque::new();
-    let mut line_num = 1;
-    let mut out = stdout();
-
-    out.write("----------------\n".as_bytes())?;
-
-    loop {
-        // Print a prompt based on whether this is the beginning of a new sequence or a continuation
-        // of the last one.
-        out.write_all(format!("{}", format!("{} > ", line_num).bold()).as_bytes())?;
-        out.flush()?;
-        line_num += 1;
-
-        // Read input.
-        let mut buf = String::new();
-        stdin().read_line(&mut buf)?;
-
-        // If the input is only whitespace, it means we're done collecting tokens and we should
-        // parse what we've collected so far.
-        let input = buf.as_str();
-        if input.trim().is_empty() {
-            break;
-        }
-
-        // Tokenize input.
-        match Token::tokenize_line(input, line_num) {
-            Ok(new_tokens) => tokens.extend(new_tokens),
-            Err(e) => return Err(Error::new(ErrorKind::InvalidInput, e)),
-        };
-    }
-
-    Ok(tokens)
 }
 
 /// Formats the file location has a colored string.

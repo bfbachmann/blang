@@ -4,7 +4,6 @@ use std::fmt::Formatter;
 use colored::Colorize;
 
 use crate::analyzer::closure::RichClosure;
-use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
@@ -72,13 +71,13 @@ impl Locatable for RichCond {
 impl RichCond {
     /// Performs semantic analysis on the given conditional and returns a type-rich version of it,
     /// or an error if the conditional is semantically invalid.
-    pub fn from(ctx: &mut ProgramContext, cond: Conditional) -> AnalyzeResult<Self> {
+    pub fn from(ctx: &mut ProgramContext, cond: Conditional) -> Self {
         let mut rich_branches = vec![];
         for branch in cond.branches {
             // Check that the branch expression evaluates to a bool, if one exists.
             let rich_expr = match &branch.condition {
                 Some(branch_cond) => {
-                    let rich_expr = RichExpr::from(ctx, branch_cond.clone())?;
+                    let rich_expr = RichExpr::from(ctx, branch_cond.clone());
                     if rich_expr.typ != RichType::Bool {
                         ctx.add_err(AnalyzeError::new_with_locatable(
                             ErrorKind::IncompatibleTypes,
@@ -99,7 +98,7 @@ impl RichCond {
             // Analyze the branch body and record the return type if the body is guaranteed to end in a
             // return statement.
             let rich_closure =
-                RichClosure::from(ctx, branch.body.clone(), ScopeKind::Branch, vec![], None)?;
+                RichClosure::from(ctx, branch.body.clone(), ScopeKind::Branch, vec![], None);
 
             rich_branches.push(RichBranch {
                 cond: rich_expr,
@@ -120,10 +119,10 @@ impl RichCond {
             ret_type = branch.body.ret_type.clone();
         }
 
-        Ok(RichCond {
+        RichCond {
             branches: rich_branches,
             ret_type,
-        })
+        }
     }
 
     /// Returns true if the conditional is exhaustive (i.e. if it has an else case).
