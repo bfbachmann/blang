@@ -240,11 +240,7 @@ impl StructInit {
             Some(other) => {
                 return Err(ParseError::new(
                     ErrorKind::ExpectedType,
-                    format!(
-                        "expected struct type, but found `{}`",
-                        format!("{}", &other).blue()
-                    )
-                    .as_str(),
+                    format_code!("expected struct type, but found {}", &other,).as_str(),
                     Some(other.clone()),
                     other.start,
                     other.end,

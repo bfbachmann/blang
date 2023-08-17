@@ -6,6 +6,7 @@ use colored::Colorize;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
+use crate::format_code;
 use crate::parser::var_assign::VariableAssignment;
 
 /// Represents a semantically valid and type-rich variable assignment.
@@ -35,11 +36,11 @@ impl RichVarAssign {
             if typ != &rich_expr.typ {
                 ctx.add_err(AnalyzeError::new_with_locatable(
                     ErrorKind::IncompatibleTypes,
-                    format!(
-                        "cannot assign value of type `{}` to variable `{}: {}`",
-                        format!("{}", &rich_expr.typ).blue(),
-                        format!("{}", &assign.name).blue(),
-                        format!("{}", &typ).blue(),
+                    format_code!(
+                        "cannot assign value of type {} to variable {}: {}",
+                        &rich_expr.typ,
+                        &assign.name,
+                        &typ
                     )
                     .as_str(),
                     Box::new(assign.value.clone()),

@@ -1,8 +1,9 @@
-use crate::lexer::kind::TokenKind;
-use colored::Colorize;
 use std::collections::VecDeque;
 use std::fmt::{Display, Formatter};
 
+use colored::Colorize;
+
+use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::parser::error::ParseResult;
@@ -57,11 +58,7 @@ impl StringLit {
             }),
             Some(other) => Err(ParseError::new_with_token(
                 ErrorKind::ExpectedBasicExpr,
-                format!(
-                    "expected boolean literal, but found `{}`",
-                    format!("{}", other).blue()
-                )
-                .as_str(),
+                format_code!("expected boolean literal, but found {}", other).as_str(),
                 other,
             )),
             None => Err(ParseError::new(

@@ -471,11 +471,7 @@ impl Expression {
                 } else {
                     return Err(ParseError::new_with_token(
                         ErrorKind::UnexpectedOperator,
-                        format!(
-                            "unexpected operator `{}`",
-                            format!("{}", op1_token).as_str().blue()
-                        )
-                        .as_str(),
+                        format_code!("unexpected operator {}", op1_token).as_str(),
                         op1_token,
                     ));
                 }
@@ -503,9 +499,9 @@ impl Expression {
                         } else {
                             return Err(ParseError::new_with_token(
                                 ErrorKind::ExpectedBeginExpr,
-                                format!(
-                                    "expected beginning of expression, but found `{}`",
-                                    format!("{}", op1_token).blue()
+                                format_code!(
+                                    "expected beginning of expression, but found {}",
+                                    op1_token,
                                 )
                                 .as_str(),
                                 op1_token,
@@ -527,9 +523,9 @@ impl Expression {
                                 } else {
                                     return Err(ParseError::new_with_token(
                                         ErrorKind::ExpectedBasicExpr,
-                                        format!(
-                                            "expected basic expression, but found `{}`",
-                                            format!("{}", op1_token).blue(),
+                                        format_code!(
+                                            "expected basic expression, but found {}",
+                                            op1_token,
                                         )
                                         .as_str(),
                                         op1_token,
@@ -538,11 +534,8 @@ impl Expression {
                             } else {
                                 return Err(ParseError::new_with_token(
                                     ErrorKind::ExpectedExpr,
-                                    format!(
-                                        "expected expression, but found `{}`",
-                                        format!("{}", op1_token).blue(),
-                                    )
-                                    .as_str(),
+                                    format_code!("expected expression, but found {}", op1_token,)
+                                        .as_str(),
                                     op1_token,
                                 ));
                             }

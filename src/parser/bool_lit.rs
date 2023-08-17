@@ -67,11 +67,7 @@ impl BoolLit {
             }),
             Some(other) => Err(ParseError::new_with_token(
                 ErrorKind::ExpectedBasicExpr,
-                format!(
-                    "expected boolean literal, but found `{}`",
-                    format!("{}", other).blue()
-                )
-                .as_str(),
+                format_code!("expected boolean literal, but found {}", other,).as_str(),
                 other,
             )),
             None => Err(ParseError::new(

@@ -1,6 +1,7 @@
-use colored::Colorize;
 use std::collections::VecDeque;
 use std::fmt::{Display, Formatter};
+
+use colored::Colorize;
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
@@ -56,18 +57,14 @@ impl I64Lit {
             }),
             Some(other) => Err(ParseError::new(
                 ErrorKind::UnexpectedToken,
-                format!(
-                    "expected i64 literal, but found `{}`",
-                    format!("{}", other).blue()
-                )
-                .as_str(),
+                format_code!("expected {} literal, but found {}", "i64", other).as_str(),
                 Some(other.clone()),
                 other.start,
                 other.end,
             )),
             None => Err(ParseError::new(
                 ErrorKind::UnexpectedEOF,
-                format!("expected i64 literal, but found EOF").as_str(),
+                "expected i64 literal, but found EOF",
                 None,
                 Position::default(),
                 Position::default(),

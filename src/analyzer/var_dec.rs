@@ -7,6 +7,7 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#type::RichType;
+use crate::format_code;
 use crate::parser::statement::Statement;
 use crate::parser::var_dec::VariableDeclaration;
 
@@ -33,9 +34,9 @@ impl RichVarDecl {
             ctx.add_err(AnalyzeError::new_from_statement(
                 ErrorKind::VariableAlreadyDefined,
                 &Statement::VariableDeclaration(var_decl.clone()),
-                format!(
-                    "variable `{}` was already defined in this scope",
-                    var_decl.name.blue(),
+                format_code!(
+                    "variable {} was already defined in this scope",
+                    var_decl.name,
                 )
                 .as_str(),
             ));
@@ -56,11 +57,10 @@ impl RichVarDecl {
                     ctx.add_err(AnalyzeError::new_from_statement(
                         ErrorKind::IncompatibleTypes,
                         &Statement::VariableDeclaration(var_decl.clone()),
-                        format!(
-                            "cannot assign value of type `{}` to variable `{}: {}`",
-                            format!("{}", &rich_expr.typ).blue(),
-                            format!("{}", &var_decl.name).blue(),
-                            format!("{}", &declared_type).blue(),
+                        format_code!(
+                            "cannot assign value of type {} to variable {}",
+                            &rich_expr.typ,
+                            format!("{}: {}", &var_decl.name, &declared_type),
                         )
                         .as_str(),
                     ));

@@ -16,7 +16,7 @@ use crate::parser::closure::Closure;
 use crate::parser::cont::Continue;
 use crate::parser::r#break::Break;
 use crate::parser::r#type::Type;
-use crate::util;
+use crate::{format_code, util};
 
 /// Represents a semantically valid and type-rich closure.
 #[derive(Debug, Clone)]
@@ -287,10 +287,10 @@ fn check_return(ret: &RichRet, expected: Option<&RichType>) -> AnalyzeResult<()>
                 {
                     return Err(AnalyzeError::new_with_locatable(
                         ErrorKind::IncompatibleTypes,
-                        format!(
-                            "expected return value of type `{}`, but found `{}`",
-                            format!("{}", expected_type).blue(),
-                            format!("{}", &expr.typ).blue(),
+                        format_code!(
+                            "expected return value of type {}, but found {}",
+                            expected_type,
+                            &expr.typ,
                         )
                         .as_str(),
                         Box::new(ret.clone()),
@@ -300,9 +300,9 @@ fn check_return(ret: &RichRet, expected: Option<&RichType>) -> AnalyzeResult<()>
             None => {
                 return Err(AnalyzeError::new_with_locatable(
                     ErrorKind::MissingReturn,
-                    format!(
-                        "return statement is missing a required value of type `{}`",
-                        format!("{}", expected_type).blue()
+                    format_code!(
+                        "return statement is missing a required value of type {}",
+                        expected_type,
                     )
                     .as_str(),
                     Box::new(ret.clone()),

@@ -11,7 +11,7 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#type::RichType;
 use crate::parser::r#struct::{StructInit, StructType};
 use crate::parser::r#type::Type;
-use crate::util;
+use crate::{format_code, util};
 
 /// Represents a semantically valid and type-rich struct field.
 #[derive(Clone, Debug, PartialEq)]
@@ -78,15 +78,14 @@ impl RichStruct {
                 return rich_struct.clone();
             }
         } else if anon && !struct_type.name.is_empty() {
-            ctx.add_err(AnalyzeError::new_with_locatable(
-                ErrorKind::UnexpectedTypeName,
-                format!(
-                    "inline struct type definitions cannot have type names (remove type name `{}`)",
-                    struct_type.name.blue()
+            ctx.add_err(
+                AnalyzeError::new_with_locatable(
+                    ErrorKind::UnexpectedTypeName,
+                    "inline struct type definitions cannot have type names",
+                    Box::new(struct_type.clone()),
                 )
-                .as_str(),
-                Box::new(struct_type.clone()),
-            ));
+                .with_hint(format_code!("remove type name {}", struct_type.name).as_str()),
+            );
         }
 
         // Analyze the struct fields.
@@ -97,10 +96,10 @@ impl RichStruct {
             if !field_names.insert(field.name.clone()) {
                 ctx.add_err(AnalyzeError::new_with_locatable(
                     ErrorKind::DuplicateStructFieldName,
-                    format!(
-                        "struct type `{}` cannot have multiple fields named `{}`",
-                        struct_type.name.blue(),
-                        field.name.blue(),
+                    format_code!(
+                        "struct type {} cannot have multiple fields named {}",
+                        struct_type.name,
+                        field.name,
                     )
                     .as_str(),
                     Box::new(field.clone()),
@@ -115,21 +114,19 @@ impl RichStruct {
                     ctx.add_err(
                         AnalyzeError::new_with_locatable(
                             ErrorKind::InfiniteSizedType,
-                            format!(
-                                "struct `{}` cannot directly contain itself (via field `{}`)",
-                                struct_type.name.blue(),
-                                field.name.blue(),
+                            format_code!(
+                                "struct {} cannot directly contain itself (via field {})",
+                                struct_type.name,
+                                field.name,
                             )
                             .as_str(),
                             Box::new(field.clone()),
                         )
                         .with_hint(
-                            format!(
-                                "consider changing field `{}: {}` to `{}: &{}`",
-                                field.name.blue(),
-                                unresolved_type.name.blue(),
-                                field.name.blue(),
-                                unresolved_type.name.blue(),
+                            format_code!(
+                                "consider changing field {} to {}",
+                                format!("{}: {}", field.name, unresolved_type.name),
+                                format!("{}: &{}", field.name, unresolved_type.name),
                             )
                             .as_str(),
                         ),
@@ -156,9 +153,9 @@ impl RichStruct {
             ctx.add_err(
                 AnalyzeError::new_with_locatable(
                     ErrorKind::InfiniteSizedType,
-                    format!(
-                        "struct `{}` cannot contain itself via any of its field types",
-                        rich_struct.name.blue()
+                    format_code!(
+                        "struct {} cannot contain itself via any of its field types",
+                        rich_struct.name,
                     )
                     .as_str(),
                     Box::new(struct_type.clone()),
@@ -203,12 +200,11 @@ impl RichStruct {
                         hierarchy.push(unresolved_type.name.to_string());
                         return Err(AnalyzeError::new_with_locatable(
                             ErrorKind::InfiniteSizedType,
-                            format!(
-                                "type `{}` cannot contain itself (via field `{}` on struct type \
-                                `{}`)",
-                                format!("{}", unresolved_type.name).blue(),
-                                format!("{}", field.name).blue(),
-                                format!("{}", struct_type).blue(),
+                            format_code!(
+                                "type {} cannot contain itself (via field {} on struct type {})",
+                                unresolved_type.name,
+                                field.name,
+                                struct_type,
                             )
                             .as_str(),
                             Box::new(field.clone()),
@@ -221,12 +217,10 @@ impl RichStruct {
                             .as_str(),
                         )
                         .with_hint(
-                            format!(
-                                "consider changing field `{}: {}` to `{}: &{}`",
-                                field.name.blue(),
-                                unresolved_type.name.blue(),
-                                field.name.blue(),
-                                unresolved_type.name.blue()
+                            format_code!(
+                                "consider changing field {} to {}",
+                                format!("{}: {}", field.name, unresolved_type.name),
+                                format!("{}: &{}", field.name, unresolved_type.name),
                             )
                             .as_str(),
                         ));
@@ -245,23 +239,21 @@ impl RichStruct {
                     {
                         return Err(AnalyzeError::new_with_locatable(
                             ErrorKind::InfiniteSizedType,
-                            format!(
-                                "type `{}` cannot contain itself (via struct field `{}` on struct \
-                                type `{}`)",
-                                field_struct_type.name.blue(),
-                                field.name.blue(),
-                                struct_type.name.blue(),
+                            format_code!(
+                                "type {} cannot contain itself (via struct field {} on struct \
+                                type {})",
+                                field_struct_type.name,
+                                field.name,
+                                struct_type.name,
                             )
                             .as_str(),
                             Box::new(field.clone()),
                         )
                         .with_hint(
-                            format!(
-                                "consider changing field `{}: {}` to `{}: &{}`",
-                                field.name.blue(),
-                                format!("{}", field_struct_type).blue(),
-                                field.name.blue(),
-                                format!("{}", field_struct_type).blue()
+                            format_code!(
+                                "consider changing field {} to {}",
+                                format!("{}: {}", field.name, field_struct_type),
+                                format!("{}: &{}", field.name, field_struct_type),
                             )
                             .as_str(),
                         ));
@@ -342,12 +334,8 @@ impl RichStructInit {
                 None => {
                     ctx.add_err(AnalyzeError::new_with_locatable(
                         ErrorKind::StructFieldNotDefined,
-                        format!(
-                            "struct type `{}` has no field `{}`",
-                            format!("{}", struct_type).blue(),
-                            format!("{}", field_name).blue(),
-                        )
-                        .as_str(),
+                        format_code!("struct type {} has no field {}", struct_type, field_name,)
+                            .as_str(),
                         // TODO: This should be the location of the bad field instead of the entire
                         // struct init.
                         Box::new(struct_init.clone()),
@@ -365,13 +353,11 @@ impl RichStructInit {
             if !expr.typ.is_compatible_with(field_type) {
                 ctx.add_err(AnalyzeError::new_with_locatable(
                     ErrorKind::IncompatibleTypes,
-                    format!(
-                        "cannot assign expression of type `{}` to field `{}: {}` on struct type \
-                        `{}`",
-                        format!("{}", &expr.typ).blue(),
-                        format!("{}", &field_name).blue(),
-                        format!("{}", &field_type).blue(),
-                        format!("{}", &struct_type).blue(),
+                    format_code!(
+                        "cannot assign expression of type {} to field {} on struct type {}",
+                        format!("{}", &expr.typ),
+                        format!("{}: {}", &field_name, &field_type),
+                        format!("{}", &struct_type),
                     )
                     .as_str(),
                     Box::new(field_value.clone()),
@@ -382,7 +368,7 @@ impl RichStructInit {
             if field_values.insert(field_name.to_string(), expr).is_some() {
                 ctx.add_err(AnalyzeError::new_with_locatable(
                     ErrorKind::DuplicateStructFieldName,
-                    format!("struct field `{}` is already assigned", &field_name.blue()).as_str(),
+                    format_code!("struct field {} is already assigned", &field_name).as_str(),
                     Box::new(field_value.clone()),
                 ));
             }
@@ -393,10 +379,10 @@ impl RichStructInit {
             if !field_values.contains_key(field.name.as_str()) {
                 ctx.add_err(AnalyzeError::new_with_locatable(
                     ErrorKind::StructFieldNotInitialized,
-                    format!(
-                        "field `{}` on struct type `{}` is uninitialized",
-                        format!("{}", field.name).blue(),
-                        format!("{}", struct_type).blue(),
+                    format_code!(
+                        "field {} on struct type {} is uninitialized",
+                        field.name,
+                        struct_type,
                     )
                     .as_str(),
                     Box::new(struct_init.clone()),

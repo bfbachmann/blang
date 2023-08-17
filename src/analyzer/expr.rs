@@ -9,6 +9,7 @@ use crate::analyzer::func::{RichFn, RichFnCall, RichFnSig};
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#struct::{RichStruct, RichStructInit};
 use crate::analyzer::r#type::RichType;
+use crate::format_code;
 use crate::parser::closure::Closure;
 use crate::parser::expr::Expression;
 use crate::parser::op::Operator;
@@ -115,11 +116,7 @@ impl RichExpr {
                     ctx.add_err(AnalyzeError::new_from_expr(
                         ErrorKind::VariableNotDefined,
                         &expr,
-                        format!(
-                            "variable `{}` does not exist",
-                            format!("{}", &var_name).blue()
-                        )
-                        .as_str(),
+                        format_code!("variable {} does not exist", &var_name).as_str(),
                     ));
 
                     RichExpr::new_zero_value(Type::Unresolved(UnresolvedType::unknown()))
@@ -159,10 +156,10 @@ impl RichExpr {
                 // some zero-value instead.
                 ctx.add_err(AnalyzeError::new_with_locatable(
                     ErrorKind::ExpectedReturnValue,
-                    format!(
-                        "function `{}` has no return value, but is called in an expression \
+                    format_code!(
+                        "function {} has no return value, but is called in an expression \
                             where a return value is expected",
-                        format!("{}", &fn_call.fn_name).blue(),
+                        &fn_call.fn_name,
                     )
                     .as_str(),
                     Box::new(fn_call),
@@ -208,10 +205,10 @@ impl RichExpr {
                         ctx.add_err(AnalyzeError::new_from_expr(
                             ErrorKind::IncompatibleTypes,
                             &expr,
-                            format!(
-                                "unary operator `{}` cannot be applied to value of type `{}`",
-                                "!".blue(),
-                                format!("{}", other).blue(),
+                            format_code!(
+                                "unary operator {} cannot be applied to value of type {}",
+                                "!",
+                                other,
                             )
                             .as_str(),
                         ));
@@ -270,10 +267,10 @@ impl RichExpr {
                         ctx.add_err(AnalyzeError::new_from_expr(
                             ErrorKind::IncompatibleTypes,
                             &expr,
-                            format!(
-                                r#"cannot apply operator `{}` to left-side expression of type `{}`"#,
-                                format!("{}", &op).blue(),
-                                format!("{}", &rich_left.typ).blue()
+                            format_code!(
+                                "cannot apply operator {} to left-side expression of type {}",
+                                &op,
+                                &rich_left.typ,
                             )
                             .as_str(),
                         ));
@@ -284,10 +281,10 @@ impl RichExpr {
                         ctx.add_err(AnalyzeError::new_from_expr(
                             ErrorKind::IncompatibleTypes,
                             &expr,
-                            format!(
-                                "cannot apply operator `{}` to right-side expression type `{}`",
-                                format!("{}", &op).blue(),
-                                format!("{}", &rich_right.typ).blue()
+                            format_code!(
+                                "cannot apply operator {} to right-side expression type {}",
+                                &op,
+                                &rich_right.typ,
                             )
                             .as_str(),
                         ));
@@ -297,10 +294,10 @@ impl RichExpr {
                     ctx.add_err(AnalyzeError::new_from_expr(
                         ErrorKind::IncompatibleTypes,
                         &expr,
-                        format!(
-                            "incompatible types `{}` and `{}`",
-                            format!("{}", &rich_left.typ).blue(),
-                            format!("{}", &rich_right.typ).blue()
+                        format_code!(
+                            "incompatible types {} and {}",
+                            &rich_left.typ,
+                            &rich_right.typ,
                         )
                         .as_str(),
                     ));

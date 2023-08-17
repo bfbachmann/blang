@@ -14,7 +14,7 @@ use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::ret::Ret;
-use crate::util;
+use crate::{format_code, util};
 
 /// Performs semantic analysis on the function signature, ensuring it doesn't match any other
 /// function signature in the ProgramContext.
@@ -25,11 +25,7 @@ pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) {
     if ctx.add_extern_fn(rich_fn_sig).is_some() {
         ctx.add_err(AnalyzeError::new_with_locatable(
             ErrorKind::FunctionAlreadyDefined,
-            format!(
-                "function `{}` was already defined in this scope",
-                sig.name.blue()
-            )
-            .as_str(),
+            format_code!("function {} was already defined in this scope", sig.name).as_str(),
             Box::new(sig.clone()),
         ));
     }
@@ -142,9 +138,9 @@ impl RichFn {
         if let Some(_) = ctx.get_fn(func.signature.name.as_str()) {
             ctx.add_err(AnalyzeError::new_with_locatable(
                 ErrorKind::FunctionAlreadyDefined,
-                format!(
-                    "function `{}` was already defined in this scope",
-                    func.signature.name.blue()
+                format_code!(
+                    "function {} was already defined in this scope",
+                    func.signature.name,
                 )
                 .as_str(),
                 Box::new(func.clone()),
@@ -176,6 +172,7 @@ impl RichFn {
     }
 }
 
+/// Represents a fully type-resolved and analyzed function call.
 #[derive(Clone, Debug)]
 pub struct RichFnCall {
     pub fn_name: String,
@@ -237,7 +234,7 @@ impl RichFnCall {
                         // The function is not defined, so add an error and return a zero value.
                         ctx.add_err(AnalyzeError::new_with_locatable(
                             ErrorKind::FunctionNotDefined,
-                            format!("function `{}` does not exist", call.fn_name.blue()).as_str(),
+                            format_code!("function {} does not exist", call.fn_name).as_str(),
                             Box::new(call.clone()),
                         ));
 
@@ -260,8 +257,8 @@ impl RichFnCall {
             ctx.add_err(AnalyzeError::new_with_locatable(
                 ErrorKind::WrongNumberOfArgs,
                 format!(
-                    "function `{}` takes {} arguments, but {} were provided",
-                    fn_sig.name.blue(),
+                    "function {} takes {} arguments, but {} were provided",
+                    format_code!(fn_sig.name),
                     fn_sig.args.len(),
                     rich_args.len()
                 )
@@ -278,12 +275,11 @@ impl RichFnCall {
                 let original_arg = call.args.get(i).unwrap();
                 ctx.add_err(AnalyzeError::new_with_locatable(
                     ErrorKind::IncompatibleTypes,
-                    format!(
-                        "cannot use value of type `{}` as argument `{}: {}` to function `{}`",
-                        format!("{}", &passed_type).blue(),
-                        format!("{}", &defined.name).blue(),
-                        format!("{}", &defined.typ).blue(),
-                        format!("{}", &fn_name).blue(),
+                    format_code!(
+                        "cannot use value of type {} as argument {} to function {}",
+                        &passed_type,
+                        format!("{}: {}", &defined.name, &defined.typ),
+                        &fn_name,
                     )
                     .as_str(),
                     Box::new(original_arg.clone()),
@@ -299,6 +295,7 @@ impl RichFnCall {
     }
 }
 
+/// Represents an analyzed return statement.
 #[derive(Clone, Debug)]
 pub struct RichRet {
     pub val: Option<RichExpr>,
@@ -367,11 +364,11 @@ impl RichRet {
                         {
                             ctx.add_err(AnalyzeError::new_with_locatable(
                                 ErrorKind::IncompatibleTypes,
-                                format!(
-                                    "cannot return value of type `{}` from function with return \
-                                    type `{}`",
-                                    format!("{}", &rich_expr.typ).blue(),
-                                    format!("{}", &expected).blue(),
+                                format_code!(
+                                    "cannot return value of type {} from function with return \
+                                    type {}",
+                                    &rich_expr.typ,
+                                    &expected,
                                 )
                                 .as_str(),
                                 Box::new(expr),
@@ -399,9 +396,9 @@ impl RichRet {
                     Some(expected) => {
                         ctx.add_err(AnalyzeError::new_with_locatable(
                             ErrorKind::IncompatibleTypes,
-                            format!(
-                                "expected return value of type `{}`, but found empty return",
-                                format!("{}", expected).blue(),
+                            format_code!(
+                                "expected return value of type {}, but found empty return",
+                                expected,
                             )
                             .as_str(),
                             Box::new(ret),

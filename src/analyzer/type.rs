@@ -7,6 +7,7 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::RichFnSig;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#struct::RichStruct;
+use crate::format_code;
 use crate::parser::r#type::Type;
 
 /// Represents a semantically valid and fully resolved type.
@@ -81,7 +82,7 @@ impl RichType {
 
                 ctx.add_err(AnalyzeError::new_with_locatable(
                     ErrorKind::TypeNotDefined,
-                    format!("type `{}` is not defined", type_name.blue()).as_str(),
+                    format_code!("type {} is not defined", type_name).as_str(),
                     Box::new(unresolved_type.clone()),
                 ));
 
@@ -153,14 +154,14 @@ impl RichType {
 
     /// Formats the given type hierarchy like this
     ///
-    ///     `A` -> `B` -> `C`
+    ///     A -> B -> C
     pub fn hierarchy_to_string(hierarchy: Vec<String>) -> String {
         let mut s = String::from("");
         for (i, type_name) in hierarchy.iter().enumerate() {
             if i == 0 {
-                s.push_str(format!("`{}`", type_name).blue().to_string().as_str());
+                s.push_str(format_code!(type_name).to_string().as_str());
             } else {
-                s.push_str(format!(" -> `{}`", type_name).blue().to_string().as_str())
+                s.push_str(format_code!(" -> {}", type_name).to_string().as_str())
             }
         }
 

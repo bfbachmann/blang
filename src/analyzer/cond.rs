@@ -11,7 +11,7 @@ use crate::analyzer::r#type::RichType;
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::branch::Branch;
 use crate::parser::cond::Conditional;
-use crate::util;
+use crate::{format_code, util};
 
 /// Represents a semantically valid and type-rich branch.
 #[derive(Clone, Debug)]
@@ -81,9 +81,9 @@ impl RichCond {
                     if rich_expr.typ != RichType::Bool {
                         ctx.add_err(AnalyzeError::new_with_locatable(
                             ErrorKind::IncompatibleTypes,
-                            format!(
-                                "expected branch condition to have type bool, but found type `{}`",
-                                format!("{}", &rich_expr.typ).blue()
+                            format_code!(
+                                "expected branch condition to have type bool, but found type {}",
+                                &rich_expr.typ,
                             )
                             .as_str(),
                             Box::new(branch_cond.clone()),

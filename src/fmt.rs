@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::fmt::Display;
 
 /// Prints an error message and exits with code 1.
 #[macro_export]
@@ -25,6 +26,25 @@ macro_rules! warnln {
         print!("{}", "warning: ".yellow().bold());
         println!($($arg)*);
     }};
+}
+
+/// Formats an output message where all the arguments should display as pieces of source code.
+/// Example:
+///
+///     format_output!("invalid statement: {}", statement_ast_node)
+///
+/// where `statement_ast_node` looks like `let a = 1`, should expand to
+/// "invalid statement: `let a = 1`", where the source code in backticks is blue (in environments,
+/// that support color).
+#[macro_export]
+macro_rules! format_code {
+    ($str_lit:literal $(, $arg:expr)+ $(,)?) => {
+        format!($str_lit, $(format_code!($arg)),*)
+    };
+
+    ($arg:expr) => {
+        format!("`{}`", $arg).blue()
+    }
 }
 
 /// Returns the contents of a HashSet as a string of the form `<value1>, <value2>, ...`.

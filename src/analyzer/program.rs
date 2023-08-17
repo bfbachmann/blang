@@ -6,6 +6,7 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#struct::RichStruct;
 use crate::analyzer::statement::RichStatement;
 use crate::analyzer::warn::Warning;
+use crate::format_code;
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::program::Program;
 use crate::parser::statement::Statement;
@@ -119,7 +120,7 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
                 if func.signature.args.len() != 0 {
                     ctx.add_err(AnalyzeError::new_with_locatable(
                         ErrorKind::InvalidMain,
-                        format!("function `{}` cannot have arguments", "main".blue()).as_str(),
+                        format_code!("function {} cannot have arguments", "main").as_str(),
                         Box::new(func.signature.clone()),
                     ));
                 }
@@ -127,7 +128,7 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
                 if func.signature.return_type.is_some() {
                     ctx.add_err(AnalyzeError::new_with_locatable(
                         ErrorKind::InvalidMain,
-                        format!("function `{}` cannot have a return type", "main".blue()).as_str(),
+                        format_code!("function {} cannot have a return type", "main").as_str(),
                         Box::new(func.signature.clone()),
                     ));
                 }
