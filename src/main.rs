@@ -12,6 +12,7 @@ use parser::program::Program;
 
 use crate::analyzer::func::RichFnSig;
 use crate::analyzer::program::RichProg;
+use crate::fmt::format_file_loc;
 use crate::lexer::error::LexError;
 use crate::parser::error::ParseError;
 use crate::syscall::syscall::all_syscalls;
@@ -88,7 +89,8 @@ fn open_file(file_path: &str) -> Result<BufReader<File>> {
     Ok(BufReader::new(file))
 }
 
-/// Performs static analysis on the source code at the given path.
+/// Performs static analysis on the source code at the given path. Returns a successfully analyzed
+/// program and extern functions, or `None`.
 fn analyze(input_path: &str) -> Option<(RichProg, Vec<RichFnSig>)> {
     // Get a reader from the source file.
     let reader = match open_file(input_path) {
@@ -128,12 +130,9 @@ fn analyze(input_path: &str) -> Option<(RichProg, Vec<RichFnSig>)> {
 
     // Analyze the program.
     let analysis = RichProg::analyze(prog, all_syscalls().to_vec());
-    if analysis.errors.is_empty() {
-        return Some((analysis.prog, analysis.extern_fns));
-    }
 
     // Print warnings.
-    for warn in analysis.warnings {
+    for warn in &analysis.warnings {
         warnln!(
             "{}\n  {}\n",
             format!("{}", warn.message).bold(),
@@ -146,7 +145,7 @@ fn analyze(input_path: &str) -> Option<(RichProg, Vec<RichFnSig>)> {
     }
 
     // Print errors.
-    for err in analysis.errors {
+    for err in &analysis.errors {
         errorln!(
             "{}\n  {}",
             format!("{}: {}", err.kind, err.message).bold(),
@@ -157,15 +156,20 @@ fn analyze(input_path: &str) -> Option<(RichProg, Vec<RichFnSig>)> {
             ),
         );
 
-        if let Some(detail) = err.detail {
+        if let Some(detail) = &err.detail {
             println!("  {}", detail);
         }
 
-        if let Some(hint) = err.hint {
+        if let Some(hint) = &err.hint {
             println!("  {} {}", "hint:".green(), hint);
         }
 
         println!();
+    }
+
+    // Return the program only if there were no errors.
+    if analysis.errors.is_empty() {
+        return Some((analysis.prog, analysis.extern_fns));
     }
 
     None
@@ -205,13 +209,5 @@ fn compile(
         simplify_ir,
     ) {
         fatalln!("{}", e);
-    }
-}
-
-/// Formats the file location has a colored string.
-fn format_file_loc(path: &str, line: Option<usize>, col: Option<usize>) -> ColoredString {
-    match (line, col) {
-        (Some(l), Some(c)) => format!("--> {}:{}:{}", path, l, c).bright_black().bold(),
-        _ => format!("--> {}", path).bright_black(),
     }
 }

@@ -111,11 +111,14 @@ fn define_structs(ctx: &mut ProgramContext, prog: &Program) {
 /// Analyzes all top-level function signatures and defines them in the program context so they
 /// can be referenced later. This will not perform any analysis of function bodies.
 fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
+    let mut main_defined = false;
     for statement in &prog.statements {
         if let Statement::FunctionDeclaration(func) = statement {
             analyze_fn_sig(ctx, &func.signature);
 
             if func.signature.name == "main" {
+                main_defined = true;
+
                 // Make sure main has no args or return.
                 if func.signature.args.len() != 0 {
                     ctx.add_err(AnalyzeError::new_with_locatable(
@@ -134,6 +137,12 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
                 }
             }
         }
+    }
+
+    if !main_defined {
+        ctx.add_warn(Warning::new_with_default_pos(
+            "no main function was detected",
+        ));
     }
 }
 

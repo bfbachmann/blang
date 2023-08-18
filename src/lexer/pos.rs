@@ -16,7 +16,7 @@ impl fmt::Display for Position {
 
 impl Default for Position {
     fn default() -> Self {
-        Position { line: 1, col: 1 }
+        Position { line: 0, col: 0 }
     }
 }
 

@@ -19,6 +19,15 @@ impl Display for Warning {
 }
 
 impl Warning {
+    /// Creates a new warning with default start and end positions.
+    pub fn new_with_default_pos(message: &str) -> Self {
+        Warning {
+            message: message.to_string(),
+            start_pos: Position::default(),
+            end_pos: Position::default(),
+        }
+    }
+
     /// Creates a new warning message with start and end positions cloned from the locatable.
     pub fn new_from_locatable(message: &str, loc: Box<dyn Locatable>) -> Self {
         Warning {

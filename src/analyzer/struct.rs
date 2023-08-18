@@ -104,6 +104,8 @@ impl RichStruct {
                     .as_str(),
                     Box::new(field.clone()),
                 ));
+
+                // Skip the duplicated field.
                 continue;
             }
 
@@ -131,6 +133,8 @@ impl RichStruct {
                             .as_str(),
                         ),
                     );
+
+                    // Skip the invalid field.
                     continue;
                 }
             }

@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 use std::fmt::Display;
 
+use colored::{ColoredString, Colorize};
+
 /// Prints an error message and exits with code 1.
 #[macro_export]
 macro_rules! fatalln {
@@ -34,7 +36,7 @@ macro_rules! warnln {
 ///     format_output!("invalid statement: {}", statement_ast_node)
 ///
 /// where `statement_ast_node` looks like `let a = 1`, should expand to
-/// "invalid statement: `let a = 1`", where the source code in backticks is blue (in environments,
+/// "invalid statement: `let a = 1`", where the source code in backticks is blue (in environments
 /// that support color).
 #[macro_export]
 macro_rules! format_code {
@@ -63,4 +65,14 @@ where
     }
 
     return s;
+}
+
+/// Formats the file location as a colored string.
+pub fn format_file_loc(path: &str, line: Option<usize>, col: Option<usize>) -> ColoredString {
+    match (line, col) {
+        (Some(l), Some(c)) if l > 0 && c > 0 => {
+            format!("--> {}:{}:{}", path, l, c).bright_black().bold()
+        }
+        _ => format!("--> {}", path).bright_black(),
+    }
 }
