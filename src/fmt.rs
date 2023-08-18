@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 
-
 use colored::{ColoredString, Colorize};
 
 /// Prints an error message and exits with code 1.
@@ -75,4 +74,20 @@ pub fn format_file_loc(path: &str, line: Option<usize>, col: Option<usize>) -> C
         }
         _ => format!("--> {}", path).bright_black(),
     }
+}
+
+/// Formats the given type hierarchy like this
+///
+///     A -> B -> C
+pub fn hierarchy_to_string(hierarchy: Vec<String>) -> String {
+    let mut s = String::from("");
+    for (i, type_name) in hierarchy.iter().enumerate() {
+        if i == 0 {
+            s.push_str(format_code!(type_name).to_string().as_str());
+        } else {
+            s.push_str(format_code!(" -> {}", type_name).to_string().as_str())
+        }
+    }
+
+    s.to_string()
 }

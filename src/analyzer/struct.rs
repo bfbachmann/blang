@@ -9,6 +9,7 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#type::RichType;
+use crate::fmt::hierarchy_to_string;
 use crate::parser::r#struct::{StructInit, StructType};
 use crate::parser::r#type::Type;
 use crate::{format_code, util};
@@ -167,9 +168,7 @@ impl RichStruct {
                 .with_detail(
                     format!(
                         "the offending type hierarchy is {}",
-                        RichType::hierarchy_to_string(
-                            type_hierarchy.iter().map(|t| t.to_string()).collect()
-                        )
+                        hierarchy_to_string(type_hierarchy.iter().map(|t| t.to_string()).collect())
                     )
                     .as_str(),
                 )
@@ -216,7 +215,7 @@ impl RichStruct {
                         .with_detail(
                             format!(
                                 "the offending type hierarchy is {}",
-                                RichType::hierarchy_to_string(hierarchy.clone())
+                                hierarchy_to_string(hierarchy.clone())
                             )
                             .as_str(),
                         )

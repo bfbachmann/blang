@@ -152,22 +152,6 @@ impl RichType {
         };
     }
 
-    /// Formats the given type hierarchy like this
-    ///
-    ///     A -> B -> C
-    pub fn hierarchy_to_string(hierarchy: Vec<String>) -> String {
-        let mut s = String::from("");
-        for (i, type_name) in hierarchy.iter().enumerate() {
-            if i == 0 {
-                s.push_str(format_code!(type_name).to_string().as_str());
-            } else {
-                s.push_str(format_code!(" -> {}", type_name).to_string().as_str())
-            }
-        }
-
-        s.to_string()
-    }
-
     /// Returns true if both types are compatible (i.e. they have the same representation in
     /// memory and can be operated on/with in the same ways).
     pub fn is_compatible_with(&self, other: &RichType) -> bool {
