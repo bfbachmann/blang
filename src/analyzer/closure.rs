@@ -10,7 +10,7 @@ use crate::analyzer::func::{RichArg, RichRet};
 use crate::analyzer::prog_context::{ProgramContext, Scope, ScopeKind};
 use crate::analyzer::r#type::RichType;
 use crate::analyzer::statement::RichStatement;
-use crate::analyzer::warn::Warning;
+use crate::analyzer::warn::{WarnKind, Warning};
 use crate::parser::arg::Argument;
 use crate::parser::closure::Closure;
 use crate::parser::cont::Continue;
@@ -80,6 +80,7 @@ impl RichClosure {
                 ctx.consume_error(result);
                 if i + 1 != num_statements {
                     ctx.add_warn(Warning::new_from_locatable(
+                        WarnKind::UnreachableCode,
                         "statements following unconditional return would never be executed",
                         Box::new(statement.clone()),
                     ));

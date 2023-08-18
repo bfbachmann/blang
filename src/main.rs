@@ -135,7 +135,7 @@ fn analyze(input_path: &str) -> Option<(RichProg, Vec<RichFnSig>)> {
     for warn in &analysis.warnings {
         warnln!(
             "{}\n  {}\n",
-            format!("{}", warn.message).bold(),
+            format!("{}", warn).bold(),
             format_file_loc(
                 input_path,
                 Some(warn.start_pos.line),

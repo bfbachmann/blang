@@ -5,7 +5,7 @@ use crate::analyzer::func::{analyze_fn_sig, RichFnSig};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#struct::RichStruct;
 use crate::analyzer::statement::RichStatement;
-use crate::analyzer::warn::Warning;
+use crate::analyzer::warn::{WarnKind, Warning};
 use crate::format_code;
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::program::Program;
@@ -141,6 +141,7 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
 
     if !main_defined {
         ctx.add_warn(Warning::new_with_default_pos(
+            WarnKind::MissingMain,
             "no main function was detected",
         ));
     }
@@ -152,14 +153,19 @@ mod tests {
 
     use crate::analyzer::error::AnalyzeResult;
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
-    use crate::analyzer::program::RichProg;
+    use crate::analyzer::program::{ProgramAnalysis, RichProg};
+    use crate::analyzer::warn::{WarnKind, Warning};
     use crate::lexer::token::Token;
     use crate::parser::program::Program;
 
-    fn analyze_prog(raw: &str) -> AnalyzeResult<RichProg> {
+    fn get_analysis(raw: &str) -> ProgramAnalysis {
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let prog = Program::from(&mut tokens).expect("should not error");
-        let mut analysis = RichProg::analyze(prog, vec![]);
+        RichProg::analyze(prog, vec![])
+    }
+
+    fn analyze_prog(raw: &str) -> AnalyzeResult<RichProg> {
+        let mut analysis = get_analysis(raw);
         if analysis.errors.is_empty() {
             Ok(analysis.prog)
         } else {
@@ -401,6 +407,44 @@ mod tests {
                 kind: ErrorKind::InfiniteSizedType,
                 ..
             })
+        ));
+    }
+
+    #[test]
+    fn unreachable_code() {
+        let raw = r#"
+            fn main() {
+                do_thing()
+            }
+            
+            fn do_thing(): bool {
+                return true
+                let a = 1
+            }
+        "#;
+        let mut analysis = get_analysis(raw);
+        assert!(analysis.errors.is_empty());
+        assert_eq!(analysis.warnings.len(), 1);
+        assert!(matches!(
+            analysis.warnings.remove(0),
+            Warning {
+                kind: WarnKind::UnreachableCode,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn missing_main() {
+        let mut analysis = get_analysis("");
+        assert!(analysis.errors.is_empty());
+        assert_eq!(analysis.warnings.len(), 1);
+        assert!(matches!(
+            analysis.warnings.remove(0),
+            Warning {
+                kind: WarnKind::MissingMain,
+                ..
+            }
         ));
     }
 }
