@@ -142,7 +142,7 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
     if !main_defined {
         ctx.add_warn(Warning::new_with_default_pos(
             WarnKind::MissingMain,
-            "no main function was detected",
+            "no main function was detected; your code will not execute",
         ));
     }
 }
