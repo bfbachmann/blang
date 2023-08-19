@@ -235,6 +235,9 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             self.fpm.run_on(&fn_val);
             Ok(fn_val)
         } else {
+            println!("\n----BEGIN MODULE----\n");
+            self.module.print_to_stderr();
+            println!("----END MODULE----\n");
             fn_val.print_to_stderr();
             unsafe {
                 fn_val.delete();

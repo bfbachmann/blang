@@ -130,35 +130,36 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
         let fn_type = convert::to_fn_type(self.context, sig);
         let fn_val = self.module.add_function(sig.name.as_str(), fn_type, None);
 
-        // Set arg names.
+        // Set arg names and mark arguments as pass-by-value where necessary.
         if fn_val.count_params() == sig.args.len() as u32 {
             // The compiled function arguments match those of the original function signature, so
             // just assign arg names normally.
-            for (arg_val, arg) in fn_val.get_param_iter().zip(sig.args.iter()) {
+            for (i, (arg_val, arg)) in fn_val.get_param_iter().zip(sig.args.iter()).enumerate() {
                 arg_val.set_name(arg.name.as_str());
+                if arg_val.is_pointer_value() {
+                    self.add_fn_arg_attrs(fn_val, i as u32, vec!["byval"]);
+                }
             }
         } else {
             // The compiled function arguments do not match those of the original function
             // signature. This means the function is taking an additional pointer as its first
             // argument, to which the result will be written. This is done for functions that
             // return structured types.
-            let first_param = fn_val.get_first_param().unwrap();
-            first_param.set_name("ret_val_ptr");
+            let first_arg_val = fn_val.get_first_param().unwrap();
+            first_arg_val.set_name("ret_val_ptr");
 
             // Add the "sret" attribute to the first argument to tell LLVM that it is being used to
             // pass the return value.
-            // Add the "noalias" attribute to the first argument to indicate that we're only
-            // accessing memory pointed to by the pointer via the argument and nothing else.
-            // Add the "nofree" attribute to the first argument to indicate that we won't free the
-            // memory it points to.
-            self.add_fn_arg_attrs(fn_val, 0, vec!["sret", "noalias", "nofree"]);
+            self.add_fn_arg_attrs(fn_val, 0, vec!["sret"]);
 
-            // Name the remaining function arguments normally.
+            // Name the remaining function arguments normally and mark them as pass-by-value where
+            // necessary.
             for i in 1..fn_val.count_params() {
-                fn_val
-                    .get_nth_param(i)
-                    .unwrap()
-                    .set_name(sig.args.get((i - 1) as usize).unwrap().name.as_str());
+                let arg_val = fn_val.get_nth_param(i).unwrap();
+                arg_val.set_name(sig.args.get((i - 1) as usize).unwrap().name.as_str());
+                if arg_val.is_pointer_value() {
+                    self.add_fn_arg_attrs(fn_val, i, vec!["byval"]);
+                }
             }
         }
     }
@@ -173,7 +174,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
             // Make sure the attribute is properly defined.
             assert_ne!(attr_kind, 0);
             let attr = self.context.create_type_attribute(attr_kind, param_type);
-            fn_val.add_attribute(AttributeLoc::Param(0), attr);
+            fn_val.add_attribute(AttributeLoc::Param(arg_index), attr);
         }
     }
 
@@ -207,7 +208,7 @@ mod tests {
         let analysis = RichProg::analyze(prog, all_syscalls().to_vec());
         ProgCompiler::compile(
             &analysis.prog,
-            vec![],
+            analysis.extern_fns,
             None,
             false,
             Path::new("/dev/null"),
@@ -318,6 +319,40 @@ mod tests {
                 let pp = new_person("guy", 32)
             }
         "#,
+        );
+    }
+
+    #[test]
+    fn struct_pass_by_value() {
+        assert_compiles(
+            r#"
+            struct Person {
+                age: i64,
+            }
+            
+            fn is_old(p: Person): bool {
+                p = Person{age: 100}
+                return false
+            }
+            
+            fn main() {
+                let p = Person{age: 10}
+                is_old(p)
+                p = Person{age: 1}
+            }
+        "#,
+        );
+    }
+
+    #[test]
+    fn uses_syscalls() {
+        assert_compiles(
+            r#"
+            fn main() {
+                write(1, "Hello World!", 13) 
+                exit(0)
+            }
+       "#,
         );
     }
 }

@@ -33,7 +33,7 @@ impl RichProg {
         // Analyze external functions to be added to the program.
         let mut rich_extern_fns = vec![];
         for extern_fn_sig in extern_fn_sigs {
-            rich_extern_fns.push(RichFnSig::from(&mut ctx, &extern_fn_sig));
+            rich_extern_fns.push(analyze_fn_sig(&mut ctx, &extern_fn_sig));
         }
 
         ProgramAnalysis {

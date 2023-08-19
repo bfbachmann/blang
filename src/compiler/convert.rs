@@ -118,9 +118,9 @@ pub fn to_metadata_type_enum<'a>(
         RichType::String => {
             BasicMetadataTypeEnum::from(context.i32_type().ptr_type(AddressSpace::default()))
         }
-        struct_type @ RichType::Struct(_) => {
-            BasicMetadataTypeEnum::from(to_basic_type(context, struct_type))
-        }
+        struct_type @ RichType::Struct(_) => BasicMetadataTypeEnum::from(
+            to_basic_type(context, struct_type).ptr_type(AddressSpace::default()),
+        ),
         other => panic!("unsupported type {}", other),
     }
 }
