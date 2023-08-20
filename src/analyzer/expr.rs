@@ -87,8 +87,7 @@ impl fmt::Display for RichExpr {
 }
 
 impl RichExpr {
-    /// Performs semantic analysis on the given expression and returns a type-rich version of it,
-    /// or an error if the expression is semantically invalid.
+    /// Performs semantic analysis on the given expression and returns a type-rich version of it.
     pub fn from(ctx: &mut ProgramContext, expr: Expression) -> RichExpr {
         match expr {
             Expression::VariableReference(ref var_ref) => {

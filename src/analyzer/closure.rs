@@ -40,8 +40,7 @@ impl PartialEq for RichClosure {
 }
 
 impl RichClosure {
-    /// Performs semantic analysis on the given closure and returns a type-rich version of it,
-    /// or an error if the closure is semantically invalid.
+    /// Performs semantic analysis on the given closure and returns a type-rich version of it.
     pub fn from(
         ctx: &mut ProgramContext,
         closure: Closure,

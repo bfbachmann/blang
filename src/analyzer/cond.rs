@@ -69,8 +69,7 @@ impl Locatable for RichCond {
 }
 
 impl RichCond {
-    /// Performs semantic analysis on the given conditional and returns a type-rich version of it,
-    /// or an error if the conditional is semantically invalid.
+    /// Performs semantic analysis on the given conditional and returns a type-rich version of it.
     pub fn from(ctx: &mut ProgramContext, cond: Conditional) -> Self {
         let mut rich_branches = vec![];
         for branch in cond.branches {

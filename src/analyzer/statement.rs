@@ -45,8 +45,7 @@ impl fmt::Display for RichStatement {
 }
 
 impl RichStatement {
-    /// Performs semantic analysis on the given statement and returns a type-rich version of it,
-    /// or an error if the statement is semantically invalid.
+    /// Performs semantic analysis on the given statement and returns a type-rich version of it.
     pub fn from(ctx: &mut ProgramContext, statement: Statement) -> Self {
         match statement {
             Statement::VariableDeclaration(var_decl) => {

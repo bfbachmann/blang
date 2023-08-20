@@ -52,14 +52,13 @@ impl RichProg {
         // Analyze top-level function declarations.
         define_fns(ctx, &prog);
 
-        // Analyze each statement in the program and collect the results.
-        let mut rich_statements = vec![];
-        for statement in prog.statements {
-            rich_statements.push(RichStatement::from(ctx, statement));
-        }
-
+        // Analyze each statement in the program and return the results.
         RichProg {
-            statements: rich_statements,
+            statements: prog
+                .statements
+                .into_iter()
+                .map(|s| RichStatement::from(ctx, s))
+                .collect(),
         }
     }
 }
@@ -76,7 +75,7 @@ fn define_structs(ctx: &mut ProgramContext, prog: &Program) {
                 if ctx.add_extern_struct(struct_type.clone()).is_some() {
                     ctx.add_err(AnalyzeError::new_with_locatable(
                         ErrorKind::TypeAlreadyDefined,
-                        format!(
+                        format_code!(
                             "another type with the name {} already exists",
                             struct_type.name
                         )
@@ -446,5 +445,22 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn type_already_exists() {
+        let result = analyze_prog(
+            r#"
+            struct A {}
+            struct A {}
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::TypeAlreadyDefined,
+                ..
+            })
+        ))
     }
 }

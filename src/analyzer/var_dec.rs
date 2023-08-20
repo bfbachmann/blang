@@ -27,7 +27,7 @@ impl fmt::Display for RichVarDecl {
 
 impl RichVarDecl {
     /// Performs semantic analysis on the given variable declaration and returns a type-rich version
-    /// of it, or an error if the variable declaration is semantically invalid.
+    /// of it.
     pub fn from(ctx: &mut ProgramContext, var_decl: VariableDeclaration) -> Self {
         // Check if the variable is already defined in this scope.
         if ctx.get_var(var_decl.name.as_str()).is_some() {

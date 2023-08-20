@@ -133,8 +133,7 @@ impl fmt::Display for RichFn {
 }
 
 impl RichFn {
-    /// Performs semantic analysis on the given function and returns a type-rich version of it,
-    /// or an error if the function is semantically invalid.
+    /// Performs semantic analysis on the given function and returns a type-rich version of it.
     pub fn from(ctx: &mut ProgramContext, func: Function) -> Self {
         // Make sure the function is not already defined.
         if let Some(_) = ctx.get_fn(func.signature.name.as_str()) {
