@@ -1,10 +1,24 @@
 use crate::lexer::pos::{Locatable, Position};
+use std::hash::{Hash, Hasher};
 
 /// Represents a string type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct StringType {
     start_pos: Position,
     end_pos: Position,
+}
+
+impl PartialEq for StringType {
+    fn eq(&self, _other: &Self) -> bool {
+        // Two string types are always considered equal.
+        true
+    }
+}
+
+impl Hash for StringType {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        "string".hash(state);
+    }
 }
 
 impl Locatable for StringType {

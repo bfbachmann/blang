@@ -7,12 +7,13 @@ use crate::analyzer::closure::{check_closure_returns, RichClosure};
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
-use crate::analyzer::r#type::RichType;
+use crate::analyzer::r#type::{RichType, TypeId};
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::arg::Argument;
 use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
 use crate::parser::func_sig::FunctionSignature;
+use crate::parser::r#type::Type;
 use crate::parser::ret::Ret;
 use crate::{format_code, util};
 
@@ -37,15 +38,15 @@ pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) -> Rich
 #[derive(PartialEq, Debug, Clone)]
 pub struct RichArg {
     pub name: String,
-    pub typ: RichType,
+    pub type_id: TypeId,
 }
 
 impl fmt::Display for RichArg {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         if self.name.is_empty() {
-            write!(f, "{}", self.typ)
+            write!(f, "{}", self.type_id)
         } else {
-            write!(f, "{} {}", self.typ, self.name)
+            write!(f, "{}: {}", self.name, self.type_id)
         }
     }
 }
@@ -55,7 +56,7 @@ impl RichArg {
     pub fn from(ctx: &mut ProgramContext, arg: &Argument) -> Self {
         RichArg {
             name: arg.name.to_string(),
-            typ: RichType::from(ctx, &arg.typ),
+            type_id: RichType::analyze(ctx, &arg.typ),
         }
     }
 }
@@ -65,14 +66,16 @@ impl RichArg {
 pub struct RichFnSig {
     pub name: String,
     pub args: Vec<RichArg>,
-    pub return_type: Option<RichType>,
+    pub ret_type_id: Option<TypeId>,
+    /// Represents this function signature as a type.
+    pub type_id: TypeId,
 }
 
 impl PartialEq for RichFnSig {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && util::vectors_are_equal(&self.args, &other.args)
-            && util::optionals_are_equal(&self.return_type, &other.return_type)
+            && util::optionals_are_equal(&self.ret_type_id, &other.ret_type_id)
     }
 }
 
@@ -88,7 +91,7 @@ impl fmt::Display for RichFnSig {
             }
         }
 
-        if let Some(typ) = &self.return_type {
+        if let Some(typ) = &self.ret_type_id {
             write!(f, "): {}", typ)
         } else {
             write!(f, ")")
@@ -107,14 +110,15 @@ impl RichFnSig {
         }
 
         let return_type = match &sig.return_type {
-            Some(typ) => Some(RichType::from(ctx, typ)),
+            Some(typ) => Some(RichType::analyze(ctx, typ)),
             None => None,
         };
 
         RichFnSig {
             name: sig.name.to_string(),
             args,
-            return_type,
+            ret_type_id: return_type,
+            type_id: TypeId::from(Type::Function(Box::new(sig.clone()))),
         }
     }
 }
@@ -159,7 +163,7 @@ impl RichFn {
 
         // Make sure the function return conditions are satisfied by the closure.
         if let Some(ret_type) = &func.signature.return_type {
-            let rich_ret_type = RichType::from(ctx, &ret_type);
+            let rich_ret_type = RichType::analyze(ctx, &ret_type);
             check_closure_returns(ctx, &rich_closure, &rich_ret_type, &ScopeKind::FnBody);
         }
 
@@ -169,7 +173,20 @@ impl RichFn {
             body: rich_closure,
         };
         ctx.add_fn(rich_fn.clone());
+
+        // Add the function as a resolved type to the program context. This is done because
+        // functions can be used as variables and therefore need types.
+        ctx.add_resolved_type(
+            TypeId::from(Type::Function(Box::new(func.signature))),
+            RichType::from_fn_sig(rich_fn.signature.clone()),
+        );
+
         rich_fn
+    }
+
+    /// Returns this function's type (useful for when the function is used as a variable).
+    pub fn type_id(&self) -> &TypeId {
+        &self.signature.type_id
     }
 }
 
@@ -178,7 +195,7 @@ impl RichFn {
 pub struct RichFnCall {
     pub fn_name: String,
     pub args: Vec<RichExpr>,
-    pub ret_type: Option<RichType>,
+    pub ret_type_id: Option<TypeId>,
 }
 
 impl fmt::Display for RichFnCall {
@@ -201,7 +218,7 @@ impl PartialEq for RichFnCall {
     fn eq(&self, other: &Self) -> bool {
         self.fn_name == other.fn_name
             && util::vectors_are_equal(&self.args, &other.args)
-            && util::optionals_are_equal(&self.ret_type, &other.ret_type)
+            && util::optionals_are_equal(&self.ret_type_id, &other.ret_type_id)
     }
 }
 
@@ -229,7 +246,7 @@ impl RichFnCall {
             Some(sig) => sig,
             None => match ctx.get_fn(call.fn_name.as_str()) {
                 Some(decl) => &decl.signature,
-                None => match ctx.get_var(call.fn_name.as_str()) {
+                None => match ctx.get_var_type(call.fn_name.as_str()) {
                     Some(&RichType::Function(ref func)) => func,
                     _ => {
                         // The function is not defined, so add an error and return a zero value.
@@ -242,14 +259,14 @@ impl RichFnCall {
                         return RichFnCall {
                             fn_name: call.fn_name.clone(),
                             args: vec![],
-                            ret_type: Some(RichType::Unknown("<unknown>".to_string())),
+                            ret_type_id: Some(TypeId::unknown()),
                         };
                     }
                 },
             },
         };
 
-        let ret_type = fn_sig.return_type.clone();
+        let ret_type = fn_sig.ret_type_id.clone();
         let fn_name = fn_sig.name.clone();
         let fn_args = fn_sig.args.clone();
 
@@ -269,17 +286,20 @@ impl RichFnCall {
         }
 
         // Make sure the arguments are of the right types.
-        for (i, (passed_type, defined)) in
-            rich_args.iter().map(|a| &a.typ).zip(&fn_args).enumerate()
+        for (i, (passed_type, defined)) in rich_args
+            .iter()
+            .map(|a| &a.type_id)
+            .zip(&fn_args)
+            .enumerate()
         {
-            if !passed_type.is_compatible_with(&defined.typ) {
+            if passed_type != &defined.type_id {
                 let original_arg = call.args.get(i).unwrap();
                 ctx.add_err(AnalyzeError::new_with_locatable(
                     ErrorKind::IncompatibleTypes,
                     format_code!(
                         "cannot use value of type {} as argument {} to function {}",
                         &passed_type,
-                        format!("{}: {}", &defined.name, &defined.typ),
+                        format!("{}: {}", &defined.name, &defined.type_id),
                         &fn_name,
                     )
                     .as_str(),
@@ -291,7 +311,7 @@ impl RichFnCall {
         RichFnCall {
             fn_name: call.fn_name,
             args: rich_args,
-            ret_type,
+            ret_type_id: ret_type,
         }
     }
 }
@@ -356,20 +376,22 @@ impl RichRet {
                 // We're returning a value. Make sure the value is of the expected type.
                 let rich_expr = RichExpr::from(ctx, expr.clone());
                 match ctx.return_type() {
-                    Some(expected) => {
+                    Some(expected_type_id) => {
                         // Skip the type check if either type is unknown. This will be the case if
                         // semantic analysis on either type already failed.
-                        if !expected.is_unknown()
-                            && !rich_expr.typ.is_unknown()
-                            && expected != &rich_expr.typ
+                        let expected_type = ctx.get_resolved_type(expected_type_id).unwrap();
+                        let expr_type = ctx.get_resolved_type(&rich_expr.type_id).unwrap();
+                        if !expected_type.is_unknown()
+                            && !expr_type.is_unknown()
+                            && expected_type != expr_type
                         {
                             ctx.add_err(AnalyzeError::new_with_locatable(
                                 ErrorKind::IncompatibleTypes,
                                 format_code!(
                                     "cannot return value of type {} from function with return \
                                     type {}",
-                                    &rich_expr.typ,
-                                    &expected,
+                                    expr_type,
+                                    expected_type,
                                 )
                                 .as_str(),
                                 Box::new(expr),

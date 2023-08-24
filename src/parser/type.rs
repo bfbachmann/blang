@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::fmt;
+use std::hash::Hash;
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
@@ -12,10 +13,9 @@ use crate::parser::i64::I64Type;
 use crate::parser::r#struct::StructType;
 use crate::parser::string::StringType;
 use crate::parser::unresolved::UnresolvedType;
-use crate::util;
 
 /// Represents a type referenced in a program.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq)]
 pub enum Type {
     Bool(BoolType),
     String(StringType),
@@ -46,9 +46,8 @@ impl PartialEq for Type {
                     args_match && f1.return_type == f2.return_type
                 }
             }
-            (Type::Struct(s1), Type::Struct(s2)) => {
-                s1.name == s2.name && util::vectors_are_equal(&s1.fields, &s2.fields)
-            }
+            (Type::Struct(s1), Type::Struct(s2)) => s1 == s2,
+            (Type::Unresolved(u1), Type::Unresolved(u2)) => u1 == u2,
             (_, _) => false,
         }
     }
@@ -184,5 +183,10 @@ impl Type {
     /// Returns a default string type.
     pub fn string() -> Self {
         Type::String(StringType::default())
+    }
+
+    /// Creates a new unknown type with the given name.
+    pub fn new_unknown(name: &str) -> Self {
+        Type::Unresolved(UnresolvedType::new_with_default_pos(name))
     }
 }

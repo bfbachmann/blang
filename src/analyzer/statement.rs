@@ -5,7 +5,7 @@ use crate::analyzer::closure::{analyze_break, analyze_continue, RichClosure};
 use crate::analyzer::cond::RichCond;
 use crate::analyzer::func::{RichFn, RichFnCall, RichRet};
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
-use crate::analyzer::r#struct::RichStruct;
+use crate::analyzer::r#struct::RichStructType;
 use crate::analyzer::var_assign::RichVarAssign;
 use crate::analyzer::var_dec::RichVarDecl;
 use crate::parser::statement::Statement;
@@ -23,7 +23,7 @@ pub enum RichStatement {
     Break,
     Continue,
     Return(RichRet),
-    StructTypeDeclaration(RichStruct),
+    StructTypeDeclaration(RichStructType),
 }
 
 impl fmt::Display for RichStatement {
@@ -88,7 +88,7 @@ impl RichStatement {
                 RichStatement::Return(rich_ret)
             }
             Statement::StructDeclaration(s) => {
-                RichStatement::StructTypeDeclaration(RichStruct::from(ctx, &s, false))
+                RichStatement::StructTypeDeclaration(RichStructType::from(ctx, &s, false))
             }
         }
     }
@@ -101,10 +101,10 @@ mod tests {
     use crate::analyzer::error::AnalyzeError;
     use crate::analyzer::error::ErrorKind;
     use crate::analyzer::prog_context::ProgramContext;
-    use crate::analyzer::r#struct::{RichField, RichStruct};
-    use crate::analyzer::r#type::RichType;
+    use crate::analyzer::r#struct::{RichField, RichStructType};
+    use crate::analyzer::r#type::{TypeId};
     use crate::analyzer::statement::RichStatement;
-    use crate::analyzer::warn::Warning;
+    use crate::analyzer::warn::AnalyzeWarning;
     use crate::lexer::token::Token;
     use crate::parser::statement::Statement;
 
@@ -324,7 +324,7 @@ mod tests {
         let mut ctx = ProgramContext::new();
         analyze_statement(raw, &mut ctx);
         assert!(ctx.errors().is_empty());
-        assert!(matches!(ctx.warnings().remove(0), Warning { .. }));
+        assert!(matches!(ctx.warnings().remove(0), AnalyzeWarning { .. }));
     }
 
     #[test]
@@ -381,20 +381,20 @@ mod tests {
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
-            RichStatement::StructTypeDeclaration(RichStruct {
+            RichStatement::StructTypeDeclaration(RichStructType {
                 name: "MyStruct".to_string(),
                 fields: vec![
                     RichField {
                         name: "counter".to_string(),
-                        typ: RichType::I64
+                        type_id: TypeId::i64(),
                     },
                     RichField {
                         name: "is_even".to_string(),
-                        typ: RichType::Bool
+                        type_id: TypeId::bool(),
                     },
                     RichField {
                         name: "message".to_string(),
-                        typ: RichType::String
+                        type_id: TypeId::string(),
                     },
                 ],
             })

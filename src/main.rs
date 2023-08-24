@@ -1,3 +1,4 @@
+
 use std::fs::File;
 use std::io::{BufRead, BufReader, Result};
 use std::path::{Path, PathBuf};
@@ -10,11 +11,13 @@ use compiler::program::ProgCompiler;
 use lexer::token::Token;
 use parser::program::Program;
 
-use crate::analyzer::func::RichFnSig;
-use crate::analyzer::program::RichProg;
+use crate::analyzer::program::{ProgramAnalysis, RichProg};
 use crate::fmt::format_file_loc;
 use crate::lexer::error::LexError;
+
 use crate::parser::error::ParseError;
+
+
 use crate::syscall::syscall::all_syscalls;
 
 mod analyzer;
@@ -38,8 +41,8 @@ fn main() {
     // Add the "build" subcommand for compiling.
     let cmd = cmd.subcommand(
         Command::new("build")
-            .about("Build Blang source code")
-            .arg(arg!([SRC_PATH]).required(true))
+            .about("Compile Blang source code to LLVM IR")
+            .arg(arg!([SRC_PATH] "Path to the source code to compile").required(true))
             .arg(
                 arg!(-u --unoptimized ... "Prevent simplification of generated LLVM IR")
                     .required(false)
@@ -58,7 +61,7 @@ fn main() {
     let cmd = cmd.subcommand(
         Command::new("check")
             .about("Perform static analysis only")
-            .arg(arg!([SRC_PATH]).required(true)),
+            .arg(arg!([SRC_PATH] "Path to the source code to check").required(true)),
     );
 
     // Handle the command.
@@ -91,7 +94,7 @@ fn open_file(file_path: &str) -> Result<BufReader<File>> {
 
 /// Performs static analysis on the source code at the given path. Returns a successfully analyzed
 /// program and extern functions, or `None`.
-fn analyze(input_path: &str) -> Option<(RichProg, Vec<RichFnSig>)> {
+fn analyze(input_path: &str) -> Option<ProgramAnalysis> {
     // Get a reader from the source file.
     let reader = match open_file(input_path) {
         Ok(r) => r,
@@ -103,7 +106,7 @@ fn analyze(input_path: &str) -> Option<(RichProg, Vec<RichFnSig>)> {
         Ok(tokens) => tokens,
         Err(LexError { message, line, col }) => {
             fatalln!(
-                "{}\n  {}",
+                "{}\n  {}\n  This error prevents any further program analysis.",
                 message.bold(),
                 format_file_loc(input_path, Some(line), Some(col)),
             )
@@ -120,7 +123,7 @@ fn analyze(input_path: &str) -> Option<(RichProg, Vec<RichFnSig>)> {
             ..
         }) => {
             fatalln!(
-                "{}\n  {}",
+                "{}\n  {}\n  This error prevents any further program analysis.",
                 message.bold(),
                 format_file_loc(input_path, Some(start_pos.line), Some(start_pos.col)),
             );
@@ -129,10 +132,10 @@ fn analyze(input_path: &str) -> Option<(RichProg, Vec<RichFnSig>)> {
     };
 
     // Analyze the program.
-    let analysis = RichProg::analyze(prog, all_syscalls().to_vec());
+    let prog_analysis = RichProg::analyze(prog, all_syscalls().to_vec());
 
     // Print warnings.
-    for warn in &analysis.warnings {
+    for warn in &prog_analysis.warnings {
         warnln!(
             "{}\n  {}\n",
             format!("{}", warn).bold(),
@@ -145,7 +148,7 @@ fn analyze(input_path: &str) -> Option<(RichProg, Vec<RichFnSig>)> {
     }
 
     // Print errors.
-    for err in &analysis.errors {
+    for err in &prog_analysis.errors {
         errorln!(
             "{}\n  {}",
             format!("{}: {}", err.kind, err.message).bold(),
@@ -168,8 +171,8 @@ fn analyze(input_path: &str) -> Option<(RichProg, Vec<RichFnSig>)> {
     }
 
     // Return the program only if there were no errors.
-    if analysis.errors.is_empty() {
-        return Some((analysis.prog, analysis.extern_fns));
+    if prog_analysis.errors.is_empty() {
+        return Some(prog_analysis);
     }
 
     None
@@ -185,7 +188,7 @@ fn compile(
     simplify_ir: bool,
 ) {
     // Read and analyze the program.
-    let (prog, extern_fns) = match analyze(src_path) {
+    let prog_analysis = match analyze(src_path) {
         Some(v) => v,
         None => return,
     };
@@ -201,8 +204,7 @@ fn compile(
 
     // Compile the program.
     if let Err(e) = ProgCompiler::compile(
-        &prog,
-        extern_fns,
+        prog_analysis,
         target,
         as_bitcode,
         dst.as_path(),

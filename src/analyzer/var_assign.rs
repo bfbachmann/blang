@@ -33,12 +33,12 @@ impl RichVarAssign {
         let var_type = ctx.get_var(assign.name.as_str());
         if let Some(typ) = var_type {
             // Make sure the variable type is the same as the expression type.
-            if typ != &rich_expr.typ {
+            if typ != &rich_expr.type_id {
                 ctx.add_err(AnalyzeError::new_with_locatable(
                     ErrorKind::IncompatibleTypes,
                     format_code!(
                         "cannot assign value of type {} to variable {}: {}",
-                        &rich_expr.typ,
+                        &rich_expr.type_id,
                         &assign.name,
                         &typ
                     )

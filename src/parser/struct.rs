@@ -1,7 +1,9 @@
-use colored::Colorize;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
+
+use colored::Colorize;
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
@@ -15,12 +17,25 @@ use crate::parser::unresolved::UnresolvedType;
 use crate::util;
 
 /// Represents a field in a struct with a type and a name.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct StructField {
     pub name: String,
     pub typ: Type,
     start_pos: Position,
     end_pos: Position,
+}
+
+impl PartialEq for StructField {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.typ == other.typ
+    }
+}
+
+impl Hash for StructField {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.typ.hash(state);
+    }
 }
 
 impl Locatable for StructField {
@@ -34,12 +49,21 @@ impl Locatable for StructField {
 }
 
 /// Represents a struct with a set of named fields.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct StructType {
     pub name: String,
     pub fields: Vec<StructField>,
     start_pos: Position,
     end_pos: Position,
+}
+
+impl Hash for StructType {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        for field in &self.fields {
+            field.hash(state);
+        }
+    }
 }
 
 impl Display for StructType {
@@ -54,10 +78,7 @@ impl Display for StructType {
 
 impl PartialEq for StructType {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-            && util::vectors_are_equal(&self.fields, &other.fields)
-            && self.start_pos == other.start_pos
-            && self.end_pos == other.end_pos
+        self.name == other.name && util::vectors_are_equal(&self.fields, &other.fields)
     }
 }
 
@@ -149,6 +170,9 @@ impl StructType {
             });
         }
 
+        // Make sure to sort the fields by name so two equivalent struct types if different field
+        // orders still look the same.
+        fields.sort_by(|f1, f2| f1.name.cmp(&f2.name));
         Ok(StructType {
             name,
             fields,

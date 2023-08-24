@@ -1,17 +1,18 @@
-use inkwell::attributes::{Attribute, AttributeLoc};
+use std::collections::HashMap;
 use std::path::Path;
 
+use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::passes::PassManager;
 use inkwell::targets::TargetTriple;
 use inkwell::types::AnyType;
-
 use inkwell::values::FunctionValue;
 
 use crate::analyzer::func::RichFnSig;
-use crate::analyzer::program::RichProg;
+use crate::analyzer::program::{ProgramAnalysis, RichProg};
+use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::statement::RichStatement;
 use crate::compiler::convert;
 use crate::compiler::error::{CompileError, CompileResult, ErrorKind};
@@ -24,19 +25,27 @@ pub struct ProgCompiler<'a, 'ctx> {
     fpm: &'a PassManager<FunctionValue<'ctx>>,
     module: &'a Module<'ctx>,
     program: &'a RichProg,
+    types: &'a HashMap<TypeId, RichType>,
 }
 
 impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     /// Compiles the program for the given target. If there is no target, compiles the program for
     /// the host system.
     pub fn compile(
-        program: &RichProg,
-        extern_fns: Vec<RichFnSig>,
+        prog_analysis: ProgramAnalysis,
         target_triple: Option<&String>,
         as_bitcode: bool,
         output_path: &Path,
         simplify_ir: bool,
     ) -> CompileResult<()> {
+        // Error if the program analysis contains errors (meaning it didn't pass semantic analysis.
+        if !prog_analysis.errors.is_empty() {
+            return Err(CompileError::new(
+                ErrorKind::InvalidProgram,
+                "cannot compile program that failed semantic analysis",
+            ));
+        }
+
         let ctx = Context::create();
         let builder = ctx.create_builder();
         let module = ctx.create_module("main");
@@ -66,9 +75,10 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
             builder: &builder,
             fpm: &fpm,
             module: &module,
-            program,
+            program: &prog_analysis.prog,
+            types: &prog_analysis.types,
         };
-        compiler.compile_program(extern_fns)?;
+        compiler.compile_program(prog_analysis.extern_fns)?;
 
         // Write output as to file.
         if as_bitcode {
@@ -106,7 +116,14 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
         for statement in &self.program.statements {
             match statement {
                 RichStatement::FunctionDeclaration(func) => {
-                    FnCompiler::compile(self.context, self.builder, self.fpm, self.module, func)?;
+                    FnCompiler::compile(
+                        self.context,
+                        self.builder,
+                        self.fpm,
+                        self.module,
+                        self.types,
+                        func,
+                    )?;
                 }
                 RichStatement::StructTypeDeclaration(_) => {
                     // Nothing to do here because struct types are compiled only when they're used.
@@ -127,7 +144,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     /// Defines the given function in the current module based on the function signature.
     fn compile_fn_sig(&self, sig: &RichFnSig) {
         // Define the function in the module.
-        let fn_type = convert::to_fn_type(self.context, sig);
+        let fn_type = convert::to_fn_type(self.context, self.types, sig);
         let fn_val = self.module.add_function(sig.name.as_str(), fn_type, None);
 
         // Set arg names and mark arguments as pass-by-value where necessary.
@@ -181,7 +198,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     /// Defines external functions in the current module.
     fn define_extern_fns(&mut self, extern_fns: Vec<RichFnSig>) {
         for extern_fn_sig in &extern_fns {
-            let fn_type = convert::to_fn_type(self.context, &extern_fn_sig);
+            let fn_type = convert::to_fn_type(self.context, self.types, &extern_fn_sig);
             self.module.add_function(
                 extern_fn_sig.name.as_str(),
                 fn_type,
@@ -206,15 +223,8 @@ mod tests {
         let mut tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
         let prog = Program::from(&mut tokens).expect("should not error");
         let analysis = RichProg::analyze(prog, all_syscalls().to_vec());
-        ProgCompiler::compile(
-            &analysis.prog,
-            analysis.extern_fns,
-            None,
-            false,
-            Path::new("/dev/null"),
-            false,
-        )
-        .expect("should not error");
+        ProgCompiler::compile(analysis, None, false, Path::new("/dev/null"), false)
+            .expect("should not error");
     }
 
     #[test]
@@ -354,5 +364,25 @@ mod tests {
             }
        "#,
         );
+    }
+
+    #[test]
+    fn valid_type_def_cycle() {
+        assert_compiles(
+            r#"
+            struct A {
+                count: i64,
+                f: fn(A),
+            }
+            
+            fn do(a: A) {}
+            
+            fn new_a(count: i64): A {
+                return A {
+                    count: count,
+                    f: do,
+                }
+            }"#,
+        )
     }
 }

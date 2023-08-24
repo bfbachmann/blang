@@ -8,7 +8,7 @@ use crate::parser::program::Program;
 use crate::parser::Type;
 
 /// Represents a function argument declaration.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Argument {
     pub name: String,
     pub typ: Type,
@@ -19,7 +19,7 @@ impl fmt::Display for Argument {
         if self.name.is_empty() {
             write!(f, "{}", self.typ)
         } else {
-            write!(f, "{} {}", self.typ, self.name)
+            write!(f, "{}: {}", self.name, self.typ)
         }
     }
 }

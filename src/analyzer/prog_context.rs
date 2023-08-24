@@ -2,12 +2,13 @@ use std::collections::hash_map::Iter;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;
 
+
 use crate::analyzer::error::AnalyzeError;
 use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::func::{RichArg, RichFn, RichFnSig};
-use crate::analyzer::r#struct::RichStruct;
-use crate::analyzer::r#type::RichType;
-use crate::analyzer::warn::Warning;
+use crate::analyzer::r#struct::RichStructType;
+use crate::analyzer::r#type::{RichType, TypeId};
+use crate::analyzer::warn::AnalyzeWarning;
 use crate::lexer::pos::Position;
 use crate::parser::r#struct::StructType;
 
@@ -33,27 +34,28 @@ impl fmt::Display for ScopeKind {
 /// Represents a scope in the program. Each scope corresponds to a unique closure which can
 /// be a function body, an inline closure, a branch, or a loop.
 pub struct Scope {
-    vars: HashMap<String, RichType>,
+    vars: HashMap<String, TypeId>,
     /// Extern functions are functions that are defined outside the program and linked to it
     /// after compilation.
     extern_fns: HashMap<String, RichFnSig>,
     fns: HashMap<String, RichFn>,
     /// Extern structs are structs that have been detected but not yet analyzed.
     extern_structs: HashMap<String, StructType>,
-    structs: HashMap<String, RichStruct>,
+    structs: HashMap<String, RichStructType>,
     /// Invalid types are types that failed semantic analysis.
     invalid_types: HashSet<String>,
+    resolved_types: HashMap<TypeId, RichType>,
     kind: ScopeKind,
-    return_type: Option<RichType>,
+    return_type: Option<TypeId>,
 }
 
 impl Scope {
     /// Creates a new scope.
-    pub fn new(kind: ScopeKind, args: Vec<RichArg>, return_type: Option<RichType>) -> Self {
+    pub fn new(kind: ScopeKind, args: Vec<RichArg>, return_type: Option<TypeId>) -> Self {
         // If there are args, add them to the current scope variables.
         let mut vars = HashMap::new();
         for arg in args {
-            vars.insert(arg.name, arg.typ);
+            vars.insert(arg.name, arg.type_id);
         }
 
         Scope {
@@ -63,14 +65,21 @@ impl Scope {
             extern_structs: HashMap::new(),
             structs: HashMap::new(),
             invalid_types: HashSet::new(),
+            resolved_types: HashMap::new(),
             kind,
             return_type,
         }
     }
 
-    /// Adds the given name to the set of invalid types in the scope.
+    /// Adds the given name to the set of invalid types in the scope. Returns true if the scope did
+    /// not already contain the invalid type and false otherwise.
     fn add_invalid_type(&mut self, name: &str) -> bool {
         self.invalid_types.insert(name.to_string())
+    }
+
+    /// Adds the mapping from type ID to resolved type to the scope.
+    fn add_resolved_type(&mut self, id: TypeId, resolved: RichType) {
+        self.resolved_types.insert(id, resolved);
     }
 
     // Adds the signature of the external function to the scope. If there was already a function
@@ -105,19 +114,24 @@ impl Scope {
 
     // Adds the struct type to the scope. If there was already a struct type with the same name in
     // the scope, returns the old type.
-    fn add_struct(&mut self, s: RichStruct) -> Option<RichStruct> {
+    fn add_struct(&mut self, s: RichStructType) -> Option<RichStructType> {
         self.structs.insert(s.name.to_string(), s)
     }
 
     // Adds the variable to the scope. If there was already a variable with the same name in the
     // scope, returns the old variable type.
-    fn add_var(&mut self, name: &str, typ: RichType) -> Option<RichType> {
+    fn add_var(&mut self, name: &str, typ: TypeId) -> Option<TypeId> {
         self.vars.insert(name.to_string(), typ)
     }
 
     // Returns the invalid type with the given name from the scope, if it exists.
     fn get_invalid_type(&self, name: &str) -> Option<&String> {
         self.invalid_types.get(name)
+    }
+
+    /// Returns the resolved type corresponding to the type ID, if it exists.
+    fn get_resolved_type(&self, id: &TypeId) -> Option<&RichType> {
+        self.resolved_types.get(id)
     }
 
     // Returns the function with the given name from the scope, or None if no such function exists.
@@ -137,12 +151,12 @@ impl Scope {
     }
 
     // Returns the struct type with the given name from the scope, or None if no such type exists.
-    fn get_struct(&self, name: &str) -> Option<&RichStruct> {
+    fn get_struct(&self, name: &str) -> Option<&RichStructType> {
         self.structs.get(name)
     }
 
     // Returns the variable with the given name from the scope, or None if no such variable exists.
-    fn get_var(&self, name: &str) -> Option<&RichType> {
+    fn get_var(&self, name: &str) -> Option<&TypeId> {
         self.vars.get(name)
     }
 }
@@ -151,29 +165,51 @@ impl Scope {
 pub struct ProgramContext {
     stack: VecDeque<Scope>,
     errors: HashMap<Position, AnalyzeError>,
-    warnings: HashMap<Position, Warning>,
+    warnings: HashMap<Position, AnalyzeWarning>,
+    pub types: HashMap<TypeId, RichType>,
 }
 
 impl ProgramContext {
     /// Returns a new ProgramContext with a single initialized scope representing the global
     /// scope.
     pub fn new() -> Self {
+        // Initialize the top-level scope with already-resolved primitive types so we can avoid
+        // having to resolve them again.
+        let mut top_scope = Scope::new(ScopeKind::Inline, vec![], None);
+        for (type_id, typ) in RichType::primitives() {
+            top_scope.add_resolved_type(type_id, typ);
+        }
+
         ProgramContext {
-            stack: VecDeque::from([Scope::new(ScopeKind::Inline, vec![], None)]),
+            stack: VecDeque::from([top_scope]),
             errors: HashMap::new(),
             warnings: HashMap::new(),
+            types: HashMap::new(),
         }
     }
 
-    /// Returns all errors that have occurred during semantic analysis.
+    /// Returns all type mappings store in the program context.
+    pub fn types(mut self) -> HashMap<TypeId, RichType> {
+        // Make sure we move all type mappings from any existing scopes.
+        loop {
+            match self.stack.pop_back() {
+                Some(scope) => {
+                    self.types.extend(scope.resolved_types);
+                }
+                None => break,
+            }
+        }
+
+        self.types
+    }
+
+    /// Returns all errors that have occurred during semantic analysis in ascending order of
+    /// position (line and col) in the program.
     pub fn errors(&self) -> Vec<AnalyzeError> {
-        let mut errors: Vec<(Position, AnalyzeError)> = self
-            .errors
-            .iter()
-            .map(|(p, e)| (p.clone(), e.clone()))
-            .collect();
+        let mut errors: Vec<(&Position, AnalyzeError)> =
+            self.errors.iter().map(|(p, e)| (p, e.clone())).collect();
         errors.sort_by(|(pos1, _), (pos2, _)| pos1.cmp(pos2));
-        errors.into_iter().map(|(_, err)| err).collect()
+        errors.into_iter().map(|(_, e)| e).collect()
     }
 
     /// If the given result is an error, consumes and stores the error, returning None. Otherwise,
@@ -194,20 +230,33 @@ impl ProgramContext {
     }
 
     /// Returns all warnings that have occurred during semantic analysis.
-    pub fn warnings(self) -> Vec<Warning> {
-        let mut warnings: Vec<(Position, Warning)> = self.warnings.into_iter().collect();
+    pub fn warnings(&self) -> Vec<AnalyzeWarning> {
+        let mut warnings = vec![];
+        for mapping in &self.warnings {
+            warnings.push(mapping);
+        }
         warnings.sort_by(|(pos1, _), (pos2, _)| pos1.cmp(&pos2));
-        warnings.into_iter().map(|(_, err)| err).collect()
+        warnings.into_iter().map(|(_, w)| w.clone()).collect()
     }
 
     /// Add the given warning to the program context.
-    pub fn add_warn(&mut self, warn: Warning) {
+    pub fn add_warn(&mut self, warn: AnalyzeWarning) {
         self.warnings.insert(warn.start_pos.clone(), warn);
     }
 
-    /// Adds the given name to the set of invalid types in the program context.
+    /// Adds the given name to the set of invalid types in the program context. Returns true if
+    /// the program context did not already contain this invalid type and false otherwise.
     pub fn add_invalid_type(&mut self, name: &str) -> bool {
         self.stack.back_mut().unwrap().add_invalid_type(name)
+    }
+
+    /// Adds the given mapping from type ID to resolved type to current scope in the program
+    /// context.
+    pub fn add_resolved_type(&mut self, id: TypeId, resolved: RichType) {
+        self.stack
+            .back_mut()
+            .unwrap()
+            .add_resolved_type(id, resolved)
     }
 
     /// Adds the external function signature to the context. If there was already a function with
@@ -216,8 +265,8 @@ impl ProgramContext {
         self.stack.back_mut().unwrap().add_extern_fn(sig)
     }
 
-    /// Adds the function to the context. If there was already a function with the same name, returns
-    /// the old function.
+    /// Adds the function to the context. If there was already a function with the same name,
+    /// returns the old function.
     pub fn add_fn(&mut self, func: RichFn) -> Option<RichFn> {
         self.stack.back_mut().unwrap().add_fn(func)
     }
@@ -235,13 +284,13 @@ impl ProgramContext {
 
     /// Adds the struct type to the context. If there was already a struct type with the same name,
     /// returns the old type.
-    pub fn add_struct(&mut self, s: RichStruct) -> Option<RichStruct> {
+    pub fn add_struct(&mut self, s: RichStructType) -> Option<RichStructType> {
         self.stack.back_mut().unwrap().add_struct(s)
     }
 
     /// Adds the variable to the context. If there was already a variable with the same name,
-    /// returns the old variable type.
-    pub fn add_var(&mut self, name: &str, typ: RichType) -> Option<RichType> {
+    /// returns the old variable type ID.
+    pub fn add_var(&mut self, name: &str, typ: TypeId) -> Option<TypeId> {
         self.stack.back_mut().unwrap().add_var(name, typ)
     }
 
@@ -251,6 +300,21 @@ impl ProgramContext {
         for scope in self.stack.iter().rev() {
             if let Some(sig) = scope.get_invalid_type(name) {
                 return Some(sig);
+            }
+        }
+
+        None
+    }
+
+    /// Attempts to locate the resolved type corresponding to the given type ID and returns it,
+    /// if found.
+    pub fn get_resolved_type(&self, id: &TypeId) -> Option<&RichType> {
+        // Unlike with variable resolution, we're going to search the stack top-down here because
+        // types are generally defined at the top level of the program, and type names cannot
+        // collide like variable names.
+        for scope in self.stack.iter() {
+            if let Some(resolved) = scope.get_resolved_type(id) {
+                return Some(resolved);
             }
         }
 
@@ -295,7 +359,7 @@ impl ProgramContext {
     }
 
     /// Attempts to locate the struct type with the given name and returns it, if found.
-    pub fn get_struct(&self, name: &str) -> Option<&RichStruct> {
+    pub fn get_struct(&self, name: &str) -> Option<&RichStructType> {
         // Search up the stack from the current scope.
         for scope in self.stack.iter().rev() {
             if let Some(s) = scope.get_struct(name) {
@@ -318,8 +382,8 @@ impl ProgramContext {
         extern_structs
     }
 
-    /// Attempts to locate the variable with the given name and returns it, if found.
-    pub fn get_var(&self, name: &str) -> Option<&RichType> {
+    /// Attempts to locate the variable with the given name and returns its type ID, if found.
+    pub fn get_var(&self, name: &str) -> Option<&TypeId> {
         // Search up the stack from the current scope.
         for scope in self.stack.iter().rev() {
             if let Some(var) = scope.get_var(name) {
@@ -330,14 +394,26 @@ impl ProgramContext {
         None
     }
 
+    /// Attempts to locate the variable with the given name and returns its type, if found.
+    pub fn get_var_type(&self, name: &str) -> Option<&RichType> {
+        match self.get_var(name) {
+            Some(type_id) => self.get_resolved_type(type_id),
+            None => None,
+        }
+    }
+
     /// Adds the given scope to the top of the stack.
     pub fn push_scope(&mut self, scope: Scope) {
         self.stack.push_back(scope);
     }
 
-    /// Pops the scope at the top of the stack.
+    /// Pops the scope at the top of the stack and copies all of its resolved types to the program
+    /// context.
     pub fn pop_scope(&mut self) {
-        self.stack.pop_back();
+        let scope = self.stack.pop_back().unwrap();
+
+        // Copy all types from the scope into the program context. We'll need them later.
+        self.types.extend(scope.resolved_types);
     }
 
     /// Returns true if the current scope falls within a function body at any depth.
@@ -365,8 +441,8 @@ impl ProgramContext {
         false
     }
 
-    /// Returns the return type of the current scope, or none if there is no return type.
-    pub fn return_type(&self) -> &Option<RichType> {
+    /// Returns the return type ID of the current scope, or none if there is no return type.
+    pub fn return_type(&self) -> &Option<TypeId> {
         for scope in self.stack.iter().rev() {
             if scope.kind == ScopeKind::FnBody {
                 return &scope.return_type;

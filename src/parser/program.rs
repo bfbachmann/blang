@@ -1,5 +1,7 @@
 use std::collections::{HashSet, VecDeque};
 
+use colored::Colorize;
+
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::Position;
 use crate::lexer::token::Token;
@@ -51,7 +53,7 @@ impl Program {
                     ErrorKind::UnexpectedEOF,
                     format!(
                         r#"expected one of {}, but found EOF"#,
-                        fmt::hashset_to_string(expected)
+                        fmt::format_hashset(expected)
                     )
                     .as_str(),
                     None,
@@ -66,9 +68,9 @@ impl Program {
                     Err(ParseError::new_with_token(
                         ErrorKind::UnexpectedToken,
                         format!(
-                            r#"expected one of {}, but found "{}"#,
-                            fmt::hashset_to_string(expected),
-                            token
+                            r#"expected one of {}, but found {}"#,
+                            fmt::format_hashset(expected),
+                            format_code!("{}", token),
                         )
                         .as_str(),
                         token,

@@ -1,11 +1,14 @@
+use std::collections::HashMap;
+
 use colored::Colorize;
 
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::{analyze_fn_sig, RichFnSig};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::r#struct::RichStruct;
+use crate::analyzer::r#struct::RichStructType;
+use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::statement::RichStatement;
-use crate::analyzer::warn::{WarnKind, Warning};
+use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
 use crate::format_code;
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::program::Program;
@@ -20,9 +23,10 @@ pub struct RichProg {
 /// Represents the result of semantic analysis on a program.
 pub struct ProgramAnalysis {
     pub prog: RichProg,
+    pub types: HashMap<TypeId, RichType>,
     pub extern_fns: Vec<RichFnSig>,
     pub errors: Vec<AnalyzeError>,
-    pub warnings: Vec<Warning>,
+    pub warnings: Vec<AnalyzeWarning>,
 }
 
 impl RichProg {
@@ -41,6 +45,7 @@ impl RichProg {
             extern_fns: rich_extern_fns,
             errors: ctx.errors(),
             warnings: ctx.warnings(),
+            types: ctx.types(),
         }
     }
 
@@ -92,7 +97,7 @@ fn define_structs(ctx: &mut ProgramContext, prog: &Program) {
     let extern_structs = ctx.extern_structs();
     let mut results = vec![];
     for struct_type in extern_structs {
-        let result = RichStruct::analyze_containment(ctx, struct_type);
+        let result = RichStructType::analyze_containment(ctx, struct_type);
         results.push((result, struct_type.name.clone()));
     }
 
@@ -139,7 +144,7 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
     }
 
     if !main_defined {
-        ctx.add_warn(Warning::new_with_default_pos(
+        ctx.add_warn(AnalyzeWarning::new_with_default_pos(
             WarnKind::MissingMain,
             "no main function was detected; your code will not execute",
         ));
@@ -153,7 +158,7 @@ mod tests {
     use crate::analyzer::error::AnalyzeResult;
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
     use crate::analyzer::program::{ProgramAnalysis, RichProg};
-    use crate::analyzer::warn::{WarnKind, Warning};
+    use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
     use crate::lexer::token::Token;
     use crate::parser::program::Program;
 
@@ -426,7 +431,7 @@ mod tests {
         assert_eq!(analysis.warnings.len(), 1);
         assert!(matches!(
             analysis.warnings.remove(0),
-            Warning {
+            AnalyzeWarning {
                 kind: WarnKind::UnreachableCode,
                 ..
             }
@@ -440,7 +445,7 @@ mod tests {
         assert_eq!(analysis.warnings.len(), 1);
         assert!(matches!(
             analysis.warnings.remove(0),
-            Warning {
+            AnalyzeWarning {
                 kind: WarnKind::MissingMain,
                 ..
             }

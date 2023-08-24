@@ -7,7 +7,7 @@ use crate::analyzer::closure::RichClosure;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
-use crate::analyzer::r#type::RichType;
+use crate::analyzer::r#type::TypeId;
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::branch::Branch;
 use crate::parser::cond::Conditional;
@@ -41,7 +41,7 @@ impl Locatable for RichBranch {
 #[derive(Clone, Debug)]
 pub struct RichCond {
     pub branches: Vec<RichBranch>,
-    pub ret_type: Option<RichType>,
+    pub ret_type_id: Option<TypeId>,
 }
 
 impl fmt::Display for RichCond {
@@ -54,7 +54,7 @@ impl fmt::Display for RichCond {
 impl PartialEq for RichCond {
     fn eq(&self, other: &Self) -> bool {
         util::vectors_are_equal(&self.branches, &other.branches)
-            && util::optionals_are_equal(&self.ret_type, &other.ret_type)
+            && util::optionals_are_equal(&self.ret_type_id, &other.ret_type_id)
     }
 }
 
@@ -77,12 +77,12 @@ impl RichCond {
             let rich_expr = match &branch.condition {
                 Some(branch_cond) => {
                     let rich_expr = RichExpr::from(ctx, branch_cond.clone());
-                    if rich_expr.typ != RichType::Bool {
+                    if rich_expr.type_id != TypeId::bool() {
                         ctx.add_err(AnalyzeError::new_with_locatable(
                             ErrorKind::IncompatibleTypes,
                             format_code!(
                                 "expected branch condition to have type bool, but found type {}",
-                                &rich_expr.typ,
+                                &rich_expr.type_id,
                             )
                             .as_str(),
                             Box::new(branch_cond.clone()),
@@ -110,17 +110,17 @@ impl RichCond {
         // type to None. Otherwise, we set it to the guaranteed return type.
         let mut ret_type = None;
         for branch in &rich_branches {
-            if branch.body.ret_type.is_none() {
+            if branch.body.ret_type_id.is_none() {
                 ret_type = None;
                 break;
             }
 
-            ret_type = branch.body.ret_type.clone();
+            ret_type = branch.body.ret_type_id.clone();
         }
 
         RichCond {
             branches: rich_branches,
-            ret_type,
+            ret_type_id: ret_type,
         }
     }
 

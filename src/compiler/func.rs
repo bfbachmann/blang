@@ -15,7 +15,7 @@ use crate::analyzer::cond::RichCond;
 use crate::analyzer::expr::{RichExpr, RichExprKind};
 use crate::analyzer::func::{RichFn, RichFnCall, RichRet};
 use crate::analyzer::r#struct::RichStructInit;
-use crate::analyzer::r#type::RichType;
+use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::statement::RichStatement;
 use crate::compiler::context::{
     BranchContext, CompilationContext, FnContext, LoopContext, StatementContext,
@@ -31,6 +31,7 @@ pub struct FnCompiler<'a, 'ctx> {
     fpm: &'a PassManager<FunctionValue<'ctx>>,
     module: &'a Module<'ctx>,
 
+    types: &'a HashMap<TypeId, RichType>,
     vars: HashMap<String, PointerValue<'ctx>>,
     fn_value: Option<FunctionValue<'ctx>>,
     stack: Vec<CompilationContext<'ctx>>,
@@ -44,6 +45,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         builder: &'a Builder<'ctx>,
         fpm: &'a PassManager<FunctionValue<'ctx>>,
         module: &'a Module<'ctx>,
+        types: &'a HashMap<TypeId, RichType>,
         func: &RichFn,
     ) -> CompileResult<FunctionValue<'ctx>> {
         let mut fn_compiler = FnCompiler {
@@ -51,6 +53,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             builder,
             fpm,
             module,
+            types,
             vars: HashMap::new(),
             fn_value: None,
             stack: vec![],
@@ -213,7 +216,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
         // Define function arguments as variables on the stack so they can be referenced in blocks.
         for (arg_val, arg) in fn_val.get_param_iter().zip(func.signature.args.iter()) {
-            self.create_var(arg.name.as_str(), &arg.typ, arg_val);
+            let arg_type = self.types.get(&arg.type_id).unwrap();
+            self.create_var(arg.name.as_str(), arg_type, arg_val);
         }
 
         // Push a function context onto the stack so we can reference it later.
@@ -299,7 +303,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             self.builder.build_alloca(val.get_type(), name)
         } else {
             self.builder
-                .build_alloca(convert::to_basic_type(self.context, typ), name)
+                .build_alloca(convert::to_basic_type(self.context, self.types, typ), name)
         };
 
         // Make sure we continue from where we left off as our builder position may have changed
@@ -340,7 +344,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 let val = self.compile_expr(&decl.val);
 
                 // Create and initialize the variable.
-                self.create_var(decl.name.as_str(), &decl.typ, val);
+                let var_type = self.types.get(&decl.typ).unwrap();
+                self.create_var(decl.name.as_str(), var_type, val);
             }
             RichStatement::StructTypeDeclaration(_) => {
                 // Nothing to do here. Struct types are compiled upon initialization.
@@ -538,7 +543,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
                 // If the value being returned is some structured type, we need to copy it to the
                 // memory pointed to by the first argument and return void.
-                if let RichType::Struct(_) = expr.typ {
+                let expr_type = self.types.get(&expr.type_id).unwrap();
+                if let RichType::Struct(_) = expr_type {
                     let ret_ptr = self.fn_value.unwrap().get_first_param().unwrap();
                     self.builder
                         .build_store(ret_ptr.into_pointer_value(), result.into_pointer_value());
@@ -595,7 +601,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
                 self.builder.build_bitcast(
                     global.as_pointer_value(),
-                    convert::to_basic_type(self.context, &RichType::String),
+                    convert::to_basic_type(self.context, self.types, &RichType::String),
                     "str_lit_as_i32_ptr",
                 )
             }
@@ -618,13 +624,14 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         };
 
         // Dereference the result if it's a pointer.
-        self.deref_if_ptr(result, &expr.typ)
+        let expr_type = self.types.get(&expr.type_id).unwrap();
+        self.deref_if_ptr(result, expr_type)
     }
 
     /// Compiles a struct initialization.
     fn compile_struct_init(&self, struct_init: &RichStructInit) -> BasicValueEnum<'ctx> {
         // Assemble the LLVM struct type and initialize with with zero values.
-        let struct_type = convert::to_struct_type(self.context, &struct_init.typ);
+        let struct_type = convert::to_struct_type(self.context, self.types, &struct_init.typ);
         let struct_val = struct_type.const_zero();
 
         // Allocate space for the struct on the stack and store the zero-valued struct there.
@@ -658,8 +665,9 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // need to add that argument. This should only be the case for functions that return
         // structured types.
         if func.count_params() == call.args.len() as u32 + 1 {
+            let ret_type = self.types.get(call.ret_type_id.as_ref().unwrap()).unwrap();
             let ptr = self.builder.build_alloca(
-                convert::to_basic_type(self.context, &call.ret_type.as_ref().unwrap()),
+                convert::to_basic_type(self.context, self.types, ret_type),
                 "ret_val_ptr",
             );
             args.push(ptr.into());
@@ -684,7 +692,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // the return value was written to the address pointed to by the first function argument.
         if result.left().is_some() {
             result.left()
-        } else if call.ret_type.is_some() {
+        } else if call.ret_type_id.is_some() {
             Some(
                 args.first()
                     .unwrap()

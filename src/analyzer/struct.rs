@@ -8,33 +8,35 @@ use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::r#type::RichType;
+use crate::analyzer::r#type::{RichType, TypeId};
 use crate::fmt::hierarchy_to_string;
+
 use crate::parser::r#struct::{StructInit, StructType};
 use crate::parser::r#type::Type;
+
 use crate::{format_code, util};
 
 /// Represents a semantically valid and type-rich struct field.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RichField {
     pub name: String,
-    pub typ: RichType,
+    pub type_id: TypeId,
 }
 
 impl Display for RichField {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}", self.typ, self.name)
+        write!(f, "{} {}", self.type_id, self.name)
     }
 }
 
 /// Represents a semantically valid and type-rich structure.
 #[derive(Clone, Debug)]
-pub struct RichStruct {
+pub struct RichStructType {
     pub name: String,
     pub fields: Vec<RichField>,
 }
 
-impl Display for RichStruct {
+impl Display for RichStructType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if self.name == "" {
             write!(f, "struct {{")?;
@@ -50,13 +52,13 @@ impl Display for RichStruct {
     }
 }
 
-impl PartialEq for RichStruct {
+impl PartialEq for RichStructType {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name && util::vectors_are_equal(&self.fields, &other.fields)
     }
 }
 
-impl RichStruct {
+impl RichStructType {
     /// Performs semantic analysis on a struct type declaration. Note that this will also
     /// recursively analyze any types contained in the struct. On success, the struct type info will
     /// be stored in the program context.
@@ -88,6 +90,19 @@ impl RichStruct {
                 .with_hint(format_code!("remove type name {}", struct_type.name).as_str()),
             );
         }
+
+        // Before analyzing struct field types, we'll prematurely add this (currently-empty) struct
+        // type to the program context. This way, if any of the field types make use of this struct
+        // type, we won't get into an infinitely recursive type resolution cycle. When we're done
+        // analyzing this struct type, the mapping will be updated in the program context.
+        let type_id = TypeId::from(Type::new_unknown(struct_type.name.as_str()));
+        ctx.add_resolved_type(
+            type_id.clone(),
+            RichType::Struct(RichStructType {
+                name: struct_type.name.clone(),
+                fields: vec![],
+            }),
+        );
 
         // Analyze the struct fields.
         let mut fields = vec![];
@@ -143,18 +158,18 @@ impl RichStruct {
             // Resolve the struct field type and add it to the list of analyzed fields.
             fields.push(RichField {
                 name: field.name.clone(),
-                typ: RichType::from(ctx, &field.typ),
+                type_id: RichType::analyze(ctx, &field.typ),
             });
         }
 
-        let rich_struct = RichStruct {
+        let rich_struct = RichStructType {
             name: struct_type.name.clone(),
             fields,
         };
 
         // Make sure the struct doesn't contain itself via other types.
         let rich_struct_type = RichType::Struct(rich_struct.clone());
-        if let Some(type_hierarchy) = rich_struct_type.contains_type(&rich_struct_type) {
+        if let Some(type_hierarchy) = rich_struct_type.contains_type(ctx, &rich_struct_type) {
             ctx.add_err(
                 AnalyzeError::new_with_locatable(
                     ErrorKind::InfiniteSizedType,
@@ -177,6 +192,7 @@ impl RichStruct {
         }
 
         ctx.add_struct(rich_struct.clone());
+        ctx.add_resolved_type(type_id, RichType::Struct(rich_struct.clone()));
         rich_struct
     }
 
@@ -186,7 +202,7 @@ impl RichStruct {
         ctx: &ProgramContext,
         struct_type: &StructType,
     ) -> AnalyzeResult<()> {
-        RichStruct::check_containment_cycles(ctx, struct_type, &mut vec![])
+        RichStructType::check_containment_cycles(ctx, struct_type, &mut vec![])
     }
 
     fn check_containment_cycles(
@@ -232,7 +248,7 @@ impl RichStruct {
                     let field_struct_type = ctx
                         .get_extern_struct(unresolved_type.name.as_str())
                         .unwrap();
-                    RichStruct::check_containment_cycles(ctx, field_struct_type, hierarchy)?;
+                    RichStructType::check_containment_cycles(ctx, field_struct_type, hierarchy)?;
                     hierarchy.pop();
                 }
 
@@ -263,7 +279,7 @@ impl RichStruct {
                     }
 
                     hierarchy.push(field_struct_type.name.clone());
-                    RichStruct::check_containment_cycles(ctx, field_struct_type, hierarchy)?;
+                    RichStructType::check_containment_cycles(ctx, field_struct_type, hierarchy)?;
                     hierarchy.pop();
                 }
 
@@ -275,10 +291,10 @@ impl RichStruct {
     }
 
     /// Returns the type of the struct field with the given name.
-    fn get_field_type(&self, name: &str) -> Option<&RichType> {
+    fn get_field_type(&self, name: &str) -> Option<&TypeId> {
         for field in &self.fields {
             if field.name.as_str() == name {
-                return Some(&field.typ);
+                return Some(&field.type_id);
             }
         }
 
@@ -289,7 +305,7 @@ impl RichStruct {
 /// Represents a semantically valid struct initialization.
 #[derive(Debug, Clone)]
 pub struct RichStructInit {
-    pub typ: RichStruct,
+    pub typ: RichStructType,
     /// Maps struct field names to their values.
     pub field_values: HashMap<String, RichExpr>,
 }
@@ -310,14 +326,16 @@ impl RichStructInit {
     /// Performs semantic analysis on struct initialization.
     pub fn from(ctx: &mut ProgramContext, struct_init: &StructInit) -> Self {
         // Resolve the struct type.
-        let struct_type = match RichType::from(ctx, &struct_init.typ) {
+        let type_id = RichType::analyze(ctx, &struct_init.typ);
+        let rich_type = ctx.get_resolved_type(&type_id).unwrap().clone();
+        let struct_type = match rich_type {
             RichType::Struct(s) => s,
             RichType::Unknown(type_name) => {
                 // The struct type has already failed semantic analysis, so we should avoid
                 // analyzing its initialization and just return some zero-value placeholder instead.
                 return RichStructInit {
-                    typ: RichStruct {
-                        name: type_name,
+                    typ: RichStructType {
+                        name: type_name.clone(),
                         fields: vec![],
                     },
                     field_values: Default::default(),
@@ -328,14 +346,15 @@ impl RichStructInit {
             }
         };
 
-        // Analyze struct field assignments.
+        // Analyze struct field assignments and collect errors.
+        let mut errors = vec![];
         let mut field_values: HashMap<String, RichExpr> = HashMap::new();
         for (field_name, field_value) in &struct_init.field_values {
             // Get the struct field type, or error if the struct type has no such field.
             let field_type = match struct_type.get_field_type(field_name.as_str()) {
                 Some(typ) => typ,
                 None => {
-                    ctx.add_err(AnalyzeError::new_with_locatable(
+                    errors.push(AnalyzeError::new_with_locatable(
                         ErrorKind::StructFieldNotDefined,
                         format_code!("struct type {} has no field {}", struct_type, field_name,)
                             .as_str(),
@@ -353,12 +372,12 @@ impl RichStructInit {
             let expr = RichExpr::from(ctx, field_value.clone());
 
             // Make sure the value being assigned to the field has the expected type.
-            if !expr.typ.is_compatible_with(field_type) {
-                ctx.add_err(AnalyzeError::new_with_locatable(
+            if &expr.type_id != field_type {
+                errors.push(AnalyzeError::new_with_locatable(
                     ErrorKind::IncompatibleTypes,
                     format_code!(
                         "cannot assign expression of type {} to field {} on struct type {}",
-                        format!("{}", &expr.typ),
+                        format!("{}", &expr.type_id),
                         format!("{}: {}", &field_name, &field_type),
                         format!("{}", &struct_type),
                     )
@@ -369,7 +388,7 @@ impl RichStructInit {
 
             // Insert the analyzed struct field value, making sure that it was not already assigned.
             if field_values.insert(field_name.to_string(), expr).is_some() {
-                ctx.add_err(AnalyzeError::new_with_locatable(
+                errors.push(AnalyzeError::new_with_locatable(
                     ErrorKind::DuplicateStructFieldName,
                     format_code!("struct field {} is already assigned", &field_name).as_str(),
                     Box::new(field_value.clone()),
@@ -380,7 +399,7 @@ impl RichStructInit {
         // Make sure all struct fields were assigned.
         for field in &struct_type.fields {
             if !field_values.contains_key(field.name.as_str()) {
-                ctx.add_err(AnalyzeError::new_with_locatable(
+                errors.push(AnalyzeError::new_with_locatable(
                     ErrorKind::StructFieldNotInitialized,
                     format_code!(
                         "field {} on struct type {} is uninitialized",
@@ -393,9 +412,14 @@ impl RichStructInit {
             }
         }
 
-        RichStructInit {
-            typ: struct_type,
-            field_values,
+        let typ = struct_type.clone();
+
+        // Move all analysis errors into the program context. We're not adding them immediately
+        // to avoid borrow issues.
+        for err in errors {
+            ctx.add_err(err);
         }
+
+        RichStructInit { typ, field_values }
     }
 }

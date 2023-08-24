@@ -1,5 +1,6 @@
 use std::collections::{HashSet, VecDeque};
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
@@ -12,13 +13,26 @@ use crate::util;
 
 /// Represents the name, arguments, and return type of a function. Anonymous functions have empty
 /// names.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct FunctionSignature {
     pub name: String,
     pub args: Vec<Argument>,
     pub return_type: Option<Type>,
     start_pos: Position,
     end_pos: Position,
+}
+
+impl Hash for FunctionSignature {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        for arg in &self.args {
+            arg.hash(state);
+        }
+
+        if let Some(typ) = &self.return_type {
+            typ.hash(state);
+        }
+    }
 }
 
 impl fmt::Display for FunctionSignature {
@@ -46,8 +60,6 @@ impl PartialEq for FunctionSignature {
         self.name == other.name
             && util::vectors_are_equal(&self.args, &other.args)
             && self.return_type == other.return_type
-            && self.start_pos == other.start_pos
-            && self.end_pos == other.end_pos
     }
 }
 

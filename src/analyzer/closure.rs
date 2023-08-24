@@ -8,9 +8,9 @@ use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::{RichArg, RichRet};
 use crate::analyzer::prog_context::{ProgramContext, Scope, ScopeKind};
-use crate::analyzer::r#type::RichType;
+use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::statement::RichStatement;
-use crate::analyzer::warn::{WarnKind, Warning};
+use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
 use crate::parser::arg::Argument;
 use crate::parser::closure::Closure;
 use crate::parser::cont::Continue;
@@ -22,7 +22,7 @@ use crate::{format_code, util};
 #[derive(Debug, Clone)]
 pub struct RichClosure {
     pub statements: Vec<RichStatement>,
-    pub ret_type: Option<RichType>,
+    pub ret_type_id: Option<TypeId>,
     pub original: Closure,
 }
 
@@ -35,7 +35,7 @@ impl fmt::Display for RichClosure {
 impl PartialEq for RichClosure {
     fn eq(&self, other: &Self) -> bool {
         util::vectors_are_equal(&self.statements, &other.statements)
-            && util::optionals_are_equal(&self.ret_type, &other.ret_type)
+            && util::optionals_are_equal(&self.ret_type_id, &other.ret_type_id)
     }
 }
 
@@ -58,7 +58,7 @@ impl RichClosure {
             kind.clone(),
             rich_args,
             match &expected_ret_type {
-                Some(typ) => Some(RichType::from(ctx, &typ)),
+                Some(typ) => Some(RichType::analyze(ctx, &typ)),
                 None => None,
             },
         );
@@ -75,10 +75,10 @@ impl RichClosure {
             // If the statement is a return, make sure the return type is correct and that there
             // are no more statements in this closure.
             if let RichStatement::Return(ret) = rich_statements.last().unwrap() {
-                let result = check_return(&ret, ctx.return_type().as_ref());
+                let result = check_return(ctx, &ret, ctx.return_type().as_ref());
                 ctx.consume_error(result);
                 if i + 1 != num_statements {
-                    ctx.add_warn(Warning::new_from_locatable(
+                    ctx.add_warn(AnalyzeWarning::new_from_locatable(
                         WarnKind::UnreachableCode,
                         "statements following unconditional return would never be executed",
                         Box::new(statement.clone()),
@@ -92,7 +92,7 @@ impl RichClosure {
 
         // Analyze the return type.
         let ret_type = match &expected_ret_type {
-            Some(typ) => Some(RichType::from(ctx, &typ)),
+            Some(typ) => Some(RichType::analyze(ctx, &typ)),
             None => None,
         };
 
@@ -100,7 +100,7 @@ impl RichClosure {
         ctx.pop_scope();
         RichClosure {
             statements: rich_statements,
-            ret_type,
+            ret_type_id: ret_type,
             original,
         }
     }
@@ -110,7 +110,7 @@ impl RichClosure {
 pub fn check_closure_returns(
     ctx: &mut ProgramContext,
     closure: &RichClosure,
-    expected_ret_type: &RichType,
+    expected_ret_type_id: &TypeId,
     kind: &ScopeKind,
 ) {
     // Given that there is an expected return type, one of the following return conditions must
@@ -129,23 +129,23 @@ pub fn check_closure_returns(
             match closure.statements.last() {
                 // If it's a return, make sure the return type is correct.
                 Some(RichStatement::Return(ret)) => {
-                    let result = check_return(&ret, Some(expected_ret_type));
+                    let result = check_return(ctx, &ret, Some(expected_ret_type_id));
                     ctx.consume_error(result);
                 }
 
                 // If it's a conditional, make sure it is exhaustive and recurse on each branch.
                 Some(RichStatement::Conditional(cond)) => {
-                    check_cond_returns(ctx, &cond, expected_ret_type);
+                    check_cond_returns(ctx, &cond, expected_ret_type_id);
                 }
 
                 // If it's a loop, recurse on the loop body.
                 Some(RichStatement::Loop(closure)) => {
-                    check_closure_returns(ctx, &closure, expected_ret_type, &ScopeKind::Loop);
+                    check_closure_returns(ctx, &closure, expected_ret_type_id, &ScopeKind::Loop);
                 }
 
                 // If it's an inline closure, recurse on the closure.
                 Some(RichStatement::Closure(closure)) => {
-                    check_closure_returns(ctx, &closure, expected_ret_type, &ScopeKind::Inline);
+                    check_closure_returns(ctx, &closure, expected_ret_type_id, &ScopeKind::Inline);
                 }
 
                 _ => {
@@ -177,7 +177,7 @@ pub fn check_closure_returns(
                         );
                     }
                     RichStatement::Return(ret) => {
-                        let result = check_return(ret, Some(expected_ret_type));
+                        let result = check_return(ctx, ret, Some(expected_ret_type_id));
                         ctx.consume_error(result);
                         contains_return = true;
                     }
@@ -256,7 +256,7 @@ fn cond_has_any_return(cond: &RichCond) -> bool {
 
 /// Checks that the given conditional is exhaustive and that each branch satisfies return
 /// conditions.
-fn check_cond_returns(ctx: &mut ProgramContext, cond: &RichCond, expected: &RichType) {
+fn check_cond_returns(ctx: &mut ProgramContext, cond: &RichCond, expected: &TypeId) {
     if !cond.is_exhaustive() {
         ctx.add_err(
             AnalyzeError::new_with_locatable(
@@ -275,22 +275,29 @@ fn check_cond_returns(ctx: &mut ProgramContext, cond: &RichCond, expected: &Rich
 }
 
 /// Checks that the return type matches what is expected.
-fn check_return(ret: &RichRet, expected: Option<&RichType>) -> AnalyzeResult<()> {
+fn check_return(
+    ctx: &ProgramContext,
+    ret: &RichRet,
+    expected: Option<&TypeId>,
+) -> AnalyzeResult<()> {
     match expected {
-        Some(expected_type) => match &ret.val {
+        Some(expected_type_id) => match &ret.val {
             Some(expr) => {
+                let expected_type = ctx.get_resolved_type(expected_type_id).unwrap();
+                let expr_type = ctx.get_resolved_type(&expr.type_id).unwrap();
+
                 // Skip the type check if either type is unknown. This will happen if semantic
                 // analysis on either type already failed.
-                if !expr.typ.is_unknown()
+                if !expr_type.is_unknown()
                     && !expected_type.is_unknown()
-                    && &expr.typ != expected_type
+                    && &expr.type_id != expected_type_id
                 {
                     return Err(AnalyzeError::new_with_locatable(
                         ErrorKind::IncompatibleTypes,
                         format_code!(
                             "expected return value of type {}, but found {}",
                             expected_type,
-                            &expr.typ,
+                            expr_type,
                         )
                         .as_str(),
                         Box::new(ret.clone()),
@@ -302,7 +309,7 @@ fn check_return(ret: &RichRet, expected: Option<&RichType>) -> AnalyzeResult<()>
                     ErrorKind::MissingReturn,
                     format_code!(
                         "return statement is missing a required value of type {}",
-                        expected_type,
+                        expected_type_id,
                     )
                     .as_str(),
                     Box::new(ret.clone()),

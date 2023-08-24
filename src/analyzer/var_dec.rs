@@ -6,7 +6,7 @@ use colored::Colorize;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::r#type::RichType;
+use crate::analyzer::r#type::{RichType, TypeId};
 use crate::format_code;
 use crate::parser::statement::Statement;
 use crate::parser::var_dec::VariableDeclaration;
@@ -14,14 +14,14 @@ use crate::parser::var_dec::VariableDeclaration;
 /// Represents a semantically valid and type-rich variable declaration.
 #[derive(PartialEq, Debug, Clone)]
 pub struct RichVarDecl {
-    pub typ: RichType,
+    pub typ: TypeId,
     pub name: String,
     pub val: RichExpr,
 }
 
 impl fmt::Display for RichVarDecl {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {} = {}", self.typ, self.name, self.val)
+        write!(f, "{}: {} = {}", self.name, self.typ, self.val)
     }
 }
 
@@ -52,14 +52,14 @@ impl RichVarDecl {
             // If the variable was declared with a type, analyze it and make sure it matches the
             // expression type.
             Some(typ) => {
-                let declared_type = RichType::from(ctx, &typ);
-                if &rich_expr.typ != &declared_type {
+                let declared_type = RichType::analyze(ctx, &typ);
+                if &rich_expr.type_id != &declared_type {
                     ctx.add_err(AnalyzeError::new_from_statement(
                         ErrorKind::IncompatibleTypes,
                         &Statement::VariableDeclaration(var_decl.clone()),
                         format_code!(
                             "cannot assign value of type {} to variable {}",
-                            &rich_expr.typ,
+                            &rich_expr.type_id,
                             format!("{}: {}", &var_decl.name, &declared_type),
                         )
                         .as_str(),
@@ -69,11 +69,11 @@ impl RichVarDecl {
                 declared_type
             }
             // Otherwise, use the expression type.
-            None => rich_expr.typ.clone(),
+            None => rich_expr.type_id.clone(),
         };
 
         // The variable expression is valid. Add it to the program context.
-        ctx.add_var(var_decl.name.as_str(), rich_expr.typ.clone());
+        ctx.add_var(var_decl.name.as_str(), rich_expr.type_id.clone());
         RichVarDecl {
             typ: var_type,
             name: var_decl.name,
@@ -87,7 +87,7 @@ mod tests {
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
     use crate::analyzer::expr::{RichExpr, RichExprKind};
     use crate::analyzer::prog_context::ProgramContext;
-    use crate::analyzer::r#type::RichType;
+    use crate::analyzer::r#type::{TypeId};
     use crate::analyzer::var_dec::RichVarDecl;
     use crate::lexer::pos::Position;
     use crate::parser::expr::Expression;
@@ -110,11 +110,11 @@ mod tests {
         assert_eq!(
             result,
             RichVarDecl {
-                typ: RichType::String,
+                typ: TypeId::string(),
                 name: "my_string".to_string(),
                 val: RichExpr {
                     kind: RichExprKind::StringLiteral("bingo".to_string()),
-                    typ: RichType::String,
+                    type_id: TypeId::string(),
                 }
             }
         );

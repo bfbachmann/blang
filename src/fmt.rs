@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::fmt::Display;
 
 use colored::{ColoredString, Colorize};
 
@@ -49,14 +50,14 @@ macro_rules! format_code {
 }
 
 /// Returns the contents of a HashSet as a string of the form `<value1>, <value2>, ...`.
-pub fn hashset_to_string<T>(set: HashSet<T>) -> String
+pub fn format_hashset<T>(set: HashSet<T>) -> String
 where
-    T: ToString,
+    T: Display,
 {
     let mut count = set.len();
     let mut s = "".to_string();
     for v in set {
-        s += v.to_string().as_str();
+        s += format_code!("{}", v).as_str();
         if count > 1 {
             s += ", ";
         }
