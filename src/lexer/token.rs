@@ -69,7 +69,7 @@ impl Token {
             let subseg = &segment[search_start..];
             if let Some((kind, end_col)) = TokenKind::first_from(subseg) {
                 // Ignore everything on the line after a comment.
-                if kind == TokenKind::BeginComment {
+                if kind == TokenKind::LineComment {
                     break;
                 }
 

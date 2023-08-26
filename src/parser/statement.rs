@@ -202,7 +202,7 @@ impl Statement {
             // If the first token is "{", it must be a closure.
             (
                 Token {
-                    kind: TokenKind::BeginClosure,
+                    kind: TokenKind::LeftBrace,
                     ..
                 },
                 _,
@@ -287,7 +287,7 @@ impl Statement {
                 // If the next token is "}", it's an empty return. Otherwise, we expect an
                 // expression.
                 if let Some(Token {
-                    kind: TokenKind::EndClosure,
+                    kind: TokenKind::RightBrace,
                     ..
                 }) = tokens.front()
                 {

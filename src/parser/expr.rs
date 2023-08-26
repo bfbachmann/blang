@@ -201,7 +201,7 @@ impl Expression {
                     // If the token is "{", try parse the expression as struct initialization. If
                     // it's not valid struct initialization, we'll assume it's a variable value.
                     Some(&Token {
-                        kind: TokenKind::BeginClosure,
+                        kind: TokenKind::LeftBrace,
                         ..
                     }) => {
                         // If we're in a conditional, we can safely assume that this is a variable

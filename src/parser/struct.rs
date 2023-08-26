@@ -125,14 +125,14 @@ impl StructType {
         }
 
         // The next token should be "{".
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::BeginClosure]))?;
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::LeftBrace]))?;
 
         // Parse struct fields until we reach "}".
         let mut fields = vec![];
         loop {
             // If the next token is "}", we're done parsing the struct type declaration.
             if let Some(Token {
-                kind: TokenKind::EndClosure,
+                kind: TokenKind::RightBrace,
                 ..
             }) = tokens.front()
             {
@@ -283,14 +283,14 @@ impl StructInit {
         };
 
         // Parse "{".
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::BeginClosure]))?;
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::LeftBrace]))?;
 
         // Parse struct field assignments until we hit "}".
         let mut field_values = HashMap::new();
         loop {
             match tokens.pop_front() {
                 Some(Token {
-                    kind: TokenKind::EndClosure,
+                    kind: TokenKind::RightBrace,
                     ..
                 }) => {
                     // Set the end position of this struct initialization in the source file.

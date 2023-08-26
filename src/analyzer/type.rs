@@ -16,7 +16,7 @@ use crate::parser::unresolved::UnresolvedType;
 /// Represents a unique identifier for a type that can be used to look up the corresponding
 /// fully-resolved type. Under the hood, a type ID is really just a parsed type without any
 /// information from type resolution/analysis. Every parsed type should map to exactly one resolved
-/// (or invalid) type.
+/// (or invalid) type, but many parsed types may map to the same resolved type.
 #[derive(Clone, Hash, Debug, PartialEq, Eq)]
 pub struct TypeId {
     typ: Type,

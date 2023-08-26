@@ -76,7 +76,7 @@ impl Closure {
         let end_pos: Position;
 
         // The first token should be "{".
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::BeginClosure]))?;
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::LeftBrace]))?;
 
         // The following nodes should be statements separated by ";".
         let mut statements = vec![];
@@ -84,7 +84,7 @@ impl Closure {
             match tokens.front() {
                 // If the next token is "}", we've reached the end of the closure.
                 Some(&Token {
-                    kind: TokenKind::EndClosure,
+                    kind: TokenKind::RightBrace,
                     ..
                 }) => {
                     // We've reached the end of the closure. Pop the "}" and break the loop.

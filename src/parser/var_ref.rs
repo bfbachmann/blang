@@ -43,7 +43,8 @@ impl VarRef {
         }
     }
 
-    /// Attempts to parse a variable reference from the given token sequence.
+    /// Attempts to parse a variable reference from the given token sequence. A variable reference
+    /// can be an identifier representing the variable name or a type member access.
     pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         match tokens.pop_front() {
             Some(Token {
