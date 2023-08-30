@@ -8,6 +8,7 @@ pub mod program;
 pub mod statement;
 pub mod r#struct;
 pub mod r#type;
+pub mod var;
 pub mod var_assign;
 pub mod var_dec;
 pub mod warn;

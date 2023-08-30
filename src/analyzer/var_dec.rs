@@ -87,7 +87,7 @@ mod tests {
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
     use crate::analyzer::expr::{RichExpr, RichExprKind};
     use crate::analyzer::prog_context::ProgramContext;
-    use crate::analyzer::r#type::{TypeId};
+    use crate::analyzer::r#type::TypeId;
     use crate::analyzer::var_dec::RichVarDecl;
     use crate::lexer::pos::Position;
     use crate::parser::expr::Expression;

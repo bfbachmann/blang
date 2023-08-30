@@ -2,14 +2,15 @@ use std::collections::hash_map::Iter;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;
 
-
 use crate::analyzer::error::AnalyzeError;
 use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::func::{RichArg, RichFn, RichFnSig};
 use crate::analyzer::r#struct::RichStructType;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::warn::AnalyzeWarning;
+
 use crate::lexer::pos::Position;
+
 use crate::parser::r#struct::StructType;
 
 #[derive(PartialEq, Clone)]
@@ -392,14 +393,6 @@ impl ProgramContext {
         }
 
         None
-    }
-
-    /// Attempts to locate the variable with the given name and returns its type, if found.
-    pub fn get_var_type(&self, name: &str) -> Option<&RichType> {
-        match self.get_var(name) {
-            Some(type_id) => self.get_resolved_type(type_id),
-            None => None,
-        }
     }
 
     /// Adds the given scope to the top of the stack.

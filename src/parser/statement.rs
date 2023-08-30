@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::fmt;
 
 use crate::lexer::kind::TokenKind;
@@ -12,10 +12,12 @@ use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::expr::Expression;
 use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
+use crate::parser::program::Program;
 use crate::parser::r#break::Break;
 use crate::parser::r#loop::Loop;
 use crate::parser::r#struct::StructType;
 use crate::parser::ret::Ret;
+use crate::parser::var::Var;
 use crate::parser::var_assign::VariableAssignment;
 use crate::parser::var_dec::VariableDeclaration;
 
@@ -46,7 +48,7 @@ impl fmt::Display for Statement {
                 }
             }
             Statement::VariableAssignment(var_assign) => {
-                write!(f, "{} = ...", var_assign.name)
+                write!(f, "{} = ...", var_assign.var)
             }
             Statement::FunctionDeclaration(func) => {
                 write!(f, "{}", func.signature)
@@ -55,7 +57,7 @@ impl fmt::Display for Statement {
                 write!(f, "{{ ... }}")
             }
             Statement::FunctionCall(call) => {
-                write!(f, "{}(...)", call.fn_name)
+                write!(f, "{}(...)", call.fn_var)
             }
             Statement::Conditional(_) => {
                 write!(f, "if ...")
@@ -316,6 +318,54 @@ impl Statement {
             ) => {
                 let struct_decl = StructType::from(tokens)?;
                 Ok(Statement::StructDeclaration(struct_decl))
+            }
+
+            // If the first two tokens are `<identifier>.`, it's a member access that can either be
+            // an assignment to the member or or a function call on the member.
+            (
+                Token {
+                    kind: TokenKind::Identifier(_),
+                    ..
+                },
+                Token {
+                    kind: TokenKind::Dot,
+                    ..
+                },
+            ) => {
+                // Parse the member access.
+                let var = Var::from(tokens)?;
+
+                // If the next token is "(", it's a function call. Otherwise, it should be "=" for
+                // member assignment.
+                match Program::parse_expecting(
+                    tokens,
+                    HashSet::from([TokenKind::Equal, TokenKind::LeftParen]),
+                )? {
+                    token @ Token {
+                        kind: TokenKind::LeftParen,
+                        ..
+                    } => {
+                        // Parse the function arguments and return the function call.
+                        tokens.push_front(token);
+                        let fn_call = FunctionCall::from_args(tokens, var)?;
+                        Ok(Statement::FunctionCall(fn_call))
+                    }
+
+                    Token {
+                        kind: TokenKind::Equal,
+                        ..
+                    } => {
+                        // Parse the expression being assigned to the member and return the variable
+                        // assignment.
+                        let value = Expression::from(tokens, false, false)?;
+                        let start_pos = var.start_pos.clone();
+                        Ok(Statement::VariableAssignment(VariableAssignment::new(
+                            var, value, start_pos,
+                        )))
+                    }
+
+                    _ => unreachable!(),
+                }
             }
 
             // If the tokens are anything else, we error because it's an invalid statement.

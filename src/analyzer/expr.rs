@@ -9,6 +9,7 @@ use crate::analyzer::func::{RichFn, RichFnCall, RichFnSig};
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#struct::{RichStructInit, RichStructType};
 use crate::analyzer::r#type::{RichType, TypeId};
+use crate::analyzer::var::RichVar;
 use crate::format_code;
 use crate::parser::closure::Closure;
 use crate::parser::expr::Expression;
@@ -18,7 +19,7 @@ use crate::parser::unresolved::UnresolvedType;
 
 #[derive(Debug, Clone)]
 pub enum RichExprKind {
-    VariableReference(String),
+    Variable(RichVar),
     BoolLiteral(bool),
     I64Literal(i64),
     StringLiteral(String),
@@ -33,7 +34,7 @@ pub enum RichExprKind {
 impl fmt::Display for RichExprKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            RichExprKind::VariableReference(var_name) => write!(f, "variable {}", var_name),
+            RichExprKind::Variable(var) => write!(f, "variable {}", var),
             RichExprKind::BoolLiteral(b) => write!(f, "{}", b),
             RichExprKind::I64Literal(i) => write!(f, "{}", i),
             RichExprKind::StringLiteral(s) => write!(f, "{}", s),
@@ -54,7 +55,7 @@ impl fmt::Display for RichExprKind {
 impl PartialEq for RichExprKind {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (RichExprKind::VariableReference(v1), RichExprKind::VariableReference(v2)) => v1 == v2,
+            (RichExprKind::Variable(v1), RichExprKind::Variable(v2)) => v1 == v2,
             (RichExprKind::BoolLiteral(b1), RichExprKind::BoolLiteral(b2)) => b1 == b2,
             (RichExprKind::I64Literal(i1), RichExprKind::I64Literal(i2)) => i1 == i2,
             (RichExprKind::StringLiteral(s1), RichExprKind::StringLiteral(s2)) => s1 == s2,
@@ -91,35 +92,12 @@ impl RichExpr {
     /// Performs semantic analysis on the given expression and returns a type-rich version of it.
     pub fn from(ctx: &mut ProgramContext, expr: Expression) -> RichExpr {
         match expr {
-            Expression::VariableReference(ref var_ref) => {
-                let var_name = var_ref.var_name.clone();
-
-                // Make sure the variable being referenced exists. Note that it might be a function.
-                if let Some(var_typ) = ctx.get_var(var_name.as_str()) {
-                    RichExpr {
-                        kind: RichExprKind::VariableReference(var_name),
-                        type_id: var_typ.clone(),
-                    }
-                } else if let Some(func) = ctx.get_fn(var_name.as_str()) {
-                    RichExpr {
-                        kind: RichExprKind::VariableReference(var_name),
-                        type_id: func.type_id().clone(),
-                    }
-                } else if let Some(fn_sig) = ctx.get_extern_fn(var_name.as_str()) {
-                    RichExpr {
-                        kind: RichExprKind::VariableReference(var_name),
-                        type_id: fn_sig.type_id.clone(),
-                    }
-                } else {
-                    // The variable was not defined, so record the error and return a zero-valued
-                    // expression instead.
-                    ctx.add_err(AnalyzeError::new_from_expr(
-                        ErrorKind::VariableNotDefined,
-                        &expr,
-                        format_code!("variable {} does not exist", &var_name).as_str(),
-                    ));
-
-                    RichExpr::new_zero_value(ctx, Type::Unresolved(UnresolvedType::unknown()))
+            Expression::Variable(ref var) => {
+                let rich_var = RichVar::from(ctx, var, true);
+                let type_id = rich_var.get_type_id().clone();
+                RichExpr {
+                    kind: RichExprKind::Variable(rich_var),
+                    type_id,
                 }
             }
             Expression::BoolLiteral(b) => RichExpr {
@@ -158,7 +136,7 @@ impl RichExpr {
                     format_code!(
                         "function {} has no return value, but is called in an expression \
                             where a return value is expected",
-                        &fn_call.fn_name,
+                        &fn_call.fn_var,
                     )
                     .as_str(),
                     Box::new(fn_call),
@@ -385,7 +363,8 @@ mod tests {
     use crate::analyzer::expr::{RichExpr, RichExprKind};
     use crate::analyzer::func::{RichArg, RichFn, RichFnCall, RichFnSig};
     use crate::analyzer::prog_context::ProgramContext;
-    use crate::analyzer::r#type::{TypeId};
+    use crate::analyzer::r#type::{RichType, TypeId};
+    use crate::analyzer::var::RichVar;
     use crate::parser::arg::Argument;
     use crate::parser::bool_lit::BoolLit;
     use crate::parser::closure::Closure;
@@ -396,7 +375,7 @@ mod tests {
     use crate::parser::op::Operator;
     use crate::parser::r#type::Type;
     use crate::parser::string_lit::StringLit;
-    use crate::parser::var_ref::VarRef;
+    use crate::parser::var::Var;
 
     #[test]
     fn analyze_i64_literal() {
@@ -444,38 +423,41 @@ mod tests {
     }
 
     #[test]
-    fn analyze_var_ref() {
+    fn analyze_var() {
         let mut ctx = ProgramContext::new();
         ctx.add_var("myvar", TypeId::string());
         let result = RichExpr::from(
             &mut ctx,
-            Expression::VariableReference(VarRef::new_with_default_pos("myvar")),
+            Expression::Variable(Var::new_with_default_pos("myvar")),
         );
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
             RichExpr {
-                kind: RichExprKind::VariableReference("myvar".to_string()),
+                kind: RichExprKind::Variable(RichVar::new("myvar", TypeId::string(), None)),
                 type_id: TypeId::string()
             }
         );
     }
 
     #[test]
-    fn analyze_invalid_var_ref() {
+    fn analyze_invalid_var() {
         let mut ctx = ProgramContext::new();
         let result = RichExpr::from(
             &mut ctx,
-            Expression::VariableReference(VarRef::new_with_default_pos("myvar")),
+            Expression::Variable(Var::new_with_default_pos("myvar")),
         );
-        assert!(matches!(
+        assert_eq!(
             result,
             RichExpr {
-                kind: RichExprKind::Unknown,
-                ..
+                kind: RichExprKind::Variable(RichVar {
+                    var_name: "myvar".to_string(),
+                    var_type_id: TypeId::unknown(),
+                    member_access: None,
+                }),
+                type_id: TypeId::unknown(),
             }
-        ));
-        assert_eq!(result.type_id, TypeId::unknown());
+        );
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {
@@ -488,7 +470,12 @@ mod tests {
     #[test]
     fn analyze_fn_call() {
         let mut ctx = ProgramContext::new();
-        ctx.add_fn(RichFn {
+        let fn_sig = FunctionSignature::new_with_default_pos(
+            "do_thing",
+            vec![Argument::new("first", Type::bool())],
+            Some(Type::string()),
+        );
+        let rich_fn = RichFn {
             signature: RichFnSig {
                 name: "do_thing".to_string(),
                 args: vec![RichArg {
@@ -496,32 +483,38 @@ mod tests {
                     type_id: TypeId::bool(),
                 }],
                 ret_type_id: Some(TypeId::string()),
-                type_id: TypeId::from(Type::Function(Box::new(
-                    FunctionSignature::new_with_default_pos(
-                        "do_thing",
-                        vec![Argument::new("first", Type::bool())],
-                        Some(Type::string()),
-                    ),
-                ))),
+                type_id: TypeId::from(Type::Function(Box::new(fn_sig.clone()))),
             },
             body: RichClosure {
                 statements: vec![],
                 ret_type_id: None,
                 original: Closure::new_empty(),
             },
-        });
+        };
+
+        // Add the function and its type to the context so they can be retrieved when analyzing
+        // the expression that calls the function.
+        ctx.add_fn(rich_fn.clone());
+        ctx.add_resolved_type(
+            TypeId::from(Type::Function(Box::new(fn_sig))),
+            RichType::from_fn_sig(rich_fn.signature),
+        );
+
+        // Analyze the function call expression.
         let fn_call = FunctionCall::new_with_default_pos(
             "do_thing",
             vec![Expression::BoolLiteral(BoolLit::new_with_default_pos(true))],
         );
         let call_expr = Expression::FunctionCall(fn_call.clone());
         let result = RichExpr::from(&mut ctx, call_expr);
+
+        // Check that analysis succeeded.
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
             RichExpr {
                 kind: RichExprKind::FunctionCall(RichFnCall {
-                    fn_name: fn_call.fn_name,
+                    fn_var: fn_call.fn_var,
                     args: vec![RichExpr {
                         kind: RichExprKind::BoolLiteral(true),
                         type_id: TypeId::bool()
@@ -536,25 +529,34 @@ mod tests {
     #[test]
     fn fn_call_no_return() {
         let mut ctx = ProgramContext::new();
-        ctx.add_fn(RichFn {
+        let fn_sig = FunctionSignature::new_with_default_pos(
+            "do_thing",
+            vec![Argument::new("first", Type::bool())],
+            None,
+        );
+        let rich_fn = RichFn {
             signature: RichFnSig {
                 name: "do_thing".to_string(),
                 args: vec![],
                 ret_type_id: None,
-                type_id: TypeId::from(Type::Function(Box::new(
-                    FunctionSignature::new_with_default_pos(
-                        "do_thing",
-                        vec![Argument::new("first", Type::bool())],
-                        None,
-                    ),
-                ))),
+                type_id: TypeId::from(Type::Function(Box::new(fn_sig.clone()))),
             },
             body: RichClosure {
                 statements: vec![],
                 ret_type_id: None,
                 original: Closure::new_empty(),
             },
-        });
+        };
+
+        // Add the function and its type to the context so they can be retrieved when analyzing
+        // the expression that calls the function.
+        ctx.add_fn(rich_fn.clone());
+        ctx.add_resolved_type(
+            TypeId::from(Type::Function(Box::new(fn_sig))),
+            RichType::from_fn_sig(rich_fn.signature),
+        );
+
+        // Analyze the function call expression.
         let result = RichExpr::from(
             &mut ctx,
             Expression::BinaryOperation(
@@ -602,7 +604,15 @@ mod tests {
     #[test]
     fn fn_call_missing_arg() {
         let mut ctx = ProgramContext::new();
-        ctx.add_fn(RichFn {
+        let fn_sig = FunctionSignature::new_with_default_pos(
+            "do_thing",
+            vec![
+                Argument::new("arg1", Type::bool()),
+                Argument::new("arg2", Type::i64()),
+            ],
+            Some(Type::bool()),
+        );
+        let rich_fn = RichFn {
             signature: RichFnSig {
                 name: "do_thing".to_string(),
                 args: vec![
@@ -616,23 +626,24 @@ mod tests {
                     },
                 ],
                 ret_type_id: Some(TypeId::bool()),
-                type_id: TypeId::from(Type::Function(Box::new(
-                    FunctionSignature::new_with_default_pos(
-                        "do_thing",
-                        vec![
-                            Argument::new("arg1", Type::bool()),
-                            Argument::new("arg2", Type::i64()),
-                        ],
-                        Some(Type::bool()),
-                    ),
-                ))),
+                type_id: TypeId::from(Type::Function(Box::new(fn_sig.clone()))),
             },
             body: RichClosure {
                 statements: vec![],
                 ret_type_id: None,
                 original: Closure::new_empty(),
             },
-        });
+        };
+
+        // Add the function and its type to the context so they can be retrieved when analyzing
+        // the expression that calls the function.
+        ctx.add_fn(rich_fn.clone());
+        ctx.add_resolved_type(
+            TypeId::from(Type::Function(Box::new(fn_sig))),
+            RichType::from_fn_sig(rich_fn.signature),
+        );
+
+        // Analyze the function call expression.
         let result = RichExpr::from(
             &mut ctx,
             Expression::FunctionCall(FunctionCall::new_with_default_pos(
@@ -645,7 +656,7 @@ mod tests {
             result,
             RichExpr {
                 kind: RichExprKind::FunctionCall(RichFnCall {
-                    fn_name: "do_thing".to_string(),
+                    fn_var: Var::new_with_default_pos("do_thing"),
                     args: vec![RichExpr {
                         kind: RichExprKind::BoolLiteral(true),
                         type_id: TypeId::bool(),
@@ -658,7 +669,7 @@ mod tests {
 
         match result.kind {
             RichExprKind::FunctionCall(call) => {
-                assert_eq!(call.fn_name, "do_thing");
+                assert_eq!(call.fn_var, Var::new_with_default_pos("do_thing"));
                 assert_eq!(call.ret_type_id, Some(TypeId::bool()));
                 assert_eq!(call.args.len(), 1);
                 assert_eq!(
@@ -684,7 +695,12 @@ mod tests {
     #[test]
     fn fn_call_invalid_arg_type() {
         let mut ctx = ProgramContext::new();
-        ctx.add_fn(RichFn {
+        let fn_sig = FunctionSignature::new_with_default_pos(
+            "do_thing",
+            vec![Argument::new("arg", Type::bool())],
+            Some(Type::bool()),
+        );
+        let rich_fn = RichFn {
             signature: RichFnSig {
                 name: "do_thing".to_string(),
                 args: vec![RichArg {
@@ -692,20 +708,24 @@ mod tests {
                     type_id: TypeId::bool(),
                 }],
                 ret_type_id: Some(TypeId::bool()),
-                type_id: TypeId::from(Type::Function(Box::new(
-                    FunctionSignature::new_with_default_pos(
-                        "do_thing",
-                        vec![Argument::new("arg", Type::bool())],
-                        Some(Type::bool()),
-                    ),
-                ))),
+                type_id: TypeId::from(Type::Function(Box::new(fn_sig.clone()))),
             },
             body: RichClosure {
                 statements: vec![],
                 ret_type_id: None,
                 original: Closure::new_empty(),
             },
-        });
+        };
+
+        // Add the function and its type to the context so they can be retrieved when analyzing
+        // the expression that calls the function.
+        ctx.add_fn(rich_fn.clone());
+        ctx.add_resolved_type(
+            TypeId::from(Type::Function(Box::new(fn_sig))),
+            RichType::from_fn_sig(rich_fn.signature),
+        );
+
+        // Analyze the function call expression.
         let result = RichExpr::from(
             &mut ctx,
             Expression::FunctionCall(FunctionCall::new_with_default_pos(
@@ -718,7 +738,7 @@ mod tests {
             result,
             RichExpr {
                 kind: RichExprKind::FunctionCall(RichFnCall {
-                    fn_name: "do_thing".to_string(),
+                    fn_var: Var::new_with_default_pos("do_thing"),
                     args: vec![RichExpr {
                         kind: RichExprKind::I64Literal(1),
                         type_id: TypeId::i64(),

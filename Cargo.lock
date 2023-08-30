@@ -88,6 +88,7 @@ dependencies = [
  "lazy_static",
  "llvm-config",
  "llvm-sys",
+ "pluralizer",
  "regex",
  "target-lexicon",
 ]
@@ -295,6 +296,16 @@ dependencies = [
  "redox_syscall",
  "smallvec",
  "windows-targets",
+]
+
+[[package]]
+name = "pluralizer"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35e4616e94b67b8b61846ea69d4bf041a62147d569d16f437689229e2677d38c"
+dependencies = [
+ "lazy_static",
+ "regex",
 ]
 
 [[package]]

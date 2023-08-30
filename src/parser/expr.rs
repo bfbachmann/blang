@@ -1,6 +1,7 @@
-use colored::Colorize;
 use std::collections::VecDeque;
 use std::fmt;
+
+use colored::Colorize;
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
@@ -15,7 +16,7 @@ use crate::parser::op::Operator;
 use crate::parser::program::Program;
 use crate::parser::r#struct::StructInit;
 use crate::parser::string_lit::StringLit;
-use crate::parser::var_ref::VarRef;
+use crate::parser::var::Var;
 
 #[derive(Debug)]
 enum OutputNode {
@@ -49,7 +50,7 @@ impl OutputNode {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
     // Basic expressions.
-    VariableReference(VarRef),
+    Variable(Var),
     BoolLiteral(BoolLit),
     I64Literal(I64Lit),
     StringLiteral(StringLit),
@@ -65,7 +66,7 @@ pub enum Expression {
 impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Expression::VariableReference(s) => write!(f, "{}", s),
+            Expression::Variable(s) => write!(f, "{}", s),
             Expression::BoolLiteral(b) => write!(f, "{}", b),
             Expression::I64Literal(i) => write!(f, "{}", i),
             Expression::StringLiteral(s) => write!(f, "{}", s),
@@ -85,7 +86,7 @@ impl fmt::Display for Expression {
 impl Locatable for Expression {
     fn start_pos(&self) -> &Position {
         match self {
-            Expression::VariableReference(var_ref) => var_ref.start_pos(),
+            Expression::Variable(var) => var.start_pos(),
             Expression::BoolLiteral(bool_lit) => bool_lit.start_pos(),
             Expression::I64Literal(i64_lit) => i64_lit.start_pos(),
             Expression::StringLiteral(string_lit) => string_lit.start_pos(),
@@ -99,7 +100,7 @@ impl Locatable for Expression {
 
     fn end_pos(&self) -> &Position {
         match self {
-            Expression::VariableReference(var_ref) => var_ref.end_pos(),
+            Expression::Variable(var) => var.end_pos(),
             Expression::BoolLiteral(bool_lit) => bool_lit.end_pos(),
             Expression::I64Literal(i64_lit) => i64_lit.end_pos(),
             Expression::StringLiteral(string_lit) => string_lit.end_pos(),
@@ -208,19 +209,32 @@ impl Expression {
                         // reference. Otherwise, it is struct initialization.
                         tokens.push_front(token);
                         if is_cond {
-                            let var_ref = VarRef::from(tokens)?;
-                            Ok(Some(Expression::VariableReference(var_ref)))
+                            let var = Var::from(tokens)?;
+                            Ok(Some(Expression::Variable(var)))
                         } else {
                             let struct_init = StructInit::from(tokens)?;
                             Ok(Some(Expression::StructInit(struct_init)))
                         }
                     }
 
-                    // If the next token is anything else, we'll assume it's a variable value.
+                    // If the next token is anything else, we'll assume it's a variable value,
+                    // variable member access, or a function call on a member.
                     _ => {
                         tokens.push_front(token);
-                        let var_ref = VarRef::from(tokens)?;
-                        Ok(Some(Expression::VariableReference(var_ref)))
+                        let var = Var::from(tokens)?;
+
+                        // If the next token is "(", we'll assume this is a function call on a
+                        // member.
+                        if let Some(Token {
+                            kind: TokenKind::LeftParen,
+                            ..
+                        }) = tokens.front()
+                        {
+                            let call = FunctionCall::from_args(tokens, var)?;
+                            Ok(Some(Expression::FunctionCall(call)))
+                        } else {
+                            Ok(Some(Expression::Variable(var)))
+                        }
                     }
                 }
             }
@@ -595,7 +609,7 @@ mod tests {
     use crate::parser::i64_lit::I64Lit;
     use crate::parser::op::Operator;
     use crate::parser::string_lit::StringLit;
-    use crate::parser::var_ref::VarRef;
+    use crate::parser::var::Var;
 
     fn parse(raw: &str) -> Expression {
         let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
@@ -606,8 +620,9 @@ mod tests {
     fn parse_basic_var_value() {
         assert_eq!(
             parse(r#"my_var"#),
-            Expression::VariableReference(VarRef {
+            Expression::Variable(Var {
                 var_name: "my_var".to_string(),
+                member_access: None,
                 start_pos: Position::new(1, 1),
                 end_pos: Position::new(1, 7),
             })
@@ -659,7 +674,7 @@ mod tests {
         assert_eq!(
             parse("call(3 * 2 - 2, other(!thing, 1 > var % 2))"),
             Expression::FunctionCall(FunctionCall::new(
-                "call",
+                Var::new("call", Position::new(1, 1), Position::new(1, 5)),
                 vec![
                     Expression::BinaryOperation(
                         Box::new(Expression::BinaryOperation(
@@ -683,12 +698,13 @@ mod tests {
                         }))
                     ),
                     Expression::FunctionCall(FunctionCall::new(
-                        "other",
+                        Var::new("other", Position::new(1, 17), Position::new(1, 22)),
                         vec![
                             Expression::UnaryOperation(
                                 Operator::Not,
-                                Box::new(Expression::VariableReference(VarRef {
+                                Box::new(Expression::Variable(Var {
                                     var_name: "thing".to_string(),
+                                    member_access: None,
                                     start_pos: Position::new(1, 24),
                                     end_pos: Position::new(1, 29),
                                 }))
@@ -701,8 +717,9 @@ mod tests {
                                 })),
                                 Operator::GreaterThan,
                                 Box::new(Expression::BinaryOperation(
-                                    Box::new(Expression::VariableReference(VarRef {
+                                    Box::new(Expression::Variable(Var {
                                         var_name: "var".to_string(),
+                                        member_access: None,
                                         start_pos: Position::new(1, 35),
                                         end_pos: Position::new(1, 38),
                                     })),
@@ -786,8 +803,9 @@ mod tests {
                 Box::new(Expression::BinaryOperation(
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::BinaryOperation(
-                            Box::new(Expression::VariableReference(VarRef {
+                            Box::new(Expression::Variable(Var {
                                 var_name: "var".to_string(),
+                                member_access: None,
                                 start_pos: Position::new(1, 2),
                                 end_pos: Position::new(1, 5),
                             })),
@@ -808,7 +826,7 @@ mod tests {
                     Operator::Multiply,
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::FunctionCall(FunctionCall::new(
-                            "call",
+                            Var::new("call", Position::new(2, 2), Position::new(2, 6)),
                             vec![Expression::BoolLiteral(BoolLit {
                                 value: true,
                                 start_pos: Position::new(2, 7),
@@ -947,8 +965,9 @@ mod tests {
             Expression::BinaryOperation(
                 Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
                 Operator::Multiply,
-                Box::new(Expression::VariableReference(VarRef {
+                Box::new(Expression::Variable(Var {
                     var_name: "x".to_string(),
+                    member_access: None,
                     start_pos: Position::new(1, 2),
                     end_pos: Position::new(1, 3),
                 })),
@@ -963,7 +982,7 @@ mod tests {
                 Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
                 Operator::Multiply,
                 Box::new(Expression::FunctionCall(FunctionCall::new(
-                    "f",
+                    Var::new("f", Position::new(1, 2), Position::new(1, 3)),
                     vec![],
                     Position::new(1, 2),
                     Position::new(1, 5)
@@ -1077,8 +1096,9 @@ mod tests {
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
                         Operator::Multiply,
-                        Box::new(Expression::VariableReference(VarRef {
+                        Box::new(Expression::Variable(Var {
                             var_name: "b".to_string(),
+                            member_access: None,
                             start_pos: Position::new(1, 4),
                             end_pos: Position::new(1, 5),
                         })),

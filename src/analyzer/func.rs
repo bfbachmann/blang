@@ -2,12 +2,14 @@ use std::fmt;
 use std::fmt::Formatter;
 
 use colored::Colorize;
+use pluralizer::pluralize;
 
 use crate::analyzer::closure::{check_closure_returns, RichClosure};
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#type::{RichType, TypeId};
+use crate::analyzer::var::RichVar;
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::arg::Argument;
 use crate::parser::func::Function;
@@ -15,6 +17,7 @@ use crate::parser::func_call::FunctionCall;
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::r#type::Type;
 use crate::parser::ret::Ret;
+use crate::parser::var::Var;
 use crate::{format_code, util};
 
 /// Performs semantic analysis on the function signature, ensuring it doesn't match any other
@@ -80,13 +83,13 @@ impl PartialEq for RichFnSig {
 }
 
 impl fmt::Display for RichFnSig {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "fn {}(", self.name)?;
 
-        for arg in self.args.iter() {
+        for (i, arg) in self.args.iter().enumerate() {
             write!(f, "{}", arg)?;
 
-            if arg != self.args.last().unwrap() {
+            if i != self.args.len() - 1 {
                 write!(f, ", ")?;
             }
         }
@@ -114,12 +117,21 @@ impl RichFnSig {
             None => None,
         };
 
-        RichFnSig {
+        let rich_fn_sig = RichFnSig {
             name: sig.name.to_string(),
             args,
             ret_type_id: return_type,
             type_id: TypeId::from(Type::Function(Box::new(sig.clone()))),
-        }
+        };
+
+        // Add the function as a resolved type to the program context. This is done because
+        // functions can be used as variables and therefore need types.
+        ctx.add_resolved_type(
+            TypeId::from(Type::Function(Box::new(sig.clone()))),
+            RichType::from_fn_sig(rich_fn_sig.clone()),
+        );
+
+        rich_fn_sig
     }
 }
 
@@ -174,33 +186,21 @@ impl RichFn {
         };
         ctx.add_fn(rich_fn.clone());
 
-        // Add the function as a resolved type to the program context. This is done because
-        // functions can be used as variables and therefore need types.
-        ctx.add_resolved_type(
-            TypeId::from(Type::Function(Box::new(func.signature))),
-            RichType::from_fn_sig(rich_fn.signature.clone()),
-        );
-
         rich_fn
-    }
-
-    /// Returns this function's type (useful for when the function is used as a variable).
-    pub fn type_id(&self) -> &TypeId {
-        &self.signature.type_id
     }
 }
 
 /// Represents a fully type-resolved and analyzed function call.
 #[derive(Clone, Debug)]
 pub struct RichFnCall {
-    pub fn_name: String,
+    pub fn_var: Var,
     pub args: Vec<RichExpr>,
     pub ret_type_id: Option<TypeId>,
 }
 
 impl fmt::Display for RichFnCall {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}(", self.fn_name)?;
+        write!(f, "{}(", self.fn_var)?;
 
         for (i, arg) in self.args.iter().enumerate() {
             write!(f, "{}", arg)?;
@@ -216,17 +216,20 @@ impl fmt::Display for RichFnCall {
 
 impl PartialEq for RichFnCall {
     fn eq(&self, other: &Self) -> bool {
-        self.fn_name == other.fn_name
+        self.fn_var == other.fn_var
             && util::vectors_are_equal(&self.args, &other.args)
             && util::optionals_are_equal(&self.ret_type_id, &other.ret_type_id)
     }
 }
 
 impl RichFnCall {
+    /// Analyzes the given function call and returns a type-rich version of it.
     pub fn from(ctx: &mut ProgramContext, call: FunctionCall) -> Self {
+        let mut errors = vec![];
+
         // Calls to "main" should not be allowed.
-        if call.fn_name == "main" {
-            ctx.add_err(AnalyzeError::new_with_locatable(
+        if call.has_fn_name("main") {
+            errors.push(AnalyzeError::new_with_locatable(
                 ErrorKind::CallToMain,
                 "cannot call entrypoint main",
                 Box::new(call.clone()),
@@ -234,51 +237,53 @@ impl RichFnCall {
         }
 
         // Extract type information from args.
-        let mut rich_args = vec![];
-        for arg in &call.args {
-            let rich_arg = RichExpr::from(ctx, arg.clone());
-            rich_args.push(rich_arg);
-        }
+        let rich_args: Vec<RichExpr> = call
+            .args
+            .iter()
+            .map(|arg| RichExpr::from(ctx, arg.clone()))
+            .collect();
 
         // Make sure the function exists, either as a fully analyzed function, an external function
         // signature, or a variable.
-        let fn_sig = match ctx.get_extern_fn(call.fn_name.as_str()) {
-            Some(sig) => sig,
-            None => match ctx.get_fn(call.fn_name.as_str()) {
-                Some(decl) => &decl.signature,
-                None => match ctx.get_var_type(call.fn_name.as_str()) {
-                    Some(&RichType::Function(ref func)) => func,
-                    _ => {
-                        // The function is not defined, so add an error and return a zero value.
-                        ctx.add_err(AnalyzeError::new_with_locatable(
-                            ErrorKind::FunctionNotDefined,
-                            format_code!("function {} does not exist", call.fn_name).as_str(),
-                            Box::new(call.clone()),
-                        ));
+        let rich_fn_var = RichVar::from(ctx, &call.fn_var, true);
+        let var_type = ctx.get_resolved_type(rich_fn_var.get_type_id());
+        let fn_sig = match &var_type {
+            Some(RichType::Function(fn_sig)) => fn_sig,
+            Some(other) => {
+                // The value being used here is not a function.
+                errors.push(AnalyzeError::new_with_locatable(
+                    ErrorKind::IncompatibleTypes,
+                    format_code!("type {} is not callable", other).as_str(),
+                    Box::new(call.clone()),
+                ));
 
-                        return RichFnCall {
-                            fn_name: call.fn_name.clone(),
-                            args: vec![],
-                            ret_type_id: Some(TypeId::unknown()),
-                        };
-                    }
-                },
-            },
+                return RichFnCall {
+                    fn_var: call.fn_var.clone(),
+                    args: vec![],
+                    ret_type_id: Some(TypeId::unknown()),
+                };
+            }
+            None => {
+                // This should never happen.
+                panic!(
+                    "failed to find resolved type for {}",
+                    rich_fn_var.get_type_id()
+                )
+            }
         };
 
+        // Clone here to avoid borrow issues.
         let ret_type = fn_sig.ret_type_id.clone();
-        let fn_name = fn_sig.name.clone();
-        let fn_args = fn_sig.args.clone();
 
         // Make sure the right number of arguments were passed.
         if rich_args.len() != fn_sig.args.len() {
-            ctx.add_err(AnalyzeError::new_with_locatable(
+            errors.push(AnalyzeError::new_with_locatable(
                 ErrorKind::WrongNumberOfArgs,
                 format!(
-                    "function {} takes {} arguments, but {} were provided",
-                    format_code!(fn_sig.name),
-                    fn_sig.args.len(),
-                    rich_args.len()
+                    "{} expects {}, but {} provided",
+                    format_code!(fn_sig),
+                    pluralize("argument", fn_sig.args.len() as isize, true),
+                    pluralize("was", rich_args.len() as isize, true)
                 )
                 .as_str(),
                 Box::new(call.clone()),
@@ -288,19 +293,19 @@ impl RichFnCall {
         // Make sure the arguments are of the right types.
         for (i, (passed_type, defined)) in rich_args
             .iter()
-            .map(|a| &a.type_id)
-            .zip(&fn_args)
+            .map(|arg| &arg.type_id)
+            .zip(&fn_sig.args)
             .enumerate()
         {
             if passed_type != &defined.type_id {
                 let original_arg = call.args.get(i).unwrap();
-                ctx.add_err(AnalyzeError::new_with_locatable(
+                errors.push(AnalyzeError::new_with_locatable(
                     ErrorKind::IncompatibleTypes,
                     format_code!(
-                        "cannot use value of type {} as argument {} to function {}",
+                        "cannot use value of type {} as argument {} to {}",
                         &passed_type,
-                        format!("{}: {}", &defined.name, &defined.type_id),
-                        &fn_name,
+                        &defined,
+                        &fn_sig,
                     )
                     .as_str(),
                     Box::new(original_arg.clone()),
@@ -308,8 +313,14 @@ impl RichFnCall {
             }
         }
 
+        // Now that we've finished our analysis, add all the errors to the program context. We're
+        // doing it this way instead of adding errors immediately to avoid borrow issues.
+        for err in errors {
+            ctx.add_err(err);
+        }
+
         RichFnCall {
-            fn_name: call.fn_name,
+            fn_var: call.fn_var.clone(),
             args: rich_args,
             ret_type_id: ret_type,
         }

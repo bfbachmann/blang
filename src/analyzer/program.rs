@@ -468,4 +468,38 @@ mod tests {
             })
         ))
     }
+
+    #[test]
+    fn struct_member_access() {
+        let result = analyze_prog(
+            r#"
+           struct Thing {
+               i: i64,
+               func: fn (i64, i64): bool,
+           }
+           
+           fn eq(a: i64, b: i64): bool {
+               return a == b
+           }
+           
+           fn neq(a: i64, b: i64): bool {
+               return !eq(a, b)
+           }
+           
+           fn main() {
+               let t = Thing{
+                   i: 234,
+                   func: eq,
+               }
+           
+               let is_eq = t.func(t.i, 2)
+               t.func = neq
+               let is_neq = t.func(t.i, 234)
+           
+               let x = t.i
+           }
+        "#,
+        );
+        assert!(result.is_ok());
+    }
 }

@@ -9,9 +9,9 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::RichFnSig;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#struct::RichStructType;
-use crate::format_code;
 use crate::parser::r#type::Type;
 use crate::parser::unresolved::UnresolvedType;
+use crate::{format_code, util};
 
 /// Represents a unique identifier for a type that can be used to look up the corresponding
 /// fully-resolved type. Under the hood, a type ID is really just a parsed type without any
@@ -203,6 +203,30 @@ impl RichType {
     /// Returns true if this type is unknown.
     pub fn is_unknown(&self) -> bool {
         matches!(self, RichType::Unknown(_))
+    }
+
+    /// Returns true if the two types are the same.
+    ///  - For primitive types (i64, bool, etc), they must be exactly the same type.
+    ///  - For struct types, they must be exactly the same type.
+    ///  - For function types, they must have arguments of the same type in the same order and the
+    ///    same return types.
+    pub fn same_as(&self, other: &RichType) -> bool {
+        match (self, other) {
+            (RichType::Function(f1), RichType::Function(f2)) => {
+                if f1.args.len() != f2.args.len() {
+                    return false;
+                }
+
+                for (a, b) in f1.args.iter().zip(f2.args.iter()) {
+                    if a.type_id != b.type_id {
+                        return false;
+                    }
+                }
+
+                util::optionals_are_equal(&f1.ret_type_id, &f2.ret_type_id)
+            }
+            (a, b) => a == b,
+        }
     }
 
     /// If this type contains the given type, returns some vector of types representing the type

@@ -291,7 +291,7 @@ impl RichStructType {
     }
 
     /// Returns the type of the struct field with the given name.
-    fn get_field_type(&self, name: &str) -> Option<&TypeId> {
+    pub fn get_field_type(&self, name: &str) -> Option<&TypeId> {
         for field in &self.fields {
             if field.name.as_str() == name {
                 return Some(&field.type_id);

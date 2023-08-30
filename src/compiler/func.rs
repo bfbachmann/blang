@@ -17,6 +17,7 @@ use crate::analyzer::func::{RichFn, RichFnCall, RichRet};
 use crate::analyzer::r#struct::RichStructInit;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::statement::RichStatement;
+use crate::analyzer::var_assign::RichVarAssign;
 use crate::compiler::context::{
     BranchContext, CompilationContext, FnContext, LoopContext, StatementContext,
 };
@@ -263,9 +264,19 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Assigns the value to the variable with the given name. Panics if no such variable exists.
-    fn assign_var(&mut self, name: &str, val: BasicValueEnum) {
-        let var = self.vars.get(name).unwrap();
-        self.builder.build_store(*var, val);
+    fn assign_var(&mut self, assign: &RichVarAssign) {
+        let val = self.compile_expr(&assign.val);
+        let var = self.vars.get(assign.var.var_name.as_str()).unwrap();
+
+        // If the variable is just named variable without accessing any of its
+        // members, just get the variable and build a simple store instruction.
+        if assign.var.member_access.is_none() {
+            self.builder.build_store(*var, val);
+            return;
+        }
+
+        // At this point we know we have to access variable members.
+        // TODO
     }
 
     /// Gets the value of the variable with the given name. Panics if no such variable (or function)
@@ -351,8 +362,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 // Nothing to do here. Struct types are compiled upon initialization.
             }
             RichStatement::VariableAssignment(assign) => {
-                let val = self.compile_expr(&assign.val);
-                self.assign_var(assign.name.as_str(), val);
+                self.assign_var(assign);
             }
             RichStatement::FunctionDeclaration(func) => {
                 self.compile_fn(func)?;
@@ -564,7 +574,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// Compiles an arbitrary expression.
     fn compile_expr(&self, expr: &RichExpr) -> BasicValueEnum<'ctx> {
         let result = match &expr.kind {
-            RichExprKind::VariableReference(name) => self.get_var(name),
+            // TODO
+            RichExprKind::Variable(var) => self.get_var(var.var_name.as_str()),
 
             RichExprKind::BoolLiteral(b) => self
                 .context
@@ -657,7 +668,11 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// Compiles a function call, returning the result if one exists.
     fn compile_call(&self, call: &RichFnCall) -> Option<BasicValueEnum<'ctx>> {
         // Get the function value from the module.
-        let func = self.module.get_function(call.fn_name.as_str()).unwrap();
+        // TODO
+        let func = self
+            .module
+            .get_function(call.fn_var.var_name.as_str())
+            .unwrap();
         let mut args: Vec<BasicMetadataValueEnum> = vec![];
 
         // Check if we're short one argument. If so, it means the function signature expects
@@ -682,9 +697,10 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
 
         // Compile the function call and return the result.
+        // TODO
         let result = self
             .builder
-            .build_call(func, args.as_slice(), call.fn_name.as_str())
+            .build_call(func, args.as_slice(), call.fn_var.var_name.as_str())
             .try_as_basic_value();
 
         // If there is a return value, return it. Otherwise, check if this function has a defined

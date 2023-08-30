@@ -16,6 +16,7 @@ pub mod func_sig;
 pub mod i64;
 pub mod i64_lit;
 pub mod r#loop;
+pub mod member;
 pub mod op;
 pub mod program;
 pub mod ret;
@@ -25,9 +26,9 @@ pub mod string_lit;
 pub mod r#struct;
 pub mod r#type;
 pub mod unresolved;
+pub mod var;
 pub mod var_assign;
 pub mod var_dec;
-pub mod var_ref;
 
 #[cfg(test)]
 mod tests {
@@ -52,9 +53,10 @@ mod tests {
     use crate::parser::r#type::Type;
     use crate::parser::ret::Ret;
     use crate::parser::statement::Statement;
+    use crate::parser::string::StringType;
     use crate::parser::string_lit::StringLit;
+    use crate::parser::var::Var;
     use crate::parser::var_dec::VariableDeclaration;
-    use crate::parser::var_ref::VarRef;
 
     #[test]
     fn parse_identifier() {
@@ -229,7 +231,7 @@ mod tests {
         assert_eq!(
             result,
             FunctionCall::new(
-                "do_thing",
+                Var::new("do_thing", Position::new(1, 1), Position::new(1, 9)),
                 vec![
                     Expression::StringLiteral(StringLit {
                         value: "one".to_string(),
@@ -350,7 +352,13 @@ mod tests {
                 statements: vec![Statement::FunctionDeclaration(Function::new(
                     FunctionSignature::new(
                         "my_func",
-                        vec![Argument::new("s", Type::string())],
+                        vec![Argument::new(
+                            "s",
+                            Type::String(StringType::new(
+                                Position::new(1, 15),
+                                Position::new(1, 21)
+                            ))
+                        )],
                         None,
                         Position::new(1, 1),
                         Position::new(1, 22)
@@ -359,8 +367,9 @@ mod tests {
                         vec![
                             Statement::Conditional(Conditional::new(vec![Branch::new(
                                 Some(Expression::BinaryOperation(
-                                    Box::new(Expression::VariableReference(VarRef {
+                                    Box::new(Expression::Variable(Var {
                                         var_name: "s".to_string(),
+                                        member_access: None,
                                         start_pos: Position::new(2, 16),
                                         end_pos: Position::new(2, 17),
                                     })),
@@ -385,7 +394,7 @@ mod tests {
                                 Position::new(4, 14),
                             )])),
                             Statement::FunctionCall(FunctionCall::new(
-                                "print",
+                                Var::new("print", Position::new(6, 13), Position::new(6, 18)),
                                 vec![Expression::StringLiteral(StringLit {
                                     value: "not dog".to_string(),
                                     start_pos: Position::new(6, 19),

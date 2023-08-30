@@ -12,13 +12,13 @@ pub type AnalyzeResult<T> = Result<T, AnalyzeError>;
 pub enum ErrorKind {
     IncompatibleTypes,
     ExpectedReturnValue,
-    FunctionNotDefined,
     FunctionAlreadyDefined,
     TypeAlreadyDefined,
     TypeNotDefined,
     VariableNotDefined,
     StructFieldNotDefined,
     StructFieldNotInitialized,
+    MemberNotDefined,
     VariableAlreadyDefined,
     DuplicateStructFieldName,
     WrongNumberOfArgs,
@@ -38,7 +38,6 @@ impl fmt::Display for ErrorKind {
         match self {
             ErrorKind::IncompatibleTypes => write!(f, "incompatible types"),
             ErrorKind::ExpectedReturnValue => write!(f, "expected return value"),
-            ErrorKind::FunctionNotDefined => write!(f, "function not defined"),
             ErrorKind::FunctionAlreadyDefined => write!(f, "function already defined"),
             ErrorKind::TypeAlreadyDefined => write!(f, "type already defined"),
             ErrorKind::TypeNotDefined => write!(f, "type not defined"),
@@ -57,6 +56,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::InfiniteSizedType => write!(f, "infinite-sized type"),
             ErrorKind::MissingTypeName => write!(f, "missing type name"),
             ErrorKind::UnexpectedTypeName => write!(f, "unexpected type name"),
+            ErrorKind::MemberNotDefined => write!(f, "undefined member access"),
         }
     }
 }
