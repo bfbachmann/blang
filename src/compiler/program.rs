@@ -20,7 +20,7 @@ use crate::compiler::func::FnCompiler;
 
 /// Compiles a type-rich and semantically valid program to LLVM IR and/or bitcode.
 pub struct ProgCompiler<'a, 'ctx> {
-    context: &'ctx Context,
+    ctx: &'ctx Context,
     builder: &'a Builder<'ctx>,
     fpm: &'a PassManager<FunctionValue<'ctx>>,
     module: &'a Module<'ctx>,
@@ -71,7 +71,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
 
         // Create the program compiler and compile the program.
         let mut compiler = ProgCompiler {
-            context: &ctx,
+            ctx: &ctx,
             builder: &builder,
             fpm: &fpm,
             module: &module,
@@ -117,7 +117,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
             match statement {
                 RichStatement::FunctionDeclaration(func) => {
                     FnCompiler::compile(
-                        self.context,
+                        self.ctx,
                         self.builder,
                         self.fpm,
                         self.module,
@@ -144,7 +144,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     /// Defines the given function in the current module based on the function signature.
     fn compile_fn_sig(&self, sig: &RichFnSig) {
         // Define the function in the module.
-        let fn_type = convert::to_fn_type(self.context, self.types, sig);
+        let fn_type = convert::to_fn_type(self.ctx, self.types, sig);
         let fn_val = self.module.add_function(sig.name.as_str(), fn_type, None);
 
         // Set arg names and mark arguments as pass-by-value where necessary.
@@ -190,7 +190,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
             let attr_kind = Attribute::get_named_enum_kind_id(attr);
             // Make sure the attribute is properly defined.
             assert_ne!(attr_kind, 0);
-            let attr = self.context.create_type_attribute(attr_kind, param_type);
+            let attr = self.ctx.create_type_attribute(attr_kind, param_type);
             fn_val.add_attribute(AttributeLoc::Param(arg_index), attr);
         }
     }
@@ -198,7 +198,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     /// Defines external functions in the current module.
     fn define_extern_fns(&mut self, extern_fns: Vec<RichFnSig>) {
         for extern_fn_sig in &extern_fns {
-            let fn_type = convert::to_fn_type(self.context, self.types, &extern_fn_sig);
+            let fn_type = convert::to_fn_type(self.ctx, self.types, &extern_fn_sig);
             self.module.add_function(
                 extern_fn_sig.name.as_str(),
                 fn_type,

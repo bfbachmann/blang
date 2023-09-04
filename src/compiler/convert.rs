@@ -168,6 +168,10 @@ pub fn to_metadata_type_enum<'a>(
         struct_type @ RichType::Struct(_) => BasicMetadataTypeEnum::from(
             to_basic_type(ctx, types, struct_type).ptr_type(AddressSpace::default()),
         ),
+        RichType::Function(func) => {
+            let fn_type = types.get(&func.type_id).unwrap();
+            BasicMetadataTypeEnum::from(to_basic_type(ctx, types, fn_type))
+        }
         other => panic!("unsupported type {}", other),
     }
 }

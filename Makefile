@@ -19,7 +19,7 @@ docs:
 fix:
 	cargo fix --allow-dirty --allow-staged
 
-# Build and run .bl source code.
+# Compile Blang source code to LLVM IR.
 .PHONY: %
 %:
 	cargo run -- build -o out.ll --unoptimized $@.bl
@@ -32,4 +32,15 @@ inspect:
 # Creates an executable from the source code in "source.bl".
 .PHONY: exec
 exec: source
-	llc -filetype=obj out.ll -o out.o && clang out.o -o out
+	@llc -filetype=obj out.ll -o out.o -O0 && clang out.o -o out
+
+# Creates an executable from the source code in "source.bl" and executes it.
+.PHONY: run
+run: exec
+	@./out
+
+# Runs end-to-end tests. These tests compile a set of Blang source files and execute the binaries, ensuring all steps
+# succeed.
+.PHONY: e2e
+e2e:
+	@cd src/tests && ./test.sh

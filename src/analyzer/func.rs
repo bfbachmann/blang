@@ -17,7 +17,7 @@ use crate::parser::func_call::FunctionCall;
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::r#type::Type;
 use crate::parser::ret::Ret;
-use crate::parser::var::Var;
+
 use crate::{format_code, util};
 
 /// Performs semantic analysis on the function signature, ensuring it doesn't match any other
@@ -193,7 +193,7 @@ impl RichFn {
 /// Represents a fully type-resolved and analyzed function call.
 #[derive(Clone, Debug)]
 pub struct RichFnCall {
-    pub fn_var: Var,
+    pub fn_var: RichVar,
     pub args: Vec<RichExpr>,
     pub ret_type_id: Option<TypeId>,
 }
@@ -258,7 +258,7 @@ impl RichFnCall {
                 ));
 
                 return RichFnCall {
-                    fn_var: call.fn_var.clone(),
+                    fn_var: rich_fn_var,
                     args: vec![],
                     ret_type_id: Some(TypeId::unknown()),
                 };
@@ -320,7 +320,7 @@ impl RichFnCall {
         }
 
         RichFnCall {
-            fn_var: call.fn_var.clone(),
+            fn_var: rich_fn_var,
             args: rich_args,
             ret_type_id: ret_type,
         }

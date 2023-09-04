@@ -300,6 +300,17 @@ impl RichStructType {
 
         None
     }
+
+    /// Returns the index of the field with the given name.
+    pub fn get_field_index(&self, name: &str) -> Option<usize> {
+        for (i, field) in self.fields.iter().enumerate() {
+            if field.name.as_str() == name {
+                return Some(i);
+            }
+        }
+
+        None
+    }
 }
 
 /// Represents a semantically valid struct initialization.

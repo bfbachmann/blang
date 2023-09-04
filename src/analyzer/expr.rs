@@ -497,7 +497,7 @@ mod tests {
         ctx.add_fn(rich_fn.clone());
         ctx.add_resolved_type(
             TypeId::from(Type::Function(Box::new(fn_sig))),
-            RichType::from_fn_sig(rich_fn.signature),
+            RichType::from_fn_sig(rich_fn.signature.clone()),
         );
 
         // Analyze the function call expression.
@@ -514,7 +514,11 @@ mod tests {
             result,
             RichExpr {
                 kind: RichExprKind::FunctionCall(RichFnCall {
-                    fn_var: fn_call.fn_var,
+                    fn_var: RichVar {
+                        var_name: "do_thing".to_string(),
+                        var_type_id: rich_fn.signature.type_id,
+                        member_access: None,
+                    },
                     args: vec![RichExpr {
                         kind: RichExprKind::BoolLiteral(true),
                         type_id: TypeId::bool()
@@ -640,7 +644,7 @@ mod tests {
         ctx.add_fn(rich_fn.clone());
         ctx.add_resolved_type(
             TypeId::from(Type::Function(Box::new(fn_sig))),
-            RichType::from_fn_sig(rich_fn.signature),
+            RichType::from_fn_sig(rich_fn.signature.clone()),
         );
 
         // Analyze the function call expression.
@@ -656,7 +660,11 @@ mod tests {
             result,
             RichExpr {
                 kind: RichExprKind::FunctionCall(RichFnCall {
-                    fn_var: Var::new_with_default_pos("do_thing"),
+                    fn_var: RichVar {
+                        var_name: "do_thing".to_string(),
+                        var_type_id: rich_fn.signature.type_id.clone(),
+                        member_access: None,
+                    },
                     args: vec![RichExpr {
                         kind: RichExprKind::BoolLiteral(true),
                         type_id: TypeId::bool(),
@@ -669,7 +677,14 @@ mod tests {
 
         match result.kind {
             RichExprKind::FunctionCall(call) => {
-                assert_eq!(call.fn_var, Var::new_with_default_pos("do_thing"));
+                assert_eq!(
+                    call.fn_var,
+                    RichVar {
+                        var_name: "do_thing".to_string(),
+                        var_type_id: rich_fn.signature.type_id,
+                        member_access: None,
+                    }
+                );
                 assert_eq!(call.ret_type_id, Some(TypeId::bool()));
                 assert_eq!(call.args.len(), 1);
                 assert_eq!(
@@ -722,7 +737,7 @@ mod tests {
         ctx.add_fn(rich_fn.clone());
         ctx.add_resolved_type(
             TypeId::from(Type::Function(Box::new(fn_sig))),
-            RichType::from_fn_sig(rich_fn.signature),
+            RichType::from_fn_sig(rich_fn.signature.clone()),
         );
 
         // Analyze the function call expression.
@@ -738,7 +753,11 @@ mod tests {
             result,
             RichExpr {
                 kind: RichExprKind::FunctionCall(RichFnCall {
-                    fn_var: Var::new_with_default_pos("do_thing"),
+                    fn_var: RichVar {
+                        var_name: "do_thing".to_string(),
+                        var_type_id: rich_fn.signature.type_id,
+                        member_access: None,
+                    },
                     args: vec![RichExpr {
                         kind: RichExprKind::I64Literal(1),
                         type_id: TypeId::i64(),

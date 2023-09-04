@@ -7,7 +7,7 @@ use crate::analyzer::closure::RichClosure;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
-use crate::analyzer::r#type::TypeId;
+use crate::analyzer::r#type::{RichType, TypeId};
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::branch::Branch;
 use crate::parser::cond::Conditional;
@@ -77,11 +77,16 @@ impl RichCond {
             let rich_expr = match &branch.condition {
                 Some(branch_cond) => {
                     let rich_expr = RichExpr::from(ctx, branch_cond.clone());
-                    if rich_expr.type_id != TypeId::bool() {
+                    let rich_expr_type = ctx.get_resolved_type(&rich_expr.type_id).unwrap();
+
+                    // Skip the type check if the expression type is unknown (meaning it failed
+                    // analysis).
+                    if !rich_expr_type.is_unknown() && rich_expr.type_id != TypeId::bool() {
                         ctx.add_err(AnalyzeError::new_with_locatable(
                             ErrorKind::IncompatibleTypes,
                             format_code!(
-                                "expected branch condition to have type bool, but found type {}",
+                                "expected branch condition to have type {}, but found type {}",
+                                RichType::Bool,
                                 &rich_expr.type_id,
                             )
                             .as_str(),

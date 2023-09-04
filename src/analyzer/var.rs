@@ -193,7 +193,7 @@ impl RichMemberAccess {
 
         ctx.add_err(AnalyzeError::new_with_locatable(
             ErrorKind::MemberNotDefined,
-            format_code!("here type {} has no member {}", typ, member_name).as_str(),
+            format_code!("type {} has no member {}", typ, member_name).as_str(),
             Box::new(member_access.clone()),
         ));
 
