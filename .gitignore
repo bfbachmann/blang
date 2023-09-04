@@ -10,4 +10,5 @@ out
 *.bc
 *.s
 .DS_Store
-tests/output
+tests/bin
+bin

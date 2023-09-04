@@ -98,6 +98,15 @@ impl RichVar {
         }
     }
 
+    /// Returns the name of the lowest level member on this variable access, or just the variable
+    /// name if there is no member access.
+    pub fn get_last_member_name(&self) -> String {
+        match &self.member_access {
+            Some(access) => access.get_last_member_name(),
+            None => self.var_name.to_string(),
+        }
+    }
+
     /// Attempts to find the type ID of a variable given the variable name.
     fn get_type_id_by_var_name(
         ctx: &ProgramContext,
@@ -210,6 +219,15 @@ impl RichMemberAccess {
         match &self.submember {
             Some(sub) => sub.get_type_id(),
             None => &self.member_type_id,
+        }
+    }
+
+    /// Returns the name of the lowest level member on this member access, or just the member
+    /// name if there is no sub-member access.
+    pub fn get_last_member_name(&self) -> String {
+        match &self.submember {
+            Some(sub) => sub.get_last_member_name(),
+            None => self.member_name.to_string(),
         }
     }
 }

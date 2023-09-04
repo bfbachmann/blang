@@ -9,7 +9,7 @@ CC=${CC:-clang}
 LLC=${LLC:-llc}
 
 # Create a directory to store compiler output files.
-output_dir="output"
+output_dir="bin"
 mkdir -p $output_dir
 
 # Iterate through .bl files in tests/cases, compiling, linking, and executing each one.

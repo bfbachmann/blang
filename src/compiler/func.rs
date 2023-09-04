@@ -228,7 +228,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             fn_val.get_params()
         };
 
-        for (arg_val, arg) in ll_fn_params.into_iter().zip(func.signature.args.iter()) {
+        for (ll_arg_val, arg) in ll_fn_params.into_iter().zip(func.signature.args.iter()) {
             let arg_type = self.types.get(&arg.type_id).unwrap();
 
             // Structs are passed as pointers and don't need to be copied to the callee stack
@@ -241,10 +241,10 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 // name in this function.
                 assert!(self
                     .vars
-                    .insert(arg.name.to_string(), arg_val.into_pointer_value())
+                    .insert(arg.name.to_string(), ll_arg_val.into_pointer_value())
                     .is_none());
             } else {
-                self.create_var(arg.name.as_str(), arg_type, arg_val);
+                self.create_var(arg.name.as_str(), arg_type, ll_arg_val);
             }
         }
 
@@ -283,73 +283,154 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
     }
 
-    /// Creates and initializes a new variable with the given name, type, and initial value.
-    /// Panics if a variable by the same name already exists.
-    fn create_var(&mut self, name: &str, typ: &RichType, val: BasicValueEnum<'ctx>) {
-        let ptr = self.create_entry_alloc(name, typ, val);
-        self.builder.build_store(ptr, val);
-        assert!(self.vars.insert(name.to_string(), ptr).is_none());
+    /// Allocates space on the stack for a new variable of type `typ` and writes `ll_val` to the
+    /// allocated memory. Also stores a pointer to the allocated memory in `self.vars` with `name`.
+    fn create_var(&mut self, name: &str, typ: &RichType, ll_val: BasicValueEnum<'ctx>) {
+        let ll_dst_ptr = self.create_entry_alloc(name, typ, ll_val);
+        self.copy_value(ll_val, ll_dst_ptr, typ);
+        assert!(self.vars.insert(name.to_string(), ll_dst_ptr).is_none());
     }
 
     /// Assigns the value to the variable with the given name. Panics if no such variable exists.
     fn assign_var(&mut self, assign: &RichVarAssign) {
         // Compile the expression value being assigned.
-        let val = self.compile_expr(&assign.val);
+        let ll_expr_val = self.compile_expr(&assign.val);
 
         // Get a pointer to the target variable (or variable member).
-        // TODO
-        let var = self.vars.get(assign.var.var_name.as_str()).unwrap();
+        let ll_var_ptr = self.get_var_ptr(&assign.var);
 
-        // If the variable is just named variable without accessing any of its
-        // members, just get the variable and build a simple store instruction.
-        if assign.var.member_access.is_none() {
-            self.builder.build_store(*var, val);
-            return;
+        // Most primitive values can be assigned (i.e. copied) with a store instruction. Composite
+        // values like structs need to be copied differently.
+        let var_type = self.types.get(&assign.val.type_id).unwrap();
+        self.copy_value(ll_expr_val, ll_var_ptr, var_type);
+    }
+
+    /// Copies the value `ll_src_val` of type `typ` to the address pointed to by `ll_dst_ptr`.
+    fn copy_value(
+        &mut self,
+        ll_src_val: BasicValueEnum<'ctx>,
+        ll_dst_ptr: PointerValue<'ctx>,
+        typ: &RichType,
+    ) {
+        match typ {
+            RichType::Struct(struct_type) => {
+                let ll_src_val_type = convert::to_basic_type(self.ctx, self.types, typ);
+
+                // We need to copy the struct fields recursively one by one.
+                for field in &struct_type.fields {
+                    let field_type = self.types.get(&field.type_id).unwrap();
+                    let ll_field_type = convert::to_basic_type(self.ctx, self.types, field_type);
+                    let ll_field_index = struct_type.get_field_index(&field.name).unwrap() as u32;
+
+                    // Get a pointer to the source struct field.
+                    let ll_src_field_ptr = self
+                        .builder
+                        .build_struct_gep(
+                            ll_src_val_type,
+                            ll_src_val.into_pointer_value(),
+                            ll_field_index,
+                            format!("{}.{}_src_ptr", struct_type.name, field.name).as_str(),
+                        )
+                        .unwrap();
+
+                    // Get a pointer to the destination struct field.
+                    let ll_dst_field_ptr = self
+                        .builder
+                        .build_struct_gep(
+                            ll_src_val_type,
+                            ll_dst_ptr,
+                            ll_field_index,
+                            format!("{}.{}_dst_ptr", struct_type.name, field.name).as_str(),
+                        )
+                        .unwrap();
+
+                    // Copy the field value.
+                    match field_type {
+                        RichType::Struct(_) => {
+                            self.copy_value(
+                                ll_src_field_ptr.as_basic_value_enum(),
+                                ll_dst_field_ptr,
+                                typ,
+                            );
+                        }
+
+                        _ => {
+                            // Load the field value from the pointer.
+                            let ll_src_field_val = self.builder.build_load(
+                                ll_field_type,
+                                ll_src_field_ptr,
+                                field.name.as_str(),
+                            );
+
+                            // Copy the value to the target field pointer.
+                            self.copy_value(ll_src_field_val, ll_dst_field_ptr, field_type)
+                        }
+                    }
+                }
+            }
+
+            _ => {
+                // Store the expression value to the pointer address.
+                self.builder.build_store(ll_dst_ptr, ll_src_val);
+            }
         }
+    }
 
-        // At this point we know we have to access variable members.
-        // TODO
+    /// Gets a pointer to the given variable or member.
+    fn get_var_ptr(&self, var: &RichVar) -> PointerValue<'ctx> {
+        let ll_var_ptr = self.get_var_ptr_by_name(var.var_name.as_str());
+        if let Some(access) = &var.member_access {
+            self.get_var_member_ptr(ll_var_ptr, &var.var_type_id, access)
+        } else {
+            ll_var_ptr
+        }
     }
 
     /// Gets a variable (or member) and returns its value.
-    fn get_var(&self, var: &RichVar) -> BasicValueEnum<'ctx> {
-        let val = self.get_var_by_name(var.var_name.as_str());
-        if let Some(access) = &var.member_access {
-            self.get_var_member(val.into_pointer_value(), &var.var_type_id, access)
-        } else {
-            val
+    fn get_var_value(&self, var: &RichVar) -> BasicValueEnum<'ctx> {
+        // Get a pointer to the variable or member.
+        let ll_var_ptr = self.get_var_ptr(var);
+
+        // Load the value from the pointer (unless its a composite struct that is passed with
+        // pointers (like structs).
+        let var_type = self.types.get(&var.get_type_id()).unwrap();
+        match var_type {
+            RichType::Struct(_) => ll_var_ptr.as_basic_value_enum(),
+            _ => {
+                let ll_var_type = convert::to_basic_type(self.ctx, self.types, var_type);
+                self.builder.build_load(
+                    ll_var_type,
+                    ll_var_ptr,
+                    var.get_last_member_name().as_str(),
+                )
+            }
         }
     }
 
-    /// Gets a variable member's value by recursively accessing sub-members.
-    fn get_var_member(
+    /// Gets a pointer to a variable member by recursively accessing sub-members.
+    /// `ll_ptr` is the pointer to the value on which the member-access is taking place.
+    /// `var_type_id` is the type ID of the value pointed to by `ll_ptr`.
+    /// `access` is the member (and sub-members) being accessed.
+    fn get_var_member_ptr(
         &self,
-        val: PointerValue<'ctx>,
+        ll_ptr: PointerValue<'ctx>,
         var_type_id: &TypeId,
         access: &RichMemberAccess,
-    ) -> BasicValueEnum<'ctx> {
+    ) -> PointerValue<'ctx> {
         let member_name = access.member_name.as_str();
         let var_type = self.types.get(var_type_id).unwrap();
 
-        // Try access the specified member value.
-        let ll_member_val = match var_type {
+        let ll_member_ptr = match var_type {
             RichType::Struct(struct_type) => {
                 // Get a pointer to the struct field at the computed index.
-                let ll_member_ptr = self
-                    .builder
+                self.builder
                     .build_struct_gep(
                         convert::to_struct_type(self.ctx, self.types, struct_type),
-                        val,
+                        ll_ptr,
                         struct_type.get_field_index(member_name).unwrap() as u32,
-                        member_name,
+                        format!("{}_ptr", member_name).as_str(),
                     )
-                    .unwrap();
-
-                // Load the value pointed to by the member pointer.
-                let member_type = self.types.get(&access.member_type_id).unwrap();
-                let ll_member_type = convert::to_basic_type(self.ctx, self.types, member_type);
-                self.builder
-                    .build_load(ll_member_type, ll_member_ptr, member_name)
+                    .unwrap()
             }
             other => {
                 panic!("access to non-struct type {}", other)
@@ -358,37 +439,35 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
         // Recursively access sub-members, if necessary.
         match &access.submember {
-            Some(sub) => self.get_var_member(
-                ll_member_val.into_pointer_value(),
-                &access.member_type_id,
-                sub.as_ref(),
-            ),
-            None => ll_member_val,
+            Some(sub) => {
+                self.get_var_member_ptr(ll_member_ptr, &access.member_type_id, sub.as_ref())
+            }
+            None => ll_member_ptr,
         }
     }
 
-    /// Gets the value of the variable with the given name. Panics if no such variable (or function)
-    /// exists.
-    fn get_var_by_name(&self, name: &str) -> BasicValueEnum<'ctx> {
+    /// Gets a pointer to a variable or function given its name.
+    fn get_var_ptr_by_name(&self, name: &str) -> PointerValue<'ctx> {
         // Try look up the symbol as a variable.
-        if let Some(var) = self.vars.get(name) {
-            return self.builder.build_load(var.get_type(), *var, name);
+        if let Some(ll_var_ptr) = self.vars.get(name) {
+            return *ll_var_ptr;
         }
 
         // The symbol was not a variable, so try look it up as a function.
         if let Some(func) = self.module.get_function(name) {
-            return func.as_global_value().as_basic_value_enum();
+            return func.as_global_value().as_pointer_value();
         }
 
         panic!("failed to resolve variable {}", name);
     }
 
-    /// Creates a new stack allocation instruction in the entry block of the current function.
+    /// Creates a new stack allocation instruction in the entry block of the current function and
+    /// returns a pointer to the allocated memory.
     fn create_entry_alloc(
         &self,
         name: &str,
         typ: &RichType,
-        val: BasicValueEnum<'ctx>,
+        ll_val: BasicValueEnum<'ctx>,
     ) -> PointerValue<'ctx> {
         let entry = self.fn_value.unwrap().get_first_basic_block().unwrap();
 
@@ -398,18 +477,22 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             None => self.builder.position_at_end(entry),
         }
 
-        let val = if *typ == RichType::String {
-            self.builder.build_alloca(val.get_type(), name)
-        } else {
+        let var_name = format!("{}_ptr", name);
+        let ll_ptr = if *typ == RichType::String {
             self.builder
-                .build_alloca(convert::to_basic_type(self.ctx, self.types, typ), name)
+                .build_alloca(ll_val.get_type(), var_name.as_str())
+        } else {
+            self.builder.build_alloca(
+                convert::to_basic_type(self.ctx, self.types, typ),
+                var_name.as_str(),
+            )
         };
 
         // Make sure we continue from where we left off as our builder position may have changed
         // in this function.
         self.builder.position_at_end(self.cur_block.unwrap());
 
-        val
+        ll_ptr
     }
 
     /// Compiles all statements in the closure.
@@ -440,11 +523,11 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         match statement {
             RichStatement::VariableDeclaration(decl) => {
                 // Get the value of the expression being assigned to the variable.
-                let val = self.compile_expr(&decl.val);
+                let ll_expr_val = self.compile_expr(&decl.val);
 
                 // Create and initialize the variable.
                 let var_type = self.types.get(&decl.typ).unwrap();
-                self.create_var(decl.name.as_str(), var_type, val);
+                self.create_var(decl.name.as_str(), var_type, ll_expr_val);
             }
             RichStatement::StructTypeDeclaration(_) => {
                 // Nothing to do here. Struct types are compiled upon initialization.
@@ -674,7 +757,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// Compiles an arbitrary expression.
     fn compile_expr(&mut self, expr: &RichExpr) -> BasicValueEnum<'ctx> {
         let result = match &expr.kind {
-            RichExprKind::Variable(var) => self.get_var(var),
+            RichExprKind::Variable(var) => self.get_var_value(var),
 
             RichExprKind::BoolLiteral(b) => self
                 .ctx
@@ -740,34 +823,39 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// Compiles a struct initialization.
     fn compile_struct_init(&mut self, struct_init: &RichStructInit) -> BasicValueEnum<'ctx> {
-        // Assemble the LLVM struct type and initialize with with zero values.
-        let struct_type = convert::to_struct_type(self.ctx, self.types, &struct_init.typ);
-        let struct_val = struct_type.const_zero();
+        // Assemble the LLVM struct type.
+        let ll_struct_type = convert::to_struct_type(self.ctx, self.types, &struct_init.typ);
 
         // Allocate space for the struct on the stack and store the zero-valued struct there.
-        let ptr = self.builder.build_alloca(struct_type, "struct_init");
-        self.builder
-            .build_store(ptr, struct_val.as_basic_value_enum());
+        let ll_struct_ptr = self.builder.build_alloca(
+            ll_struct_type,
+            format!("{}.init_ptr", struct_init.typ.name).as_str(),
+        );
 
         // Assign values to initialized struct fields.
         for (i, field) in struct_init.typ.fields.iter().enumerate() {
             if let Some(field_val) = struct_init.field_values.get(field.name.as_str()) {
                 let ll_field_ptr = self
                     .builder
-                    .build_struct_gep(struct_type, ptr, i as u32, field.name.as_str())
+                    .build_struct_gep(
+                        ll_struct_type,
+                        ll_struct_ptr,
+                        i as u32,
+                        format!("{}.{}_ptr", struct_init.typ.name, field.name).as_str(),
+                    )
                     .unwrap();
                 self.builder
                     .build_store(ll_field_ptr, self.compile_expr(field_val));
             }
         }
 
-        ptr.as_basic_value_enum()
+        ll_struct_ptr.as_basic_value_enum()
     }
 
     /// Compiles a function call, returning the result if one exists.
     fn compile_call(&mut self, call: &RichFnCall) -> Option<BasicValueEnum<'ctx>> {
         // Get the function value from the module.
-        // TODO
+        // TODO: get functions from variables.
         let ll_fn = self
             .module
             .get_function(call.fn_var.var_name.as_str())
@@ -792,14 +880,13 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             // Compile the argument expression.
             let ll_arg_val = self.compile_expr(arg);
 
-            // If the argument is a struct, we need to create a copy of it an pass a pointer to the
+            // If the argument is a struct, we need to create a copy of it and pass a pointer to the
             // copied data instead of the original. This way, we're still passing the struct "by
             // value" (the callee can modify the data being pointed to safely, because it's a copy).
             let arg_type = self.types.get(&arg.type_id).unwrap();
             if let RichType::Struct(_) = arg_type {
-                // TODO: use proper arg name
                 let ll_copy_ptr = self.create_entry_alloc("copy_arg", arg_type, ll_arg_val);
-                self.builder.build_store(ll_copy_ptr, ll_arg_val);
+                self.copy_value(ll_arg_val, ll_copy_ptr, arg_type);
                 args.push(ll_copy_ptr.as_basic_value_enum().into());
             } else {
                 args.push(ll_arg_val.into());
@@ -807,10 +894,13 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
 
         // Compile the function call and return the result.
-        // TODO: set return value name from member name, where applicable
         let result = self
             .builder
-            .build_call(ll_fn, args.as_slice(), call.fn_var.var_name.as_str())
+            .build_call(
+                ll_fn,
+                args.as_slice(),
+                call.fn_var.get_last_member_name().as_str(),
+            )
             .try_as_basic_value();
 
         // If there is a return value, return it. Otherwise, check if this function has a defined
@@ -843,15 +933,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
         // If the value is a pointer (i.e. a variable reference), we need to get the bool
         // value it points to.
-        let operand = if expr_val.is_pointer_value() {
-            self.builder.build_ptr_to_int(
-                expr_val.into_pointer_value(),
-                self.ctx.bool_type(),
-                "negated_bool",
-            )
-        } else {
-            expr_val.into_int_value()
-        };
+        let operand = self.get_bool(expr_val);
 
         // Build the logical not as the result of the int compare == 0.
         let result = self.builder.build_int_compare(
