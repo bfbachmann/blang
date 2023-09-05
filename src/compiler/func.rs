@@ -943,7 +943,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             IntPredicate::EQ,
             operand,
             self.ctx.bool_type().const_int(0, false),
-            "is_zero",
+            ("not_".to_string() + operand.get_name().to_str().unwrap()).as_str(),
         );
 
         result

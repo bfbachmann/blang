@@ -151,11 +151,8 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
         if fn_val.count_params() == sig.args.len() as u32 {
             // The compiled function arguments match those of the original function signature, so
             // just assign arg names normally.
-            for (i, (arg_val, arg)) in fn_val.get_param_iter().zip(sig.args.iter()).enumerate() {
+            for (arg_val, arg) in fn_val.get_param_iter().zip(sig.args.iter()) {
                 arg_val.set_name(arg.name.as_str());
-                if arg_val.is_pointer_value() {
-                    self.add_fn_arg_attrs(fn_val, i as u32, vec!["byval"]);
-                }
             }
         } else {
             // The compiled function arguments do not match those of the original function
@@ -169,14 +166,10 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
             // pass the return value.
             self.add_fn_arg_attrs(fn_val, 0, vec!["sret"]);
 
-            // Name the remaining function arguments normally and mark them as pass-by-value where
-            // necessary.
+            // Name the remaining function arguments normally.
             for i in 1..fn_val.count_params() {
                 let arg_val = fn_val.get_nth_param(i).unwrap();
                 arg_val.set_name(sig.args.get((i - 1) as usize).unwrap().name.as_str());
-                if arg_val.is_pointer_value() {
-                    self.add_fn_arg_attrs(fn_val, i, vec!["byval"]);
-                }
             }
         }
     }
