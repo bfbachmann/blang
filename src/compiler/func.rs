@@ -801,8 +801,6 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
             RichExprKind::FunctionCall(call) => self.compile_call(call).unwrap(),
 
-            // TODO
-            // RichExprKind::AnonFunction(Box<RichFn>),
             RichExprKind::UnaryOperation(op, expr) => self.compile_unary_op(op, expr),
 
             RichExprKind::BinaryOperation(left_expr, op, right_expr) => {
@@ -811,8 +809,13 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
             RichExprKind::StructInit(struct_init) => self.compile_struct_init(struct_init),
 
-            other => {
-                panic!("{other} not implemented");
+            // TODO
+            RichExprKind::AnonFunction(anon_fn) => {
+                panic!("{anon_fn} not implemented");
+            }
+
+            RichExprKind::Unknown => {
+                panic!("encountered unknown expression");
             }
         };
 
