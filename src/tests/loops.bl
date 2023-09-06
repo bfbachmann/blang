@@ -4,7 +4,7 @@ fn assert(b: bool, exit_code: i64) {
     }
 }
 
-// Checks that there are 25 primes between 1 and 100 (inclusive).
+// Checks that we can use loops to calculate 25 primes between 1 and 100 (inclusive).
 fn main() {
     let n = 0
     let prime_count = 0

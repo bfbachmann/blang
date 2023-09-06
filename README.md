@@ -30,6 +30,8 @@ fn main() {
 }
 ```
 
+For more examples, see [src/tests](src/tests).
+
 ## Useful commands
 
 ```bash
