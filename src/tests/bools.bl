@@ -1,0 +1,19 @@
+fn assert(b: bool, exit_code: i64) {
+    if !b {
+        exit(exit_code)
+    }
+}
+
+fn main() {
+    assert(true, 1)
+    assert(!false, 2)
+    assert(true == true, 3)
+    assert(true != false, 4)
+    assert(false != true, 5)
+    assert(false == false, 6)
+    assert(!false == true, 7)
+    assert(false == !true, 8)
+    assert(1 + 1 == 2, 9)
+
+    exit(0)
+}

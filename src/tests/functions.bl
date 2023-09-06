@@ -1,0 +1,34 @@
+fn cumulative_sum(i: i64): i64 {
+    let result = 0
+    loop {
+        if i == 0 {
+            return result
+        }
+
+        result = result + i
+        i = i - 1
+    }
+}
+
+fn fib(n: i64): i64 {
+    if n <= 2 {
+        return 1
+    }
+    return fib(n-1) + fib(n-2)
+}
+
+fn assert(b: bool, exit_code: i64) {
+    if !b {
+        exit(exit_code)
+    }
+}
+
+fn main() {
+    let cumulative_sum_50 = cumulative_sum(50)
+    assert(cumulative_sum_50 == 1275, 1)
+
+    let fib_10 = fib(10)
+    assert(fib_10 == 55, 2)
+
+    exit(0)
+}

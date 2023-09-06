@@ -1,0 +1,123 @@
+fn assert(b: bool, err_code: i64) {
+    if !b {
+        exit(err_code)
+    }
+}
+
+struct Nested {
+    int_val: i64,
+    bool_val: bool,
+}
+
+struct Test {
+    int_val1: i64,
+    bool_val: bool,
+    int_val2: i64,
+    nested: Nested,
+}
+
+fn main() {
+    // Check that struct initialization works.
+    let t = Test{
+        int_val1: 432,
+        bool_val: true,
+        int_val2: 543,
+        nested: Nested{
+            int_val: -75,
+            bool_val: false,
+        }
+    }
+
+    assert(t.int_val1 == 432, 1)
+    assert(t.bool_val, 2)
+    assert(t.int_val2 == 543, 3)
+    assert(t.nested.int_val == -75, 4)
+    assert(t.nested.bool_val == false, 5)
+
+    // Check that struct field values can be changed.
+    {
+        t.int_val1 = 9
+        t.bool_val = false
+        t.int_val2 = 5
+        t.nested = Nested{
+            int_val: -45,
+            bool_val: true,
+        }
+
+        assert(t.int_val1 == 9, 6)
+        assert(!t.bool_val, 7)
+        assert(t.int_val2 == 5, 8)
+        assert(t.nested.int_val == -45, 9)
+        assert(t.nested.bool_val == true, 10)
+    }
+
+    // Check that structs can be passed by value.
+    {
+        take_struct(t)
+        assert(t.int_val1 == 9, 21)
+        assert(!t.bool_val, 22)
+        assert(t.int_val2 == 5, 23)
+        assert(t.nested.int_val == -45, 24)
+        assert(t.nested.bool_val == true, 25)
+    }
+
+    // Check that struct assignment works.
+    {
+        let t2 = t;
+
+        assert(t.int_val1 == 9, 26)
+        assert(!t.bool_val, 27)
+        assert(t.int_val2 == 5, 28)
+        assert(t.nested.int_val == -45, 29)
+        assert(t.nested.bool_val == true, 30)
+
+        assert(t2.int_val1 == 9, 31)
+        assert(!t2.bool_val, 32)
+        assert(t2.int_val2 == 5, 33)
+        assert(t.nested.int_val == -45, 34)
+        assert(t.nested.bool_val == true, 35)
+
+        // This should not modify `t`.
+        t2.int_val1 = -6
+        t2.bool_val = false
+        t2.int_val2 = -18
+        t2.nested.int_val = 555
+        t2.nested.bool_val = false
+
+        assert(t.int_val1 == 9, 36)
+        assert(!t.bool_val, 37)
+        assert(t.int_val2 == 5, 38)
+        assert(t.nested.int_val == -45, 39)
+        assert(t.nested.bool_val == true, 40)
+
+        assert(t2.int_val1 == -6, 41)
+        assert(!t2.bool_val, 42)
+        assert(t2.int_val2 == -18, 43)
+        assert(t2.nested.int_val == 555, 44)
+        assert(t2.nested.bool_val == false, 45)
+    }
+
+    exit(0)
+}
+
+fn take_struct(t: Test) {
+    // Make sure the struct field values are correct.
+    assert(t.int_val1 == 9, 11)
+    assert(!t.bool_val, 12)
+    assert(t.int_val2 == 5, 13)
+    assert(t.nested.int_val == -45, 14)
+    assert(t.nested.bool_val == true, 15)
+
+    // This should not modify the caller's struct.
+    t.int_val1 = 845
+    t.bool_val = true
+    t.int_val2 = 57
+    t.nested.int_val = 123
+    t.nested.bool_val = false
+
+    assert(t.int_val1 == 845, 16)
+    assert(t.bool_val, 17)
+    assert(t.int_val2 == 57, 18)
+    assert(t.nested.int_val == 123, 19)
+    assert(t.nested.bool_val == false, 20)
+}

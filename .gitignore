@@ -1,6 +1,6 @@
 .idea
 /target
-*.bl
+source.bl
 *.profraw
 *.o
 *.out
