@@ -350,7 +350,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                             self.copy_value(
                                 ll_src_field_ptr.as_basic_value_enum(),
                                 ll_dst_field_ptr,
-                                typ,
+                                field_type,
                             );
                         }
 
@@ -838,6 +838,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // Assign values to initialized struct fields.
         for (i, field) in struct_init.typ.fields.iter().enumerate() {
             if let Some(field_val) = struct_init.field_values.get(field.name.as_str()) {
+                // Get a pointer to the struct field we're initializing.
                 let ll_field_ptr = self
                     .builder
                     .build_struct_gep(
@@ -847,8 +848,11 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                         format!("{}.{}_ptr", struct_init.typ.name, field.name).as_str(),
                     )
                     .unwrap();
-                self.builder
-                    .build_store(ll_field_ptr, self.compile_expr(field_val));
+
+                // Compile the expression and copy its value to the struct field pointer.
+                let ll_field_val = self.compile_expr(field_val);
+                let field_type = self.types.get(&field.type_id).unwrap();
+                self.copy_value(ll_field_val, ll_field_ptr, field_type);
             }
         }
 
