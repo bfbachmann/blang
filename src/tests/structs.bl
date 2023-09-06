@@ -16,6 +16,7 @@ struct Test {
     nested: Nested,
 }
 
+// Checks that all struct-related operations work properly.
 fn main() {
     // Check that struct initialization works.
     let t = Test{

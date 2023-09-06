@@ -23,6 +23,8 @@ fn assert(b: bool, exit_code: i64) {
     }
 }
 
+// Checks that Fibonacci of 50 and cumulative sum of 50 are calculated 
+// correctly.
 fn main() {
     let cumulative_sum_50 = cumulative_sum(50)
     assert(cumulative_sum_50 == 1275, 1)
