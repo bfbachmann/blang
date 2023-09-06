@@ -69,9 +69,16 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// Creates a new basic block for this function and returns it.
     fn append_block(&mut self, name: &str) -> BasicBlock<'ctx> {
-        let block = self.ctx.append_basic_block(self.fn_value.unwrap(), name);
+        self.ctx.append_basic_block(self.fn_value.unwrap(), name)
+    }
+
+    /// Positions at the end of `block`. Instructions created after this call will be placed at the
+    /// end of `block`. Also sets `self.cur_block` to `block`. Returns the previous block.
+    fn set_current_block(&mut self, block: BasicBlock<'ctx>) -> Option<BasicBlock<'ctx>> {
+        let prev = self.cur_block;
         self.cur_block = Some(block);
-        block
+        self.builder.position_at_end(block);
+        prev
     }
 
     /// Creates a new statement context and pushes it onto the stack.
@@ -211,10 +218,9 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             .unwrap();
         self.fn_value = Some(fn_val);
 
-        let entry = self.append_block("entry");
-
         // Start building from the beginning of the entry block.
-        self.builder.position_at_end(entry);
+        let entry = self.append_block("entry");
+        self.set_current_block(entry);
 
         // Define function arguments as variables on the stack so they can be referenced in blocks.
         // Skip the first function argument if it is a special argument that holds the pointer to
@@ -464,7 +470,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// Creates a new stack allocation instruction in the entry block of the current function and
     /// returns a pointer to the allocated memory.
     fn create_entry_alloc(
-        &self,
+        &mut self,
         name: &str,
         typ: &RichType,
         ll_val: BasicValueEnum<'ctx>,
@@ -472,10 +478,13 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         let entry = self.fn_value.unwrap().get_first_basic_block().unwrap();
 
         // Switch to the beginning of the entry block if we're not already there.
-        match entry.get_first_instruction() {
-            Some(first_instr) => self.builder.position_before(&first_instr),
-            None => self.builder.position_at_end(entry),
-        }
+        let prev_block = match entry.get_first_instruction() {
+            Some(first_instr) => {
+                self.builder.position_before(&first_instr);
+                self.cur_block
+            }
+            None => self.set_current_block(entry),
+        };
 
         let var_name = format!("{}_ptr", name);
         let ll_ptr = if *typ == RichType::String {
@@ -490,7 +499,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
         // Make sure we continue from where we left off as our builder position may have changed
         // in this function.
-        self.builder.position_at_end(self.cur_block.unwrap());
+        self.set_current_block(prev_block.unwrap());
 
         ll_ptr
     }
@@ -586,7 +595,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // Create a new block for the loop body, and branch to it.
         let begin_block = self.get_loop_ctx().begin_block;
         self.builder.build_unconditional_branch(begin_block);
-        self.builder.position_at_end(begin_block);
+        self.set_current_block(begin_block);
 
         // Compile the loop body.
         self.compile_closure(loop_body)?;
@@ -608,7 +617,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // that this loop is not guaranteed to end in a terminator or return (since it can be broken
         // out of).
         if let Some(end_block) = ctx.end_block {
-            self.builder.position_at_end(end_block);
+            self.set_current_block(end_block);
             self.set_guarantees_terminator(false);
             self.set_guarantees_return(false);
         } else {
@@ -630,6 +639,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         let mut all_branches_return = true;
         let mut all_branches_terminate = true;
         let mut else_branch_exists = false;
+
         for (i, branch) in cond.branches.iter().enumerate() {
             // If there is a branch condition, it means we are on an "if" or "else if" branch.
             // Otherwise, it means we're on an "else" branch.
@@ -657,7 +667,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                     .build_conditional_branch(ll_cond_val, then_block, else_block);
 
                 // Fill the "then" block with the branch body.
-                self.builder.position_at_end(then_block);
+                self.set_current_block(then_block);
 
                 // Create a branch context to store information about the branch being compiled.
                 self.push_branch_ctx();
@@ -681,7 +691,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 }
 
                 // Continue on the "else" block.
-                self.builder.position_at_end(else_block);
+                self.set_current_block(else_block);
             } else {
                 // This is an else branch, so we must execute the branch body.
                 else_branch_exists = true;
@@ -704,7 +714,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
         // If there is an "end" block, continue on that block.
         if let Some(block) = end_block {
-            self.builder.position_at_end(block);
+            self.set_current_block(block);
         }
 
         // Update the parent context with return and terminator information.

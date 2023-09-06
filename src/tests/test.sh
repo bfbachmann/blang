@@ -12,7 +12,7 @@ LLC=${LLC:-llc}
 output_dir="bin"
 mkdir -p $output_dir
 
-# Iterate through .bl files in tests/cases, compiling, linking, and executing each one.
+# Iterate through .bl files in tests, compiling, linking, and executing each one.
 for src_path in ./*.bl; do
     base_file_name=$(basename "$src_path" .bl)
     ll_path="$output_dir"/"$base_file_name".ll
@@ -30,8 +30,9 @@ for src_path in ./*.bl; do
     # Link the object file with libc and create an executable.
     $CC "$obj_path" -o "$exe_path"
 
-    # Execute the executable.
-    ./"$exe_path"
+    # Execute the executable. Pipe stdout to /dev/null so prevent output from
+    # test cases from muddying the test output.
+    ./"$exe_path" 1> /dev/null
 
     echo "PASS"
 done
