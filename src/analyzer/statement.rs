@@ -102,7 +102,7 @@ mod tests {
     use crate::analyzer::error::ErrorKind;
     use crate::analyzer::prog_context::ProgramContext;
     use crate::analyzer::r#struct::{RichField, RichStructType};
-    use crate::analyzer::r#type::{TypeId};
+    use crate::analyzer::r#type::TypeId;
     use crate::analyzer::statement::RichStatement;
     use crate::analyzer::warn::AnalyzeWarning;
     use crate::lexer::token::Token;
@@ -131,7 +131,7 @@ mod tests {
     fn return_in_conditional() {
         let raw = r#"
             fn thing(a: i64): bool {
-                a = a * 2
+                let mut a = a * 2
                 if a > 10 {
                     return true
                 } else if a > 5 {
@@ -150,13 +150,13 @@ mod tests {
     fn missing_return_in_conditional() {
         let raw = r#"
             fn thing(a: i64): bool {
-                a = a * 2
-                if a > 10 {
+                let mut mut_a = a * 2
+                if mut_a > 10 {
                     return true
-                } else if a > 5 {
+                } else if mut_a > 5 {
                     return false
                 } else  {
-                    a = 2
+                    mut_a = 2
                 }
             }
         "#;
@@ -175,10 +175,10 @@ mod tests {
     fn non_exhaustive_conditional() {
         let raw = r#"
             fn thing(a: i64): bool {
-                a = a * 2
-                if a > 10 {
+                let mut mut_a = a * 2
+                if mut_a > 10 {
                     return true
-                } else if a > 5 {
+                } else if mut_a > 5 {
                     return false
                 }
             }
@@ -198,15 +198,15 @@ mod tests {
     fn conditional_with_loop() {
         let raw = r#"
             fn thing(a: i64): bool {
-                a = a * 2
-                if a > 10 {
+                let mut mut_a = a * 2
+                if mut_a > 10 {
                     return true
-                } else if a > 5 {
+                } else if mut_a > 5 {
                     return false
                 } else  {
                     loop {
-                        a = a * 2
-                        if a > 50 {
+                        mut_a = mut_a * 2
+                        if mut_a > 50 {
                             return true
                         }
                     }
@@ -222,12 +222,12 @@ mod tests {
     fn conditional_with_closure() {
         let raw = r#"
             fn thing(a: i64): bool {
-                a = a * 2
+                let mut mut_a = a * 2
                 if a > 10 {
                     return true
                 } else {
                     {
-                        if a > 50 {
+                        if mut_a > 50 {
                             return true
                         }
                     }
@@ -297,9 +297,10 @@ mod tests {
     fn loop_with_continue() {
         let raw = r#"
             fn thing(a: i64): bool {
+                let mut mut_a = a
                 loop {
-                    a = a - 1
-                    if a == 1 {
+                    mut_a = mut_a - 1
+                    if mut_a == 1 {
                         continue
                     }
                     

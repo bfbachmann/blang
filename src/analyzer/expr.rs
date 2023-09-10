@@ -362,7 +362,7 @@ mod tests {
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
     use crate::analyzer::expr::{RichExpr, RichExprKind};
     use crate::analyzer::func::{RichArg, RichFn, RichFnCall, RichFnSig};
-    use crate::analyzer::prog_context::ProgramContext;
+    use crate::analyzer::prog_context::{ProgramContext, Scope, ScopedVar};
     use crate::analyzer::r#type::{RichType, TypeId};
     use crate::analyzer::var::RichVar;
     use crate::parser::arg::Argument;
@@ -425,7 +425,7 @@ mod tests {
     #[test]
     fn analyze_var() {
         let mut ctx = ProgramContext::new();
-        ctx.add_var("myvar", TypeId::string());
+        ctx.add_var(ScopedVar::new("myvar", TypeId::string(), false));
         let result = RichExpr::from(
             &mut ctx,
             Expression::Variable(Var::new_with_default_pos("myvar")),
@@ -472,7 +472,7 @@ mod tests {
         let mut ctx = ProgramContext::new();
         let fn_sig = FunctionSignature::new_with_default_pos(
             "do_thing",
-            vec![Argument::new("first", Type::bool())],
+            vec![Argument::new_with_default_pos("first", Type::bool(), false)],
             Some(Type::string()),
         );
         let rich_fn = RichFn {
@@ -481,6 +481,7 @@ mod tests {
                 args: vec![RichArg {
                     name: "first".to_string(),
                     type_id: TypeId::bool(),
+                    is_mut: false,
                 }],
                 ret_type_id: Some(TypeId::string()),
                 type_id: TypeId::from(Type::Function(Box::new(fn_sig.clone()))),
@@ -535,7 +536,7 @@ mod tests {
         let mut ctx = ProgramContext::new();
         let fn_sig = FunctionSignature::new_with_default_pos(
             "do_thing",
-            vec![Argument::new("first", Type::bool())],
+            vec![Argument::new_with_default_pos("first", Type::bool(), false)],
             None,
         );
         let rich_fn = RichFn {
@@ -611,8 +612,8 @@ mod tests {
         let fn_sig = FunctionSignature::new_with_default_pos(
             "do_thing",
             vec![
-                Argument::new("arg1", Type::bool()),
-                Argument::new("arg2", Type::i64()),
+                Argument::new_with_default_pos("arg1", Type::bool(), false),
+                Argument::new_with_default_pos("arg2", Type::i64(), false),
             ],
             Some(Type::bool()),
         );
@@ -623,10 +624,12 @@ mod tests {
                     RichArg {
                         name: "arg1".to_string(),
                         type_id: TypeId::bool(),
+                        is_mut: false,
                     },
                     RichArg {
                         name: "arg2".to_string(),
                         type_id: TypeId::i64(),
+                        is_mut: false,
                     },
                 ],
                 ret_type_id: Some(TypeId::bool()),
@@ -712,7 +715,7 @@ mod tests {
         let mut ctx = ProgramContext::new();
         let fn_sig = FunctionSignature::new_with_default_pos(
             "do_thing",
-            vec![Argument::new("arg", Type::bool())],
+            vec![Argument::new_with_default_pos("arg", Type::bool(), false)],
             Some(Type::bool()),
         );
         let rich_fn = RichFn {
@@ -721,6 +724,7 @@ mod tests {
                 args: vec![RichArg {
                     name: "arg".to_string(),
                     type_id: TypeId::bool(),
+                    is_mut: false,
                 }],
                 ret_type_id: Some(TypeId::bool()),
                 type_id: TypeId::from(Type::Function(Box::new(fn_sig.clone()))),

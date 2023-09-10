@@ -294,7 +294,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     fn create_var(&mut self, name: &str, typ: &RichType, ll_val: BasicValueEnum<'ctx>) {
         let ll_dst_ptr = self.create_entry_alloc(name, typ, ll_val);
         self.copy_value(ll_val, ll_dst_ptr, typ);
-        assert!(self.vars.insert(name.to_string(), ll_dst_ptr).is_none());
+        self.vars.insert(name.to_string(), ll_dst_ptr);
     }
 
     /// Assigns the value to the variable with the given name. Panics if no such variable exists.

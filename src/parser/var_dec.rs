@@ -13,6 +13,7 @@ use crate::parser::r#type::Type;
 #[derive(Debug, PartialEq, Clone)]
 pub struct VariableDeclaration {
     pub typ: Option<Type>,
+    pub is_mut: bool,
     pub name: String,
     pub value: Expression,
     pub start_pos: Position,
@@ -32,6 +33,7 @@ impl Locatable for VariableDeclaration {
 impl VariableDeclaration {
     pub fn new(
         typ: Option<Type>,
+        is_mut: bool,
         name: String,
         value: Expression,
         start_pos: Position,
@@ -39,6 +41,7 @@ impl VariableDeclaration {
     ) -> Self {
         VariableDeclaration {
             typ,
+            is_mut,
             name,
             value,
             start_pos,
@@ -49,7 +52,9 @@ impl VariableDeclaration {
     /// Parses variable declarations. Expects token sequences of the forms
     ///
     ///     let <name>: <type> = <expr>
+    ///     let mut <name>: <type> = <expr>
     ///     let <name> = <expr>
+    ///     let mut <name> = <expr>
     ///
     /// where
     ///  - `type` is the variable type
@@ -58,6 +63,9 @@ impl VariableDeclaration {
     pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
         // The first token should be "let".
         let start_token = Program::parse_expecting(tokens, HashSet::from([TokenKind::Let]))?;
+
+        // Parse the optional "mut".
+        let is_mut = Program::parse_optional(tokens, HashSet::from([TokenKind::Mut])).is_some();
 
         // The second token should be the variable name.
         let name = Program::parse_identifier(tokens)?;
@@ -76,6 +84,7 @@ impl VariableDeclaration {
 
         Ok(VariableDeclaration::new(
             typ,
+            is_mut,
             name,
             value,
             start_token.start,

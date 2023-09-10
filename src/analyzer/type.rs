@@ -319,12 +319,13 @@ mod tests {
                 args: vec![RichArg {
                     name: "arg1".to_string(),
                     type_id: TypeId::bool(),
+                    is_mut: false,
                 }],
                 ret_type_id: Some(TypeId::string()),
                 type_id: TypeId::from(Type::Function(Box::new(
                     FunctionSignature::new_with_default_pos(
                         "test_func",
-                        vec![Argument::new("arg1", Type::bool())],
+                        vec![Argument::new_with_default_pos("arg1", Type::bool(), false)],
                         Some(Type::string())
                     )
                 ))),
@@ -334,12 +335,13 @@ mod tests {
                 args: vec![RichArg {
                     name: "arg1".to_string(),
                     type_id: TypeId::bool(),
+                    is_mut: false,
                 }],
                 ret_type_id: Some(TypeId::string()),
                 type_id: TypeId::from(Type::Function(Box::new(
                     FunctionSignature::new_with_default_pos(
                         "test_func",
-                        vec![Argument::new("arg1", Type::bool())],
+                        vec![Argument::new_with_default_pos("arg1", Type::bool(), false)],
                         Some(Type::string())
                     )
                 ))),

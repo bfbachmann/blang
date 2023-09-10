@@ -38,6 +38,7 @@ mod tests {
     use crate::lexer::pos::Position;
     use crate::lexer::token::Token;
     use crate::parser::arg::Argument;
+    use crate::parser::bool::BoolType;
     use crate::parser::bool_lit::BoolLit;
     use crate::parser::branch::Branch;
     use crate::parser::closure::Closure;
@@ -47,6 +48,7 @@ mod tests {
     use crate::parser::func::Function;
     use crate::parser::func_call::FunctionCall;
     use crate::parser::func_sig::FunctionSignature;
+    use crate::parser::i64::I64Type;
     use crate::parser::i64_lit::I64Lit;
     use crate::parser::op::Operator;
     use crate::parser::program::Program;
@@ -118,6 +120,7 @@ mod tests {
                 statements: vec![
                     Statement::VariableDeclaration(VariableDeclaration::new(
                         Some(Type::i64()),
+                        false,
                         "i".to_string(),
                         Expression::I64Literal(I64Lit {
                             value: 123,
@@ -129,6 +132,7 @@ mod tests {
                     )),
                     Statement::VariableDeclaration(VariableDeclaration::new(
                         None,
+                        false,
                         "j".to_string(),
                         Expression::I64Literal(I64Lit {
                             value: 1231,
@@ -157,8 +161,23 @@ mod tests {
                 FunctionSignature::new(
                     "my_fn",
                     vec![
-                        Argument::new("arg1", Type::string()),
-                        Argument::new("arg2", Type::i64())
+                        Argument::new(
+                            "arg1",
+                            Type::String(StringType::new(
+                                Position::new(1, 16),
+                                Position::new(1, 22)
+                            )),
+                            false,
+                            Position::new(1, 10),
+                            Position::new(1, 22)
+                        ),
+                        Argument::new(
+                            "arg2",
+                            Type::I64(I64Type::new(Position::new(1, 30), Position::new(1, 33))),
+                            false,
+                            Position::new(1, 24),
+                            Position::new(1, 33)
+                        )
                     ],
                     Some(Type::string()),
                     Position::new(1, 1),
@@ -167,6 +186,7 @@ mod tests {
                 Closure::new(
                     vec![Statement::VariableDeclaration(VariableDeclaration::new(
                         None,
+                        false,
                         "s".to_string(),
                         Expression::StringLiteral(StringLit {
                             value: "hello world!".to_string(),
@@ -199,18 +219,48 @@ mod tests {
                             "f",
                             Type::Function(Box::new(FunctionSignature::new_anon(
                                 vec![
-                                    Argument::new("", Type::string()),
-                                    Argument::new("", Type::i64())
+                                    Argument::new(
+                                        "",
+                                        Type::String(StringType::new(
+                                            Position::new(1, 18),
+                                            Position::new(1, 24)
+                                        )),
+                                        false,
+                                        Position::new(1, 18),
+                                        Position::new(1, 24)
+                                    ),
+                                    Argument::new(
+                                        "",
+                                        Type::I64(I64Type::new(
+                                            Position::new(1, 26),
+                                            Position::new(1, 29)
+                                        )),
+                                        false,
+                                        Position::new(1, 26),
+                                        Position::new(1, 29)
+                                    )
                                 ],
-                                Some(Type::bool()),
-                                Position::new(1, 14),
+                                Some(Type::Bool(BoolType::new(
+                                    Position::new(1, 32),
+                                    Position::new(1, 36)
+                                ))),
+                                Position::default(), // TODO: fix this
                                 Position::new(1, 30),
                             ))),
+                            false,
+                            Position::new(1, 11),
+                            Position::new(1, 30),
                         ),
-                        Argument::new("i", Type::i64())
+                        Argument::new(
+                            "i",
+                            Type::I64(I64Type::new(Position::new(1, 41), Position::new(1, 44))),
+                            false,
+                            Position::new(1, 38),
+                            Position::new(1, 44)
+                        )
                     ],
                     Some(Type::Function(Box::new(FunctionSignature::new_anon(
-                        vec![Argument::new("", Type::bool())],
+                        vec![Argument::new_with_default_pos("", Type::bool(), false)],
                         Some(Type::string()),
                         Position::new(1, 47),
                         Position::new(1, 56),
@@ -357,7 +407,10 @@ mod tests {
                             Type::String(StringType::new(
                                 Position::new(1, 15),
                                 Position::new(1, 21)
-                            ))
+                            )),
+                            false,
+                            Position::new(1, 12),
+                            Position::new(1, 21)
                         )],
                         None,
                         Position::new(1, 1),

@@ -159,14 +159,15 @@ impl Statement {
         }
 
         match (first.unwrap(), second.unwrap()) {
-            // If the first two tokens are "let <name>", it must be a variable declaration.
+            // If the first two tokens are "let <name>" or "let mut", it must be a variable
+            // declaration.
             (
                 Token {
                     kind: TokenKind::Let,
                     ..
                 },
                 Token {
-                    kind: TokenKind::Identifier(_),
+                    kind: TokenKind::Identifier(_) | TokenKind::Mut,
                     ..
                 },
             ) => {

@@ -19,8 +19,6 @@ for src_path in ./*.bl; do
     obj_path="$output_dir"/"$base_file_name".o
     exe_path="$output_dir"/"$base_file_name"
 
-    printf "%s " "$base_file_name".bl
-
     # Compile Blang to LLVM IR.
     cargo -q run -- build -o "$ll_path" --unoptimized "$src_path"
 
@@ -32,7 +30,9 @@ for src_path in ./*.bl; do
 
     # Execute the executable. Pipe stdout to /dev/null so prevent output from
     # test cases from muddying the test output.
-    ./"$exe_path" 1> /dev/null
-
-    echo "PASS"
+    if ./"$exe_path" 1> /dev/null 2> /dev/null; then
+        echo "$base_file_name".bl PASS
+    else
+        echo "$base_file_name".bl FAIL
+    fi
 done

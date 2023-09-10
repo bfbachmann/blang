@@ -115,8 +115,8 @@ impl RichVar {
     ) -> Option<TypeId> {
         // Search for a variable with the given name. Variables take precedence over functions.
         match ctx.get_var(name) {
-            Some(typ) => {
-                return Some(typ.clone());
+            Some(var) => {
+                return Some(var.type_id.clone());
             }
             None => {}
         }

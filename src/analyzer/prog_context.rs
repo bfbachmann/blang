@@ -8,10 +8,26 @@ use crate::analyzer::func::{RichArg, RichFn, RichFnSig};
 use crate::analyzer::r#struct::RichStructType;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::warn::AnalyzeWarning;
-
 use crate::lexer::pos::Position;
-
 use crate::parser::r#struct::StructType;
+
+pub struct ScopedVar {
+    pub name: String,
+    pub type_id: TypeId,
+    pub is_mut: bool,
+    pub is_arg: bool,
+}
+
+impl ScopedVar {
+    pub fn new(name: &str, type_id: TypeId, is_mut: bool) -> Self {
+        ScopedVar {
+            name: name.to_string(),
+            type_id,
+            is_mut,
+            is_arg: false,
+        }
+    }
+}
 
 #[derive(PartialEq, Clone)]
 pub enum ScopeKind {
@@ -35,7 +51,7 @@ impl fmt::Display for ScopeKind {
 /// Represents a scope in the program. Each scope corresponds to a unique closure which can
 /// be a function body, an inline closure, a branch, or a loop.
 pub struct Scope {
-    vars: HashMap<String, TypeId>,
+    vars: HashMap<String, ScopedVar>,
     /// Extern functions are functions that are defined outside the program and linked to it
     /// after compilation.
     extern_fns: HashMap<String, RichFnSig>,
@@ -56,7 +72,15 @@ impl Scope {
         // If there are args, add them to the current scope variables.
         let mut vars = HashMap::new();
         for arg in args {
-            vars.insert(arg.name, arg.type_id);
+            vars.insert(
+                arg.name.clone(),
+                ScopedVar {
+                    name: arg.name,
+                    type_id: arg.type_id,
+                    is_mut: arg.is_mut,
+                    is_arg: true,
+                },
+            );
         }
 
         Scope {
@@ -119,10 +143,10 @@ impl Scope {
         self.structs.insert(s.name.to_string(), s)
     }
 
-    // Adds the variable to the scope. If there was already a variable with the same name in the
-    // scope, returns the old variable type.
-    fn add_var(&mut self, name: &str, typ: TypeId) -> Option<TypeId> {
-        self.vars.insert(name.to_string(), typ)
+    // Adds the variable to the scope. If there was already a variable with the same name in
+    // the scope, returns the old variable.
+    fn add_var(&mut self, var: ScopedVar) -> Option<ScopedVar> {
+        self.vars.insert(var.name.clone(), var)
     }
 
     // Returns the invalid type with the given name from the scope, if it exists.
@@ -156,8 +180,9 @@ impl Scope {
         self.structs.get(name)
     }
 
-    // Returns the variable with the given name from the scope, or None if no such variable exists.
-    fn get_var(&self, name: &str) -> Option<&TypeId> {
+    // Returns the variable with the given name from the scope, or None if no such variable
+    // exists.
+    fn get_var(&self, name: &str) -> Option<&ScopedVar> {
         self.vars.get(name)
     }
 }
@@ -289,10 +314,10 @@ impl ProgramContext {
         self.stack.back_mut().unwrap().add_struct(s)
     }
 
-    /// Adds the variable to the context. If there was already a variable with the same name,
-    /// returns the old variable type ID.
-    pub fn add_var(&mut self, name: &str, typ: TypeId) -> Option<TypeId> {
-        self.stack.back_mut().unwrap().add_var(name, typ)
+    /// Adds the variable type ID to the context. If there was already a variable with the same
+    /// name, returns the old variable type ID.
+    pub fn add_var(&mut self, var: ScopedVar) -> Option<ScopedVar> {
+        self.stack.back_mut().unwrap().add_var(var)
     }
 
     /// Attempts to locate the invalid type with the given name and returns it, if found.
@@ -383,8 +408,8 @@ impl ProgramContext {
         extern_structs
     }
 
-    /// Attempts to locate the variable with the given name and returns its type ID, if found.
-    pub fn get_var(&self, name: &str) -> Option<&TypeId> {
+    /// Attempts to locate the variable with the given name and returns it, if found.
+    pub fn get_var(&self, name: &str) -> Option<&ScopedVar> {
         // Search up the stack from the current scope.
         for scope in self.stack.iter().rev() {
             if let Some(var) = scope.get_var(name) {

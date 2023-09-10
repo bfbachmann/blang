@@ -87,7 +87,7 @@ impl RichStructType {
                     "inline struct type definitions cannot have type names",
                     Box::new(struct_type.clone()),
                 )
-                .with_hint(format_code!("remove type name {}", struct_type.name).as_str()),
+                .with_help(format_code!("remove type name {}", struct_type.name).as_str()),
             );
         }
 
@@ -140,7 +140,7 @@ impl RichStructType {
                             .as_str(),
                             Box::new(field.clone()),
                         )
-                        .with_hint(
+                        .with_help(
                             format_code!(
                                 "consider changing field {} to {}",
                                 format!("{}: {}", field.name, unresolved_type.name),
@@ -187,7 +187,7 @@ impl RichStructType {
                     )
                     .as_str(),
                 )
-                .with_hint("considering using reference types instead"),
+                .with_help("considering using reference types instead"),
             );
         }
 
@@ -235,7 +235,7 @@ impl RichStructType {
                             )
                             .as_str(),
                         )
-                        .with_hint(
+                        .with_help(
                             format_code!(
                                 "consider changing field {} to {}",
                                 format!("{}: {}", field.name, unresolved_type.name),
@@ -268,7 +268,7 @@ impl RichStructType {
                             .as_str(),
                             Box::new(field.clone()),
                         )
-                        .with_hint(
+                        .with_help(
                             format_code!(
                                 "consider changing field {} to {}",
                                 format!("{}: {}", field.name, field_struct_type),

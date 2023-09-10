@@ -19,7 +19,6 @@ pub enum ErrorKind {
     StructFieldNotDefined,
     StructFieldNotInitialized,
     MemberNotDefined,
-    VariableAlreadyDefined,
     DuplicateStructFieldName,
     WrongNumberOfArgs,
     UnexpectedBreak,
@@ -32,6 +31,8 @@ pub enum ErrorKind {
     MissingTypeName,
     UnexpectedTypeName,
     InvalidStatement,
+    ImmutableAssignment,
+    IllegalUseOfMut,
 }
 
 impl fmt::Display for ErrorKind {
@@ -45,7 +46,6 @@ impl fmt::Display for ErrorKind {
             ErrorKind::VariableNotDefined => write!(f, "variable not defined"),
             ErrorKind::StructFieldNotDefined => write!(f, "struct field not defined"),
             ErrorKind::StructFieldNotInitialized => write!(f, "struct field not initialized"),
-            ErrorKind::VariableAlreadyDefined => write!(f, "variable already defined"),
             ErrorKind::DuplicateStructFieldName => write!(f, "duplicate struct field name"),
             ErrorKind::WrongNumberOfArgs => write!(f, "wrong number of arguments"),
             ErrorKind::UnexpectedBreak => write!(f, "unexpected break"),
@@ -59,6 +59,8 @@ impl fmt::Display for ErrorKind {
             ErrorKind::UnexpectedTypeName => write!(f, "unexpected type name"),
             ErrorKind::MemberNotDefined => write!(f, "undefined member access"),
             ErrorKind::InvalidStatement => write!(f, "invalid statement"),
+            ErrorKind::ImmutableAssignment => write!(f, "assignment to immutable variable"),
+            ErrorKind::IllegalUseOfMut => write!(f, "illegal mutable declaration"),
         }
     }
 }
@@ -69,7 +71,7 @@ pub struct AnalyzeError {
     pub kind: ErrorKind,
     pub message: String,
     pub detail: Option<String>,
-    pub hint: Option<String>,
+    pub help: Option<String>,
     pub start_pos: Position,
     pub end_pos: Position,
 }
@@ -86,7 +88,7 @@ impl AnalyzeError {
             kind,
             message: message.to_string(),
             detail: None,
-            hint: None,
+            help: None,
             start_pos: loc.start_pos().clone(),
             end_pos: loc.end_pos().clone(),
         }
@@ -100,7 +102,7 @@ impl AnalyzeError {
                 "invalid expression: {}",
                 format!("{}", expr).as_str().underline()
             )),
-            hint: None,
+            help: None,
             start_pos: expr.start_pos().clone(),
             end_pos: expr.end_pos().clone(),
         }
@@ -114,7 +116,7 @@ impl AnalyzeError {
                 "invalid statement: {}",
                 format!("{}", statement).as_str().underline()
             )),
-            hint: None,
+            help: None,
             start_pos: statement.start_pos().clone(),
             end_pos: statement.end_pos().clone(),
         }
@@ -125,18 +127,18 @@ impl AnalyzeError {
             kind: self.kind,
             message: self.message,
             detail: Some(detail.to_string()),
-            hint: self.hint,
+            help: self.help,
             start_pos: self.start_pos,
             end_pos: self.end_pos,
         }
     }
 
-    pub fn with_hint(self, hint: &str) -> Self {
+    pub fn with_help(self, help: &str) -> Self {
         AnalyzeError {
             kind: self.kind,
             message: self.message,
             detail: self.detail,
-            hint: Some(hint.to_string()),
+            help: Some(help.to_string()),
             start_pos: self.start_pos,
             end_pos: self.end_pos,
         }

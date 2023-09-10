@@ -1,5 +1,7 @@
-fn cumulative_sum(i: i64): i64 {
-    let result = 0
+fn cumulative_sum(n: i64): i64 {
+    let mut result = 0
+    let mut i = n
+    
     loop {
         if i == 0 {
             return result

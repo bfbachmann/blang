@@ -42,6 +42,7 @@ pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) -> Rich
 pub struct RichArg {
     pub name: String,
     pub type_id: TypeId,
+    pub is_mut: bool,
 }
 
 impl fmt::Display for RichArg {
@@ -57,9 +58,37 @@ impl fmt::Display for RichArg {
 impl RichArg {
     /// Performs semantic analysis on the argument and returns an analyzed version of it.
     pub fn from(ctx: &mut ProgramContext, arg: &Argument) -> Self {
+        // Ensure that only arguments with reference types can be declared mutable.
+        // TODO: Update this once reference types are implemented.
+        if arg.is_mut {
+            ctx.add_err(
+                AnalyzeError::new_with_locatable(
+                    ErrorKind::IllegalUseOfMut,
+                    format_code!(
+                        "cannot declare argument {} of non-reference type {} as mutable",
+                        arg.name,
+                        arg.typ
+                    )
+                    .as_str(),
+                    Box::new(arg.clone()),
+                )
+                .with_detail(
+                    "only arguments with reference types can be declared as mutable",
+                )
+                .with_help(
+                    format_code!(
+                        "if you'd like to mutate this value, consider assigning it to a mutable local variable inside the function body: {}",
+                        format!("let mut new_{} = {}", arg.name, arg.name),
+                    )
+                    .as_str(),
+                ),
+            )
+        }
+
         RichArg {
             name: arg.name.to_string(),
             type_id: RichType::analyze(ctx, &arg.typ),
+            is_mut: arg.is_mut,
         }
     }
 }

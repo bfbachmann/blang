@@ -19,7 +19,7 @@ struct Test {
 // Checks that all struct-related operations work properly.
 fn main() {
     // Check that struct initialization works.
-    let t = Test{
+    let mut t = Test{
         int_val1: 432,
         bool_val: true,
         int_val2: 543,
@@ -64,7 +64,7 @@ fn main() {
 
     // Check that struct assignment works.
     {
-        let t2 = t;
+        let mut t2 = t;
 
         assert(t.int_val1 == 9, 26)
         assert(!t.bool_val, 27)
@@ -110,15 +110,16 @@ fn take_struct(t: Test) {
     assert(t.nested.bool_val == true, 15)
 
     // This should not modify the caller's struct.
-    t.int_val1 = 845
-    t.bool_val = true
-    t.int_val2 = 57
-    t.nested.int_val = 123
-    t.nested.bool_val = false
+    let mut t_copy = t
+    t_copy.int_val1 = 845
+    t_copy.bool_val = true
+    t_copy.int_val2 = 57
+    t_copy.nested.int_val = 123
+    t_copy.nested.bool_val = false
 
-    assert(t.int_val1 == 845, 16)
-    assert(t.bool_val, 17)
-    assert(t.int_val2 == 57, 18)
-    assert(t.nested.int_val == 123, 19)
-    assert(t.nested.bool_val == false, 20)
+    assert(t_copy.int_val1 == 845, 16)
+    assert(t_copy.bool_val, 17)
+    assert(t_copy.int_val2 == 57, 18)
+    assert(t_copy.nested.int_val == 123, 19)
+    assert(t_copy.nested.bool_val == false, 20)
 }

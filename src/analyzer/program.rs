@@ -214,12 +214,30 @@ mod tests {
     fn variable_assignment() {
         let raw = r#"
         fn main() {
-            let i: i64 = 10
+            let mut i: i64 = 10
             i = 11
         }
         "#;
         let result = analyze_prog(raw);
         assert!(matches!(result, Ok(_)));
+    }
+
+    #[test]
+    fn immutable_variable_assignment() {
+        let raw = r#"
+        fn main() {
+            let i: i64 = 10
+            i = 11
+        }
+        "#;
+        let result = analyze_prog(raw);
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::ImmutableAssignment,
+                ..
+            })
+        ));
     }
 
     #[test]
@@ -270,7 +288,7 @@ mod tests {
     fn big_program() {
         let raw = r#"
         fn main() {
-            let i = 0
+            let mut i = 0
             loop {
                 let prefix = str_concat(str_concat("Fibonacci number ", itoa(i)), " is: ")
                 
@@ -498,7 +516,7 @@ mod tests {
            }
            
            fn main() {
-               let t = Thing{
+               let mut t = Thing{
                    i: 234,
                    func: eq,
                }

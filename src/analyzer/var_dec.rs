@@ -5,7 +5,7 @@ use colored::Colorize;
 
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
-use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::prog_context::{ProgramContext, ScopedVar};
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::format_code;
 use crate::parser::statement::Statement;
@@ -29,20 +29,9 @@ impl RichVarDecl {
     /// Performs semantic analysis on the given variable declaration and returns a type-rich version
     /// of it.
     pub fn from(ctx: &mut ProgramContext, var_decl: VariableDeclaration) -> Self {
-        // Check if the variable is already defined in this scope.
-        if ctx.get_var(var_decl.name.as_str()).is_some() {
-            ctx.add_err(AnalyzeError::new_from_statement(
-                ErrorKind::VariableAlreadyDefined,
-                &Statement::VariableDeclaration(var_decl.clone()),
-                format_code!(
-                    "variable {} was already defined in this scope",
-                    var_decl.name,
-                )
-                .as_str(),
-            ));
-        }
-
-        // Check the expression being assigned to this new variable.
+        // Check the expression being assigned to this new variable. Note that it's okay for
+        // the variable name to collide with that of another variable. In this case, the old
+        // variable will simply be replaced with this one in the current scope.
         let rich_expr = RichExpr::from(ctx, var_decl.value.clone());
 
         // Analyze the variable type. It might be empty because type annotations are optional
@@ -73,7 +62,12 @@ impl RichVarDecl {
         };
 
         // The variable expression is valid. Add it to the program context.
-        ctx.add_var(var_decl.name.as_str(), rich_expr.type_id.clone());
+        ctx.add_var(ScopedVar::new(
+            var_decl.name.as_str(),
+            rich_expr.type_id.clone(),
+            var_decl.is_mut,
+        ));
+
         RichVarDecl {
             typ: var_type,
             name: var_decl.name,
@@ -90,17 +84,20 @@ mod tests {
     use crate::analyzer::r#type::TypeId;
     use crate::analyzer::var_dec::RichVarDecl;
     use crate::lexer::pos::Position;
+    use crate::parser::bool_lit::BoolLit;
     use crate::parser::expr::Expression;
     use crate::parser::r#type::Type;
     use crate::parser::string_lit::StringLit;
     use crate::parser::var_dec::VariableDeclaration;
+    use std::any::Any;
 
     #[test]
-    fn var_already_defined() {
+    fn var_redeclared() {
         let mut ctx = ProgramContext::new();
         let var_decl = VariableDeclaration::new(
             Some(Type::string()),
-            "my_string".to_string(),
+            false,
+            "my_var".to_string(),
             Expression::StringLiteral(StringLit::new_with_default_pos("bingo")),
             Position::default(),
             Position::default(),
@@ -111,22 +108,38 @@ mod tests {
             result,
             RichVarDecl {
                 typ: TypeId::string(),
-                name: "my_string".to_string(),
+                name: "my_var".to_string(),
                 val: RichExpr {
                     kind: RichExprKind::StringLiteral("bingo".to_string()),
                     type_id: TypeId::string(),
                 }
             }
         );
+        assert_eq!(ctx.get_var("my_var").unwrap().type_id, TypeId::string());
 
-        RichVarDecl::from(&mut ctx, var_decl);
-        assert!(matches!(
-            ctx.errors().remove(0),
-            AnalyzeError {
-                kind: ErrorKind::VariableAlreadyDefined,
-                ..
+        let new_var_decl = VariableDeclaration::new(
+            Some(Type::bool()),
+            false,
+            "my_var".to_string(),
+            Expression::BoolLiteral(BoolLit::new_with_default_pos(true)),
+            Position::default(),
+            Position::default(),
+        );
+
+        let result = RichVarDecl::from(&mut ctx, new_var_decl);
+        assert!(ctx.errors().is_empty());
+        assert_eq!(
+            result,
+            RichVarDecl {
+                typ: TypeId::bool(),
+                name: "my_var".to_string(),
+                val: RichExpr {
+                    kind: RichExprKind::BoolLiteral(true),
+                    type_id: TypeId::bool(),
+                }
             }
-        ));
+        );
+        assert_eq!(ctx.get_var("my_var").unwrap().type_id, TypeId::bool());
     }
 
     #[test]
@@ -134,6 +147,7 @@ mod tests {
         let mut ctx = ProgramContext::new();
         let var_decl = VariableDeclaration::new(
             Some(Type::i64()),
+            false,
             "my_string".to_string(),
             Expression::StringLiteral(StringLit::new_with_default_pos("bingo")),
             Position::default(),

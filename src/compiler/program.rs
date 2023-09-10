@@ -250,13 +250,14 @@ mod tests {
             }
             
             fn do_thing(a: i64): i64 {
-                let result = 5
+                let mut result = 5
+                let mut mut_a = a
                 loop {
-                    if a < 10 {
+                    if mut_a < 10 {
                         loop {
                             result = result + 1
                             if result > 100 {
-                                a = a / 2
+                                mut_a = mut_a / 2
                                 break
                             } else {
                                 continue
@@ -264,13 +265,13 @@ mod tests {
                         }
                     }
                     
-                    return a * result
+                    return mut_a * result
                 }
             }
             
             fn cum_sum(n: i64): i64 {
-                let i = 1
-                let result = 0
+                let mut i = 1
+                let mut result = 0
                 loop {
                     if i >= n {
                         return result 
@@ -334,12 +335,12 @@ mod tests {
             }
             
             fn is_old(p: Person): bool {
-                p = Person{age: 100}
+                let p = Person{age: 100}
                 return false
             }
             
             fn main() {
-                let p = Person{age: 10}
+                let mut p = Person{age: 10}
                 is_old(p)
                 p = Person{age: 1}
             }

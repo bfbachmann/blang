@@ -1,4 +1,3 @@
-
 use std::fs::File;
 use std::io::{BufRead, BufReader, Result};
 use std::path::{Path, PathBuf};
@@ -16,7 +15,6 @@ use crate::fmt::format_file_loc;
 use crate::lexer::error::LexError;
 
 use crate::parser::error::ParseError;
-
 
 use crate::syscall::syscall::all_syscalls;
 
@@ -163,8 +161,8 @@ fn analyze(input_path: &str) -> Option<ProgramAnalysis> {
             println!("  {}", detail);
         }
 
-        if let Some(hint) = &err.hint {
-            println!("  {} {}", "hint:".green(), hint);
+        if let Some(help) = &err.help {
+            println!("  {} {}", "help:".green(), help);
         }
 
         println!();

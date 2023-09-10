@@ -19,7 +19,7 @@ pub fn all_syscalls() -> [FunctionSignature; 2] {
 pub fn sys_exit() -> FunctionSignature {
     FunctionSignature::new_with_default_pos(
         "exit",
-        vec![Argument::new("status", Type::i64())],
+        vec![Argument::new_with_default_pos("status", Type::i64(), false)],
         None,
     )
 }
@@ -38,9 +38,9 @@ pub fn sys_write() -> FunctionSignature {
     FunctionSignature::new_with_default_pos(
         "write",
         vec![
-            Argument::new("file_desc", Type::i64()),
-            Argument::new("buf", Type::string()),
-            Argument::new("count", Type::i64()),
+            Argument::new_with_default_pos("file_desc", Type::i64(), false),
+            Argument::new_with_default_pos("buf", Type::string(), false),
+            Argument::new_with_default_pos("count", Type::i64(), false),
         ],
         Some(Type::i64()),
     )
