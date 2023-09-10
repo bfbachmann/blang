@@ -57,13 +57,25 @@ impl RichProg {
         // Analyze top-level function declarations.
         define_fns(ctx, &prog);
 
-        // Analyze each statement in the program and return the results.
+        // Analyze each statement in the program.
+        let mut analyzed_statements = vec![];
+        for statement in prog.statements {
+            match statement {
+                Statement::FunctionDeclaration(_) | Statement::StructDeclaration(_) => {
+                    analyzed_statements.push(RichStatement::from(ctx, statement));
+                }
+                other => {
+                    ctx.add_err(AnalyzeError::new_with_locatable(
+                        ErrorKind::InvalidStatement,
+                        "expected type or function declaration",
+                        Box::new(other),
+                    ));
+                }
+            }
+        }
+
         RichProg {
-            statements: prog
-                .statements
-                .into_iter()
-                .map(|s| RichStatement::from(ctx, s))
-                .collect(),
+            statements: analyzed_statements,
         }
     }
 }
@@ -240,13 +252,12 @@ mod tests {
     #[test]
     fn multiple_functions() {
         let raw = r#"
-        let s = "Hello world!"
-        
         fn main() {
             do_thing()
         }
         
         fn do_thing() {
+            let s = "Hello world!"
             let v = s
         }
         "#;
@@ -501,5 +512,22 @@ mod tests {
         "#,
         );
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn invalid_top_level_statements() {
+        let programs = vec![
+            r#"let a = 1"#,
+            r#"thing = 1"#,
+            r#"if true {}"#,
+            r#"loop {}"#,
+            r#"{}"#,
+        ];
+
+        for prog in programs {
+            let result = analyze_prog(prog);
+            assert!(result.is_err());
+            assert_eq!(result.err().unwrap().kind, ErrorKind::InvalidStatement);
+        }
     }
 }

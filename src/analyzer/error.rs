@@ -31,6 +31,7 @@ pub enum ErrorKind {
     InfiniteSizedType,
     MissingTypeName,
     UnexpectedTypeName,
+    InvalidStatement,
 }
 
 impl fmt::Display for ErrorKind {
@@ -57,6 +58,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::MissingTypeName => write!(f, "missing type name"),
             ErrorKind::UnexpectedTypeName => write!(f, "unexpected type name"),
             ErrorKind::MemberNotDefined => write!(f, "undefined member access"),
+            ErrorKind::InvalidStatement => write!(f, "invalid statement"),
         }
     }
 }

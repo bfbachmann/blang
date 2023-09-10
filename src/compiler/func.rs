@@ -989,13 +989,13 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// Compiles a logical (boolean) operation expression.
     fn compile_logical_op(
         &self,
-        lhs: BasicValueEnum<'ctx>,
+        ll_lhs: BasicValueEnum<'ctx>,
         op: &Operator,
-        rhs: BasicValueEnum<'ctx>,
+        ll_rhs: BasicValueEnum<'ctx>,
     ) -> IntValue<'ctx> {
         // Expect both operands to be of type bool.
-        let lhs = self.get_bool(lhs);
-        let rhs = self.get_bool(rhs);
+        let lhs = self.get_bool(ll_lhs);
+        let rhs = self.get_bool(ll_rhs);
 
         match op {
             Operator::LogicalAnd => self.builder.build_and(lhs, rhs, "logical_and"),
@@ -1007,13 +1007,13 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// Compiles a comparison operation expression.
     fn compile_cmp(
         &self,
-        lhs: BasicValueEnum<'ctx>,
+        ll_lhs: BasicValueEnum<'ctx>,
         op: &Operator,
-        rhs: BasicValueEnum<'ctx>,
+        ll_rhs: BasicValueEnum<'ctx>,
     ) -> IntValue<'ctx> {
         // TODO: will it work if we always treat operands as ints?
-        let lhs = self.get_int(lhs);
-        let rhs = self.get_int(rhs);
+        let lhs = self.get_int(ll_lhs);
+        let rhs = self.get_int(ll_rhs);
 
         match op {
             Operator::EqualTo => self
@@ -1045,13 +1045,13 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// Compiles a binary arithmetic operation expression.
     fn compile_arith_op(
         &self,
-        lhs: BasicValueEnum<'ctx>,
+        ll_lhs: BasicValueEnum<'ctx>,
         op: &Operator,
-        rhs: BasicValueEnum<'ctx>,
+        ll_rhs: BasicValueEnum<'ctx>,
     ) -> IntValue<'ctx> {
         // Expect both operands to be of type i64.
-        let lhs = self.get_int(lhs);
-        let rhs = self.get_int(rhs);
+        let lhs = self.get_int(ll_lhs);
+        let rhs = self.get_int(ll_rhs);
 
         match op {
             Operator::Add => self.builder.build_int_add(lhs, rhs, "sum"),
@@ -1065,41 +1065,41 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// Returns the given value as a boolean int value. This is useful for cases where the value may
     /// be a pointer to a bool.
-    fn get_bool(&self, val: BasicValueEnum<'ctx>) -> IntValue<'ctx> {
-        if val.is_pointer_value() {
+    fn get_bool(&self, ll_val: BasicValueEnum<'ctx>) -> IntValue<'ctx> {
+        if ll_val.is_pointer_value() {
             self.builder.build_ptr_to_int(
-                val.into_pointer_value(),
+                ll_val.into_pointer_value(),
                 self.ctx.bool_type(),
                 "ptr_to_bool",
             )
         } else {
-            val.into_int_value()
+            ll_val.into_int_value()
         }
     }
 
     /// Returns the given value as an int value. This is useful for cases where the value may be
     /// a pointer to an int.
-    fn get_int(&self, val: BasicValueEnum<'ctx>) -> IntValue<'ctx> {
-        if val.is_pointer_value() {
+    fn get_int(&self, ll_val: BasicValueEnum<'ctx>) -> IntValue<'ctx> {
+        if ll_val.is_pointer_value() {
             self.builder.build_ptr_to_int(
-                val.into_pointer_value(),
+                ll_val.into_pointer_value(),
                 self.ctx.i64_type(),
                 "ptr_to_int",
             )
         } else {
-            val.into_int_value()
+            ll_val.into_int_value()
         }
     }
 
     /// If the given value is a pointer, it will be dereferenced as the given type. Otherwise
     /// the value is simply returned.
-    fn deref_if_ptr(&self, val: BasicValueEnum<'ctx>, typ: &RichType) -> BasicValueEnum<'ctx> {
+    fn deref_if_ptr(&self, ll_val: BasicValueEnum<'ctx>, typ: &RichType) -> BasicValueEnum<'ctx> {
         match typ {
             // Strings an structs should already be represented as pointers.
-            RichType::String | RichType::Struct(_) => val,
-            RichType::I64 => self.get_int(val).as_basic_value_enum(),
-            RichType::Bool => self.get_bool(val).as_basic_value_enum(),
-            RichType::Function(_) => val.as_basic_value_enum(),
+            RichType::String | RichType::Struct(_) => ll_val,
+            RichType::I64 => self.get_int(ll_val).as_basic_value_enum(),
+            RichType::Bool => self.get_bool(ll_val).as_basic_value_enum(),
+            RichType::Function(_) => ll_val.as_basic_value_enum(),
             RichType::Unknown(name) => {
                 panic!("encountered unknown type {}", name)
             }
