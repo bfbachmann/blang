@@ -1,12 +1,14 @@
 # Blang
 
-_A bad language (don't use it, it's bad)._
+_A simple, statically typed, ahead-of-time compiled programming language written in Rust._
 
 ## Example program
 
-```
-fn cumulative_sum(i: i64): i64 {
-    let result = 0
+```rust
+// Returns the sum of all integers from 1 to `n` (inclusive).
+fn cumulative_sum(n: i64): i64 {
+    let mut result = 0
+    let mut i = n
     loop {
         if i == 0 {
             return result
@@ -17,6 +19,7 @@ fn cumulative_sum(i: i64): i64 {
     }
 }
 
+// Returns the `n`th Fibonacci number.
 fn fib(n: i64): i64 {
     if n <= 2 {
         return 1
@@ -32,16 +35,27 @@ fn main() {
 
 For more examples, see [src/tests](src/tests).
 
-## Useful commands
+## Compiler CLI
 
-```bash
-# Run tests
-make test
+```
+The Blang programming language.
 
-# Compile Blang source code in file "my_code.bl" to LLVM IR.
-make my_code
+Usage: blang <COMMAND>
+
+Commands:
+  build  Compile Blang source code to LLVM IR
+  check  Perform static analysis only
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
 ```
 
-## Requirements
+## Development Utilities
+
+See [Makefile](Makefile).
+
+## Development Requirements
 
 Rust, Cargo, and a working installation of LLVM (currently using v15.0.0).

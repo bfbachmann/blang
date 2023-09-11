@@ -32,7 +32,7 @@ fn main() {
     let cmd = Command::new("blang")
         .version(env!("CARGO_PKG_VERSION"))
         .author("Bruno Bachmann")
-        .about("A bad programming language.")
+        .about("The Blang programming language.")
         .subcommand_required(true)
         .arg_required_else_help(true);
 
