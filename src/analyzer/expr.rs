@@ -362,7 +362,7 @@ mod tests {
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
     use crate::analyzer::expr::{RichExpr, RichExprKind};
     use crate::analyzer::func::{RichArg, RichFn, RichFnCall, RichFnSig};
-    use crate::analyzer::prog_context::{ProgramContext, Scope, ScopedVar};
+    use crate::analyzer::prog_context::{ProgramContext, ScopedVar};
     use crate::analyzer::r#type::{RichType, TypeId};
     use crate::analyzer::var::RichVar;
     use crate::parser::arg::Argument;

@@ -89,7 +89,6 @@ mod tests {
     use crate::parser::r#type::Type;
     use crate::parser::string_lit::StringLit;
     use crate::parser::var_dec::VariableDeclaration;
-    use std::any::Any;
 
     #[test]
     fn var_redeclared() {

@@ -241,6 +241,21 @@ mod tests {
     }
 
     #[test]
+    fn illegal_immutable_arg() {
+        let raw = r#"
+            fn my_func(arg: mut i64) {}
+        "#;
+        let result = analyze_prog(raw);
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::IllegalUseOfMut,
+                ..
+            })
+        ));
+    }
+
+    #[test]
     fn fn_decl() {
         let raw = r#"
         fn main() {}
