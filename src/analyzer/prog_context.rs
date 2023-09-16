@@ -11,6 +11,7 @@ use crate::analyzer::warn::AnalyzeWarning;
 use crate::lexer::pos::Position;
 use crate::parser::r#struct::StructType;
 
+/// Represents a variable defined in a specific scope.
 pub struct ScopedVar {
     pub name: String,
     pub type_id: TypeId,
@@ -29,6 +30,7 @@ impl ScopedVar {
     }
 }
 
+/// Represents a kind of scope in which variables can be defined.
 #[derive(PartialEq, Clone)]
 pub enum ScopeKind {
     FnBody,
