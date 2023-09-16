@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Result};
 use std::path::{Path, PathBuf};
 use std::process;
+use std::process::exit;
 
 use clap::{arg, ArgAction, Command};
 use colored::*;
@@ -76,7 +77,9 @@ fn main() {
         },
         Some(("check", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(file_path) => {
-                analyze(file_path);
+                if analyze(file_path).is_none() {
+                    exit(1);
+                }
             }
             _ => fatalln!("expected source path"),
         },
@@ -188,7 +191,7 @@ fn compile(
     // Read and analyze the program.
     let prog_analysis = match analyze(src_path) {
         Some(v) => v,
-        None => return,
+        None => exit(1),
     };
 
     // If no output path was specified, just use the source file name.

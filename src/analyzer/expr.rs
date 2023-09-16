@@ -17,6 +17,7 @@ use crate::parser::op::Operator;
 use crate::parser::r#type::Type;
 use crate::parser::unresolved::UnresolvedType;
 
+/// Represents a kind of expression.
 #[derive(Debug, Clone)]
 pub enum RichExprKind {
     Variable(RichVar),
@@ -119,6 +120,7 @@ impl RichExpr {
                     type_id: TypeId::from(struct_init.typ),
                 }
             }
+
             Expression::FunctionCall(fn_call) => {
                 // Analyze the function call and ensure it has a return type.
                 let rich_call = RichFnCall::from(ctx, fn_call.clone());
@@ -144,6 +146,7 @@ impl RichExpr {
 
                 RichExpr::new_zero_value(ctx, Type::Unresolved(UnresolvedType::none()))
             }
+
             Expression::AnonFunction(anon_fn) => {
                 // We don't need to analyze the function signature, since it has no name. Just analyze
                 // the function body.
@@ -163,6 +166,7 @@ impl RichExpr {
                     type_id: TypeId::from(Type::Function(Box::new(sig))),
                 }
             }
+
             ref expr @ Expression::UnaryOperation(ref op, ref right_expr) => {
                 if *op != Operator::Not {
                     // If this happens, the parser is badly broken.
@@ -193,6 +197,7 @@ impl RichExpr {
                     RichExpr::new_zero_value(ctx, Type::bool())
                 }
             }
+
             ref expr @ Expression::BinaryOperation(ref left_expr, ref op, ref right_expr) => {
                 // Analyze the left and right operands.
                 let rich_left = RichExpr::from(ctx, *left_expr.clone());
@@ -425,7 +430,7 @@ mod tests {
     #[test]
     fn analyze_var() {
         let mut ctx = ProgramContext::new();
-        ctx.add_var(ScopedVar::new("myvar", TypeId::string(), false));
+        ctx.add_var(ScopedVar::new("myvar", TypeId::string(), false, false));
         let result = RichExpr::from(
             &mut ctx,
             Expression::Variable(Var::new_with_default_pos("myvar")),

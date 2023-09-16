@@ -320,19 +320,25 @@ impl RichFnCall {
         }
 
         // Make sure the arguments are of the right types.
-        for (i, (passed_type, defined)) in rich_args
+        for (i, (passed_type_id, defined)) in rich_args
             .iter()
             .map(|arg| &arg.type_id)
             .zip(&fn_sig.args)
             .enumerate()
         {
-            if passed_type != &defined.type_id {
+            // Skip the check if the argument type is unknown. This will happen if the argument
+            // already failed semantic analysis.
+            if ctx.get_resolved_type(passed_type_id).unwrap().is_unknown() {
+                continue;
+            }
+
+            if passed_type_id != &defined.type_id {
                 let original_arg = call.args.get(i).unwrap();
                 errors.push(AnalyzeError::new_with_locatable(
                     ErrorKind::IncompatibleTypes,
                     format_code!(
                         "cannot use value of type {} as argument {} to {}",
-                        &passed_type,
+                        &passed_type_id,
                         &defined,
                         &fn_sig,
                     )

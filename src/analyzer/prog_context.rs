@@ -19,12 +19,12 @@ pub struct ScopedVar {
 }
 
 impl ScopedVar {
-    pub fn new(name: &str, type_id: TypeId, is_mut: bool) -> Self {
+    pub fn new(name: &str, type_id: TypeId, is_mut: bool, is_arg: bool) -> Self {
         ScopedVar {
             name: name.to_string(),
             type_id,
             is_mut,
-            is_arg: false,
+            is_arg,
         }
     }
 }
@@ -74,12 +74,7 @@ impl Scope {
         for arg in args {
             vars.insert(
                 arg.name.clone(),
-                ScopedVar {
-                    name: arg.name,
-                    type_id: arg.type_id,
-                    is_mut: arg.is_mut,
-                    is_arg: true,
-                },
+                ScopedVar::new(arg.name.as_str(), arg.type_id, arg.is_mut, true),
             );
         }
 

@@ -2,6 +2,7 @@ use std::fmt;
 
 use colored::*;
 
+use crate::format_code;
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::expr::Expression;
 use crate::parser::statement::Statement;
@@ -98,10 +99,7 @@ impl AnalyzeError {
         AnalyzeError {
             kind,
             message: message.to_string(),
-            detail: Some(format!(
-                "invalid expression: {}",
-                format!("{}", expr).as_str().underline()
-            )),
+            detail: Some(format_code!("invalid expression: {}", expr)),
             help: None,
             start_pos: expr.start_pos().clone(),
             end_pos: expr.end_pos().clone(),

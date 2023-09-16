@@ -66,6 +66,7 @@ impl RichVarDecl {
             var_decl.name.as_str(),
             rich_expr.type_id.clone(),
             var_decl.is_mut,
+            false,
         ));
 
         RichVarDecl {
