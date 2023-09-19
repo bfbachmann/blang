@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
@@ -13,6 +13,7 @@ use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
 use crate::parser::r#type::Type;
+use crate::parser::stream::Stream;
 use crate::parser::unresolved::UnresolvedType;
 use crate::util;
 
@@ -106,7 +107,7 @@ impl StructType {
     ///  - `field` is the struct field name
     ///
     /// The commas after each field declaration are optional.
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Record the starting position of the struct type declaration.
         let start_pos = Program::current_position(tokens);
         let end_pos: Position;
@@ -119,7 +120,7 @@ impl StructType {
         if let Some(Token {
             kind: TokenKind::Identifier(_),
             ..
-        }) = tokens.front()
+        }) = tokens.peek_next()
         {
             name = Program::parse_identifier(tokens)?;
         }
@@ -134,10 +135,10 @@ impl StructType {
             if let Some(Token {
                 kind: TokenKind::RightBrace,
                 ..
-            }) = tokens.front()
+            }) = tokens.peek_next()
             {
                 // Record the position of the last token in the struct type declaration.
-                let end_token = tokens.pop_front().unwrap();
+                let end_token = tokens.next().unwrap();
                 end_pos = end_token.end;
                 break;
             }
@@ -233,20 +234,20 @@ impl StructInit {
     ///  - `value` is the value being assigned to the field
     ///
     /// The commas after each field assignment are optional.
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Get the start position of the struct initialization in the source file.
         let start_pos = Program::current_position(tokens);
         let end_pos: Position;
 
         // Parse the struct type (either by name or inline declaration).
-        let struct_type = match tokens.pop_front() {
+        let struct_type = match tokens.next() {
             Some(
-                token @ Token {
+                _token @ Token {
                     kind: TokenKind::Struct,
                     ..
                 },
             ) => {
-                tokens.push_front(token);
+                tokens.rewind(1);
                 Type::Struct(StructType::from(tokens)?)
             }
 
@@ -288,8 +289,8 @@ impl StructInit {
         // Parse struct field assignments until we hit "}".
         let mut field_values = HashMap::new();
         loop {
-            match tokens.pop_front() {
-                Some(Token {
+            match tokens.next() {
+                Some(&Token {
                     kind: TokenKind::RightBrace,
                     ..
                 }) => {
@@ -298,11 +299,12 @@ impl StructInit {
                     break;
                 }
 
-                Some(Token {
-                    kind: TokenKind::Identifier(field_name),
+                Some(&Token {
+                    kind: TokenKind::Identifier(ref field_name),
                     ..
                 }) => {
                     // Parse ":" followed by the field value and record the field.
+                    let field_name = field_name.clone();
                     Program::parse_expecting(tokens, HashSet::from([TokenKind::Colon]))?;
                     let value = Expression::from(tokens, false, false)?;
                     field_values.insert(field_name, value);

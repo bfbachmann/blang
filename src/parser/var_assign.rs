@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
@@ -6,6 +6,7 @@ use crate::lexer::token::Token;
 use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
+use crate::parser::stream::Stream;
 use crate::parser::var::Var;
 
 /// Represents the assignment of some value (i.e. an expression) to a variable.
@@ -44,7 +45,7 @@ impl VariableAssignment {
     ///  - `var` is the variable name or a field access (e.g. `var.field.subfield`, see
     ///    `Var::from`)
     ///  - `expr` is an expression representing the value assigned to the variable
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Get the starting position of the variable assignment.
         let start_pos = Program::current_position(tokens);
 

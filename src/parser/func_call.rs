@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::fmt;
 
 use crate::lexer::kind::TokenKind;
@@ -8,6 +8,7 @@ use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
+use crate::parser::stream::Stream;
 use crate::parser::var::Var;
 use crate::util;
 
@@ -82,7 +83,7 @@ impl FunctionCall {
 
     /// Parses function arguments from the given token sequence and returns a new function call
     /// with the parsed arguments and the given function reference.
-    pub fn from_args(tokens: &mut VecDeque<Token>, fn_var: Var) -> ParseResult<Self> {
+    pub fn from_args(tokens: &mut Stream<Token>, fn_var: Var) -> ParseResult<Self> {
         // Get the start position of the function call in the source file.
         let start_pos = fn_var.start_pos().clone();
         let end_pos: Position;
@@ -94,7 +95,7 @@ impl FunctionCall {
         // and ending in ")".
         let mut args = vec![];
         loop {
-            match tokens.front() {
+            match tokens.peek_next() {
                 // If the next token is ")", we break because we're done parsing arguments.
                 Some(&Token {
                     kind: TokenKind::RightParen,
@@ -102,7 +103,7 @@ impl FunctionCall {
                 }) => {
                     // Pop the ")" and set the end position of this function call in the source
                     // file.
-                    end_pos = tokens.pop_front().unwrap().end;
+                    end_pos = tokens.next().unwrap().end;
                     break;
                 }
 
@@ -124,19 +125,19 @@ impl FunctionCall {
                     }
 
                     // Pop the ",".
-                    tokens.pop_front();
+                    tokens.next();
 
                     // If the next token is ")", we break. We're allowing arguments to end in ",)"
-                    // a to account for cases where function call arguments are broken over
+                    // to account for cases where function call arguments are broken over
                     // multiple lines and the user wishes to end the last argument with a ",".
                     if let Some(&Token {
                         kind: TokenKind::RightParen,
                         ..
-                    }) = tokens.front()
+                    }) = tokens.peek_next()
                     {
                         // Pop the ")" and set the end position of this function call in the source
                         // file.
-                        end_pos = tokens.pop_front().unwrap().end;
+                        end_pos = tokens.next().unwrap().end;
                         break;
                     }
                 }
@@ -176,7 +177,7 @@ impl FunctionCall {
     ///  - `fn_var` is the name of the function being called or a chained member access ending in
     ///     the function member (e.g `var.field_member.fn_member()`, see `Var::from`).
     ///  - `arg` is some expression that evaluates to the argument value
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // The first token should be the function identifier (either just a function name or a
         // member access). We parse this the same way we parse a regular variable.
         let fn_var = Var::from(tokens)?;

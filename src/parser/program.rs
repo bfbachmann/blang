@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 
 use colored::Colorize;
 
@@ -8,6 +8,7 @@ use crate::lexer::token::Token;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::statement::Statement;
+use crate::parser::stream::Stream;
 use crate::{fmt, util};
 
 /// Represents a complete and syntactically valid (but not necessarily semantically valid) program.
@@ -30,9 +31,9 @@ impl Program {
     ///
     /// where
     ///  - `statement` is a valid statement (see `Statement::from`)
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         let mut statements = vec![];
-        while !tokens.is_empty() {
+        while tokens.has_next() {
             match Statement::from(tokens) {
                 Ok(statement) => statements.push(statement),
                 Err(err) => return Err(err),
@@ -44,10 +45,10 @@ impl Program {
 
     /// Returns an error if the next token is not any of the given kinds, or the token otherwise.
     pub fn parse_expecting(
-        tokens: &mut VecDeque<Token>,
+        tokens: &mut Stream<Token>,
         expected: HashSet<TokenKind>,
     ) -> ParseResult<Token> {
-        match tokens.pop_front() {
+        match tokens.next() {
             None => {
                 return Err(ParseError::new(
                     ErrorKind::UnexpectedEOF,
@@ -63,7 +64,7 @@ impl Program {
             }
             Some(token) => {
                 if expected.contains(&token.kind) {
-                    Ok(token)
+                    Ok(token.clone())
                 } else {
                     Err(ParseError::new_with_token(
                         ErrorKind::UnexpectedToken,
@@ -73,7 +74,7 @@ impl Program {
                             format_code!("{}", token),
                         )
                         .as_str(),
-                        token,
+                        token.clone(),
                     ))
                 }
             }
@@ -83,13 +84,13 @@ impl Program {
     /// Checks if the first token is one of the given kinds and, if so, pops the token and returns
     /// it.
     pub fn parse_optional(
-        tokens: &mut VecDeque<Token>,
+        tokens: &mut Stream<Token>,
         expected: HashSet<TokenKind>,
-    ) -> Option<Token> {
-        if let Some(Token { kind, .. }) = tokens.front() {
-            let found_kind = expected.get(kind);
+    ) -> Option<&Token> {
+        if let Some(Token { kind, .. }) = tokens.peek_next() {
+            let found_kind = expected.get(&kind);
             if found_kind.is_some() {
-                return tokens.pop_front();
+                return tokens.next();
             }
         }
 
@@ -97,12 +98,12 @@ impl Program {
     }
 
     /// Parses an identifier, returning its name.
-    pub fn parse_identifier(tokens: &mut VecDeque<Token>) -> ParseResult<String> {
-        match tokens.pop_front() {
+    pub fn parse_identifier(tokens: &mut Stream<Token>) -> ParseResult<String> {
+        match tokens.next() {
             Some(Token {
                 kind: TokenKind::Identifier(name),
                 ..
-            }) => Ok(name),
+            }) => Ok(name.clone()),
             None => {
                 return Err(ParseError::new(
                     ErrorKind::UnexpectedEOF,
@@ -116,15 +117,15 @@ impl Program {
                 return Err(ParseError::new_with_token(
                     ErrorKind::ExpectedIdent,
                     format!(r#"expected identifier, but found "{}""#, other).as_str(),
-                    other,
+                    other.clone(),
                 ))
             }
         }
     }
 
     /// Returns the current position in the file based on the head of the token deque.
-    pub fn current_position(tokens: &VecDeque<Token>) -> Position {
-        match tokens.front() {
+    pub fn current_position(tokens: &Stream<Token>) -> Position {
+        match tokens.peek_next() {
             Some(Token { kind: _, start, .. }) => Position {
                 line: start.line,
                 col: start.col,

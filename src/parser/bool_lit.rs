@@ -1,12 +1,13 @@
-use colored::Colorize;
-use std::collections::VecDeque;
 use std::fmt::{Display, Formatter};
+
+use colored::Colorize;
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
+use crate::parser::stream::Stream;
 
 /// Represents a boolean literal.
 #[derive(Debug, PartialEq, Clone)]
@@ -54,21 +55,21 @@ impl BoolLit {
     }
 
     /// Attempts to parse a boolean literal from the given token sequence.
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
-        match tokens.pop_front() {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+        match tokens.next() {
             Some(Token {
                 kind: TokenKind::BoolLiteral(value),
                 start,
                 end,
             }) => Ok(BoolLit {
-                value,
-                start_pos: start,
-                end_pos: end,
+                value: *value,
+                start_pos: start.clone(),
+                end_pos: end.clone(),
             }),
             Some(other) => Err(ParseError::new_with_token(
                 ErrorKind::ExpectedBasicExpr,
-                format_code!("expected boolean literal, but found {}", other,).as_str(),
-                other,
+                format_code!("expected boolean literal, but found {}", other).as_str(),
+                other.clone(),
             )),
             None => Err(ParseError::new(
                 ErrorKind::UnexpectedEOF,

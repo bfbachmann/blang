@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -8,6 +8,7 @@ use crate::lexer::token::Token;
 use crate::parser::branch::Branch;
 use crate::parser::error::ParseResult;
 use crate::parser::program::Program;
+use crate::parser::stream::Stream;
 use crate::util;
 
 /// Represents a conditional (i.e. branching if/else if/else statements).
@@ -76,7 +77,7 @@ impl Conditional {
     ///  - the `else if` and `else` branches are optional, and the `else if` branch is repeatable
     ///  - `if_cond` is an expression that represents the `if` branch condition
     ///  - `else_if_cond` is an expression that represents the `else if` branch condition
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // The first token should be "if".
         Program::parse_expecting(tokens, HashSet::from([TokenKind::If]))?;
 
@@ -87,13 +88,13 @@ impl Conditional {
         // there are none left.
         let mut branches = vec![branch];
         loop {
-            match tokens.front() {
+            match tokens.peek_next() {
                 Some(&Token {
                     kind: TokenKind::ElseIf,
                     ..
                 }) => {
-                    // Pop the "else if" token.
-                    tokens.pop_front();
+                    // Move past the "else if" token.
+                    tokens.next();
 
                     // Parse the rest of the branch and add it to the list of branches.
                     let branch = Branch::from(tokens, true)?;
@@ -103,8 +104,8 @@ impl Conditional {
                     kind: TokenKind::Else,
                     ..
                 }) => {
-                    // Pop the "else" token.
-                    tokens.pop_front();
+                    // Move past the "else" token.
+                    tokens.next();
 
                     // Parse the rest of the branch and add it to the list of branches, then break
                     // because we're reached the end of the conditional.

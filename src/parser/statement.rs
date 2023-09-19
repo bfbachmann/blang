@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::fmt;
 
 use crate::lexer::kind::TokenKind;
@@ -17,6 +17,7 @@ use crate::parser::r#break::Break;
 use crate::parser::r#loop::Loop;
 use crate::parser::r#struct::StructType;
 use crate::parser::ret::Ret;
+use crate::parser::stream::Stream;
 use crate::parser::var::Var;
 use crate::parser::var_assign::VariableAssignment;
 use crate::parser::var_dec::VariableDeclaration;
@@ -132,10 +133,10 @@ impl Statement {
     ///  - continue
     ///  - return (of the form `return <expr>` where `expr` is an expression)
     ///  - struct declaration (see `Struct::from`)
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Try use the first two tokens to figure out what type of statement will follow. This works
         // because no valid statement can contain fewer than two tokens.
-        let (first, second) = (tokens.front(), tokens.get(1));
+        let (first, second) = (tokens.peek_next(), tokens.peek_ahead(1));
         match (&first, &second) {
             (None, None) => {
                 return Err(ParseError::new(
@@ -285,26 +286,28 @@ impl Statement {
                 },
                 _,
             ) => {
-                let ret_token = tokens.pop_front().unwrap();
+                let ret_token = tokens.next().unwrap();
+                let ret_token_start = ret_token.start.clone();
+                let ret_token_end = ret_token.end.clone();
 
                 // If the next token is "}", it's an empty return. Otherwise, we expect an
                 // expression.
                 if let Some(Token {
                     kind: TokenKind::RightBrace,
                     ..
-                }) = tokens.front()
+                }) = tokens.peek_next()
                 {
                     return Ok(Statement::Return(Ret::new(
                         None,
-                        ret_token.start.clone(),
-                        ret_token.end.clone(),
+                        ret_token_start,
+                        ret_token_end,
                     )));
                 }
 
                 let expr = Expression::from(tokens, false, false)?;
                 Ok(Statement::Return(Ret::new(
                     Some(expr.clone()),
-                    ret_token.start.clone(),
+                    ret_token_start,
                     *expr.end_pos(),
                 )))
             }
@@ -342,12 +345,12 @@ impl Statement {
                     tokens,
                     HashSet::from([TokenKind::Equal, TokenKind::LeftParen]),
                 )? {
-                    token @ Token {
+                    _token @ Token {
                         kind: TokenKind::LeftParen,
                         ..
                     } => {
                         // Parse the function arguments and return the function call.
-                        tokens.push_front(token);
+                        tokens.rewind(1);
                         let fn_call = FunctionCall::from_args(tokens, var)?;
                         Ok(Statement::FunctionCall(fn_call))
                     }
@@ -383,10 +386,11 @@ impl Statement {
 mod tests {
     use crate::lexer::token::Token;
     use crate::parser::statement::Statement;
+    use crate::parser::stream::Stream;
 
     #[test]
     fn parse_var_assignment() {
-        let mut tokens = Token::tokenize_line("let thing: i64 = 234", 0).expect("should not error");
-        Statement::from(&mut tokens).expect("should not error");
+        let tokens = Token::tokenize_line("let thing: i64 = 234", 0).expect("should not error");
+        Statement::from(&mut Stream::from(tokens)).expect("should not error");
     }
 }

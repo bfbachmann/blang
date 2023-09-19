@@ -1,11 +1,11 @@
-use crate::lexer::pos::{Locatable, Position};
-use std::collections::VecDeque;
 use std::fmt;
 
+use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::parser::closure::Closure;
 use crate::parser::error::ParseResult;
 use crate::parser::func_sig::FunctionSignature;
+use crate::parser::stream::Stream;
 
 /// Represents a function declaration.
 #[derive(Debug, PartialEq, Clone)]
@@ -46,7 +46,7 @@ impl Function {
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return type
     ///  - `body` is the body of the function
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // The first set of tokens should be the function signature.
         let sig = FunctionSignature::from(tokens)?;
 
@@ -68,7 +68,7 @@ impl Function {
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return type
     ///  - `body` is the body of the function
-    pub fn from_anon(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+    pub fn from_anon(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // The first set of tokens should be the function signature.
         let sig = FunctionSignature::from_anon(tokens, true)?;
 

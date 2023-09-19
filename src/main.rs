@@ -14,9 +14,8 @@ use parser::program::Program;
 use crate::analyzer::program::{ProgramAnalysis, RichProg};
 use crate::fmt::format_file_loc;
 use crate::lexer::error::LexError;
-
 use crate::parser::error::ParseError;
-
+use crate::parser::stream::Stream;
 use crate::syscall::syscall::all_syscalls;
 
 mod analyzer;
@@ -103,7 +102,7 @@ fn analyze(input_path: &str) -> Option<ProgramAnalysis> {
     };
 
     // Break the file into tokens.
-    let mut tokens = match Token::tokenize(reader.lines()) {
+    let tokens = match Token::tokenize(reader.lines()) {
         Ok(tokens) => tokens,
         Err(LexError { message, line, col }) => {
             fatalln!(
@@ -115,7 +114,7 @@ fn analyze(input_path: &str) -> Option<ProgramAnalysis> {
     };
 
     // Parse the program.
-    let prog = match Program::from(&mut tokens) {
+    let prog = match Program::from(&mut Stream::from(tokens)) {
         Err(ParseError {
             kind: _,
             message,

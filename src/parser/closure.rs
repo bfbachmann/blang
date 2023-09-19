@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
@@ -7,6 +7,7 @@ use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
 use crate::parser::statement::Statement;
+use crate::parser::stream::Stream;
 use crate::util;
 
 /// Represents a closure, which is just a series of statements with their own scope.
@@ -70,7 +71,7 @@ impl Closure {
     ///
     /// where
     /// - `statement` is any valid statement (see `Statement::from`)
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Record the closure starting position.
         let start_pos = Program::current_position(tokens);
         let end_pos: Position;
@@ -81,14 +82,14 @@ impl Closure {
         // The following nodes should be statements separated by ";".
         let mut statements = vec![];
         loop {
-            match tokens.front() {
+            match tokens.peek_next() {
                 // If the next token is "}", we've reached the end of the closure.
                 Some(&Token {
                     kind: TokenKind::RightBrace,
                     ..
                 }) => {
-                    // We've reached the end of the closure. Pop the "}" and break the loop.
-                    let end_token = tokens.pop_front().unwrap();
+                    // We've reached the end of the closure. Move past "}" and break the loop.
+                    let end_token = tokens.next().unwrap();
 
                     // Record the closure ending position.
                     end_pos = end_token.end;
@@ -100,7 +101,7 @@ impl Closure {
                     kind: TokenKind::SemiColon,
                     ..
                 }) => {
-                    tokens.pop_front();
+                    tokens.next();
                 }
 
                 // If the next token is anything else, we expect it to be the beginning of a new

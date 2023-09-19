@@ -210,11 +210,12 @@ mod tests {
     use crate::compiler::program::ProgCompiler;
     use crate::lexer::token::Token;
     use crate::parser::program::Program;
+    use crate::parser::stream::Stream;
     use crate::syscall::syscall::all_syscalls;
 
     fn assert_compiles(code: &str) {
-        let mut tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
-        let prog = Program::from(&mut tokens).expect("should not error");
+        let tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
+        let prog = Program::from(&mut Stream::from(tokens)).expect("should not error");
         let analysis = RichProg::analyze(prog, all_syscalls().to_vec());
         ProgCompiler::compile(analysis, None, false, Path::new("/dev/null"), false)
             .expect("should not error");

@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::fmt;
 
 use crate::lexer::kind::TokenKind;
@@ -6,6 +6,7 @@ use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::parser::error::ParseResult;
 use crate::parser::program::Program;
+use crate::parser::stream::Stream;
 use crate::parser::Type;
 
 /// Represents a function argument declaration.
@@ -75,7 +76,7 @@ impl Argument {
     /// where
     ///  - `arg_type` is the type of the argument
     ///  - `arg_name` is an identifier representing the argument name
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Get the argument starting position in the source code.
         let start_pos = Program::current_position(tokens);
 
@@ -110,7 +111,7 @@ impl Argument {
     ///
     /// where
     ///  - `arg_type` is the type of the argument
-    pub fn unnamed_from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+    pub fn unnamed_from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Get the argument starting position in the source code.
         let start_pos = Program::current_position(tokens);
 

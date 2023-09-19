@@ -173,10 +173,11 @@ mod tests {
     use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
     use crate::lexer::token::Token;
     use crate::parser::program::Program;
+    use crate::parser::stream::Stream;
 
     fn get_analysis(raw: &str) -> ProgramAnalysis {
-        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        let prog = Program::from(&mut tokens).expect("should not error");
+        let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let prog = Program::from(&mut Stream::from(tokens)).expect("should not error");
         RichProg::analyze(prog, vec![])
     }
 

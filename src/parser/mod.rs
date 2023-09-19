@@ -21,6 +21,7 @@ pub mod op;
 pub mod program;
 pub mod ret;
 pub mod statement;
+pub mod stream;
 pub mod string;
 pub mod string_lit;
 pub mod r#struct;
@@ -55,6 +56,7 @@ mod tests {
     use crate::parser::r#type::Type;
     use crate::parser::ret::Ret;
     use crate::parser::statement::Statement;
+    use crate::parser::stream::Stream;
     use crate::parser::string::StringType;
     use crate::parser::string_lit::StringLit;
     use crate::parser::var::Var;
@@ -62,8 +64,9 @@ mod tests {
 
     #[test]
     fn parse_identifier() {
-        let mut tokens = Token::tokenize_line("something", 0).expect("should not error");
-        let result = Program::parse_identifier(&mut tokens).expect("should not error");
+        let tokens = Token::tokenize_line("something", 0).expect("should not error");
+        let result =
+            Program::parse_identifier(&mut Stream::from(tokens)).expect("should not error");
         assert_eq!(result, "something");
     }
 
@@ -108,12 +111,12 @@ mod tests {
             return
         }
         "#;
-        let mut tokens = Token::tokenize(Cursor::new(raw_code).lines()).expect("should not error");
-        Program::from(&mut tokens).expect("should not error");
+        let tokens = Token::tokenize(Cursor::new(raw_code).lines()).expect("should not error");
+        Program::from(&mut Stream::from(tokens)).expect("should not error");
 
-        let mut tokens =
+        let tokens =
             Token::tokenize_line("let i: i64 = 123 let j = 1231", 1).expect("should not error");
-        let result = Program::from(&mut tokens).expect("should not error");
+        let result = Program::from(&mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
             Program {
@@ -149,12 +152,12 @@ mod tests {
 
     #[test]
     fn parse_function_declaration() {
-        let mut tokens = Token::tokenize_line(
+        let tokens = Token::tokenize_line(
             r#"fn my_fn(arg1: string, arg2: i64): string { let s = "hello world!"; }"#,
             1,
         )
         .expect("should not error");
-        let result = Function::from(&mut tokens).expect("should not error");
+        let result = Function::from(&mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
             Function::new(
@@ -203,12 +206,12 @@ mod tests {
             )
         );
 
-        let mut tokens = Token::tokenize_line(
+        let tokens = Token::tokenize_line(
             "fn bigboi(f: fn (string, i64): bool, i: i64): fn (bool): string {}",
             1,
         )
         .expect("should not error");
-        let result = Function::from(&mut tokens).expect("should not error");
+        let result = Function::from(&mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
             Function::new(
@@ -275,9 +278,9 @@ mod tests {
 
     #[test]
     fn parse_function_call() {
-        let mut tokens =
+        let tokens =
             Token::tokenize_line(r#"do_thing("one", "two", true)"#, 1).expect("should not error");
-        let result = FunctionCall::from(&mut tokens).expect("should not error");
+        let result = FunctionCall::from(&mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
             FunctionCall::new(
@@ -308,8 +311,8 @@ mod tests {
     #[test]
     fn invalid_extra_comma() {
         let raw = r#"let i = call(,,)"#;
-        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        let result = Program::from(&mut tokens);
+        let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let result = Program::from(&mut Stream::from(tokens));
         assert!(matches!(
             result,
             Err(ParseError {
@@ -329,8 +332,8 @@ mod tests {
     #[test]
     fn invalid_extra_close_paren() {
         let raw = r#"let i = call())"#;
-        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        let result = Program::from(&mut tokens);
+        let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let result = Program::from(&mut Stream::from(tokens));
         assert!(matches!(
             result,
             Err(ParseError {
@@ -350,8 +353,8 @@ mod tests {
     #[test]
     fn invalid_missing_close_paren() {
         let raw = r#"do(((x+3) > 2) || other"#;
-        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        let result = Program::from(&mut tokens);
+        let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let result = Program::from(&mut Stream::from(tokens));
         assert!(matches!(
             result,
             Err(ParseError {
@@ -367,8 +370,8 @@ mod tests {
     #[test]
     fn invalid_start_of_expression() {
         let raw = r#"do(&& true)"#;
-        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        let result = Program::from(&mut tokens);
+        let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let result = Program::from(&mut Stream::from(tokens));
         assert!(matches!(
             result,
             Err(ParseError {
@@ -394,8 +397,8 @@ mod tests {
            
             print(\"not dog\")
         }";
-        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        let result = Program::from(&mut tokens).expect("should not error");
+        let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let result = Program::from(&mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
             Program {
@@ -471,8 +474,8 @@ mod tests {
         let raw = r#"fn thing(): i64 {
             return 4 / 2 + 8
         "#;
-        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        let result = Program::from(&mut tokens);
+        let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let result = Program::from(&mut Stream::from(tokens));
         assert!(matches!(
             result,
             Err(ParseError {

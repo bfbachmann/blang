@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::fmt::{Display, Formatter};
 
 use colored::Colorize;
@@ -8,6 +7,7 @@ use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
+use crate::parser::stream::Stream;
 
 /// Represents a signed 64 bit integer literal.
 #[derive(Debug, PartialEq, Clone)]
@@ -44,9 +44,9 @@ impl I64Lit {
     }
 
     /// Attempts to parse an i64 literal from the token sequence.
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
-        match tokens.pop_front() {
-            Some(Token {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+        match tokens.next() {
+            Some(&Token {
                 kind: TokenKind::I64Literal(value),
                 start,
                 end,

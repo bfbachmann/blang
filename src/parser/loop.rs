@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
@@ -6,6 +6,7 @@ use crate::lexer::token::Token;
 use crate::parser::closure::Closure;
 use crate::parser::error::ParseResult;
 use crate::parser::program::Program;
+use crate::parser::stream::Stream;
 
 /// Represents a closure that is executed repeatedly.
 #[derive(Debug, PartialEq, Clone)]
@@ -33,7 +34,7 @@ impl Loop {
     /// Parses a loop. Expects token sequences of the form
     ///
     ///     loop { ... }
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Record the starting position of the loop.
         let start_pos = Program::current_position(tokens);
 

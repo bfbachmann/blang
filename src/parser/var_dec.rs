@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
@@ -7,6 +7,7 @@ use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
 use crate::parser::r#type::Type;
+use crate::parser::stream::Stream;
 
 /// Represents a variable declaration. Each variable declaration must have a valid type, a name,
 /// and some value as the result of an expression.
@@ -60,7 +61,7 @@ impl VariableDeclaration {
     ///  - `type` is the variable type
     ///  - `name` is the variable name
     ///  - `expr` is an expression representing the value assigned to the variable
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // The first token should be "let".
         let start_token = Program::parse_expecting(tokens, HashSet::from([TokenKind::Let]))?;
 

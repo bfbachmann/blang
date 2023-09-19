@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::fmt::{Display, Formatter};
 
 use colored::Colorize;
@@ -9,6 +8,7 @@ use crate::lexer::token::Token;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::member::MemberAccess;
+use crate::parser::stream::Stream;
 
 /// Represents a variable. Variables can be made via simply naming a variable or by accessing a
 /// member of a variable.
@@ -67,20 +67,22 @@ impl Var {
 
     /// Attempts to parse a variable from the given token sequence. A variable can be an identifier
     /// representing the variable name or a type member access.
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
-        match tokens.pop_front() {
-            Some(Token {
-                kind: TokenKind::Identifier(var_name),
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+        match tokens.next() {
+            Some(&Token {
+                kind: TokenKind::Identifier(ref var_name),
                 start,
                 end,
             }) => {
+                let var_name = var_name.clone();
+
                 // Check if the next token is ".". If so, we're accessing a member on this variable
                 // or type.
                 let mut member_access = None;
                 if let Some(&Token {
                     kind: TokenKind::Dot,
                     ..
-                }) = tokens.front()
+                }) = tokens.peek_next()
                 {
                     member_access = Some(MemberAccess::from(tokens)?);
                 }

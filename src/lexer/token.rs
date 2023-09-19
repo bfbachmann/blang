@@ -1,5 +1,5 @@
 use colored::Colorize;
-use std::collections::VecDeque;
+
 use std::fmt;
 use std::io::{BufRead, Lines};
 
@@ -7,6 +7,7 @@ use crate::lexer::error::LexError;
 use crate::lexer::error::LexResult;
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::Position;
+
 
 /// A token has a kind and a start and end position (in the file).
 #[derive(Clone, Debug, PartialEq)]
@@ -33,8 +34,8 @@ impl Token {
 
     /// Attempts to lex lines from the given reader and return a deque of tokens, or an error
     /// if the buffer contains invalid tokens.
-    pub fn tokenize<B: BufRead>(lines: Lines<B>) -> LexResult<VecDeque<Token>> {
-        let mut tokens = VecDeque::new();
+    pub fn tokenize<B: BufRead>(lines: Lines<B>) -> LexResult<Vec<Token>> {
+        let mut tokens = vec![];
         for (line_num, line) in lines.enumerate() {
             // Line numbers should start from 1.
             let line_num = line_num + 1;
@@ -61,8 +62,8 @@ impl Token {
 
     /// Breaks the given slice into a deque of tokens. If the slice contains any invalid tokens,
     /// an error is returned.
-    pub fn tokenize_line(segment: &str, line_num: usize) -> LexResult<VecDeque<Token>> {
-        let mut tokens = VecDeque::new();
+    pub fn tokenize_line(segment: &str, line_num: usize) -> LexResult<Vec<Token>> {
+        let mut tokens = vec![];
         let mut search_start: usize = 0;
 
         while search_start < segment.len() {
@@ -80,7 +81,7 @@ impl Token {
                 let token_end =
                     search_start + end_col - whitespace_suffix_size(&subseg[..end_col]) + 1;
 
-                tokens.push_back(Token::new(kind, line_num, token_start, token_end));
+                tokens.push(Token::new(kind, line_num, token_start, token_end));
                 search_start += end_col;
             } else if subseg.trim().is_empty() {
                 // The subsegment is just whitespace, so just continue from the end of the

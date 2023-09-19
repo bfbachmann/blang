@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::fmt;
 use std::hash::Hash;
 
@@ -11,6 +10,7 @@ use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::i64::I64Type;
 use crate::parser::r#struct::StructType;
+use crate::parser::stream::Stream;
 use crate::parser::string::StringType;
 use crate::parser::unresolved::UnresolvedType;
 
@@ -92,8 +92,8 @@ impl Locatable for Type {
 
 impl Type {
     /// Parses a type.
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
-        match tokens.pop_front() {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+        match tokens.next() {
             Some(
                 token @ Token {
                     kind: TokenKind::Bool,
@@ -116,23 +116,23 @@ impl Type {
             ) => Ok(Type::String(StringType::new(token.start, token.end))),
 
             Some(
-                token @ Token {
+                _token @ Token {
                     kind: TokenKind::Function,
                     ..
                 },
             ) => {
-                tokens.push_front(token);
+                tokens.rewind(1);
                 let sig = FunctionSignature::from_anon(tokens, false)?;
                 Ok(Type::Function(Box::new(sig)))
             }
 
             Some(
-                token @ Token {
+                _token @ Token {
                     kind: TokenKind::Struct,
                     ..
                 },
             ) => {
-                tokens.push_front(token);
+                tokens.rewind(1);
                 let struct_type = StructType::from(tokens)?;
                 Ok(Type::Struct(struct_type))
             }

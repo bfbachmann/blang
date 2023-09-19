@@ -1,11 +1,10 @@
 use crate::lexer::pos::{Locatable, Position};
-use std::collections::VecDeque;
-
 use crate::lexer::token::Token;
 use crate::parser::closure::Closure;
 use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
+use crate::parser::stream::Stream;
 
 /// Represents a branch in a conditional. "if" and "else if" branches must have condition
 /// expressions, but "else" branches must not.
@@ -53,7 +52,7 @@ impl Branch {
     ///
     /// where
     ///  - `expr` is the branch condition expression (see `Expression::from`)
-    pub fn from(tokens: &mut VecDeque<Token>, with_condition: bool) -> ParseResult<Self> {
+    pub fn from(tokens: &mut Stream<Token>, with_condition: bool) -> ParseResult<Self> {
         // Record the starting position of the branch.
         let start_pos = Program::current_position(tokens);
 

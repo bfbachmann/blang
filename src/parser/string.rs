@@ -1,5 +1,6 @@
-use crate::lexer::pos::{Locatable, Position};
 use std::hash::{Hash, Hasher};
+
+use crate::lexer::pos::{Locatable, Position};
 
 /// Represents a string type.
 #[derive(Debug, Clone, Eq)]

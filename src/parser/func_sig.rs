@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
@@ -8,6 +8,7 @@ use crate::lexer::token::Token;
 use crate::parser::arg::Argument;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::program::Program;
+use crate::parser::stream::Stream;
 use crate::parser::Type;
 use crate::util;
 
@@ -132,7 +133,7 @@ impl FunctionSignature {
     ///  - `arg_type` is the type of the argument
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return type
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Record the function signature starting position.
         let start_pos = Program::current_position(tokens);
 
@@ -169,7 +170,7 @@ impl FunctionSignature {
     ///  - `arg_type` is the type of the argument
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return type
-    pub fn from_anon(tokens: &mut VecDeque<Token>, named: bool) -> ParseResult<Self> {
+    pub fn from_anon(tokens: &mut Stream<Token>, named: bool) -> ParseResult<Self> {
         // The first token should be "fn".
         Program::parse_expecting(tokens, HashSet::from([TokenKind::Function]))?;
 
@@ -192,20 +193,20 @@ impl FunctionSignature {
     ///  - `arg_type` is the type of the argument
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return value
-    fn from_args_and_return(tokens: &mut VecDeque<Token>, named: bool) -> ParseResult<Self> {
+    fn from_args_and_return(tokens: &mut Stream<Token>, named: bool) -> ParseResult<Self> {
         // The next tokens should represent function arguments.
         let (args, args_end_pos) = FunctionSignature::arg_declarations_from(tokens, named)?;
 
         // The next token should be ":" if there is a return type. Otherwise, there is no return
         // type and we're done.
         let mut return_type = None;
-        match tokens.front() {
+        match tokens.peek_next() {
             Some(Token {
                 kind: TokenKind::Colon,
                 ..
             }) => {
                 // Remove the ":" and parse the return type.
-                tokens.pop_front();
+                tokens.next();
                 return_type = Some(Type::from(tokens)?);
             }
             _ => {}
@@ -234,7 +235,7 @@ impl FunctionSignature {
     ///  - `arg_type` is the type of the argument
     ///  - `arg_name` is an identifier representing the argument name
     fn arg_declarations_from(
-        tokens: &mut VecDeque<Token>,
+        tokens: &mut Stream<Token>,
         named: bool,
     ) -> ParseResult<(Vec<Argument>, Position)> {
         // Record the starting position of the arguments.
@@ -249,7 +250,7 @@ impl FunctionSignature {
         let mut arg_names = HashSet::new();
         loop {
             // The next token should be an argument, or ")".
-            let token = tokens.pop_front();
+            let token = tokens.next();
             match token {
                 Some(
                     token @ Token {
@@ -273,7 +274,8 @@ impl FunctionSignature {
                     ..
                 }) => {
                     // The next few tokens represent an argument.
-                    tokens.push_front(token.clone().unwrap());
+                    let token = token.unwrap().clone();
+                    tokens.rewind(1);
                     let arg = if named {
                         let arg = Argument::from(tokens)?;
 
@@ -282,7 +284,7 @@ impl FunctionSignature {
                             return Err(ParseError::new_with_token(
                                 ErrorKind::DuplicateArgName,
                                 format!("duplicate argument name {}", arg.name).as_str(),
-                                token.unwrap(),
+                                token,
                             ));
                         }
 
@@ -309,7 +311,7 @@ impl FunctionSignature {
                     return Err(ParseError::new_with_token(
                         ErrorKind::ExpectedArgOrEndOfArgs,
                         format!(r#"expected argument or ")", but found "{}""#, other).as_str(),
-                        other,
+                        other.clone(),
                     ))
                 }
             };
@@ -348,12 +350,13 @@ mod tests {
     use crate::parser::error::ErrorKind;
     use crate::parser::error::ParseError;
     use crate::parser::program::Program;
+    use crate::parser::stream::Stream;
 
     #[test]
     fn duplicate_arg_name() {
         let raw = r#"fn one(a: i64, b: i64, a: i64) {}"#;
-        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        let result = Program::from(&mut tokens);
+        let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let result = Program::from(&mut Stream::from(tokens));
         assert!(matches!(
             result,
             Err(ParseError {
@@ -366,8 +369,8 @@ mod tests {
     #[test]
     fn inline_struct_types_in_fn_sig() {
         let raw = r#"fn one(a: struct {one: i64, two: bool}, b: i64): struct {thing: string} {}"#;
-        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        let result = Program::from(&mut tokens);
+        let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let result = Program::from(&mut Stream::from(tokens));
         assert!(matches!(result, Ok(_)));
     }
 }

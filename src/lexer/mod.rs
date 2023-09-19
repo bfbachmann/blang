@@ -5,7 +5,7 @@ pub mod token;
 
 #[cfg(test)]
 mod tests {
-    use std::collections::VecDeque;
+    
 
     use crate::lexer::error::LexError;
     use crate::lexer::kind::TokenKind;
@@ -138,7 +138,7 @@ mod tests {
         let result = Token::tokenize_line(r#"thing = 234 "onetwo" "three"four"" "\\\\\\""#, 1);
         assert_eq!(
             result,
-            Ok(VecDeque::from(vec![
+            Ok(vec![
                 Token::new(TokenKind::Identifier(String::from("thing")), 1, 1, 6),
                 Token::new(TokenKind::Equal, 1, 7, 8),
                 Token::new(TokenKind::I64Literal(234), 1, 9, 12),
@@ -147,13 +147,13 @@ mod tests {
                 Token::new(TokenKind::Identifier(String::from("four")), 1, 29, 33),
                 Token::new(TokenKind::StringLiteral(String::from("")), 1, 33, 35),
                 Token::new(TokenKind::StringLiteral(String::from(r#"\\\"#)), 1, 36, 44),
-            ])),
+            ]),
         );
 
         let result = Token::tokenize_line(r#"if {} else if {} else {} elser iff"#, 100);
         assert_eq!(
             result,
-            Ok(VecDeque::from(vec![
+            Ok(vec![
                 Token::new(TokenKind::If, 100, 1, 3),
                 Token::new(TokenKind::LeftBrace, 100, 4, 5),
                 Token::new(TokenKind::RightBrace, 100, 5, 6),
@@ -165,7 +165,7 @@ mod tests {
                 Token::new(TokenKind::RightBrace, 100, 24, 25),
                 Token::new(TokenKind::Identifier(String::from("elser")), 100, 26, 31),
                 Token::new(TokenKind::Identifier(String::from("iff")), 100, 32, 35),
-            ])),
+            ]),
         );
 
         let result = Token::tokenize_line(r#"<?>"#, 1);

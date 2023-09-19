@@ -107,10 +107,11 @@ mod tests {
     use crate::analyzer::warn::AnalyzeWarning;
     use crate::lexer::token::Token;
     use crate::parser::statement::Statement;
+    use crate::parser::stream::Stream;
 
     fn analyze_statement(raw: &str, ctx: &mut ProgramContext) -> RichStatement {
-        let mut tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        let statement = Statement::from(&mut tokens).expect("should not error");
+        let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let statement = Statement::from(&mut Stream::from(tokens)).expect("should not error");
         RichStatement::from(ctx, statement)
     }
 

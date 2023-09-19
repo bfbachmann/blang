@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 
 use crate::lexer::kind::TokenKind;
@@ -6,6 +6,7 @@ use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::parser::error::ParseResult;
 use crate::parser::program::Program;
+use crate::parser::stream::Stream;
 
 /// Represents access to a member or field on a type or an instance of a type.
 #[derive(Debug, Clone)]
@@ -63,14 +64,14 @@ impl MemberAccess {
     /// where
     ///  - `member` is the name of the member being accessed.
     /// Member accesses can be chained (e.g. `my_struct.child.child.child`).
-    pub fn from(tokens: &mut VecDeque<Token>) -> ParseResult<Self> {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         let start_pos = Program::current_position(tokens);
 
         // The first token should be ".".
         Program::parse_expecting(tokens, HashSet::from([TokenKind::Dot]))?;
 
         // Get the end position of the next token (the member name).
-        let mut end_pos = match tokens.front() {
+        let mut end_pos = match tokens.peek_next() {
             Some(&Token { end, .. }) => end.clone(),
             // If this happens, we'll error on the next line while parsing the identifier anyway.
             _ => Position::default(),
@@ -81,7 +82,7 @@ impl MemberAccess {
 
         // Recursively parse the sub-members, if necessary.
         let mut submember = None;
-        match tokens.front() {
+        match tokens.peek_next() {
             Some(&Token {
                 kind: TokenKind::Dot,
                 end,
