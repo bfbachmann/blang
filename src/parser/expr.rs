@@ -148,11 +148,7 @@ impl Expression {
     ///  - a function call
     ///  - a unary operator followed by a composite expression (`<unary_op> <comp_expr>`)
     ///  - a struct initialization (see `StructInit::from`)
-    fn from_basic(
-        tokens: &mut Stream<Token>,
-        is_arg: bool,
-        is_cond: bool,
-    ) -> ParseResult<Option<Expression>> {
+    fn from_basic(tokens: &mut Stream<Token>, is_arg: bool) -> ParseResult<Option<Expression>> {
         match tokens.peek_next() {
             // If the first token is "fn", we'll assume the expression is an anonymous function.
             Some(Token {
@@ -239,7 +235,7 @@ impl Expression {
             ) => {
                 let op = Operator::from(&token.kind).unwrap();
                 tokens.next();
-                let expr = Expression::from(tokens, is_arg, is_cond)?;
+                let expr = Expression::from(tokens, is_arg)?;
                 Ok(Some(Expression::UnaryOperation(op, Box::new(expr))))
             }
 
@@ -296,11 +292,7 @@ impl Expression {
     /// This function implements a modified version of the shunting yard algorithm. The general
     /// structure is the same, but modifications have been made to handle negative values and
     /// function calls with arbitrary arguments.
-    pub fn from(
-        tokens: &mut Stream<Token>,
-        is_arg: bool,
-        is_cond: bool,
-    ) -> ParseResult<Expression> {
+    pub fn from(tokens: &mut Stream<Token>, is_arg: bool) -> ParseResult<Expression> {
         let start_pos = Program::current_position(tokens);
         let mut out_q: VecDeque<OutputNode> = VecDeque::new();
         let mut op_stack: VecDeque<Token> = VecDeque::new();
@@ -409,7 +401,7 @@ impl Expression {
                 // Add the operator back to the token deque so it can be parsed as part of the basic
                 // expression.
                 tokens.rewind(1);
-                let expr = Expression::from_basic(tokens, is_arg, is_cond)?;
+                let expr = Expression::from_basic(tokens, is_arg)?;
                 out_q.push_back(OutputNode::from_basic_expr(expr.unwrap()));
                 expect_binop_or_end = true
             }
@@ -488,7 +480,7 @@ impl Expression {
                     None => {
                         // This is the beginning of the expression, so we expect a basic expression.
                         tokens.rewind(1);
-                        if let Some(expr) = Expression::from_basic(tokens, is_arg, is_cond)? {
+                        if let Some(expr) = Expression::from_basic(tokens, is_arg)? {
                             out_q.push_back(OutputNode::from_basic_expr(expr));
                             expect_binop_or_end = true;
                         } else {
@@ -511,8 +503,7 @@ impl Expression {
                         if let Some(last_op) = Operator::from(&last.kind) {
                             if last_op.is_binary() {
                                 tokens.rewind(1);
-                                if let Some(expr) = Expression::from_basic(tokens, is_arg, is_cond)?
-                                {
+                                if let Some(expr) = Expression::from_basic(tokens, is_arg)? {
                                     out_q.push_back(OutputNode::from_basic_expr(expr));
                                     expect_binop_or_end = true;
                                 } else {
@@ -595,7 +586,7 @@ mod tests {
 
     fn parse(raw: &str) -> Expression {
         let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        Expression::from(&mut Stream::from(tokens), false, false).expect("should not error")
+        Expression::from(&mut Stream::from(tokens), false).expect("should not error")
     }
 
     #[test]
@@ -839,7 +830,7 @@ mod tests {
     fn parse_unmatched_open_paren() {
         let tokens =
             Token::tokenize(Cursor::new("3 - 4 / (2 * 3:").lines()).expect("should not error");
-        let result = Expression::from(&mut Stream::from(tokens), false, false);
+        let result = Expression::from(&mut Stream::from(tokens), false);
         assert!(matches!(
             result,
             Err(ParseError {
@@ -860,8 +851,7 @@ mod tests {
     fn parse_composite_negative_values() {
         let tokens = Token::tokenize(Cursor::new("-8 - (-100 + 2) * 4 / 2 + 8").lines())
             .expect("should not error");
-        let result =
-            Expression::from(&mut Stream::from(tokens), false, false).expect("should not error");
+        let result = Expression::from(&mut Stream::from(tokens), false).expect("should not error");
         assert_eq!(
             result,
             Expression::BinaryOperation(
@@ -927,8 +917,7 @@ mod tests {
     #[test]
     fn parse_basic_negative_values() {
         let tokens = Token::tokenize(Cursor::new("-8").lines()).expect("should not error");
-        let result =
-            Expression::from(&mut Stream::from(tokens), false, false).expect("should not error");
+        let result = Expression::from(&mut Stream::from(tokens), false).expect("should not error");
         assert_eq!(
             result,
             Expression::BinaryOperation(
@@ -943,8 +932,7 @@ mod tests {
         );
 
         let tokens = Token::tokenize(Cursor::new("-x").lines()).expect("should not error");
-        let result =
-            Expression::from(&mut Stream::from(tokens), false, false).expect("should not error");
+        let result = Expression::from(&mut Stream::from(tokens), false).expect("should not error");
         assert_eq!(
             result,
             Expression::BinaryOperation(
@@ -960,8 +948,7 @@ mod tests {
         );
 
         let tokens = Token::tokenize(Cursor::new("-f()").lines()).expect("should not error");
-        let result =
-            Expression::from(&mut Stream::from(tokens), false, false).expect("should not error");
+        let result = Expression::from(&mut Stream::from(tokens), false).expect("should not error");
         assert_eq!(
             result,
             Expression::BinaryOperation(
@@ -990,7 +977,7 @@ mod tests {
 
         for input in inputs {
             let tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
-            let result = Expression::from(&mut Stream::from(tokens), false, false);
+            let result = Expression::from(&mut Stream::from(tokens), false);
             assert!(matches!(
                 result,
                 Err(ParseError {
@@ -1004,8 +991,7 @@ mod tests {
     #[test]
     fn parse_redundant_parens() {
         let tokens = Token::tokenize(Cursor::new("(((1>0)+1))").lines()).expect("should not error");
-        let result =
-            Expression::from(&mut Stream::from(tokens), false, false).expect("should not error");
+        let result = Expression::from(&mut Stream::from(tokens), false).expect("should not error");
         assert_eq!(
             result,
             Expression::BinaryOperation(
@@ -1036,7 +1022,7 @@ mod tests {
     fn parse_unexpected_end_of_expr() {
         for input in ["2 -", "ok *", "5/", "v -3 + -", "(3 % 3) +"] {
             let tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
-            let result = Expression::from(&mut Stream::from(tokens), false, false);
+            let result = Expression::from(&mut Stream::from(tokens), false);
             assert!(matches!(
                 result,
                 Err(ParseError {
@@ -1051,7 +1037,7 @@ mod tests {
     fn parse_repeated_minus() {
         let input = "--(-v--a)-2--(-100 -- call(1))";
         let tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
-        let result = Expression::from(&mut Stream::from(tokens), false, false);
+        let result = Expression::from(&mut Stream::from(tokens), false);
         assert!(matches!(
             result,
             Err(ParseError {
@@ -1072,8 +1058,7 @@ mod tests {
     fn redundant_parenthesized_negatives() {
         let input = "-(-b-(-100))";
         let tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
-        let result =
-            Expression::from(&mut Stream::from(tokens), false, false).expect("should not error");
+        let result = Expression::from(&mut Stream::from(tokens), false).expect("should not error");
         assert_eq!(
             result,
             Expression::BinaryOperation(

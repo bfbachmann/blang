@@ -157,7 +157,7 @@ impl FunctionCall {
                 _ => {}
             }
 
-            let expr = Expression::from(tokens, true, false)?;
+            let expr = Expression::from(tokens, true)?;
             args.push(expr);
         }
 

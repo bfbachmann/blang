@@ -306,7 +306,7 @@ impl StructInit {
                     // Parse ":" followed by the field value and record the field.
                     let field_name = field_name.clone();
                     Program::parse_expecting(tokens, HashSet::from([TokenKind::Colon]))?;
-                    let value = Expression::from(tokens, false, false)?;
+                    let value = Expression::from(tokens, false)?;
                     field_values.insert(field_name, value);
 
                     // Parse the optional comma.

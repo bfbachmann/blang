@@ -304,7 +304,7 @@ impl Statement {
                     )));
                 }
 
-                let expr = Expression::from(tokens, false, false)?;
+                let expr = Expression::from(tokens, false)?;
                 Ok(Statement::Return(Ret::new(
                     Some(expr.clone()),
                     ret_token_start,
@@ -361,7 +361,7 @@ impl Statement {
                     } => {
                         // Parse the expression being assigned to the member and return the variable
                         // assignment.
-                        let value = Expression::from(tokens, false, false)?;
+                        let value = Expression::from(tokens, false)?;
                         let start_pos = var.start_pos.clone();
                         Ok(Statement::VariableAssignment(VariableAssignment::new(
                             var, value, start_pos,

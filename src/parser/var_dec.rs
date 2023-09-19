@@ -80,7 +80,7 @@ impl VariableDeclaration {
 
         // The remaining tokens should be "=" followed by the variable value.
         Program::parse_expecting(tokens, HashSet::from([TokenKind::Equal]))?;
-        let value = Expression::from(tokens, false, false)?;
+        let value = Expression::from(tokens, false)?;
         let end_pos = value.end_pos().clone();
 
         Ok(VariableDeclaration::new(
