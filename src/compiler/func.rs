@@ -155,7 +155,11 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             CompilationContext::Loop(ctx) => {
                 ctx.guarantees_terminator = guarantees_term;
             }
-            CompilationContext::Func(_) => {}
+            CompilationContext::Func(ctx) => {
+                if guarantees_term {
+                    ctx.guarantees_return = true;
+                }
+            }
         }
     }
 

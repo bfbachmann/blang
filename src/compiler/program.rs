@@ -380,4 +380,15 @@ mod tests {
             }"#,
         )
     }
+
+    #[test]
+    fn infinite_loop() {
+        assert_compiles(
+            r#"
+        fn main() {
+            loop {}
+        }
+        "#,
+        );
+    }
 }
