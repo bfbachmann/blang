@@ -153,6 +153,16 @@ impl fmt::Display for RichFn {
 impl RichFn {
     /// Performs semantic analysis on the given function and returns a type-rich version of it.
     pub fn from(ctx: &mut ProgramContext, func: Function) -> Self {
+        // Make sure we are not already inside a function. For now, functions cannot be defined
+        // within other functions.
+        if ctx.is_in_fn() {
+            ctx.add_err(AnalyzeError::new_with_locatable(
+                ErrorKind::InvalidStatement,
+                "cannot declare functions inside other functions",
+                Box::new(func.clone()),
+            ));
+        }
+
         // Make sure the function is not already defined.
         if let Some(_) = ctx.get_fn(func.signature.name.as_str()) {
             ctx.add_err(AnalyzeError::new_with_locatable(

@@ -253,6 +253,23 @@ mod tests {
     }
 
     #[test]
+    fn illegal_nested_fn() {
+        let raw = r#"
+            fn my_func() {
+                fn another() {}
+            }
+        "#;
+        let result = analyze_prog(raw);
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::InvalidStatement,
+                ..
+            })
+        ));
+    }
+
+    #[test]
     fn assign_to_immutable_arg() {
         let raw = r#"
             fn my_func(arg: i64) {
