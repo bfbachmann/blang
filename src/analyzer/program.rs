@@ -281,6 +281,23 @@ mod tests {
     }
 
     #[test]
+    fn assign_to_undefined_var() {
+        let raw = r#"
+        fn main() {
+            i = 1
+        }
+        "#;
+        let result = analyze_prog(raw);
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::VariableNotDefined,
+                ..
+            })
+        ));
+    }
+
+    #[test]
     fn fn_already_defined() {
         let raw = r#"
         fn test() {}

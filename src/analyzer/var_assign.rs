@@ -30,9 +30,42 @@ impl RichVarAssign {
         // Analyze the expression representing the value assigned to the variable.
         let rich_expr = RichExpr::from(ctx, assign.value.clone());
 
-        // Make sure the variable has been defined. If not, we'll record the error and skip type
-        // match checks.
+        // Make sure the variable being assigned to exists and is mutable.
         let rich_var = RichVar::from(ctx, &assign.var, false);
+        let var_name = assign.var.var_name.clone();
+        match ctx.get_var(var_name.as_str()) {
+            Some(var) => {
+                // The variable exists, so make sure it is mutable.
+                if !var.is_mut {
+                    ctx.add_err(
+                        AnalyzeError::new_with_locatable(
+                            ErrorKind::ImmutableAssignment,
+                            format_code!("cannot assign to immutable variable {}", assign.var)
+                                .as_str(),
+                            Box::new(assign.clone()),
+                        )
+                        .with_help(
+                            format_code!("consider declaring {} as mutable", var_name).as_str(),
+                        ),
+                    )
+                }
+            }
+            None => {
+                // The variable does not exist. Record the error and skip any further checks.
+                ctx.add_err(AnalyzeError::new_with_locatable(
+                    ErrorKind::VariableNotDefined,
+                    format_code!("cannot assign to undefined variable {}", var_name).as_str(),
+                    Box::new(assign),
+                ));
+
+                return RichVarAssign {
+                    var: rich_var,
+                    val: rich_expr,
+                };
+            }
+        };
+
+        // Make sure the variable type matches the expression type.
         let referenced_type = ctx.get_resolved_type(rich_var.get_type_id());
         match referenced_type {
             Some(typ) => {
@@ -55,20 +88,6 @@ impl RichVarAssign {
                 // The variable reference being assigned to is invalid, so we'll skip any further
                 // analysis on this statement.
             }
-        }
-
-        // Make sure the variable being assigned to is mutable.
-        let var_name = assign.var.var_name.clone();
-        let var = ctx.get_var(var_name.as_str()).unwrap();
-        if !var.is_mut {
-            ctx.add_err(
-                AnalyzeError::new_with_locatable(
-                    ErrorKind::ImmutableAssignment,
-                    format_code!("cannot assign to immutable variable {}", assign.var).as_str(),
-                    Box::new(assign),
-                )
-                .with_help(format_code!("consider declaring {} as mutable", var_name).as_str()),
-            )
         }
 
         RichVarAssign {
