@@ -71,7 +71,7 @@ impl Argument {
     /// Parses a function argument declaration. Expects token sequences of the forms
     ///
     ///      <arg_name>: <arg_type>
-    ///      <arg_name>: mut <arg_type>
+    ///      mut <arg_name>: <arg_type>
     ///
     /// where
     ///  - `arg_type` is the type of the argument
@@ -80,14 +80,14 @@ impl Argument {
         // Get the argument starting position in the source code.
         let start_pos = Program::current_position(tokens);
 
+        // The argument can optionally be declared as mutable, so check for "mut".
+        let is_mut = Program::parse_optional(tokens, HashSet::from([TokenKind::Mut])).is_some();
+
         // The first token should be the argument name.
         let name = Program::parse_identifier(tokens)?;
 
         // The next token should be a colon.
         Program::parse_expecting(tokens, HashSet::from([TokenKind::Colon]))?;
-
-        // Check for the optional "mut" keyword for mutable arguments.
-        let is_mut = Program::parse_optional(tokens, HashSet::from([TokenKind::Mut])).is_some();
 
         // The remaining tokens should form the argument type.
         let arg_type = Type::from(tokens)?;

@@ -242,15 +242,28 @@ mod tests {
     }
 
     #[test]
-    fn illegal_immutable_arg() {
+    fn mutable_arg() {
         let raw = r#"
-            fn my_func(arg: mut i64) {}
+            fn my_func(mut arg: i64) {
+                arg = 2
+            }
+        "#;
+        let result = analyze_prog(raw);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn assign_to_immutable_arg() {
+        let raw = r#"
+            fn my_func(arg: i64) {
+                arg = 2
+            }
         "#;
         let result = analyze_prog(raw);
         assert!(matches!(
             result,
             Err(AnalyzeError {
-                kind: ErrorKind::IllegalUseOfMut,
+                kind: ErrorKind::ImmutableAssignment,
                 ..
             })
         ));

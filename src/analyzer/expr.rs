@@ -266,7 +266,7 @@ impl RichExpr {
                             ErrorKind::IncompatibleTypes,
                             &expr,
                             format_code!(
-                                "cannot apply operator {} to right-side expression type {}",
+                                "cannot apply operator {} to right-side expression of type {}",
                                 &op,
                                 &rich_right.type_id,
                             )

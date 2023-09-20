@@ -270,7 +270,8 @@ impl FunctionSignature {
                         | TokenKind::Bool
                         | TokenKind::Function
                         | TokenKind::Identifier(_)
-                        | TokenKind::Struct,
+                        | TokenKind::Struct
+                        | TokenKind::Mut,
                     ..
                 }) => {
                     // The next few tokens represent an argument.

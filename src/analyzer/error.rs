@@ -33,7 +33,6 @@ pub enum ErrorKind {
     UnexpectedTypeName,
     InvalidStatement,
     ImmutableAssignment,
-    IllegalUseOfMut,
 }
 
 impl fmt::Display for ErrorKind {
@@ -61,7 +60,6 @@ impl fmt::Display for ErrorKind {
             ErrorKind::MemberNotDefined => write!(f, "undefined member access"),
             ErrorKind::InvalidStatement => write!(f, "invalid statement"),
             ErrorKind::ImmutableAssignment => write!(f, "assignment to immutable variable"),
-            ErrorKind::IllegalUseOfMut => write!(f, "illegal mutable declaration"),
         }
     }
 }

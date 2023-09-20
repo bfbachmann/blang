@@ -61,23 +61,13 @@ impl RichVarAssign {
         let var_name = assign.var.var_name.clone();
         let var = ctx.get_var(var_name.as_str()).unwrap();
         if !var.is_mut {
-            let help = if var.is_arg {
-                // TODO: Update this when reference types are implemented.
-                format_code!(
-                    "consider assigning {} to a mutable local variable",
-                    var_name
-                )
-            } else {
-                format_code!("consider declaring {} as mutable", var_name)
-            };
-
             ctx.add_err(
                 AnalyzeError::new_with_locatable(
                     ErrorKind::ImmutableAssignment,
                     format_code!("cannot assign to immutable variable {}", assign.var).as_str(),
                     Box::new(assign),
                 )
-                .with_help(help.as_str()),
+                .with_help(format_code!("consider declaring {} as mutable", var_name).as_str()),
             )
         }
 
