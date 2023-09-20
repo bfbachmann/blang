@@ -6,16 +6,15 @@ _A simple, statically typed, ahead-of-time compiled programming language written
 
 ```rust
 // Returns the sum of all integers from 1 to `n` (inclusive).
-fn cumulative_sum(n: i64): i64 {
+fn cumulative_sum(mut n: i64): i64 {
     let mut result = 0
-    let mut i = n
     loop {
-        if i == 0 {
+        if n == 0 {
             return result
         }
 
-        result = result + i
-        i = i - 1
+        result = result + n
+        n = n - 1
     }
 }
 
