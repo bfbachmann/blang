@@ -809,4 +809,28 @@ mod tests {
         );
         assert!(result.is_ok())
     }
+
+    #[test]
+    fn invalid_operand_types() {
+        let result = analyze_prog(
+            r#"
+            struct Thing {}
+            fn main() {
+                let a = Thing{}
+                let b = Thing{}
+                
+                if a == b {
+                    exit(1)
+                }
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::IncompatibleTypes,
+                ..
+            })
+        ))
+    }
 }

@@ -99,7 +99,7 @@ impl AnalyzeError {
         AnalyzeError {
             kind,
             message: message.to_string(),
-            detail: Some(format_code!("invalid expression: {}", expr)),
+            detail: Some(format_code!("Invalid expression: {}", expr)),
             help: None,
             start_pos: expr.start_pos().clone(),
             end_pos: expr.end_pos().clone(),
@@ -111,7 +111,7 @@ impl AnalyzeError {
             kind,
             message: message.to_string(),
             detail: Some(format!(
-                "invalid statement: {}",
+                "Invalid statement: {}",
                 format!("{}", statement).as_str().underline()
             )),
             help: None,
