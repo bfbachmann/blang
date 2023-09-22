@@ -5,6 +5,7 @@ use colored::Colorize;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#type::{RichType, TypeId};
+use crate::lexer::pos::{Locatable, Position};
 use crate::parser::member::MemberAccess;
 use crate::parser::var::Var;
 use crate::{format_code, util};
@@ -16,6 +17,18 @@ pub struct RichVar {
     /// The type ID of the parent variable (i.e. not the member(s) being accessed).
     pub var_type_id: TypeId,
     pub member_access: Option<RichMemberAccess>,
+    start_pos: Position,
+    end_pos: Position,
+}
+
+impl Locatable for RichVar {
+    fn start_pos(&self) -> &Position {
+        &self.start_pos
+    }
+
+    fn end_pos(&self) -> &Position {
+        &self.end_pos
+    }
 }
 
 impl Display for RichVar {
@@ -39,13 +52,18 @@ impl PartialEq for RichVar {
 }
 
 impl RichVar {
-    /// Creates a new variable.
-    #[cfg(test)]
-    pub fn new(name: &str, type_id: TypeId, member_access: Option<RichMemberAccess>) -> Self {
+    /// Creates a new variable with default start and end positions.
+    pub fn new_with_default_pos(
+        name: &str,
+        type_id: TypeId,
+        member_access: Option<RichMemberAccess>,
+    ) -> Self {
         RichVar {
             var_name: name.to_string(),
             var_type_id: type_id,
             member_access,
+            start_pos: Position::default(),
+            end_pos: Position::default(),
         }
     }
 
@@ -68,11 +86,11 @@ impl RichVar {
                     Box::new(var.clone()),
                 ));
 
-                return RichVar {
-                    var_name: var.var_name.clone(),
-                    var_type_id: TypeId::unknown(),
-                    member_access: None,
-                };
+                return RichVar::new_with_default_pos(
+                    var.var_name.as_str(),
+                    TypeId::unknown(),
+                    None,
+                );
             }
         };
 
@@ -86,6 +104,8 @@ impl RichVar {
             var_name: var.var_name.clone(),
             var_type_id: type_id,
             member_access,
+            start_pos: var.start_pos().clone(),
+            end_pos: var.end_pos().clone(),
         }
     }
 

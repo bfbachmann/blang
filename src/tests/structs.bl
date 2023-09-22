@@ -54,7 +54,18 @@ fn main() {
 
     // Check that structs can be passed by value.
     {
-        take_struct(t)
+        let t_copy = Test{
+            int_val1: t.int_val1,
+            bool_val: t.bool_val,
+            int_val2: t.int_val2,
+            nested: Nested{
+                int_val: t.nested.int_val,
+                bool_val: t.nested.bool_val,
+            },
+        }
+
+        take_struct(t_copy)
+        
         assert(t.int_val1 == 9, 21)
         assert(!t.bool_val, 22)
         assert(t.int_val2 == 5, 23)
@@ -66,30 +77,17 @@ fn main() {
     {
         let mut t2 = t;
 
-        assert(t.int_val1 == 9, 26)
-        assert(!t.bool_val, 27)
-        assert(t.int_val2 == 5, 28)
-        assert(t.nested.int_val == -45, 29)
-        assert(t.nested.bool_val == true, 30)
-
         assert(t2.int_val1 == 9, 31)
         assert(!t2.bool_val, 32)
         assert(t2.int_val2 == 5, 33)
-        assert(t.nested.int_val == -45, 34)
-        assert(t.nested.bool_val == true, 35)
+        assert(t2.nested.int_val == -45, 34)
+        assert(t2.nested.bool_val == true, 35)
 
-        // This should not modify `t`.
         t2.int_val1 = -6
         t2.bool_val = false
         t2.int_val2 = -18
         t2.nested.int_val = 555
         t2.nested.bool_val = false
-
-        assert(t.int_val1 == 9, 36)
-        assert(!t.bool_val, 37)
-        assert(t.int_val2 == 5, 38)
-        assert(t.nested.int_val == -45, 39)
-        assert(t.nested.bool_val == true, 40)
 
         assert(t2.int_val1 == -6, 41)
         assert(!t2.bool_val, 42)
@@ -101,7 +99,7 @@ fn main() {
     exit(0)
 }
 
-fn take_struct(t: Test) {
+fn take_struct(mut t: Test) {
     // Make sure the struct field values are correct.
     assert(t.int_val1 == 9, 11)
     assert(!t.bool_val, 12)
@@ -110,16 +108,15 @@ fn take_struct(t: Test) {
     assert(t.nested.bool_val == true, 15)
 
     // This should not modify the caller's struct.
-    let mut t_copy = t
-    t_copy.int_val1 = 845
-    t_copy.bool_val = true
-    t_copy.int_val2 = 57
-    t_copy.nested.int_val = 123
-    t_copy.nested.bool_val = false
+    t.int_val1 = 845
+    t.bool_val = true
+    t.int_val2 = 57
+    t.nested.int_val = 123
+    t.nested.bool_val = false
 
-    assert(t_copy.int_val1 == 845, 16)
-    assert(t_copy.bool_val, 17)
-    assert(t_copy.int_val2 == 57, 18)
-    assert(t_copy.nested.int_val == 123, 19)
-    assert(t_copy.nested.bool_val == false, 20)
+    assert(t.int_val1 == 845, 16)
+    assert(t.bool_val, 17)
+    assert(t.int_val2 == 57, 18)
+    assert(t.nested.int_val == 123, 19)
+    assert(t.nested.bool_val == false, 20)
 }

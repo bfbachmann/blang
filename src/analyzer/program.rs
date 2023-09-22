@@ -4,6 +4,7 @@ use colored::Colorize;
 
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::{analyze_fn_sig, RichFnSig};
+use crate::analyzer::move_check::MoveChecker;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#struct::RichStructType;
 use crate::analyzer::r#type::{RichType, TypeId};
@@ -40,12 +41,24 @@ impl RichProg {
             rich_extern_fns.push(analyze_fn_sig(&mut ctx, &extern_fn_sig));
         }
 
+        // Perform semantic analysis on the program.
+        let prog = RichProg::from(&mut ctx, prog);
+        let mut errors = ctx.errors();
+        let warnings = ctx.warnings();
+        let types = ctx.types();
+
+        // Perform move checks and add any errors to our list of errors only if semantic analysis
+        // passed.
+        if errors.is_empty() {
+            errors = MoveChecker::check_prog(&prog, &types);
+        }
+
         ProgramAnalysis {
-            prog: RichProg::from(&mut ctx, prog),
+            prog,
             extern_fns: rich_extern_fns,
-            errors: ctx.errors(),
-            warnings: ctx.warnings(),
-            types: ctx.types(),
+            warnings,
+            errors,
+            types,
         }
     }
 
@@ -610,5 +623,190 @@ mod tests {
             assert!(result.is_err());
             assert_eq!(result.err().unwrap().kind, ErrorKind::InvalidStatement);
         }
+    }
+
+    #[test]
+    fn illegal_move() {
+        let result = analyze_prog(
+            r#"
+            struct T {}
+            
+            fn main() {
+                let t = T{}
+                let t1 = t
+                let t2 = t 
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::UseOfMovedValue,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn illegal_member_move() {
+        let result = analyze_prog(
+            r#"
+            struct Inner {}
+            
+            struct T {
+                inner: Inner
+            }
+            
+            fn main() {
+                let t = T{inner: Inner{}}
+                let t1 = t
+                let t2 = t.inner
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::UseOfMovedValue,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn undefined_type_in_struct() {
+        let result = analyze_prog(
+            r#"
+            struct T {
+                inner: Inner
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::TypeNotDefined,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn illegal_loop_move() {
+        let result = analyze_prog(
+            r#"
+            struct T {}
+            
+            fn main() {
+                let t = T{}
+                
+                loop {
+                    let a = t
+                }
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::UseOfMovedValue,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn loop_move() {
+        let result = analyze_prog(
+            r#"
+            struct T {}
+            
+            fn main() {
+                let t = T{}
+                
+                loop {
+                    let a = t
+                    break
+                }
+            }
+            "#,
+        );
+        assert!(result.is_ok())
+    }
+
+    #[test]
+    fn nested_loop_move() {
+        let result = analyze_prog(
+            r#"
+            struct T {}
+            
+            fn main() {
+                let t = T{}
+                
+                loop {
+                    loop {
+                        let a = t
+                        break
+                    }
+                    return
+                }
+            }
+            "#,
+        );
+        assert!(result.is_ok())
+    }
+
+    #[test]
+    fn illegal_nested_loop_move() {
+        let result = analyze_prog(
+            r#"
+            struct T {}
+            
+            fn main() {
+                let t = T{}
+                
+                loop {
+                    loop {
+                        if true {
+                            let a = t
+                        }
+                    }
+                    return
+                }
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::UseOfMovedValue,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn partial_moves() {
+        let result = analyze_prog(
+            r#"
+            struct Inner {}
+            
+            struct T {
+                inner1: Inner,
+                inner2: Inner,
+            }
+            
+            fn main() {
+                let t = T{
+                    inner1: Inner{},
+                    inner2: Inner{},
+                }
+                
+                let i1 = t.inner1
+                let i2 = t.inner2
+            }
+            "#,
+        );
+        assert!(result.is_ok())
     }
 }

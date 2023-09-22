@@ -33,6 +33,7 @@ pub enum ErrorKind {
     UnexpectedTypeName,
     InvalidStatement,
     ImmutableAssignment,
+    UseOfMovedValue,
 }
 
 impl fmt::Display for ErrorKind {
@@ -60,6 +61,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::MemberNotDefined => write!(f, "undefined member access"),
             ErrorKind::InvalidStatement => write!(f, "invalid statement"),
             ErrorKind::ImmutableAssignment => write!(f, "assignment to immutable variable"),
+            ErrorKind::UseOfMovedValue => write!(f, "use of moved value"),
         }
     }
 }

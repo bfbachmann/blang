@@ -3,6 +3,7 @@ pub mod cond;
 pub mod error;
 pub mod expr;
 pub mod func;
+mod move_check;
 pub mod prog_context;
 pub mod program;
 pub mod statement;

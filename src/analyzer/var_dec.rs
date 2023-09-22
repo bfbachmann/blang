@@ -14,14 +14,14 @@ use crate::parser::var_dec::VariableDeclaration;
 /// Represents a semantically valid and type-rich variable declaration.
 #[derive(PartialEq, Debug, Clone)]
 pub struct RichVarDecl {
-    pub typ: TypeId,
+    pub type_id: TypeId,
     pub name: String,
     pub val: RichExpr,
 }
 
 impl fmt::Display for RichVarDecl {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {} = {}", self.name, self.typ, self.val)
+        write!(f, "{}: {} = {}", self.name, self.type_id, self.val)
     }
 }
 
@@ -70,7 +70,7 @@ impl RichVarDecl {
         ));
 
         RichVarDecl {
-            typ: var_type,
+            type_id: var_type,
             name: var_decl.name,
             val: rich_expr,
         }
@@ -107,7 +107,7 @@ mod tests {
         assert_eq!(
             result,
             RichVarDecl {
-                typ: TypeId::string(),
+                type_id: TypeId::string(),
                 name: "my_var".to_string(),
                 val: RichExpr {
                     kind: RichExprKind::StringLiteral("bingo".to_string()),
@@ -131,7 +131,7 @@ mod tests {
         assert_eq!(
             result,
             RichVarDecl {
-                typ: TypeId::bool(),
+                type_id: TypeId::bool(),
                 name: "my_var".to_string(),
                 val: RichExpr {
                     kind: RichExprKind::BoolLiteral(true),

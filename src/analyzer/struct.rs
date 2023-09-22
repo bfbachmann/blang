@@ -87,7 +87,9 @@ impl RichStructType {
                     "inline struct type definitions cannot have type names",
                     Box::new(struct_type.clone()),
                 )
-                .with_help(format_code!("remove type name {}", struct_type.name).as_str()),
+                .with_help(
+                    format_code!("Consider removing the type name {}.", struct_type.name).as_str(),
+                ),
             );
         }
 
@@ -142,7 +144,7 @@ impl RichStructType {
                         )
                         .with_help(
                             format_code!(
-                                "consider changing field {} to {}",
+                                "Consider changing field {} to {}",
                                 format!("{}: {}", field.name, unresolved_type.name),
                                 format!("{}: &{}", field.name, unresolved_type.name),
                             )
@@ -182,12 +184,12 @@ impl RichStructType {
                 )
                 .with_detail(
                     format!(
-                        "the offending type hierarchy is {}",
+                        "The offending type hierarchy is {}.",
                         hierarchy_to_string(type_hierarchy.iter().map(|t| t.to_string()).collect())
                     )
                     .as_str(),
                 )
-                .with_help("considering using reference types instead"),
+                .with_help("Consider using reference types instead."),
             );
         }
 
@@ -230,14 +232,14 @@ impl RichStructType {
                         )
                         .with_detail(
                             format!(
-                                "the offending type hierarchy is {}",
+                                "The offending type hierarchy is {}.",
                                 hierarchy_to_string(hierarchy.clone())
                             )
                             .as_str(),
                         )
                         .with_help(
                             format_code!(
-                                "consider changing field {} to {}",
+                                "Consider changing field {} to {}",
                                 format!("{}: {}", field.name, unresolved_type.name),
                                 format!("{}: &{}", field.name, unresolved_type.name),
                             )
@@ -245,11 +247,19 @@ impl RichStructType {
                         ));
                     }
 
-                    let field_struct_type = ctx
-                        .get_extern_struct(unresolved_type.name.as_str())
-                        .unwrap();
-                    RichStructType::check_containment_cycles(ctx, field_struct_type, hierarchy)?;
-                    hierarchy.pop();
+                    match ctx.get_extern_struct(unresolved_type.name.as_str()) {
+                        Some(field_struct_type) => {
+                            RichStructType::check_containment_cycles(
+                                ctx,
+                                field_struct_type,
+                                hierarchy,
+                            )?;
+                            hierarchy.pop();
+                        }
+                        None => {
+                            // This type is not defined.
+                        }
+                    };
                 }
 
                 Type::Struct(field_struct_type) => {
@@ -270,7 +280,7 @@ impl RichStructType {
                         )
                         .with_help(
                             format_code!(
-                                "consider changing field {} to {}",
+                                "Consider changing field {} to {}.",
                                 format!("{}: {}", field.name, field_struct_type),
                                 format!("{}: &{}", field.name, field_struct_type),
                             )

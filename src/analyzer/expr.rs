@@ -349,6 +349,9 @@ impl RichExpr {
                             start_pos: Default::default(),
                             end_pos: Default::default(),
                         },
+                        has_break: false,
+                        has_continue: false,
+                        has_return: false,
                     },
                 })),
                 type_id,
@@ -439,7 +442,11 @@ mod tests {
         assert_eq!(
             result,
             RichExpr {
-                kind: RichExprKind::Variable(RichVar::new("myvar", TypeId::string(), None)),
+                kind: RichExprKind::Variable(RichVar::new_with_default_pos(
+                    "myvar",
+                    TypeId::string(),
+                    None
+                )),
                 type_id: TypeId::string()
             }
         );
@@ -455,11 +462,11 @@ mod tests {
         assert_eq!(
             result,
             RichExpr {
-                kind: RichExprKind::Variable(RichVar {
-                    var_name: "myvar".to_string(),
-                    var_type_id: TypeId::unknown(),
-                    member_access: None,
-                }),
+                kind: RichExprKind::Variable(RichVar::new_with_default_pos(
+                    "myvar",
+                    TypeId::unknown(),
+                    None,
+                )),
                 type_id: TypeId::unknown(),
             }
         );
@@ -495,6 +502,9 @@ mod tests {
                 statements: vec![],
                 ret_type_id: None,
                 original: Closure::new_empty(),
+                has_break: false,
+                has_continue: false,
+                has_return: false,
             },
         };
 
@@ -520,11 +530,11 @@ mod tests {
             result,
             RichExpr {
                 kind: RichExprKind::FunctionCall(RichFnCall {
-                    fn_var: RichVar {
-                        var_name: "do_thing".to_string(),
-                        var_type_id: rich_fn.signature.type_id,
-                        member_access: None,
-                    },
+                    fn_var: RichVar::new_with_default_pos(
+                        "do_thing",
+                        rich_fn.signature.type_id,
+                        None,
+                    ),
                     args: vec![RichExpr {
                         kind: RichExprKind::BoolLiteral(true),
                         type_id: TypeId::bool()
@@ -555,6 +565,9 @@ mod tests {
                 statements: vec![],
                 ret_type_id: None,
                 original: Closure::new_empty(),
+                has_break: false,
+                has_continue: false,
+                has_return: false,
             },
         };
 
@@ -644,6 +657,9 @@ mod tests {
                 statements: vec![],
                 ret_type_id: None,
                 original: Closure::new_empty(),
+                has_break: false,
+                has_continue: false,
+                has_return: false,
             },
         };
 
@@ -668,11 +684,11 @@ mod tests {
             result,
             RichExpr {
                 kind: RichExprKind::FunctionCall(RichFnCall {
-                    fn_var: RichVar {
-                        var_name: "do_thing".to_string(),
-                        var_type_id: rich_fn.signature.type_id.clone(),
-                        member_access: None,
-                    },
+                    fn_var: RichVar::new_with_default_pos(
+                        "do_thing",
+                        rich_fn.signature.type_id.clone(),
+                        None,
+                    ),
                     args: vec![RichExpr {
                         kind: RichExprKind::BoolLiteral(true),
                         type_id: TypeId::bool(),
@@ -687,11 +703,7 @@ mod tests {
             RichExprKind::FunctionCall(call) => {
                 assert_eq!(
                     call.fn_var,
-                    RichVar {
-                        var_name: "do_thing".to_string(),
-                        var_type_id: rich_fn.signature.type_id,
-                        member_access: None,
-                    }
+                    RichVar::new_with_default_pos("do_thing", rich_fn.signature.type_id, None,)
                 );
                 assert_eq!(call.ret_type_id, Some(TypeId::bool()));
                 assert_eq!(call.args.len(), 1);
@@ -738,6 +750,9 @@ mod tests {
                 statements: vec![],
                 ret_type_id: None,
                 original: Closure::new_empty(),
+                has_break: false,
+                has_continue: false,
+                has_return: false,
             },
         };
 
@@ -762,11 +777,11 @@ mod tests {
             result,
             RichExpr {
                 kind: RichExprKind::FunctionCall(RichFnCall {
-                    fn_var: RichVar {
-                        var_name: "do_thing".to_string(),
-                        var_type_id: rich_fn.signature.type_id,
-                        member_access: None,
-                    },
+                    fn_var: RichVar::new_with_default_pos(
+                        "do_thing",
+                        rich_fn.signature.type_id,
+                        None,
+                    ),
                     args: vec![RichExpr {
                         kind: RichExprKind::I64Literal(1),
                         type_id: TypeId::i64(),

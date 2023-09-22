@@ -24,6 +24,9 @@ pub struct RichClosure {
     pub statements: Vec<RichStatement>,
     pub ret_type_id: Option<TypeId>,
     pub original: Closure,
+    pub has_break: bool,
+    pub has_continue: bool,
+    pub has_return: bool,
 }
 
 impl fmt::Display for RichClosure {
@@ -68,24 +71,49 @@ impl RichClosure {
         let original = closure.clone();
         let mut rich_statements = vec![];
         let num_statements = closure.statements.len();
+        let mut has_break = false;
+        let mut has_continue = false;
+        let mut has_return = false;
         for (i, statement) in closure.statements.into_iter().enumerate() {
+            // Analyze the statement.
             let rich_statement = RichStatement::from(ctx, statement.clone());
-            rich_statements.push(rich_statement);
 
-            // If the statement is a return, make sure the return type is correct and that there
-            // are no more statements in this closure.
-            if let RichStatement::Return(ret) = rich_statements.last().unwrap() {
-                let result = check_return(ctx, &ret, ctx.return_type().as_ref());
-                ctx.consume_error(result);
+            // Check if the statement is a break, continue, or return, so we can mark this closure
+            // as containing such statements.
+            match &rich_statement {
+                RichStatement::Break => {
+                    has_break = true;
+                }
+                RichStatement::Continue => {
+                    has_continue = true;
+                }
+                RichStatement::Return(ret) => {
+                    has_return = true;
+
+                    // Check that the return statement is valid.
+                    let result = check_return(ctx, ret, ctx.return_type().as_ref());
+                    ctx.consume_error(result);
+                }
+                _ => {}
+            };
+
+            // If this statement jumps away from this closure but there are still more statements
+            // following the jump inside this closure, issue a warning that those statements will
+            // never be executed.
+            if has_break || has_continue || has_return {
                 if i + 1 != num_statements {
                     ctx.add_warn(AnalyzeWarning::new_from_locatable(
                         WarnKind::UnreachableCode,
-                        "statements following unconditional return would never be executed",
+                        format_code!("statements following {} will never be executed", statement)
+                            .as_str(),
                         Box::new(statement.clone()),
                     ));
+                    rich_statements.push(rich_statement);
                     break;
                 }
             }
+
+            rich_statements.push(rich_statement);
         }
 
         // TODO: handle closure result.
@@ -102,7 +130,16 @@ impl RichClosure {
             statements: rich_statements,
             ret_type_id: ret_type,
             original,
+            has_break,
+            has_continue,
+            has_return,
         }
+    }
+
+    /// Returns `true` only if the closure directly contains a statement that will exit a loop,
+    /// such as `break` or `return`.
+    pub fn exits_loop(&self) -> bool {
+        self.has_break || self.has_return
     }
 }
 
@@ -172,7 +209,8 @@ pub fn check_closure_returns(
                                 Box::new(closure.original.clone()),
                             )
                             .with_detail(
-                                "final statement is a loop that contains break statements",
+                                "The last statement in this closure is a loop that contains \
+                                break statements.",
                             ),
                         );
                     }
@@ -207,7 +245,9 @@ pub fn check_closure_returns(
                         "missing return statement",
                         Box::new(closure.original.clone()),
                     )
-                    .with_detail("final statement is a loop that does not return"),
+                    .with_detail(
+                        "The last statement in this closure is a loop that does not return.",
+                    ),
                 );
             }
         }
@@ -264,7 +304,9 @@ fn check_cond_returns(ctx: &mut ProgramContext, cond: &RichCond, expected: &Type
                 "missing return statement",
                 Box::new(cond.clone()),
             )
-            .with_detail("final statement is a conditional that is not exhaustive"),
+            .with_detail(
+                "The last statement in this closure is a conditional that is not exhaustive",
+            ),
         );
         return;
     }

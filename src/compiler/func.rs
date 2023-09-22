@@ -539,7 +539,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 let ll_expr_val = self.compile_expr(&decl.val);
 
                 // Create and initialize the variable.
-                let var_type = self.types.get(&decl.typ).unwrap();
+                let var_type = self.types.get(&decl.type_id).unwrap();
                 self.create_var(decl.name.as_str(), var_type, ll_expr_val);
             }
             RichStatement::StructTypeDeclaration(_) => {

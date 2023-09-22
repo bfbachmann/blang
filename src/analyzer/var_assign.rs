@@ -45,7 +45,7 @@ impl RichVarAssign {
                             Box::new(assign.clone()),
                         )
                         .with_help(
-                            format_code!("consider declaring {} as mutable", var_name).as_str(),
+                            format_code!("Consider declaring {} as mutable.", var_name).as_str(),
                         ),
                     )
                 }
