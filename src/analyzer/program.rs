@@ -380,7 +380,7 @@ mod tests {
                 
                 if i == 10 {
                     break
-                } else if i % 2 == 0 {
+                } elsif i % 2 == 0 {
                     print("i is even")
                 } else {
                     print("i is odd")

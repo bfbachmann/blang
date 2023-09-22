@@ -6,7 +6,7 @@ use crate::parser::expr::Expression;
 use crate::parser::program::Program;
 use crate::parser::stream::Stream;
 
-/// Represents a branch in a conditional. "if" and "else if" branches must have condition
+/// Represents a branch in a conditional. "if" and "elsif" branches must have condition
 /// expressions, but "else" branches must not.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Branch {

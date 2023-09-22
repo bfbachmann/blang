@@ -67,16 +67,16 @@ impl Conditional {
     ///
     ///     if <if_cond> {
     ///         ...
-    ///     } else if <else_if_cond> {
+    ///     } elsif <elsif_cond> {
     ///         ...
     ///     } else {
     ///         ...
     ///     }
     ///
     /// where
-    ///  - the `else if` and `else` branches are optional, and the `else if` branch is repeatable
+    ///  - the `elsif` and `else` branches are optional, and the `elsif` branch is repeatable
     ///  - `if_cond` is an expression that represents the `if` branch condition
-    ///  - `else_if_cond` is an expression that represents the `else if` branch condition
+    ///  - `elsif_cond` is an expression that represents the `else if` branch condition
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // The first token should be "if".
         Program::parse_expecting(tokens, HashSet::from([TokenKind::If]))?;
@@ -84,16 +84,16 @@ impl Conditional {
         // Parse the rest of the branch (the expression and the closure).
         let branch = Branch::from(tokens, true)?;
 
-        // We now have the first "if" branch. Continue by adding other "else if" branches until
+        // We now have the first "if" branch. Continue by adding other "elsif" branches until
         // there are none left.
         let mut branches = vec![branch];
         loop {
             match tokens.peek_next() {
                 Some(&Token {
-                    kind: TokenKind::ElseIf,
+                    kind: TokenKind::Elsif,
                     ..
                 }) => {
-                    // Move past the "else if" token.
+                    // Move past the "elsif" token.
                     tokens.next();
 
                     // Parse the rest of the branch and add it to the list of branches.
@@ -114,7 +114,7 @@ impl Conditional {
                     break;
                 }
                 _ => {
-                    // The next token is not "else if" or "else", so we assume it's some new
+                    // The next token is not "elsif" or "else", so we assume it's some new
                     // statement and break.
                     break;
                 }

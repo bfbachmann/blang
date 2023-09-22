@@ -5,7 +5,6 @@ pub mod token;
 
 #[cfg(test)]
 mod tests {
-    
 
     use crate::lexer::error::LexError;
     use crate::lexer::kind::TokenKind;
@@ -150,21 +149,21 @@ mod tests {
             ]),
         );
 
-        let result = Token::tokenize_line(r#"if {} else if {} else {} elser iff"#, 100);
+        let result = Token::tokenize_line(r#"if {} elsif {} else {} elser iff"#, 100);
         assert_eq!(
             result,
             Ok(vec![
                 Token::new(TokenKind::If, 100, 1, 3),
                 Token::new(TokenKind::LeftBrace, 100, 4, 5),
                 Token::new(TokenKind::RightBrace, 100, 5, 6),
-                Token::new(TokenKind::ElseIf, 100, 7, 14),
-                Token::new(TokenKind::LeftBrace, 100, 15, 16),
-                Token::new(TokenKind::RightBrace, 100, 16, 17),
-                Token::new(TokenKind::Else, 100, 18, 22),
-                Token::new(TokenKind::LeftBrace, 100, 23, 24),
-                Token::new(TokenKind::RightBrace, 100, 24, 25),
-                Token::new(TokenKind::Identifier(String::from("elser")), 100, 26, 31),
-                Token::new(TokenKind::Identifier(String::from("iff")), 100, 32, 35),
+                Token::new(TokenKind::Elsif, 100, 7, 12),
+                Token::new(TokenKind::LeftBrace, 100, 13, 14),
+                Token::new(TokenKind::RightBrace, 100, 14, 15),
+                Token::new(TokenKind::Else, 100, 16, 20),
+                Token::new(TokenKind::LeftBrace, 100, 21, 22),
+                Token::new(TokenKind::RightBrace, 100, 22, 23),
+                Token::new(TokenKind::Identifier(String::from("elser")), 100, 24, 29),
+                Token::new(TokenKind::Identifier(String::from("iff")), 100, 30, 33),
             ]),
         );
 

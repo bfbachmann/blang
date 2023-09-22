@@ -645,7 +645,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         let mut else_branch_exists = false;
 
         for (i, branch) in cond.branches.iter().enumerate() {
-            // If there is a branch condition, it means we are on an "if" or "else if" branch.
+            // If there is a branch condition, it means we are on an "if" or "elsif" branch.
             // Otherwise, it means we're on an "else" branch.
             if let Some(expr) = &branch.cond {
                 // Create a "then" block to jump to if the branch condition is true.

@@ -135,7 +135,7 @@ mod tests {
                 let mut a = a * 2
                 if a > 10 {
                     return true
-                } else if a > 5 {
+                } elsif a > 5 {
                     return false
                 } else  {
                     return true
@@ -154,7 +154,7 @@ mod tests {
                 let mut mut_a = a * 2
                 if mut_a > 10 {
                     return true
-                } else if mut_a > 5 {
+                } elsif mut_a > 5 {
                     return false
                 } else  {
                     mut_a = 2
@@ -179,7 +179,7 @@ mod tests {
                 let mut mut_a = a * 2
                 if mut_a > 10 {
                     return true
-                } else if mut_a > 5 {
+                } elsif mut_a > 5 {
                     return false
                 }
             }
@@ -202,7 +202,7 @@ mod tests {
                 let mut mut_a = a * 2
                 if mut_a > 10 {
                     return true
-                } else if mut_a > 5 {
+                } elsif mut_a > 5 {
                     return false
                 } else  {
                     loop {
