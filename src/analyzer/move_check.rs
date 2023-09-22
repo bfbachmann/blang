@@ -114,19 +114,20 @@ impl Scope {
         }
     }
 
-    /// Returns a move that conflicts with `mv`, if one exists.
-    fn get_conflicting_move(&self, mv: &Move) -> Option<&Move> {
+    /// Returns all moves that conflict with `mv`.
+    fn get_conflicting_moves(&self, mv: &Move) -> Vec<&Move> {
         // Check all the moves that occurred for this variable in this scope.
         let var_name = mv.var_name();
+        let mut conflicting_moves = vec![];
         if let Some(existing_moves) = self.moved_vars.get(var_name) {
             for existing_move in existing_moves {
                 if existing_move.conflicts_with(&mv) {
-                    return Some(existing_move);
+                    conflicting_moves.push(existing_move);
                 }
             }
         }
 
-        None
+        conflicting_moves
     }
 
     /// Adds `mv` to this scope.
@@ -407,18 +408,18 @@ impl<'a> MoveChecker<'a> {
 
         // Search every scope in the stack for moves of this variable.
         let mv = Move::from(var);
-        let mut err = None;
+        let mut errors = vec![];
         for scope in self.stack.iter_mut().rev() {
             // Check if the move conflicts with an existing move for this variable inside this
             // scope.
-            if let Some(existing_move) = scope.get_conflicting_move(&mv) {
-                err = Some(
+            for conflicting_move in scope.get_conflicting_moves(&mv) {
+                errors.push(
                     AnalyzeError::new_with_locatable(
                         ErrorKind::UseOfMovedValue,
                         format_code!(
                             "cannot use {} because {} was already moved",
                             var,
-                            existing_move
+                            conflicting_move
                         )
                         .as_str(),
                         Box::new(mv.clone()),
@@ -426,26 +427,33 @@ impl<'a> MoveChecker<'a> {
                     .with_detail(
                         format!(
                             "The conflicting move of {} occurs at {}:{}.",
-                            format_code!(existing_move),
-                            existing_move.start_pos.line,
-                            existing_move.start_pos.col,
+                            format_code!(conflicting_move),
+                            conflicting_move.start_pos.line,
+                            conflicting_move.start_pos.col,
                         )
                         .as_str(),
                     )
                     .with_help(format!(
                         "Consider either copying {} on line {} instead of moving it, or refactoring \
                         your code to avoid the move conflict.",
-                        format_code!(existing_move), existing_move.start_pos.line
+                        format_code!(conflicting_move), conflicting_move.start_pos.line
                     ).as_mut()),
                 );
+            }
+
+            // Break as soon as we've checked up to the scope in which the variable was declared.
+            if scope.declared_vars.contains(var.var_name.as_str()) {
                 break;
             }
         }
 
-        // If an error occurred, record it and return early. We're doing this here to avoid
+        // If errors occurred, record them and return early. We're doing this here to avoid
         // borrowing issues above.
-        if let Some(err) = err {
-            self.add_err(err);
+        if !errors.is_empty() {
+            for err in errors {
+                self.add_err(err);
+            }
+
             return;
         }
 
