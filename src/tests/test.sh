@@ -31,7 +31,7 @@ for src_path in ./*.bl; do
     # Link the object file with libc and create an executable.
     $CC "$obj_path" -o "$exe_path" || fail "$base_file_name".bl
 
-    # Execute the executable. Pipe stdout to /dev/null so prevent output from
+    # Execute the executable. Pipe stdout to /dev/null to prevent output from
     # test cases from muddying the test output.
     ./"$exe_path" 1> /dev/null 2> /dev/null || fail "$base_file_name".bl
 
