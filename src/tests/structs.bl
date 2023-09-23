@@ -96,6 +96,17 @@ fn main() {
         assert(t2.nested.bool_val == false, 45)
     }
 
+    // Check that structs work as return values.
+    {
+        let ret_struct = new_struct()
+
+        assert(ret_struct.int_val1 == 555, 46)
+        assert(ret_struct.bool_val == false, 47)
+        assert(ret_struct.int_val2 == 777, 48)
+        assert(ret_struct.nested.int_val == -99, 49)
+        assert(ret_struct.nested.bool_val == true, 50)
+    }
+
     exit(0)
 }
 
@@ -119,4 +130,16 @@ fn take_struct(mut t: Test) {
     assert(t.int_val2 == 57, 18)
     assert(t.nested.int_val == 123, 19)
     assert(t.nested.bool_val == false, 20)
+}
+
+fn new_struct(): Test {
+    return Test{
+        int_val1: 555,
+        bool_val: false,
+        int_val2: 777,
+        nested: Nested{
+            int_val: -99,
+            bool_val: true,
+        },
+    }
 }
