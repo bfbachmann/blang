@@ -199,7 +199,7 @@ fn compile(
         PathBuf::from(path)
     } else {
         let file_stem = src.file_stem().unwrap_or_default();
-        src.with_file_name(file_stem).with_extension(".ll")
+        src.with_file_name(file_stem).with_extension("ll")
     };
 
     // Compile the program.
