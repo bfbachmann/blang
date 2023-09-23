@@ -23,7 +23,7 @@ for src_path in ./*.bl; do
     exe_path="$output_dir"/"$base_file_name"
 
     # Compile Blang to LLVM IR.
-    cargo -q run -- build -o "$ll_path" --unoptimized "$src_path" || fail "$base_file_name".bl
+    cargo -q run -- build -o "$ll_path" "$src_path" || fail "$base_file_name".bl
 
     # Compile LLVM IR to an object file.
     $LLC -filetype=obj "$ll_path" -o "$obj_path" -O0 || fail "$base_file_name".bl
