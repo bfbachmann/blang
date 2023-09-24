@@ -194,42 +194,50 @@ impl RichMemberAccess {
     fn from(ctx: &mut ProgramContext, type_id: &TypeId, member_access: &MemberAccess) -> Self {
         let typ = ctx.get_resolved_type(type_id).unwrap();
 
-        // Check if the member access is accessing a field on a struct type.
+        // Check if the member access is accessing a field on a struct or tuple type.
         let member_name = &member_access.member_name;
-        if let RichType::Struct(struct_type) = typ {
-            if let Some(field_type_id) = struct_type.get_field_type(member_name.as_str()) {
-                // If a submember is being accessed, continue resolving it recursively. Otherwise,
-                // just return the field type.
-                return match &member_access.submember {
-                    Some(submember) => {
-                        let tid = field_type_id.clone();
-                        let submember_access =
-                            RichMemberAccess::from(ctx, &tid, submember.as_ref());
-                        RichMemberAccess {
-                            member_name: member_name.to_string(),
-                            member_type_id: tid,
-                            submember: Some(Box::new(submember_access)),
-                        }
-                    }
-                    None => RichMemberAccess {
-                        member_name: member_name.to_string(),
-                        member_type_id: field_type_id.clone(),
-                        submember: None,
-                    },
-                };
+        let maybe_field_type_id = match typ {
+            RichType::Struct(struct_type) => struct_type.get_field_type(member_name.as_str()),
+            RichType::Tuple(tuple_type) => {
+                let field_index = member_name.parse::<usize>().unwrap();
+                tuple_type.type_ids.get(field_index)
             }
+            _ => None,
+        };
+
+        // Error and return a placeholder value if we couldn't locate the member being accessed.
+        if maybe_field_type_id.is_none() {
+            ctx.add_err(AnalyzeError::new_with_locatable(
+                ErrorKind::MemberNotDefined,
+                format_code!("type {} has no member {}", typ, member_name).as_str(),
+                Box::new(member_access.clone()),
+            ));
+
+            return RichMemberAccess {
+                member_name: member_name.to_string(),
+                member_type_id: TypeId::unknown(),
+                submember: None,
+            };
         }
 
-        ctx.add_err(AnalyzeError::new_with_locatable(
-            ErrorKind::MemberNotDefined,
-            format_code!("type {} has no member {}", typ, member_name).as_str(),
-            Box::new(member_access.clone()),
-        ));
-
-        RichMemberAccess {
-            member_name: member_name.to_string(),
-            member_type_id: TypeId::unknown(),
-            submember: None,
+        // If a submember is being accessed, continue resolving it recursively. Otherwise,
+        // just return the field type.
+        let field_type_id = maybe_field_type_id.unwrap().clone();
+        match &member_access.submember {
+            Some(submember) => {
+                let submember_access =
+                    RichMemberAccess::from(ctx, &field_type_id, submember.as_ref());
+                RichMemberAccess {
+                    member_name: member_name.to_string(),
+                    member_type_id: field_type_id,
+                    submember: Some(Box::new(submember_access)),
+                }
+            }
+            None => RichMemberAccess {
+                member_name: member_name.to_string(),
+                member_type_id: field_type_id,
+                submember: None,
+            },
         }
     }
 

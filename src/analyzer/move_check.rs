@@ -90,17 +90,20 @@ struct Scope {
     /// Will be true if the scope contains a statement like `break`, `continue`, or `return` that
     /// is guaranteed to exit the current loop.
     exits_loop: bool,
+    /// Will be true if the scope is guaranteed to return.
+    returns: bool,
 }
 
 impl Scope {
     /// Creates a new scope. `exits_loop` should be true if the scope directly contains a statement
     /// that would escape the loop it falls under (i.e. `break` or `return`).
-    fn new(kind: ScopeKind, exits_loop: bool) -> Self {
+    fn new(kind: ScopeKind, exits_loop: bool, returns: bool) -> Self {
         Scope {
             kind,
             declared_vars: HashSet::new(),
             moved_vars: HashMap::new(),
             exits_loop,
+            returns,
         }
     }
 
@@ -111,6 +114,7 @@ impl Scope {
             declared_vars: HashSet::new(),
             moved_vars: HashMap::new(),
             exits_loop: false,
+            returns: true,
         }
     }
 
@@ -273,7 +277,11 @@ impl<'a> MoveChecker<'a> {
     /// Recursively performs move checks on `loop_body`.
     fn check_loop(&mut self, loop_body: &RichClosure) {
         // Push a new scope for the loop body.
-        self.push_scope(Scope::new(ScopeKind::Loop, loop_body.exits_loop()));
+        self.push_scope(Scope::new(
+            ScopeKind::Loop,
+            loop_body.exits_loop(),
+            loop_body.has_return,
+        ));
 
         // Check the loop body.
         self.check_statements(&loop_body.statements);
@@ -360,7 +368,11 @@ impl<'a> MoveChecker<'a> {
     /// Recursively performs move checks on `closure`.
     fn check_closure(&mut self, closure: &RichClosure) {
         // Push a new scope onto the stack for this closure.
-        self.push_scope(Scope::new(ScopeKind::Inline, closure.exits_loop()));
+        self.push_scope(Scope::new(
+            ScopeKind::Inline,
+            closure.exits_loop(),
+            closure.has_return,
+        ));
 
         self.check_statements(&closure.statements);
 
@@ -382,7 +394,11 @@ impl<'a> MoveChecker<'a> {
         let mut branch_scopes = vec![];
         for branch in &cond.branches {
             // Push a new scope for the branch body.
-            self.push_scope(Scope::new(ScopeKind::Branch, branch.body.exits_loop()));
+            self.push_scope(Scope::new(
+                ScopeKind::Branch,
+                branch.body.exits_loop(),
+                branch.body.has_return,
+            ));
 
             // Check the branch body.
             self.check_statements(&branch.body.statements);
@@ -391,10 +407,13 @@ impl<'a> MoveChecker<'a> {
             branch_scopes.push(self.pop_scope());
         }
 
-        // Add all the moves from the checked branch scopes to the current scope, since it's
-        // possible that any (or even all) of them are actually executed at runtime.
+        // Add all the moves from the checked branch scopes to the current scope as the branch
+        // doesn't return, since it's possible that any (or even all) of them are actually executed
+        // at runtime.
         for branch_scope in branch_scopes {
-            self.merge_moves_from(branch_scope);
+            if !branch_scope.returns {
+                self.merge_moves_from(branch_scope);
+            }
         }
     }
 

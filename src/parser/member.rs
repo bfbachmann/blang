@@ -1,10 +1,12 @@
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 
+use colored::Colorize;
+
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
-use crate::parser::error::ParseResult;
+use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::program::Program;
 use crate::parser::stream::Stream;
 
@@ -77,8 +79,52 @@ impl MemberAccess {
             _ => Position::default(),
         };
 
-        // The second token should be the member name.
-        let member_name = Program::parse_identifier(tokens)?;
+        // The second token should be the member name or index. Types like structs will have member
+        // names as regular identifiers, but tuples will have numbered fields.
+        let cursor = tokens.cursor();
+        let member_name = match Program::parse_identifier(tokens) {
+            Ok(name) => name,
+            Err(_) => {
+                // The member name is not an identifier, so check if it's a number. Tuple fields
+                // are accessed by number since they don't have field names like structs.
+                tokens.set_cursor(cursor);
+                match tokens.next() {
+                    Some(
+                        token @ Token {
+                            kind: TokenKind::I64Literal(field_index),
+                            ..
+                        },
+                    ) => {
+                        // Make sure the index is positive.
+                        if *field_index < 0 {
+                            return Err(ParseError::new_with_token(
+                                ErrorKind::UnexpectedToken,
+                                format_code!("expected field identifier, but found {}", token)
+                                    .as_str(),
+                                token.clone(),
+                            ));
+                        }
+                        field_index.to_string()
+                    }
+                    Some(other) => {
+                        return Err(ParseError::new_with_token(
+                            ErrorKind::UnexpectedToken,
+                            format_code!("expected field identifier, but found {}", other).as_str(),
+                            other.clone(),
+                        ))
+                    }
+                    None => {
+                        return Err(ParseError::new(
+                            ErrorKind::UnexpectedEOF,
+                            "expected field identifier, but found EOF",
+                            None,
+                            Position::default(),
+                            Position::default(),
+                        ))
+                    }
+                }
+            }
+        };
 
         // Recursively parse the sub-members, if necessary.
         let mut submember = None;

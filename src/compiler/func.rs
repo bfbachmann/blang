@@ -498,8 +498,19 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                     )
                     .unwrap()
             }
+            RichType::Tuple(tuple_type) => {
+                // Get a pointer to the tuple field at the computed index.
+                self.builder
+                    .build_struct_gep(
+                        convert::tuple_to_struct_type(self.ctx, self.types, tuple_type),
+                        ll_ptr,
+                        member_name.parse::<u32>().unwrap(),
+                        format!("{}_ptr", member_name).as_str(),
+                    )
+                    .unwrap()
+            }
             other => {
-                panic!("access to non-struct type {}", other)
+                panic!("invalid member access {}", other)
             }
         };
 
