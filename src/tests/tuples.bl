@@ -41,6 +41,9 @@ fn main() {
 
         assert(t.0 == -2, 11)
         assert(t.1.0 == 15, 12)
+
+        t.1 = {-99}
+        assert(t.1.0 == -99, 13)
     }
 
     exit(0)
