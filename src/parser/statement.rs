@@ -43,7 +43,7 @@ impl fmt::Display for Statement {
         match self {
             Statement::VariableDeclaration(var_dec) => {
                 if let Some(typ) = &var_dec.typ {
-                    write!(f, "let {}: {} = ...", typ, var_dec.name)
+                    write!(f, "let {}: {} = ...", var_dec.name, typ)
                 } else {
                     write!(f, "let {} = ...", var_dec.name)
                 }

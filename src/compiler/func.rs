@@ -18,6 +18,7 @@ use crate::analyzer::func::{RichFn, RichFnCall, RichRet};
 use crate::analyzer::r#struct::RichStructInit;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::statement::RichStatement;
+use crate::analyzer::tuple::RichTupleInit;
 use crate::analyzer::var::{RichMemberAccess, RichVar};
 use crate::analyzer::var_assign::RichVarAssign;
 use crate::compiler::context::{
@@ -379,6 +380,61 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 }
             }
 
+            RichType::Tuple(tuple_type) => {
+                let ll_src_val_type = convert::to_basic_type(self.ctx, self.types, typ);
+
+                // We need to copy the tuple fields recursively one by one.
+                for (ll_field_index, type_id) in tuple_type.type_ids.iter().enumerate() {
+                    let field_type = self.types.get(&type_id).unwrap();
+                    let ll_field_type = convert::to_basic_type(self.ctx, self.types, field_type);
+
+                    // Get a pointer to the source struct field.
+                    let ll_src_field_ptr = self
+                        .builder
+                        .build_struct_gep(
+                            ll_src_val_type,
+                            ll_src_val.into_pointer_value(),
+                            ll_field_index as u32,
+                            format!("tuple.{}_src_ptr", ll_field_index).as_str(),
+                        )
+                        .unwrap();
+
+                    // Get a pointer to the destination struct field.
+                    let ll_dst_field_ptr = self
+                        .builder
+                        .build_struct_gep(
+                            ll_src_val_type,
+                            ll_dst_ptr,
+                            ll_field_index as u32,
+                            format!("tuple.{}_dst_ptr", ll_field_index).as_str(),
+                        )
+                        .unwrap();
+
+                    // Copy the field value.
+                    match field_type {
+                        RichType::Struct(_) | RichType::Tuple(_) => {
+                            self.copy_value(
+                                ll_src_field_ptr.as_basic_value_enum(),
+                                ll_dst_field_ptr,
+                                field_type,
+                            );
+                        }
+
+                        _ => {
+                            // Load the field value from the pointer.
+                            let ll_src_field_val = self.builder.build_load(
+                                ll_field_type,
+                                ll_src_field_ptr,
+                                format!("tuple.{}", ll_field_index).as_str(),
+                            );
+
+                            // Copy the value to the target field pointer.
+                            self.copy_value(ll_src_field_val, ll_dst_field_ptr, field_type)
+                        }
+                    }
+                }
+            }
+
             _ => {
                 // Store the expression value to the pointer address.
                 self.builder.build_store(ll_dst_ptr, ll_src_val);
@@ -402,10 +458,10 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         let ll_var_ptr = self.get_var_ptr(var);
 
         // Load the value from the pointer (unless its a composite struct that is passed with
-        // pointers (like structs).
+        // pointers (like structs or tuples).
         let var_type = self.types.get(&var.get_type_id()).unwrap();
         match var_type {
-            RichType::Struct(_) => ll_var_ptr.as_basic_value_enum(),
+            RichType::Struct(_) | RichType::Tuple(_) => ll_var_ptr.as_basic_value_enum(),
             _ => {
                 let ll_var_type = convert::to_basic_type(self.ctx, self.types, var_type);
                 self.builder.build_load(
@@ -534,13 +590,13 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// Compiles a statement.
     fn compile_statement(&mut self, statement: &RichStatement) -> CompileResult<()> {
         match statement {
-            RichStatement::VariableDeclaration(decl) => {
+            RichStatement::VariableDeclaration(var_decl) => {
                 // Get the value of the expression being assigned to the variable.
-                let ll_expr_val = self.compile_expr(&decl.val);
+                let ll_expr_val = self.compile_expr(&var_decl.val);
 
                 // Create and initialize the variable.
-                let var_type = self.types.get(&decl.type_id).unwrap();
-                self.create_var(decl.name.as_str(), var_type, ll_expr_val);
+                let var_type = self.types.get(&var_decl.type_id).unwrap();
+                self.create_var(var_decl.name.as_str(), var_type, ll_expr_val);
             }
             RichStatement::StructTypeDeclaration(_) => {
                 // Nothing to do here. Struct types are compiled upon initialization.
@@ -740,7 +796,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 // If the value being returned is some structured type, we need to copy it to the
                 // memory pointed to by the first argument and return void.
                 let expr_type = self.types.get(&expr.type_id).unwrap();
-                if let RichType::Struct(_) = expr_type {
+                if let RichType::Struct(_) | RichType::Tuple(_) = expr_type {
                     // Load the return value from the result pointer.
                     let expr_type = self.types.get(&expr.type_id).unwrap();
                     let ret_val = self.builder.build_load(
@@ -823,6 +879,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
             RichExprKind::StructInit(struct_init) => self.compile_struct_init(struct_init),
 
+            RichExprKind::TupleInit(tuple_init) => self.compile_tuple_init(tuple_init),
+
             // TODO
             RichExprKind::AnonFunction(anon_fn) => {
                 panic!("{anon_fn} not implemented");
@@ -838,12 +896,51 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         self.deref_if_ptr(result, expr_type)
     }
 
+    /// Compiles tuple initialization.
+    fn compile_tuple_init(&mut self, tuple_init: &RichTupleInit) -> BasicValueEnum<'ctx> {
+        // Assemble the LLVM struct type.
+        let tuple_type = match self.types.get(&tuple_init.type_id).unwrap() {
+            RichType::Tuple(tt) => tt,
+            _ => {
+                panic!("unexpected type {}", tuple_init.type_id);
+            }
+        };
+        let ll_struct_type = convert::tuple_to_struct_type(self.ctx, self.types, tuple_type);
+
+        // Allocate space for the struct on the stack.
+        let ll_struct_ptr = self.builder.build_alloca(ll_struct_type, "tuple_init_ptr");
+
+        // Assign values to initialized tuple fields.
+        for (i, field_val) in tuple_init.values.iter().enumerate() {
+            // Get a pointer to the tuple field we're initializing.
+            let ll_field_ptr = self
+                .builder
+                .build_struct_gep(
+                    ll_struct_type,
+                    ll_struct_ptr,
+                    i as u32,
+                    format!("tuple.{}_ptr", i).as_str(),
+                )
+                .unwrap();
+
+            // Compile the expression and copy its value to the struct field pointer.
+            let ll_field_val = self.compile_expr(field_val);
+            let field_type = self
+                .types
+                .get(&tuple_type.type_ids.get(i).unwrap())
+                .unwrap();
+            self.copy_value(ll_field_val, ll_field_ptr, field_type);
+        }
+
+        ll_struct_ptr.as_basic_value_enum()
+    }
+
     /// Compiles a struct initialization.
     fn compile_struct_init(&mut self, struct_init: &RichStructInit) -> BasicValueEnum<'ctx> {
         // Assemble the LLVM struct type.
         let ll_struct_type = convert::to_struct_type(self.ctx, self.types, &struct_init.typ);
 
-        // Allocate space for the struct on the stack and store the zero-valued struct there.
+        // Allocate space for the struct on the stack.
         let ll_struct_ptr = self.builder.build_alloca(
             ll_struct_type,
             format!("{}.init_ptr", struct_init.typ.name).as_str(),
@@ -901,11 +998,12 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             // Compile the argument expression.
             let ll_arg_val = self.compile_expr(arg);
 
-            // If the argument is a struct, we need to create a copy of it and pass a pointer to the
-            // copied data instead of the original. This way, we're still passing the struct "by
-            // value" (the callee can modify the data being pointed to safely, because it's a copy).
+            // If the argument is a structured type, we need to create a copy of it and pass a
+            // pointer to the copied data instead of the original. This way, we're still passing the
+            // struct "by value" (the callee can modify the data being pointed to safely, because
+            // it's a copy).
             let arg_type = self.types.get(&arg.type_id).unwrap();
-            if let RichType::Struct(_) = arg_type {
+            if let RichType::Struct(_) | RichType::Tuple(_) = arg_type {
                 let ll_copy_ptr = self.create_entry_alloc("copy_arg", arg_type, ll_arg_val);
                 self.copy_value(ll_arg_val, ll_copy_ptr, arg_type);
                 args.push(ll_copy_ptr.as_basic_value_enum().into());
@@ -1100,7 +1198,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     fn deref_if_ptr(&self, ll_val: BasicValueEnum<'ctx>, typ: &RichType) -> BasicValueEnum<'ctx> {
         match typ {
             // Strings an structs should already be represented as pointers.
-            RichType::String | RichType::Struct(_) => ll_val,
+            RichType::String | RichType::Struct(_) | RichType::Tuple(_) => ll_val,
             RichType::I64 => self.get_int(ll_val).as_basic_value_enum(),
             RichType::Bool => self.get_bool(ll_val).as_basic_value_enum(),
             RichType::Function(_) => ll_val.as_basic_value_enum(),

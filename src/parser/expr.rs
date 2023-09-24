@@ -17,6 +17,7 @@ use crate::parser::program::Program;
 use crate::parser::r#struct::StructInit;
 use crate::parser::stream::Stream;
 use crate::parser::string_lit::StringLit;
+use crate::parser::tuple::TupleInit;
 use crate::parser::var::Var;
 
 #[derive(Debug)]
@@ -59,6 +60,7 @@ pub enum Expression {
     AnonFunction(Box<Function>),
     UnaryOperation(Operator, Box<Expression>),
     StructInit(StructInit),
+    TupleInit(TupleInit),
 
     // Composite expressions.
     BinaryOperation(Box<Expression>, Operator, Box<Expression>),
@@ -80,6 +82,9 @@ impl fmt::Display for Expression {
             Expression::StructInit(struct_init) => {
                 write!(f, "struct initialization {}", struct_init)
             }
+            Expression::TupleInit(tuple_init) => {
+                write!(f, "tuple initialization {}", tuple_init)
+            }
         }
     }
 }
@@ -95,6 +100,7 @@ impl Locatable for Expression {
             Expression::AnonFunction(func) => func.start_pos(),
             Expression::UnaryOperation(_, expr) => expr.start_pos(),
             Expression::StructInit(struct_init) => struct_init.start_pos(),
+            Expression::TupleInit(tuple_init) => tuple_init.start_pos(),
             Expression::BinaryOperation(left, _, _) => left.start_pos(),
         }
     }
@@ -109,6 +115,7 @@ impl Locatable for Expression {
             Expression::AnonFunction(func) => func.end_pos(),
             Expression::UnaryOperation(_, expr) => expr.end_pos(),
             Expression::StructInit(struct_init) => struct_init.end_pos(),
+            Expression::TupleInit(tuple_init) => tuple_init.end_pos(),
             Expression::BinaryOperation(left, _, _) => left.end_pos(),
         }
     }
@@ -168,6 +175,16 @@ impl Expression {
                 let struct_init = StructInit::from(tokens)?;
                 Ok(Some(Expression::StructInit(struct_init)))
             }
+
+            // If the first token is "{", it might be tuple initialization. Try parse the tokens
+            // as tuple initialization and assume there is no tuple initialization here if it fails.
+            Some(Token {
+                kind: TokenKind::LeftBrace,
+                ..
+            }) => match TupleInit::from(tokens) {
+                Ok(tuple_init) => Ok(Some(Expression::TupleInit(tuple_init))),
+                Err(_) => Ok(None),
+            },
 
             // If the first token is an identifier, the expression can be a function call,
             // a variable value, or a struct initialization.

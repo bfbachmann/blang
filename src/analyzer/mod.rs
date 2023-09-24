@@ -28,6 +28,7 @@ pub mod prog_context;
 pub mod program;
 pub mod statement;
 pub mod r#struct;
+pub mod tuple;
 pub mod r#type;
 pub mod var;
 pub mod var_assign;

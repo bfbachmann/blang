@@ -28,6 +28,7 @@ pub mod stream;
 pub mod string;
 pub mod string_lit;
 pub mod r#struct;
+pub mod tuple;
 pub mod r#type;
 pub mod unresolved;
 pub mod var;

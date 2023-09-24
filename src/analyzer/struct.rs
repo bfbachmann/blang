@@ -10,10 +10,8 @@ use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::fmt::hierarchy_to_string;
-
 use crate::parser::r#struct::{StructInit, StructType};
 use crate::parser::r#type::Type;
-
 use crate::{format_code, util};
 
 /// Represents a semantically valid and type-rich struct field.
@@ -25,7 +23,7 @@ pub struct RichField {
 
 impl Display for RichField {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}", self.type_id, self.name)
+        write!(f, "{}: {}", self.name, self.type_id)
     }
 }
 
@@ -293,7 +291,12 @@ impl RichStructType {
                     hierarchy.pop();
                 }
 
-                Type::I64(_) | Type::String(_) | Type::Bool(_) | Type::Function(_) => {}
+                Type::I64(_)
+                | Type::String(_)
+                | Type::Bool(_)
+                | Type::Function(_)
+                // Tuples aren't named types, so they can't have containment cycles.
+                | Type::Tuple(_) => {}
             }
         }
 

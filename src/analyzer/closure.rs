@@ -4,9 +4,8 @@ use std::fmt::Formatter;
 use colored::*;
 
 use crate::analyzer::cond::RichCond;
-use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::func::{RichArg, RichRet};
+use crate::analyzer::func::RichArg;
 use crate::analyzer::prog_context::{ProgramContext, Scope, ScopeKind};
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::statement::RichStatement;
@@ -87,12 +86,8 @@ impl RichClosure {
                 RichStatement::Continue => {
                     has_continue = true;
                 }
-                RichStatement::Return(ret) => {
+                RichStatement::Return(_) => {
                     has_return = true;
-
-                    // Check that the return statement is valid.
-                    let result = check_return(ctx, ret, ctx.return_type().as_ref());
-                    ctx.consume_error(result);
                 }
                 _ => {}
             };
@@ -164,11 +159,9 @@ pub fn check_closure_returns(
         // that the final statement satisfies the return conditions.
         ScopeKind::FnBody | ScopeKind::Branch | ScopeKind::Inline => {
             match closure.statements.last() {
-                // If it's a return, make sure the return type is correct.
-                Some(RichStatement::Return(ret)) => {
-                    let result = check_return(ctx, &ret, Some(expected_ret_type_id));
-                    ctx.consume_error(result);
-                }
+                // If it's a return, we're done checking. We don't need to validate the return
+                // itself because return statements are validated in `RichRet::from`.
+                Some(RichStatement::Return(_)) => {}
 
                 // If it's a conditional, make sure it is exhaustive and recurse on each branch.
                 Some(RichStatement::Conditional(cond)) => {
@@ -214,9 +207,7 @@ pub fn check_closure_returns(
                             ),
                         );
                     }
-                    RichStatement::Return(ret) => {
-                        let result = check_return(ctx, ret, Some(expected_ret_type_id));
-                        ctx.consume_error(result);
+                    RichStatement::Return(_) => {
                         contains_return = true;
                     }
                     RichStatement::Conditional(cond) => {
@@ -314,63 +305,6 @@ fn check_cond_returns(ctx: &mut ProgramContext, cond: &RichCond, expected: &Type
     for branch in &cond.branches {
         check_closure_returns(ctx, &branch.body, expected, &ScopeKind::Branch);
     }
-}
-
-/// Checks that the return type matches what is expected.
-fn check_return(
-    ctx: &ProgramContext,
-    ret: &RichRet,
-    expected: Option<&TypeId>,
-) -> AnalyzeResult<()> {
-    match expected {
-        Some(expected_type_id) => match &ret.val {
-            Some(expr) => {
-                let expected_type = ctx.get_resolved_type(expected_type_id).unwrap();
-                let expr_type = ctx.get_resolved_type(&expr.type_id).unwrap();
-
-                // Skip the type check if either type is unknown. This will happen if semantic
-                // analysis on either type already failed.
-                if !expr_type.is_unknown()
-                    && !expected_type.is_unknown()
-                    && &expr.type_id != expected_type_id
-                {
-                    return Err(AnalyzeError::new_with_locatable(
-                        ErrorKind::IncompatibleTypes,
-                        format_code!(
-                            "expected return value of type {}, but found {}",
-                            expected_type,
-                            expr_type,
-                        )
-                        .as_str(),
-                        Box::new(ret.clone()),
-                    ));
-                }
-            }
-            None => {
-                return Err(AnalyzeError::new_with_locatable(
-                    ErrorKind::MissingReturn,
-                    format_code!(
-                        "return statement is missing a required value of type {}",
-                        expected_type_id,
-                    )
-                    .as_str(),
-                    Box::new(ret.clone()),
-                ))
-            }
-        },
-        None => {
-            // There is no expected return type, so make sure we're returning nothing.
-            if ret.val.is_some() {
-                return Err(AnalyzeError::new_with_locatable(
-                    ErrorKind::IncompatibleTypes,
-                    "cannot return value from function with no return type",
-                    Box::new(ret.clone()),
-                ));
-            }
-        }
-    }
-
-    Ok(())
 }
 
 /// Performs semantic analysis on a break statement.

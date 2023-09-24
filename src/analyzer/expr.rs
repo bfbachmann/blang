@@ -9,6 +9,7 @@ use crate::analyzer::func::{RichFn, RichFnCall, RichFnSig};
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#struct::{RichStructInit, RichStructType};
 use crate::analyzer::r#type::{RichType, TypeId};
+use crate::analyzer::tuple::RichTupleInit;
 use crate::analyzer::var::RichVar;
 use crate::format_code;
 use crate::parser::closure::Closure;
@@ -25,6 +26,7 @@ pub enum RichExprKind {
     I64Literal(i64),
     StringLiteral(String),
     StructInit(RichStructInit),
+    TupleInit(RichTupleInit),
     FunctionCall(RichFnCall),
     AnonFunction(Box<RichFn>),
     UnaryOperation(Operator, Box<RichExpr>),
@@ -40,6 +42,7 @@ impl fmt::Display for RichExprKind {
             RichExprKind::I64Literal(i) => write!(f, "{}", i),
             RichExprKind::StringLiteral(s) => write!(f, "{}", s),
             RichExprKind::StructInit(s) => write!(f, "{}", s),
+            RichExprKind::TupleInit(t) => write!(f, "{}", t),
             RichExprKind::FunctionCall(call) => write!(f, "{}", call),
             RichExprKind::AnonFunction(func) => write!(f, "{}", *func),
             RichExprKind::UnaryOperation(op, expr) => write!(f, "{} {}", op, expr),
@@ -61,6 +64,7 @@ impl PartialEq for RichExprKind {
             (RichExprKind::I64Literal(i1), RichExprKind::I64Literal(i2)) => i1 == i2,
             (RichExprKind::StringLiteral(s1), RichExprKind::StringLiteral(s2)) => s1 == s2,
             (RichExprKind::StructInit(s1), RichExprKind::StructInit(s2)) => s1 == s2,
+            (RichExprKind::TupleInit(t1), RichExprKind::TupleInit(t2)) => t1 == t2,
             (RichExprKind::FunctionCall(f1), RichExprKind::FunctionCall(f2)) => f1 == f2,
             (RichExprKind::AnonFunction(a1), RichExprKind::AnonFunction(a2)) => a1 == a2,
             (RichExprKind::UnaryOperation(o1, e1), RichExprKind::UnaryOperation(o2, e2)) => {
@@ -101,18 +105,22 @@ impl RichExpr {
                     type_id,
                 }
             }
+
             Expression::BoolLiteral(b) => RichExpr {
                 kind: RichExprKind::BoolLiteral(b.value),
                 type_id: TypeId::bool(),
             },
+
             Expression::I64Literal(i) => RichExpr {
                 kind: RichExprKind::I64Literal(i.value),
                 type_id: TypeId::i64(),
             },
+
             Expression::StringLiteral(s) => RichExpr {
                 kind: RichExprKind::StringLiteral(s.value),
                 type_id: TypeId::string(),
             },
+
             Expression::StructInit(struct_init) => {
                 let rich_init = RichStructInit::from(ctx, &struct_init);
                 RichExpr {
@@ -121,13 +129,22 @@ impl RichExpr {
                 }
             }
 
+            Expression::TupleInit(tuple_init) => {
+                let rich_init = RichTupleInit::from(ctx, &tuple_init);
+                let type_id = rich_init.type_id.clone();
+                RichExpr {
+                    kind: RichExprKind::TupleInit(rich_init),
+                    type_id,
+                }
+            }
+
             Expression::FunctionCall(fn_call) => {
                 // Analyze the function call and ensure it has a return type.
                 let rich_call = RichFnCall::from(ctx, fn_call.clone());
-                if let Some(typ) = rich_call.ret_type_id.clone() {
+                if let Some(type_id) = rich_call.ret_type_id.clone() {
                     return RichExpr {
                         kind: RichExprKind::FunctionCall(rich_call),
-                        type_id: typ,
+                        type_id,
                     };
                 }
 
@@ -287,21 +304,24 @@ impl RichExpr {
     }
 
     /// Creates a new zero-valued expression of the given type.
-    pub fn new_zero_value(_ctx: &mut ProgramContext, typ: Type) -> Self {
+    pub fn new_zero_value(ctx: &mut ProgramContext, typ: Type) -> Self {
         let type_id = TypeId::from(typ.clone());
         match typ {
             Type::Bool(_) => RichExpr {
                 kind: RichExprKind::BoolLiteral(false),
                 type_id,
             },
+
             Type::String(_) => RichExpr {
                 kind: RichExprKind::StringLiteral("".to_string()),
                 type_id,
             },
+
             Type::I64(_) => RichExpr {
                 kind: RichExprKind::I64Literal(0),
                 type_id,
             },
+
             Type::Struct(struct_type) => RichExpr {
                 kind: RichExprKind::StructInit(RichStructInit {
                     typ: RichStructType {
@@ -312,6 +332,12 @@ impl RichExpr {
                 }),
                 type_id,
             },
+
+            Type::Tuple(_) => RichExpr {
+                kind: RichExprKind::TupleInit(RichTupleInit::new_empty(ctx)),
+                type_id,
+            },
+
             func_type @ Type::Function(_) => RichExpr {
                 kind: RichExprKind::AnonFunction(Box::new(RichFn {
                     signature: RichFnSig {
@@ -336,6 +362,7 @@ impl RichExpr {
                 })),
                 type_id,
             },
+
             Type::Unresolved(_) => RichExpr {
                 kind: RichExprKind::Unknown,
                 type_id,

@@ -1,0 +1,36 @@
+fn main() {
+    // Check that tuple initialization and assignment works.
+    {
+        let t = {true, 100, {-5, false}}
+        let t2 = t
+    }
+
+    // Check that tuples work as arguments.
+    {
+        let t = {{53}, true}
+        take_tuple(t)
+
+    }
+
+    // Check that tuples work as return values.
+    {
+        let ret_tuple = new_tuple()
+    }
+
+    exit(0)
+}
+
+fn take_tuple(t: {{i64}, bool}) {
+    // TODO
+}
+
+fn new_tuple(): {i64, bool, {bool, i64}} {
+    return {
+        -100,
+        false,
+        {
+            true,
+            555,
+        }
+    }
+}

@@ -9,6 +9,7 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::RichFnSig;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#struct::RichStructType;
+use crate::analyzer::tuple::RichTupleType;
 use crate::parser::r#type::Type;
 use crate::parser::unresolved::UnresolvedType;
 use crate::{format_code, util};
@@ -69,6 +70,11 @@ impl TypeId {
     pub fn is_bool(&self) -> bool {
         matches!(self.typ, Type::Bool(_))
     }
+
+    /// Returns the parsed type associated with this type ID.
+    pub fn typ(&self) -> &Type {
+        &self.typ
+    }
 }
 
 /// Represents a semantically valid and fully resolved type.
@@ -78,6 +84,7 @@ pub enum RichType {
     String,
     I64,
     Struct(RichStructType),
+    Tuple(RichTupleType),
     Function(Box<RichFnSig>),
     /// Represents a type that did not pass semantic analysis and thus was never properly resolved.
     Unknown(String),
@@ -90,6 +97,7 @@ impl Display for RichType {
             RichType::String => write!(f, "string"),
             RichType::I64 => write!(f, "i64"),
             RichType::Struct(s) => write!(f, "{}", s),
+            RichType::Tuple(t) => write!(f, "{}", t),
             RichType::Function(func) => write!(f, "{}", func),
             RichType::Unknown(name) => write!(f, "{}", name),
         }
@@ -103,6 +111,7 @@ impl PartialEq for RichType {
             | (RichType::I64, RichType::I64)
             | (RichType::String, RichType::String) => true,
             (RichType::Struct(s1), RichType::Struct(s2)) => s1 == s2,
+            (RichType::Tuple(t1), RichType::Tuple(t2)) => t1 == t2,
             (RichType::Function(f1), RichType::Function(f2)) => *f1 == *f2,
             (_, _) => false,
         }
@@ -176,6 +185,11 @@ impl RichType {
             Type::Struct(struct_type) => {
                 let rich_struct_type = RichStructType::from(ctx, struct_type, true);
                 return RichType::Struct(rich_struct_type);
+            }
+
+            Type::Tuple(tuple_type) => {
+                let rich_tuple_type = RichTupleType::from(ctx, tuple_type);
+                return RichType::Tuple(rich_tuple_type);
             }
         }
     }
@@ -269,6 +283,19 @@ impl RichType {
             RichType::Struct(s) => {
                 for field in &s.fields {
                     let field_type = ctx.get_resolved_type(&field.type_id).unwrap();
+                    if field_type == typ {
+                        hierarchy.push(field_type);
+                        return true;
+                    } else if field_type.get_type_hierarchy(ctx, typ, hierarchy) {
+                        return true;
+                    }
+                }
+
+                false
+            }
+            RichType::Tuple(t) => {
+                for type_id in &t.type_ids {
+                    let field_type = ctx.get_resolved_type(type_id).unwrap();
                     if field_type == typ {
                         hierarchy.push(field_type);
                         return true;

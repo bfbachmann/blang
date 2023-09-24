@@ -12,6 +12,7 @@ use crate::parser::i64::I64Type;
 use crate::parser::r#struct::StructType;
 use crate::parser::stream::Stream;
 use crate::parser::string::StringType;
+use crate::parser::tuple::TupleType;
 use crate::parser::unresolved::UnresolvedType;
 
 /// Represents a type referenced in a program.
@@ -21,6 +22,7 @@ pub enum Type {
     String(StringType),
     I64(I64Type),
     Struct(StructType),
+    Tuple(TupleType),
     Function(Box<FunctionSignature>),
     /// Represents a named user-defined (i.e. non-primitive) type.
     Unresolved(UnresolvedType),
@@ -47,6 +49,7 @@ impl PartialEq for Type {
                 }
             }
             (Type::Struct(s1), Type::Struct(s2)) => s1 == s2,
+            (Type::Tuple(t1), Type::Tuple(t2)) => t1 == t2,
             (Type::Unresolved(u1), Type::Unresolved(u2)) => u1 == u2,
             (_, _) => false,
         }
@@ -61,6 +64,7 @@ impl fmt::Display for Type {
             Type::I64(_) => write!(f, "i64"),
             Type::Function(fn_sig) => write!(f, "{}", fn_sig),
             Type::Struct(s) => write!(f, "{}", s),
+            Type::Tuple(t) => write!(f, "{}", t),
             Type::Unresolved(u) => write!(f, "{}", u.name),
         }
     }
@@ -73,6 +77,7 @@ impl Locatable for Type {
             Type::String(string_type) => string_type.start_pos(),
             Type::I64(i64_type) => i64_type.start_pos(),
             Type::Struct(struct_type) => struct_type.start_pos(),
+            Type::Tuple(tuple_type) => tuple_type.start_pos(),
             Type::Function(fn_sig) => fn_sig.start_pos(),
             Type::Unresolved(unresolved) => unresolved.start_pos(),
         }
@@ -84,6 +89,7 @@ impl Locatable for Type {
             Type::String(string_type) => string_type.end_pos(),
             Type::I64(i64_type) => i64_type.end_pos(),
             Type::Struct(struct_type) => struct_type.end_pos(),
+            Type::Tuple(tuple_type) => tuple_type.end_pos(),
             Type::Function(fn_sig) => fn_sig.end_pos(),
             Type::Unresolved(unresolved) => unresolved.start_pos(),
         }
@@ -126,15 +132,22 @@ impl Type {
                 Ok(Type::Function(Box::new(sig)))
             }
 
-            Some(
-                _token @ Token {
-                    kind: TokenKind::Struct,
-                    ..
-                },
-            ) => {
+            Some(Token {
+                kind: TokenKind::Struct,
+                ..
+            }) => {
                 tokens.rewind(1);
                 let struct_type = StructType::from(tokens)?;
                 Ok(Type::Struct(struct_type))
+            }
+
+            Some(Token {
+                kind: TokenKind::LeftBrace,
+                ..
+            }) => {
+                tokens.rewind(1);
+                let tuple_type = TupleType::from(tokens)?;
+                Ok(Type::Tuple(tuple_type))
             }
 
             Some(
