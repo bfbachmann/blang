@@ -833,4 +833,42 @@ mod tests {
             })
         ))
     }
+
+    #[test]
+    fn invalid_tuple_access() {
+        let result = analyze_prog(
+            r#"
+            fn main() {
+                let a = {1, 2, 3}
+                let b = a.5
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::MemberNotDefined,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn invalid_tuple_field_assignment() {
+        let result = analyze_prog(
+            r#"
+            fn main() {
+                let mut a = {1, 2, 3}
+                a.0 = true
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::IncompatibleTypes,
+                ..
+            })
+        ))
+    }
 }
