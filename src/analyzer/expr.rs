@@ -215,7 +215,7 @@ impl RichExpr {
                 }
             }
 
-            ref expr @ Expression::BinaryOperation(ref left_expr, ref op, ref right_expr) => {
+            Expression::BinaryOperation(ref left_expr, ref op, ref right_expr) => {
                 // Analyze the left and right operands.
                 let rich_left = RichExpr::from(ctx, *left_expr.clone());
                 let rich_right = RichExpr::from(ctx, *right_expr.clone());
@@ -241,7 +241,7 @@ impl RichExpr {
                 if !RichExpr::is_valid_operand_type(op, left_type) {
                     errors.push(AnalyzeError::new_from_expr(
                         ErrorKind::IncompatibleTypes,
-                        &expr,
+                        &left_expr,
                         format_code!(
                             "cannot apply operator {} to left-side expression of type {}",
                             &op,
@@ -257,7 +257,7 @@ impl RichExpr {
                 if !RichExpr::is_valid_operand_type(op, right_type) {
                     errors.push(AnalyzeError::new_from_expr(
                         ErrorKind::IncompatibleTypes,
-                        &expr,
+                        &right_expr,
                         format_code!(
                             "cannot apply operator {} to right-side expression of type {}",
                             &op,
