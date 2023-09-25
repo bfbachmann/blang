@@ -3,11 +3,12 @@ use crate::parser::func_sig::FunctionSignature;
 use crate::parser::r#type::Type;
 
 /// Returns all syscall signatures.
-pub fn all_syscalls() -> [FunctionSignature; 5] {
+pub fn all_syscalls() -> [FunctionSignature; 6] {
     [
         sys_exit(),
         sys_write(),
         sys_malloc(),
+        sys_calloc(),
         sys_realloc(),
         sys_free(),
     ]
@@ -67,6 +68,27 @@ pub fn sys_malloc() -> FunctionSignature {
     FunctionSignature::new_with_default_pos(
         "malloc",
         vec![Argument::new_with_default_pos("size", Type::usize(), false)],
+        Some(Type::unsafeptr()),
+    )
+}
+
+/// The `calloc` system call function signature. allocates memory for an array of `nmemb` elements
+/// of size bytes each and returns a pointer to the allocated memory. The memory is set to zero.
+///
+/// Blang:
+///
+///     calloc(nmemb: usize, size: usize): unsafeptr
+///
+/// Libc:
+///
+///     void *calloc(size_t nmemb, size_t size)
+pub fn sys_calloc() -> FunctionSignature {
+    FunctionSignature::new_with_default_pos(
+        "calloc",
+        vec![
+            Argument::new_with_default_pos("nmemb", Type::usize(), false),
+            Argument::new_with_default_pos("size", Type::usize(), false),
+        ],
         Some(Type::unsafeptr()),
     )
 }
