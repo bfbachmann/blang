@@ -295,6 +295,7 @@ impl RichStructType {
                 | Type::String(_)
                 | Type::Bool(_)
                 | Type::Function(_)
+                | Type::UnsafePtr(_)
                 // Tuples aren't named types, so they can't have containment cycles.
                 | Type::Tuple(_) => {}
             }

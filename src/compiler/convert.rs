@@ -22,20 +22,32 @@ pub fn to_basic_type<'a>(
 ) -> BasicTypeEnum<'a> {
     match typ {
         RichType::Bool => ctx.bool_type().as_basic_type_enum(),
+
         RichType::I64 => ctx.i64_type().as_basic_type_enum(),
+
+        // TODO: There has to be a better way of representing `void *`.
+        RichType::UnsafePtr => ctx
+            .i64_type()
+            .ptr_type(AddressSpace::default())
+            .as_basic_type_enum(),
+
         RichType::String => ctx
             .i32_type()
             .ptr_type(AddressSpace::default())
             .as_basic_type_enum(),
+
         RichType::Struct(struct_type) => {
             to_struct_type(ctx, types, struct_type).as_basic_type_enum()
         }
+
         RichType::Tuple(tuple_type) => {
             tuple_to_struct_type(ctx, types, tuple_type).as_basic_type_enum()
         }
+
         RichType::Function(fn_sig) => to_fn_type(ctx, &types, fn_sig)
             .ptr_type(AddressSpace::default())
             .as_basic_type_enum(),
+
         RichType::Unknown(name) => {
             panic!("encountered unknown type {}", name)
         }
@@ -190,6 +202,9 @@ pub fn to_metadata_type_enum<'a>(
 ) -> BasicMetadataTypeEnum<'a> {
     match typ {
         RichType::I64 => BasicMetadataTypeEnum::from(ctx.i64_type()),
+        RichType::UnsafePtr => {
+            BasicMetadataTypeEnum::from(ctx.i64_type().ptr_type(AddressSpace::default()))
+        }
         RichType::Bool => BasicMetadataTypeEnum::from(ctx.bool_type()),
         RichType::String => {
             BasicMetadataTypeEnum::from(ctx.i32_type().ptr_type(AddressSpace::default()))

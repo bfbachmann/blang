@@ -1,0 +1,6 @@
+fn main() {
+    let mut ptr: unsafeptr = unsafe_null
+    ptr = malloc(100)
+    free(ptr)
+    exit(0)
+}

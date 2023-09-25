@@ -9,7 +9,7 @@ use inkwell::passes::PassManager;
 use inkwell::values::{
     BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue,
 };
-use inkwell::IntPredicate;
+use inkwell::{AddressSpace, IntPredicate};
 
 use crate::analyzer::closure::RichClosure;
 use crate::analyzer::cond::RichCond;
@@ -852,6 +852,13 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 .const_int(i.abs() as u64, *i < 0)
                 .as_basic_value_enum(),
 
+            RichExprKind::UnsafeNull => self
+                .ctx
+                .i64_type()
+                .ptr_type(AddressSpace::default())
+                .const_null()
+                .as_basic_value_enum(),
+
             RichExprKind::StringLiteral(literal) => {
                 let char_type = self.ctx.i32_type();
 
@@ -1208,8 +1215,11 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// the value is simply returned.
     fn deref_if_ptr(&self, ll_val: BasicValueEnum<'ctx>, typ: &RichType) -> BasicValueEnum<'ctx> {
         match typ {
-            // Strings an structs should already be represented as pointers.
-            RichType::String | RichType::Struct(_) | RichType::Tuple(_) => ll_val,
+            // Strings, structs, tuples, and unsafe pointers should already be represented as
+            // pointers.
+            RichType::String | RichType::Struct(_) | RichType::Tuple(_) | RichType::UnsafePtr => {
+                ll_val
+            }
             RichType::I64 => self.get_int(ll_val).as_basic_value_enum(),
             RichType::Bool => self.get_bool(ll_val).as_basic_value_enum(),
             RichType::Function(_) => ll_val.as_basic_value_enum(),

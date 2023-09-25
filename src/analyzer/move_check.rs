@@ -211,10 +211,9 @@ impl<'a> MoveChecker<'a> {
         self.errors.push(err);
     }
 
-    /// Copies all moves contained within `scope` into the current scope. If `to_loop_as_deferred`
-    /// is true, merges moves as deferred moves into the enclosing loop scope. Otherwise, merges
-    /// moves into the current scope. If `deferred_only` is true, only deferred moves will be
-    /// copied.
+    /// If `to_loop_as_deferred` is true, merges moves as deferred moves into the enclosing loop
+    /// scope. Otherwise, merges moves into the current scope. If `deferred_only` is true, only
+    /// deferred moves will be copied.
     fn merge_moves_from(&mut self, scope: Scope, to_loop_as_deferred: bool, deferred_only: bool) {
         // Find the target scope into which we'll merge moves from the given scope.
         if to_loop_as_deferred {
@@ -363,7 +362,7 @@ impl<'a> MoveChecker<'a> {
         self.check_expr(&assign.val.kind);
     }
 
-    /// Recursively performs move checks on `fn_call`.
+    /// Recursively performs move checks on `call`.
     fn check_fn_call(&mut self, call: &RichFnCall) {
         // Check if any of the function arguments are being moved.
         for arg in &call.args {

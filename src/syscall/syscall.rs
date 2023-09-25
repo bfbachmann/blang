@@ -3,11 +3,17 @@ use crate::parser::func_sig::FunctionSignature;
 use crate::parser::r#type::Type;
 
 /// Returns all syscall signatures.
-pub fn all_syscalls() -> [FunctionSignature; 2] {
-    [sys_exit(), sys_write()]
+pub fn all_syscalls() -> [FunctionSignature; 5] {
+    [
+        sys_exit(),
+        sys_write(),
+        sys_malloc(),
+        sys_realloc(),
+        sys_free(),
+    ]
 }
 
-/// The exit system call signature. Exits the current process.
+/// The `exit` system call signature. Exits the current process.
 ///
 /// Blang:
 ///
@@ -24,7 +30,7 @@ pub fn sys_exit() -> FunctionSignature {
     )
 }
 
-/// The write system call signature. Tries to write `count` characters to the file descriptor from
+/// The `write` system call signature. Tries to write `count` characters to the file descriptor from
 /// the given string `buf` and returns the number of characters written.
 ///
 /// Blang:
@@ -33,7 +39,7 @@ pub fn sys_exit() -> FunctionSignature {
 ///
 /// Libc:
 ///
-///     ssize_t write(int fd, const void buf[.count], size_t count);
+///     size_t write(int fd, const void buf[.count], size_t count)
 pub fn sys_write() -> FunctionSignature {
     FunctionSignature::new_with_default_pos(
         "write",
@@ -43,5 +49,63 @@ pub fn sys_write() -> FunctionSignature {
             Argument::new_with_default_pos("count", Type::i64(), false),
         ],
         Some(Type::i64()),
+    )
+}
+
+/// The `malloc` system call function signature. Allocates `size` bytes and returns a pointer to
+/// the allocated memory. The memory is not initialized.
+///
+/// Blang:
+///
+///     malloc(size: i64): unsafeptr
+///
+/// Libc:
+///
+///     void *malloc(size_t size)
+pub fn sys_malloc() -> FunctionSignature {
+    FunctionSignature::new_with_default_pos(
+        "malloc",
+        vec![Argument::new_with_default_pos("size", Type::i64(), false)],
+        Some(Type::unsafeptr()),
+    )
+}
+
+/// The `realloc` system call function signature. Changes the size of the memory block pointed to
+/// by `ptr` to `size` bytes.
+///
+/// Blang:
+///
+///     realloc(size: i64): unsafeptr
+///
+/// Libc:
+///
+///     void *realloc(size_t size)
+pub fn sys_realloc() -> FunctionSignature {
+    FunctionSignature::new_with_default_pos(
+        "realloc",
+        vec![Argument::new_with_default_pos("size", Type::i64(), false)],
+        Some(Type::unsafeptr()),
+    )
+}
+
+/// The `free` system call function signature. Frees the memory space pointed to by `ptr`, which
+/// must have been returned by a previous call to `malloc()`, `calloc()` or `realloc()`.
+///
+/// Blang:
+///
+///     free(ptr: unsafeptr)
+///
+/// Libc:
+///
+///     void free(void *ptr)
+pub fn sys_free() -> FunctionSignature {
+    FunctionSignature::new_with_default_pos(
+        "free",
+        vec![Argument::new_with_default_pos(
+            "ptr",
+            Type::unsafeptr(),
+            false,
+        )],
+        None,
     )
 }

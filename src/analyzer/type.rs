@@ -45,6 +45,13 @@ impl TypeId {
         TypeId { typ: Type::i64() }
     }
 
+    /// Returns the type ID for the `unsafeptr` type.
+    pub fn unsafeptr() -> Self {
+        TypeId {
+            typ: Type::unsafeptr(),
+        }
+    }
+
     /// Returns the type ID for the `string` type.
     pub fn string() -> Self {
         TypeId {
@@ -83,6 +90,9 @@ pub enum RichType {
     Bool,
     String,
     I64,
+    /// These are pointers that are not garbage collected and allow pointer arithmetic.
+    /// This type translates directly to `void *` in C.
+    UnsafePtr,
     Struct(RichStructType),
     Tuple(RichTupleType),
     Function(Box<RichFnSig>),
@@ -96,6 +106,7 @@ impl Display for RichType {
             RichType::Bool => write!(f, "bool"),
             RichType::String => write!(f, "string"),
             RichType::I64 => write!(f, "i64"),
+            RichType::UnsafePtr => write!(f, "unsafeptr"),
             RichType::Struct(s) => write!(f, "{}", s),
             RichType::Tuple(t) => write!(f, "{}", t),
             RichType::Function(func) => write!(f, "{}", func),
@@ -109,7 +120,8 @@ impl PartialEq for RichType {
         match (self, other) {
             (RichType::Bool, RichType::Bool)
             | (RichType::I64, RichType::I64)
-            | (RichType::String, RichType::String) => true,
+            | (RichType::String, RichType::String)
+            | (RichType::UnsafePtr, RichType::UnsafePtr) => true,
             (RichType::Struct(s1), RichType::Struct(s2)) => s1 == s2,
             (RichType::Tuple(t1), RichType::Tuple(t2)) => t1 == t2,
             (RichType::Function(f1), RichType::Function(f2)) => *f1 == *f2,
@@ -175,6 +187,8 @@ impl RichType {
             }
 
             Type::I64(_) => RichType::I64,
+
+            Type::UnsafePtr(_) => RichType::UnsafePtr,
 
             Type::Bool(_) => RichType::Bool,
 
@@ -277,6 +291,7 @@ impl RichType {
         return match self {
             RichType::Bool
             | RichType::I64
+            | RichType::UnsafePtr
             | RichType::String
             | RichType::Function(_)
             | RichType::Unknown(_) => false,

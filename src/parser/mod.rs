@@ -31,6 +31,8 @@ pub mod r#struct;
 pub mod tuple;
 pub mod r#type;
 pub mod unresolved;
+pub mod unsafe_null;
+pub mod unsafe_ptr;
 pub mod var;
 pub mod var_assign;
 pub mod var_dec;

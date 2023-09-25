@@ -14,6 +14,7 @@ use crate::parser::stream::Stream;
 use crate::parser::string::StringType;
 use crate::parser::tuple::TupleType;
 use crate::parser::unresolved::UnresolvedType;
+use crate::parser::unsafe_ptr::UnsafePtrType;
 
 /// Represents a type referenced in a program.
 #[derive(Debug, Clone, Hash, Eq)]
@@ -21,6 +22,7 @@ pub enum Type {
     Bool(BoolType),
     String(StringType),
     I64(I64Type),
+    UnsafePtr(UnsafePtrType),
     Struct(StructType),
     Tuple(TupleType),
     Function(Box<FunctionSignature>),
@@ -33,7 +35,8 @@ impl PartialEq for Type {
         match (self, other) {
             (Type::Bool(_), Type::Bool(_))
             | (Type::String(_), Type::String(_))
-            | (Type::I64(_), Type::I64(_)) => true,
+            | (Type::I64(_), Type::I64(_))
+            | (Type::UnsafePtr(_), Type::UnsafePtr(_)) => true,
             (Type::Function(f1), Type::Function(f2)) => {
                 if f1.args.len() != f2.args.len() {
                     false
@@ -62,6 +65,7 @@ impl fmt::Display for Type {
             Type::Bool(_) => write!(f, "bool"),
             Type::String(_) => write!(f, "string"),
             Type::I64(_) => write!(f, "i64"),
+            Type::UnsafePtr(_) => write!(f, "unsafeptr"),
             Type::Function(fn_sig) => write!(f, "{}", fn_sig),
             Type::Struct(s) => write!(f, "{}", s),
             Type::Tuple(t) => write!(f, "{}", t),
@@ -76,6 +80,7 @@ impl Locatable for Type {
             Type::Bool(bool_type) => bool_type.start_pos(),
             Type::String(string_type) => string_type.start_pos(),
             Type::I64(i64_type) => i64_type.start_pos(),
+            Type::UnsafePtr(uptr) => uptr.start_pos(),
             Type::Struct(struct_type) => struct_type.start_pos(),
             Type::Tuple(tuple_type) => tuple_type.start_pos(),
             Type::Function(fn_sig) => fn_sig.start_pos(),
@@ -88,6 +93,7 @@ impl Locatable for Type {
             Type::Bool(bool_type) => bool_type.end_pos(),
             Type::String(string_type) => string_type.end_pos(),
             Type::I64(i64_type) => i64_type.end_pos(),
+            Type::UnsafePtr(uptr) => uptr.end_pos(),
             Type::Struct(struct_type) => struct_type.end_pos(),
             Type::Tuple(tuple_type) => tuple_type.end_pos(),
             Type::Function(fn_sig) => fn_sig.end_pos(),
@@ -113,6 +119,13 @@ impl Type {
                     ..
                 },
             ) => Ok(Type::I64(I64Type::new(token.start, token.end))),
+
+            Some(
+                token @ Token {
+                    kind: TokenKind::UnsafePtr,
+                    ..
+                },
+            ) => Ok(Type::UnsafePtr(UnsafePtrType::new(token.start, token.end))),
 
             Some(
                 token @ Token {
@@ -186,6 +199,11 @@ impl Type {
     /// Returns a default i64 type.
     pub fn i64() -> Self {
         Type::I64(I64Type::default())
+    }
+
+    /// Returns a new unsafeptr type.
+    pub fn unsafeptr() -> Self {
+        Type::UnsafePtr(UnsafePtrType::default())
     }
 
     /// Returns a default bool type.

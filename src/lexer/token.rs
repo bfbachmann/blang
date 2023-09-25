@@ -8,7 +8,6 @@ use crate::lexer::error::LexResult;
 use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::Position;
 
-
 /// A token has a kind and a start and end position (in the file).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token {
@@ -91,7 +90,7 @@ impl Token {
                 // The subsegment does not begin with a valid token. This means the segment is
                 // syntactically invalid.
                 return Err(LexError::new(
-                    format_code!("expected valid token, but found {}", subseg).as_str(),
+                    format_code!("invalid token {}", subseg).as_str(),
                     line_num,
                     search_start + 1,
                 ));

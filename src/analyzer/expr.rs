@@ -24,6 +24,7 @@ pub enum RichExprKind {
     Variable(RichVar),
     BoolLiteral(bool),
     I64Literal(i64),
+    UnsafeNull,
     StringLiteral(String),
     StructInit(RichStructInit),
     TupleInit(RichTupleInit),
@@ -40,6 +41,7 @@ impl fmt::Display for RichExprKind {
             RichExprKind::Variable(var) => write!(f, "variable {}", var),
             RichExprKind::BoolLiteral(b) => write!(f, "{}", b),
             RichExprKind::I64Literal(i) => write!(f, "{}", i),
+            RichExprKind::UnsafeNull => write!(f, "unsafe_null"),
             RichExprKind::StringLiteral(s) => write!(f, "{}", s),
             RichExprKind::StructInit(s) => write!(f, "{}", s),
             RichExprKind::TupleInit(t) => write!(f, "{}", t),
@@ -62,6 +64,7 @@ impl PartialEq for RichExprKind {
             (RichExprKind::Variable(v1), RichExprKind::Variable(v2)) => v1 == v2,
             (RichExprKind::BoolLiteral(b1), RichExprKind::BoolLiteral(b2)) => b1 == b2,
             (RichExprKind::I64Literal(i1), RichExprKind::I64Literal(i2)) => i1 == i2,
+            (RichExprKind::UnsafeNull, RichExprKind::UnsafeNull) => true,
             (RichExprKind::StringLiteral(s1), RichExprKind::StringLiteral(s2)) => s1 == s2,
             (RichExprKind::StructInit(s1), RichExprKind::StructInit(s2)) => s1 == s2,
             (RichExprKind::TupleInit(t1), RichExprKind::TupleInit(t2)) => t1 == t2,
@@ -114,6 +117,11 @@ impl RichExpr {
             Expression::I64Literal(i) => RichExpr {
                 kind: RichExprKind::I64Literal(i.value),
                 type_id: TypeId::i64(),
+            },
+
+            Expression::UnsafeNull(_) => RichExpr {
+                kind: RichExprKind::UnsafeNull,
+                type_id: TypeId::unsafeptr(),
             },
 
             Expression::StringLiteral(s) => RichExpr {
@@ -322,6 +330,11 @@ impl RichExpr {
                 type_id,
             },
 
+            Type::UnsafePtr(_) => RichExpr {
+                kind: RichExprKind::UnsafeNull,
+                type_id,
+            },
+
             Type::Struct(struct_type) => RichExpr {
                 kind: RichExprKind::StructInit(RichStructInit {
                     typ: RichStructType {
@@ -379,14 +392,17 @@ impl RichExpr {
             | Operator::Subtract
             | Operator::Multiply
             | Operator::Divide
-            | Operator::Modulo => matches!(operand_type, RichType::I64),
+            | Operator::Modulo => matches!(operand_type, RichType::I64 | RichType::UnsafePtr),
 
             // Logical operators only work on bools.
             Operator::LogicalAnd | Operator::LogicalOr => matches!(operand_type, RichType::Bool),
 
             // Equality operators only work on numerics and bools.
             Operator::EqualTo | Operator::NotEqualTo => {
-                matches!(operand_type, RichType::Bool | RichType::I64)
+                matches!(
+                    operand_type,
+                    RichType::Bool | RichType::I64 | RichType::UnsafePtr
+                )
             }
 
             // Comparators only work on numeric types.

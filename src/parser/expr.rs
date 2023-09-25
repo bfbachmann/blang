@@ -18,6 +18,7 @@ use crate::parser::r#struct::StructInit;
 use crate::parser::stream::Stream;
 use crate::parser::string_lit::StringLit;
 use crate::parser::tuple::TupleInit;
+use crate::parser::unsafe_null::UnsafeNull;
 use crate::parser::var::Var;
 
 #[derive(Debug)]
@@ -55,6 +56,7 @@ pub enum Expression {
     Variable(Var),
     BoolLiteral(BoolLit),
     I64Literal(I64Lit),
+    UnsafeNull(UnsafeNull),
     StringLiteral(StringLit),
     FunctionCall(FunctionCall),
     AnonFunction(Box<Function>),
@@ -72,6 +74,7 @@ impl fmt::Display for Expression {
             Expression::Variable(s) => write!(f, "{}", s),
             Expression::BoolLiteral(b) => write!(f, "{}", b),
             Expression::I64Literal(i) => write!(f, "{}", i),
+            Expression::UnsafeNull(unsafe_null) => write!(f, "{}", unsafe_null),
             Expression::StringLiteral(s) => write!(f, "{}", s),
             Expression::FunctionCall(fn_call) => write!(f, "{}", fn_call),
             Expression::AnonFunction(func) => write!(f, "{}", func),
@@ -95,6 +98,7 @@ impl Locatable for Expression {
             Expression::Variable(var) => var.start_pos(),
             Expression::BoolLiteral(bool_lit) => bool_lit.start_pos(),
             Expression::I64Literal(i64_lit) => i64_lit.start_pos(),
+            Expression::UnsafeNull(unsafe_null) => unsafe_null.start_pos(),
             Expression::StringLiteral(string_lit) => string_lit.start_pos(),
             Expression::FunctionCall(fn_call) => fn_call.start_pos(),
             Expression::AnonFunction(func) => func.start_pos(),
@@ -110,6 +114,7 @@ impl Locatable for Expression {
             Expression::Variable(var) => var.end_pos(),
             Expression::BoolLiteral(bool_lit) => bool_lit.end_pos(),
             Expression::I64Literal(i64_lit) => i64_lit.end_pos(),
+            Expression::UnsafeNull(unsafe_null) => unsafe_null.end_pos(),
             Expression::StringLiteral(string_lit) => string_lit.end_pos(),
             Expression::FunctionCall(fn_call) => fn_call.end_pos(),
             Expression::AnonFunction(func) => func.end_pos(),
@@ -281,6 +286,15 @@ impl Expression {
             }) => {
                 let string_lit = StringLit::from(tokens)?;
                 Ok(Some(Expression::StringLiteral(string_lit)))
+            }
+
+            // Check if it's an unsafe null value.
+            Some(Token {
+                kind: TokenKind::UnsafeNull,
+                ..
+            }) => {
+                let unsafe_null = UnsafeNull::from(tokens)?;
+                Ok(Some(Expression::UnsafeNull(unsafe_null)))
             }
 
             // If the token is anything else, we assume there is no basic expression here.
