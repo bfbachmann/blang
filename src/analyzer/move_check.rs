@@ -87,23 +87,27 @@ struct Scope {
     declared_vars: HashSet<String>,
     /// Variables moves that occur within this scope.
     moved_vars: HashMap<String, Vec<Move>>,
-    /// Will be true if the scope contains a statement like `break`, `continue`, or `return` that
-    /// is guaranteed to exit the current loop.
-    exits_loop: bool,
+    /// Deferred moves are moves that can only conflict with moves that occur after this scope and
+    /// not with moves that occur within or under this scope. The prime example is any move that
+    /// occurs before a `break` inside a branch inside a loop, because it can't conflict with any
+    /// moves after it in the loop, but can conflict with moves after the loop.
+    deferred_moves: HashMap<String, Vec<Move>>,
     /// Will be true if the scope is guaranteed to return.
-    returns: bool,
+    has_return: bool,
+    /// Will be true if the scope is guaranteed to break.
+    has_break: bool,
 }
 
 impl Scope {
-    /// Creates a new scope. `exits_loop` should be true if the scope directly contains a statement
-    /// that would escape the loop it falls under (i.e. `break` or `return`).
-    fn new(kind: ScopeKind, exits_loop: bool, returns: bool) -> Self {
+    /// Creates a new scope.
+    fn new(kind: ScopeKind, has_return: bool, has_break: bool) -> Self {
         Scope {
             kind,
             declared_vars: HashSet::new(),
             moved_vars: HashMap::new(),
-            exits_loop,
-            returns,
+            deferred_moves: HashMap::new(),
+            has_return,
+            has_break,
         }
     }
 
@@ -113,9 +117,16 @@ impl Scope {
             kind: ScopeKind::FnBody,
             declared_vars: HashSet::new(),
             moved_vars: HashMap::new(),
-            exits_loop: false,
-            returns: true,
+            deferred_moves: HashMap::new(),
+            has_return: true,
+            has_break: false,
         }
+    }
+
+    /// Returns true if this scope is guaranteed to exit its enclosing loop (i.e. it has a `break`
+    /// or `return` statement).
+    fn exits_loop(&self) -> bool {
+        self.has_break || self.has_return
     }
 
     /// Returns all moves that conflict with `mv`.
@@ -134,14 +145,32 @@ impl Scope {
         conflicting_moves
     }
 
-    /// Adds `mv` to this scope.
-    fn add_move(&mut self, var_name: &str, mv: Move) {
-        match self.moved_vars.get_mut(var_name) {
+    /// Adds `mv` to this scope. If `deferred` is true, adds the move as a deferred move, so it
+    /// will only be checked against other moves after this scope and none within or under this
+    /// scope.
+    fn add_move(&mut self, mv: Move, deferred: bool) {
+        let target = match deferred {
+            true => &mut self.deferred_moves,
+            false => &mut self.moved_vars,
+        };
+
+        let var_name = mv.var_name();
+        match target.get_mut(var_name) {
             Some(moves) => moves.push(mv),
             None => {
-                self.moved_vars.insert(var_name.to_string(), vec![mv]);
+                target.insert(var_name.to_string(), vec![mv]);
             }
         };
+    }
+
+    /// Adds all moves from `moves` to the current scope. If `deferred` is true, the moves are
+    /// added to the current scope as deferred moves.
+    fn add_moves(&mut self, moves: HashMap<String, Vec<Move>>, deferred: bool) {
+        for (_, new_moves) in moves {
+            for new_move in new_moves {
+                self.add_move(new_move, deferred);
+            }
+        }
     }
 }
 
@@ -174,11 +203,7 @@ impl<'a> MoveChecker<'a> {
 
     /// Records the move in the current scope.
     fn add_move(&mut self, mv: Move) {
-        let var_name = mv.var_name().to_string();
-        self.stack
-            .last_mut()
-            .unwrap()
-            .add_move(var_name.as_str(), mv);
+        self.stack.last_mut().unwrap().add_move(mv, false);
     }
 
     /// Records `err`.
@@ -186,16 +211,33 @@ impl<'a> MoveChecker<'a> {
         self.errors.push(err);
     }
 
-    /// Copies all moves contained within `scope` into the current scope.
-    fn merge_moves_from(&mut self, scope: Scope) {
-        let cur_scope = self.stack.last_mut().unwrap();
-        for (var_name, new_moves) in scope.moved_vars {
-            if let Some(existing_moves) = cur_scope.moved_vars.get_mut(var_name.as_str()) {
-                existing_moves.extend(new_moves);
-            } else {
-                cur_scope.moved_vars.insert(var_name, new_moves);
+    /// Copies all moves contained within `scope` into the current scope. If `to_loop_as_deferred`
+    /// is true, merges moves as deferred moves into the enclosing loop scope. Otherwise, merges
+    /// moves into the current scope. If `deferred_only` is true, only deferred moves will be
+    /// copied.
+    fn merge_moves_from(&mut self, scope: Scope, to_loop_as_deferred: bool, deferred_only: bool) {
+        // Find the target scope into which we'll merge moves from the given scope.
+        if to_loop_as_deferred {
+            // Find the enclosing loop scope.
+            for target_scope in self.stack.iter_mut().rev() {
+                if target_scope.kind == ScopeKind::Loop {
+                    // Copy moves as deferred moves from the given scope to the target scope.
+                    target_scope.add_moves(scope.deferred_moves, true);
+                    if !deferred_only {
+                        target_scope.add_moves(scope.moved_vars, true);
+                    }
+
+                    break;
+                }
             }
-        }
+        } else {
+            // Copy moves from the given scope to the current scope.
+            let cur_scope = self.stack.last_mut().unwrap();
+            cur_scope.add_moves(scope.deferred_moves, false);
+            if !deferred_only {
+                cur_scope.add_moves(scope.moved_vars, false);
+            }
+        };
     }
 
     /// Returns true if the current scope either is a loop body or exists inside a loop body and
@@ -207,7 +249,7 @@ impl<'a> MoveChecker<'a> {
         // guaranteed to execute at most once.
         let mut exits_loop = false;
         for scope in self.stack.iter().rev() {
-            if scope.exits_loop {
+            if scope.exits_loop() {
                 exits_loop = true;
             }
 
@@ -279,8 +321,8 @@ impl<'a> MoveChecker<'a> {
         // Push a new scope for the loop body.
         self.push_scope(Scope::new(
             ScopeKind::Loop,
-            loop_body.exits_loop(),
             loop_body.has_return,
+            loop_body.has_break,
         ));
 
         // Check the loop body.
@@ -288,7 +330,10 @@ impl<'a> MoveChecker<'a> {
 
         // Pop the scope now that we're done checking the loop body.
         let scope = self.pop_scope();
-        self.merge_moves_from(scope);
+
+        // If this loop is guaranteed to return, only merge its deferred moves. Otherwise, merge
+        // all its moves.
+        self.merge_moves_from(scope, false, loop_body.has_return);
     }
 
     /// Recursively performs move checks on `fn_decl`.
@@ -370,8 +415,8 @@ impl<'a> MoveChecker<'a> {
         // Push a new scope onto the stack for this closure.
         self.push_scope(Scope::new(
             ScopeKind::Inline,
-            closure.exits_loop(),
             closure.has_return,
+            closure.has_break,
         ));
 
         self.check_statements(&closure.statements);
@@ -379,7 +424,10 @@ impl<'a> MoveChecker<'a> {
         // Now that we're done checking the closure, pop its scope from the stack and merge any
         // moves that occurred within it into the current scope.
         let scope = self.pop_scope();
-        self.merge_moves_from(scope);
+
+        // If this closure if guaranteed to return, only merge its deferred moves into the current
+        // scope. We do this because its regular moves should never conflict with later moves.
+        self.merge_moves_from(scope, false, closure.has_return);
     }
 
     /// Recursively performs move checks on all statements in `statements`.
@@ -391,29 +439,38 @@ impl<'a> MoveChecker<'a> {
 
     /// Recursively performs move checks on all branches in `cond`.
     fn check_cond(&mut self, cond: &RichCond) {
+        // Check moves on each branch separately – that is, independently, because branch bodies
+        // are mutually exclusive so their moves should never conflict with one another.
         let mut branch_scopes = vec![];
         for branch in &cond.branches {
             // Push a new scope for the branch body.
             self.push_scope(Scope::new(
                 ScopeKind::Branch,
-                branch.body.exits_loop(),
                 branch.body.has_return,
+                branch.body.has_break,
             ));
 
             // Check the branch body.
             self.check_statements(&branch.body.statements);
 
-            // Pop the scope now that we're done checking the branch body.
+            // Pop the scope now that we're done checking the branch body. We don't want to merge
+            // the moves from this branch into the parent scope yet, because we won't want them
+            // to conflict with moves from other mutually exclusive branches in this conditional.
             branch_scopes.push(self.pop_scope());
         }
 
-        // Add all the moves from the checked branch scopes to the current scope as the branch
-        // doesn't return, since it's possible that any (or even all) of them are actually executed
-        // at runtime.
+        // Copy the moves from the checked branch scopes to some parent scope.
         for branch_scope in branch_scopes {
-            if !branch_scope.returns {
-                self.merge_moves_from(branch_scope);
-            }
+            // If the branch breaks the loop, we need to merge its moves into the enclosing loop
+            // scope as deferred moves. This way, the moves on this branch won't conflict with
+            // any later moves inside the current loop, but they may conflict with moves after
+            // the current loop.
+            let to_loop_as_deferred = branch_scope.has_break;
+
+            // If the branch returns, we should only merge its deferred moves, as none of its
+            // regular moves could ever conflict with later moves.
+            let deferred_only = branch_scope.has_return;
+            self.merge_moves_from(branch_scope, to_loop_as_deferred, deferred_only);
         }
     }
 

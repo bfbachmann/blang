@@ -130,12 +130,6 @@ impl RichClosure {
             has_return,
         }
     }
-
-    /// Returns `true` only if the closure directly contains a statement that will exit a loop,
-    /// such as `break` or `return`.
-    pub fn exits_loop(&self) -> bool {
-        self.has_break || self.has_return
-    }
 }
 
 /// Checks that the given closure returns the given type.

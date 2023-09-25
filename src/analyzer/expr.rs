@@ -275,7 +275,7 @@ impl RichExpr {
                         ErrorKind::IncompatibleTypes,
                         right_expr,
                         format_code!(
-                            "{} operands has mismatched types {} and {}",
+                            "{} operands have mismatched types {} and {}",
                             op,
                             left_type,
                             right_type,

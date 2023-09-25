@@ -786,6 +786,106 @@ mod tests {
     }
 
     #[test]
+    fn move_in_branch_with_break() {
+        let result = analyze_prog(
+            r#"
+            fn main() {
+                struct T {}
+                let t = T{}
+                loop {
+                    if true {
+                        let a = t
+                        break
+                    }
+                    
+                    let a = t
+                    return
+                }
+            }
+            "#,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn illegal_move_in_loop_with_return() {
+        let result = analyze_prog(
+            r#"
+            fn main() {
+                struct T {}
+                let t = T{}
+                loop {
+                    if true {
+                        let a = t
+                        break
+                    }
+                    
+                    let a = t
+                    return
+                }
+            
+                let a = t
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::UseOfMovedValue,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn illegal_move_in_branch_with_break() {
+        let result = analyze_prog(
+            r#"
+            fn main() {
+                struct T {}
+                let t = T{}
+                loop {
+                    if true {
+                        let a = t
+                        break
+                    }
+                }
+                
+                let b = t
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::UseOfMovedValue,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn move_in_branch_with_return() {
+        let result = analyze_prog(
+            r#"
+            fn main() {
+                struct T {}
+                let t = T{}
+                loop {
+                    if true {
+                        let a = t
+                        return
+                    }
+                }
+                
+                let b = t
+            }
+            "#,
+        );
+        assert!(result.is_ok())
+    }
+
+    #[test]
     fn partial_moves() {
         let result = analyze_prog(
             r#"
