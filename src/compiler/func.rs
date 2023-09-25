@@ -852,6 +852,12 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 .const_int(i.abs() as u64, *i < 0)
                 .as_basic_value_enum(),
 
+            RichExprKind::USizeLiteral(u) => self
+                .ctx
+                .i64_type()
+                .const_int(*u, false)
+                .as_basic_value_enum(),
+
             RichExprKind::UnsafeNull => self
                 .ctx
                 .i64_type()
@@ -1095,10 +1101,14 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         let lhs = self.compile_expr(left_expr);
         let rhs = self.compile_expr(right_expr);
 
+        // Determine whether the operation should be signed or unsigned based on the operand types.
+        let signed = self.types.get(&left_expr.type_id).unwrap().is_signed();
+
         if op.is_arithmetic() {
-            self.compile_arith_op(lhs, op, rhs).as_basic_value_enum()
+            self.compile_arith_op(lhs, op, rhs, signed)
+                .as_basic_value_enum()
         } else if op.is_comparator() {
-            self.compile_cmp(lhs, op, rhs).as_basic_value_enum()
+            self.compile_cmp(lhs, op, rhs, signed).as_basic_value_enum()
         } else if op.is_logical() {
             self.compile_logical_op(lhs, op, rhs).as_basic_value_enum()
         } else {
@@ -1130,6 +1140,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         ll_lhs: BasicValueEnum<'ctx>,
         op: &Operator,
         ll_rhs: BasicValueEnum<'ctx>,
+        signed: bool,
     ) -> IntValue<'ctx> {
         // TODO: will it work if we always treat operands as ints?
         let lhs = self.get_int(ll_lhs);
@@ -1144,19 +1155,32 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                     .build_int_compare(IntPredicate::NE, lhs, rhs, "ne")
             }
             Operator::GreaterThan => {
-                self.builder
-                    .build_int_compare(IntPredicate::SGT, lhs, rhs, "gt")
+                let ll_op = match signed {
+                    true => IntPredicate::SGT,
+                    false => IntPredicate::UGT,
+                };
+                self.builder.build_int_compare(ll_op, lhs, rhs, "gt")
             }
-            Operator::LessThan => self
-                .builder
-                .build_int_compare(IntPredicate::SLT, lhs, rhs, "lt"),
+            Operator::LessThan => {
+                let ll_op = match signed {
+                    true => IntPredicate::SLT,
+                    false => IntPredicate::ULT,
+                };
+                self.builder.build_int_compare(ll_op, lhs, rhs, "lt")
+            }
             Operator::GreaterThanOrEqual => {
-                self.builder
-                    .build_int_compare(IntPredicate::SGE, lhs, rhs, "ge")
+                let ll_op = match signed {
+                    true => IntPredicate::SGE,
+                    false => IntPredicate::UGE,
+                };
+                self.builder.build_int_compare(ll_op, lhs, rhs, "ge")
             }
             Operator::LessThanOrEqual => {
-                self.builder
-                    .build_int_compare(IntPredicate::SLE, lhs, rhs, "le")
+                let ll_op = match signed {
+                    true => IntPredicate::SLE,
+                    false => IntPredicate::ULE,
+                };
+                self.builder.build_int_compare(ll_op, lhs, rhs, "le")
             }
             other => panic!("unexpected comparison operator {other}"),
         }
@@ -1168,6 +1192,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         ll_lhs: BasicValueEnum<'ctx>,
         op: &Operator,
         ll_rhs: BasicValueEnum<'ctx>,
+        signed: bool,
     ) -> IntValue<'ctx> {
         // Expect both operands to be of type i64.
         let lhs = self.get_int(ll_lhs);
@@ -1177,8 +1202,20 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             Operator::Add => self.builder.build_int_add(lhs, rhs, "sum"),
             Operator::Subtract => self.builder.build_int_sub(lhs, rhs, "diff"),
             Operator::Multiply => self.builder.build_int_mul(lhs, rhs, "prod"),
-            Operator::Divide => self.builder.build_int_signed_div(lhs, rhs, "quot"),
-            Operator::Modulo => self.builder.build_int_signed_rem(lhs, rhs, "rem"),
+            Operator::Divide => {
+                if signed {
+                    self.builder.build_int_signed_div(lhs, rhs, "quot")
+                } else {
+                    self.builder.build_int_unsigned_div(lhs, rhs, "quot")
+                }
+            }
+            Operator::Modulo => {
+                if signed {
+                    self.builder.build_int_signed_rem(lhs, rhs, "rem")
+                } else {
+                    self.builder.build_int_unsigned_rem(lhs, rhs, "rem")
+                }
+            }
             other => panic!("unexpected arithmetic operator {other}"),
         }
     }
@@ -1220,7 +1257,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             RichType::String | RichType::Struct(_) | RichType::Tuple(_) | RichType::UnsafePtr => {
                 ll_val
             }
-            RichType::I64 => self.get_int(ll_val).as_basic_value_enum(),
+            RichType::I64 | RichType::USize => self.get_int(ll_val).as_basic_value_enum(),
             RichType::Bool => self.get_bool(ll_val).as_basic_value_enum(),
             RichType::Function(_) => ll_val.as_basic_value_enum(),
             RichType::Unknown(name) => {

@@ -291,11 +291,13 @@ impl RichStructType {
                     hierarchy.pop();
                 }
 
+                // These types can't have containment cycles.
                 Type::I64(_)
                 | Type::String(_)
                 | Type::Bool(_)
                 | Type::Function(_)
                 | Type::UnsafePtr(_)
+                | Type::USize(_)
                 // Tuples aren't named types, so they can't have containment cycles.
                 | Type::Tuple(_) => {}
             }

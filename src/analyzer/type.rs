@@ -52,6 +52,11 @@ impl TypeId {
         }
     }
 
+    /// Returns the type ID for the `usize` type.
+    pub fn usize() -> Self {
+        TypeId { typ: Type::usize() }
+    }
+
     /// Returns the type ID for the `string` type.
     pub fn string() -> Self {
         TypeId {
@@ -93,6 +98,8 @@ pub enum RichType {
     /// These are pointers that are not garbage collected and allow pointer arithmetic.
     /// This type translates directly to `void *` in C.
     UnsafePtr,
+    /// Represents a pointer-sized unsigned integer.
+    USize,
     Struct(RichStructType),
     Tuple(RichTupleType),
     Function(Box<RichFnSig>),
@@ -106,6 +113,7 @@ impl Display for RichType {
             RichType::Bool => write!(f, "bool"),
             RichType::String => write!(f, "string"),
             RichType::I64 => write!(f, "i64"),
+            RichType::USize => write!(f, "usize"),
             RichType::UnsafePtr => write!(f, "unsafeptr"),
             RichType::Struct(s) => write!(f, "{}", s),
             RichType::Tuple(t) => write!(f, "{}", t),
@@ -121,7 +129,8 @@ impl PartialEq for RichType {
             (RichType::Bool, RichType::Bool)
             | (RichType::I64, RichType::I64)
             | (RichType::String, RichType::String)
-            | (RichType::UnsafePtr, RichType::UnsafePtr) => true,
+            | (RichType::UnsafePtr, RichType::UnsafePtr)
+            | (RichType::USize, RichType::USize) => true,
             (RichType::Struct(s1), RichType::Struct(s2)) => s1 == s2,
             (RichType::Tuple(t1), RichType::Tuple(t2)) => t1 == t2,
             (RichType::Function(f1), RichType::Function(f2)) => *f1 == *f2,
@@ -190,6 +199,8 @@ impl RichType {
 
             Type::UnsafePtr(_) => RichType::UnsafePtr,
 
+            Type::USize(_) => RichType::USize,
+
             Type::Bool(_) => RichType::Bool,
 
             Type::String(_) => RichType::String,
@@ -220,6 +231,8 @@ impl RichType {
             (TypeId::bool(), RichType::Bool),
             (TypeId::i64(), RichType::I64),
             (TypeId::string(), RichType::String),
+            (TypeId::unsafeptr(), RichType::UnsafePtr),
+            (TypeId::usize(), RichType::USize),
             (
                 TypeId::unknown(),
                 RichType::Unknown("<unknown>".to_string()),
@@ -292,6 +305,7 @@ impl RichType {
             RichType::Bool
             | RichType::I64
             | RichType::UnsafePtr
+            | RichType::USize
             | RichType::String
             | RichType::Function(_)
             | RichType::Unknown(_) => false,
@@ -329,6 +343,57 @@ impl RichType {
         match self {
             RichType::Bool | RichType::I64 | RichType::Function(_) => false,
             _ => true,
+        }
+    }
+
+    /// Returns true if arithmetic operations on this type should be signed. Otherwise, this type
+    /// either doesn't support arithmetic operations, or requires unsigned operations.
+    pub fn is_signed(&self) -> bool {
+        match self {
+            RichType::I64 => true,
+            RichType::Bool
+            | RichType::String
+            | RichType::UnsafePtr
+            | RichType::USize
+            | RichType::Struct(_)
+            | RichType::Tuple(_)
+            | RichType::Function(_)
+            | RichType::Unknown(_) => false,
+        }
+    }
+
+    /// Returns the size of this type (i.e. the amount of memory required to store it) in bytes.
+    pub fn size_bytes(&self, ctx: &ProgramContext) -> Option<u64> {
+        match self {
+            RichType::Bool => Some(1),
+            RichType::I64 | RichType::UnsafePtr | RichType::USize | RichType::Function(_) => {
+                Some(8)
+            }
+            RichType::String | RichType::Unknown(_) => None,
+            RichType::Struct(struct_type) => {
+                let mut size = 0;
+                for field in &struct_type.fields {
+                    let field_type = ctx.get_resolved_type(&field.type_id).unwrap();
+                    size += match field_type.size_bytes(ctx) {
+                        Some(s) => s,
+                        None => return None,
+                    }
+                }
+
+                Some(size)
+            }
+            RichType::Tuple(tuple_type) => {
+                let mut size = 0;
+                for type_id in &tuple_type.type_ids {
+                    let field_type = ctx.get_resolved_type(&type_id).unwrap();
+                    size += match field_type.size_bytes(ctx) {
+                        Some(s) => s,
+                        None => return None,
+                    }
+                }
+
+                Some(size)
+            }
         }
     }
 }

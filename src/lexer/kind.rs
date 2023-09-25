@@ -36,6 +36,7 @@ pub enum TokenKind {
     I64Literal(i64),
     UnsafePtr,
     UnsafeNull,
+    USize,
     String,
     StringLiteral(String),
     Function,
@@ -51,6 +52,7 @@ pub enum TokenKind {
     Break,
     Return,
     Continue,
+    SizeOf,
 
     // Delimiters
     LeftBrace,
@@ -95,6 +97,7 @@ impl Clone for TokenKind {
             TokenKind::I64Literal(v) => TokenKind::I64Literal(*v),
             TokenKind::UnsafePtr => TokenKind::UnsafePtr,
             TokenKind::UnsafeNull => TokenKind::UnsafeNull,
+            TokenKind::USize => TokenKind::USize,
             TokenKind::String => TokenKind::String,
             TokenKind::StringLiteral(v) => TokenKind::StringLiteral(v.clone()),
             TokenKind::Function => TokenKind::Function,
@@ -122,6 +125,7 @@ impl Clone for TokenKind {
             TokenKind::EndBlockComment => TokenKind::EndBlockComment,
             TokenKind::Identifier(v) => TokenKind::Identifier(v.clone()),
             TokenKind::Continue => TokenKind::Continue,
+            TokenKind::SizeOf => TokenKind::SizeOf,
         }
     }
 }
@@ -161,6 +165,7 @@ impl TokenKind {
             TokenKind::I64Literal(v) => v.to_string(),
             TokenKind::UnsafePtr => "unsafeptr".to_string(),
             TokenKind::UnsafeNull => "unsafe_null".to_string(),
+            TokenKind::USize => "usize".to_string(),
             TokenKind::String => "string".to_string(),
             TokenKind::StringLiteral(v) => v.to_string(),
             TokenKind::Function => "fn".to_string(),
@@ -189,6 +194,7 @@ impl TokenKind {
             TokenKind::BeginBlockComment => "/*".to_string(),
             TokenKind::EndBlockComment => "*/".to_string(),
             TokenKind::Continue => "continue".to_string(),
+            TokenKind::SizeOf => "sizeof".to_string(),
         }
     }
 
@@ -235,6 +241,7 @@ impl TokenKind {
             TokenKind::I64,
             TokenKind::UnsafePtr,
             TokenKind::UnsafeNull,
+            TokenKind::USize,
             TokenKind::Bool,
             TokenKind::EqualTo,
             TokenKind::NotEqualTo,
@@ -267,6 +274,7 @@ impl TokenKind {
             TokenKind::Continue,
             TokenKind::BeginBlockComment,
             TokenKind::EndBlockComment,
+            TokenKind::SizeOf,
         ];
 
         for kind in basic_kinds {

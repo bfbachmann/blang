@@ -25,11 +25,18 @@ pub fn to_basic_type<'a>(
 
         RichType::I64 => ctx.i64_type().as_basic_type_enum(),
 
-        // TODO: There has to be a better way of representing `void *`.
+        // TODO: There has to be a better way of representing `void *`... but then again, maybe not.
+        // LLVM doesn't actually care about the pointee type, so really all pointers are treated
+        // equally.
         RichType::UnsafePtr => ctx
             .i64_type()
             .ptr_type(AddressSpace::default())
             .as_basic_type_enum(),
+
+        // TODO: This is definitely wrong. USize should have the same size as a pointer on the
+        // target system. On most systems, this will be 64 bits, but Inkwell doesn't really give
+        // us an easy way to tell.
+        RichType::USize => ctx.i64_type().as_basic_type_enum(),
 
         RichType::String => ctx
             .i32_type()
@@ -204,6 +211,11 @@ pub fn to_metadata_type_enum<'a>(
         RichType::I64 => BasicMetadataTypeEnum::from(ctx.i64_type()),
         RichType::UnsafePtr => {
             BasicMetadataTypeEnum::from(ctx.i64_type().ptr_type(AddressSpace::default()))
+        }
+        RichType::USize => {
+            // TODO: This is definitely wrong. This type should have the same size as a pointer
+            // on the target system.
+            BasicMetadataTypeEnum::from(ctx.i64_type())
         }
         RichType::Bool => BasicMetadataTypeEnum::from(ctx.bool_type()),
         RichType::String => {

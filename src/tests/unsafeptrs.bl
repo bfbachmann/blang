@@ -1,6 +1,22 @@
+fn assert(b: bool, code: i64) {
+    if !b {
+        exit(code)
+    }
+}
+
+struct T {
+    i: i64,
+    b: bool,
+}
+
 fn main() {
-    let mut ptr: unsafeptr = unsafe_null
-    ptr = malloc(100)
-    free(ptr)
+    let t_ptr = malloc(sizeof T)
+    free(t_ptr)
+
+    let s_ptr = malloc(sizeof {i64, bool})
+    free(s_ptr)
+
+    assert(sizeof T == sizeof {bool, i64}, 1)
+    
     exit(0)
 }

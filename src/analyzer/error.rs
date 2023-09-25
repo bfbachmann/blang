@@ -34,6 +34,7 @@ pub enum ErrorKind {
     InvalidStatement,
     ImmutableAssignment,
     UseOfMovedValue,
+    TypeNotSized,
 }
 
 impl fmt::Display for ErrorKind {
@@ -62,6 +63,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::InvalidStatement => write!(f, "invalid statement"),
             ErrorKind::ImmutableAssignment => write!(f, "assignment to immutable variable"),
             ErrorKind::UseOfMovedValue => write!(f, "use of moved value"),
+            ErrorKind::TypeNotSized => write!(f, "type not sized"),
         }
     }
 }

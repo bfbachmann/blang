@@ -23,6 +23,7 @@ pub fn all_syscalls() -> [FunctionSignature; 5] {
 ///
 ///     void exit(int status)
 pub fn sys_exit() -> FunctionSignature {
+    // TODO: Update this when we have a u64 type.
     FunctionSignature::new_with_default_pos(
         "exit",
         vec![Argument::new_with_default_pos("status", Type::i64(), false)],
@@ -57,7 +58,7 @@ pub fn sys_write() -> FunctionSignature {
 ///
 /// Blang:
 ///
-///     malloc(size: i64): unsafeptr
+///     malloc(size: usize): unsafeptr
 ///
 /// Libc:
 ///
@@ -65,7 +66,7 @@ pub fn sys_write() -> FunctionSignature {
 pub fn sys_malloc() -> FunctionSignature {
     FunctionSignature::new_with_default_pos(
         "malloc",
-        vec![Argument::new_with_default_pos("size", Type::i64(), false)],
+        vec![Argument::new_with_default_pos("size", Type::usize(), false)],
         Some(Type::unsafeptr()),
     )
 }
@@ -75,7 +76,7 @@ pub fn sys_malloc() -> FunctionSignature {
 ///
 /// Blang:
 ///
-///     realloc(size: i64): unsafeptr
+///     realloc(size: usize): unsafeptr
 ///
 /// Libc:
 ///
@@ -83,7 +84,7 @@ pub fn sys_malloc() -> FunctionSignature {
 pub fn sys_realloc() -> FunctionSignature {
     FunctionSignature::new_with_default_pos(
         "realloc",
-        vec![Argument::new_with_default_pos("size", Type::i64(), false)],
+        vec![Argument::new_with_default_pos("size", Type::usize(), false)],
         Some(Type::unsafeptr()),
     )
 }

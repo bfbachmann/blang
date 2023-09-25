@@ -25,6 +25,7 @@ pub enum RichExprKind {
     BoolLiteral(bool),
     I64Literal(i64),
     UnsafeNull,
+    USizeLiteral(u64),
     StringLiteral(String),
     StructInit(RichStructInit),
     TupleInit(RichTupleInit),
@@ -42,6 +43,7 @@ impl fmt::Display for RichExprKind {
             RichExprKind::BoolLiteral(b) => write!(f, "{}", b),
             RichExprKind::I64Literal(i) => write!(f, "{}", i),
             RichExprKind::UnsafeNull => write!(f, "unsafe_null"),
+            RichExprKind::USizeLiteral(usz) => write!(f, "{}", usz),
             RichExprKind::StringLiteral(s) => write!(f, "{}", s),
             RichExprKind::StructInit(s) => write!(f, "{}", s),
             RichExprKind::TupleInit(t) => write!(f, "{}", t),
@@ -143,6 +145,30 @@ impl RichExpr {
                 RichExpr {
                     kind: RichExprKind::TupleInit(rich_init),
                     type_id,
+                }
+            }
+
+            Expression::SizeOf(sizeof) => {
+                // Get the size of the type and just represent it as a usize literal.
+                let type_id = RichType::analyze(ctx, &sizeof.typ);
+                let typ = ctx.get_resolved_type(&type_id).unwrap();
+                match typ.size_bytes(ctx) {
+                    Some(size) => RichExpr {
+                        kind: RichExprKind::USizeLiteral(size),
+                        type_id: TypeId::usize(),
+                    },
+                    None => {
+                        // This type is not sized, so record the error and return a placeholder
+                        // value.
+                        let parse_type = sizeof.typ.clone();
+                        ctx.add_err(AnalyzeError::new_with_locatable(
+                            ErrorKind::TypeNotSized,
+                            format_code!("type {} is not sized", typ).as_str(),
+                            Box::new(sizeof),
+                        ));
+
+                        RichExpr::new_zero_value(ctx, parse_type)
+                    }
                 }
             }
 
@@ -335,6 +361,11 @@ impl RichExpr {
                 type_id,
             },
 
+            Type::USize(_) => RichExpr {
+                kind: RichExprKind::USizeLiteral(0),
+                type_id,
+            },
+
             Type::Struct(struct_type) => RichExpr {
                 kind: RichExprKind::StructInit(RichStructInit {
                     typ: RichStructType {
@@ -392,7 +423,10 @@ impl RichExpr {
             | Operator::Subtract
             | Operator::Multiply
             | Operator::Divide
-            | Operator::Modulo => matches!(operand_type, RichType::I64 | RichType::UnsafePtr),
+            | Operator::Modulo => matches!(
+                operand_type,
+                RichType::I64 | RichType::UnsafePtr | RichType::USize
+            ),
 
             // Logical operators only work on bools.
             Operator::LogicalAnd | Operator::LogicalOr => matches!(operand_type, RichType::Bool),
@@ -401,7 +435,7 @@ impl RichExpr {
             Operator::EqualTo | Operator::NotEqualTo => {
                 matches!(
                     operand_type,
-                    RichType::Bool | RichType::I64 | RichType::UnsafePtr
+                    RichType::Bool | RichType::I64 | RichType::UnsafePtr | RichType::USize
                 )
             }
 
@@ -409,7 +443,7 @@ impl RichExpr {
             Operator::GreaterThan
             | Operator::LessThan
             | Operator::GreaterThanOrEqual
-            | Operator::LessThanOrEqual => matches!(operand_type, RichType::I64),
+            | Operator::LessThanOrEqual => matches!(operand_type, RichType::I64 | RichType::USize),
 
             // If this happens, something is badly broken.
             other => panic!("unexpected operator {}", other),

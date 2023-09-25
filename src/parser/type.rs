@@ -14,7 +14,8 @@ use crate::parser::stream::Stream;
 use crate::parser::string::StringType;
 use crate::parser::tuple::TupleType;
 use crate::parser::unresolved::UnresolvedType;
-use crate::parser::unsafe_ptr::UnsafePtrType;
+use crate::parser::unsafeptr::UnsafePtrType;
+use crate::parser::usize::USizeType;
 
 /// Represents a type referenced in a program.
 #[derive(Debug, Clone, Hash, Eq)]
@@ -23,6 +24,7 @@ pub enum Type {
     String(StringType),
     I64(I64Type),
     UnsafePtr(UnsafePtrType),
+    USize(USizeType),
     Struct(StructType),
     Tuple(TupleType),
     Function(Box<FunctionSignature>),
@@ -36,7 +38,8 @@ impl PartialEq for Type {
             (Type::Bool(_), Type::Bool(_))
             | (Type::String(_), Type::String(_))
             | (Type::I64(_), Type::I64(_))
-            | (Type::UnsafePtr(_), Type::UnsafePtr(_)) => true,
+            | (Type::UnsafePtr(_), Type::UnsafePtr(_))
+            | (Type::USize(_), Type::USize(_)) => true,
             (Type::Function(f1), Type::Function(f2)) => {
                 if f1.args.len() != f2.args.len() {
                     false
@@ -62,10 +65,11 @@ impl PartialEq for Type {
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Type::Bool(_) => write!(f, "bool"),
-            Type::String(_) => write!(f, "string"),
-            Type::I64(_) => write!(f, "i64"),
-            Type::UnsafePtr(_) => write!(f, "unsafeptr"),
+            Type::Bool(_) => write!(f, "{}", TokenKind::Bool),
+            Type::String(_) => write!(f, "{}", TokenKind::String),
+            Type::I64(_) => write!(f, "{}", TokenKind::I64),
+            Type::UnsafePtr(_) => write!(f, "{}", TokenKind::UnsafePtr),
+            Type::USize(_) => write!(f, "{}", TokenKind::USize),
             Type::Function(fn_sig) => write!(f, "{}", fn_sig),
             Type::Struct(s) => write!(f, "{}", s),
             Type::Tuple(t) => write!(f, "{}", t),
@@ -81,6 +85,7 @@ impl Locatable for Type {
             Type::String(string_type) => string_type.start_pos(),
             Type::I64(i64_type) => i64_type.start_pos(),
             Type::UnsafePtr(uptr) => uptr.start_pos(),
+            Type::USize(usz) => usz.start_pos(),
             Type::Struct(struct_type) => struct_type.start_pos(),
             Type::Tuple(tuple_type) => tuple_type.start_pos(),
             Type::Function(fn_sig) => fn_sig.start_pos(),
@@ -94,10 +99,11 @@ impl Locatable for Type {
             Type::String(string_type) => string_type.end_pos(),
             Type::I64(i64_type) => i64_type.end_pos(),
             Type::UnsafePtr(uptr) => uptr.end_pos(),
+            Type::USize(usz) => usz.end_pos(),
             Type::Struct(struct_type) => struct_type.end_pos(),
             Type::Tuple(tuple_type) => tuple_type.end_pos(),
             Type::Function(fn_sig) => fn_sig.end_pos(),
-            Type::Unresolved(unresolved) => unresolved.start_pos(),
+            Type::Unresolved(unresolved) => unresolved.end_pos(),
         }
     }
 }
@@ -126,6 +132,13 @@ impl Type {
                     ..
                 },
             ) => Ok(Type::UnsafePtr(UnsafePtrType::new(token.start, token.end))),
+
+            Some(
+                token @ Token {
+                    kind: TokenKind::USize,
+                    ..
+                },
+            ) => Ok(Type::USize(USizeType::new(token.start, token.end))),
 
             Some(
                 token @ Token {
@@ -204,6 +217,11 @@ impl Type {
     /// Returns a new unsafeptr type.
     pub fn unsafeptr() -> Self {
         Type::UnsafePtr(UnsafePtrType::default())
+    }
+
+    /// Returns a new usize type.
+    pub fn usize() -> Self {
+        Type::USize(USizeType::default())
     }
 
     /// Returns a default bool type.

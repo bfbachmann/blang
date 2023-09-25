@@ -15,6 +15,7 @@ use crate::parser::i64_lit::I64Lit;
 use crate::parser::op::Operator;
 use crate::parser::program::Program;
 use crate::parser::r#struct::StructInit;
+use crate::parser::sizeof::SizeOf;
 use crate::parser::stream::Stream;
 use crate::parser::string_lit::StringLit;
 use crate::parser::tuple::TupleInit;
@@ -37,19 +38,8 @@ impl OutputNode {
     }
 }
 
-/// Represents basic and composite expressions. A basic expression can be any of the following:
-///  - an identifier representing a variable value
-///  - a literal value
-///  - a function call
-///  - a unary operator followed by a composite expression (`<unary_op> <comp_expr>`)
-/// whereas a composite expression can be any token sequence of the forms
-///
-///     <basic_expr> <binary_op> <comp_expr>
-///
-/// where
-///  - `basic_expr` is a basic expression
-///  - `binary_op` is a binary operator
-///  - `comp_expr` is a composite expression
+/// Represents basic and composite expressions. For basic expressions, see `Expression::from_basic`,
+/// and for composite expressions, see `Expression::from`.
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
     // Basic expressions.
@@ -63,6 +53,7 @@ pub enum Expression {
     UnaryOperation(Operator, Box<Expression>),
     StructInit(StructInit),
     TupleInit(TupleInit),
+    SizeOf(SizeOf),
 
     // Composite expressions.
     BinaryOperation(Box<Expression>, Operator, Box<Expression>),
@@ -88,6 +79,9 @@ impl fmt::Display for Expression {
             Expression::TupleInit(tuple_init) => {
                 write!(f, "tuple initialization {}", tuple_init)
             }
+            Expression::SizeOf(so) => {
+                write!(f, "{}", so)
+            }
         }
     }
 }
@@ -106,6 +100,7 @@ impl Locatable for Expression {
             Expression::StructInit(struct_init) => struct_init.start_pos(),
             Expression::TupleInit(tuple_init) => tuple_init.start_pos(),
             Expression::BinaryOperation(left, _, _) => left.start_pos(),
+            Expression::SizeOf(so) => so.start_pos(),
         }
     }
 
@@ -122,6 +117,7 @@ impl Locatable for Expression {
             Expression::StructInit(struct_init) => struct_init.end_pos(),
             Expression::TupleInit(tuple_init) => tuple_init.end_pos(),
             Expression::BinaryOperation(left, _, _) => left.end_pos(),
+            Expression::SizeOf(so) => so.end_pos(),
         }
     }
 }
@@ -160,6 +156,7 @@ impl Expression {
     ///  - a function call
     ///  - a unary operator followed by a composite expression (`<unary_op> <comp_expr>`)
     ///  - a struct initialization (see `StructInit::from`)
+    ///  - a `sizeof` expression (see `SizeOf::from`)
     fn from_basic(tokens: &mut Stream<Token>, is_arg: bool) -> ParseResult<Option<Expression>> {
         match tokens.peek_next() {
             // If the first token is "fn", we'll assume the expression is an anonymous function.
@@ -295,6 +292,15 @@ impl Expression {
             }) => {
                 let unsafe_null = UnsafeNull::from(tokens)?;
                 Ok(Some(Expression::UnsafeNull(unsafe_null)))
+            }
+
+            // Check if it's a `sizeof <type>` expression.
+            Some(Token {
+                kind: TokenKind::SizeOf,
+                ..
+            }) => {
+                let sizeof = SizeOf::from(tokens)?;
+                Ok(Some(Expression::SizeOf(sizeof)))
             }
 
             // If the token is anything else, we assume there is no basic expression here.
