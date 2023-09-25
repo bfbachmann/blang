@@ -94,19 +94,23 @@ pub fn sys_calloc() -> FunctionSignature {
 }
 
 /// The `realloc` system call function signature. Changes the size of the memory block pointed to
-/// by `ptr` to `size` bytes.
+/// by `ptr` to `size` bytes. The contents will be unchanged in the range from the start of the
+/// region up to the minimum of the old and new sizes.
 ///
 /// Blang:
 ///
-///     realloc(size: usize): unsafeptr
+///     realloc(ptr: unsafeptr, size: usize): unsafeptr
 ///
 /// Libc:
 ///
-///     void *realloc(size_t size)
+///     void *realloc(void *ptr, size_t size)
 pub fn sys_realloc() -> FunctionSignature {
     FunctionSignature::new_with_default_pos(
         "realloc",
-        vec![Argument::new_with_default_pos("size", Type::usize(), false)],
+        vec![
+            Argument::new_with_default_pos("ptr", Type::unsafeptr(), false),
+            Argument::new_with_default_pos("size", Type::usize(), false),
+        ],
         Some(Type::unsafeptr()),
     )
 }
