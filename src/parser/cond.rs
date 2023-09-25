@@ -63,7 +63,7 @@ impl Conditional {
         }
     }
 
-    /// Parses conditionals. Expects token sequences of the forms
+    /// Parses conditionals. Expects token sequences of the form
     ///
     ///     if <if_cond> {
     ///         ...
