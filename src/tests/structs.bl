@@ -1,3 +1,5 @@
+extern fn exit(code: i64)
+
 fn assert(b: bool, err_code: i64) {
     if !b {
         exit(err_code)

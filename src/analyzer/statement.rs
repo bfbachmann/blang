@@ -3,7 +3,7 @@ use std::fmt::Formatter;
 
 use crate::analyzer::closure::{analyze_break, analyze_continue, RichClosure};
 use crate::analyzer::cond::RichCond;
-use crate::analyzer::func::{RichFn, RichFnCall, RichRet};
+use crate::analyzer::func::{RichFn, RichFnCall, RichFnSig, RichRet};
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#struct::RichStructType;
 use crate::analyzer::var_assign::RichVarAssign;
@@ -24,6 +24,7 @@ pub enum RichStatement {
     Continue,
     Return(RichRet),
     StructTypeDeclaration(RichStructType),
+    ExternFnDeclaration(RichFnSig),
 }
 
 impl fmt::Display for RichStatement {
@@ -40,6 +41,7 @@ impl fmt::Display for RichStatement {
             RichStatement::Continue => write!(f, "continue"),
             RichStatement::Return(v) => write!(f, "{}", v),
             RichStatement::StructTypeDeclaration(s) => write!(f, "{}", s),
+            RichStatement::ExternFnDeclaration(e) => write!(f, "{}", e),
         }
     }
 }
@@ -89,6 +91,10 @@ impl RichStatement {
             }
             Statement::StructDeclaration(s) => {
                 RichStatement::StructTypeDeclaration(RichStructType::from(ctx, &s, false))
+            }
+            Statement::ExternFn(e) => {
+                let sig = RichFnSig::from(ctx, &e);
+                RichStatement::ExternFnDeclaration(sig)
             }
         }
     }

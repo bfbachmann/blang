@@ -58,6 +58,7 @@ impl Argument {
     }
 
     /// Creates a new function argument with default (zero) start and end positions.
+    #[cfg(test)]
     pub fn new_with_default_pos(name: &str, typ: Type, is_mut: bool) -> Self {
         Argument {
             name: name.to_string(),

@@ -12,6 +12,7 @@ use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::expr::Expression;
 use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
+use crate::parser::func_sig::FunctionSignature;
 use crate::parser::program::Program;
 use crate::parser::r#break::Break;
 use crate::parser::r#loop::Loop;
@@ -36,6 +37,7 @@ pub enum Statement {
     Continue(Continue),
     Return(Ret),
     StructDeclaration(StructType),
+    ExternFn(FunctionSignature),
 }
 
 impl fmt::Display for Statement {
@@ -82,6 +84,9 @@ impl fmt::Display for Statement {
             Statement::StructDeclaration(s) => {
                 write!(f, "{}", s)
             }
+            Statement::ExternFn(extern_fn) => {
+                write!(f, "{}", extern_fn)
+            }
         }
     }
 }
@@ -100,6 +105,7 @@ impl Locatable for Statement {
             Statement::Continue(cont) => cont.start_pos(),
             Statement::Return(ret) => ret.start_pos(),
             Statement::StructDeclaration(s) => s.start_pos(),
+            Statement::ExternFn(e) => e.start_pos(),
         }
     }
 
@@ -116,6 +122,7 @@ impl Locatable for Statement {
             Statement::Continue(cont) => cont.end_pos(),
             Statement::Return(ret) => ret.end_pos(),
             Statement::StructDeclaration(s) => s.end_pos(),
+            Statement::ExternFn(e) => e.end_pos(),
         }
     }
 }
@@ -133,6 +140,7 @@ impl Statement {
     ///  - continue
     ///  - return (of the form `return <expr>` where `expr` is an expression)
     ///  - struct declaration (see `Struct::from`)
+    ///  - extern function declaration (see `FunctionSignature::from_extern`)
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Try use the first two tokens to figure out what type of statement will follow. This works
         // because no valid statement can contain fewer than two tokens.
@@ -189,6 +197,21 @@ impl Statement {
             ) => {
                 let assign = VariableAssignment::from(tokens)?;
                 Ok(Statement::VariableAssignment(assign))
+            }
+
+            // If the first two tokens are "extern fn", it's an external function declaration.
+            (
+                Token {
+                    kind: TokenKind::Extern,
+                    ..
+                },
+                Token {
+                    kind: TokenKind::Function,
+                    ..
+                },
+            ) => {
+                let sig = FunctionSignature::from_extern(tokens)?;
+                Ok(Statement::ExternFn(sig))
             }
 
             // If the first token is "fn", it must be a function declaration.

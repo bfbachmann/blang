@@ -16,7 +16,6 @@ use crate::fmt::format_file_loc;
 use crate::lexer::error::LexError;
 use crate::parser::error::ParseError;
 use crate::parser::stream::Stream;
-use crate::syscall::syscall::all_syscalls;
 
 mod analyzer;
 mod compiler;
@@ -24,7 +23,6 @@ mod compiler;
 mod fmt;
 mod lexer;
 mod parser;
-mod syscall;
 mod util;
 
 fn main() {
@@ -132,7 +130,7 @@ fn analyze(input_path: &str) -> Option<ProgramAnalysis> {
     };
 
     // Analyze the program.
-    let prog_analysis = RichProg::analyze(prog, all_syscalls().to_vec());
+    let prog_analysis = RichProg::analyze(prog);
 
     // Print warnings.
     for warn in &prog_analysis.warnings {

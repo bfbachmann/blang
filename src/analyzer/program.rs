@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use colored::Colorize;
 
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::func::{analyze_fn_sig, RichFnSig};
+use crate::analyzer::func::analyze_fn_sig;
 use crate::analyzer::move_check::MoveChecker;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#struct::RichStructType;
@@ -11,7 +11,6 @@ use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::statement::RichStatement;
 use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
 use crate::format_code;
-use crate::parser::func_sig::FunctionSignature;
 use crate::parser::program::Program;
 use crate::parser::statement::Statement;
 
@@ -25,21 +24,14 @@ pub struct RichProg {
 pub struct ProgramAnalysis {
     pub prog: RichProg,
     pub types: HashMap<TypeId, RichType>,
-    pub extern_fns: Vec<RichFnSig>,
     pub errors: Vec<AnalyzeError>,
     pub warnings: Vec<AnalyzeWarning>,
 }
 
 impl RichProg {
     /// Performs semantic analysis on the given program and extern functions.
-    pub fn analyze(prog: Program, extern_fn_sigs: Vec<FunctionSignature>) -> ProgramAnalysis {
+    pub fn analyze(prog: Program) -> ProgramAnalysis {
         let mut ctx = ProgramContext::new();
-
-        // Analyze external functions to be added to the program.
-        let mut rich_extern_fns = vec![];
-        for extern_fn_sig in extern_fn_sigs {
-            rich_extern_fns.push(analyze_fn_sig(&mut ctx, &extern_fn_sig));
-        }
 
         // Perform semantic analysis on the program.
         let prog = RichProg::from(&mut ctx, prog);
@@ -55,7 +47,6 @@ impl RichProg {
 
         ProgramAnalysis {
             prog,
-            extern_fns: rich_extern_fns,
             warnings,
             errors,
             types,
@@ -74,7 +65,9 @@ impl RichProg {
         let mut analyzed_statements = vec![];
         for statement in prog.statements {
             match statement {
-                Statement::FunctionDeclaration(_) | Statement::StructDeclaration(_) => {
+                Statement::FunctionDeclaration(_)
+                | Statement::ExternFn(_)
+                | Statement::StructDeclaration(_) => {
                     analyzed_statements.push(RichStatement::from(ctx, statement));
                 }
                 other => {
@@ -142,30 +135,38 @@ fn define_structs(ctx: &mut ProgramContext, prog: &Program) {
 fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
     let mut main_defined = false;
     for statement in &prog.statements {
-        if let Statement::FunctionDeclaration(func) = statement {
-            analyze_fn_sig(ctx, &func.signature);
+        match statement {
+            Statement::FunctionDeclaration(func) => {
+                analyze_fn_sig(ctx, &func.signature);
 
-            if func.signature.name == "main" {
-                main_defined = true;
+                if func.signature.name == "main" {
+                    main_defined = true;
 
-                // Make sure main has no args or return.
-                if func.signature.args.len() != 0 {
-                    ctx.add_err(AnalyzeError::new_with_locatable(
-                        ErrorKind::InvalidMain,
-                        format_code!("function {} cannot have arguments", "main").as_str(),
-                        Box::new(func.signature.clone()),
-                    ));
-                }
+                    // Make sure main has no args or return.
+                    if func.signature.args.len() != 0 {
+                        ctx.add_err(AnalyzeError::new_with_locatable(
+                            ErrorKind::InvalidMain,
+                            format_code!("function {} cannot have arguments", "main").as_str(),
+                            Box::new(func.signature.clone()),
+                        ));
+                    }
 
-                if func.signature.return_type.is_some() {
-                    ctx.add_err(AnalyzeError::new_with_locatable(
-                        ErrorKind::InvalidMain,
-                        format_code!("function {} cannot have a return type", "main").as_str(),
-                        Box::new(func.signature.clone()),
-                    ));
+                    if func.signature.return_type.is_some() {
+                        ctx.add_err(AnalyzeError::new_with_locatable(
+                            ErrorKind::InvalidMain,
+                            format_code!("function {} cannot have a return type", "main").as_str(),
+                            Box::new(func.signature.clone()),
+                        ));
+                    }
                 }
             }
-        }
+
+            Statement::ExternFn(extern_fn) => {
+                analyze_fn_sig(ctx, extern_fn);
+            }
+
+            _ => {}
+        };
     }
 
     if !main_defined {
@@ -191,7 +192,7 @@ mod tests {
     fn get_analysis(raw: &str) -> ProgramAnalysis {
         let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let prog = Program::from(&mut Stream::from(tokens)).expect("should not error");
-        RichProg::analyze(prog, vec![])
+        RichProg::analyze(prog)
     }
 
     fn analyze_prog(raw: &str) -> AnalyzeResult<RichProg> {

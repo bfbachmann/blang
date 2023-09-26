@@ -76,6 +76,7 @@ impl Locatable for FunctionSignature {
 
 impl FunctionSignature {
     /// Creates a new function signature with default start and end positions.
+    #[cfg(test)]
     pub fn new_with_default_pos(
         name: &str,
         args: Vec<Argument>,
@@ -121,6 +122,17 @@ impl FunctionSignature {
             start_pos,
             end_pos,
         }
+    }
+
+    /// Parses an extern function signature. Expects token sequences of the form
+    ///
+    ///     extern <fn_sig>
+    ///
+    /// where
+    ///  - `fn_sig` is a function signature (see `FunctionSignature::from`)
+    pub fn from_extern(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::Extern]))?;
+        FunctionSignature::from(tokens)
     }
 
     /// Parses function signatures. Expects token sequences of the forms

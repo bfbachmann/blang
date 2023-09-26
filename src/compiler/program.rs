@@ -78,7 +78,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
             program: &prog_analysis.prog,
             types: &prog_analysis.types,
         };
-        compiler.compile_program(prog_analysis.extern_fns)?;
+        compiler.compile_program()?;
 
         // Write output as to file.
         if as_bitcode {
@@ -96,11 +96,11 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     }
 
     /// Compiles the program.
-    fn compile_program(&mut self, extern_fn_sigs: Vec<RichFnSig>) -> CompileResult<()> {
+    fn compile_program(&mut self) -> CompileResult<()> {
         // Define external functions (like syscalls) so we can call the safely from within the
         // module. Their actual implementations should be linked from libc when generating an
         // executable.
-        self.define_extern_fns(extern_fn_sigs);
+        self.define_extern_fns();
 
         // Do one shallow pass to define all top-level functions in the module.
         for statement in &self.program.statements {
@@ -128,8 +128,12 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
                 RichStatement::StructTypeDeclaration(_) => {
                     // Nothing to do here because struct types are compiled only when they're used.
                 }
+                RichStatement::ExternFnDeclaration(_) => {
+                    // Nothing to do here because extern functions are compiled in the call to
+                    // `ProgramCompiler::define_extern_fns` above.
+                }
                 other => {
-                    panic!("top-level statement {other} not implemented");
+                    panic!("unexpected top-level statement {other}");
                 }
             }
         }
@@ -189,14 +193,13 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     }
 
     /// Defines external functions in the current module.
-    fn define_extern_fns(&mut self, extern_fns: Vec<RichFnSig>) {
-        for extern_fn_sig in &extern_fns {
-            let fn_type = convert::to_fn_type(self.ctx, self.types, &extern_fn_sig);
-            self.module.add_function(
-                extern_fn_sig.name.as_str(),
-                fn_type,
-                Some(Linkage::External),
-            );
+    fn define_extern_fns(&mut self) {
+        for statement in &self.program.statements {
+            if let RichStatement::ExternFnDeclaration(fn_sig) = statement {
+                let fn_type = convert::to_fn_type(self.ctx, self.types, &fn_sig);
+                self.module
+                    .add_function(fn_sig.name.as_str(), fn_type, Some(Linkage::External));
+            }
         }
     }
 }
@@ -211,12 +214,11 @@ mod tests {
     use crate::lexer::token::Token;
     use crate::parser::program::Program;
     use crate::parser::stream::Stream;
-    use crate::syscall::syscall::all_syscalls;
 
     fn assert_compiles(code: &str) {
         let tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
         let prog = Program::from(&mut Stream::from(tokens)).expect("should not error");
-        let analysis = RichProg::analyze(prog, all_syscalls().to_vec());
+        let analysis = RichProg::analyze(prog);
         ProgCompiler::compile(analysis, None, false, Path::new("/dev/null"), false)
             .expect("should not error");
     }
@@ -350,9 +352,12 @@ mod tests {
     }
 
     #[test]
-    fn uses_syscalls() {
+    fn uses_externs() {
         assert_compiles(
             r#"
+            extern fn write(fd: i64, msg: string, len: i64)
+            extern fn exit(code: i64)
+            
             fn main() {
                 write(1, "Hello World!", 13) 
                 exit(0)
