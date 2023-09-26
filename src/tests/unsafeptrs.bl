@@ -1,6 +1,6 @@
-extern fn exit(code: i64)
-extern fn malloc(size: usize): unsafeptr
-extern fn free(ptr: unsafeptr)
+ext fn exit(code: i64)
+ext fn malloc(size: usize): unsafeptr
+ext fn free(ptr: unsafeptr)
 
 fn assert(b: bool, code: i64) {
     if !b {

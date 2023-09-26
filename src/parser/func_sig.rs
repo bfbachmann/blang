@@ -131,7 +131,7 @@ impl FunctionSignature {
     /// where
     ///  - `fn_sig` is a function signature (see `FunctionSignature::from`)
     pub fn from_extern(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::Extern]))?;
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::Ext]))?;
         FunctionSignature::from(tokens)
     }
 

@@ -978,7 +978,7 @@ mod tests {
         let result = analyze_prog(
             r#"
             fn main() {
-                extern fn nothing()
+                ext fn nothing()
             }
             "#,
         );

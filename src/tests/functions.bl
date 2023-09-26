@@ -1,4 +1,4 @@
-extern fn exit(code: i64)
+ext fn exit(code: i64)
 
 fn cumulative_sum(n: i64): i64 {
     let mut result = 0

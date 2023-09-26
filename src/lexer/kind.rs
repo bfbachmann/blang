@@ -53,7 +53,7 @@ pub enum TokenKind {
     Return,
     Continue,
     SizeOf,
-    Extern,
+    Ext,
 
     // Delimiters
     LeftBrace,
@@ -127,7 +127,7 @@ impl Clone for TokenKind {
             TokenKind::Identifier(v) => TokenKind::Identifier(v.clone()),
             TokenKind::Continue => TokenKind::Continue,
             TokenKind::SizeOf => TokenKind::SizeOf,
-            TokenKind::Extern => TokenKind::Extern,
+            TokenKind::Ext => TokenKind::Ext,
         }
     }
 }
@@ -197,7 +197,7 @@ impl TokenKind {
             TokenKind::EndBlockComment => "*/".to_string(),
             TokenKind::Continue => "continue".to_string(),
             TokenKind::SizeOf => "sizeof".to_string(),
-            TokenKind::Extern => "extern".to_string(),
+            TokenKind::Ext => "ext".to_string(),
         }
     }
 
@@ -278,7 +278,7 @@ impl TokenKind {
             TokenKind::BeginBlockComment,
             TokenKind::EndBlockComment,
             TokenKind::SizeOf,
-            TokenKind::Extern,
+            TokenKind::Ext,
         ];
 
         for kind in basic_kinds {

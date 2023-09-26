@@ -25,6 +25,7 @@ pub enum RichStatement {
     Continue,
     Return(RichRet),
     StructTypeDeclaration(RichStructType),
+    /// An external function declaration.
     ExternFnDeclaration(RichFnSig),
 }
 

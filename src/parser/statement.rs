@@ -37,6 +37,7 @@ pub enum Statement {
     Continue(Continue),
     Return(Ret),
     StructDeclaration(StructType),
+    /// An external function signature.
     ExternFn(FunctionSignature),
 }
 
@@ -199,10 +200,10 @@ impl Statement {
                 Ok(Statement::VariableAssignment(assign))
             }
 
-            // If the first token is "extern", it's an external function declaration.
+            // If the first token is "ext", it's an external function declaration.
             (
                 Token {
-                    kind: TokenKind::Extern,
+                    kind: TokenKind::Ext,
                     ..
                 },
                 _,
