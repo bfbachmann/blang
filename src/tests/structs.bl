@@ -107,6 +107,27 @@ fn main() {
         assert(ret_struct.nested.bool_val == true, 50)
     }
 
+    // Test structs that contain tuples.
+    {
+        struct T {
+            tuple: {i64, i64}
+        }
+
+        let mut t = T{tuple: {1, 2}}
+        assert(t.tuple.0 == 1, 51)
+        assert(t.tuple.1 == 2, 52)
+
+        t.tuple.0 = 42
+        assert(t.tuple.0 == 42, 52)
+
+        let mut tuple = t.tuple
+        assert(tuple.0 == 42, 53)
+        assert(tuple.1 == 2, 54)
+
+        tuple.1 = 100
+        assert(tuple.1 == 100, 55)
+    }
+
     exit(0)
 }
 

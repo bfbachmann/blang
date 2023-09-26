@@ -264,7 +264,7 @@ impl RichFnCall {
             Some(other) => {
                 // The value being used here is not a function.
                 errors.push(AnalyzeError::new_with_locatable(
-                    ErrorKind::IncompatibleTypes,
+                    ErrorKind::MismatchedTypes,
                     format_code!("type {} is not callable", other).as_str(),
                     Box::new(call.clone()),
                 ));
@@ -318,7 +318,7 @@ impl RichFnCall {
             if passed_type_id != &defined.type_id {
                 let original_arg = call.args.get(i).unwrap();
                 errors.push(AnalyzeError::new_with_locatable(
-                    ErrorKind::IncompatibleTypes,
+                    ErrorKind::MismatchedTypes,
                     format_code!(
                         "cannot use value of type {} as argument {} to {}",
                         &passed_type_id,
@@ -415,7 +415,7 @@ impl RichRet {
                             && expected_type != expr_type
                         {
                             ctx.add_err(AnalyzeError::new_with_locatable(
-                                ErrorKind::IncompatibleTypes,
+                                ErrorKind::MismatchedTypes,
                                 format_code!(
                                     "cannot return value of type {} from function with return \
                                     type {}",
@@ -429,7 +429,7 @@ impl RichRet {
                     }
                     None => {
                         ctx.add_err(AnalyzeError::new_with_locatable(
-                            ErrorKind::IncompatibleTypes,
+                            ErrorKind::MismatchedTypes,
                             "cannot return value from function with no return type",
                             Box::new(expr.clone()),
                         ));
@@ -447,7 +447,7 @@ impl RichRet {
                 match ctx.return_type() {
                     Some(expected) => {
                         ctx.add_err(AnalyzeError::new_with_locatable(
-                            ErrorKind::IncompatibleTypes,
+                            ErrorKind::MismatchedTypes,
                             format_code!(
                                 "expected return value of type {}, but found empty return",
                                 expected,

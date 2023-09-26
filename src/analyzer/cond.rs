@@ -83,7 +83,7 @@ impl RichCond {
                     // analysis).
                     if !rich_expr_type.is_unknown() && rich_expr.type_id != TypeId::bool() {
                         ctx.add_err(AnalyzeError::new_with_locatable(
-                            ErrorKind::IncompatibleTypes,
+                            ErrorKind::MismatchedTypes,
                             format_code!(
                                 "expected branch condition to have type {}, but found type {}",
                                 RichType::Bool,

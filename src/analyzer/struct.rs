@@ -401,7 +401,7 @@ impl RichStructInit {
             // Make sure the value being assigned to the field has the expected type.
             if &expr.type_id != field_type {
                 errors.push(AnalyzeError::new_with_locatable(
-                    ErrorKind::IncompatibleTypes,
+                    ErrorKind::MismatchedTypes,
                     format_code!(
                         "cannot assign expression of type {} to field {} on struct type {}",
                         format!("{}", &expr.type_id),

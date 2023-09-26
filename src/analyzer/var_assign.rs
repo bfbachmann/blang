@@ -73,7 +73,7 @@ impl RichVarAssign {
                 let expr_type = ctx.get_resolved_type(&rich_expr.type_id).unwrap();
                 if !typ.same_as(expr_type) {
                     ctx.add_err(AnalyzeError::new_with_locatable(
-                        ErrorKind::IncompatibleTypes,
+                        ErrorKind::MismatchedTypes,
                         format_code!(
                             "cannot assign value of type {} to variable {}",
                             &expr_type,

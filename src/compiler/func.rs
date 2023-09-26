@@ -242,18 +242,14 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         for (ll_arg_val, arg) in ll_fn_params.into_iter().zip(func.signature.args.iter()) {
             let arg_type = self.types.get(&arg.type_id).unwrap();
 
-            // Structs are passed as pointers and don't need to be copied to the callee stack
-            // because they point to memory on the caller's stack that is safe to modify. In other
-            // words, when the caller wishes to pass a struct by value, the caller will allocate
-            // new space on its stack and store a copy of the struct there, and will then pass a
-            // pointer to that space to the callee.
-            if let RichType::Struct(_) = arg_type {
-                // Create the new variable and assert that there is no other variable by the same
-                // name in this function.
-                assert!(self
-                    .vars
-                    .insert(arg.name.to_string(), ll_arg_val.into_pointer_value())
-                    .is_none());
+            // Structs and tuples are passed as pointers and don't need to be copied to the callee
+            // stack because they point to memory on the caller's stack that is safe to modify. In
+            // other words, when the caller wishes to pass a struct by value, the caller will
+            // allocate new space on its stack and store a copy of the struct there, and will then
+            // pass a pointer to that space to the callee.
+            if let RichType::Struct(_) | RichType::Tuple(_) = arg_type {
+                self.vars
+                    .insert(arg.name.to_string(), ll_arg_val.into_pointer_value());
             } else {
                 self.create_var(arg.name.as_str(), arg_type, ll_arg_val);
             }
@@ -357,7 +353,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
                     // Copy the field value.
                     match field_type {
-                        RichType::Struct(_) => {
+                        RichType::Struct(_) | RichType::Tuple(_) => {
                             self.copy_value(
                                 ll_src_field_ptr.as_basic_value_enum(),
                                 ll_dst_field_ptr,

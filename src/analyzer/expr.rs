@@ -152,23 +152,9 @@ impl RichExpr {
                 // Get the size of the type and just represent it as a usize literal.
                 let type_id = RichType::analyze(ctx, &sizeof.typ);
                 let typ = ctx.get_resolved_type(&type_id).unwrap();
-                match typ.size_bytes(ctx) {
-                    Some(size) => RichExpr {
-                        kind: RichExprKind::USizeLiteral(size),
-                        type_id: TypeId::usize(),
-                    },
-                    None => {
-                        // This type is not sized, so record the error and return a placeholder
-                        // value.
-                        let parse_type = sizeof.typ.clone();
-                        ctx.add_err(AnalyzeError::new_with_locatable(
-                            ErrorKind::TypeNotSized,
-                            format_code!("type {} is not sized", typ).as_str(),
-                            Box::new(sizeof),
-                        ));
-
-                        RichExpr::new_zero_value(ctx, parse_type)
-                    }
+                RichExpr {
+                    kind: RichExprKind::USizeLiteral(typ.size_bytes(ctx)),
+                    type_id: TypeId::usize(),
                 }
             }
 
@@ -235,7 +221,7 @@ impl RichExpr {
                     // The expression has the wrong type. Record the error and insert a
                     // zero-value instead.
                     ctx.add_err(AnalyzeError::new_from_expr(
-                        ErrorKind::IncompatibleTypes,
+                        ErrorKind::MismatchedTypes,
                         &expr,
                         format_code!(
                             "unary operator {} cannot be applied to value of type {}",
@@ -274,7 +260,7 @@ impl RichExpr {
                 let mut operand_type_id = None;
                 if !RichExpr::is_valid_operand_type(op, left_type) {
                     errors.push(AnalyzeError::new_from_expr(
-                        ErrorKind::IncompatibleTypes,
+                        ErrorKind::MismatchedTypes,
                         &left_expr,
                         format_code!(
                             "cannot apply operator {} to left-side expression of type {}",
@@ -290,7 +276,7 @@ impl RichExpr {
                 // Make sure the right-side expression is of the right type.
                 if !RichExpr::is_valid_operand_type(op, right_type) {
                     errors.push(AnalyzeError::new_from_expr(
-                        ErrorKind::IncompatibleTypes,
+                        ErrorKind::MismatchedTypes,
                         &right_expr,
                         format_code!(
                             "cannot apply operator {} to right-side expression of type {}",
@@ -306,7 +292,7 @@ impl RichExpr {
                 // Make sure both operands are of the same type.
                 if right_type != left_type {
                     errors.push(AnalyzeError::new_from_expr(
-                        ErrorKind::IncompatibleTypes,
+                        ErrorKind::MismatchedTypes,
                         right_expr,
                         format_code!(
                             "{} operands have mismatched types {} and {}",
@@ -913,7 +899,7 @@ mod tests {
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {
-                kind: ErrorKind::IncompatibleTypes,
+                kind: ErrorKind::MismatchedTypes,
                 ..
             }
         ));
@@ -954,7 +940,7 @@ mod tests {
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {
-                kind: ErrorKind::IncompatibleTypes,
+                kind: ErrorKind::MismatchedTypes,
                 ..
             }
         ));
@@ -992,7 +978,7 @@ mod tests {
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {
-                kind: ErrorKind::IncompatibleTypes,
+                kind: ErrorKind::MismatchedTypes,
                 ..
             }
         ));
@@ -1020,7 +1006,7 @@ mod tests {
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {
-                kind: ErrorKind::IncompatibleTypes,
+                kind: ErrorKind::MismatchedTypes,
                 ..
             }
         ));
@@ -1050,7 +1036,7 @@ mod tests {
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {
-                kind: ErrorKind::IncompatibleTypes,
+                kind: ErrorKind::MismatchedTypes,
                 ..
             }
         ));

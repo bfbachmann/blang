@@ -44,7 +44,7 @@ impl RichVarDecl {
                 let declared_type = RichType::analyze(ctx, &typ);
                 if &rich_expr.type_id != &declared_type {
                     ctx.add_err(AnalyzeError::new_from_statement(
-                        ErrorKind::IncompatibleTypes,
+                        ErrorKind::MismatchedTypes,
                         &Statement::VariableDeclaration(var_decl.clone()),
                         format_code!(
                             "cannot assign value of type {} to variable {}",
@@ -157,7 +157,7 @@ mod tests {
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {
-                kind: ErrorKind::IncompatibleTypes,
+                kind: ErrorKind::MismatchedTypes,
                 ..
             }
         ));

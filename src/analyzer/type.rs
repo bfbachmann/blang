@@ -363,37 +363,33 @@ impl RichType {
     }
 
     /// Returns the size of this type (i.e. the amount of memory required to store it) in bytes.
-    pub fn size_bytes(&self, ctx: &ProgramContext) -> Option<u64> {
+    pub fn size_bytes(&self, ctx: &ProgramContext) -> u64 {
         match self {
-            RichType::Bool => Some(1),
-            RichType::I64 | RichType::UnsafePtr | RichType::USize | RichType::Function(_) => {
-                Some(8)
+            RichType::Bool => 1,
+            RichType::I64 | RichType::UnsafePtr | RichType::USize | RichType::Function(_) => 8,
+            RichType::String => {
+                // TODO: Update this when strings are implemented properly.
+                panic!("cannot compute size of type {}", self)
             }
-            RichType::String | RichType::Unknown(_) => None,
             RichType::Struct(struct_type) => {
                 let mut size = 0;
                 for field in &struct_type.fields {
                     let field_type = ctx.get_resolved_type(&field.type_id).unwrap();
-                    size += match field_type.size_bytes(ctx) {
-                        Some(s) => s,
-                        None => return None,
-                    }
+                    size += field_type.size_bytes(ctx);
                 }
 
-                Some(size)
+                size
             }
             RichType::Tuple(tuple_type) => {
                 let mut size = 0;
                 for type_id in &tuple_type.type_ids {
                     let field_type = ctx.get_resolved_type(&type_id).unwrap();
-                    size += match field_type.size_bytes(ctx) {
-                        Some(s) => s,
-                        None => return None,
-                    }
+                    size += field_type.size_bytes(ctx)
                 }
 
-                Some(size)
+                size
             }
+            RichType::Unknown(_) => 0,
         }
     }
 }

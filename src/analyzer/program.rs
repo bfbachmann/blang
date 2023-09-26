@@ -928,7 +928,7 @@ mod tests {
         assert!(matches!(
             result,
             Err(AnalyzeError {
-                kind: ErrorKind::IncompatibleTypes,
+                kind: ErrorKind::MismatchedTypes,
                 ..
             })
         ))
@@ -966,7 +966,7 @@ mod tests {
         assert!(matches!(
             result,
             Err(AnalyzeError {
-                kind: ErrorKind::IncompatibleTypes,
+                kind: ErrorKind::MismatchedTypes,
                 ..
             })
         ))

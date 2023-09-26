@@ -11,7 +11,7 @@ pub type AnalyzeResult<T> = Result<T, AnalyzeError>;
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum ErrorKind {
-    IncompatibleTypes,
+    MismatchedTypes,
     ExpectedReturnValue,
     FunctionAlreadyDefined,
     TypeAlreadyDefined,
@@ -34,13 +34,12 @@ pub enum ErrorKind {
     InvalidStatement,
     ImmutableAssignment,
     UseOfMovedValue,
-    TypeNotSized,
 }
 
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ErrorKind::IncompatibleTypes => write!(f, "incompatible types"),
+            ErrorKind::MismatchedTypes => write!(f, "mismatched types"),
             ErrorKind::ExpectedReturnValue => write!(f, "expected return value"),
             ErrorKind::FunctionAlreadyDefined => write!(f, "function already defined"),
             ErrorKind::TypeAlreadyDefined => write!(f, "type already defined"),
@@ -63,7 +62,6 @@ impl fmt::Display for ErrorKind {
             ErrorKind::InvalidStatement => write!(f, "invalid statement"),
             ErrorKind::ImmutableAssignment => write!(f, "assignment to immutable variable"),
             ErrorKind::UseOfMovedValue => write!(f, "use of moved value"),
-            ErrorKind::TypeNotSized => write!(f, "type not sized"),
         }
     }
 }
