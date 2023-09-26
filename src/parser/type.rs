@@ -10,8 +10,8 @@ use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::i64::I64Type;
 use crate::parser::r#struct::StructType;
+use crate::parser::str::StrType;
 use crate::parser::stream::Stream;
-use crate::parser::string::StringType;
 use crate::parser::tuple::TupleType;
 use crate::parser::unresolved::UnresolvedType;
 use crate::parser::unsafeptr::UnsafePtrType;
@@ -21,7 +21,7 @@ use crate::parser::usize::USizeType;
 #[derive(Debug, Clone, Hash, Eq)]
 pub enum Type {
     Bool(BoolType),
-    String(StringType),
+    Str(StrType),
     I64(I64Type),
     UnsafePtr(UnsafePtrType),
     USize(USizeType),
@@ -36,7 +36,7 @@ impl PartialEq for Type {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Type::Bool(_), Type::Bool(_))
-            | (Type::String(_), Type::String(_))
+            | (Type::Str(_), Type::Str(_))
             | (Type::I64(_), Type::I64(_))
             | (Type::UnsafePtr(_), Type::UnsafePtr(_))
             | (Type::USize(_), Type::USize(_)) => true,
@@ -66,7 +66,7 @@ impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Type::Bool(_) => write!(f, "{}", TokenKind::Bool),
-            Type::String(_) => write!(f, "{}", TokenKind::String),
+            Type::Str(_) => write!(f, "{}", TokenKind::Str),
             Type::I64(_) => write!(f, "{}", TokenKind::I64),
             Type::UnsafePtr(_) => write!(f, "{}", TokenKind::UnsafePtr),
             Type::USize(_) => write!(f, "{}", TokenKind::USize),
@@ -82,7 +82,7 @@ impl Locatable for Type {
     fn start_pos(&self) -> &Position {
         match self {
             Type::Bool(bool_type) => bool_type.start_pos(),
-            Type::String(string_type) => string_type.start_pos(),
+            Type::Str(string_type) => string_type.start_pos(),
             Type::I64(i64_type) => i64_type.start_pos(),
             Type::UnsafePtr(uptr) => uptr.start_pos(),
             Type::USize(usz) => usz.start_pos(),
@@ -96,7 +96,7 @@ impl Locatable for Type {
     fn end_pos(&self) -> &Position {
         match self {
             Type::Bool(bool_type) => bool_type.end_pos(),
-            Type::String(string_type) => string_type.end_pos(),
+            Type::Str(string_type) => string_type.end_pos(),
             Type::I64(i64_type) => i64_type.end_pos(),
             Type::UnsafePtr(uptr) => uptr.end_pos(),
             Type::USize(usz) => usz.end_pos(),
@@ -142,10 +142,10 @@ impl Type {
 
             Some(
                 token @ Token {
-                    kind: TokenKind::String,
+                    kind: TokenKind::Str,
                     ..
                 },
-            ) => Ok(Type::String(StringType::new(token.start, token.end))),
+            ) => Ok(Type::Str(StrType::new(token.start, token.end))),
 
             Some(
                 _token @ Token {
@@ -229,9 +229,9 @@ impl Type {
         Type::Bool(BoolType::default())
     }
 
-    /// Returns a default string type.
-    pub fn string() -> Self {
-        Type::String(StringType::default())
+    /// Returns a default str type.
+    pub fn str() -> Self {
+        Type::Str(StrType::default())
     }
 
     /// Creates a new unknown type with the given name.

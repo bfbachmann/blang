@@ -2,27 +2,27 @@ use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Locatable, Position};
 
-/// Represents a string type.
+/// Represents a static type (i.e. a string literal that is allocated globally).
 #[derive(Debug, Clone, Eq)]
-pub struct StringType {
+pub struct StrType {
     start_pos: Position,
     end_pos: Position,
 }
 
-impl PartialEq for StringType {
+impl PartialEq for StrType {
     fn eq(&self, _other: &Self) -> bool {
-        // Two string types are always considered equal.
+        // Two str types are always considered equal.
         true
     }
 }
 
-impl Hash for StringType {
+impl Hash for StrType {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        "string".hash(state);
+        "str".hash(state);
     }
 }
 
-impl Locatable for StringType {
+impl Locatable for StrType {
     fn start_pos(&self) -> &Position {
         &self.start_pos
     }
@@ -32,13 +32,13 @@ impl Locatable for StringType {
     }
 }
 
-impl StringType {
+impl StrType {
     pub fn new(start_pos: Position, end_pos: Position) -> Self {
-        StringType { start_pos, end_pos }
+        StrType { start_pos, end_pos }
     }
 
     pub fn default() -> Self {
-        StringType {
+        StrType {
             start_pos: Default::default(),
             end_pos: Default::default(),
         }

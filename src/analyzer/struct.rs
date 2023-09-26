@@ -293,7 +293,7 @@ impl RichStructType {
 
                 // These types can't have containment cycles.
                 Type::I64(_)
-                | Type::String(_)
+                | Type::Str(_)
                 | Type::Bool(_)
                 | Type::Function(_)
                 | Type::UnsafePtr(_)

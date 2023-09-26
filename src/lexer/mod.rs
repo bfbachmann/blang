@@ -65,29 +65,24 @@ mod tests {
     }
 
     #[test]
-    fn lex_string_literal() {
+    fn lex_str_literal() {
         let result = TokenKind::from(" \"asdf\" ");
-        assert_eq!(result, Some(TokenKind::StringLiteral(String::from("asdf"))));
+        assert_eq!(result, Some(TokenKind::StrLiteral(String::from("asdf"))));
 
         let result = TokenKind::from(r#" "say \"something\"!!" "#);
         assert_eq!(
             result,
-            Some(TokenKind::StringLiteral(String::from(
-                r#"say "something"!!"#
-            )))
+            Some(TokenKind::StrLiteral(String::from(r#"say "something"!!"#)))
         );
 
         let result = TokenKind::from(r#" "" "#);
-        assert_eq!(result, Some(TokenKind::StringLiteral(String::from(""))));
+        assert_eq!(result, Some(TokenKind::StrLiteral(String::from(""))));
 
         let result = TokenKind::from(r#" "\\\\" "#);
-        assert_eq!(
-            result,
-            Some(TokenKind::StringLiteral(String::from(r#"\\"#)))
-        );
+        assert_eq!(result, Some(TokenKind::StrLiteral(String::from(r#"\\"#))));
 
         let result = TokenKind::from(r#""\n\t\r""#);
-        assert_eq!(result, Some(TokenKind::StringLiteral("\n\t\r".to_string())));
+        assert_eq!(result, Some(TokenKind::StrLiteral("\n\t\r".to_string())));
 
         let result = TokenKind::from(r#" "23424?? "#);
         assert_eq!(result, None);
@@ -126,7 +121,7 @@ mod tests {
         assert_eq!(
             result,
             Some((
-                TokenKind::StringLiteral(String::from(r#"some "BIG" string"#)),
+                TokenKind::StrLiteral(String::from(r#"some "BIG" string"#)),
                 24,
             )),
         );
@@ -144,11 +139,11 @@ mod tests {
                 Token::new(TokenKind::Identifier(String::from("thing")), 1, 1, 6),
                 Token::new(TokenKind::Equal, 1, 7, 8),
                 Token::new(TokenKind::I64Literal(234), 1, 9, 12),
-                Token::new(TokenKind::StringLiteral(String::from("onetwo")), 1, 13, 21),
-                Token::new(TokenKind::StringLiteral(String::from("three")), 1, 22, 29),
+                Token::new(TokenKind::StrLiteral(String::from("onetwo")), 1, 13, 21),
+                Token::new(TokenKind::StrLiteral(String::from("three")), 1, 22, 29),
                 Token::new(TokenKind::Identifier(String::from("four")), 1, 29, 33),
-                Token::new(TokenKind::StringLiteral(String::from("")), 1, 33, 35),
-                Token::new(TokenKind::StringLiteral(String::from(r#"\\\"#)), 1, 36, 44),
+                Token::new(TokenKind::StrLiteral(String::from("")), 1, 33, 35),
+                Token::new(TokenKind::StrLiteral(String::from(r#"\\\"#)), 1, 36, 44),
             ]),
         );
 

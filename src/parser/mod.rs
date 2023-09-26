@@ -25,9 +25,9 @@ pub mod program;
 pub mod ret;
 pub mod sizeof;
 pub mod statement;
+pub mod str;
+pub mod str_lit;
 pub mod stream;
-pub mod string;
-pub mod string_lit;
 pub mod r#struct;
 pub mod tuple;
 pub mod r#type;
@@ -64,9 +64,9 @@ mod tests {
     use crate::parser::r#type::Type;
     use crate::parser::ret::Ret;
     use crate::parser::statement::Statement;
+    use crate::parser::str::StrType;
+    use crate::parser::str_lit::StrLit;
     use crate::parser::stream::Stream;
-    use crate::parser::string::StringType;
-    use crate::parser::string_lit::StringLit;
     use crate::parser::var::Var;
     use crate::parser::var_dec::VariableDeclaration;
 
@@ -161,7 +161,7 @@ mod tests {
     #[test]
     fn parse_function_declaration() {
         let tokens = Token::tokenize_line(
-            r#"fn my_fn(arg1: string, arg2: i64): string { let s = "hello world!"; }"#,
+            r#"fn my_fn(arg1: str, arg2: i64): str { let s = "hello world!"; }"#,
             1,
         )
         .expect("should not error");
@@ -174,48 +174,48 @@ mod tests {
                     vec![
                         Argument::new(
                             "arg1",
-                            Type::String(StringType::new(
-                                Position::new(1, 16),
-                                Position::new(1, 22)
-                            )),
+                            Type::Str(StrType::new(Position::new(1, 16), Position::new(1, 19))),
                             false,
                             Position::new(1, 10),
-                            Position::new(1, 22)
+                            Position::new(1, 19)
                         ),
                         Argument::new(
                             "arg2",
-                            Type::I64(I64Type::new(Position::new(1, 30), Position::new(1, 33))),
+                            Type::I64(I64Type::new(Position::new(1, 27), Position::new(1, 30))),
                             false,
-                            Position::new(1, 24),
-                            Position::new(1, 33)
+                            Position::new(1, 21),
+                            Position::new(1, 30)
                         )
                     ],
-                    Some(Type::string()),
+                    Some(Type::Str(StrType::new(
+                        Position::new(1, 33),
+                        Position::new(1, 36)
+                    ))),
                     Position::new(1, 1),
-                    Position::new(1, 34),
+                    Position::new(1, 31),
                 ),
                 Closure::new(
                     vec![Statement::VariableDeclaration(VariableDeclaration::new(
                         None,
                         false,
                         "s".to_string(),
-                        Expression::StringLiteral(StringLit {
+                        Expression::StrLiteral(StrLit {
                             value: "hello world!".to_string(),
-                            start_pos: Position::new(1, 53),
-                            end_pos: Position::new(1, 67),
+                            start_pos: Position::new(1, 47),
+                            end_pos: Position::new(1, 61),
                         }),
-                        Position::new(1, 45),
-                        Position::new(1, 67),
+                        Position::new(1, 39),
+                        Position::new(1, 61),
                     ))],
                     None,
-                    Position::new(1, 43),
-                    Position::new(1, 70),
+                    Position::new(1, 37),
+                    Position::new(1, 64),
                 ),
             )
         );
 
         let tokens = Token::tokenize_line(
-            "fn bigboi(f: fn (string, i64): bool, i: i64): fn (bool): string {}",
+            "fn bigboi(f: fn (str, i64): bool, i: i64): fn (bool): str {}",
             1,
         )
         .expect("should not error");
@@ -232,54 +232,63 @@ mod tests {
                                 vec![
                                     Argument::new(
                                         "",
-                                        Type::String(StringType::new(
+                                        Type::Str(StrType::new(
                                             Position::new(1, 18),
-                                            Position::new(1, 24)
+                                            Position::new(1, 21)
                                         )),
                                         false,
                                         Position::new(1, 18),
-                                        Position::new(1, 24)
+                                        Position::new(1, 21)
                                     ),
                                     Argument::new(
                                         "",
                                         Type::I64(I64Type::new(
-                                            Position::new(1, 26),
-                                            Position::new(1, 29)
+                                            Position::new(1, 23),
+                                            Position::new(1, 26)
                                         )),
                                         false,
-                                        Position::new(1, 26),
-                                        Position::new(1, 29)
+                                        Position::new(1, 23),
+                                        Position::new(1, 26)
                                     )
                                 ],
                                 Some(Type::Bool(BoolType::new(
-                                    Position::new(1, 32),
-                                    Position::new(1, 36)
+                                    Position::new(1, 29),
+                                    Position::new(1, 33)
                                 ))),
                                 Position::default(), // TODO: fix this
-                                Position::new(1, 30),
+                                Position::new(1, 27),
                             ))),
                             false,
                             Position::new(1, 11),
-                            Position::new(1, 30),
+                            Position::new(1, 27),
                         ),
                         Argument::new(
                             "i",
-                            Type::I64(I64Type::new(Position::new(1, 41), Position::new(1, 44))),
+                            Type::I64(I64Type::new(Position::new(1, 38), Position::new(1, 41))),
                             false,
-                            Position::new(1, 38),
-                            Position::new(1, 44)
+                            Position::new(1, 35),
+                            Position::new(1, 41)
                         )
                     ],
                     Some(Type::Function(Box::new(FunctionSignature::new_anon(
-                        vec![Argument::new_with_default_pos("", Type::bool(), false)],
-                        Some(Type::string()),
-                        Position::new(1, 47),
-                        Position::new(1, 56),
+                        vec![Argument::new(
+                            "",
+                            Type::Bool(BoolType::new(Position::new(1, 48), Position::new(1, 52))),
+                            false,
+                            Position::new(1, 48),
+                            Position::new(1, 52)
+                        )],
+                        Some(Type::Str(StrType::new(
+                            Position::new(1, 55),
+                            Position::new(1, 58)
+                        ))),
+                        Position::new(1, 44),
+                        Position::new(1, 53),
                     )))),
                     Position::new(1, 1),
-                    Position::new(1, 45),
+                    Position::new(1, 42),
                 ),
-                Closure::new(vec![], None, Position::new(1, 65), Position::new(1, 67)),
+                Closure::new(vec![], None, Position::new(1, 59), Position::new(1, 61)),
             )
         );
     }
@@ -294,12 +303,12 @@ mod tests {
             FunctionCall::new(
                 Var::new("do_thing", Position::new(1, 1), Position::new(1, 9)),
                 vec![
-                    Expression::StringLiteral(StringLit {
+                    Expression::StrLiteral(StrLit {
                         value: "one".to_string(),
                         start_pos: Position::new(1, 10),
                         end_pos: Position::new(1, 15),
                     }),
-                    Expression::StringLiteral(StringLit {
+                    Expression::StrLiteral(StrLit {
                         value: "two".to_string(),
                         start_pos: Position::new(1, 17),
                         end_pos: Position::new(1, 22),
@@ -398,7 +407,7 @@ mod tests {
 
     #[test]
     fn empty_fn_return() {
-        let raw = "fn my_func(s: string) {
+        let raw = "fn my_func(s: str) {
             if s == \"dog\" {
                 return
             }
@@ -415,17 +424,14 @@ mod tests {
                         "my_func",
                         vec![Argument::new(
                             "s",
-                            Type::String(StringType::new(
-                                Position::new(1, 15),
-                                Position::new(1, 21)
-                            )),
+                            Type::Str(StrType::new(Position::new(1, 15), Position::new(1, 18))),
                             false,
                             Position::new(1, 12),
-                            Position::new(1, 21)
+                            Position::new(1, 18)
                         )],
                         None,
                         Position::new(1, 1),
-                        Position::new(1, 22)
+                        Position::new(1, 19)
                     ),
                     Closure::new(
                         vec![
@@ -438,7 +444,7 @@ mod tests {
                                         end_pos: Position::new(2, 17),
                                     })),
                                     Operator::EqualTo,
-                                    Box::new(Expression::StringLiteral(StringLit {
+                                    Box::new(Expression::StrLiteral(StrLit {
                                         value: "dog".to_string(),
                                         start_pos: Position::new(2, 21),
                                         end_pos: Position::new(2, 26),
@@ -459,7 +465,7 @@ mod tests {
                             )])),
                             Statement::FunctionCall(FunctionCall::new(
                                 Var::new("print", Position::new(6, 13), Position::new(6, 18)),
-                                vec![Expression::StringLiteral(StringLit {
+                                vec![Expression::StrLiteral(StrLit {
                                     value: "not dog".to_string(),
                                     start_pos: Position::new(6, 19),
                                     end_pos: Position::new(6, 28),
@@ -469,7 +475,7 @@ mod tests {
                             ))
                         ],
                         None,
-                        Position::new(1, 23),
+                        Position::new(1, 20),
                         Position::new(7, 10),
                     )
                 ))]

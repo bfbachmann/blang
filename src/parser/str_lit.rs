@@ -11,19 +11,19 @@ use crate::parser::stream::Stream;
 
 /// Represents a string literal.
 #[derive(Debug, PartialEq, Clone)]
-pub struct StringLit {
+pub struct StrLit {
     pub value: String,
     pub start_pos: Position,
     pub end_pos: Position,
 }
 
-impl Display for StringLit {
+impl Display for StrLit {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, r#""{}""#, self.value)
     }
 }
 
-impl Locatable for StringLit {
+impl Locatable for StrLit {
     fn start_pos(&self) -> &Position {
         &self.start_pos
     }
@@ -33,11 +33,11 @@ impl Locatable for StringLit {
     }
 }
 
-impl StringLit {
+impl StrLit {
     /// Creates a new string literal with default (zero) start and end positions.
     #[cfg(test)]
     pub fn new_with_default_pos(value: &str) -> Self {
-        StringLit {
+        StrLit {
             value: value.to_string(),
             start_pos: Position::default(),
             end_pos: Position::default(),
@@ -48,10 +48,10 @@ impl StringLit {
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         match tokens.next() {
             Some(&Token {
-                kind: TokenKind::StringLiteral(ref value),
+                kind: TokenKind::StrLiteral(ref value),
                 start,
                 end,
-            }) => Ok(StringLit {
+            }) => Ok(StrLit {
                 value: value.to_string(),
                 start_pos: start,
                 end_pos: end,

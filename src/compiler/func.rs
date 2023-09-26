@@ -554,7 +554,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         };
 
         let var_name = format!("{}_ptr", name);
-        let ll_ptr = if *typ == RichType::String {
+        let ll_ptr = if *typ == RichType::Str {
             self.builder
                 .build_alloca(ll_val.get_type(), var_name.as_str())
         } else {
@@ -888,7 +888,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
                 self.builder.build_bitcast(
                     global.as_pointer_value(),
-                    convert::to_basic_type(self.ctx, self.types, &RichType::String),
+                    convert::to_basic_type(self.ctx, self.types, &RichType::Str),
                     "str_lit_as_i32_ptr",
                 )
             }
@@ -1254,7 +1254,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         match typ {
             // Strings, structs, tuples, and unsafe pointers should already be represented as
             // pointers.
-            RichType::String | RichType::Struct(_) | RichType::Tuple(_) | RichType::UnsafePtr => {
+            RichType::Str | RichType::Struct(_) | RichType::Tuple(_) | RichType::UnsafePtr => {
                 ll_val
             }
             RichType::I64 | RichType::USize => self.get_int(ll_val).as_basic_value_enum(),

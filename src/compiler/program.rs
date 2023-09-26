@@ -232,7 +232,7 @@ mod tests {
                 fib(val)
                 
                 let hi = "hello world!!"
-                string_stuff("test")
+                str_stuff("test")
             }
             
             fn thing(b: bool): bool {
@@ -287,7 +287,7 @@ mod tests {
                 }
             }
             
-            fn string_stuff(s: string): string {
+            fn str_stuff(s: str): str {
                 return "test"
             }
         "#,
@@ -299,12 +299,12 @@ mod tests {
         assert_compiles(
             r#"
             struct Person {
-                name: string,
+                name: str,
                 age: i64,
-                do_thing: fn(string): i64,
+                do_thing: fn(str): i64,
             }
             
-            fn new_person(name: string, age: i64): Person {
+            fn new_person(name: str, age: i64): Person {
                 return Person{
                     name: name,
                     age: age,
@@ -312,7 +312,7 @@ mod tests {
                 }
             }
             
-            fn test(s: string): i64 {
+            fn test(s: str): i64 {
                 return 1
             }
             
@@ -355,7 +355,7 @@ mod tests {
     fn uses_externs() {
         assert_compiles(
             r#"
-            ext fn write(fd: i64, msg: string, len: i64)
+            ext fn write(fd: i64, msg: str, len: i64)
             ext fn exit(code: i64)
             
             fn main() {

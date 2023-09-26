@@ -57,11 +57,9 @@ impl TypeId {
         TypeId { typ: Type::usize() }
     }
 
-    /// Returns the type ID for the `string` type.
-    pub fn string() -> Self {
-        TypeId {
-            typ: Type::string(),
-        }
+    /// Returns the type ID for the `str` type.
+    pub fn str() -> Self {
+        TypeId { typ: Type::str() }
     }
 
     /// Returns the type ID for the `<unknown>` type.
@@ -93,7 +91,7 @@ impl TypeId {
 #[derive(Clone, Debug)]
 pub enum RichType {
     Bool,
-    String,
+    Str,
     I64,
     /// These are pointers that are not garbage collected and allow pointer arithmetic.
     /// This type translates directly to `void *` in C.
@@ -111,7 +109,7 @@ impl Display for RichType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             RichType::Bool => write!(f, "bool"),
-            RichType::String => write!(f, "string"),
+            RichType::Str => write!(f, "str"),
             RichType::I64 => write!(f, "i64"),
             RichType::USize => write!(f, "usize"),
             RichType::UnsafePtr => write!(f, "unsafeptr"),
@@ -128,7 +126,7 @@ impl PartialEq for RichType {
         match (self, other) {
             (RichType::Bool, RichType::Bool)
             | (RichType::I64, RichType::I64)
-            | (RichType::String, RichType::String)
+            | (RichType::Str, RichType::Str)
             | (RichType::UnsafePtr, RichType::UnsafePtr)
             | (RichType::USize, RichType::USize) => true,
             (RichType::Struct(s1), RichType::Struct(s2)) => s1 == s2,
@@ -203,7 +201,7 @@ impl RichType {
 
             Type::Bool(_) => RichType::Bool,
 
-            Type::String(_) => RichType::String,
+            Type::Str(_) => RichType::Str,
 
             Type::Function(sig) => RichType::Function(Box::new(RichFnSig::from(ctx, &*sig))),
 
@@ -230,7 +228,7 @@ impl RichType {
         HashMap::from([
             (TypeId::bool(), RichType::Bool),
             (TypeId::i64(), RichType::I64),
-            (TypeId::string(), RichType::String),
+            (TypeId::str(), RichType::Str),
             (TypeId::unsafeptr(), RichType::UnsafePtr),
             (TypeId::usize(), RichType::USize),
             (
@@ -306,7 +304,7 @@ impl RichType {
             | RichType::I64
             | RichType::UnsafePtr
             | RichType::USize
-            | RichType::String
+            | RichType::Str
             | RichType::Function(_)
             | RichType::Unknown(_) => false,
             RichType::Struct(s) => {
@@ -352,7 +350,7 @@ impl RichType {
         match self {
             RichType::I64 => true,
             RichType::Bool
-            | RichType::String
+            | RichType::Str
             | RichType::UnsafePtr
             | RichType::USize
             | RichType::Struct(_)
@@ -366,11 +364,13 @@ impl RichType {
     pub fn size_bytes(&self, ctx: &ProgramContext) -> u64 {
         match self {
             RichType::Bool => 1,
-            RichType::I64 | RichType::UnsafePtr | RichType::USize | RichType::Function(_) => 8,
-            RichType::String => {
-                // TODO: Update this when strings are implemented properly.
-                panic!("cannot compute size of type {}", self)
-            }
+
+            RichType::I64
+            | RichType::UnsafePtr
+            | RichType::USize
+            | RichType::Function(_)
+            | RichType::Str => 8,
+
             RichType::Struct(struct_type) => {
                 let mut size = 0;
                 for field in &struct_type.fields {
@@ -380,6 +380,7 @@ impl RichType {
 
                 size
             }
+
             RichType::Tuple(tuple_type) => {
                 let mut size = 0;
                 for type_id in &tuple_type.type_ids {
@@ -389,6 +390,7 @@ impl RichType {
 
                 size
             }
+
             RichType::Unknown(_) => 0,
         }
     }
@@ -406,7 +408,7 @@ mod tests {
     #[test]
     fn partial_eq() {
         assert_eq!(RichType::Bool, RichType::Bool);
-        assert_eq!(RichType::String, RichType::String);
+        assert_eq!(RichType::Str, RichType::Str);
         assert_eq!(RichType::I64, RichType::I64);
         assert_eq!(
             RichType::Struct(RichStructType {
@@ -432,12 +434,12 @@ mod tests {
                     type_id: TypeId::bool(),
                     is_mut: false,
                 }],
-                ret_type_id: Some(TypeId::string()),
+                ret_type_id: Some(TypeId::str()),
                 type_id: TypeId::from(Type::Function(Box::new(
                     FunctionSignature::new_with_default_pos(
                         "test_func",
                         vec![Argument::new_with_default_pos("arg1", Type::bool(), false)],
-                        Some(Type::string())
+                        Some(Type::str())
                     )
                 ))),
             })),
@@ -448,12 +450,12 @@ mod tests {
                     type_id: TypeId::bool(),
                     is_mut: false,
                 }],
-                ret_type_id: Some(TypeId::string()),
+                ret_type_id: Some(TypeId::str()),
                 type_id: TypeId::from(Type::Function(Box::new(
                     FunctionSignature::new_with_default_pos(
                         "test_func",
                         vec![Argument::new_with_default_pos("arg1", Type::bool(), false)],
-                        Some(Type::string())
+                        Some(Type::str())
                     )
                 ))),
             }))

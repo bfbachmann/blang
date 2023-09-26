@@ -38,7 +38,7 @@ pub fn to_basic_type<'a>(
         // us an easy way to tell.
         RichType::USize => ctx.i64_type().as_basic_type_enum(),
 
-        RichType::String => ctx
+        RichType::Str => ctx
             .i32_type()
             .ptr_type(AddressSpace::default())
             .as_basic_type_enum(),
@@ -218,7 +218,7 @@ pub fn to_metadata_type_enum<'a>(
             BasicMetadataTypeEnum::from(ctx.i64_type())
         }
         RichType::Bool => BasicMetadataTypeEnum::from(ctx.bool_type()),
-        RichType::String => {
+        RichType::Str => {
             BasicMetadataTypeEnum::from(ctx.i32_type().ptr_type(AddressSpace::default()))
         }
         RichType::Struct(_) | RichType::Tuple(_) => BasicMetadataTypeEnum::from(

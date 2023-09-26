@@ -88,17 +88,17 @@ mod tests {
     use crate::parser::bool_lit::BoolLit;
     use crate::parser::expr::Expression;
     use crate::parser::r#type::Type;
-    use crate::parser::string_lit::StringLit;
+    use crate::parser::str_lit::StrLit;
     use crate::parser::var_dec::VariableDeclaration;
 
     #[test]
     fn var_redeclared() {
         let mut ctx = ProgramContext::new();
         let var_decl = VariableDeclaration::new(
-            Some(Type::string()),
+            Some(Type::str()),
             false,
             "my_var".to_string(),
-            Expression::StringLiteral(StringLit::new_with_default_pos("bingo")),
+            Expression::StrLiteral(StrLit::new_with_default_pos("bingo")),
             Position::default(),
             Position::default(),
         );
@@ -107,15 +107,15 @@ mod tests {
         assert_eq!(
             result,
             RichVarDecl {
-                type_id: TypeId::string(),
+                type_id: TypeId::str(),
                 name: "my_var".to_string(),
                 val: RichExpr {
                     kind: RichExprKind::StringLiteral("bingo".to_string()),
-                    type_id: TypeId::string(),
+                    type_id: TypeId::str(),
                 }
             }
         );
-        assert_eq!(ctx.get_var("my_var").unwrap().type_id, TypeId::string());
+        assert_eq!(ctx.get_var("my_var").unwrap().type_id, TypeId::str());
 
         let new_var_decl = VariableDeclaration::new(
             Some(Type::bool()),
@@ -149,7 +149,7 @@ mod tests {
             Some(Type::i64()),
             false,
             "my_string".to_string(),
-            Expression::StringLiteral(StringLit::new_with_default_pos("bingo")),
+            Expression::StrLiteral(StrLit::new_with_default_pos("bingo")),
             Position::default(),
             Default::default(),
         );

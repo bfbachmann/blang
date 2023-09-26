@@ -37,8 +37,8 @@ pub enum TokenKind {
     UnsafePtr,
     UnsafeNull,
     USize,
-    String,
-    StringLiteral(String),
+    Str,
+    StrLiteral(String),
     Function,
     Struct,
 
@@ -99,8 +99,8 @@ impl Clone for TokenKind {
             TokenKind::UnsafePtr => TokenKind::UnsafePtr,
             TokenKind::UnsafeNull => TokenKind::UnsafeNull,
             TokenKind::USize => TokenKind::USize,
-            TokenKind::String => TokenKind::String,
-            TokenKind::StringLiteral(v) => TokenKind::StringLiteral(v.clone()),
+            TokenKind::Str => TokenKind::Str,
+            TokenKind::StrLiteral(v) => TokenKind::StrLiteral(v.clone()),
             TokenKind::Function => TokenKind::Function,
             TokenKind::Struct => TokenKind::Struct,
             TokenKind::Let => TokenKind::Let,
@@ -137,7 +137,7 @@ impl fmt::Display for TokenKind {
         match self {
             TokenKind::BoolLiteral(b) => write!(f, "{}", b),
             TokenKind::I64Literal(i) => write!(f, "{}", i),
-            TokenKind::StringLiteral(s) => write!(f, r#""{}""#, s),
+            TokenKind::StrLiteral(s) => write!(f, r#""{}""#, s),
             TokenKind::Identifier(s) => write!(f, "{}", s),
             other => write!(f, "{}", other.to_string()),
         }
@@ -168,8 +168,8 @@ impl TokenKind {
             TokenKind::UnsafePtr => "unsafeptr".to_string(),
             TokenKind::UnsafeNull => "unsafe_null".to_string(),
             TokenKind::USize => "usize".to_string(),
-            TokenKind::String => "string".to_string(),
-            TokenKind::StringLiteral(v) => v.to_string(),
+            TokenKind::Str => "str".to_string(),
+            TokenKind::StrLiteral(v) => v.to_string(),
             TokenKind::Function => "fn".to_string(),
             TokenKind::Struct => "struct".to_string(),
             TokenKind::Let => "let".to_string(),
@@ -257,7 +257,7 @@ impl TokenKind {
             TokenKind::If,
             TokenKind::Else,
             TokenKind::Elsif,
-            TokenKind::String,
+            TokenKind::Str,
             TokenKind::LeftBrace,
             TokenKind::RightBrace,
             TokenKind::LeftParen,
@@ -387,7 +387,7 @@ impl TokenKind {
                     i += 1;
                 }
 
-                Some(TokenKind::StringLiteral(String::from(replaced)))
+                Some(TokenKind::StrLiteral(String::from(replaced)))
             }
             false => None,
         }

@@ -126,9 +126,9 @@ impl RichExpr {
                 type_id: TypeId::unsafeptr(),
             },
 
-            Expression::StringLiteral(s) => RichExpr {
+            Expression::StrLiteral(s) => RichExpr {
                 kind: RichExprKind::StringLiteral(s.value),
-                type_id: TypeId::string(),
+                type_id: TypeId::str(),
             },
 
             Expression::StructInit(struct_init) => {
@@ -332,7 +332,7 @@ impl RichExpr {
                 type_id,
             },
 
-            Type::String(_) => RichExpr {
+            Type::Str(_) => RichExpr {
                 kind: RichExprKind::StringLiteral("".to_string()),
                 type_id,
             },
@@ -486,7 +486,7 @@ mod tests {
     use crate::parser::i64_lit::I64Lit;
     use crate::parser::op::Operator;
     use crate::parser::r#type::Type;
-    use crate::parser::string_lit::StringLit;
+    use crate::parser::str_lit::StrLit;
     use crate::parser::var::Var;
 
     #[test]
@@ -522,14 +522,14 @@ mod tests {
     #[test]
     fn analyze_string_literal() {
         let mut ctx = ProgramContext::new();
-        let expr = Expression::StringLiteral(StringLit::new_with_default_pos("test"));
+        let expr = Expression::StrLiteral(StrLit::new_with_default_pos("test"));
         let result = RichExpr::from(&mut ctx, expr);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
             RichExpr {
                 kind: RichExprKind::StringLiteral(String::from("test")),
-                type_id: TypeId::string()
+                type_id: TypeId::str()
             }
         );
     }
@@ -537,7 +537,7 @@ mod tests {
     #[test]
     fn analyze_var() {
         let mut ctx = ProgramContext::new();
-        ctx.add_var(ScopedVar::new("myvar", TypeId::string(), false, false));
+        ctx.add_var(ScopedVar::new("myvar", TypeId::str(), false, false));
         let result = RichExpr::from(
             &mut ctx,
             Expression::Variable(Var::new_with_default_pos("myvar")),
@@ -548,10 +548,10 @@ mod tests {
             RichExpr {
                 kind: RichExprKind::Variable(RichVar::new_with_default_pos(
                     "myvar",
-                    TypeId::string(),
+                    TypeId::str(),
                     None
                 )),
-                type_id: TypeId::string()
+                type_id: TypeId::str()
             }
         );
     }
@@ -589,7 +589,7 @@ mod tests {
         let fn_sig = FunctionSignature::new_with_default_pos(
             "do_thing",
             vec![Argument::new_with_default_pos("first", Type::bool(), false)],
-            Some(Type::string()),
+            Some(Type::str()),
         );
         let rich_fn = RichFn {
             signature: RichFnSig {
@@ -599,7 +599,7 @@ mod tests {
                     type_id: TypeId::bool(),
                     is_mut: false,
                 }],
-                ret_type_id: Some(TypeId::string()),
+                ret_type_id: Some(TypeId::str()),
                 type_id: TypeId::from(Type::Function(Box::new(fn_sig.clone()))),
             },
             body: RichClosure {
@@ -643,9 +643,9 @@ mod tests {
                         kind: RichExprKind::BoolLiteral(true),
                         type_id: TypeId::bool()
                     }],
-                    ret_type_id: Some(TypeId::string()),
+                    ret_type_id: Some(TypeId::str()),
                 }),
-                type_id: TypeId::string(),
+                type_id: TypeId::str(),
             },
         );
     }
@@ -913,9 +913,7 @@ mod tests {
             Expression::BinaryOperation(
                 Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
                 Operator::Add,
-                Box::new(Expression::StringLiteral(StringLit::new_with_default_pos(
-                    "asdf",
-                ))),
+                Box::new(Expression::StrLiteral(StrLit::new_with_default_pos("asdf"))),
             ),
         );
 
@@ -930,7 +928,7 @@ mod tests {
                     Operator::Add,
                     Box::new(RichExpr {
                         kind: RichExprKind::StringLiteral("asdf".to_string()),
-                        type_id: TypeId::string(),
+                        type_id: TypeId::str(),
                     })
                 ),
                 type_id: TypeId::i64(),
@@ -949,9 +947,7 @@ mod tests {
         let result = RichExpr::from(
             &mut ctx,
             Expression::BinaryOperation(
-                Box::new(Expression::StringLiteral(StringLit::new_with_default_pos(
-                    "asdf",
-                ))),
+                Box::new(Expression::StrLiteral(StrLit::new_with_default_pos("asdf"))),
                 Operator::Add,
                 Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
             ),
@@ -963,7 +959,7 @@ mod tests {
                 kind: RichExprKind::BinaryOperation(
                     Box::new(RichExpr {
                         kind: RichExprKind::StringLiteral("asdf".to_string()),
-                        type_id: TypeId::string(),
+                        type_id: TypeId::str(),
                     }),
                     Operator::Add,
                     Box::new(RichExpr {
@@ -1019,9 +1015,7 @@ mod tests {
             &mut ctx,
             Expression::UnaryOperation(
                 Operator::Not,
-                Box::new(Expression::StringLiteral(StringLit::new_with_default_pos(
-                    "s",
-                ))),
+                Box::new(Expression::StrLiteral(StrLit::new_with_default_pos("s"))),
             ),
         );
 

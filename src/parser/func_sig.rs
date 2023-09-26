@@ -183,11 +183,14 @@ impl FunctionSignature {
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return type
     pub fn from_anon(tokens: &mut Stream<Token>, named: bool) -> ParseResult<Self> {
+        let start_pos = Program::current_position(tokens);
+
         // The first token should be "fn".
         Program::parse_expecting(tokens, HashSet::from([TokenKind::Function]))?;
 
         // The next tokens should represent function arguments followed by the return type.
-        let fn_sig = FunctionSignature::from_args_and_return(tokens, named)?;
+        let mut fn_sig = FunctionSignature::from_args_and_return(tokens, named)?;
+        fn_sig.start_pos = start_pos;
         Ok(fn_sig)
     }
 
@@ -229,7 +232,6 @@ impl FunctionSignature {
             return_type,
             // We can leave the start position as default here because it will be set by the caller.
             Position::default(),
-            // TODO: technically, this position is wrong.
             args_end_pos,
         ))
     }
@@ -277,7 +279,7 @@ impl FunctionSignature {
 
                 Some(Token {
                     kind:
-                        TokenKind::String
+                        TokenKind::Str
                         | TokenKind::I64
                         | TokenKind::Bool
                         | TokenKind::Function
@@ -381,7 +383,7 @@ mod tests {
 
     #[test]
     fn inline_struct_types_in_fn_sig() {
-        let raw = r#"fn one(a: struct {one: i64, two: bool}, b: i64): struct {thing: string} {}"#;
+        let raw = r#"fn one(a: struct {one: i64, two: bool}, b: i64): struct {thing: str} {}"#;
         let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let result = Program::from(&mut Stream::from(tokens));
         assert!(matches!(result, Ok(_)));

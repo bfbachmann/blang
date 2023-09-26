@@ -16,8 +16,8 @@ use crate::parser::op::Operator;
 use crate::parser::program::Program;
 use crate::parser::r#struct::StructInit;
 use crate::parser::sizeof::SizeOf;
+use crate::parser::str_lit::StrLit;
 use crate::parser::stream::Stream;
-use crate::parser::string_lit::StringLit;
 use crate::parser::tuple::TupleInit;
 use crate::parser::unsafe_null::UnsafeNull;
 use crate::parser::var::Var;
@@ -47,7 +47,7 @@ pub enum Expression {
     BoolLiteral(BoolLit),
     I64Literal(I64Lit),
     UnsafeNull(UnsafeNull),
-    StringLiteral(StringLit),
+    StrLiteral(StrLit),
     FunctionCall(FunctionCall),
     AnonFunction(Box<Function>),
     UnaryOperation(Operator, Box<Expression>),
@@ -66,7 +66,7 @@ impl fmt::Display for Expression {
             Expression::BoolLiteral(b) => write!(f, "{}", b),
             Expression::I64Literal(i) => write!(f, "{}", i),
             Expression::UnsafeNull(unsafe_null) => write!(f, "{}", unsafe_null),
-            Expression::StringLiteral(s) => write!(f, "{}", s),
+            Expression::StrLiteral(s) => write!(f, "{}", s),
             Expression::FunctionCall(fn_call) => write!(f, "{}", fn_call),
             Expression::AnonFunction(func) => write!(f, "{}", func),
             Expression::UnaryOperation(op, expr) => write!(f, "{}{}", op, expr),
@@ -93,7 +93,7 @@ impl Locatable for Expression {
             Expression::BoolLiteral(bool_lit) => bool_lit.start_pos(),
             Expression::I64Literal(i64_lit) => i64_lit.start_pos(),
             Expression::UnsafeNull(unsafe_null) => unsafe_null.start_pos(),
-            Expression::StringLiteral(string_lit) => string_lit.start_pos(),
+            Expression::StrLiteral(string_lit) => string_lit.start_pos(),
             Expression::FunctionCall(fn_call) => fn_call.start_pos(),
             Expression::AnonFunction(func) => func.start_pos(),
             Expression::UnaryOperation(_, expr) => expr.start_pos(),
@@ -110,7 +110,7 @@ impl Locatable for Expression {
             Expression::BoolLiteral(bool_lit) => bool_lit.end_pos(),
             Expression::I64Literal(i64_lit) => i64_lit.end_pos(),
             Expression::UnsafeNull(unsafe_null) => unsafe_null.end_pos(),
-            Expression::StringLiteral(string_lit) => string_lit.end_pos(),
+            Expression::StrLiteral(string_lit) => string_lit.end_pos(),
             Expression::FunctionCall(fn_call) => fn_call.end_pos(),
             Expression::AnonFunction(func) => func.end_pos(),
             Expression::UnaryOperation(_, expr) => expr.end_pos(),
@@ -276,13 +276,13 @@ impl Expression {
                 Ok(Some(Expression::I64Literal(i64_lit)))
             }
 
-            // Check if it's a string literal.
+            // Check if it's a str literal.
             Some(Token {
-                kind: TokenKind::StringLiteral(_),
+                kind: TokenKind::StrLiteral(_),
                 ..
             }) => {
-                let string_lit = StringLit::from(tokens)?;
-                Ok(Some(Expression::StringLiteral(string_lit)))
+                let str_lit = StrLit::from(tokens)?;
+                Ok(Some(Expression::StrLiteral(str_lit)))
             }
 
             // Check if it's an unsafe null value.
@@ -617,8 +617,8 @@ mod tests {
     use crate::parser::func_call::FunctionCall;
     use crate::parser::i64_lit::I64Lit;
     use crate::parser::op::Operator;
+    use crate::parser::str_lit::StrLit;
     use crate::parser::stream::Stream;
-    use crate::parser::string_lit::StringLit;
     use crate::parser::var::Var;
 
     fn parse(raw: &str) -> Expression {
@@ -671,7 +671,7 @@ mod tests {
     fn parse_basic_string_literal() {
         assert_eq!(
             parse(r#""this is my \"String\"""#),
-            Expression::StringLiteral(StringLit {
+            Expression::StrLiteral(StrLit {
                 value: r#"this is my "String""#.to_string(),
                 start_pos: Position::new(1, 1),
                 end_pos: Position::new(1, 24),

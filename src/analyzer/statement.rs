@@ -393,7 +393,7 @@ mod tests {
             struct MyStruct {
                 counter: i64,
                 is_even: bool,
-                message: string,
+                message: str,
             }
         "#;
         let mut ctx = ProgramContext::new();
@@ -414,7 +414,7 @@ mod tests {
                     },
                     RichField {
                         name: "message".to_string(),
-                        type_id: TypeId::string(),
+                        type_id: TypeId::str(),
                     },
                 ],
             })

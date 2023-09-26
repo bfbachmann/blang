@@ -304,7 +304,7 @@ mod tests {
     fn fn_decl() {
         let raw = r#"
         fn main() {}
-        fn test(a: i64, b: string) { 
+        fn test(a: i64, b: str) { 
             let s = "hello world!" 
         }"#;
         let result = analyze_prog(raw);
@@ -332,7 +332,7 @@ mod tests {
     fn fn_already_defined() {
         let raw = r#"
         fn test() {}
-        fn test(thing: string) {}
+        fn test(thing: str) {}
         "#;
         let result = analyze_prog(raw);
         assert!(matches!(
@@ -402,13 +402,13 @@ mod tests {
             return fib(n-1, visitor_fn) + fib(n-2, visitor_fn)
         }
         
-        fn print(s: string) {}
+        fn print(s: str) {}
         
-        fn str_concat(a: string, b: string): string {
+        fn str_concat(a: str, b: str): str {
             return a
         }
         
-        fn itoa(i: i64): string {
+        fn itoa(i: i64): str {
             return "fake"
         }
         
@@ -430,14 +430,14 @@ mod tests {
     fn struct_defs_with_legal_containment() {
         let raw = r#"
             struct Person {
-                name: string,
+                name: str,
                 age: i64,
             }
             
             struct Inner {
                 count: i64,
-                msg: string,
-                get_person: fn (string): Person,
+                msg: str,
+                get_person: fn (str): Person,
                 inline_struct_field: struct {
                     something: bool,
                     another: Person,
@@ -451,7 +451,7 @@ mod tests {
             
             struct Empty {}
             
-            fn get_person(name: string): Person {
+            fn get_person(name: str): Person {
                 return Person{
                     name: "dave",
                     age: 43,
