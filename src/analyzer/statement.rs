@@ -3,6 +3,7 @@ use std::fmt::Formatter;
 
 use crate::analyzer::closure::{analyze_break, analyze_continue, RichClosure};
 use crate::analyzer::cond::RichCond;
+use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::{RichFn, RichFnCall, RichFnSig, RichRet};
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#struct::RichStructType;
@@ -92,8 +93,18 @@ impl RichStatement {
             Statement::StructDeclaration(s) => {
                 RichStatement::StructTypeDeclaration(RichStructType::from(ctx, &s, false))
             }
-            Statement::ExternFn(e) => {
-                let sig = RichFnSig::from(ctx, &e);
+            Statement::ExternFn(extern_fn_sig) => {
+                // Make sure we are not already inside a function. Extern functions cannot be
+                // defined within other functions.
+                if ctx.is_in_fn() {
+                    ctx.add_err(AnalyzeError::new_with_locatable(
+                        ErrorKind::InvalidStatement,
+                        "cannot declare external functions inside other functions",
+                        Box::new(extern_fn_sig.clone()),
+                    ));
+                }
+
+                let sig = RichFnSig::from(ctx, &extern_fn_sig);
                 RichStatement::ExternFnDeclaration(sig)
             }
         }

@@ -972,4 +972,22 @@ mod tests {
             })
         ))
     }
+
+    #[test]
+    fn illegal_use_of_extern() {
+        let result = analyze_prog(
+            r#"
+            fn main() {
+                extern fn nothing()
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::InvalidStatement,
+                ..
+            })
+        ))
+    }
 }
