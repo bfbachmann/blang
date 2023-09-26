@@ -199,16 +199,13 @@ impl Statement {
                 Ok(Statement::VariableAssignment(assign))
             }
 
-            // If the first two tokens are "extern fn", it's an external function declaration.
+            // If the first token is "extern", it's an external function declaration.
             (
                 Token {
                     kind: TokenKind::Extern,
                     ..
                 },
-                Token {
-                    kind: TokenKind::Function,
-                    ..
-                },
+                _,
             ) => {
                 let sig = FunctionSignature::from_extern(tokens)?;
                 Ok(Statement::ExternFn(sig))

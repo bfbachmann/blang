@@ -53,7 +53,8 @@ impl Program {
                 return Err(ParseError::new(
                     ErrorKind::UnexpectedEOF,
                     format!(
-                        r#"expected one of {}, but found EOF"#,
+                        r#"expected {}{}, but found EOF"#,
+                        if expected.len() > 1 { "one of " } else { "" },
                         fmt::format_hashset(expected)
                     )
                     .as_str(),
@@ -69,7 +70,8 @@ impl Program {
                     Err(ParseError::new_with_token(
                         ErrorKind::UnexpectedToken,
                         format!(
-                            r#"expected one of {}, but found {}"#,
+                            r#"expected {}{}, but found {}"#,
+                            if expected.len() > 1 { "one of " } else { "" },
                             fmt::format_hashset(expected),
                             format_code!("{}", token),
                         )
