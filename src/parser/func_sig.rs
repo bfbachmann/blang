@@ -138,7 +138,7 @@ impl FunctionSignature {
         // Record the function signature starting position.
         let start_pos = Program::current_position(tokens);
 
-        // The first token should be "fn".
+        // The first token should be `fn`.
         Program::parse_expecting(tokens, HashSet::from([TokenKind::Function]))?;
 
         // The second token should be an identifier that represents the function name.
@@ -174,7 +174,7 @@ impl FunctionSignature {
     pub fn from_anon(tokens: &mut Stream<Token>, named: bool) -> ParseResult<Self> {
         let start_pos = Program::current_position(tokens);
 
-        // The first token should be "fn".
+        // The first token should be `fn`.
         Program::parse_expecting(tokens, HashSet::from([TokenKind::Function]))?;
 
         // The next tokens should represent function arguments followed by the return type.
@@ -201,7 +201,7 @@ impl FunctionSignature {
         // The next tokens should represent function arguments.
         let (args, args_end_pos) = FunctionSignature::arg_declarations_from(tokens, named)?;
 
-        // The next token should be "~" if there is a return type. Otherwise, there is no return
+        // The next token should be `~` if there is a return type. Otherwise, there is no return
         // type and we're done.
         let mut return_type = None;
         match tokens.peek_next() {
@@ -209,7 +209,7 @@ impl FunctionSignature {
                 kind: TokenKind::Tilde,
                 ..
             }) => {
-                // Remove the "~" and parse the return type.
+                // Remove the `~` and parse the return type.
                 tokens.next();
                 return_type = Some(Type::from(tokens)?);
             }
@@ -252,7 +252,7 @@ impl FunctionSignature {
         let mut args = vec![];
         let mut arg_names = HashSet::new();
         loop {
-            // The next token should be an argument, or ")".
+            // The next token should be an argument, or `)`.
             let token = tokens.next();
             match token {
                 Some(
@@ -320,7 +320,7 @@ impl FunctionSignature {
                 }
             };
 
-            // After the argument, the next token should be "," or ")".
+            // After the argument, the next token should be `,` or `)`.
             let token = Program::parse_expecting(
                 tokens,
                 HashSet::from([TokenKind::Comma, TokenKind::RightParen]),
@@ -334,7 +334,7 @@ impl FunctionSignature {
                     kind: TokenKind::RightParen,
                     ..
                 } => {
-                    // We're done parsing args. Record the position of the ")".
+                    // We're done parsing args. Record the position of the `)`.
                     end_pos = token.end;
                     break;
                 }

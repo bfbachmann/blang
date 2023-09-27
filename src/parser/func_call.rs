@@ -88,26 +88,26 @@ impl FunctionCall {
         let start_pos = fn_var.start_pos().clone();
         let end_pos: Position;
 
-        // The next token should be "(".
+        // The next token should be `(`.
         Program::parse_expecting(tokens, HashSet::from([TokenKind::LeftParen]))?;
 
-        // The remaining tokens should be expressions representing argument values separated by ","
-        // and ending in ")".
+        // The remaining tokens should be expressions representing argument values separated by `,`
+        // and ending in `)`.
         let mut args = vec![];
         loop {
             match tokens.peek_next() {
-                // If the next token is ")", we break because we're done parsing arguments.
+                // If the next token is `)`, we break because we're done parsing arguments.
                 Some(&Token {
                     kind: TokenKind::RightParen,
                     ..
                 }) => {
-                    // Pop the ")" and set the end position of this function call in the source
+                    // Pop the `)` and set the end position of this function call in the source
                     // file.
                     end_pos = tokens.next().unwrap().end;
                     break;
                 }
 
-                // If the next token is ",", we'll make sure that we've already parsed at least one
+                // If the next token is `,`, we'll make sure that we've already parsed at least one
                 // argument because the comma should only come after an argument.
                 Some(
                     comma @ &Token {
@@ -124,18 +124,18 @@ impl FunctionCall {
                         ));
                     }
 
-                    // Pop the ",".
+                    // Pop the `,`.
                     tokens.next();
 
-                    // If the next token is ")", we break. We're allowing arguments to end in ",)"
+                    // If the next token is `)`, we break. We're allowing arguments to end in ",)"
                     // to account for cases where function call arguments are broken over
-                    // multiple lines and the user wishes to end the last argument with a ",".
+                    // multiple lines and the user wishes to end the last argument with a `,`.
                     if let Some(&Token {
                         kind: TokenKind::RightParen,
                         ..
                     }) = tokens.peek_next()
                     {
-                        // Pop the ")" and set the end position of this function call in the source
+                        // Pop the `)` and set the end position of this function call in the source
                         // file.
                         end_pos = tokens.next().unwrap().end;
                         break;
@@ -152,7 +152,7 @@ impl FunctionCall {
                     ));
                 }
 
-                // If the next token is not "," or ")", we assume that it's the beginning of an
+                // If the next token is not `,` or `)`, we assume that it's the beginning of an
                 // expression that represents the next argument.
                 _ => {}
             }

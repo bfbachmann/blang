@@ -96,10 +96,10 @@ impl TupleType {
         // Record the starting position of this statement.
         let start_pos = Program::current_position(tokens);
 
-        // The first token should be "{".
+        // The first token should be `{`.
         Program::parse_expecting(tokens, HashSet::from([TokenKind::LeftBrace]))?;
 
-        // The next tokens should be types followed by commas ending in "}".
+        // The next tokens should be types followed by commas ending in `}`.
         let mut types = vec![];
         let end_pos;
         loop {
@@ -126,11 +126,11 @@ impl TupleType {
                 }
 
                 _ => {
-                    // The token is not a comma or "}", so we're expecting it to be a type.
+                    // The token is not a comma or `}`, so we're expecting it to be a type.
                     let typ = Type::from(tokens)?;
                     types.push(typ);
 
-                    // The next token should be a comma or "}".
+                    // The next token should be a comma or `}`.
                     if let token @ Token {
                         kind: TokenKind::RightBrace,
                         ..
@@ -219,10 +219,10 @@ impl TupleInit {
         // Record the starting position of this statement.
         let start_pos = Program::current_position(tokens);
 
-        // The first token should be "{".
+        // The first token should be `{`.
         Program::parse_expecting(tokens, HashSet::from([TokenKind::LeftBrace]))?;
 
-        // The next tokens should be expressions followed by commas ending in "}".
+        // The next tokens should be expressions followed by commas ending in `}`.
         let mut values = vec![];
         let end_pos;
         loop {
@@ -249,11 +249,11 @@ impl TupleInit {
                 }
 
                 _ => {
-                    // The token is not a comma or "}", so we're expecting it to be an expression.
+                    // The token is not a comma or `}`, so we're expecting it to be an expression.
                     let val = Expression::from(tokens, false)?;
                     values.push(val);
 
-                    // The next token should be a comma or "}".
+                    // The next token should be a comma or `}`.
                     if let token @ Token {
                         kind: TokenKind::RightBrace,
                         ..

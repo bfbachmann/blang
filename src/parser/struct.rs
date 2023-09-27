@@ -125,13 +125,13 @@ impl StructType {
             name = Program::parse_identifier(tokens)?;
         }
 
-        // The next token should be "{".
+        // The next token should be `{`.
         Program::parse_expecting(tokens, HashSet::from([TokenKind::LeftBrace]))?;
 
-        // Parse struct fields until we reach "}".
+        // Parse struct fields until we reach `}`.
         let mut fields = vec![];
         loop {
-            // If the next token is "}", we're done parsing the struct type declaration.
+            // If the next token is `}`, we're done parsing the struct type declaration.
             if let Some(Token {
                 kind: TokenKind::RightBrace,
                 ..
@@ -149,7 +149,7 @@ impl StructType {
             // The next token should be the field name.
             let field_name = Program::parse_identifier(tokens)?;
 
-            // The next token should be a ":".
+            // The next token should be a `:`.
             Program::parse_expecting(tokens, HashSet::from([TokenKind::Colon]))?;
 
             // The next tokens should represent the field type.
@@ -283,10 +283,10 @@ impl StructInit {
             }
         };
 
-        // Parse "{".
+        // Parse `{`.
         Program::parse_expecting(tokens, HashSet::from([TokenKind::LeftBrace]))?;
 
-        // Parse struct field assignments until we hit "}".
+        // Parse struct field assignments until we hit `}`.
         let mut field_values = HashMap::new();
         loop {
             match tokens.next() {
@@ -303,7 +303,7 @@ impl StructInit {
                     kind: TokenKind::Identifier(ref field_name),
                     ..
                 }) => {
-                    // Parse ":" followed by the field value and record the field.
+                    // Parse `:` followed by the field value and record the field.
                     let field_name = field_name.clone();
                     Program::parse_expecting(tokens, HashSet::from([TokenKind::Colon]))?;
                     let value = Expression::from(tokens, false)?;

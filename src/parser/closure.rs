@@ -76,19 +76,19 @@ impl Closure {
         let start_pos = Program::current_position(tokens);
         let end_pos: Position;
 
-        // The first token should be "{".
+        // The first token should be `{`.
         Program::parse_expecting(tokens, HashSet::from([TokenKind::LeftBrace]))?;
 
         // The following nodes should be statements separated by ";".
         let mut statements = vec![];
         loop {
             match tokens.peek_next() {
-                // If the next token is "}", we've reached the end of the closure.
+                // If the next token is `}`, we've reached the end of the closure.
                 Some(&Token {
                     kind: TokenKind::RightBrace,
                     ..
                 }) => {
-                    // We've reached the end of the closure. Move past "}" and break the loop.
+                    // We've reached the end of the closure. Move past `}` and break the loop.
                     let end_token = tokens.next().unwrap();
 
                     // Record the closure ending position.

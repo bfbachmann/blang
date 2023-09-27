@@ -69,7 +69,7 @@ impl MemberAccess {
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         let start_pos = Program::current_position(tokens);
 
-        // The first token should be ".".
+        // The first token should be `.`.
         Program::parse_expecting(tokens, HashSet::from([TokenKind::Dot]))?;
 
         // Get the end position of the next token (the member name).

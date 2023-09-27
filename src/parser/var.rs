@@ -76,7 +76,7 @@ impl Var {
             }) => {
                 let var_name = var_name.clone();
 
-                // Check if the next token is ".". If so, we're accessing a member on this variable
+                // Check if the next token is `.`. If so, we're accessing a member on this variable
                 // or type.
                 let mut member_access = None;
                 if let Some(&Token {

@@ -199,7 +199,7 @@ impl Statement {
                 Ok(Statement::VariableAssignment(assign))
             }
 
-            // If the first token is "ext", it's a set of external function declarations.
+            // If the first token is `fn`, it's a set of external function declarations.
             (
                 Token {
                     kind: TokenKind::Ext,
@@ -211,7 +211,7 @@ impl Statement {
                 Ok(Statement::ExternFns(ext))
             }
 
-            // If the first token is "fn", it must be a function declaration.
+            // If the first token is `fn`, it must be a function declaration.
             (
                 Token {
                     kind: TokenKind::Function,
@@ -223,7 +223,7 @@ impl Statement {
                 Ok(Statement::FunctionDeclaration(fn_decl))
             }
 
-            // If the first token is "{", it must be a closure.
+            // If the first token is `{`, it must be a closure.
             (
                 Token {
                     kind: TokenKind::LeftBrace,
@@ -310,7 +310,7 @@ impl Statement {
                 let ret_token_start = ret_token.start.clone();
                 let ret_token_end = ret_token.end.clone();
 
-                // If the next token is "}", it's an empty return. Otherwise, we expect an
+                // If the next token is `}`, it's an empty return. Otherwise, we expect an
                 // expression.
                 if let Some(Token {
                     kind: TokenKind::RightBrace,
@@ -359,7 +359,7 @@ impl Statement {
                 // Parse the member access.
                 let var = Var::from(tokens)?;
 
-                // If the next token is "(", it's a function call. Otherwise, it should be "=" for
+                // If the next token is `(`, it's a function call. Otherwise, it should be "=" for
                 // member assignment.
                 match Program::parse_expecting(
                     tokens,

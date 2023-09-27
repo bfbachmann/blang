@@ -159,7 +159,7 @@ impl Expression {
     ///  - a `sizeof` expression (see `SizeOf::from`)
     fn from_basic(tokens: &mut Stream<Token>, is_arg: bool) -> ParseResult<Option<Expression>> {
         match tokens.peek_next() {
-            // If the first token is "fn", we'll assume the expression is an anonymous function.
+            // If the first token is `fn`, we'll assume the expression is an anonymous function.
             Some(Token {
                 kind: TokenKind::Function,
                 ..
@@ -178,7 +178,7 @@ impl Expression {
                 Ok(Some(Expression::StructInit(struct_init)))
             }
 
-            // If the first token is "{", it might be tuple initialization. Try parse the tokens
+            // If the first token is `{`, it might be tuple initialization. Try parse the tokens
             // as tuple initialization and assume there is no tuple initialization here if it fails.
             Some(Token {
                 kind: TokenKind::LeftBrace,
@@ -195,7 +195,7 @@ impl Expression {
                 ..
             }) => {
                 match tokens.peek_ahead(1) {
-                    // If the token is "(", it's a function call.
+                    // If the token is `(`, it's a function call.
                     Some(&Token {
                         kind: TokenKind::LeftParen,
                         ..
@@ -204,7 +204,7 @@ impl Expression {
                         Ok(Some(Expression::FunctionCall(call)))
                     }
 
-                    // If the token is "{", try parse the expression as struct initialization. If
+                    // If the token is `{`, try parse the expression as struct initialization. If
                     // it's not valid struct initialization, we'll assume it's a variable value.
                     Some(&Token {
                         kind: TokenKind::LeftBrace,
@@ -228,7 +228,7 @@ impl Expression {
                     _ => {
                         let var = Var::from(tokens)?;
 
-                        // If the next token is "(", we'll assume this is a function call on a
+                        // If the next token is `(`, we'll assume this is a function call on a
                         // member.
                         if let Some(Token {
                             kind: TokenKind::LeftParen,
@@ -341,19 +341,19 @@ impl Expression {
         'outer: while let Some(op1_token) = tokens.next() {
             let op1_token = op1_token.clone();
 
-            // If the token is ",", we can stop trying to parse the expression and assume we've
+            // If the token is `,`, we can stop trying to parse the expression and assume we've
             // reached the end because commas aren't valid in expressions.
             if let Token {
                 kind: TokenKind::Comma,
                 ..
             } = op1_token
             {
-                // Add the "," back to the token sequence because it's expected during
+                // Add the `,` back to the token sequence because it's expected during
                 // function argument parsing.
                 tokens.rewind(1);
                 break;
             }
-            // Check if the token is "(".
+            // Check if the token is `(`.
             else if let Some(Operator::LeftParen) = Operator::from(&op1_token.kind) {
                 // We should not be here if we we're expecting a binary operator or the end of the
                 // expression.
@@ -367,12 +367,12 @@ impl Expression {
 
                 op_stack.push_back(op1_token.clone());
             }
-            // Check if the token is ")".
+            // Check if the token is `)`.
             else if let Some(Operator::RightParen) = Operator::from(&op1_token.kind) {
-                // Look for the "(" that matches this ")" on the operator stack.
+                // Look for the `(` that matches this `)` on the operator stack.
                 loop {
                     match op_stack.back() {
-                        // If the operator at the top of the operator stack is "(", we're done.
+                        // If the operator at the top of the operator stack is `(`, we're done.
                         Some(&Token {
                             kind: TokenKind::LeftParen,
                             ..
@@ -385,7 +385,7 @@ impl Expression {
                         // function call.
                         None => {
                             if is_arg {
-                                // Add the ")" back to the token sequence because it's expected during
+                                // Add the `)` back to the token sequence because it's expected during
                                 // function argument parsing.
                                 tokens.rewind(1);
                                 break 'outer;
@@ -407,13 +407,13 @@ impl Expression {
                     }
                 }
 
-                // Assert there is a "(" at the top of the operator stack.
+                // Assert there is a `(` at the top of the operator stack.
                 if let Some(&Token {
                     kind: TokenKind::LeftParen,
                     ..
                 }) = op_stack.back()
                 {
-                    // Pop the "(" from the operator stack and discard it
+                    // Pop the `(` from the operator stack and discard it
                     op_stack.pop_back();
                 } else {
                     return Err(ParseError::new_with_token(
@@ -577,7 +577,7 @@ impl Expression {
 
         // Pop the remaining items from the operator stack into the output queue.
         while let Some(op) = op_stack.pop_back() {
-            // Assert the operator on top of the stack is not "(".
+            // Assert the operator on top of the stack is not `(`.
             if let token @ Token {
                 kind: TokenKind::LeftParen,
                 start: _,
