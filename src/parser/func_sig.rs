@@ -124,17 +124,6 @@ impl FunctionSignature {
         }
     }
 
-    /// Parses an extern function signature. Expects token sequences of the form
-    ///
-    ///     ext <fn_sig>
-    ///
-    /// where
-    ///  - `fn_sig` is a function signature (see `FunctionSignature::from`)
-    pub fn from_extern(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::Ext]))?;
-        FunctionSignature::from(tokens)
-    }
-
     /// Parses function signatures. Expects token sequences of the forms
     ///
     ///      fn <fn_name>(<arg_name>: <arg_type>, ...) ~ (<return_type>, ...)
@@ -349,7 +338,7 @@ impl FunctionSignature {
                     end_pos = token.end;
                     break;
                 }
-                _ => panic!("this should be impossible"),
+                _ => unreachable!(),
             }
         }
 

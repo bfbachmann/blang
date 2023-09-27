@@ -292,7 +292,7 @@ impl<'a> MoveChecker<'a> {
     fn check_statement(&mut self, statement: &RichStatement) {
         match statement {
             RichStatement::StructTypeDeclaration(_)
-            | RichStatement::ExternFnDeclaration(_)
+            | RichStatement::ExternFns(_)
             | RichStatement::Continue
             | RichStatement::Break => {
                 // Nothing to do here since moves cannot occur in these types of statements.

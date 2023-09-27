@@ -13,6 +13,7 @@ pub mod cond;
 pub mod cont;
 pub mod error;
 pub mod expr;
+pub mod ext;
 pub mod func;
 pub mod func_call;
 pub mod func_sig;

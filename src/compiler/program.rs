@@ -128,7 +128,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
                 RichStatement::StructTypeDeclaration(_) => {
                     // Nothing to do here because struct types are compiled only when they're used.
                 }
-                RichStatement::ExternFnDeclaration(_) => {
+                RichStatement::ExternFns(_) => {
                     // Nothing to do here because extern functions are compiled in the call to
                     // `ProgramCompiler::define_extern_fns` above.
                 }
@@ -195,10 +195,15 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     /// Defines external functions in the current module.
     fn define_extern_fns(&mut self) {
         for statement in &self.program.statements {
-            if let RichStatement::ExternFnDeclaration(fn_sig) = statement {
-                let fn_type = convert::to_fn_type(self.ctx, self.types, &fn_sig);
-                self.module
-                    .add_function(fn_sig.name.as_str(), fn_type, Some(Linkage::External));
+            if let RichStatement::ExternFns(fn_sigs) = statement {
+                for fn_sig in fn_sigs {
+                    let fn_type = convert::to_fn_type(self.ctx, self.types, &fn_sig);
+                    self.module.add_function(
+                        fn_sig.name.as_str(),
+                        fn_type,
+                        Some(Linkage::External),
+                    );
+                }
             }
         }
     }
@@ -356,7 +361,9 @@ mod tests {
         assert_compiles(
             r#"
             ext fn write(fd: i64, msg: str, len: i64)
-            ext fn exit(code: i64)
+            ext {
+                fn exit(code: i64)
+            }
             
             fn main() {
                 write(1, "Hello World!", 13) 

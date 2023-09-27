@@ -66,7 +66,7 @@ impl RichProg {
         for statement in prog.statements {
             match statement {
                 Statement::FunctionDeclaration(_)
-                | Statement::ExternFn(_)
+                | Statement::ExternFns(_)
                 | Statement::StructDeclaration(_) => {
                     analyzed_statements.push(RichStatement::from(ctx, statement));
                 }
@@ -161,8 +161,10 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
                 }
             }
 
-            Statement::ExternFn(extern_fn) => {
-                analyze_fn_sig(ctx, extern_fn);
+            Statement::ExternFns(ext) => {
+                for sig in &ext.fn_sigs {
+                    analyze_fn_sig(ctx, sig);
+                }
             }
 
             _ => {}

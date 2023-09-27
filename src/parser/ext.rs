@@ -1,0 +1,122 @@
+use std::collections::HashSet;
+use std::fmt::{Display, Formatter};
+
+use crate::lexer::kind::TokenKind;
+use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::token::Token;
+use crate::parser::error::ParseResult;
+use crate::parser::func_sig::FunctionSignature;
+use crate::parser::program::Program;
+use crate::parser::stream::Stream;
+use crate::util;
+
+/// Represents a set of external function declarations.
+#[derive(Debug)]
+pub struct Ext {
+    pub fn_sigs: Vec<FunctionSignature>,
+    start_pos: Position,
+    end_pos: Position,
+}
+
+impl PartialEq for Ext {
+    fn eq(&self, other: &Self) -> bool {
+        util::vectors_are_equal(&self.fn_sigs, &other.fn_sigs)
+    }
+}
+
+impl Clone for Ext {
+    fn clone(&self) -> Self {
+        Ext {
+            fn_sigs: self.fn_sigs.iter().map(|sig| sig.clone()).collect(),
+            start_pos: self.start_pos.clone(),
+            end_pos: self.end_pos.clone(),
+        }
+    }
+}
+
+impl Display for Ext {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.fn_sigs.len() == 1 {
+            write!(f, "ext {}", self.fn_sigs.first().unwrap())
+        } else {
+            write!(f, "ext {{ <{} function signatures> }}", self.fn_sigs.len())
+        }
+    }
+}
+
+impl Locatable for Ext {
+    fn start_pos(&self) -> &Position {
+        &self.start_pos
+    }
+
+    fn end_pos(&self) -> &Position {
+        &self.end_pos
+    }
+}
+
+impl Ext {
+    /// Attempts to parse a set of external function declarations from the token sequence. Expects
+    /// token sequences of one of the following forms:
+    ///
+    ///     ext <fn_sig>
+    ///     ext {
+    ///         <fn_sig>
+    ///         ...
+    ///     }
+    ///
+    /// where
+    ///  - `fn_sig` is a function signature (see `FunctionSignature::from`).
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+        let start_pos = Program::current_position(tokens);
+
+        // Parse the `ext` token.
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::Ext]))?;
+
+        // The next token should either be `{` or `fn`.
+        match Program::parse_expecting(
+            tokens,
+            HashSet::from([TokenKind::LeftBrace, TokenKind::Function]),
+        )? {
+            Token {
+                kind: TokenKind::LeftBrace,
+                ..
+            } => {
+                // We're inside an `ext` block, so we need to parse a series of function signatures
+                // until we reach the closing curly brace.
+                let mut fn_sigs = vec![];
+                let end_pos = loop {
+                    fn_sigs.push(FunctionSignature::from(tokens)?);
+
+                    if let Some(token) =
+                        Program::parse_optional(tokens, HashSet::from([TokenKind::RightBrace]))
+                    {
+                        break token.end.clone();
+                    }
+                };
+
+                Ok(Ext {
+                    fn_sigs,
+                    start_pos,
+                    end_pos,
+                })
+            }
+
+            Token {
+                kind: TokenKind::Function,
+                ..
+            } => {
+                // This is just a single `ext` function declaration.
+                tokens.rewind(1);
+                let fn_sig = FunctionSignature::from(tokens)?;
+                let end_pos = fn_sig.end_pos().clone();
+                Ok(Ext {
+                    fn_sigs: vec![fn_sig],
+                    start_pos,
+                    end_pos,
+                })
+            }
+
+            _ => unreachable!(),
+        }
+    }
+}

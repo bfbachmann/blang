@@ -635,7 +635,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             RichStatement::Return(ret) => {
                 self.compile_return(ret);
             }
-            RichStatement::ExternFnDeclaration(_) => {
+            RichStatement::ExternFns(_) => {
                 // Nothing to do here. This is already handled in
                 // `ProgramCompiler::compile_program`.
             }

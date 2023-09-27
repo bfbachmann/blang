@@ -10,9 +10,9 @@ use crate::parser::cont::Continue;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::expr::Expression;
+use crate::parser::ext::Ext;
 use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
-use crate::parser::func_sig::FunctionSignature;
 use crate::parser::program::Program;
 use crate::parser::r#break::Break;
 use crate::parser::r#loop::Loop;
@@ -37,8 +37,7 @@ pub enum Statement {
     Continue(Continue),
     Return(Ret),
     StructDeclaration(StructType),
-    /// An external function signature.
-    ExternFn(FunctionSignature),
+    ExternFns(Ext),
 }
 
 impl fmt::Display for Statement {
@@ -85,7 +84,7 @@ impl fmt::Display for Statement {
             Statement::StructDeclaration(s) => {
                 write!(f, "{}", s)
             }
-            Statement::ExternFn(extern_fn) => {
+            Statement::ExternFns(extern_fn) => {
                 write!(f, "{}", extern_fn)
             }
         }
@@ -106,7 +105,7 @@ impl Locatable for Statement {
             Statement::Continue(cont) => cont.start_pos(),
             Statement::Return(ret) => ret.start_pos(),
             Statement::StructDeclaration(s) => s.start_pos(),
-            Statement::ExternFn(e) => e.start_pos(),
+            Statement::ExternFns(e) => e.start_pos(),
         }
     }
 
@@ -123,7 +122,7 @@ impl Locatable for Statement {
             Statement::Continue(cont) => cont.end_pos(),
             Statement::Return(ret) => ret.end_pos(),
             Statement::StructDeclaration(s) => s.end_pos(),
-            Statement::ExternFn(e) => e.end_pos(),
+            Statement::ExternFns(e) => e.end_pos(),
         }
     }
 }
@@ -200,7 +199,7 @@ impl Statement {
                 Ok(Statement::VariableAssignment(assign))
             }
 
-            // If the first token is "ext", it's an external function declaration.
+            // If the first token is "ext", it's a set of external function declarations.
             (
                 Token {
                     kind: TokenKind::Ext,
@@ -208,8 +207,8 @@ impl Statement {
                 },
                 _,
             ) => {
-                let sig = FunctionSignature::from_extern(tokens)?;
-                Ok(Statement::ExternFn(sig))
+                let ext = Ext::from(tokens)?;
+                Ok(Statement::ExternFns(ext))
             }
 
             // If the first token is "fn", it must be a function declaration.

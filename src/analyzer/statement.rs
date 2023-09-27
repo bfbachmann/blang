@@ -25,8 +25,8 @@ pub enum RichStatement {
     Continue,
     Return(RichRet),
     StructTypeDeclaration(RichStructType),
-    /// An external function declaration.
-    ExternFnDeclaration(RichFnSig),
+    /// A set of external function declarations.
+    ExternFns(Vec<RichFnSig>),
 }
 
 impl fmt::Display for RichStatement {
@@ -43,7 +43,13 @@ impl fmt::Display for RichStatement {
             RichStatement::Continue => write!(f, "continue"),
             RichStatement::Return(v) => write!(f, "{}", v),
             RichStatement::StructTypeDeclaration(s) => write!(f, "{}", s),
-            RichStatement::ExternFnDeclaration(e) => write!(f, "{}", e),
+            RichStatement::ExternFns(e) => {
+                if e.len() == 1 {
+                    write!(f, "ext {}", e.first().unwrap())
+                } else {
+                    write!(f, "ext {{ <{} function signatures> }}", e.len())
+                }
+            }
         }
     }
 }
@@ -55,12 +61,15 @@ impl RichStatement {
             Statement::VariableDeclaration(var_decl) => {
                 RichStatement::VariableDeclaration(RichVarDecl::from(ctx, var_decl))
             }
+
             Statement::VariableAssignment(var_assign) => {
                 RichStatement::VariableAssignment(RichVarAssign::from(ctx, var_assign))
             }
+
             Statement::FunctionDeclaration(fn_decl) => {
                 RichStatement::FunctionDeclaration(RichFn::from(ctx, fn_decl))
             }
+
             Statement::Closure(closure) => RichStatement::Closure(RichClosure::from(
                 ctx,
                 closure,
@@ -68,10 +77,13 @@ impl RichStatement {
                 vec![],
                 None,
             )),
+
             Statement::FunctionCall(call) => {
                 RichStatement::FunctionCall(RichFnCall::from(ctx, call))
             }
+
             Statement::Conditional(cond) => RichStatement::Conditional(RichCond::from(ctx, cond)),
+
             Statement::Loop(loop_) => RichStatement::Loop(RichClosure::from(
                 ctx,
                 loop_.closure,
@@ -79,34 +91,44 @@ impl RichStatement {
                 vec![],
                 None,
             )),
+
             Statement::Break(br) => {
                 analyze_break(ctx, &br);
                 RichStatement::Break
             }
+
             Statement::Continue(cont) => {
                 analyze_continue(ctx, &cont);
                 RichStatement::Continue
             }
+
             Statement::Return(ret) => {
                 let rich_ret = RichRet::from(ctx, ret);
                 RichStatement::Return(rich_ret)
             }
+
             Statement::StructDeclaration(s) => {
                 RichStatement::StructTypeDeclaration(RichStructType::from(ctx, &s, false))
             }
-            Statement::ExternFn(extern_fn_sig) => {
+
+            Statement::ExternFns(ext) => {
                 // Make sure we are not already inside a function. Extern functions cannot be
                 // defined within other functions.
                 if ctx.is_in_fn() {
                     ctx.add_err(AnalyzeError::new(
                         ErrorKind::InvalidStatement,
                         "cannot declare external functions inside other functions",
-                        &extern_fn_sig,
+                        &ext,
                     ));
                 }
 
-                let sig = RichFnSig::from(ctx, &extern_fn_sig);
-                RichStatement::ExternFnDeclaration(sig)
+                // Analyze all the function signatures in the `ext` block.
+                let mut rich_fn_sigs = vec![];
+                for ext_fn_sig in &ext.fn_sigs {
+                    rich_fn_sigs.push(RichFnSig::from(ctx, ext_fn_sig));
+                }
+
+                RichStatement::ExternFns(rich_fn_sigs)
             }
         }
     }
