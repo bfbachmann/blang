@@ -17,7 +17,7 @@ use crate::util;
 /// Represents tuple type declaration.
 #[derive(Debug, Eq)]
 pub struct TupleType {
-    pub types: Vec<Type>,
+    pub field_types: Vec<Type>,
     start_pos: Position,
     end_pos: Position,
 }
@@ -34,7 +34,7 @@ impl Locatable for TupleType {
 
 impl Hash for TupleType {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        for typ in &self.types {
+        for typ in &self.field_types {
             typ.hash(state);
         }
     }
@@ -44,10 +44,10 @@ impl Display for TupleType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{")?;
 
-        for (i, typ) in self.types.iter().enumerate() {
+        for (i, typ) in self.field_types.iter().enumerate() {
             write!(f, "{}", typ)?;
 
-            if i + 1 < self.types.len() {
+            if i + 1 < self.field_types.len() {
                 write!(f, ", ")?;
             }
         }
@@ -61,7 +61,7 @@ impl Display for TupleType {
 impl Clone for TupleType {
     fn clone(&self) -> Self {
         TupleType {
-            types: self.types.iter().map(|t| t.clone()).collect(),
+            field_types: self.field_types.iter().map(|t| t.clone()).collect(),
             start_pos: self.start_pos.clone(),
             end_pos: self.end_pos.clone(),
         }
@@ -70,7 +70,7 @@ impl Clone for TupleType {
 
 impl PartialEq for TupleType {
     fn eq(&self, other: &Self) -> bool {
-        util::vectors_are_equal(&self.types, &other.types)
+        util::vectors_are_equal(&self.field_types, &other.field_types)
     }
 }
 
@@ -78,7 +78,7 @@ impl TupleType {
     /// Creates a new tuple type with default start and end positions.
     pub fn new(types: Vec<Type>) -> Self {
         TupleType {
-            types,
+            field_types: types,
             start_pos: Position::default(),
             end_pos: Position::default(),
         }
@@ -147,7 +147,7 @@ impl TupleType {
         }
 
         Ok(TupleType {
-            types,
+            field_types: types,
             start_pos,
             end_pos,
         })

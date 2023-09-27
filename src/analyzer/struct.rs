@@ -12,6 +12,7 @@ use crate::analyzer::r#type::{RichType, TypeId};
 use crate::fmt::hierarchy_to_string;
 use crate::parser::r#struct::{StructInit, StructType};
 use crate::parser::r#type::Type;
+use crate::parser::tuple::TupleType;
 use crate::{format_code, util};
 
 /// Represents a semantically valid and type-rich struct field.
@@ -205,90 +206,82 @@ impl RichStructType {
         RichStructType::check_containment_cycles(ctx, struct_type, &mut vec![])
     }
 
+    fn check_tuple_containment_cycles(
+        ctx: &ProgramContext,
+        tuple_type: &TupleType,
+        hierarchy: &mut Vec<String>,
+    ) -> AnalyzeResult<()> {
+        // Recursively check each tuple field type.
+        for typ in &tuple_type.field_types {
+            match typ {
+                Type::Unresolved(unresolved_type) => {
+                    if let Some(field_struct_type) =
+                        ctx.get_extern_struct(unresolved_type.name.as_str())
+                    {
+                        RichStructType::check_containment_cycles(
+                            ctx,
+                            field_struct_type,
+                            hierarchy,
+                        )?;
+                    };
+                }
+
+                Type::Struct(field_struct_type) => {
+                    RichStructType::check_containment_cycles(ctx, &field_struct_type, hierarchy)?;
+                }
+
+                Type::Tuple(field_tuple_type) => {
+                    RichStructType::check_tuple_containment_cycles(
+                        ctx,
+                        field_tuple_type,
+                        hierarchy,
+                    )?;
+                }
+
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+
     fn check_containment_cycles(
         ctx: &ProgramContext,
         struct_type: &StructType,
         hierarchy: &mut Vec<String>,
     ) -> AnalyzeResult<()> {
+        if hierarchy.contains(&struct_type.name) {
+            return Err(AnalyzeError::new(
+                ErrorKind::InfiniteSizedType,
+                format_code!("type {} cannot contain itself", struct_type).as_str(),
+                struct_type,
+            ));
+        }
+
+        // Push this type name onto the hierarchy stack so it can be checked against other types.
         hierarchy.push(struct_type.name.clone());
 
+        // Recursively check each struct field type.
         for field in &struct_type.fields {
             match &field.typ {
                 Type::Unresolved(unresolved_type) => {
-                    if hierarchy.contains(&unresolved_type.name) {
-                        hierarchy.push(unresolved_type.name.to_string());
-                        return Err(AnalyzeError::new(
-                            ErrorKind::InfiniteSizedType,
-                            format_code!(
-                                "type {} cannot contain itself (via field {} on struct type {})",
-                                unresolved_type.name,
-                                field.name,
-                                struct_type,
-                            )
-                            .as_str(),
-                            field,
-                        )
-                        .with_detail(
-                            format!(
-                                "The offending type hierarchy is {}.",
-                                hierarchy_to_string(hierarchy.clone())
-                            )
-                            .as_str(),
-                        )
-                        .with_help(
-                            format_code!(
-                                "Consider changing field {} to {}",
-                                format!("{}: {}", field.name, unresolved_type.name),
-                                format!("{}: &{}", field.name, unresolved_type.name),
-                            )
-                            .as_str(),
-                        ));
-                    }
-
-                    match ctx.get_extern_struct(unresolved_type.name.as_str()) {
-                        Some(field_struct_type) => {
-                            RichStructType::check_containment_cycles(
-                                ctx,
-                                field_struct_type,
-                                hierarchy,
-                            )?;
-                            hierarchy.pop();
-                        }
-                        None => {
-                            // This type is not defined.
-                        }
+                    if let Some(field_struct_type) =
+                        ctx.get_extern_struct(unresolved_type.name.as_str())
+                    {
+                        RichStructType::check_containment_cycles(
+                            ctx,
+                            field_struct_type,
+                            hierarchy,
+                        )?;
                     };
                 }
 
                 Type::Struct(field_struct_type) => {
-                    if !field_struct_type.name.is_empty()
-                        && hierarchy.contains(&field_struct_type.name)
-                    {
-                        return Err(AnalyzeError::new(
-                            ErrorKind::InfiniteSizedType,
-                            format_code!(
-                                "type {} cannot contain itself (via struct field {} on struct \
-                                type {})",
-                                field_struct_type.name,
-                                field.name,
-                                struct_type.name,
-                            )
-                            .as_str(),
-                            field,
-                        )
-                        .with_help(
-                            format_code!(
-                                "Consider changing field {} to {}.",
-                                format!("{}: {}", field.name, field_struct_type),
-                                format!("{}: &{}", field.name, field_struct_type),
-                            )
-                            .as_str(),
-                        ));
-                    }
-
-                    hierarchy.push(field_struct_type.name.clone());
                     RichStructType::check_containment_cycles(ctx, field_struct_type, hierarchy)?;
-                    hierarchy.pop();
+                }
+
+                Type::Tuple(tuple_type) => {
+                    RichStructType::check_tuple_containment_cycles(ctx, tuple_type, hierarchy)?;
                 }
 
                 // These types can't have containment cycles.
@@ -297,11 +290,13 @@ impl RichStructType {
                 | Type::Bool(_)
                 | Type::Function(_)
                 | Type::UnsafePtr(_)
-                | Type::USize(_)
-                // Tuples aren't named types, so they can't have containment cycles.
-                | Type::Tuple(_) => {}
+                | Type::USize(_) => {}
             }
         }
+
+        // Pop this type name off the hierarchy stack because all types it contains have been
+        // checked.
+        hierarchy.pop();
 
         Ok(())
     }

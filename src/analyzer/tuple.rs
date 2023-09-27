@@ -47,7 +47,7 @@ impl Display for RichTupleType {
 impl RichTupleType {
     pub fn from(ctx: &mut ProgramContext, tuple_type: &TupleType) -> Self {
         let mut type_ids = vec![];
-        for typ in &tuple_type.types {
+        for typ in &tuple_type.field_types {
             let type_id = RichType::analyze(ctx, typ);
             type_ids.push(type_id);
         }

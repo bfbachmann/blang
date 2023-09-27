@@ -523,6 +523,29 @@ mod tests {
     }
 
     #[test]
+    fn indirect_struct_containment_cycle_via_tuple() {
+        let raw = r#"
+            struct Inner {
+                count: i64,
+                outer: {Outer},
+            }
+            
+            struct Outer {
+                cond: bool,
+                inner: Inner,
+            }
+        "#;
+        let result = analyze_prog(raw);
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::InfiniteSizedType,
+                ..
+            })
+        ));
+    }
+
+    #[test]
     fn unreachable_code() {
         let raw = r#"
             fn main() {
