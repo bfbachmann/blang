@@ -38,11 +38,11 @@ impl RichVarAssign {
                 // The variable exists, so make sure it is mutable.
                 if !var.is_mut {
                     ctx.add_err(
-                        AnalyzeError::new_with_locatable(
+                        AnalyzeError::new(
                             ErrorKind::ImmutableAssignment,
                             format_code!("cannot assign to immutable variable {}", assign.var)
                                 .as_str(),
-                            Box::new(assign.clone()),
+                            &assign,
                         )
                         .with_help(
                             format_code!("Consider declaring {} as mutable.", var_name).as_str(),
@@ -52,10 +52,10 @@ impl RichVarAssign {
             }
             None => {
                 // The variable does not exist. Record the error and skip any further checks.
-                ctx.add_err(AnalyzeError::new_with_locatable(
+                ctx.add_err(AnalyzeError::new(
                     ErrorKind::VariableNotDefined,
                     format_code!("cannot assign to undefined variable {}", var_name).as_str(),
-                    Box::new(assign),
+                    &assign,
                 ));
 
                 return RichVarAssign {
@@ -72,7 +72,7 @@ impl RichVarAssign {
                 // Make sure the variable type is the same as the expression type.
                 let expr_type = ctx.get_resolved_type(&rich_expr.type_id).unwrap();
                 if !typ.same_as(expr_type) {
-                    ctx.add_err(AnalyzeError::new_with_locatable(
+                    ctx.add_err(AnalyzeError::new(
                         ErrorKind::MismatchedTypes,
                         format_code!(
                             "cannot assign value of type {} to variable {}",
@@ -80,7 +80,7 @@ impl RichVarAssign {
                             format!("{}: {}", &assign.var, &typ),
                         )
                         .as_str(),
-                        Box::new(assign.value.clone()),
+                        &assign.value,
                     ));
                 }
             }

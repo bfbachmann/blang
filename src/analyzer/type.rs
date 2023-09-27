@@ -184,10 +184,10 @@ impl RichType {
                     return RichType::Struct(rich_struct_type);
                 }
 
-                ctx.add_err(AnalyzeError::new_with_locatable(
+                ctx.add_err(AnalyzeError::new(
                     ErrorKind::TypeNotDefined,
                     format_code!("type {} is not defined", type_name).as_str(),
-                    Box::new(unresolved_type.clone()),
+                    unresolved_type,
                 ));
 
                 return RichType::Unknown("<unknown>".to_string());

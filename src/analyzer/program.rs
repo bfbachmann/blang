@@ -71,10 +71,10 @@ impl RichProg {
                     analyzed_statements.push(RichStatement::from(ctx, statement));
                 }
                 other => {
-                    ctx.add_err(AnalyzeError::new_with_locatable(
+                    ctx.add_err(AnalyzeError::new(
                         ErrorKind::InvalidStatement,
                         "expected type or function declaration",
-                        Box::new(other),
+                        &other,
                     ));
                 }
             }
@@ -96,14 +96,14 @@ fn define_structs(ctx: &mut ProgramContext, prog: &Program) {
         match statement {
             Statement::StructDeclaration(struct_type) => {
                 if ctx.add_extern_struct(struct_type.clone()).is_some() {
-                    ctx.add_err(AnalyzeError::new_with_locatable(
+                    ctx.add_err(AnalyzeError::new(
                         ErrorKind::TypeAlreadyDefined,
                         format_code!(
                             "another type with the name {} already exists",
                             struct_type.name
                         )
                         .as_str(),
-                        Box::new(struct_type.clone()),
+                        struct_type,
                     ));
                 }
             }
@@ -144,18 +144,18 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
 
                     // Make sure main has no args or return.
                     if func.signature.args.len() != 0 {
-                        ctx.add_err(AnalyzeError::new_with_locatable(
+                        ctx.add_err(AnalyzeError::new(
                             ErrorKind::InvalidMain,
                             format_code!("function {} cannot have arguments", "main").as_str(),
-                            Box::new(func.signature.clone()),
+                            &func.signature,
                         ));
                     }
 
                     if func.signature.return_type.is_some() {
-                        ctx.add_err(AnalyzeError::new_with_locatable(
+                        ctx.add_err(AnalyzeError::new(
                             ErrorKind::InvalidMain,
                             format_code!("function {} cannot have a return type", "main").as_str(),
-                            Box::new(func.signature.clone()),
+                            &func.signature,
                         ));
                     }
                 }

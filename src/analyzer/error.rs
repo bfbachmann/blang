@@ -1,11 +1,6 @@
 use std::fmt;
 
-use colored::*;
-
-use crate::format_code;
 use crate::lexer::pos::{Locatable, Position};
-use crate::parser::expr::Expression;
-use crate::parser::statement::Statement;
 
 pub type AnalyzeResult<T> = Result<T, AnalyzeError>;
 
@@ -84,7 +79,7 @@ impl fmt::Display for AnalyzeError {
 }
 
 impl AnalyzeError {
-    pub fn new_with_locatable(kind: ErrorKind, message: &str, loc: Box<dyn Locatable>) -> Self {
+    pub fn new<T: Locatable>(kind: ErrorKind, message: &str, loc: &T) -> Self {
         AnalyzeError {
             kind,
             message: message.to_string(),
@@ -92,31 +87,6 @@ impl AnalyzeError {
             help: None,
             start_pos: loc.start_pos().clone(),
             end_pos: loc.end_pos().clone(),
-        }
-    }
-
-    pub fn new_from_expr(kind: ErrorKind, expr: &Expression, message: &str) -> Self {
-        AnalyzeError {
-            kind,
-            message: message.to_string(),
-            detail: Some(format_code!("Invalid expression: {}", expr)),
-            help: None,
-            start_pos: expr.start_pos().clone(),
-            end_pos: expr.end_pos().clone(),
-        }
-    }
-
-    pub fn new_from_statement(kind: ErrorKind, statement: &Statement, message: &str) -> Self {
-        AnalyzeError {
-            kind,
-            message: message.to_string(),
-            detail: Some(format!(
-                "Invalid statement: {}",
-                format!("{}", statement).as_str().underline()
-            )),
-            help: None,
-            start_pos: statement.start_pos().clone(),
-            end_pos: statement.end_pos().clone(),
         }
     }
 

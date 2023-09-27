@@ -173,10 +173,10 @@ pub fn check_closure_returns(
                 }
 
                 _ => {
-                    ctx.add_err(AnalyzeError::new_with_locatable(
+                    ctx.add_err(AnalyzeError::new(
                         ErrorKind::MissingReturn,
                         "missing return statement",
-                        Box::new(closure.original.clone()),
+                        &closure.original,
                     ));
                 }
             };
@@ -190,10 +190,10 @@ pub fn check_closure_returns(
                 match statement {
                     RichStatement::Break => {
                         ctx.add_err(
-                            AnalyzeError::new_with_locatable(
+                            AnalyzeError::new(
                                 ErrorKind::MissingReturn,
                                 "missing return statement",
-                                Box::new(closure.original.clone()),
+                                &closure.original,
                             )
                             .with_detail(
                                 "The last statement in this closure is a loop that contains \
@@ -225,10 +225,10 @@ pub fn check_closure_returns(
 
             if !contains_return {
                 ctx.add_err(
-                    AnalyzeError::new_with_locatable(
+                    AnalyzeError::new(
                         ErrorKind::MissingReturn,
                         "missing return statement",
-                        Box::new(closure.original.clone()),
+                        &closure.original,
                     )
                     .with_detail(
                         "The last statement in this closure is a loop that does not return.",
@@ -284,14 +284,10 @@ fn cond_has_any_return(cond: &RichCond) -> bool {
 fn check_cond_returns(ctx: &mut ProgramContext, cond: &RichCond, expected: &TypeId) {
     if !cond.is_exhaustive() {
         ctx.add_err(
-            AnalyzeError::new_with_locatable(
-                ErrorKind::MissingReturn,
-                "missing return statement",
-                Box::new(cond.clone()),
-            )
-            .with_detail(
-                "The last statement in this closure is a conditional that is not exhaustive",
-            ),
+            AnalyzeError::new(ErrorKind::MissingReturn, "missing return statement", cond)
+                .with_detail(
+                    "The last statement in this closure is a conditional that is not exhaustive",
+                ),
         );
         return;
     }
@@ -305,10 +301,10 @@ fn check_cond_returns(ctx: &mut ProgramContext, cond: &RichCond, expected: &Type
 pub fn analyze_break(ctx: &mut ProgramContext, br: &Break) {
     // Make sure we are inside a loop closure.
     if !ctx.is_in_loop() {
-        ctx.add_err(AnalyzeError::new_with_locatable(
+        ctx.add_err(AnalyzeError::new(
             ErrorKind::UnexpectedBreak,
             "cannot break from outside a loop",
-            Box::new(br.clone()),
+            br,
         ));
     }
 }
@@ -317,10 +313,10 @@ pub fn analyze_break(ctx: &mut ProgramContext, br: &Break) {
 pub fn analyze_continue(ctx: &mut ProgramContext, cont: &Continue) {
     // Make sure we are inside a loop closure.
     if !ctx.is_in_loop() {
-        ctx.add_err(AnalyzeError::new_with_locatable(
+        ctx.add_err(AnalyzeError::new(
             ErrorKind::UnexpectedContinue,
             "cannot continue from outside a loop",
-            Box::new(cont.clone()),
+            cont,
         ));
     }
 }

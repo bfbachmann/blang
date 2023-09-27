@@ -82,7 +82,7 @@ impl RichCond {
                     // Skip the type check if the expression type is unknown (meaning it failed
                     // analysis).
                     if !rich_expr_type.is_unknown() && rich_expr.type_id != TypeId::bool() {
-                        ctx.add_err(AnalyzeError::new_with_locatable(
+                        ctx.add_err(AnalyzeError::new(
                             ErrorKind::MismatchedTypes,
                             format_code!(
                                 "expected branch condition to have type {}, but found type {}",
@@ -90,7 +90,7 @@ impl RichCond {
                                 &rich_expr.type_id,
                             )
                             .as_str(),
-                            Box::new(branch_cond.clone()),
+                            branch_cond,
                         ));
                     }
 

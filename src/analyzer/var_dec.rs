@@ -8,7 +8,6 @@ use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::{ProgramContext, ScopedVar};
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::format_code;
-use crate::parser::statement::Statement;
 use crate::parser::var_dec::VariableDeclaration;
 
 /// Represents a semantically valid and type-rich variable declaration.
@@ -43,15 +42,15 @@ impl RichVarDecl {
             Some(typ) => {
                 let declared_type = RichType::analyze(ctx, &typ);
                 if &rich_expr.type_id != &declared_type {
-                    ctx.add_err(AnalyzeError::new_from_statement(
+                    ctx.add_err(AnalyzeError::new(
                         ErrorKind::MismatchedTypes,
-                        &Statement::VariableDeclaration(var_decl.clone()),
                         format_code!(
                             "cannot assign value of type {} to variable {}",
                             &rich_expr.type_id,
                             format!("{}: {}", &var_decl.name, &declared_type),
                         )
                         .as_str(),
+                        &var_decl,
                     ));
                 }
 

@@ -98,10 +98,10 @@ impl RichStatement {
                 // Make sure we are not already inside a function. Extern functions cannot be
                 // defined within other functions.
                 if ctx.is_in_fn() {
-                    ctx.add_err(AnalyzeError::new_with_locatable(
+                    ctx.add_err(AnalyzeError::new(
                         ErrorKind::InvalidStatement,
                         "cannot declare external functions inside other functions",
-                        Box::new(extern_fn_sig.clone()),
+                        &extern_fn_sig,
                     ));
                 }
 

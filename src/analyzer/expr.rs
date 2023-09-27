@@ -170,7 +170,7 @@ impl RichExpr {
 
                 // The function does not have a return value. Record the error and return some
                 // some zero-value instead.
-                ctx.add_err(AnalyzeError::new_with_locatable(
+                ctx.add_err(AnalyzeError::new(
                     ErrorKind::ExpectedReturnValue,
                     format_code!(
                         "function {} has no return value, but is called in an expression \
@@ -178,7 +178,7 @@ impl RichExpr {
                         &fn_call.fn_var,
                     )
                     .as_str(),
-                    Box::new(fn_call),
+                    &fn_call,
                 ));
 
                 RichExpr::new_zero_value(ctx, Type::Unresolved(UnresolvedType::none()))
@@ -220,15 +220,15 @@ impl RichExpr {
                 } else {
                     // The expression has the wrong type. Record the error and insert a
                     // zero-value instead.
-                    ctx.add_err(AnalyzeError::new_from_expr(
+                    ctx.add_err(AnalyzeError::new(
                         ErrorKind::MismatchedTypes,
-                        &expr,
                         format_code!(
                             "unary operator {} cannot be applied to value of type {}",
                             "!",
                             rich_expr.type_id,
                         )
                         .as_str(),
+                        expr,
                     ));
 
                     RichExpr::new_zero_value(ctx, Type::bool())
@@ -259,15 +259,15 @@ impl RichExpr {
                 let mut errors = vec![];
                 let mut operand_type_id = None;
                 if !RichExpr::is_valid_operand_type(op, left_type) {
-                    errors.push(AnalyzeError::new_from_expr(
+                    errors.push(AnalyzeError::new(
                         ErrorKind::MismatchedTypes,
-                        &left_expr,
                         format_code!(
                             "cannot apply operator {} to left-side expression of type {}",
                             &op,
                             &rich_left.type_id,
                         )
                         .as_str(),
+                        left_expr.as_ref(),
                     ));
                 } else {
                     operand_type_id = Some(rich_left.type_id.clone());
@@ -275,15 +275,15 @@ impl RichExpr {
 
                 // Make sure the right-side expression is of the right type.
                 if !RichExpr::is_valid_operand_type(op, right_type) {
-                    errors.push(AnalyzeError::new_from_expr(
+                    errors.push(AnalyzeError::new(
                         ErrorKind::MismatchedTypes,
-                        &right_expr,
                         format_code!(
                             "cannot apply operator {} to right-side expression of type {}",
                             &op,
                             &rich_right.type_id,
                         )
                         .as_str(),
+                        right_expr.as_ref(),
                     ));
                 } else {
                     operand_type_id = Some(rich_right.type_id.clone());
@@ -291,9 +291,8 @@ impl RichExpr {
 
                 // Make sure both operands are of the same type.
                 if right_type != left_type {
-                    errors.push(AnalyzeError::new_from_expr(
+                    errors.push(AnalyzeError::new(
                         ErrorKind::MismatchedTypes,
-                        right_expr,
                         format_code!(
                             "{} operands have mismatched types {} and {}",
                             op,
@@ -301,6 +300,7 @@ impl RichExpr {
                             right_type,
                         )
                         .as_str(),
+                        right_expr.as_ref(),
                     ));
                 }
 

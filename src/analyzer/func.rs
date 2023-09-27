@@ -27,10 +27,10 @@ pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) -> Rich
     // exist. We'll replace the function body when we analyze it later.
     let rich_fn_sig = RichFnSig::from(ctx, &sig);
     if ctx.add_extern_fn(rich_fn_sig.clone()).is_some() {
-        ctx.add_err(AnalyzeError::new_with_locatable(
+        ctx.add_err(AnalyzeError::new(
             ErrorKind::FunctionAlreadyDefined,
             format_code!("function {} was already defined in this scope", sig.name).as_str(),
-            Box::new(sig.clone()),
+            sig,
         ));
     }
 
@@ -156,23 +156,23 @@ impl RichFn {
         // Make sure we are not already inside a function. For now, functions cannot be defined
         // within other functions.
         if ctx.is_in_fn() {
-            ctx.add_err(AnalyzeError::new_with_locatable(
+            ctx.add_err(AnalyzeError::new(
                 ErrorKind::InvalidStatement,
                 "cannot declare functions inside other functions",
-                Box::new(func.clone()),
+                &func,
             ));
         }
 
         // Make sure the function is not already defined.
         if let Some(_) = ctx.get_fn(func.signature.name.as_str()) {
-            ctx.add_err(AnalyzeError::new_with_locatable(
+            ctx.add_err(AnalyzeError::new(
                 ErrorKind::FunctionAlreadyDefined,
                 format_code!(
                     "function {} was already defined in this scope",
                     func.signature.name,
                 )
                 .as_str(),
-                Box::new(func.clone()),
+                &func,
             ));
         }
 
@@ -241,10 +241,10 @@ impl RichFnCall {
 
         // Calls to "main" should not be allowed.
         if call.has_fn_name("main") {
-            errors.push(AnalyzeError::new_with_locatable(
+            errors.push(AnalyzeError::new(
                 ErrorKind::CallToMain,
                 "cannot call entrypoint main",
-                Box::new(call.clone()),
+                &call,
             ));
         }
 
@@ -263,10 +263,10 @@ impl RichFnCall {
             Some(RichType::Function(fn_sig)) => fn_sig,
             Some(other) => {
                 // The value being used here is not a function.
-                errors.push(AnalyzeError::new_with_locatable(
+                errors.push(AnalyzeError::new(
                     ErrorKind::MismatchedTypes,
                     format_code!("type {} is not callable", other).as_str(),
-                    Box::new(call.clone()),
+                    &call,
                 ));
 
                 return RichFnCall {
@@ -289,7 +289,7 @@ impl RichFnCall {
 
         // Make sure the right number of arguments were passed.
         if rich_args.len() != fn_sig.args.len() {
-            errors.push(AnalyzeError::new_with_locatable(
+            errors.push(AnalyzeError::new(
                 ErrorKind::WrongNumberOfArgs,
                 format!(
                     "{} expects {}, but {} provided",
@@ -298,7 +298,7 @@ impl RichFnCall {
                     pluralize("was", rich_args.len() as isize, true)
                 )
                 .as_str(),
-                Box::new(call.clone()),
+                &call,
             ));
         }
 
@@ -317,7 +317,7 @@ impl RichFnCall {
 
             if passed_type_id != &defined.type_id {
                 let original_arg = call.args.get(i).unwrap();
-                errors.push(AnalyzeError::new_with_locatable(
+                errors.push(AnalyzeError::new(
                     ErrorKind::MismatchedTypes,
                     format_code!(
                         "cannot use value of type {} as argument {} to {}",
@@ -326,7 +326,7 @@ impl RichFnCall {
                         &fn_sig,
                     )
                     .as_str(),
-                    Box::new(original_arg.clone()),
+                    original_arg,
                 ));
             }
         }
@@ -387,10 +387,10 @@ impl RichRet {
         // Make sure we are inside a function body. If not, record the error and return a dummy
         // value.
         if !ctx.is_in_fn() {
-            ctx.add_err(AnalyzeError::new_with_locatable(
+            ctx.add_err(AnalyzeError::new(
                 ErrorKind::UnexpectedReturn,
                 "cannot return from outside function body",
-                Box::new(ret.clone()),
+                &ret,
             ));
 
             return RichRet {
@@ -414,7 +414,7 @@ impl RichRet {
                             && !expr_type.is_unknown()
                             && expected_type != expr_type
                         {
-                            ctx.add_err(AnalyzeError::new_with_locatable(
+                            ctx.add_err(AnalyzeError::new(
                                 ErrorKind::MismatchedTypes,
                                 format_code!(
                                     "cannot return value of type {} from function with return \
@@ -423,15 +423,15 @@ impl RichRet {
                                     expected_type,
                                 )
                                 .as_str(),
-                                Box::new(expr),
+                                &expr,
                             ));
                         }
                     }
                     None => {
-                        ctx.add_err(AnalyzeError::new_with_locatable(
+                        ctx.add_err(AnalyzeError::new(
                             ErrorKind::MismatchedTypes,
                             "cannot return value from function with no return type",
-                            Box::new(expr.clone()),
+                            &expr,
                         ));
                     }
                 };
@@ -446,14 +446,14 @@ impl RichRet {
                 // This is an empty return. Make sure we're not expecting a return type.
                 match ctx.return_type() {
                     Some(expected) => {
-                        ctx.add_err(AnalyzeError::new_with_locatable(
+                        ctx.add_err(AnalyzeError::new(
                             ErrorKind::MismatchedTypes,
                             format_code!(
                                 "expected return value of type {}, but found empty return",
                                 expected,
                             )
                             .as_str(),
-                            Box::new(ret),
+                            &ret,
                         ));
                     }
                     None => {}

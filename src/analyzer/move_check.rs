@@ -490,7 +490,7 @@ impl<'a> MoveChecker<'a> {
             // scope.
             for conflicting_move in scope.get_conflicting_moves(&mv) {
                 errors.push(
-                    AnalyzeError::new_with_locatable(
+                    AnalyzeError::new(
                         ErrorKind::UseOfMovedValue,
                         format_code!(
                             "cannot use {} because {} was already moved",
@@ -498,7 +498,7 @@ impl<'a> MoveChecker<'a> {
                             conflicting_move
                         )
                         .as_str(),
-                        Box::new(mv.clone()),
+                        &mv,
                     )
                     .with_detail(
                         format!(
@@ -538,10 +538,10 @@ impl<'a> MoveChecker<'a> {
         // move is illegal as it could execute more than once.
         if !self.var_declared_in_cur_scope(var) && !self.cur_scope_executes_at_most_once() {
             self.add_err(
-                AnalyzeError::new_with_locatable(
+                AnalyzeError::new(
                     ErrorKind::UseOfMovedValue,
                     format_code!("move of {} may occur multiple times inside a loop", var).as_str(),
-                    Box::new(mv),
+                    &mv,
                 )
                 .with_detail(
                     format_code!(
