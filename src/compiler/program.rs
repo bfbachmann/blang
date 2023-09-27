@@ -235,16 +235,16 @@ mod tests {
                 str_stuff("test")
             }
             
-            fn thing(b: bool): bool {
+            fn thing(b: bool) ~ bool {
                 let a = true
                 return !a || b
             }
             
-            fn other(a: i64, b: i64): i64 {
+            fn other(a: i64, b: i64) ~ i64 {
                 return a * b + a / 2 - 1
             }
             
-            fn fib(n: i64): i64 {
+            fn fib(n: i64) ~ i64 {
                 if n < 2 {
                     return 1
                 }
@@ -252,7 +252,7 @@ mod tests {
                 return fib(n-1) + fib(n-2)
             }
             
-            fn do_thing(a: i64): i64 {
+            fn do_thing(a: i64) ~ i64 {
                 let mut result = 5
                 let mut mut_a = a
                 loop {
@@ -272,7 +272,7 @@ mod tests {
                 }
             }
             
-            fn cum_sum(n: i64): i64 {
+            fn cum_sum(n: i64) ~ i64 {
                 let mut i = 1
                 let mut result = 0
                 loop {
@@ -287,7 +287,7 @@ mod tests {
                 }
             }
             
-            fn str_stuff(s: str): str {
+            fn str_stuff(s: str) ~ str {
                 return "test"
             }
         "#,
@@ -301,10 +301,10 @@ mod tests {
             struct Person {
                 name: str,
                 age: i64,
-                do_thing: fn(str): i64,
+                do_thing: fn(str) ~ i64,
             }
             
-            fn new_person(name: str, age: i64): Person {
+            fn new_person(name: str, age: i64) ~ Person {
                 return Person{
                     name: name,
                     age: age,
@@ -312,7 +312,7 @@ mod tests {
                 }
             }
             
-            fn test(s: str): i64 {
+            fn test(s: str) ~ i64 {
                 return 1
             }
             
@@ -337,7 +337,7 @@ mod tests {
                 age: i64,
             }
             
-            fn is_old(p: Person): bool {
+            fn is_old(p: Person) ~ bool {
                 let p = Person{age: 100}
                 return false
             }
@@ -377,7 +377,7 @@ mod tests {
             
             fn do(a: A) {}
             
-            fn new_a(count: i64): A {
+            fn new_a(count: i64) ~ A {
                 return A {
                     count: count,
                     f: do,

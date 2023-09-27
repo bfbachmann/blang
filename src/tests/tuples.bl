@@ -56,7 +56,7 @@ fn take_tuple(t: {{i64}, bool}) {
     assert(t.1 == true, 6)
 }
 
-fn new_tuple(): {i64, bool, {bool, i64}} {
+fn new_tuple() ~ {i64, bool, {bool, i64}} {
     return {
         -100,
         false,

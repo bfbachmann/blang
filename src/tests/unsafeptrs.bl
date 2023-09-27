@@ -1,5 +1,5 @@
 ext fn exit(code: i64)
-ext fn malloc(size: usize): unsafeptr
+ext fn malloc(size: usize) ~ unsafeptr
 ext fn free(ptr: unsafeptr)
 
 fn assert(b: bool, code: i64) {

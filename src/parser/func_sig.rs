@@ -49,7 +49,7 @@ impl fmt::Display for FunctionSignature {
         }
 
         if let Some(typ) = &self.return_type {
-            write!(f, "): {}", typ)
+            write!(f, ") ~ {}", typ)
         } else {
             write!(f, ")")
         }
@@ -126,7 +126,7 @@ impl FunctionSignature {
 
     /// Parses an extern function signature. Expects token sequences of the form
     ///
-    ///     extern <fn_sig>
+    ///     ext <fn_sig>
     ///
     /// where
     ///  - `fn_sig` is a function signature (see `FunctionSignature::from`)
@@ -137,7 +137,7 @@ impl FunctionSignature {
 
     /// Parses function signatures. Expects token sequences of the forms
     ///
-    ///      fn <fn_name>(<arg_name>: <arg_type>, ...): (<return_type>, ...)
+    ///      fn <fn_name>(<arg_name>: <arg_type>, ...) ~ (<return_type>, ...)
     ///      fn <fn_name>(<arg_name>: <arg_type>, ...)
     ///
     /// where
@@ -170,12 +170,12 @@ impl FunctionSignature {
     /// Parses anonymous function signatures. If `named` is true, expects token sequences of the
     /// forms
     ///
-    ///      fn (<arg_name>: <arg_type>, ...): <return_type>
+    ///      fn (<arg_name>: <arg_type>, ...) ~ <return_type>
     ///      fn (<arg_name>: <arg_type>, ...)
     ///
     /// Otherwise, expects token sequences of the forms
     ///
-    ///      fn (<arg_type>, ...): <return_type>
+    ///      fn (<arg_type>, ...) ~ <return_type>
     ///      fn (<arg_type>, ...)
     ///
     /// where
@@ -197,7 +197,7 @@ impl FunctionSignature {
     /// Parses function arguments and return value from a function signature. If `named` is true,
     /// expects token sequences of the forms
     ///
-    ///     (<arg_name>: <arg_type>, ...): <return_type>
+    ///     (<arg_name>: <arg_type>, ...) ~ <return_type>
     ///     (<arg_name>: <arg_type>, ...)
     ///
     /// Otherwise, expects token sequences of the form
@@ -212,15 +212,15 @@ impl FunctionSignature {
         // The next tokens should represent function arguments.
         let (args, args_end_pos) = FunctionSignature::arg_declarations_from(tokens, named)?;
 
-        // The next token should be ":" if there is a return type. Otherwise, there is no return
+        // The next token should be "~" if there is a return type. Otherwise, there is no return
         // type and we're done.
         let mut return_type = None;
         match tokens.peek_next() {
             Some(Token {
-                kind: TokenKind::Colon,
+                kind: TokenKind::Tilde,
                 ..
             }) => {
-                // Remove the ":" and parse the return type.
+                // Remove the "~" and parse the return type.
                 tokens.next();
                 return_type = Some(Type::from(tokens)?);
             }
@@ -383,7 +383,7 @@ mod tests {
 
     #[test]
     fn inline_struct_types_in_fn_sig() {
-        let raw = r#"fn one(a: struct {one: i64, two: bool}, b: i64): struct {thing: str} {}"#;
+        let raw = r#"fn one(a: struct {one: i64, two: bool}, b: i64) ~ struct {thing: str} {}"#;
         let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let result = Program::from(&mut Stream::from(tokens));
         assert!(matches!(result, Ok(_)));

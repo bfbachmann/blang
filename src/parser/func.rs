@@ -37,7 +37,7 @@ impl Function {
 
     /// Parses function declarations. Expects token sequences of the form
     ///
-    ///      fn <fn_name>(<arg_name>: <arg_type>, ...): <return_type> { <body> }
+    ///      fn <fn_name>(<arg_name>: <arg_type>, ...) ~ <return_type> { <body> }
     ///      fn <fn_name>(<arg_name>: <arg_type>, ...) { <body> }
     ///
     /// where
@@ -59,7 +59,7 @@ impl Function {
 
     /// Parses anonymous function declarations. Expects token sequences of the forms
     ///
-    ///      fn (<arg_type> <arg_name>, ...): <return_type> { <body> }
+    ///      fn (<arg_type> <arg_name>, ...) ~ <return_type> { <body> }
     ///      fn (<arg_type> <arg_name>, ...) { <body> }
     ///
     /// where

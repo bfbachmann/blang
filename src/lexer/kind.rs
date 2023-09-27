@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 
 use lazy_static::lazy_static;
@@ -69,6 +70,7 @@ pub enum TokenKind {
     LineComment,
     BeginBlockComment,
     EndBlockComment,
+    Tilde,
 
     // User-defined values
     Identifier(String),
@@ -128,6 +130,7 @@ impl Clone for TokenKind {
             TokenKind::Continue => TokenKind::Continue,
             TokenKind::SizeOf => TokenKind::SizeOf,
             TokenKind::Ext => TokenKind::Ext,
+            TokenKind::Tilde => TokenKind::Tilde,
         }
     }
 }
@@ -198,6 +201,7 @@ impl TokenKind {
             TokenKind::Continue => "continue".to_string(),
             TokenKind::SizeOf => "sizeof".to_string(),
             TokenKind::Ext => "ext".to_string(),
+            TokenKind::Tilde => "~".to_string(),
         }
     }
 
@@ -231,60 +235,71 @@ impl TokenKind {
     /// Attempts to lex the given slice into a TokenKind. Returns None if the slice is not a valid
     /// token.
     pub fn from(segment: &str) -> Option<TokenKind> {
-        let basic_kinds = [
-            TokenKind::Add,
-            TokenKind::Subtract,
-            TokenKind::Multiply,
-            TokenKind::Divide,
-            TokenKind::Modulo,
-            TokenKind::LogicalAnd,
-            TokenKind::LogicalOr,
-            TokenKind::Not,
-            TokenKind::Equal,
-            TokenKind::I64,
-            TokenKind::UnsafePtr,
-            TokenKind::UnsafeNull,
-            TokenKind::USize,
-            TokenKind::Bool,
-            TokenKind::EqualTo,
-            TokenKind::NotEqualTo,
-            TokenKind::GreaterThan,
-            TokenKind::LessThan,
-            TokenKind::GreaterThanOrEqual,
-            TokenKind::LessThanOrEqual,
-            TokenKind::Let,
-            TokenKind::Mut,
-            TokenKind::If,
-            TokenKind::Else,
-            TokenKind::Elsif,
-            TokenKind::Str,
-            TokenKind::LeftBrace,
-            TokenKind::RightBrace,
-            TokenKind::LeftParen,
-            TokenKind::RightParen,
-            TokenKind::LeftBracket,
-            TokenKind::RightBracket,
-            TokenKind::Comma,
-            TokenKind::SemiColon,
-            TokenKind::Colon,
-            TokenKind::Dot,
-            TokenKind::Function,
-            TokenKind::Struct,
-            TokenKind::Loop,
-            TokenKind::Break,
-            TokenKind::Return,
-            TokenKind::LineComment,
-            TokenKind::Continue,
-            TokenKind::BeginBlockComment,
-            TokenKind::EndBlockComment,
-            TokenKind::SizeOf,
-            TokenKind::Ext,
-        ];
+        let basic_kinds = HashMap::from([
+            (TokenKind::Add.to_string(), TokenKind::Add),
+            (TokenKind::Subtract.to_string(), TokenKind::Subtract),
+            (TokenKind::Multiply.to_string(), TokenKind::Multiply),
+            (TokenKind::Divide.to_string(), TokenKind::Divide),
+            (TokenKind::Modulo.to_string(), TokenKind::Modulo),
+            (TokenKind::LogicalAnd.to_string(), TokenKind::LogicalAnd),
+            (TokenKind::LogicalOr.to_string(), TokenKind::LogicalOr),
+            (TokenKind::Not.to_string(), TokenKind::Not),
+            (TokenKind::Equal.to_string(), TokenKind::Equal),
+            (TokenKind::I64.to_string(), TokenKind::I64),
+            (TokenKind::UnsafePtr.to_string(), TokenKind::UnsafePtr),
+            (TokenKind::UnsafeNull.to_string(), TokenKind::UnsafeNull),
+            (TokenKind::USize.to_string(), TokenKind::USize),
+            (TokenKind::Bool.to_string(), TokenKind::Bool),
+            (TokenKind::EqualTo.to_string(), TokenKind::EqualTo),
+            (TokenKind::NotEqualTo.to_string(), TokenKind::NotEqualTo),
+            (TokenKind::GreaterThan.to_string(), TokenKind::GreaterThan),
+            (TokenKind::LessThan.to_string(), TokenKind::LessThan),
+            (
+                TokenKind::GreaterThanOrEqual.to_string(),
+                TokenKind::GreaterThanOrEqual,
+            ),
+            (
+                TokenKind::LessThanOrEqual.to_string(),
+                TokenKind::LessThanOrEqual,
+            ),
+            (TokenKind::Let.to_string(), TokenKind::Let),
+            (TokenKind::Mut.to_string(), TokenKind::Mut),
+            (TokenKind::If.to_string(), TokenKind::If),
+            (TokenKind::Else.to_string(), TokenKind::Else),
+            (TokenKind::Elsif.to_string(), TokenKind::Elsif),
+            (TokenKind::Str.to_string(), TokenKind::Str),
+            (TokenKind::LeftBrace.to_string(), TokenKind::LeftBrace),
+            (TokenKind::RightBrace.to_string(), TokenKind::RightBrace),
+            (TokenKind::LeftParen.to_string(), TokenKind::LeftParen),
+            (TokenKind::RightParen.to_string(), TokenKind::RightParen),
+            (TokenKind::LeftBracket.to_string(), TokenKind::LeftBracket),
+            (TokenKind::RightBracket.to_string(), TokenKind::RightBracket),
+            (TokenKind::Comma.to_string(), TokenKind::Comma),
+            (TokenKind::SemiColon.to_string(), TokenKind::SemiColon),
+            (TokenKind::Colon.to_string(), TokenKind::Colon),
+            (TokenKind::Dot.to_string(), TokenKind::Dot),
+            (TokenKind::Function.to_string(), TokenKind::Function),
+            (TokenKind::Struct.to_string(), TokenKind::Struct),
+            (TokenKind::Loop.to_string(), TokenKind::Loop),
+            (TokenKind::Break.to_string(), TokenKind::Break),
+            (TokenKind::Return.to_string(), TokenKind::Return),
+            (TokenKind::LineComment.to_string(), TokenKind::LineComment),
+            (TokenKind::Continue.to_string(), TokenKind::Continue),
+            (
+                TokenKind::BeginBlockComment.to_string(),
+                TokenKind::BeginBlockComment,
+            ),
+            (
+                TokenKind::EndBlockComment.to_string(),
+                TokenKind::EndBlockComment,
+            ),
+            (TokenKind::SizeOf.to_string(), TokenKind::SizeOf),
+            (TokenKind::Ext.to_string(), TokenKind::Ext),
+            (TokenKind::Tilde.to_string(), TokenKind::Tilde),
+        ]);
 
-        for kind in basic_kinds {
-            if let Some(v) = TokenKind::lex_basic(segment, kind.to_string().as_str(), kind) {
-                return Some(v);
-            }
+        if let Some(v) = basic_kinds.get(segment.trim()) {
+            return Some(v.clone());
         }
 
         if let Some(v) = TokenKind::lex_bool_literal(segment) {
@@ -303,13 +318,6 @@ impl TokenKind {
             return Some(v);
         }
 
-        None
-    }
-
-    fn lex_basic(segment: &str, target: &str, token: TokenKind) -> Option<TokenKind> {
-        if segment.trim() == target {
-            return Some(token);
-        }
         None
     }
 

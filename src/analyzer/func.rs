@@ -97,7 +97,7 @@ impl fmt::Display for RichFnSig {
         }
 
         if let Some(typ) = &self.ret_type_id {
-            write!(f, "): {}", typ)
+            write!(f, ") ~ {}", typ)
         } else {
             write!(f, ")")
         }

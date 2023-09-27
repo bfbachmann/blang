@@ -1,6 +1,6 @@
 ext fn exit(code: i64)
 
-fn cumulative_sum(n: i64): i64 {
+fn cumulative_sum(n: i64) ~ i64 {
     let mut result = 0
     let mut i = n
     
@@ -14,7 +14,7 @@ fn cumulative_sum(n: i64): i64 {
     }
 }
 
-fn fib(n: i64): i64 {
+fn fib(n: i64) ~ i64 {
     if n <= 2 {
         return 1
     }

@@ -371,7 +371,7 @@ mod tests {
                 
                 let result = fib(
                     i,
-                    fn (n: i64): bool {
+                    fn (n: i64) ~ bool {
                         print(str_concat("fib visitor sees n=", itoa(n)))
                         return n % 2 == 0
                     },
@@ -392,7 +392,7 @@ mod tests {
         }
         
         // Calls `visitor_fn` with n and returns the n'th Fibonacci number.
-        fn fib(n: i64, visitor_fn: fn (i64): bool): i64 {
+        fn fib(n: i64, visitor_fn: fn (i64) ~ bool) ~ i64 {
             if visitor_fn(n) {
                 print("visitor returned true")
             }
@@ -404,11 +404,11 @@ mod tests {
         
         fn print(s: str) {}
         
-        fn str_concat(a: str, b: str): str {
+        fn str_concat(a: str, b: str) ~ str {
             return a
         }
         
-        fn itoa(i: i64): str {
+        fn itoa(i: i64) ~ str {
             return "fake"
         }
         
@@ -437,7 +437,7 @@ mod tests {
             struct Inner {
                 count: i64,
                 msg: str,
-                get_person: fn (str): Person,
+                get_person: fn (str) ~ Person,
                 inline_struct_field: struct {
                     something: bool,
                     another: Person,
@@ -451,7 +451,7 @@ mod tests {
             
             struct Empty {}
             
-            fn get_person(name: str): Person {
+            fn get_person(name: str) ~ Person {
                 return Person{
                     name: "dave",
                     age: 43,
@@ -527,7 +527,7 @@ mod tests {
                 do_thing()
             }
             
-            fn do_thing(): bool {
+            fn do_thing() ~ bool {
                 return true
                 let a = 1
             }
@@ -581,14 +581,14 @@ mod tests {
             r#"
            struct Thing {
                i: i64,
-               func: fn (i64, i64): bool,
+               func: fn (i64, i64) ~ bool,
            }
            
-           fn eq(a: i64, b: i64): bool {
+           fn eq(a: i64, b: i64) ~ bool {
                return a == b
            }
            
-           fn neq(a: i64, b: i64): bool {
+           fn neq(a: i64, b: i64) ~ bool {
                return !eq(a, b)
            }
            

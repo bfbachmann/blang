@@ -88,7 +88,7 @@ mod tests {
                 let prefix = "Fibonacci number " + itoa(i) + " is: "
                 let result = fib(
                     i,
-                    fn (n: i64): bool {
+                    fn (n: i64) ~ bool {
                         print("fib visitor sees n=" + itoa(n))
                         return n % 2 == 0
                     },
@@ -103,7 +103,7 @@ mod tests {
         }
         
         // Calls `visitor_fn` with n and returns the n'th Fibonacci number.
-        fn fib(n: i64, visitor_fn: fn (i64): bool): i64 {
+        fn fib(n: i64, visitor_fn: fn (i64) ~ bool) ~ i64 {
             if visitor_fn(n) {
                 print("visitor returned true")
             }
@@ -161,7 +161,7 @@ mod tests {
     #[test]
     fn parse_function_declaration() {
         let tokens = Token::tokenize_line(
-            r#"fn my_fn(arg1: str, arg2: i64): str { let s = "hello world!"; }"#,
+            r#"fn my_fn(arg1: str, arg2: i64) ~ str { let s = "hello world!"; }"#,
             1,
         )
         .expect("should not error");
@@ -188,8 +188,8 @@ mod tests {
                         )
                     ],
                     Some(Type::Str(StrType::new(
-                        Position::new(1, 33),
-                        Position::new(1, 36)
+                        Position::new(1, 34),
+                        Position::new(1, 37)
                     ))),
                     Position::new(1, 1),
                     Position::new(1, 31),
@@ -201,21 +201,21 @@ mod tests {
                         "s".to_string(),
                         Expression::StrLiteral(StrLit {
                             value: "hello world!".to_string(),
-                            start_pos: Position::new(1, 47),
-                            end_pos: Position::new(1, 61),
+                            start_pos: Position::new(1, 48),
+                            end_pos: Position::new(1, 62),
                         }),
-                        Position::new(1, 39),
-                        Position::new(1, 61),
+                        Position::new(1, 40),
+                        Position::new(1, 62),
                     ))],
                     None,
-                    Position::new(1, 37),
-                    Position::new(1, 64),
+                    Position::new(1, 38),
+                    Position::new(1, 65),
                 ),
             )
         );
 
         let tokens = Token::tokenize_line(
-            "fn bigboi(f: fn (str, i64): bool, i: i64): fn (bool): str {}",
+            "fn bigboi(f: fn (str, i64) ~ bool, i: i64) ~ fn (bool) ~ str {}",
             1,
         )
         .expect("should not error");
@@ -252,10 +252,10 @@ mod tests {
                                     )
                                 ],
                                 Some(Type::Bool(BoolType::new(
-                                    Position::new(1, 29),
-                                    Position::new(1, 33)
+                                    Position::new(1, 30),
+                                    Position::new(1, 34)
                                 ))),
-                                Position::default(), // TODO: fix this
+                                Position::new(1, 14),
                                 Position::new(1, 27),
                             ))),
                             false,
@@ -264,31 +264,31 @@ mod tests {
                         ),
                         Argument::new(
                             "i",
-                            Type::I64(I64Type::new(Position::new(1, 38), Position::new(1, 41))),
+                            Type::I64(I64Type::new(Position::new(1, 39), Position::new(1, 42))),
                             false,
-                            Position::new(1, 35),
-                            Position::new(1, 41)
+                            Position::new(1, 36),
+                            Position::new(1, 42)
                         )
                     ],
                     Some(Type::Function(Box::new(FunctionSignature::new_anon(
                         vec![Argument::new(
                             "",
-                            Type::Bool(BoolType::new(Position::new(1, 48), Position::new(1, 52))),
+                            Type::Bool(BoolType::new(Position::new(1, 50), Position::new(1, 54))),
                             false,
-                            Position::new(1, 48),
-                            Position::new(1, 52)
+                            Position::new(1, 50),
+                            Position::new(1, 54)
                         )],
                         Some(Type::Str(StrType::new(
-                            Position::new(1, 55),
-                            Position::new(1, 58)
+                            Position::new(1, 58),
+                            Position::new(1, 61)
                         ))),
-                        Position::new(1, 44),
-                        Position::new(1, 53),
+                        Position::new(1, 46),
+                        Position::new(1, 55),
                     )))),
                     Position::new(1, 1),
-                    Position::new(1, 42),
+                    Position::new(1, 43),
                 ),
-                Closure::new(vec![], None, Position::new(1, 59), Position::new(1, 61)),
+                Closure::new(vec![], None, Position::new(1, 62), Position::new(1, 64)),
             )
         );
     }
@@ -485,7 +485,7 @@ mod tests {
 
     #[test]
     fn missing_fn_closing_brace() {
-        let raw = r#"fn thing(): i64 {
+        let raw = r#"fn thing() ~ i64 {
             return 4 / 2 + 8
         "#;
         let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
