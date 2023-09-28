@@ -149,7 +149,7 @@ impl Type {
 
             Some(
                 _token @ Token {
-                    kind: TokenKind::Function,
+                    kind: TokenKind::Fn,
                     ..
                 },
             ) => {

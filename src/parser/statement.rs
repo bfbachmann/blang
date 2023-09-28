@@ -214,7 +214,7 @@ impl Statement {
             // If the first token is `fn`, it must be a function declaration.
             (
                 Token {
-                    kind: TokenKind::Function,
+                    kind: TokenKind::Fn,
                     ..
                 },
                 _,

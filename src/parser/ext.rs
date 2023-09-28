@@ -75,7 +75,7 @@ impl Ext {
         // The next token should either be `{` or `fn`.
         match Program::parse_expecting(
             tokens,
-            HashSet::from([TokenKind::LeftBrace, TokenKind::Function]),
+            HashSet::from([TokenKind::LeftBrace, TokenKind::Fn]),
         )? {
             Token {
                 kind: TokenKind::LeftBrace,
@@ -102,7 +102,7 @@ impl Ext {
             }
 
             Token {
-                kind: TokenKind::Function,
+                kind: TokenKind::Fn,
                 ..
             } => {
                 // This is just a single `ext` function declaration.

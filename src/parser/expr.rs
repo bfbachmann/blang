@@ -161,7 +161,7 @@ impl Expression {
         match tokens.peek_next() {
             // If the first token is `fn`, we'll assume the expression is an anonymous function.
             Some(Token {
-                kind: TokenKind::Function,
+                kind: TokenKind::Fn,
                 ..
             }) => {
                 // Parse the anonymous function and return it.
@@ -248,7 +248,7 @@ impl Expression {
             // expression.
             Some(
                 token @ Token {
-                    kind: TokenKind::Not,
+                    kind: TokenKind::LogicalNot,
                     ..
                 },
             ) => {

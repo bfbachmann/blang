@@ -17,7 +17,7 @@ pub enum TokenKind {
     LogicalOr,
 
     // Unary operators
-    Not,
+    LogicalNot,
 
     // Variable assignment
     Equal,
@@ -40,7 +40,7 @@ pub enum TokenKind {
     USize,
     Str,
     StrLiteral(String),
-    Function,
+    Fn,
     Struct,
 
     // Keywords and control flow
@@ -86,7 +86,7 @@ impl Clone for TokenKind {
             TokenKind::Modulo => TokenKind::Modulo,
             TokenKind::LogicalAnd => TokenKind::LogicalAnd,
             TokenKind::LogicalOr => TokenKind::LogicalOr,
-            TokenKind::Not => TokenKind::Not,
+            TokenKind::LogicalNot => TokenKind::LogicalNot,
             TokenKind::Equal => TokenKind::Equal,
             TokenKind::EqualTo => TokenKind::EqualTo,
             TokenKind::NotEqualTo => TokenKind::NotEqualTo,
@@ -103,7 +103,7 @@ impl Clone for TokenKind {
             TokenKind::USize => TokenKind::USize,
             TokenKind::Str => TokenKind::Str,
             TokenKind::StrLiteral(v) => TokenKind::StrLiteral(v.clone()),
-            TokenKind::Function => TokenKind::Function,
+            TokenKind::Fn => TokenKind::Fn,
             TokenKind::Struct => TokenKind::Struct,
             TokenKind::Let => TokenKind::Let,
             TokenKind::Mut => TokenKind::Mut,
@@ -157,7 +157,7 @@ impl TokenKind {
             TokenKind::Modulo => "%".to_string(),
             TokenKind::LogicalAnd => "&&".to_string(),
             TokenKind::LogicalOr => "||".to_string(),
-            TokenKind::Not => "!".to_string(),
+            TokenKind::LogicalNot => "!".to_string(),
             TokenKind::Equal => "=".to_string(),
             TokenKind::EqualTo => "==".to_string(),
             TokenKind::NotEqualTo => "!=".to_string(),
@@ -173,7 +173,7 @@ impl TokenKind {
             TokenKind::USize => "usize".to_string(),
             TokenKind::Str => "str".to_string(),
             TokenKind::StrLiteral(v) => v.to_string(),
-            TokenKind::Function => "fn".to_string(),
+            TokenKind::Fn => "fn".to_string(),
             TokenKind::Struct => "struct".to_string(),
             TokenKind::Let => "let".to_string(),
             TokenKind::Mut => "mut".to_string(),
@@ -243,7 +243,7 @@ impl TokenKind {
             (TokenKind::Modulo.to_string(), TokenKind::Modulo),
             (TokenKind::LogicalAnd.to_string(), TokenKind::LogicalAnd),
             (TokenKind::LogicalOr.to_string(), TokenKind::LogicalOr),
-            (TokenKind::Not.to_string(), TokenKind::Not),
+            (TokenKind::LogicalNot.to_string(), TokenKind::LogicalNot),
             (TokenKind::Equal.to_string(), TokenKind::Equal),
             (TokenKind::I64.to_string(), TokenKind::I64),
             (TokenKind::UnsafePtr.to_string(), TokenKind::UnsafePtr),
@@ -278,7 +278,7 @@ impl TokenKind {
             (TokenKind::SemiColon.to_string(), TokenKind::SemiColon),
             (TokenKind::Colon.to_string(), TokenKind::Colon),
             (TokenKind::Dot.to_string(), TokenKind::Dot),
-            (TokenKind::Function.to_string(), TokenKind::Function),
+            (TokenKind::Fn.to_string(), TokenKind::Fn),
             (TokenKind::Struct.to_string(), TokenKind::Struct),
             (TokenKind::Loop.to_string(), TokenKind::Loop),
             (TokenKind::Break.to_string(), TokenKind::Break),

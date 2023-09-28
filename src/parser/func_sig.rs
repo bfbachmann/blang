@@ -139,7 +139,7 @@ impl FunctionSignature {
         let start_pos = Program::current_position(tokens);
 
         // The first token should be `fn`.
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::Function]))?;
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::Fn]))?;
 
         // The second token should be an identifier that represents the function name.
         let fn_name = Program::parse_identifier(tokens)?;
@@ -175,7 +175,7 @@ impl FunctionSignature {
         let start_pos = Program::current_position(tokens);
 
         // The first token should be `fn`.
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::Function]))?;
+        Program::parse_expecting(tokens, HashSet::from([TokenKind::Fn]))?;
 
         // The next tokens should represent function arguments followed by the return type.
         let mut fn_sig = FunctionSignature::from_args_and_return(tokens, named)?;
@@ -271,7 +271,7 @@ impl FunctionSignature {
                         TokenKind::Str
                         | TokenKind::I64
                         | TokenKind::Bool
-                        | TokenKind::Function
+                        | TokenKind::Fn
                         | TokenKind::Identifier(_)
                         | TokenKind::Struct
                         | TokenKind::Mut,
