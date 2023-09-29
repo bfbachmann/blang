@@ -1051,4 +1051,24 @@ mod tests {
             })
         ))
     }
+
+    #[test]
+    fn illegal_assign_to_const() {
+        let result = analyze_prog(
+            r#"
+            const a = true
+            
+            fn main() {
+                a = false
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::ImmutableAssignment,
+                ..
+            })
+        ))
+    }
 }
