@@ -1,9 +1,9 @@
-use std::collections::HashSet;
+
 use std::fmt::{Display, Formatter};
 
-use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
 use crate::parser::program::Program;
 use crate::parser::r#type::Type;
@@ -43,7 +43,7 @@ impl SizeOf {
     ///  - `type` is any type.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Parse the `sizeof` keyword.
-        let sizeof_token = Program::parse_expecting(tokens, HashSet::from([TokenKind::SizeOf]))?;
+        let sizeof_token = Program::parse_expecting(tokens, TokenKind::SizeOf)?;
 
         // Parse the type.
         let typ = Type::from(tokens)?;

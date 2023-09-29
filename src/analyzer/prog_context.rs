@@ -17,6 +17,7 @@ pub struct ScopedVar {
     pub type_id: TypeId,
     pub is_mut: bool,
     pub is_arg: bool,
+    pub is_const: bool,
 }
 
 impl ScopedVar {
@@ -26,6 +27,17 @@ impl ScopedVar {
             type_id,
             is_mut,
             is_arg,
+            is_const: false,
+        }
+    }
+
+    pub fn new_const(name: &str, type_id: TypeId) -> Self {
+        ScopedVar {
+            name: name.to_string(),
+            type_id,
+            is_mut: false,
+            is_arg: false,
+            is_const: true,
         }
     }
 }

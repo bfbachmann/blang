@@ -36,7 +36,22 @@ impl RichVarAssign {
         match ctx.get_var(var_name.as_str()) {
             Some(var) => {
                 // The variable exists, so make sure it is mutable.
-                if !var.is_mut {
+                if var.is_const {
+                    ctx.add_err(
+                        AnalyzeError::new(
+                            ErrorKind::ImmutableAssignment,
+                            format_code!("cannot assign to constant {}", assign.var).as_str(),
+                            &assign,
+                        )
+                        .with_help(
+                            format_code!(
+                                "Consider declaring {} as a mutable local variable.",
+                                var_name
+                            )
+                            .as_str(),
+                        ),
+                    )
+                } else if !var.is_mut {
                     ctx.add_err(
                         AnalyzeError::new(
                             ErrorKind::ImmutableAssignment,

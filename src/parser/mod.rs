@@ -10,6 +10,7 @@ pub mod branch;
 pub mod r#break;
 pub mod closure;
 pub mod cond;
+pub mod r#const;
 pub mod cont;
 pub mod error;
 pub mod expr;
@@ -44,9 +45,9 @@ pub mod var_dec;
 mod tests {
     use std::io::{BufRead, Cursor};
 
-    use crate::lexer::kind::TokenKind;
     use crate::lexer::pos::Position;
     use crate::lexer::token::Token;
+    use crate::lexer::token_kind::TokenKind;
     use crate::parser::arg::Argument;
     use crate::parser::bool::BoolType;
     use crate::parser::bool_lit::BoolLit;

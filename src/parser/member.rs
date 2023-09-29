@@ -1,11 +1,11 @@
-use std::collections::HashSet;
+
 use std::fmt::{Display, Formatter};
 
 use colored::Colorize;
 
-use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::program::Program;
 use crate::parser::stream::Stream;
@@ -70,7 +70,7 @@ impl MemberAccess {
         let start_pos = Program::current_position(tokens);
 
         // The first token should be `.`.
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::Dot]))?;
+        Program::parse_expecting(tokens, TokenKind::Dot)?;
 
         // Get the end position of the next token (the member name).
         let mut end_pos = match tokens.peek_next() {

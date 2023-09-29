@@ -67,13 +67,14 @@ impl RichProg {
             match statement {
                 Statement::FunctionDeclaration(_)
                 | Statement::ExternFns(_)
+                | Statement::Consts(_)
                 | Statement::StructDeclaration(_) => {
                     analyzed_statements.push(RichStatement::from(ctx, statement));
                 }
                 other => {
                     ctx.add_err(AnalyzeError::new(
                         ErrorKind::InvalidStatement,
-                        "expected type or function declaration",
+                        "expected type, constant, or function declaration",
                         &other,
                     ));
                 }
@@ -1011,6 +1012,41 @@ mod tests {
             result,
             Err(AnalyzeError {
                 kind: ErrorKind::InvalidStatement,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn duplicate_const() {
+        let result = analyze_prog(
+            r#"
+            const {
+                a = {1, 2, true}
+                a = "test"
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::ConstAlreadyDefined,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn const_type_mismatch() {
+        let result = analyze_prog(
+            r#"
+            const a: {bool, i64, i64} = {1, 2, true}
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::MismatchedTypes,
                 ..
             })
         ))

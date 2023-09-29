@@ -293,6 +293,7 @@ impl<'a> MoveChecker<'a> {
         match statement {
             RichStatement::StructTypeDeclaration(_)
             | RichStatement::ExternFns(_)
+            | RichStatement::Consts(_)
             | RichStatement::Continue
             | RichStatement::Break => {
                 // Nothing to do here since moves cannot occur in these types of statements.

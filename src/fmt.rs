@@ -71,9 +71,9 @@ where
 pub fn format_file_loc(path: &str, line: Option<usize>, col: Option<usize>) -> ColoredString {
     match (line, col) {
         (Some(l), Some(c)) if l > 0 && c > 0 => {
-            format!("--> {}:{}:{}", path, l, c).bright_black().bold()
+            format!("{}:{}:{}", path, l, c).bright_black().bold()
         }
-        _ => format!("--> {}", path).bright_black(),
+        _ => format!("{}", path).bright_black(),
     }
 }
 

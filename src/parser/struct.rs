@@ -1,13 +1,13 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
 use colored::Colorize;
 
-use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::expr::Expression;
@@ -112,8 +112,8 @@ impl StructType {
         let start_pos = Program::current_position(tokens);
         let end_pos: Position;
 
-        // The first token should be "struct".
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::Struct]))?;
+        // The first token should be `struct`.
+        Program::parse_expecting(tokens, TokenKind::Struct)?;
 
         // The next token should might be the struct type name, which is optional.
         let mut name = "".to_string();
@@ -126,7 +126,7 @@ impl StructType {
         }
 
         // The next token should be `{`.
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::LeftBrace]))?;
+        Program::parse_expecting(tokens, TokenKind::LeftBrace)?;
 
         // Parse struct fields until we reach `}`.
         let mut fields = vec![];
@@ -150,7 +150,7 @@ impl StructType {
             let field_name = Program::parse_identifier(tokens)?;
 
             // The next token should be a `:`.
-            Program::parse_expecting(tokens, HashSet::from([TokenKind::Colon]))?;
+            Program::parse_expecting(tokens, TokenKind::Colon)?;
 
             // The next tokens should represent the field type.
             let field_type = Type::from(tokens)?;
@@ -160,7 +160,7 @@ impl StructType {
             let field_end_pos = Program::current_position(tokens);
 
             // Parse the optional comma.
-            Program::parse_optional(tokens, HashSet::from([TokenKind::Comma]));
+            Program::parse_optional(tokens, TokenKind::Comma);
 
             // Add the field to the map. We'll check for field name collisions in the analyzer.
             fields.push(StructField {
@@ -284,7 +284,7 @@ impl StructInit {
         };
 
         // Parse `{`.
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::LeftBrace]))?;
+        Program::parse_expecting(tokens, TokenKind::LeftBrace)?;
 
         // Parse struct field assignments until we hit `}`.
         let mut field_values = HashMap::new();
@@ -305,12 +305,12 @@ impl StructInit {
                 }) => {
                     // Parse `:` followed by the field value and record the field.
                     let field_name = field_name.clone();
-                    Program::parse_expecting(tokens, HashSet::from([TokenKind::Colon]))?;
+                    Program::parse_expecting(tokens, TokenKind::Colon)?;
                     let value = Expression::from(tokens, false)?;
                     field_values.insert(field_name, value);
 
                     // Parse the optional comma.
-                    Program::parse_optional(tokens, HashSet::from([TokenKind::Comma]));
+                    Program::parse_optional(tokens, TokenKind::Comma);
                 }
 
                 Some(other) => {

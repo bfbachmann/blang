@@ -3,9 +3,9 @@ use std::fmt;
 
 use colored::Colorize;
 
-use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::lexer::token_kind::TokenKind;
 use crate::parser::bool_lit::BoolLit;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
@@ -169,7 +169,7 @@ impl Expression {
                 Ok(Some(Expression::AnonFunction(Box::new(func))))
             }
 
-            // If the first token is "struct", it's an inline struct initialization.
+            // If the first token is `struct`, it's an inline struct initialization.
             Some(Token {
                 kind: TokenKind::Struct,
                 ..
@@ -608,9 +608,9 @@ impl Expression {
 mod tests {
     use std::io::{BufRead, Cursor};
 
-    use crate::lexer::kind::TokenKind;
     use crate::lexer::pos::Position;
     use crate::lexer::token::Token;
+    use crate::lexer::token_kind::TokenKind;
     use crate::parser::bool_lit::BoolLit;
     use crate::parser::error::{ErrorKind, ParseError};
     use crate::parser::expr::Expression;

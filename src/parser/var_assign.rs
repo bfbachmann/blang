@@ -1,8 +1,8 @@
-use std::collections::HashSet;
 
-use crate::lexer::kind::TokenKind;
+
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
@@ -53,7 +53,7 @@ impl VariableAssignment {
         let var = Var::from(tokens)?;
 
         // The next token should be an assignment "=".
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::Equal]))?;
+        Program::parse_expecting(tokens, TokenKind::Equal)?;
 
         // The next tokens should be some expression.
         let expr = Expression::from(tokens, false)?;

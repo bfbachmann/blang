@@ -1,8 +1,6 @@
-use std::collections::HashSet;
-
-use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::lexer::token_kind::TokenKind;
 use crate::parser::closure::Closure;
 use crate::parser::error::ParseResult;
 use crate::parser::program::Program;
@@ -38,8 +36,8 @@ impl Loop {
         // Record the starting position of the loop.
         let start_pos = Program::current_position(tokens);
 
-        // The first token should be "loop".
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::Loop]))?;
+        // The first token should be `loop`.
+        Program::parse_expecting(tokens, TokenKind::Loop)?;
 
         // The rest should be the closure representing the loop body.
         let body = Closure::from(tokens)?;

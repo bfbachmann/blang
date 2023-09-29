@@ -2,16 +2,15 @@
 //! to the Blang parser.
 
 pub mod error;
-pub mod kind;
 pub mod pos;
 pub mod token;
+pub mod token_kind;
 
 #[cfg(test)]
 mod tests {
-
     use crate::lexer::error::LexError;
-    use crate::lexer::kind::TokenKind;
     use crate::lexer::token::Token;
+    use crate::lexer::token_kind::TokenKind;
 
     #[test]
     fn lex_add() {

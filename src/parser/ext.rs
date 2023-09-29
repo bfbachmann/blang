@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 
-use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::program::Program;
@@ -70,10 +70,10 @@ impl Ext {
         let start_pos = Program::current_position(tokens);
 
         // Parse the `ext` token.
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::Ext]))?;
+        Program::parse_expecting(tokens, TokenKind::Ext)?;
 
         // The next token should either be `{` or `fn`.
-        match Program::parse_expecting(
+        match Program::parse_expecting_any(
             tokens,
             HashSet::from([TokenKind::LeftBrace, TokenKind::Fn]),
         )? {
@@ -87,9 +87,7 @@ impl Ext {
                 let end_pos = loop {
                     fn_sigs.push(FunctionSignature::from(tokens)?);
 
-                    if let Some(token) =
-                        Program::parse_optional(tokens, HashSet::from([TokenKind::RightBrace]))
-                    {
+                    if let Some(token) = Program::parse_optional(tokens, TokenKind::RightBrace) {
                         break token.end.clone();
                     }
                 };

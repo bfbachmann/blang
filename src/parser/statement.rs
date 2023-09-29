@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 use std::fmt;
 
-use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::lexer::token_kind::TokenKind;
 use crate::parser::closure::Closure;
 use crate::parser::cond::Conditional;
 use crate::parser::cont::Continue;
@@ -15,6 +15,7 @@ use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
 use crate::parser::program::Program;
 use crate::parser::r#break::Break;
+use crate::parser::r#const::ConstBlock;
 use crate::parser::r#loop::Loop;
 use crate::parser::r#struct::StructType;
 use crate::parser::ret::Ret;
@@ -38,6 +39,7 @@ pub enum Statement {
     Return(Ret),
     StructDeclaration(StructType),
     ExternFns(Ext),
+    Consts(ConstBlock),
 }
 
 impl fmt::Display for Statement {
@@ -87,6 +89,9 @@ impl fmt::Display for Statement {
             Statement::ExternFns(extern_fn) => {
                 write!(f, "{}", extern_fn)
             }
+            Statement::Consts(const_block) => {
+                write!(f, "{}", const_block)
+            }
         }
     }
 }
@@ -106,6 +111,7 @@ impl Locatable for Statement {
             Statement::Return(ret) => ret.start_pos(),
             Statement::StructDeclaration(s) => s.start_pos(),
             Statement::ExternFns(e) => e.start_pos(),
+            Statement::Consts(c) => c.start_pos(),
         }
     }
 
@@ -123,6 +129,7 @@ impl Locatable for Statement {
             Statement::Return(ret) => ret.end_pos(),
             Statement::StructDeclaration(s) => s.end_pos(),
             Statement::ExternFns(e) => e.end_pos(),
+            Statement::Consts(c) => c.end_pos(),
         }
     }
 }
@@ -199,7 +206,7 @@ impl Statement {
                 Ok(Statement::VariableAssignment(assign))
             }
 
-            // If the first token is `fn`, it's a set of external function declarations.
+            // If the first token is `ext`, it's a set of external function declarations.
             (
                 Token {
                     kind: TokenKind::Ext,
@@ -209,6 +216,18 @@ impl Statement {
             ) => {
                 let ext = Ext::from(tokens)?;
                 Ok(Statement::ExternFns(ext))
+            }
+
+            // If the first token is `const`, it's a set of constant declarations.
+            (
+                Token {
+                    kind: TokenKind::Const,
+                    ..
+                },
+                _,
+            ) => {
+                let const_block = ConstBlock::from(tokens)?;
+                Ok(Statement::Consts(const_block))
             }
 
             // If the first token is `fn`, it must be a function declaration.
@@ -250,7 +269,7 @@ impl Statement {
                 Ok(Statement::FunctionCall(call))
             }
 
-            // If the first token is "if", it must be a conditional.
+            // If the first token is `if`, it must be a conditional.
             (
                 Token {
                     kind: TokenKind::If,
@@ -262,7 +281,7 @@ impl Statement {
                 Ok(Statement::Conditional(cond))
             }
 
-            // If the first token is "loop", it must be a loop.
+            // If the first token is `loop`, it must be a loop.
             (
                 Token {
                     kind: TokenKind::Loop,
@@ -274,7 +293,7 @@ impl Statement {
                 Ok(Statement::Loop(cond))
             }
 
-            // If the first token is "break", it must be a break statement.
+            // If the first token is `break`, it must be a break statement.
             (
                 Token {
                     kind: TokenKind::Break,
@@ -286,7 +305,7 @@ impl Statement {
                 Ok(Statement::Break(br))
             }
 
-            // If the first token is "continue", it must be a loop continue.
+            // If the first token is `continue`, it must be a loop continue.
             (
                 Token {
                     kind: TokenKind::Continue,
@@ -298,7 +317,7 @@ impl Statement {
                 Ok(Statement::Continue(cont))
             }
 
-            // If the first token is "return", it must be a return statement.
+            // If the first token is `return`, it must be a return statement.
             (
                 Token {
                     kind: TokenKind::Return,
@@ -332,7 +351,7 @@ impl Statement {
                 )))
             }
 
-            // If the first token is "struct" it must be a struct declaration.
+            // If the first token is `struct` it must be a struct declaration.
             (
                 Token {
                     kind: TokenKind::Struct,
@@ -361,7 +380,7 @@ impl Statement {
 
                 // If the next token is `(`, it's a function call. Otherwise, it should be "=" for
                 // member assignment.
-                match Program::parse_expecting(
+                match Program::parse_expecting_any(
                     tokens,
                     HashSet::from([TokenKind::Equal, TokenKind::LeftParen]),
                 )? {

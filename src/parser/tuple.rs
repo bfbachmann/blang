@@ -4,9 +4,9 @@ use std::hash::{Hash, Hasher};
 
 use colored::Colorize;
 
-use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
@@ -97,7 +97,7 @@ impl TupleType {
         let start_pos = Program::current_position(tokens);
 
         // The first token should be `{`.
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::LeftBrace]))?;
+        Program::parse_expecting(tokens, TokenKind::LeftBrace)?;
 
         // The next tokens should be types followed by commas ending in `}`.
         let mut types = vec![];
@@ -134,7 +134,7 @@ impl TupleType {
                     if let token @ Token {
                         kind: TokenKind::RightBrace,
                         ..
-                    } = Program::parse_expecting(
+                    } = Program::parse_expecting_any(
                         tokens,
                         HashSet::from([TokenKind::Comma, TokenKind::RightBrace]),
                     )? {
@@ -220,7 +220,7 @@ impl TupleInit {
         let start_pos = Program::current_position(tokens);
 
         // The first token should be `{`.
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::LeftBrace]))?;
+        Program::parse_expecting(tokens, TokenKind::LeftBrace)?;
 
         // The next tokens should be expressions followed by commas ending in `}`.
         let mut values = vec![];
@@ -257,7 +257,7 @@ impl TupleInit {
                     if let token @ Token {
                         kind: TokenKind::RightBrace,
                         ..
-                    } = Program::parse_expecting(
+                    } = Program::parse_expecting_any(
                         tokens,
                         HashSet::from([TokenKind::Comma, TokenKind::RightBrace]),
                     )? {

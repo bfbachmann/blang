@@ -1,9 +1,9 @@
 use std::fmt;
 use std::hash::Hash;
 
-use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::lexer::token_kind::TokenKind;
 use crate::parser::bool::BoolType;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};

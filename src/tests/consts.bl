@@ -1,0 +1,28 @@
+ext fn exit(code: i64)
+
+const {
+    INT = -50
+    STRUCT = struct{i: i64, b: bool}{
+        i: 987
+        b: false
+    }
+    TUPLE = {345, true}
+    UNSAFEPTR = unsafe_null
+}
+
+fn assert(b: bool, code: i64) {
+    if !b {
+        exit(code)
+    }
+}
+
+fn main() {
+    assert(INT == -50, 1)
+    assert(STRUCT.i == 987, 2)
+    assert(STRUCT.b == false, 3)
+    assert(TUPLE.0 == 345, 4)
+    assert(TUPLE.1 == true, 5)
+    assert(UNSAFEPTR == unsafe_null, 6)
+
+    exit(0)
+}

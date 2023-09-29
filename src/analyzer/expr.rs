@@ -85,6 +85,54 @@ impl PartialEq for RichExprKind {
     }
 }
 
+impl RichExprKind {
+    /// Returns true if the expression kind can be used as a constant.
+    pub fn is_const(&self) -> bool {
+        match self {
+            // Primitive literals are valid constants.
+            RichExprKind::BoolLiteral(_)
+            | RichExprKind::I64Literal(_)
+            | RichExprKind::UnsafeNull
+            | RichExprKind::USizeLiteral(_)
+            | RichExprKind::StringLiteral(_) => true,
+
+            // Unary and binary operations are constants if they only operate on constants.
+            RichExprKind::UnaryOperation(_, expr) => expr.kind.is_const(),
+            RichExprKind::BinaryOperation(left_expr, _, right_expr) => {
+                left_expr.kind.is_const() && right_expr.kind.is_const()
+            }
+
+            // Struct initializations are constants if all their fields are constants.
+            RichExprKind::StructInit(struct_init) => {
+                for (_, field_val) in &struct_init.field_values {
+                    if !field_val.kind.is_const() {
+                        return false;
+                    }
+                }
+
+                true
+            }
+
+            // Tuple values are constants if all their fields are constants.
+            RichExprKind::TupleInit(tuple_init) => {
+                for val in &tuple_init.values {
+                    if !val.kind.is_const() {
+                        return false;
+                    }
+                }
+
+                true
+            }
+
+            // Function calls and variables are never constants.
+            RichExprKind::Variable(_)
+            | RichExprKind::FunctionCall(_)
+            | RichExprKind::AnonFunction(_)
+            | RichExprKind::Unknown => false,
+        }
+    }
+}
+
 /// Represents a semantically valid and type-rich expression.
 #[derive(Clone, PartialEq, Debug)]
 pub struct RichExpr {

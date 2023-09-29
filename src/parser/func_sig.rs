@@ -2,9 +2,9 @@ use std::collections::HashSet;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::lexer::token_kind::TokenKind;
 use crate::parser::arg::Argument;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::program::Program;
@@ -139,7 +139,7 @@ impl FunctionSignature {
         let start_pos = Program::current_position(tokens);
 
         // The first token should be `fn`.
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::Fn]))?;
+        Program::parse_expecting(tokens, TokenKind::Fn)?;
 
         // The second token should be an identifier that represents the function name.
         let fn_name = Program::parse_identifier(tokens)?;
@@ -175,7 +175,7 @@ impl FunctionSignature {
         let start_pos = Program::current_position(tokens);
 
         // The first token should be `fn`.
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::Fn]))?;
+        Program::parse_expecting(tokens, TokenKind::Fn)?;
 
         // The next tokens should represent function arguments followed by the return type.
         let mut fn_sig = FunctionSignature::from_args_and_return(tokens, named)?;
@@ -246,7 +246,7 @@ impl FunctionSignature {
         let end_pos: Position;
 
         // The first token should be the opening parenthesis.
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::LeftParen]))?;
+        Program::parse_expecting(tokens, TokenKind::LeftParen)?;
 
         // The next token(s) should be arguments or a closing parenthesis.
         let mut args = vec![];
@@ -321,7 +321,7 @@ impl FunctionSignature {
             };
 
             // After the argument, the next token should be `,` or `)`.
-            let token = Program::parse_expecting(
+            let token = Program::parse_expecting_any(
                 tokens,
                 HashSet::from([TokenKind::Comma, TokenKind::RightParen]),
             )?;

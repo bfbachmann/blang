@@ -1,8 +1,8 @@
-use std::collections::HashSet;
 
-use crate::lexer::kind::TokenKind;
+
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
@@ -77,7 +77,7 @@ impl Closure {
         let end_pos: Position;
 
         // The first token should be `{`.
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::LeftBrace]))?;
+        Program::parse_expecting(tokens, TokenKind::LeftBrace)?;
 
         // The following nodes should be statements separated by ";".
         let mut statements = vec![];

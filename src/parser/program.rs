@@ -2,9 +2,9 @@ use std::collections::HashSet;
 
 use colored::Colorize;
 
-use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::Position;
 use crate::lexer::token::Token;
+use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::statement::Statement;
@@ -43,8 +43,39 @@ impl Program {
         Ok(Program { statements })
     }
 
+    /// Returns an error if the next token is the given kind, or the token otherwise.
+    pub fn parse_expecting(tokens: &mut Stream<Token>, expected: TokenKind) -> ParseResult<Token> {
+        match tokens.next() {
+            None => {
+                return Err(ParseError::new(
+                    ErrorKind::UnexpectedEOF,
+                    format!(r#"expected {}, but found EOF"#, expected).as_str(),
+                    None,
+                    Position::default(),
+                    Position::default(),
+                ))
+            }
+            Some(token) => {
+                if token.kind == expected {
+                    Ok(token.clone())
+                } else {
+                    Err(ParseError::new_with_token(
+                        ErrorKind::UnexpectedToken,
+                        format!(
+                            r#"expected {}, but found {}"#,
+                            expected,
+                            format_code!("{}", token),
+                        )
+                        .as_str(),
+                        token.clone(),
+                    ))
+                }
+            }
+        }
+    }
+
     /// Returns an error if the next token is not any of the given kinds, or the token otherwise.
-    pub fn parse_expecting(
+    pub fn parse_expecting_any(
         tokens: &mut Stream<Token>,
         expected: HashSet<TokenKind>,
     ) -> ParseResult<Token> {
@@ -83,15 +114,11 @@ impl Program {
         }
     }
 
-    /// Checks if the first token is one of the given kinds and, if so, pops the token and returns
+    /// Checks if the first token is the given kind and, if so, pops the token and returns
     /// it.
-    pub fn parse_optional(
-        tokens: &mut Stream<Token>,
-        expected: HashSet<TokenKind>,
-    ) -> Option<&Token> {
+    pub fn parse_optional(tokens: &mut Stream<Token>, expected: TokenKind) -> Option<&Token> {
         if let Some(Token { kind, .. }) = tokens.peek_next() {
-            let found_kind = expected.get(&kind);
-            if found_kind.is_some() {
+            if kind == &expected {
                 return tokens.next();
             }
         }

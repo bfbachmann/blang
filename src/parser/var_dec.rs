@@ -1,8 +1,8 @@
-use std::collections::HashSet;
 
-use crate::lexer::kind::TokenKind;
+
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
@@ -63,23 +63,23 @@ impl VariableDeclaration {
     ///  - `expr` is an expression representing the value assigned to the variable
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // The first token should be "let".
-        let start_token = Program::parse_expecting(tokens, HashSet::from([TokenKind::Let]))?;
+        let start_token = Program::parse_expecting(tokens, TokenKind::Let)?;
 
         // Parse the optional "mut".
-        let is_mut = Program::parse_optional(tokens, HashSet::from([TokenKind::Mut])).is_some();
+        let is_mut = Program::parse_optional(tokens, TokenKind::Mut).is_some();
 
         // The second token should be the variable name.
         let name = Program::parse_identifier(tokens)?;
 
         // The colon and variable type are optional.
         let mut typ = None;
-        if Program::parse_optional(tokens, HashSet::from([TokenKind::Colon])).is_some() {
+        if Program::parse_optional(tokens, TokenKind::Colon).is_some() {
             // There was a colon, so there should be a type name.
             typ = Some(Type::from(tokens)?);
         }
 
         // The remaining tokens should be "=" followed by the variable value.
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::Equal]))?;
+        Program::parse_expecting(tokens, TokenKind::Equal)?;
         let value = Expression::from(tokens, false)?;
         let end_pos = value.end_pos().clone();
 

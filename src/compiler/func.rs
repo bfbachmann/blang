@@ -15,6 +15,7 @@ use crate::analyzer::closure::RichClosure;
 use crate::analyzer::cond::RichCond;
 use crate::analyzer::expr::{RichExpr, RichExprKind};
 use crate::analyzer::func::{RichFn, RichFnCall, RichRet};
+use crate::analyzer::r#const::RichConst;
 use crate::analyzer::r#struct::RichStructInit;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::statement::RichStatement;
@@ -37,6 +38,7 @@ pub struct FnCompiler<'a, 'ctx> {
     module: &'a Module<'ctx>,
 
     types: &'a HashMap<TypeId, RichType>,
+    consts: &'a HashMap<String, RichConst>,
     vars: HashMap<String, PointerValue<'ctx>>,
     fn_value: Option<FunctionValue<'ctx>>,
     stack: Vec<CompilationContext<'ctx>>,
@@ -51,6 +53,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         fpm: &'a PassManager<FunctionValue<'ctx>>,
         module: &'a Module<'ctx>,
         types: &'a HashMap<TypeId, RichType>,
+        consts: &'a HashMap<String, RichConst>,
         func: &RichFn,
     ) -> CompileResult<FunctionValue<'ctx>> {
         let mut fn_compiler = FnCompiler {
@@ -59,6 +62,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             fpm,
             module,
             types,
+            consts,
             vars: HashMap::new(),
             fn_value: None,
             stack: vec![],
@@ -292,10 +296,17 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// Allocates space on the stack for a new variable of type `typ` and writes `ll_val` to the
     /// allocated memory. Also stores a pointer to the allocated memory in `self.vars` with `name`.
-    fn create_var(&mut self, name: &str, typ: &RichType, ll_val: BasicValueEnum<'ctx>) {
+    /// Returns a pointer to the new variable.
+    fn create_var(
+        &mut self,
+        name: &str,
+        typ: &RichType,
+        ll_val: BasicValueEnum<'ctx>,
+    ) -> PointerValue<'ctx> {
         let ll_dst_ptr = self.create_entry_alloc(name, typ, ll_val);
         self.copy_value(ll_val, ll_dst_ptr, typ);
         self.vars.insert(name.to_string(), ll_dst_ptr);
+        ll_dst_ptr
     }
 
     /// Assigns the value to the variable with the given name. Panics if no such variable exists.
@@ -439,7 +450,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Gets a pointer to the given variable or member.
-    fn get_var_ptr(&self, var: &RichVar) -> PointerValue<'ctx> {
+    fn get_var_ptr(&mut self, var: &RichVar) -> PointerValue<'ctx> {
         let ll_var_ptr = self.get_var_ptr_by_name(var.var_name.as_str());
         if let Some(access) = &var.member_access {
             self.get_var_member_ptr(ll_var_ptr, &var.var_type_id, access)
@@ -449,7 +460,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Gets a variable (or member) and returns its value.
-    fn get_var_value(&self, var: &RichVar) -> BasicValueEnum<'ctx> {
+    fn get_var_value(&mut self, var: &RichVar) -> BasicValueEnum<'ctx> {
         // Get a pointer to the variable or member.
         let ll_var_ptr = self.get_var_ptr(var);
 
@@ -520,7 +531,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Gets a pointer to a variable or function given its name.
-    fn get_var_ptr_by_name(&self, name: &str) -> PointerValue<'ctx> {
+    fn get_var_ptr_by_name(&mut self, name: &str) -> PointerValue<'ctx> {
         // Try look up the symbol as a variable.
         if let Some(ll_var_ptr) = self.vars.get(name) {
             return *ll_var_ptr;
@@ -529,6 +540,14 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // The symbol was not a variable, so try look it up as a function.
         if let Some(func) = self.module.get_function(name) {
             return func.as_global_value().as_pointer_value();
+        }
+
+        // The symbol was not a variable or function. Try look it up as a constant. If the constant
+        // exists, we'll just create it inline on the stack and return a pointer to it.
+        if let Some(const_) = self.consts.get(name) {
+            let const_type = self.types.get(&const_.value.type_id).unwrap();
+            let ll_const_val = self.compile_expr(&const_.value);
+            return self.create_var(const_.name.as_str(), const_type, ll_const_val);
         }
 
         panic!("failed to resolve variable {}", name);
@@ -635,7 +654,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             RichStatement::Return(ret) => {
                 self.compile_return(ret);
             }
-            RichStatement::ExternFns(_) => {
+            RichStatement::ExternFns(_) | RichStatement::Consts(_) => {
                 // Nothing to do here. This is already handled in
                 // `ProgramCompiler::compile_program`.
             }
@@ -712,15 +731,15 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         let mut else_branch_exists = false;
 
         for (i, branch) in cond.branches.iter().enumerate() {
-            // If there is a branch condition, it means we are on an "if" or "elsif" branch.
-            // Otherwise, it means we're on an "else" branch.
+            // If there is a branch condition, it means we are on an `if` or `elsif` branch.
+            // Otherwise, it means we're on an `else` branch.
             if let Some(expr) = &branch.cond {
                 // Create a "then" block to jump to if the branch condition is true.
                 let then_block = self.append_block("cond_branch");
 
-                // Create an "else" block to jump to if the branch condition is false. If this is
-                // the last branch in the conditional, the "else" block is the "end" block.
-                // Otherwise, we create a new "else" block.
+                // Create an `else` block to jump to if the branch condition is false. If this is
+                // the last branch in the conditional, the `else` block is the "end" block.
+                // Otherwise, we create a new `else` block.
                 let else_block = if i + 1 == cond.branches.len() {
                     if end_block.is_none() {
                         end_block = Some(self.append_block("cond_end"));
@@ -761,7 +780,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                     self.builder.build_unconditional_branch(end_block.unwrap());
                 }
 
-                // Continue on the "else" block.
+                // Continue on the `else` block.
                 self.set_current_block(else_block);
             } else {
                 // This is an else branch, so we must execute the branch body.

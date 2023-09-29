@@ -12,6 +12,7 @@ use inkwell::values::FunctionValue;
 
 use crate::analyzer::func::RichFnSig;
 use crate::analyzer::program::{ProgramAnalysis, RichProg};
+use crate::analyzer::r#const::RichConst;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::statement::RichStatement;
 use crate::compiler::convert;
@@ -26,6 +27,7 @@ pub struct ProgCompiler<'a, 'ctx> {
     module: &'a Module<'ctx>,
     program: &'a RichProg,
     types: &'a HashMap<TypeId, RichType>,
+    consts: &'a mut HashMap<String, RichConst>,
 }
 
 impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
@@ -77,10 +79,11 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
             module: &module,
             program: &prog_analysis.prog,
             types: &prog_analysis.types,
+            consts: &mut HashMap::new(),
         };
         compiler.compile_program()?;
 
-        // Write output as to file.
+        // Write output to file.
         if as_bitcode {
             compiler.module.write_bitcode_to_path(output_path);
         } else {
@@ -102,6 +105,9 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
         // executable.
         self.define_extern_fns();
 
+        // Defined constants so they can be used inside the functions we compile later.
+        self.define_consts();
+
         // Do one shallow pass to define all top-level functions in the module.
         for statement in &self.program.statements {
             match statement {
@@ -122,6 +128,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
                         self.fpm,
                         self.module,
                         self.types,
+                        self.consts,
                         func,
                     )?;
                 }
@@ -131,6 +138,10 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
                 RichStatement::ExternFns(_) => {
                     // Nothing to do here because extern functions are compiled in the call to
                     // `ProgramCompiler::define_extern_fns` above.
+                }
+                RichStatement::Consts(_) => {
+                    // Nothing to do here because constants are compiled in the call to
+                    // `ProgramCompiler::define_consts` above.
                 }
                 other => {
                     panic!("unexpected top-level statement {other}");
@@ -197,12 +208,24 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
         for statement in &self.program.statements {
             if let RichStatement::ExternFns(fn_sigs) = statement {
                 for fn_sig in fn_sigs {
-                    let fn_type = convert::to_fn_type(self.ctx, self.types, &fn_sig);
+                    let ll_fn_type = convert::to_fn_type(self.ctx, self.types, &fn_sig);
                     self.module.add_function(
                         fn_sig.name.as_str(),
-                        fn_type,
+                        ll_fn_type,
                         Some(Linkage::External),
                     );
+                }
+            }
+        }
+    }
+
+    /// Defines constants in the current module.
+    fn define_consts(&mut self) {
+        for statement in &self.program.statements {
+            if let RichStatement::Consts(consts) = statement {
+                for const_decl in consts {
+                    self.consts
+                        .insert(const_decl.name.clone(), const_decl.clone());
                 }
             }
         }

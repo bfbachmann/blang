@@ -1,6 +1,6 @@
 use core::fmt;
 
-use crate::lexer::kind::TokenKind;
+use crate::lexer::token_kind::TokenKind;
 
 /// Represents an operator.
 #[derive(Debug, PartialEq, Clone)]

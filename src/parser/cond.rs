@@ -1,10 +1,10 @@
-use std::collections::HashSet;
+
 use std::fmt;
 use std::fmt::Formatter;
 
-use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::lexer::token_kind::TokenKind;
 use crate::parser::branch::Branch;
 use crate::parser::error::ParseResult;
 use crate::parser::program::Program;
@@ -78,13 +78,13 @@ impl Conditional {
     ///  - `if_cond` is an expression that represents the `if` branch condition
     ///  - `elsif_cond` is an expression that represents the `else if` branch condition
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        // The first token should be "if".
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::If]))?;
+        // The first token should be `if`.
+        Program::parse_expecting(tokens, TokenKind::If)?;
 
         // Parse the rest of the branch (the expression and the closure).
         let branch = Branch::from(tokens, true)?;
 
-        // We now have the first "if" branch. Continue by adding other "elsif" branches until
+        // We now have the first `if` branch. Continue by adding other `elsif` branches until
         // there are none left.
         let mut branches = vec![branch];
         loop {
@@ -93,7 +93,7 @@ impl Conditional {
                     kind: TokenKind::Elsif,
                     ..
                 }) => {
-                    // Move past the "elsif" token.
+                    // Move past the `elsif` token.
                     tokens.next();
 
                     // Parse the rest of the branch and add it to the list of branches.
@@ -104,7 +104,7 @@ impl Conditional {
                     kind: TokenKind::Else,
                     ..
                 }) => {
-                    // Move past the "else" token.
+                    // Move past the `else` token.
                     tokens.next();
 
                     // Parse the rest of the branch and add it to the list of branches, then break
@@ -114,7 +114,7 @@ impl Conditional {
                     break;
                 }
                 _ => {
-                    // The next token is not "elsif" or "else", so we assume it's some new
+                    // The next token is not `elsif` or `else`, so we assume it's some new
                     // statement and break.
                     break;
                 }

@@ -1,9 +1,9 @@
-use std::collections::HashSet;
+
 use std::fmt;
 
-use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
 use crate::parser::program::Program;
 use crate::parser::stream::Stream;
@@ -82,13 +82,13 @@ impl Argument {
         let start_pos = Program::current_position(tokens);
 
         // The argument can optionally be declared as mutable, so check for "mut".
-        let is_mut = Program::parse_optional(tokens, HashSet::from([TokenKind::Mut])).is_some();
+        let is_mut = Program::parse_optional(tokens, TokenKind::Mut).is_some();
 
         // The first token should be the argument name.
         let name = Program::parse_identifier(tokens)?;
 
         // The next token should be a colon.
-        Program::parse_expecting(tokens, HashSet::from([TokenKind::Colon]))?;
+        Program::parse_expecting(tokens, TokenKind::Colon)?;
 
         // The remaining tokens should form the argument type.
         let arg_type = Type::from(tokens)?;
@@ -117,7 +117,7 @@ impl Argument {
         let start_pos = Program::current_position(tokens);
 
         // Check for the optional "mut" keyword for mutable arguments.
-        let is_mut = Program::parse_optional(tokens, HashSet::from([TokenKind::Mut])).is_some();
+        let is_mut = Program::parse_optional(tokens, TokenKind::Mut).is_some();
 
         // The next token should be the argument type.
         let arg_type = Type::from(tokens)?;

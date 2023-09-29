@@ -55,6 +55,7 @@ pub enum TokenKind {
     Continue,
     SizeOf,
     Ext,
+    Const,
 
     // Delimiters
     LeftBrace,
@@ -131,6 +132,7 @@ impl Clone for TokenKind {
             TokenKind::SizeOf => TokenKind::SizeOf,
             TokenKind::Ext => TokenKind::Ext,
             TokenKind::Tilde => TokenKind::Tilde,
+            TokenKind::Const => TokenKind::Const,
         }
     }
 }
@@ -202,6 +204,7 @@ impl TokenKind {
             TokenKind::SizeOf => "sizeof".to_string(),
             TokenKind::Ext => "ext".to_string(),
             TokenKind::Tilde => "~".to_string(),
+            TokenKind::Const => "const".to_string(),
         }
     }
 
@@ -296,6 +299,7 @@ impl TokenKind {
             (TokenKind::SizeOf.to_string(), TokenKind::SizeOf),
             (TokenKind::Ext.to_string(), TokenKind::Ext),
             (TokenKind::Tilde.to_string(), TokenKind::Tilde),
+            (TokenKind::Const.to_string(), TokenKind::Const),
         ]);
 
         if let Some(v) = basic_kinds.get(segment.trim()) {

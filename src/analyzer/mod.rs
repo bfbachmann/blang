@@ -20,6 +20,7 @@
 
 pub mod closure;
 pub mod cond;
+pub mod r#const;
 pub mod error;
 pub mod expr;
 pub mod func;

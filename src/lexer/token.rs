@@ -5,8 +5,8 @@ use std::io::{BufRead, Lines};
 
 use crate::lexer::error::LexError;
 use crate::lexer::error::LexResult;
-use crate::lexer::kind::TokenKind;
 use crate::lexer::pos::Position;
+use crate::lexer::token_kind::TokenKind;
 
 /// A token has a kind and a start and end position (in the file).
 #[derive(Clone, Debug, PartialEq)]

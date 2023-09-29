@@ -6,6 +6,7 @@ use crate::analyzer::cond::RichCond;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::{RichFn, RichFnCall, RichFnSig, RichRet};
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
+use crate::analyzer::r#const::RichConst;
 use crate::analyzer::r#struct::RichStructType;
 use crate::analyzer::var_assign::RichVarAssign;
 use crate::analyzer::var_dec::RichVarDecl;
@@ -27,6 +28,7 @@ pub enum RichStatement {
     StructTypeDeclaration(RichStructType),
     /// A set of external function declarations.
     ExternFns(Vec<RichFnSig>),
+    Consts(Vec<RichConst>),
 }
 
 impl fmt::Display for RichStatement {
@@ -48,6 +50,13 @@ impl fmt::Display for RichStatement {
                     write!(f, "ext {}", e.first().unwrap())
                 } else {
                     write!(f, "ext {{ <{} function signatures> }}", e.len())
+                }
+            }
+            RichStatement::Consts(consts) => {
+                if consts.len() == 1 {
+                    write!(f, "const {}", consts.first().unwrap())
+                } else {
+                    write!(f, "const {{ <{} constant declarations> }}", consts.len())
                 }
             }
         }
@@ -129,6 +138,25 @@ impl RichStatement {
                 }
 
                 RichStatement::ExternFns(rich_fn_sigs)
+            }
+
+            Statement::Consts(const_block) => {
+                // Make sure this const is not being declared inside a function.
+                if ctx.is_in_fn() {
+                    ctx.add_err(AnalyzeError::new(
+                        ErrorKind::InvalidStatement,
+                        "cannot declare constant inside function",
+                        &const_block,
+                    ));
+                }
+
+                // Analyze all the constant declarations.
+                let mut consts = vec![];
+                for const_decl in &const_block.consts {
+                    consts.push(RichConst::from(ctx, const_decl));
+                }
+
+                RichStatement::Consts(consts)
             }
         }
     }
