@@ -12,21 +12,21 @@ use crate::util;
 
 /// Represents a set of external function declarations.
 #[derive(Debug)]
-pub struct Ext {
+pub struct Extern {
     pub fn_sigs: Vec<FunctionSignature>,
     start_pos: Position,
     end_pos: Position,
 }
 
-impl PartialEq for Ext {
+impl PartialEq for Extern {
     fn eq(&self, other: &Self) -> bool {
         util::vectors_are_equal(&self.fn_sigs, &other.fn_sigs)
     }
 }
 
-impl Clone for Ext {
+impl Clone for Extern {
     fn clone(&self) -> Self {
-        Ext {
+        Extern {
             fn_sigs: self.fn_sigs.iter().map(|sig| sig.clone()).collect(),
             start_pos: self.start_pos.clone(),
             end_pos: self.end_pos.clone(),
@@ -34,17 +34,21 @@ impl Clone for Ext {
     }
 }
 
-impl Display for Ext {
+impl Display for Extern {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if self.fn_sigs.len() == 1 {
-            write!(f, "ext {}", self.fn_sigs.first().unwrap())
+            write!(f, "extern {}", self.fn_sigs.first().unwrap())
         } else {
-            write!(f, "ext {{ <{} function signatures> }}", self.fn_sigs.len())
+            write!(
+                f,
+                "extern {{ <{} function signatures> }}",
+                self.fn_sigs.len()
+            )
         }
     }
 }
 
-impl Locatable for Ext {
+impl Locatable for Extern {
     fn start_pos(&self) -> &Position {
         &self.start_pos
     }
@@ -54,12 +58,12 @@ impl Locatable for Ext {
     }
 }
 
-impl Ext {
+impl Extern {
     /// Attempts to parse a set of external function declarations from the token sequence. Expects
     /// token sequences of one of the following forms:
     ///
-    ///     ext <fn_sig>
-    ///     ext {
+    ///     extern <fn_sig>
+    ///     extern {
     ///         <fn_sig>
     ///         ...
     ///     }
@@ -70,7 +74,7 @@ impl Ext {
         let start_pos = Program::current_position(tokens);
 
         // Parse the `ext` token.
-        Program::parse_expecting(tokens, TokenKind::Ext)?;
+        Program::parse_expecting(tokens, TokenKind::Extern)?;
 
         // The next token should either be `{` or `fn`.
         match Program::parse_expecting_any(
@@ -92,7 +96,7 @@ impl Ext {
                     }
                 };
 
-                Ok(Ext {
+                Ok(Extern {
                     fn_sigs,
                     start_pos,
                     end_pos,
@@ -107,7 +111,7 @@ impl Ext {
                 tokens.rewind(1);
                 let fn_sig = FunctionSignature::from(tokens)?;
                 let end_pos = fn_sig.end_pos().clone();
-                Ok(Ext {
+                Ok(Extern {
                     fn_sigs: vec![fn_sig],
                     start_pos,
                     end_pos,

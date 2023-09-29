@@ -10,7 +10,7 @@ use crate::parser::cont::Continue;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::expr::Expression;
-use crate::parser::ext::Ext;
+use crate::parser::ext::Extern;
 use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
 use crate::parser::program::Program;
@@ -38,7 +38,7 @@ pub enum Statement {
     Continue(Continue),
     Return(Ret),
     StructDeclaration(StructType),
-    ExternFns(Ext),
+    ExternFns(Extern),
     Consts(ConstBlock),
 }
 
@@ -209,12 +209,12 @@ impl Statement {
             // If the first token is `ext`, it's a set of external function declarations.
             (
                 Token {
-                    kind: TokenKind::Ext,
+                    kind: TokenKind::Extern,
                     ..
                 },
                 _,
             ) => {
-                let ext = Ext::from(tokens)?;
+                let ext = Extern::from(tokens)?;
                 Ok(Statement::ExternFns(ext))
             }
 

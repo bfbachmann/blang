@@ -47,9 +47,9 @@ impl fmt::Display for RichStatement {
             RichStatement::StructTypeDeclaration(s) => write!(f, "{}", s),
             RichStatement::ExternFns(e) => {
                 if e.len() == 1 {
-                    write!(f, "ext {}", e.first().unwrap())
+                    write!(f, "extern {}", e.first().unwrap())
                 } else {
-                    write!(f, "ext {{ <{} function signatures> }}", e.len())
+                    write!(f, "extern {{ <{} function signatures> }}", e.len())
                 }
             }
             RichStatement::Consts(consts) => {

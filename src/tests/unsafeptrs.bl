@@ -1,4 +1,4 @@
-ext {
+extern {
     fn exit(code: i64)
     fn malloc(size: usize) ~ unsafeptr
     fn free(ptr: unsafeptr)

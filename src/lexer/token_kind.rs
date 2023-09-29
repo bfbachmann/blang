@@ -54,7 +54,7 @@ pub enum TokenKind {
     Return,
     Continue,
     SizeOf,
-    Ext,
+    Extern,
     Const,
 
     // Delimiters
@@ -130,7 +130,7 @@ impl Clone for TokenKind {
             TokenKind::Identifier(v) => TokenKind::Identifier(v.clone()),
             TokenKind::Continue => TokenKind::Continue,
             TokenKind::SizeOf => TokenKind::SizeOf,
-            TokenKind::Ext => TokenKind::Ext,
+            TokenKind::Extern => TokenKind::Extern,
             TokenKind::Tilde => TokenKind::Tilde,
             TokenKind::Const => TokenKind::Const,
         }
@@ -202,7 +202,7 @@ impl TokenKind {
             TokenKind::EndBlockComment => "*/".to_string(),
             TokenKind::Continue => "continue".to_string(),
             TokenKind::SizeOf => "sizeof".to_string(),
-            TokenKind::Ext => "ext".to_string(),
+            TokenKind::Extern => "extern".to_string(),
             TokenKind::Tilde => "~".to_string(),
             TokenKind::Const => "const".to_string(),
         }
@@ -297,7 +297,7 @@ impl TokenKind {
                 TokenKind::EndBlockComment,
             ),
             (TokenKind::SizeOf.to_string(), TokenKind::SizeOf),
-            (TokenKind::Ext.to_string(), TokenKind::Ext),
+            (TokenKind::Extern.to_string(), TokenKind::Extern),
             (TokenKind::Tilde.to_string(), TokenKind::Tilde),
             (TokenKind::Const.to_string(), TokenKind::Const),
         ]);

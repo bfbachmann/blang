@@ -383,8 +383,8 @@ mod tests {
     fn uses_externs() {
         assert_compiles(
             r#"
-            ext fn write(fd: i64, msg: str, len: i64)
-            ext {
+            extern fn write(fd: i64, msg: str, len: i64)
+            extern {
                 fn exit(code: i64)
             }
             

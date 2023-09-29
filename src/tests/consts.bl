@@ -1,4 +1,4 @@
-ext fn exit(code: i64)
+extern fn exit(code: i64)
 
 const {
     INT = -50
