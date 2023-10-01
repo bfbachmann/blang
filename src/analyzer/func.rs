@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -17,7 +18,6 @@ use crate::parser::func_call::FunctionCall;
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::r#type::Type;
 use crate::parser::ret::Ret;
-
 use crate::{format_code, util};
 
 /// Performs semantic analysis on the function signature, ensuring it doesn't match any other
@@ -74,12 +74,14 @@ pub struct RichFnSig {
     pub ret_type_id: Option<TypeId>,
     /// Represents this function signature as a type.
     pub type_id: TypeId,
+    /// The type ID of the parent type of this is a member function.
+    pub impl_type_id: Option<TypeId>,
 }
 
 impl PartialEq for RichFnSig {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
-            && util::vectors_are_equal(&self.args, &other.args)
+            && util::vecs_eq(&self.args, &other.args)
             && util::optionals_are_equal(&self.ret_type_id, &other.ret_type_id)
     }
 }
@@ -108,14 +110,23 @@ impl RichFnSig {
     /// Analyzes a function signature and returns a semantically valid, type-rich function
     /// signature.
     pub fn from(ctx: &mut ProgramContext, sig: &FunctionSignature) -> Self {
+        // Analyze the arguments.
         let mut args = vec![];
         for arg in &sig.args {
             let rich_arg = RichArg::from(ctx, &arg);
             args.push(rich_arg);
         }
 
+        // Analyze the return type.
         let return_type = match &sig.return_type {
             Some(typ) => Some(RichType::analyze(ctx, typ)),
+            None => None,
+        };
+
+        // Check if this function signature is for a member function on a type by getting the
+        // impl type ID.
+        let impl_type_id = match ctx.get_impl_type_id() {
+            Some(type_id) => Some(type_id.clone()),
             None => None,
         };
 
@@ -124,6 +135,7 @@ impl RichFnSig {
             args,
             ret_type_id: return_type,
             type_id: TypeId::from(Type::Function(Box::new(sig.clone()))),
+            impl_type_id,
         };
 
         // Add the function as a resolved type to the program context. This is done because
@@ -134,6 +146,23 @@ impl RichFnSig {
         );
 
         rich_fn_sig
+    }
+
+    /// Returns the fully qualified name of this function. If it's a regular function, this will
+    /// just be the function name. If it's a member function, it will be `<type>::<fn_name>`.
+    pub fn full_name(&self) -> String {
+        match &self.impl_type_id {
+            Some(type_id) => format!("{}::{}", type_id.to_string(), self.name),
+            None => self.name.to_string(),
+        }
+    }
+
+    /// Returns true if the function signature has `this` as its first argument.
+    pub fn takes_this(&self) -> bool {
+        match self.args.first() {
+            Some(arg) => arg.name == "this",
+            None => false,
+        }
     }
 }
 
@@ -163,19 +192,6 @@ impl RichFn {
             ));
         }
 
-        // Make sure the function is not already defined.
-        if let Some(_) = ctx.get_fn(func.signature.name.as_str()) {
-            ctx.add_err(AnalyzeError::new(
-                ErrorKind::FunctionAlreadyDefined,
-                format_code!(
-                    "function {} was already defined in this scope",
-                    func.signature.name,
-                )
-                .as_str(),
-                &func,
-            ));
-        }
-
         // Analyze the function body.
         let rich_closure = RichClosure::from(
             ctx,
@@ -191,14 +207,10 @@ impl RichFn {
             check_closure_returns(ctx, &rich_closure, &rich_ret_type, &ScopeKind::FnBody);
         }
 
-        // Add the function to the program context so we can reference it later.
-        let rich_fn = RichFn {
+        RichFn {
             signature: RichFnSig::from(ctx, &func.signature),
             body: rich_closure,
-        };
-        ctx.add_fn(rich_fn.clone());
-
-        rich_fn
+        }
     }
 }
 
@@ -229,7 +241,7 @@ impl fmt::Display for RichFnCall {
 impl PartialEq for RichFnCall {
     fn eq(&self, other: &Self) -> bool {
         self.fn_var == other.fn_var
-            && util::vectors_are_equal(&self.args, &other.args)
+            && util::vecs_eq(&self.args, &other.args)
             && util::optionals_are_equal(&self.ret_type_id, &other.ret_type_id)
     }
 }
@@ -249,7 +261,7 @@ impl RichFnCall {
         }
 
         // Extract type information from args.
-        let rich_args: Vec<RichExpr> = call
+        let mut passed_args: VecDeque<RichExpr> = call
             .args
             .iter()
             .map(|arg| RichExpr::from(ctx, arg.clone()))
@@ -258,10 +270,10 @@ impl RichFnCall {
         // Make sure the function exists, either as a fully analyzed function, an external function
         // signature, or a variable.
         let rich_fn_var = RichVar::from(ctx, &call.fn_var, true);
-        let var_type = ctx.get_resolved_type(rich_fn_var.get_type_id());
-        let fn_sig = match &var_type {
-            Some(RichType::Function(fn_sig)) => fn_sig,
-            Some(other) => {
+        let var_type = ctx.get_resolved_type(rich_fn_var.get_type_id()).unwrap();
+        let fn_sig = match var_type {
+            RichType::Function(fn_sig) => fn_sig,
+            other => {
                 // The value being used here is not a function.
                 errors.push(AnalyzeError::new(
                     ErrorKind::MismatchedTypes,
@@ -275,27 +287,52 @@ impl RichFnCall {
                     ret_type_id: Some(TypeId::unknown()),
                 };
             }
-            None => {
-                // This should never happen.
-                panic!(
-                    "failed to find resolved type for {}",
-                    rich_fn_var.get_type_id()
-                )
-            }
         };
 
         // Clone here to avoid borrow issues.
         let ret_type = fn_sig.ret_type_id.clone();
 
+        // If this function takes the special argument `this` and was not called directly via its
+        // fully-qualified name, add the special `this` argument.
+        let maybe_this = rich_fn_var.clone().without_last_member();
+        let called_on_this = fn_sig.impl_type_id.is_some()
+            && maybe_this.get_type_id() == fn_sig.impl_type_id.as_ref().unwrap();
+        if fn_sig.takes_this() && called_on_this {
+            passed_args.push_front(RichExpr::from_var(maybe_this));
+        } else if !fn_sig.takes_this() && called_on_this {
+            errors.push(
+                AnalyzeError::new(
+                    ErrorKind::MemberNotDefined,
+                    format_code!(
+                        "cannot call function {} on value of type {}",
+                        fn_sig.name,
+                        maybe_this.get_type_id(),
+                    )
+                    .as_str(),
+                    &call,
+                )
+                .with_detail(
+                    format_code!(
+                        "Member function {} on type {} does not take {} as its first argument.",
+                        fn_sig,
+                        fn_sig.impl_type_id.as_ref().unwrap(),
+                        "this",
+                    )
+                    .as_str(),
+                )
+                .with_help(format_code!("Did you mean to call {}?", fn_sig.full_name()).as_str()),
+            );
+        }
+
         // Make sure the right number of arguments were passed.
-        if rich_args.len() != fn_sig.args.len() {
+        if passed_args.len() != fn_sig.args.len() {
             errors.push(AnalyzeError::new(
                 ErrorKind::WrongNumberOfArgs,
                 format!(
                     "{} expects {}, but {} provided",
                     format_code!(fn_sig),
                     pluralize("argument", fn_sig.args.len() as isize, true),
-                    pluralize("was", rich_args.len() as isize, true)
+                    pluralize("was", passed_args.len() as isize, true)
                 )
                 .as_str(),
                 &call,
@@ -303,11 +340,8 @@ impl RichFnCall {
         }
 
         // Make sure the arguments are of the right types.
-        for (i, (passed_type_id, defined)) in rich_args
-            .iter()
-            .map(|arg| &arg.type_id)
-            .zip(&fn_sig.args)
-            .enumerate()
+        for (passed_type_id, defined) in
+            passed_args.iter().map(|arg| &arg.type_id).zip(&fn_sig.args)
         {
             // Skip the check if the argument type is unknown. This will happen if the argument
             // already failed semantic analysis.
@@ -316,7 +350,6 @@ impl RichFnCall {
             }
 
             if passed_type_id != &defined.type_id {
-                let original_arg = call.args.get(i).unwrap();
                 errors.push(AnalyzeError::new(
                     ErrorKind::MismatchedTypes,
                     format_code!(
@@ -326,7 +359,7 @@ impl RichFnCall {
                         &fn_sig,
                     )
                     .as_str(),
-                    original_arg,
+                    &call,
                 ));
             }
         }
@@ -339,7 +372,7 @@ impl RichFnCall {
 
         RichFnCall {
             fn_var: rich_fn_var,
-            args: rich_args,
+            args: passed_args.into(),
             ret_type_id: ret_type,
         }
     }

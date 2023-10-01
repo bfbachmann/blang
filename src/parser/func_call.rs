@@ -1,4 +1,3 @@
-
 use std::fmt;
 
 use crate::lexer::pos::{Locatable, Position};
@@ -26,7 +25,7 @@ pub struct FunctionCall {
 impl PartialEq for FunctionCall {
     fn eq(&self, other: &Self) -> bool {
         self.fn_var == other.fn_var
-            && util::vectors_are_equal(&self.args, &other.args)
+            && util::vecs_eq(&self.args, &other.args)
             && self.start_pos == other.start_pos
             && self.end_pos == other.end_pos
     }

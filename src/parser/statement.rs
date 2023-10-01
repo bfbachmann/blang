@@ -16,6 +16,7 @@ use crate::parser::func_call::FunctionCall;
 use crate::parser::program::Program;
 use crate::parser::r#break::Break;
 use crate::parser::r#const::ConstBlock;
+use crate::parser::r#impl::Impl;
 use crate::parser::r#loop::Loop;
 use crate::parser::r#struct::StructType;
 use crate::parser::ret::Ret;
@@ -40,6 +41,7 @@ pub enum Statement {
     StructDeclaration(StructType),
     ExternFns(Extern),
     Consts(ConstBlock),
+    Impl(Impl),
 }
 
 impl fmt::Display for Statement {
@@ -92,6 +94,13 @@ impl fmt::Display for Statement {
             Statement::Consts(const_block) => {
                 write!(f, "{}", const_block)
             }
+            Statement::Impl(impl_) => {
+                write!(
+                    f,
+                    "impl {{ <{} member functions> }}",
+                    impl_.member_fns.len()
+                )
+            }
         }
     }
 }
@@ -112,6 +121,7 @@ impl Locatable for Statement {
             Statement::StructDeclaration(s) => s.start_pos(),
             Statement::ExternFns(e) => e.start_pos(),
             Statement::Consts(c) => c.start_pos(),
+            Statement::Impl(i) => i.start_pos(),
         }
     }
 
@@ -130,6 +140,7 @@ impl Locatable for Statement {
             Statement::StructDeclaration(s) => s.end_pos(),
             Statement::ExternFns(e) => e.end_pos(),
             Statement::Consts(c) => c.end_pos(),
+            Statement::Impl(i) => i.end_pos(),
         }
     }
 }
@@ -315,6 +326,18 @@ impl Statement {
             ) => {
                 let cont = Continue::from(tokens)?;
                 Ok(Statement::Continue(cont))
+            }
+
+            // If the first token is `impl`, it's the implementation of member functions for a type.
+            (
+                Token {
+                    kind: TokenKind::Impl,
+                    ..
+                },
+                _,
+            ) => {
+                let impl_ = Impl::from(tokens)?;
+                Ok(Statement::Impl(impl_))
             }
 
             // If the first token is `return`, it must be a return statement.

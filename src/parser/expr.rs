@@ -188,6 +188,14 @@ impl Expression {
                 Err(_) => Ok(None),
             },
 
+            Some(Token {
+                kind: TokenKind::This,
+                ..
+            }) => {
+                let var = Var::from(tokens)?;
+                Ok(Some(Expression::Variable(var)))
+            }
+
             // If the first token is an identifier, the expression can be a function call,
             // a variable value, or a struct initialization.
             Some(Token {

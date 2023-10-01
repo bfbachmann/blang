@@ -7,6 +7,7 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::{RichFn, RichFnCall, RichFnSig, RichRet};
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#const::RichConst;
+use crate::analyzer::r#impl::RichImpl;
 use crate::analyzer::r#struct::RichStructType;
 use crate::analyzer::var_assign::RichVarAssign;
 use crate::analyzer::var_dec::RichVarDecl;
@@ -29,6 +30,7 @@ pub enum RichStatement {
     /// A set of external function declarations.
     ExternFns(Vec<RichFnSig>),
     Consts(Vec<RichConst>),
+    Impl(RichImpl),
 }
 
 impl fmt::Display for RichStatement {
@@ -59,6 +61,13 @@ impl fmt::Display for RichStatement {
                     write!(f, "const {{ <{} constant declarations> }}", consts.len())
                 }
             }
+            RichStatement::Impl(impl_) => {
+                write!(
+                    f,
+                    "impl {{ <{} member functions> }}",
+                    impl_.member_fns.len()
+                )
+            }
         }
     }
 }
@@ -76,7 +85,11 @@ impl RichStatement {
             }
 
             Statement::FunctionDeclaration(fn_decl) => {
-                RichStatement::FunctionDeclaration(RichFn::from(ctx, fn_decl))
+                // Analyze the function and add it to the program context so we can reference it
+                // later.
+                let rich_fn = RichFn::from(ctx, fn_decl);
+                ctx.add_fn(rich_fn.clone());
+                RichStatement::FunctionDeclaration(rich_fn)
             }
 
             Statement::Closure(closure) => RichStatement::Closure(RichClosure::from(
@@ -119,6 +132,8 @@ impl RichStatement {
             Statement::StructDeclaration(s) => {
                 RichStatement::StructTypeDeclaration(RichStructType::from(ctx, &s, false))
             }
+
+            Statement::Impl(impl_) => RichStatement::Impl(RichImpl::from(ctx, &impl_)),
 
             Statement::ExternFns(ext) => {
                 // Make sure we are not already inside a function. Extern functions cannot be

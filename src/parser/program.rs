@@ -19,7 +19,7 @@ pub struct Program {
 
 impl PartialEq for Program {
     fn eq(&self, other: &Self) -> bool {
-        util::vectors_are_equal(&self.statements, &other.statements)
+        util::vecs_eq(&self.statements, &other.statements)
     }
 }
 
@@ -49,7 +49,7 @@ impl Program {
             None => {
                 return Err(ParseError::new(
                     ErrorKind::UnexpectedEOF,
-                    format!(r#"expected {}, but found EOF"#, expected).as_str(),
+                    format_code!(r#"expected {}, but found EOF"#, expected).as_str(),
                     None,
                     Position::default(),
                     Position::default(),
@@ -61,12 +61,7 @@ impl Program {
                 } else {
                     Err(ParseError::new_with_token(
                         ErrorKind::UnexpectedToken,
-                        format!(
-                            r#"expected {}, but found {}"#,
-                            expected,
-                            format_code!("{}", token),
-                        )
-                        .as_str(),
+                        format_code!(r#"expected {}, but found {}"#, expected, token,).as_str(),
                         token.clone(),
                     ))
                 }

@@ -22,7 +22,7 @@ impl Clone for RichTupleType {
 
 impl PartialEq for RichTupleType {
     fn eq(&self, other: &Self) -> bool {
-        util::vectors_are_equal(&self.type_ids, &other.type_ids)
+        util::vecs_eq(&self.type_ids, &other.type_ids)
     }
 }
 
@@ -82,7 +82,7 @@ impl Display for RichTupleInit {
 
 impl PartialEq for RichTupleInit {
     fn eq(&self, other: &Self) -> bool {
-        self.type_id == other.type_id && util::vectors_are_equal(&self.values, &other.values)
+        self.type_id == other.type_id && util::vecs_eq(&self.values, &other.values)
     }
 }
 

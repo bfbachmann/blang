@@ -109,7 +109,7 @@ mod tests {
                 type_id: TypeId::str(),
                 name: "my_var".to_string(),
                 val: RichExpr {
-                    kind: RichExprKind::StringLiteral("bingo".to_string()),
+                    kind: RichExprKind::StrLiteral("bingo".to_string()),
                     type_id: TypeId::str(),
                 }
             }

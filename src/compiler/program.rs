@@ -114,6 +114,11 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
                 RichStatement::FunctionDeclaration(func) => {
                     self.compile_fn_sig(&func.signature);
                 }
+                RichStatement::Impl(impl_) => {
+                    for mem_fn in &impl_.member_fns {
+                        self.compile_fn_sig(&mem_fn.signature);
+                    }
+                }
                 _ => {}
             }
         }
@@ -131,6 +136,19 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
                         self.consts,
                         func,
                     )?;
+                }
+                RichStatement::Impl(impl_) => {
+                    for mem_fn in &impl_.member_fns {
+                        FnCompiler::compile(
+                            self.ctx,
+                            self.builder,
+                            self.fpm,
+                            self.module,
+                            self.types,
+                            self.consts,
+                            mem_fn,
+                        )?;
+                    }
                 }
                 RichStatement::StructTypeDeclaration(_) => {
                     // Nothing to do here because struct types are compiled only when they're used.
@@ -158,9 +176,11 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
 
     /// Defines the given function in the current module based on the function signature.
     fn compile_fn_sig(&self, sig: &RichFnSig) {
-        // Define the function in the module.
+        // Define the function in the module using the fully-qualified function name.
         let fn_type = convert::to_fn_type(self.ctx, self.types, sig);
-        let fn_val = self.module.add_function(sig.name.as_str(), fn_type, None);
+        let fn_val = self
+            .module
+            .add_function(sig.full_name().as_str(), fn_type, None);
 
         // Set arg names and mark arguments as pass-by-value where necessary.
         if fn_val.count_params() == sig.args.len() as u32 {

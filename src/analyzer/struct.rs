@@ -53,7 +53,7 @@ impl Display for RichStructType {
 
 impl PartialEq for RichStructType {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && util::vectors_are_equal(&self.fields, &other.fields)
+        self.name == other.name && util::vecs_eq(&self.fields, &other.fields)
     }
 }
 
@@ -282,6 +282,18 @@ impl RichStructType {
 
                 Type::Tuple(tuple_type) => {
                     RichStructType::check_tuple_containment_cycles(ctx, tuple_type, hierarchy)?;
+                }
+
+                Type::This(_) => {
+                    todo!();
+                    // // This should never happen because struct types declared at the top-level of
+                    // // the program cannot reference type `This` because they're not in an `impl`.
+                    // return Err(AnalyzeError::new(
+                    //     ErrorKind::TypeNotDefined,
+                    //     format_code!("cannot use type {} outside {} block", "This", "impl")
+                    //         .as_str(),
+                    //     this_type,
+                    // ));
                 }
 
                 // These types can't have containment cycles.

@@ -53,7 +53,7 @@ impl fmt::Display for RichCond {
 
 impl PartialEq for RichCond {
     fn eq(&self, other: &Self) -> bool {
-        util::vectors_are_equal(&self.branches, &other.branches)
+        util::vecs_eq(&self.branches, &other.branches)
             && util::optionals_are_equal(&self.ret_type_id, &other.ret_type_id)
     }
 }

@@ -199,8 +199,13 @@ impl Scope {
 /// Represents the current program stack and analysis state.
 pub struct ProgramContext {
     stack: VecDeque<Scope>,
+    /// The type ID that corresponds to the current `impl` block, if we're inside an `impl` block.
+    cur_impl_type_id: Option<TypeId>,
     errors: HashMap<Position, AnalyzeError>,
     warnings: HashMap<Position, AnalyzeWarning>,
+    /// Maps type IDs to mappings of member function name to member function signature.
+    type_member_fn_sigs: HashMap<TypeId, HashMap<String, RichFnSig>>,
+    /// Stores all resolved types.
     pub types: HashMap<TypeId, RichType>,
 }
 
@@ -217,8 +222,10 @@ impl ProgramContext {
 
         ProgramContext {
             stack: VecDeque::from([top_scope]),
+            cur_impl_type_id: None,
             errors: HashMap::new(),
             warnings: HashMap::new(),
+            type_member_fn_sigs: HashMap::new(),
             types: HashMap::new(),
         }
     }
@@ -294,6 +301,20 @@ impl ProgramContext {
             .add_resolved_type(id, resolved)
     }
 
+    /// Adds the member function signature `mem_fn_sig` to the given type in the program context.
+    /// Returns the existing member function signature if it has the type name and parent type as
+    /// (i.e. collides with) `mem_fn_sig`.
+    pub fn add_type_member_fn(&mut self, id: TypeId, mem_fn_sig: RichFnSig) -> Option<RichFnSig> {
+        match self.type_member_fn_sigs.get_mut(&id) {
+            Some(mem_fns) => mem_fns.insert(mem_fn_sig.name.clone(), mem_fn_sig),
+            None => {
+                self.type_member_fn_sigs
+                    .insert(id, HashMap::from([(mem_fn_sig.name.clone(), mem_fn_sig)]));
+                None
+            }
+        }
+    }
+
     /// Adds the external function signature to the context. If there was already a function with
     /// the same name, returns the old function signature.
     pub fn add_extern_fn(&mut self, sig: RichFnSig) -> Option<RichFnSig> {
@@ -354,6 +375,14 @@ impl ProgramContext {
         }
 
         None
+    }
+
+    /// Returns the member function with name `name` on the type with ID `id`, if one exists.
+    pub fn get_type_member_fn(&self, id: &TypeId, name: &str) -> Option<&RichFnSig> {
+        match self.type_member_fn_sigs.get(id) {
+            Some(member_fns) => member_fns.get(name),
+            None => None,
+        }
     }
 
     /// Attempts to locate the external function signature with the given name and returns it,
@@ -477,5 +506,15 @@ impl ProgramContext {
         }
 
         &None
+    }
+
+    /// Sets the type ID of the current `impl` block.
+    pub fn set_impl_type_id(&mut self, maybe_type_id: Option<TypeId>) {
+        self.cur_impl_type_id = maybe_type_id;
+    }
+
+    /// Returns the type ID of the current `impl` block, or `None` if we're not in an `impl` block.
+    pub fn get_impl_type_id(&self) -> Option<&TypeId> {
+        self.cur_impl_type_id.as_ref()
     }
 }

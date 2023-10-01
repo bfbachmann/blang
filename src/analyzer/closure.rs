@@ -36,7 +36,7 @@ impl fmt::Display for RichClosure {
 
 impl PartialEq for RichClosure {
     fn eq(&self, other: &Self) -> bool {
-        util::vectors_are_equal(&self.statements, &other.statements)
+        util::vecs_eq(&self.statements, &other.statements)
             && util::optionals_are_equal(&self.ret_type_id, &other.ret_type_id)
     }
 }

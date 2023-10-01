@@ -1,4 +1,3 @@
-
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -28,7 +27,7 @@ impl fmt::Display for Conditional {
 
 impl PartialEq for Conditional {
     fn eq(&self, other: &Self) -> bool {
-        util::vectors_are_equal(&self.branches, &other.branches)
+        util::vecs_eq(&self.branches, &other.branches)
             && self.start_pos == other.start_pos
             && self.end_pos == other.end_pos
     }

@@ -30,6 +30,7 @@ pub enum Type {
     Function(Box<FunctionSignature>),
     /// Represents a named user-defined (i.e. non-primitive) type.
     Unresolved(UnresolvedType),
+    This(UnresolvedType),
 }
 
 impl PartialEq for Type {
@@ -39,7 +40,8 @@ impl PartialEq for Type {
             | (Type::Str(_), Type::Str(_))
             | (Type::I64(_), Type::I64(_))
             | (Type::UnsafePtr(_), Type::UnsafePtr(_))
-            | (Type::USize(_), Type::USize(_)) => true,
+            | (Type::USize(_), Type::USize(_))
+            | (Type::This(_), Type::This(_)) => true,
             (Type::Function(f1), Type::Function(f2)) => {
                 if f1.args.len() != f2.args.len() {
                     false
@@ -74,6 +76,7 @@ impl fmt::Display for Type {
             Type::Struct(s) => write!(f, "{}", s),
             Type::Tuple(t) => write!(f, "{}", t),
             Type::Unresolved(u) => write!(f, "{}", u.name),
+            Type::This(_) => write!(f, "{}", TokenKind::ThisType),
         }
     }
 }
@@ -90,6 +93,7 @@ impl Locatable for Type {
             Type::Tuple(tuple_type) => tuple_type.start_pos(),
             Type::Function(fn_sig) => fn_sig.start_pos(),
             Type::Unresolved(unresolved) => unresolved.start_pos(),
+            Type::This(t) => t.start_pos(),
         }
     }
 
@@ -104,6 +108,7 @@ impl Locatable for Type {
             Type::Tuple(tuple_type) => tuple_type.end_pos(),
             Type::Function(fn_sig) => fn_sig.end_pos(),
             Type::Unresolved(unresolved) => unresolved.end_pos(),
+            Type::This(t) => t.end_pos(),
         }
     }
 }
@@ -237,5 +242,12 @@ impl Type {
     /// Creates a new unknown type with the given name.
     pub fn new_unknown(name: &str) -> Self {
         Type::Unresolved(UnresolvedType::new_with_default_pos(name))
+    }
+
+    /// Creates a new `This` type with default start and end positions.
+    pub fn this() -> Self {
+        Type::This(UnresolvedType::new_with_default_pos(
+            TokenKind::ThisType.to_string().as_str(),
+        ))
     }
 }

@@ -24,6 +24,7 @@ pub mod r#const;
 pub mod error;
 pub mod expr;
 pub mod func;
+pub mod r#impl;
 mod move_check;
 pub mod prog_context;
 pub mod program;

@@ -1,5 +1,3 @@
-
-
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -21,7 +19,7 @@ pub struct Closure {
 
 impl PartialEq for Closure {
     fn eq(&self, other: &Self) -> bool {
-        util::vectors_are_equal(&self.statements, &other.statements)
+        util::vecs_eq(&self.statements, &other.statements)
             && self.result == other.result
             && self.start_pos == other.start_pos
             && self.end_pos == other.end_pos

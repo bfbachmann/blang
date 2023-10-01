@@ -159,6 +159,20 @@ impl RichVar {
             None
         }
     }
+
+    /// Removes the last member on this member access chain, or does nothing if there are no
+    /// members.
+    pub fn without_last_member(mut self) -> Self {
+        if let Some(member_access) = &mut self.member_access {
+            if member_access.submember.is_none() {
+                self.member_access = None;
+            } else {
+                self.member_access = Some(self.member_access.unwrap().without_last_member());
+            }
+        }
+
+        self
+    }
 }
 
 /// Represents a member access on a variable or type.
@@ -203,6 +217,17 @@ impl RichMemberAccess {
                 tuple_type.type_ids.get(field_index)
             }
             _ => None,
+        };
+
+        // If we failed to find a field on this type with a matching name, check for a member
+        // function with a matching name.
+        let maybe_field_type_id = if maybe_field_type_id.is_none() {
+            match ctx.get_type_member_fn(type_id, member_name) {
+                Some(member_fn_sig) => Some(&member_fn_sig.type_id),
+                None => None,
+            }
+        } else {
+            maybe_field_type_id
         };
 
         // Error and return a placeholder value if we couldn't locate the member being accessed.
@@ -257,5 +282,19 @@ impl RichMemberAccess {
             Some(sub) => sub.get_last_member_name(),
             None => self.member_name.to_string(),
         }
+    }
+
+    /// Removes the last member on this member access chain, or does nothing if there is no
+    /// sub-member.
+    pub fn without_last_member(mut self) -> Self {
+        if let Some(sub) = &mut self.submember {
+            if sub.submember.is_none() {
+                self.submember = None;
+            } else {
+                self.submember = Some(Box::new(self.submember.unwrap().without_last_member()));
+            }
+        }
+
+        self
     }
 }

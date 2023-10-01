@@ -1,4 +1,3 @@
-
 use std::fmt;
 
 use crate::lexer::pos::{Locatable, Position};
@@ -71,8 +70,10 @@ impl Argument {
 
     /// Parses a function argument declaration. Expects token sequences of the forms
     ///
-    ///      <arg_name>: <arg_type>
-    ///      mut <arg_name>: <arg_type>
+    ///     <arg_name>: <arg_type>
+    ///     mut <arg_name>: <arg_type>
+    ///     this
+    ///     mut this
     ///
     /// where
     ///  - `arg_type` is the type of the argument
@@ -84,25 +85,37 @@ impl Argument {
         // The argument can optionally be declared as mutable, so check for "mut".
         let is_mut = Program::parse_optional(tokens, TokenKind::Mut).is_some();
 
-        // The first token should be the argument name.
-        let name = Program::parse_identifier(tokens)?;
+        // If the argument name is `this`, it doesn't need a type. Otherwise, it's a regular
+        // argument with a type.
+        if let Some(this_token) = Program::parse_optional(tokens, TokenKind::This) {
+            Ok(Argument::new(
+                this_token.to_string().as_str(),
+                Type::this(),
+                is_mut,
+                start_pos,
+                this_token.end.clone(),
+            ))
+        } else {
+            // The first token should be the argument name.
+            let name = Program::parse_identifier(tokens)?;
 
-        // The next token should be a colon.
-        Program::parse_expecting(tokens, TokenKind::Colon)?;
+            // The next token should be a colon.
+            Program::parse_expecting(tokens, TokenKind::Colon)?;
 
-        // The remaining tokens should form the argument type.
-        let arg_type = Type::from(tokens)?;
+            // The remaining tokens should form the argument type.
+            let arg_type = Type::from(tokens)?;
 
-        // Get the argument ending position in the source code.
-        let end_pos = arg_type.end_pos().clone();
+            // Get the argument ending position in the source code.
+            let end_pos = arg_type.end_pos().clone();
 
-        Ok(Argument::new(
-            name.as_str(),
-            arg_type,
-            is_mut,
-            start_pos,
-            end_pos,
-        ))
+            Ok(Argument::new(
+                name.as_str(),
+                arg_type,
+                is_mut,
+                start_pos,
+                end_pos,
+            ))
+        }
     }
 
     /// Parses an unnamed function argument declaration. Expects token sequences of the forms

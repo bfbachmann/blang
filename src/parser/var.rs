@@ -78,14 +78,13 @@ impl Var {
 
                 // Check if the next token is `.`. If so, we're accessing a member on this variable
                 // or type.
-                let mut member_access = None;
-                if let Some(&Token {
-                    kind: TokenKind::Dot,
-                    ..
-                }) = tokens.peek_next()
-                {
-                    member_access = Some(MemberAccess::from(tokens)?);
-                }
+                let member_access = match tokens.peek_next() {
+                    Some(&Token {
+                        kind: TokenKind::Dot,
+                        ..
+                    }) => Some(MemberAccess::from(tokens)?),
+                    _ => None,
+                };
 
                 Ok(Var {
                     var_name,
@@ -94,6 +93,30 @@ impl Var {
                     end_pos: end,
                 })
             }
+
+            Some(&Token {
+                kind: TokenKind::This,
+                start,
+                end,
+            }) => {
+                // Check if the next token is `.`. If so, we're accessing a member on this variable
+                // or type.
+                let member_access = match tokens.peek_next() {
+                    Some(&Token {
+                        kind: TokenKind::Dot,
+                        ..
+                    }) => Some(MemberAccess::from(tokens)?),
+                    _ => None,
+                };
+
+                Ok(Var {
+                    var_name: TokenKind::This.to_string(),
+                    member_access,
+                    start_pos: start,
+                    end_pos: end,
+                })
+            }
+
             Some(other) => Err(ParseError::new(
                 ErrorKind::ExpectedIdent,
                 format_code!("expected identifier, but found {}", other).as_str(),
@@ -101,6 +124,7 @@ impl Var {
                 other.start,
                 other.end,
             )),
+
             None => Err(ParseError::new(
                 ErrorKind::UnexpectedEOF,
                 "expected identifier, but found EOF",

@@ -223,7 +223,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // TODO: This will panic when accessing nested functions.
         let fn_val = self
             .module
-            .get_function(func.signature.name.as_str())
+            .get_function(func.signature.full_name().as_str())
             .unwrap();
         self.fn_value = Some(fn_val);
 
@@ -658,6 +658,10 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 // Nothing to do here. This is already handled in
                 // `ProgramCompiler::compile_program`.
             }
+            RichStatement::Impl(_) => {
+                // `impl` blocks should not occur inside functions.
+                unreachable!();
+            }
         };
 
         Ok(())
@@ -884,7 +888,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 .const_null()
                 .as_basic_value_enum(),
 
-            RichExprKind::StringLiteral(literal) => {
+            RichExprKind::StrLiteral(literal) => {
                 let char_type = self.ctx.i32_type();
 
                 // Check if this string literal already exists as a global. If not, create one.
@@ -892,7 +896,6 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                     global
                 } else {
                     let chars: Vec<u32> = literal.clone().chars().map(|c| c as u32).collect();
-
                     let array_type = char_type.array_type((chars.len()) as u32);
                     let array_vals: Vec<_> = chars
                         .iter()
@@ -1015,11 +1018,16 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// Compiles a function call, returning the result if one exists.
     fn compile_call(&mut self, call: &RichFnCall) -> Option<BasicValueEnum<'ctx>> {
-        // Get the function value from the module.
+        // Get the function value from the module using the fully-qualified function name.
         // TODO: get functions from variables.
+        let fn_sig = self
+            .types
+            .get(call.fn_var.get_type_id())
+            .unwrap()
+            .to_fn_sig();
         let ll_fn = self
             .module
-            .get_function(call.fn_var.var_name.as_str())
+            .get_function(fn_sig.full_name().as_str())
             .unwrap();
         let mut args: Vec<BasicMetadataValueEnum> = vec![];
 

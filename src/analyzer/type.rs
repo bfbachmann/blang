@@ -141,6 +141,23 @@ impl RichType {
     /// Analyzes and resolves the given type (if unresolved), stores the resolved type in the
     /// program context, and returns its type ID.
     pub fn analyze(ctx: &mut ProgramContext, typ: &Type) -> TypeId {
+        // If the type is `This`, just return the type ID that corresponds to the current `impl`
+        // block.
+        if let Type::This(this_type) = typ {
+            return match ctx.get_impl_type_id() {
+                Some(type_id) => type_id.clone(),
+                None => {
+                    ctx.add_err(AnalyzeError::new(
+                        ErrorKind::TypeNotDefined,
+                        format_code!("type {} is not defined", this_type.name).as_str(),
+                        this_type,
+                    ));
+
+                    TypeId::unknown()
+                }
+            };
+        }
+
         // Check if the type has already been resolved and, if so, just return its ID.
         let id = TypeId::from(typ.clone());
         if ctx.get_resolved_type(&id).is_some() {
@@ -191,6 +208,10 @@ impl RichType {
                 ));
 
                 return RichType::Unknown("<unknown>".to_string());
+            }
+
+            Type::This(_) => {
+                unreachable!()
             }
 
             Type::I64(_) => RichType::I64,
@@ -392,6 +413,15 @@ impl RichType {
             }
 
             RichType::Unknown(_) => 0,
+        }
+    }
+
+    /// Returns the function signature corresponding to this type. Panics if this type is not a
+    /// function type.
+    pub fn to_fn_sig(&self) -> &RichFnSig {
+        match self {
+            RichType::Function(fn_sig) => fn_sig,
+            _ => panic!("type {} is not a function", self),
         }
     }
 }

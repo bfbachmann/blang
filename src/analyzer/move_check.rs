@@ -10,6 +10,7 @@ use crate::analyzer::expr::RichExprKind;
 use crate::analyzer::func::{RichFn, RichFnCall, RichRet};
 use crate::analyzer::prog_context::ScopeKind;
 use crate::analyzer::program::RichProg;
+use crate::analyzer::r#impl::RichImpl;
 use crate::analyzer::r#struct::RichStructInit;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::statement::RichStatement;
@@ -314,6 +315,15 @@ impl<'a> MoveChecker<'a> {
             RichStatement::Closure(closure) => self.check_closure(closure),
 
             RichStatement::Conditional(cond) => self.check_cond(cond),
+
+            RichStatement::Impl(impl_) => self.check_impl(impl_),
+        }
+    }
+
+    /// Recursively checks all member functions inside an `impl` block.
+    fn check_impl(&mut self, impl_: &RichImpl) {
+        for mem_fn in &impl_.member_fns {
+            self.check_fn_decl(&mem_fn);
         }
     }
 

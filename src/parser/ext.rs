@@ -20,7 +20,7 @@ pub struct Extern {
 
 impl PartialEq for Extern {
     fn eq(&self, other: &Self) -> bool {
-        util::vectors_are_equal(&self.fn_sigs, &other.fn_sigs)
+        util::vecs_eq(&self.fn_sigs, &other.fn_sigs)
     }
 }
 

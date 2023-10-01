@@ -79,7 +79,7 @@ impl Display for StructType {
 
 impl PartialEq for StructType {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && util::vectors_are_equal(&self.fields, &other.fields)
+        self.name == other.name && util::vecs_eq(&self.fields, &other.fields)
     }
 }
 

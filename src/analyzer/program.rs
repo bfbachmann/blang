@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use colored::Colorize;
 
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::func::analyze_fn_sig;
+use crate::analyzer::func::{analyze_fn_sig, RichFnSig};
 use crate::analyzer::move_check::MoveChecker;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#struct::RichStructType;
@@ -68,7 +68,8 @@ impl RichProg {
                 Statement::FunctionDeclaration(_)
                 | Statement::ExternFns(_)
                 | Statement::Consts(_)
-                | Statement::StructDeclaration(_) => {
+                | Statement::StructDeclaration(_)
+                | Statement::Impl(_) => {
                     analyzed_statements.push(RichStatement::from(ctx, statement));
                 }
                 other => {
@@ -108,6 +109,7 @@ fn define_structs(ctx: &mut ProgramContext, prog: &Program) {
                     ));
                 }
             }
+
             _ => {}
         }
     }
@@ -166,6 +168,40 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
                 for sig in &ext.fn_sigs {
                     analyze_fn_sig(ctx, sig);
                 }
+            }
+
+            Statement::Impl(impl_) => {
+                // Set the current impl type ID on the program context so we can access it when
+                // resolving type `This`.
+                let type_id = TypeId::from(impl_.typ.clone());
+                ctx.set_impl_type_id(Some(type_id.clone()));
+
+                // Analyze each member function signature and record it as a member of this type
+                // in the program context.
+                for member_fn in &impl_.member_fns {
+                    let fn_sig = RichFnSig::from(ctx, &member_fn.signature);
+                    if ctx
+                        .get_type_member_fn(&type_id, fn_sig.name.as_str())
+                        .is_some()
+                    {
+                        ctx.add_err(AnalyzeError::new(
+                            ErrorKind::FunctionAlreadyDefined,
+                            format_code!(
+                                "function {} was already defined for type {}",
+                                member_fn.signature.name,
+                                type_id
+                            )
+                            .as_str(),
+                            &member_fn.signature,
+                        ));
+                    } else {
+                        ctx.add_type_member_fn(type_id.clone(), fn_sig);
+                    }
+                }
+
+                // Remove the current impl type ID from the program context now that we're done
+                // checking the function signatures inside the impl block.
+                ctx.set_impl_type_id(None);
             }
 
             _ => {}

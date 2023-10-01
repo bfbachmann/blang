@@ -70,7 +70,7 @@ impl Clone for TupleType {
 
 impl PartialEq for TupleType {
     fn eq(&self, other: &Self) -> bool {
-        util::vectors_are_equal(&self.field_types, &other.field_types)
+        util::vecs_eq(&self.field_types, &other.field_types)
     }
 }
 
@@ -202,7 +202,7 @@ impl Clone for TupleInit {
 
 impl PartialEq for TupleInit {
     fn eq(&self, other: &Self) -> bool {
-        util::vectors_are_equal(&self.values, &other.values)
+        util::vecs_eq(&self.values, &other.values)
     }
 }
 

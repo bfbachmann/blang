@@ -2,6 +2,8 @@ use std::collections::HashSet;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
+use colored::Colorize;
+
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -59,7 +61,7 @@ impl fmt::Display for FunctionSignature {
 impl PartialEq for FunctionSignature {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
-            && util::vectors_are_equal(&self.args, &other.args)
+            && util::vecs_eq(&self.args, &other.args)
             && self.return_type == other.return_type
     }
 }
@@ -274,7 +276,8 @@ impl FunctionSignature {
                         | TokenKind::Fn
                         | TokenKind::Identifier(_)
                         | TokenKind::Struct
-                        | TokenKind::Mut,
+                        | TokenKind::Mut
+                        | TokenKind::This,
                     ..
                 }) => {
                     // The next few tokens represent an argument.
@@ -303,7 +306,11 @@ impl FunctionSignature {
                 None => {
                     return Err(ParseError::new(
                         ErrorKind::UnexpectedEOF,
-                        r#"expected argument or ")", but found EOF"#,
+                        format_code!(
+                            r#"expected argument or {}, but found EOF"#,
+                            TokenKind::RightParen
+                        )
+                        .as_str(),
                         None,
                         // TODO: These positions are technically wrong.
                         start_pos,
@@ -314,7 +321,12 @@ impl FunctionSignature {
                 Some(other) => {
                     return Err(ParseError::new_with_token(
                         ErrorKind::ExpectedArgOrEndOfArgs,
-                        format!(r#"expected argument or ")", but found "{}""#, other).as_str(),
+                        format_code!(
+                            r#"expected argument or {}, but found {}"#,
+                            TokenKind::RightParen,
+                            other
+                        )
+                        .as_str(),
                         other.clone(),
                     ))
                 }

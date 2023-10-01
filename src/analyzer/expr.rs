@@ -26,7 +26,7 @@ pub enum RichExprKind {
     I64Literal(i64),
     UnsafeNull,
     USizeLiteral(u64),
-    StringLiteral(String),
+    StrLiteral(String),
     StructInit(RichStructInit),
     TupleInit(RichTupleInit),
     FunctionCall(RichFnCall),
@@ -44,7 +44,7 @@ impl fmt::Display for RichExprKind {
             RichExprKind::I64Literal(i) => write!(f, "{}", i),
             RichExprKind::UnsafeNull => write!(f, "unsafe_null"),
             RichExprKind::USizeLiteral(usz) => write!(f, "{}", usz),
-            RichExprKind::StringLiteral(s) => write!(f, "{}", s),
+            RichExprKind::StrLiteral(s) => write!(f, "{}", s),
             RichExprKind::StructInit(s) => write!(f, "{}", s),
             RichExprKind::TupleInit(t) => write!(f, "{}", t),
             RichExprKind::FunctionCall(call) => write!(f, "{}", call),
@@ -67,7 +67,7 @@ impl PartialEq for RichExprKind {
             (RichExprKind::BoolLiteral(b1), RichExprKind::BoolLiteral(b2)) => b1 == b2,
             (RichExprKind::I64Literal(i1), RichExprKind::I64Literal(i2)) => i1 == i2,
             (RichExprKind::UnsafeNull, RichExprKind::UnsafeNull) => true,
-            (RichExprKind::StringLiteral(s1), RichExprKind::StringLiteral(s2)) => s1 == s2,
+            (RichExprKind::StrLiteral(s1), RichExprKind::StrLiteral(s2)) => s1 == s2,
             (RichExprKind::StructInit(s1), RichExprKind::StructInit(s2)) => s1 == s2,
             (RichExprKind::TupleInit(t1), RichExprKind::TupleInit(t2)) => t1 == t2,
             (RichExprKind::FunctionCall(f1), RichExprKind::FunctionCall(f2)) => f1 == f2,
@@ -94,7 +94,7 @@ impl RichExprKind {
             | RichExprKind::I64Literal(_)
             | RichExprKind::UnsafeNull
             | RichExprKind::USizeLiteral(_)
-            | RichExprKind::StringLiteral(_) => true,
+            | RichExprKind::StrLiteral(_) => true,
 
             // Unary and binary operations are constants if they only operate on constants.
             RichExprKind::UnaryOperation(_, expr) => expr.kind.is_const(),
@@ -175,7 +175,7 @@ impl RichExpr {
             },
 
             Expression::StrLiteral(s) => RichExpr {
-                kind: RichExprKind::StringLiteral(s.value),
+                kind: RichExprKind::StrLiteral(s.value),
                 type_id: TypeId::str(),
             },
 
@@ -371,6 +371,15 @@ impl RichExpr {
         }
     }
 
+    /// Creates a new expression with the value of the given variable.
+    pub fn from_var(var: RichVar) -> Self {
+        let type_id = var.get_type_id().clone();
+        RichExpr {
+            kind: RichExprKind::Variable(var),
+            type_id,
+        }
+    }
+
     /// Creates a new zero-valued expression of the given type.
     pub fn new_zero_value(ctx: &mut ProgramContext, typ: Type) -> Self {
         let type_id = TypeId::from(typ.clone());
@@ -381,7 +390,7 @@ impl RichExpr {
             },
 
             Type::Str(_) => RichExpr {
-                kind: RichExprKind::StringLiteral("".to_string()),
+                kind: RichExprKind::StrLiteral("".to_string()),
                 type_id,
             },
 
@@ -423,6 +432,7 @@ impl RichExpr {
                         args: vec![],
                         ret_type_id: None,
                         type_id: TypeId::from(func_type.clone()),
+                        impl_type_id: None,
                     },
                     body: RichClosure {
                         statements: vec![],
@@ -445,6 +455,12 @@ impl RichExpr {
                 kind: RichExprKind::Unknown,
                 type_id,
             },
+
+            Type::This(_) => {
+                // This should never happen because type `This` is always resolved to a valid type
+                // inside `impl` blocks.
+                unreachable!()
+            }
         }
     }
 
@@ -576,7 +592,7 @@ mod tests {
         assert_eq!(
             result,
             RichExpr {
-                kind: RichExprKind::StringLiteral(String::from("test")),
+                kind: RichExprKind::StrLiteral(String::from("test")),
                 type_id: TypeId::str()
             }
         );
@@ -649,6 +665,7 @@ mod tests {
                 }],
                 ret_type_id: Some(TypeId::str()),
                 type_id: TypeId::from(Type::Function(Box::new(fn_sig.clone()))),
+                impl_type_id: None,
             },
             body: RichClosure {
                 statements: vec![],
@@ -712,6 +729,7 @@ mod tests {
                 args: vec![],
                 ret_type_id: None,
                 type_id: TypeId::from(Type::Function(Box::new(fn_sig.clone()))),
+                impl_type_id: None,
             },
             body: RichClosure {
                 statements: vec![],
@@ -804,6 +822,7 @@ mod tests {
                 ],
                 ret_type_id: Some(TypeId::bool()),
                 type_id: TypeId::from(Type::Function(Box::new(fn_sig.clone()))),
+                impl_type_id: None,
             },
             body: RichClosure {
                 statements: vec![],
@@ -897,6 +916,7 @@ mod tests {
                 }],
                 ret_type_id: Some(TypeId::bool()),
                 type_id: TypeId::from(Type::Function(Box::new(fn_sig.clone()))),
+                impl_type_id: None,
             },
             body: RichClosure {
                 statements: vec![],
@@ -975,7 +995,7 @@ mod tests {
                     }),
                     Operator::Add,
                     Box::new(RichExpr {
-                        kind: RichExprKind::StringLiteral("asdf".to_string()),
+                        kind: RichExprKind::StrLiteral("asdf".to_string()),
                         type_id: TypeId::str(),
                     })
                 ),
@@ -1006,7 +1026,7 @@ mod tests {
             RichExpr {
                 kind: RichExprKind::BinaryOperation(
                     Box::new(RichExpr {
-                        kind: RichExprKind::StringLiteral("asdf".to_string()),
+                        kind: RichExprKind::StrLiteral("asdf".to_string()),
                         type_id: TypeId::str(),
                     }),
                     Operator::Add,
