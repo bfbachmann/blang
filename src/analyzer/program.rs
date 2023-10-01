@@ -1107,4 +1107,32 @@ mod tests {
             })
         ))
     }
+
+    #[test]
+    fn duplicate_member_fn() {
+        let result = analyze_prog(
+            r#"
+            struct T {
+                value: i64
+            }
+            
+            impl T {
+                fn get_value(this) ~ i64 {
+                    return this.value
+                }
+            }
+            
+            impl T {
+                fn get_value() {}
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::FunctionAlreadyDefined,
+                ..
+            })
+        ))
+    }
 }

@@ -1,0 +1,33 @@
+extern fn exit(code: i64)
+
+fn assert(b: bool, code: i64) {
+    if !b {
+        exit(code)
+    }
+}
+
+struct T {
+    value: i64
+}
+
+impl T {
+    fn get_value(this) ~ i64 {
+        return this.value
+    }
+}
+
+impl i64 {
+    fn is_even(this) ~ bool {
+        return this % 2 == 0
+    }
+}
+
+fn main() {
+    let t = T{value: 23}
+    assert(t.get_value() == 23, 1)
+    
+    let two = 2
+    assert(two.is_even(), 2)
+
+    exit(0)
+}

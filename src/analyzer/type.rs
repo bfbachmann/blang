@@ -472,6 +472,7 @@ mod tests {
                         Some(Type::str())
                     )
                 ))),
+                impl_type_id: None,
             })),
             RichType::Function(Box::new(RichFnSig {
                 name: "test_func".to_string(),
@@ -488,6 +489,7 @@ mod tests {
                         Some(Type::str())
                     )
                 ))),
+                impl_type_id: None,
             }))
         )
     }
