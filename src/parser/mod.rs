@@ -300,7 +300,8 @@ mod tests {
     fn parse_function_call() {
         let tokens =
             Token::tokenize_line(r#"do_thing("one", "two", true)"#, 1).expect("should not error");
-        let result = FunctionCall::from(&mut Stream::from(tokens)).expect("should not error");
+        let result =
+            FunctionCall::from_single(&mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
             FunctionCall::new(
@@ -336,15 +337,15 @@ mod tests {
         assert!(matches!(
             result,
             Err(ParseError {
-                kind: ErrorKind::ExpectedExprOrCloseParen,
+                kind: ErrorKind::ExpectedBinOpOrEndOfExpr,
                 message: _,
                 token: Some(Token {
-                    kind: TokenKind::Comma,
-                    start: Position { line: 1, col: 14 },
-                    end: Position { line: 1, col: 15 },
+                    kind: TokenKind::LeftParen,
+                    start: Position { line: 1, col: 13 },
+                    end: Position { line: 1, col: 14 },
                 }),
-                start_pos: Position { line: 1, col: 14 },
-                end_pos: Position { line: 1, col: 15 },
+                start_pos: Position { line: 1, col: 13 },
+                end_pos: Position { line: 1, col: 14 },
             })
         ));
     }

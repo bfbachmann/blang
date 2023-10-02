@@ -70,11 +70,27 @@ impl RichVar {
     /// Attempts to analyze the variable (including member accesses). If `include_fns` is
     /// `true`, functions and extern functions will also be searched for the variable name.
     /// Otherwise, only variables will be searched.
-    pub fn from(ctx: &mut ProgramContext, var: &Var, include_fns: bool) -> Self {
+    pub fn from(
+        ctx: &mut ProgramContext,
+        var: &Var,
+        include_fns: bool,
+        maybe_impl_type_id: Option<&TypeId>,
+    ) -> Self {
         // Find the type ID for the variable or member being accessed.
         // Return a placeholder value if we failed to resolve the variable type ID.
-        let maybe_type_id =
+        let mut maybe_type_id =
             RichVar::get_type_id_by_var_name(ctx, var.var_name.as_str(), include_fns);
+        if maybe_type_id.is_none() && include_fns {
+            // We could not find the variable or function with the given name, so if there is
+            // an impl_type_id, check if this function is defined as a member function on
+            // that type.
+            if let Some(impl_type_id) = maybe_impl_type_id {
+                if let Some(mem_fn) = ctx.get_type_member_fn(impl_type_id, var.var_name.as_str()) {
+                    maybe_type_id = Some(mem_fn.type_id.clone());
+                }
+            }
+        };
+
         let type_id = match maybe_type_id {
             Some(t) => t,
             None => {

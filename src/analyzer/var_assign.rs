@@ -31,7 +31,7 @@ impl RichVarAssign {
         let rich_expr = RichExpr::from(ctx, assign.value.clone());
 
         // Make sure the variable being assigned to exists and is mutable.
-        let rich_var = RichVar::from(ctx, &assign.var, false);
+        let rich_var = RichVar::from(ctx, &assign.var, false, None);
         let var_name = assign.var.var_name.clone();
         match ctx.get_var(var_name.as_str()) {
             Some(var) => {

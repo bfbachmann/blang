@@ -17,8 +17,12 @@ impl T {
 }
 
 impl i64 {
-    fn is_even(this) ~ bool {
-        return this % 2 == 0
+    fn mul(this, v: i64) ~ i64 {
+        return this * v
+    }
+
+    fn add(this, v: i64) ~ i64 {
+        return this + v
     }
 }
 
@@ -27,7 +31,7 @@ fn main() {
     assert(t.get_value() == 23, 1)
     
     let two = 2
-    assert(two.is_even(), 2)
+    assert(two.mul(5).add(10).add(1) == 21, 2)
 
     exit(0)
 }

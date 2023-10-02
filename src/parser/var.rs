@@ -44,7 +44,6 @@ impl Locatable for Var {
 
 impl Var {
     /// Creates a new variable.
-    #[cfg(test)]
     pub fn new(var_name: &str, start_pos: Position, end_pos: Position) -> Self {
         Var {
             var_name: var_name.to_string(),

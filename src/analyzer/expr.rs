@@ -151,7 +151,7 @@ impl RichExpr {
     pub fn from(ctx: &mut ProgramContext, expr: Expression) -> RichExpr {
         match expr {
             Expression::Variable(ref var) => {
-                let rich_var = RichVar::from(ctx, var, true);
+                let rich_var = RichVar::from(ctx, var, true, None);
                 let type_id = rich_var.get_type_id().clone();
                 RichExpr {
                     kind: RichExprKind::Variable(rich_var),

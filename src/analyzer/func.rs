@@ -267,9 +267,17 @@ impl RichFnCall {
             .map(|arg| RichExpr::from(ctx, arg.clone()))
             .collect();
 
+        // Get the type ID of the first argument so we can pass it as a hint to the variable
+        // resolver. The variable resolver can use it as a means of locating member functions
+        // for types. This is necessary for chained method calls.
+        let maybe_impl_type_id = match passed_args.front() {
+            Some(arg) => Some(&arg.type_id),
+            None => None,
+        };
+
         // Make sure the function exists, either as a fully analyzed function, an external function
         // signature, or a variable.
-        let rich_fn_var = RichVar::from(ctx, &call.fn_var, true);
+        let rich_fn_var = RichVar::from(ctx, &call.fn_var, true, maybe_impl_type_id);
         let var_type = ctx.get_resolved_type(rich_fn_var.get_type_id()).unwrap();
         let fn_sig = match var_type {
             RichType::Function(fn_sig) => fn_sig,

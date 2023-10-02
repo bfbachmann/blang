@@ -168,7 +168,7 @@ impl FunctionCall {
         })
     }
 
-    /// Parses function calls. Expects token sequences of the form
+    /// Parse a single (i.e. not chained) function call. Expects token sequences of the form
     ///
     ///     <fn_var>(<arg>, ...)
     ///
@@ -176,13 +176,86 @@ impl FunctionCall {
     ///  - `fn_var` is the name of the function being called or a chained member access ending in
     ///     the function member (e.g `var.field_member.fn_member()`, see `Var::from`).
     ///  - `arg` is some expression that evaluates to the argument value
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+    pub fn from_single(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // The first token should be the function identifier (either just a function name or a
         // member access). We parse this the same way we parse a regular variable.
         let fn_var = Var::from(tokens)?;
 
         // Parse the function arguments.
         FunctionCall::from_args(tokens, fn_var)
+    }
+
+    /// Parses a chain of function calls. Expects token sequences of the forms
+    ///
+    ///     <var>()
+    ///     <var>()()...
+    ///     <var>().<fn_call>...
+    ///
+    /// where
+    ///  - `var` is any variable that is a function (see `Var::from`)
+    ///  - `<fn_call>` is any series of function calls accepted by this function.
+    ///
+    /// The first example is a single function call. The second is one where the return type
+    /// of the first call in the chain is itself a function that is being called. The third is one
+    /// where chained calls are being made on some member of the return value of the first call.
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+        // Parse the first function call.
+        let mut calls = vec![FunctionCall::from_single(tokens)?];
+
+        // Try parse chained function calls after the first. There may be none.
+        loop {
+            match tokens.peek_next() {
+                // The next function may be called on a member of the return value of the last one,
+                // in which case we expect the next token to be `.`.
+                Some(Token {
+                    kind: TokenKind::Dot,
+                    ..
+                }) => {
+                    tokens.next();
+                    calls.push(FunctionCall::from_single(tokens)?);
+                }
+
+                // The next function may be called directly on the return value of the last one
+                // if the return value is a function. In this case, we expect the next token to be
+                // `(`.
+                Some(Token {
+                    kind: TokenKind::LeftParen,
+                    ..
+                }) => {
+                    let token = tokens.next().unwrap();
+                    let start_pos = token.start;
+                    let end_pos = token.end;
+
+                    calls.push(FunctionCall::from_args(
+                        tokens,
+                        Var::new("", start_pos, end_pos),
+                    )?);
+                }
+
+                // If the token is anything else, we assume we're done checking the call chain.
+                _ => {
+                    break;
+                }
+            };
+        }
+
+        // Convert the chain of calls into nested calls and return the outermost call.
+        let mut maybe_last_call: Option<FunctionCall> = None;
+        while !calls.is_empty() {
+            // Get the next call at the front of the chain.
+            let mut call = calls.remove(0);
+
+            // Add the return value of the last call as the first argument of this call.
+            if let Some(last_call) = maybe_last_call {
+                call.args.insert(0, Expression::FunctionCall(last_call));
+            }
+
+            // Track the result of this call so it can be passed as the first argument of the next
+            // one, or returned if this is the last call in the chain.
+            maybe_last_call = Some(call);
+        }
+
+        Ok(maybe_last_call.unwrap())
     }
 
     /// Returns true if the function call is directly to a function (i.e. doesn't happen via member

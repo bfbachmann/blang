@@ -67,7 +67,7 @@ impl fmt::Display for Expression {
             Expression::I64Literal(i) => write!(f, "{}", i),
             Expression::UnsafeNull(unsafe_null) => write!(f, "{}", unsafe_null),
             Expression::StrLiteral(s) => write!(f, "{}", s),
-            Expression::FunctionCall(fn_call) => write!(f, "{}", fn_call),
+            Expression::FunctionCall(chain) => write!(f, "{}", chain),
             Expression::AnonFunction(func) => write!(f, "{}", func),
             Expression::UnaryOperation(op, expr) => write!(f, "{}{}", op, expr),
             Expression::BinaryOperation(left_expr, op, right_expr) => {
@@ -202,54 +202,21 @@ impl Expression {
                 kind: TokenKind::Identifier(_),
                 ..
             }) => {
-                match tokens.peek_ahead(1) {
-                    // If the token is `(`, it's a function call.
-                    Some(&Token {
-                        kind: TokenKind::LeftParen,
-                        ..
-                    }) => {
-                        let call = FunctionCall::from(tokens)?;
-                        Ok(Some(Expression::FunctionCall(call)))
-                    }
-
-                    // If the token is `{`, try parse the expression as struct initialization. If
-                    // it's not valid struct initialization, we'll assume it's a variable value.
-                    Some(&Token {
-                        kind: TokenKind::LeftBrace,
-                        ..
-                    }) => {
-                        let cursor = tokens.cursor();
-                        match StructInit::from(tokens) {
-                            Ok(struct_init) => Ok(Some(Expression::StructInit(struct_init))),
-                            Err(_) => {
-                                // Restore the parse cursor to before we tried to parse the struct
-                                // init.
-                                tokens.set_cursor(cursor);
-                                let var = Var::from(tokens)?;
-                                Ok(Some(Expression::Variable(var)))
-                            }
-                        }
-                    }
-
-                    // If the next token is anything else, we'll assume it's a variable value,
-                    // variable member access, or a function call on a member.
-                    _ => {
-                        let var = Var::from(tokens)?;
-
-                        // If the next token is `(`, we'll assume this is a function call on a
-                        // member.
-                        if let Some(Token {
-                            kind: TokenKind::LeftParen,
-                            ..
-                        }) = tokens.peek_next()
-                        {
-                            let call = FunctionCall::from_args(tokens, var)?;
-                            Ok(Some(Expression::FunctionCall(call)))
-                        } else {
-                            Ok(Some(Expression::Variable(var)))
-                        }
-                    }
+                // Try parse the token sequence as a function call first.
+                let cursor = tokens.cursor();
+                if let Ok(call) = FunctionCall::from(tokens) {
+                    return Ok(Some(Expression::FunctionCall(call)));
                 }
+
+                // It's not a call chain. Try parse it as struct initialization.
+                tokens.set_cursor(cursor);
+                if let Ok(struct_init) = StructInit::from(tokens) {
+                    return Ok(Some(Expression::StructInit(struct_init)));
+                }
+
+                // At this point it can only possibly be a variable. Otherwise, it's invalid code.
+                tokens.set_cursor(cursor);
+                Ok(Some(Expression::Variable(Var::from(tokens)?)))
             }
 
             // If the first token is a unary operator, we know the rest should be a composite
