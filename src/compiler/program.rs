@@ -458,6 +458,7 @@ mod tests {
             fn main() {
                 let i = 1
                 let v = i.add(10).sub(50).sub(2).add(-24)
+                i.sub(10).add(1)
             }
             "#,
         );
