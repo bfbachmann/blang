@@ -399,6 +399,7 @@ impl Statement {
                 },
             ) => {
                 // Parse the member access.
+                let cursor = tokens.cursor();
                 let var = Symbol::from(tokens)?;
 
                 // If the next token is `(`, it's a function call. Otherwise, it should be "=" for
@@ -407,13 +408,13 @@ impl Statement {
                     tokens,
                     HashSet::from([TokenKind::Equal, TokenKind::LeftParen]),
                 )? {
-                    _token @ Token {
+                    Token {
                         kind: TokenKind::LeftParen,
                         ..
                     } => {
                         // Parse the function arguments and return the function call.
-                        tokens.rewind(1);
-                        let fn_call = FunctionCall::from_args(tokens, var)?;
+                        tokens.set_cursor(cursor);
+                        let fn_call = FunctionCall::from(tokens)?;
                         Ok(Statement::FunctionCall(fn_call))
                     }
 
@@ -437,7 +438,7 @@ impl Statement {
             // If the tokens are anything else, we error because it's an invalid statement.
             (&ref token, _) => Err(ParseError::new_with_token(
                 ErrorKind::InvalidStatement,
-                "invalid statement",
+                "expected statement or expression",
                 token.clone(),
             )),
         }
