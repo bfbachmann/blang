@@ -59,7 +59,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::UnexpectedTypeName => write!(f, "unexpected type name"),
             ErrorKind::MemberNotDefined => write!(f, "undefined member access"),
             ErrorKind::InvalidStatement => write!(f, "invalid statement"),
-            ErrorKind::ImmutableAssignment => write!(f, "assignment to immutable variable"),
+            ErrorKind::ImmutableAssignment => write!(f, "assignment to immutable value"),
             ErrorKind::UseOfMovedValue => write!(f, "use of moved value"),
         }
     }

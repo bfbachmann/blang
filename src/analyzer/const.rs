@@ -5,7 +5,7 @@ use colored::Colorize;
 
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
-use crate::analyzer::prog_context::{ProgramContext, ScopedVar};
+use crate::analyzer::prog_context::{ProgramContext, ScopedSymbol};
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::parser::r#const::Const;
 use crate::parser::r#type::Type;
@@ -44,7 +44,7 @@ impl RichConst {
     /// declaration.
     pub fn from(ctx: &mut ProgramContext, const_decl: &Const) -> Self {
         // Make sure this const name doesn't collide with any other const names.
-        if ctx.get_var(const_decl.name.as_str()).is_some() {
+        if ctx.get_symbol(const_decl.name.as_str()).is_some() {
             ctx.add_err(AnalyzeError::new(
                 ErrorKind::ConstAlreadyDefined,
                 format_code!(
@@ -67,7 +67,7 @@ impl RichConst {
                     format_code!("{} is not a constant expression", value).as_str(),
                     const_decl,
                 )
-                .with_detail("Constant expressions cannot contain variables function calls."),
+                .with_detail("Constant expressions cannot contain variables or function calls."),
             );
 
             return RichConst::new_zero_value(ctx, const_decl.name.as_str());
@@ -103,7 +103,7 @@ impl RichConst {
         };
 
         // Add the constant to the program context so it can be used later.
-        ctx.add_var(ScopedVar::new_const(
+        ctx.add_symbol(ScopedSymbol::new_const(
             const_decl.name.as_str(),
             value.type_id.clone(),
         ));

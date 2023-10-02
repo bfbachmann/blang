@@ -18,9 +18,9 @@ use crate::parser::r#struct::StructInit;
 use crate::parser::sizeof::SizeOf;
 use crate::parser::str_lit::StrLit;
 use crate::parser::stream::Stream;
+use crate::parser::symbol::Symbol;
 use crate::parser::tuple::TupleInit;
 use crate::parser::unsafe_null::UnsafeNull;
-use crate::parser::var::Var;
 
 #[derive(Debug)]
 enum OutputNode {
@@ -43,7 +43,7 @@ impl OutputNode {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
     // Basic expressions.
-    Variable(Var),
+    Symbol(Symbol),
     BoolLiteral(BoolLit),
     I64Literal(I64Lit),
     UnsafeNull(UnsafeNull),
@@ -62,7 +62,7 @@ pub enum Expression {
 impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Expression::Variable(s) => write!(f, "{}", s),
+            Expression::Symbol(s) => write!(f, "{}", s),
             Expression::BoolLiteral(b) => write!(f, "{}", b),
             Expression::I64Literal(i) => write!(f, "{}", i),
             Expression::UnsafeNull(unsafe_null) => write!(f, "{}", unsafe_null),
@@ -89,7 +89,7 @@ impl fmt::Display for Expression {
 impl Locatable for Expression {
     fn start_pos(&self) -> &Position {
         match self {
-            Expression::Variable(var) => var.start_pos(),
+            Expression::Symbol(sym) => sym.start_pos(),
             Expression::BoolLiteral(bool_lit) => bool_lit.start_pos(),
             Expression::I64Literal(i64_lit) => i64_lit.start_pos(),
             Expression::UnsafeNull(unsafe_null) => unsafe_null.start_pos(),
@@ -106,7 +106,7 @@ impl Locatable for Expression {
 
     fn end_pos(&self) -> &Position {
         match self {
-            Expression::Variable(var) => var.end_pos(),
+            Expression::Symbol(sym) => sym.end_pos(),
             Expression::BoolLiteral(bool_lit) => bool_lit.end_pos(),
             Expression::I64Literal(i64_lit) => i64_lit.end_pos(),
             Expression::UnsafeNull(unsafe_null) => unsafe_null.end_pos(),
@@ -151,7 +151,7 @@ impl Expression {
     }
 
     /// Parses a basic expression. A basic expression can be any of the following:
-    ///  - an identifier representing a variable value
+    ///  - a symbol (see `Symbol::from`)
     ///  - a literal value (includes anonymous functions)
     ///  - a function call
     ///  - a unary operator followed by a composite expression (`<unary_op> <comp_expr>`)
@@ -192,12 +192,12 @@ impl Expression {
                 kind: TokenKind::This,
                 ..
             }) => {
-                let var = Var::from(tokens)?;
-                Ok(Some(Expression::Variable(var)))
+                let sym = Symbol::from(tokens)?;
+                Ok(Some(Expression::Symbol(sym)))
             }
 
             // If the first token is an identifier, the expression can be a function call,
-            // a variable value, or a struct initialization.
+            // a symbol, or a struct initialization.
             Some(Token {
                 kind: TokenKind::Identifier(_),
                 ..
@@ -214,9 +214,9 @@ impl Expression {
                     return Ok(Some(Expression::StructInit(struct_init)));
                 }
 
-                // At this point it can only possibly be a variable. Otherwise, it's invalid code.
+                // At this point it can only possibly be a symbol. Otherwise, it's invalid code.
                 tokens.set_cursor(cursor);
-                Ok(Some(Expression::Variable(Var::from(tokens)?)))
+                Ok(Some(Expression::Symbol(Symbol::from(tokens)?)))
             }
 
             // If the first token is a unary operator, we know the rest should be a composite
@@ -287,7 +287,7 @@ impl Expression {
 
     /// Parses a basic or composite expression from the given tokens. A basic expression can be any
     /// of the following:
-    ///  - an identifier representing a variable value
+    ///  - a symbol (see `Symbol::from`)
     ///  - a literal value
     ///  - a function call
     ///  - a unary operator followed by a composite expression (`<unary_op> <comp_expr>`)
@@ -594,7 +594,7 @@ mod tests {
     use crate::parser::op::Operator;
     use crate::parser::str_lit::StrLit;
     use crate::parser::stream::Stream;
-    use crate::parser::var::Var;
+    use crate::parser::symbol::Symbol;
 
     fn parse(raw: &str) -> Expression {
         let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
@@ -605,8 +605,8 @@ mod tests {
     fn parse_basic_var_value() {
         assert_eq!(
             parse(r#"my_var"#),
-            Expression::Variable(Var {
-                var_name: "my_var".to_string(),
+            Expression::Symbol(Symbol {
+                name: "my_var".to_string(),
                 member_access: None,
                 start_pos: Position::new(1, 1),
                 end_pos: Position::new(1, 7),
@@ -659,7 +659,7 @@ mod tests {
         assert_eq!(
             parse("call(3 * 2 - 2, other(!thing, 1 > var % 2))"),
             Expression::FunctionCall(FunctionCall::new(
-                Var::new("call", Position::new(1, 1), Position::new(1, 5)),
+                Symbol::new("call", Position::new(1, 1), Position::new(1, 5)),
                 vec![
                     Expression::BinaryOperation(
                         Box::new(Expression::BinaryOperation(
@@ -683,12 +683,12 @@ mod tests {
                         }))
                     ),
                     Expression::FunctionCall(FunctionCall::new(
-                        Var::new("other", Position::new(1, 17), Position::new(1, 22)),
+                        Symbol::new("other", Position::new(1, 17), Position::new(1, 22)),
                         vec![
                             Expression::UnaryOperation(
                                 Operator::Not,
-                                Box::new(Expression::Variable(Var {
-                                    var_name: "thing".to_string(),
+                                Box::new(Expression::Symbol(Symbol {
+                                    name: "thing".to_string(),
                                     member_access: None,
                                     start_pos: Position::new(1, 24),
                                     end_pos: Position::new(1, 29),
@@ -702,8 +702,8 @@ mod tests {
                                 })),
                                 Operator::GreaterThan,
                                 Box::new(Expression::BinaryOperation(
-                                    Box::new(Expression::Variable(Var {
-                                        var_name: "var".to_string(),
+                                    Box::new(Expression::Symbol(Symbol {
+                                        name: "var".to_string(),
                                         member_access: None,
                                         start_pos: Position::new(1, 35),
                                         end_pos: Position::new(1, 38),
@@ -788,8 +788,8 @@ mod tests {
                 Box::new(Expression::BinaryOperation(
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::BinaryOperation(
-                            Box::new(Expression::Variable(Var {
-                                var_name: "var".to_string(),
+                            Box::new(Expression::Symbol(Symbol {
+                                name: "var".to_string(),
                                 member_access: None,
                                 start_pos: Position::new(1, 2),
                                 end_pos: Position::new(1, 5),
@@ -811,7 +811,7 @@ mod tests {
                     Operator::Multiply,
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::FunctionCall(FunctionCall::new(
-                            Var::new("call", Position::new(2, 2), Position::new(2, 6)),
+                            Symbol::new("call", Position::new(2, 2), Position::new(2, 6)),
                             vec![Expression::BoolLiteral(BoolLit {
                                 value: true,
                                 start_pos: Position::new(2, 7),
@@ -950,8 +950,8 @@ mod tests {
             Expression::BinaryOperation(
                 Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
                 Operator::Multiply,
-                Box::new(Expression::Variable(Var {
-                    var_name: "x".to_string(),
+                Box::new(Expression::Symbol(Symbol {
+                    name: "x".to_string(),
                     member_access: None,
                     start_pos: Position::new(1, 2),
                     end_pos: Position::new(1, 3),
@@ -967,7 +967,7 @@ mod tests {
                 Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
                 Operator::Multiply,
                 Box::new(Expression::FunctionCall(FunctionCall::new(
-                    Var::new("f", Position::new(1, 2), Position::new(1, 3)),
+                    Symbol::new("f", Position::new(1, 2), Position::new(1, 3)),
                     vec![],
                     Position::new(1, 2),
                     Position::new(1, 5)
@@ -1080,8 +1080,8 @@ mod tests {
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
                         Operator::Multiply,
-                        Box::new(Expression::Variable(Var {
-                            var_name: "b".to_string(),
+                        Box::new(Expression::Symbol(Symbol {
+                            name: "b".to_string(),
                             member_access: None,
                             start_pos: Position::new(1, 4),
                             end_pos: Position::new(1, 5),

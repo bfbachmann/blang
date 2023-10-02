@@ -8,7 +8,7 @@ use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
 use crate::parser::stream::Stream;
-use crate::parser::var::Var;
+use crate::parser::symbol::Symbol;
 use crate::util;
 
 /// Represents the calling of a function.
@@ -16,7 +16,7 @@ use crate::util;
 pub struct FunctionCall {
     /// Should either be the name of the function, a function variable name, or an access of a
     /// variable's function member.
-    pub fn_var: Var,
+    pub fn_symbol: Symbol,
     pub args: Vec<Expression>,
     pub start_pos: Position,
     pub end_pos: Position,
@@ -24,7 +24,7 @@ pub struct FunctionCall {
 
 impl PartialEq for FunctionCall {
     fn eq(&self, other: &Self) -> bool {
-        self.fn_var == other.fn_var
+        self.fn_symbol == other.fn_symbol
             && util::vecs_eq(&self.args, &other.args)
             && self.start_pos == other.start_pos
             && self.end_pos == other.end_pos
@@ -33,7 +33,7 @@ impl PartialEq for FunctionCall {
 
 impl fmt::Display for FunctionCall {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}(", self.fn_var)?;
+        write!(f, "{}(", self.fn_symbol)?;
 
         for (i, arg) in self.args.iter().enumerate() {
             write!(f, "{}", arg)?;
@@ -62,7 +62,7 @@ impl FunctionCall {
     #[cfg(test)]
     pub fn new_with_default_pos(fn_name: &str, args: Vec<Expression>) -> Self {
         FunctionCall {
-            fn_var: Var::new_with_default_pos(fn_name),
+            fn_symbol: Symbol::new_with_default_pos(fn_name),
             args,
             start_pos: Position::default(),
             end_pos: Position::default(),
@@ -71,9 +71,14 @@ impl FunctionCall {
 
     /// Creates a new function call.
     #[cfg(test)]
-    pub fn new(fn_var: Var, args: Vec<Expression>, start_pos: Position, end_pos: Position) -> Self {
+    pub fn new(
+        fn_symbol: Symbol,
+        args: Vec<Expression>,
+        start_pos: Position,
+        end_pos: Position,
+    ) -> Self {
         FunctionCall {
-            fn_var,
+            fn_symbol,
             args,
             start_pos,
             end_pos,
@@ -82,9 +87,9 @@ impl FunctionCall {
 
     /// Parses function arguments from the given token sequence and returns a new function call
     /// with the parsed arguments and the given function reference.
-    pub fn from_args(tokens: &mut Stream<Token>, fn_var: Var) -> ParseResult<Self> {
+    pub fn from_args(tokens: &mut Stream<Token>, fn_symbol: Symbol) -> ParseResult<Self> {
         // Get the start position of the function call in the source file.
-        let start_pos = fn_var.start_pos().clone();
+        let start_pos = fn_symbol.start_pos().clone();
         let end_pos: Position;
 
         // The next token should be `(`.
@@ -161,7 +166,7 @@ impl FunctionCall {
         }
 
         Ok(FunctionCall {
-            fn_var,
+            fn_symbol,
             args,
             start_pos,
             end_pos,
@@ -170,29 +175,29 @@ impl FunctionCall {
 
     /// Parse a single (i.e. not chained) function call. Expects token sequences of the form
     ///
-    ///     <fn_var>(<arg>, ...)
+    ///     <fn_symbol>(<arg>, ...)
     ///
     /// where
-    ///  - `fn_var` is the name of the function being called or a chained member access ending in
-    ///     the function member (e.g `var.field_member.fn_member()`, see `Var::from`).
+    ///  - `fn_symbol` is the name of the function being called or a chained member access ending in
+    ///     the function member (e.g `symbol.field_member.fn_member()`, see `Symbol::from`).
     ///  - `arg` is some expression that evaluates to the argument value
     pub fn from_single(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // The first token should be the function identifier (either just a function name or a
         // member access). We parse this the same way we parse a regular variable.
-        let fn_var = Var::from(tokens)?;
+        let fn_symbol = Symbol::from(tokens)?;
 
         // Parse the function arguments.
-        FunctionCall::from_args(tokens, fn_var)
+        FunctionCall::from_args(tokens, fn_symbol)
     }
 
     /// Parses a chain of function calls. Expects token sequences of the forms
     ///
-    ///     <var>()
-    ///     <var>()()...
-    ///     <var>().<fn_call>...
+    ///     <symbol>()
+    ///     <symbol>()()...
+    ///     <symbol>().<fn_call>...
     ///
     /// where
-    ///  - `var` is any variable that is a function (see `Var::from`)
+    ///  - `symbol` is any symbol that is a function (see `Symbol::from`)
     ///  - `<fn_call>` is any series of function calls accepted by this function.
     ///
     /// The first example is a single function call. The second is one where the return type
@@ -228,7 +233,7 @@ impl FunctionCall {
 
                     calls.push(FunctionCall::from_args(
                         tokens,
-                        Var::new("", start_pos, end_pos),
+                        Symbol::new("", start_pos, end_pos),
                     )?);
                 }
 
@@ -261,6 +266,6 @@ impl FunctionCall {
     /// Returns true if the function call is directly to a function (i.e. doesn't happen via member
     /// access) and the called function has the given name.
     pub fn has_fn_name(&self, name: &str) -> bool {
-        self.fn_var.var_name == name && self.fn_var.member_access.is_none()
+        self.fn_symbol.name == name && self.fn_symbol.member_access.is_none()
     }
 }

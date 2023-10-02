@@ -1,5 +1,3 @@
-
-
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -7,12 +5,12 @@ use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
 use crate::parser::stream::Stream;
-use crate::parser::var::Var;
+use crate::parser::symbol::Symbol;
 
 /// Represents the assignment of some value (i.e. an expression) to a variable.
 #[derive(Debug, PartialEq, Clone)]
 pub struct VariableAssignment {
-    pub var: Var,
+    pub symbol: Symbol,
     pub value: Expression,
     start_pos: Position,
 }
@@ -29,9 +27,9 @@ impl Locatable for VariableAssignment {
 
 impl VariableAssignment {
     /// Creates a new variable assignment.
-    pub fn new(var: Var, value: Expression, start_pos: Position) -> Self {
+    pub fn new(symbol: Symbol, value: Expression, start_pos: Position) -> Self {
         VariableAssignment {
-            var,
+            symbol,
             value,
             start_pos,
         }
@@ -43,14 +41,14 @@ impl VariableAssignment {
     ///
     /// where
     ///  - `var` is the variable name or a field access (e.g. `var.field.subfield`, see
-    ///    `Var::from`)
+    ///    `Symbol::from`)
     ///  - `expr` is an expression representing the value assigned to the variable
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Get the starting position of the variable assignment.
         let start_pos = Program::current_position(tokens);
 
         // The next token should be an identifier representing the variable name.
-        let var = Var::from(tokens)?;
+        let var = Symbol::from(tokens)?;
 
         // The next token should be an assignment "=".
         Program::parse_expecting(tokens, TokenKind::Equal)?;

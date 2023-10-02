@@ -5,7 +5,7 @@ use colored::Colorize;
 
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
-use crate::analyzer::prog_context::{ProgramContext, ScopedVar};
+use crate::analyzer::prog_context::{ProgramContext, ScopedSymbol};
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::format_code;
 use crate::parser::var_dec::VariableDeclaration;
@@ -61,7 +61,7 @@ impl RichVarDecl {
         };
 
         // The variable expression is valid. Add it to the program context.
-        ctx.add_var(ScopedVar::new(
+        ctx.add_symbol(ScopedSymbol::new(
             var_decl.name.as_str(),
             rich_expr.type_id.clone(),
             var_decl.is_mut,
@@ -114,7 +114,7 @@ mod tests {
                 }
             }
         );
-        assert_eq!(ctx.get_var("my_var").unwrap().type_id, TypeId::str());
+        assert_eq!(ctx.get_symbol("my_var").unwrap().type_id, TypeId::str());
 
         let new_var_decl = VariableDeclaration::new(
             Some(Type::bool()),
@@ -138,7 +138,7 @@ mod tests {
                 }
             }
         );
-        assert_eq!(ctx.get_var("my_var").unwrap().type_id, TypeId::bool());
+        assert_eq!(ctx.get_symbol("my_var").unwrap().type_id, TypeId::bool());
     }
 
     #[test]

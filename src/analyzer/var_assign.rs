@@ -6,20 +6,20 @@ use colored::Colorize;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::var::RichVar;
+use crate::analyzer::symbol::RichSymbol;
 use crate::format_code;
 use crate::parser::var_assign::VariableAssignment;
 
 /// Represents a semantically valid and type-rich variable assignment.
 #[derive(Clone, PartialEq, Debug)]
 pub struct RichVarAssign {
-    pub var: RichVar,
+    pub symbol: RichSymbol,
     pub val: RichExpr,
 }
 
 impl fmt::Display for RichVarAssign {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{} = {}", self.var, self.val)
+        write!(f, "{} = {}", self.symbol, self.val)
     }
 }
 
@@ -31,16 +31,16 @@ impl RichVarAssign {
         let rich_expr = RichExpr::from(ctx, assign.value.clone());
 
         // Make sure the variable being assigned to exists and is mutable.
-        let rich_var = RichVar::from(ctx, &assign.var, false, None);
-        let var_name = assign.var.var_name.clone();
-        match ctx.get_var(var_name.as_str()) {
+        let symbol = RichSymbol::from(ctx, &assign.symbol, false, None);
+        let var_name = assign.symbol.name.clone();
+        match ctx.get_symbol(var_name.as_str()) {
             Some(var) => {
                 // The variable exists, so make sure it is mutable.
                 if var.is_const {
                     ctx.add_err(
                         AnalyzeError::new(
                             ErrorKind::ImmutableAssignment,
-                            format_code!("cannot assign to constant {}", assign.var).as_str(),
+                            format_code!("cannot assign to constant {}", assign.symbol).as_str(),
                             &assign,
                         )
                         .with_help(
@@ -55,7 +55,7 @@ impl RichVarAssign {
                     ctx.add_err(
                         AnalyzeError::new(
                             ErrorKind::ImmutableAssignment,
-                            format_code!("cannot assign to immutable variable {}", assign.var)
+                            format_code!("cannot assign to immutable variable {}", assign.symbol)
                                 .as_str(),
                             &assign,
                         )
@@ -74,14 +74,14 @@ impl RichVarAssign {
                 ));
 
                 return RichVarAssign {
-                    var: rich_var,
+                    symbol,
                     val: rich_expr,
                 };
             }
         };
 
         // Make sure the variable type matches the expression type.
-        let referenced_type = ctx.get_resolved_type(rich_var.get_type_id());
+        let referenced_type = ctx.get_resolved_type(symbol.get_type_id());
         match referenced_type {
             Some(typ) => {
                 // Make sure the variable type is the same as the expression type.
@@ -92,7 +92,7 @@ impl RichVarAssign {
                         format_code!(
                             "cannot assign value of type {} to variable {}",
                             &expr_type,
-                            format!("{}: {}", &assign.var, &typ),
+                            format!("{}: {}", &assign.symbol, &typ),
                         )
                         .as_str(),
                         &assign.value,
@@ -106,7 +106,7 @@ impl RichVarAssign {
         }
 
         RichVarAssign {
-            var: rich_var,
+            symbol,
             val: rich_expr,
         }
     }

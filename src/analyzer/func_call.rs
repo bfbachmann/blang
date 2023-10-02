@@ -8,21 +8,21 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#type::{RichType, TypeId};
-use crate::analyzer::var::RichVar;
+use crate::analyzer::symbol::RichSymbol;
 use crate::parser::func_call::FunctionCall;
 use crate::{format_code, util};
 
 /// Represents a fully type-resolved and analyzed function call.
 #[derive(Clone, Debug)]
 pub struct RichFnCall {
-    pub fn_var: RichVar,
+    pub fn_symbol: RichSymbol,
     pub args: Vec<RichExpr>,
     pub ret_type_id: Option<TypeId>,
 }
 
 impl fmt::Display for RichFnCall {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}(", self.fn_var)?;
+        write!(f, "{}(", self.fn_symbol)?;
 
         for (i, arg) in self.args.iter().enumerate() {
             write!(f, "{}", arg)?;
@@ -38,7 +38,7 @@ impl fmt::Display for RichFnCall {
 
 impl PartialEq for RichFnCall {
     fn eq(&self, other: &Self) -> bool {
-        self.fn_var == other.fn_var
+        self.fn_symbol == other.fn_symbol
             && util::vecs_eq(&self.args, &other.args)
             && util::optionals_are_equal(&self.ret_type_id, &other.ret_type_id)
     }
@@ -75,22 +75,22 @@ impl RichFnCall {
 
         // Make sure the function exists, either as a fully analyzed function, an external function
         // signature, or a variable.
-        let rich_fn_var = RichVar::from(ctx, &call.fn_var, true, maybe_impl_type_id);
-        let var_type = ctx.get_resolved_type(rich_fn_var.get_type_id()).unwrap();
+        let rich_fn_symbol = RichSymbol::from(ctx, &call.fn_symbol, true, maybe_impl_type_id);
+        let var_type = ctx.get_resolved_type(rich_fn_symbol.get_type_id()).unwrap();
 
         // Try to locate the function signature for this function call. If it's a call on a type
         // member function we'll look up the function using the type ID. Otherwise, we just extract
         // the function signature from the variable type, as it should be a function type.
-        let fn_sig = if rich_fn_var.is_type {
-            let method_name = rich_fn_var.get_last_member_name();
-            match ctx.get_type_member_fn(&rich_fn_var.var_type_id, method_name.as_str()) {
+        let fn_sig = if rich_fn_symbol.is_type {
+            let method_name = rich_fn_symbol.get_last_member_name();
+            match ctx.get_type_member_fn(&rich_fn_symbol.parent_type_id, method_name.as_str()) {
                 Some(fn_sig) => fn_sig,
                 None => {
                     errors.push(AnalyzeError::new(
                         ErrorKind::MismatchedTypes,
                         format_code!(
                             "type {} has no member function {}",
-                            rich_fn_var.var_name,
+                            rich_fn_symbol.name,
                             method_name
                         )
                         .as_str(),
@@ -98,7 +98,7 @@ impl RichFnCall {
                     ));
 
                     return RichFnCall {
-                        fn_var: rich_fn_var,
+                        fn_symbol: rich_fn_symbol,
                         args: vec![],
                         ret_type_id: Some(TypeId::unknown()),
                     };
@@ -116,7 +116,7 @@ impl RichFnCall {
                     ));
 
                     return RichFnCall {
-                        fn_var: rich_fn_var,
+                        fn_symbol: rich_fn_symbol,
                         args: vec![],
                         ret_type_id: Some(TypeId::unknown()),
                     };
@@ -129,17 +129,17 @@ impl RichFnCall {
 
         // If this function takes the special argument `this` and was not called directly via its
         // fully-qualified name, add the special `this` argument.
-        let maybe_this = rich_fn_var.clone().without_last_member();
+        let maybe_this = rich_fn_symbol.clone().without_last_member();
         let called_on_this = fn_sig.impl_type_id.is_some()
             && maybe_this.get_type_id() == fn_sig.impl_type_id.as_ref().unwrap()
-            && !rich_fn_var.is_type;
+            && !rich_fn_symbol.is_type;
 
         // If the function call is to an instance method, make sure the method takes `this` as its
         // first argument.
         if called_on_this {
             if fn_sig.takes_this() {
                 // Add `this` as the first argument since the method is being called on it.
-                passed_args.push_front(RichExpr::from_var(maybe_this));
+                passed_args.push_front(RichExpr::from_symbol(maybe_this));
             } else {
                 // This is a call to a method that does not take `this` as its first argument.
                 errors.push(
@@ -216,7 +216,7 @@ impl RichFnCall {
         }
 
         RichFnCall {
-            fn_var: rich_fn_var,
+            fn_symbol: rich_fn_symbol,
             args: passed_args.into(),
             ret_type_id: ret_type,
         }

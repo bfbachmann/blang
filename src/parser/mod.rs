@@ -32,13 +32,13 @@ pub mod str;
 pub mod str_lit;
 pub mod stream;
 pub mod r#struct;
+pub mod symbol;
 pub mod tuple;
 pub mod r#type;
 pub mod unresolved;
 pub mod unsafe_null;
 pub mod unsafeptr;
 pub mod usize;
-pub mod var;
 pub mod var_assign;
 pub mod var_dec;
 
@@ -70,7 +70,7 @@ mod tests {
     use crate::parser::str::StrType;
     use crate::parser::str_lit::StrLit;
     use crate::parser::stream::Stream;
-    use crate::parser::var::Var;
+    use crate::parser::symbol::Symbol;
     use crate::parser::var_dec::VariableDeclaration;
 
     #[test]
@@ -305,7 +305,7 @@ mod tests {
         assert_eq!(
             result,
             FunctionCall::new(
-                Var::new("do_thing", Position::new(1, 1), Position::new(1, 9)),
+                Symbol::new("do_thing", Position::new(1, 1), Position::new(1, 9)),
                 vec![
                     Expression::StrLiteral(StrLit {
                         value: "one".to_string(),
@@ -441,8 +441,8 @@ mod tests {
                         vec![
                             Statement::Conditional(Conditional::new(vec![Branch::new(
                                 Some(Expression::BinaryOperation(
-                                    Box::new(Expression::Variable(Var {
-                                        var_name: "s".to_string(),
+                                    Box::new(Expression::Symbol(Symbol {
+                                        name: "s".to_string(),
                                         member_access: None,
                                         start_pos: Position::new(2, 16),
                                         end_pos: Position::new(2, 17),
@@ -468,7 +468,7 @@ mod tests {
                                 Position::new(4, 14),
                             )])),
                             Statement::FunctionCall(FunctionCall::new(
-                                Var::new("print", Position::new(6, 13), Position::new(6, 18)),
+                                Symbol::new("print", Position::new(6, 13), Position::new(6, 18)),
                                 vec![Expression::StrLiteral(StrLit {
                                     value: "not dog".to_string(),
                                     start_pos: Position::new(6, 19),

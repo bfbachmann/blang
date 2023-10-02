@@ -11,8 +11,8 @@ use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#struct::{RichStructInit, RichStructType};
 use crate::analyzer::r#type::{RichType, TypeId};
+use crate::analyzer::symbol::RichSymbol;
 use crate::analyzer::tuple::RichTupleInit;
-use crate::analyzer::var::RichVar;
 use crate::format_code;
 use crate::parser::closure::Closure;
 use crate::parser::expr::Expression;
@@ -23,7 +23,7 @@ use crate::parser::unresolved::UnresolvedType;
 /// Represents a kind of expression.
 #[derive(Debug, Clone)]
 pub enum RichExprKind {
-    Variable(RichVar),
+    Symbol(RichSymbol),
     BoolLiteral(bool),
     I64Literal(i64),
     UnsafeNull,
@@ -41,7 +41,7 @@ pub enum RichExprKind {
 impl fmt::Display for RichExprKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            RichExprKind::Variable(var) => write!(f, "{}", var),
+            RichExprKind::Symbol(sym) => write!(f, "{}", sym),
             RichExprKind::BoolLiteral(b) => write!(f, "{}", b),
             RichExprKind::I64Literal(i) => write!(f, "{}", i),
             RichExprKind::UnsafeNull => write!(f, "unsafe_null"),
@@ -65,7 +65,7 @@ impl fmt::Display for RichExprKind {
 impl PartialEq for RichExprKind {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (RichExprKind::Variable(v1), RichExprKind::Variable(v2)) => v1 == v2,
+            (RichExprKind::Symbol(v1), RichExprKind::Symbol(v2)) => v1 == v2,
             (RichExprKind::BoolLiteral(b1), RichExprKind::BoolLiteral(b2)) => b1 == b2,
             (RichExprKind::I64Literal(i1), RichExprKind::I64Literal(i2)) => i1 == i2,
             (RichExprKind::UnsafeNull, RichExprKind::UnsafeNull) => true,
@@ -126,8 +126,8 @@ impl RichExprKind {
                 true
             }
 
-            // Variables can be constants.
-            RichExprKind::Variable(var) => var.is_const,
+            // Symbols can be constants.
+            RichExprKind::Symbol(sym) => sym.is_const,
 
             // Function calls and unknown values are never constants.
             RichExprKind::FunctionCall(_)
@@ -154,11 +154,11 @@ impl RichExpr {
     /// Performs semantic analysis on the given expression and returns a type-rich version of it.
     pub fn from(ctx: &mut ProgramContext, expr: Expression) -> RichExpr {
         match expr {
-            Expression::Variable(ref var) => {
-                let rich_var = RichVar::from(ctx, var, true, None);
-                let type_id = rich_var.get_type_id().clone();
+            Expression::Symbol(ref symbol) => {
+                let rich_symbol = RichSymbol::from(ctx, symbol, true, None);
+                let type_id = rich_symbol.get_type_id().clone();
                 RichExpr {
-                    kind: RichExprKind::Variable(rich_var),
+                    kind: RichExprKind::Symbol(rich_symbol),
                     type_id,
                 }
             }
@@ -227,7 +227,7 @@ impl RichExpr {
                     format_code!(
                         "function {} has no return value, but is called in an expression \
                             where a return value is expected",
-                        &fn_call.fn_var,
+                        &fn_call.fn_symbol,
                     )
                     .as_str(),
                     &fn_call,
@@ -375,11 +375,11 @@ impl RichExpr {
         }
     }
 
-    /// Creates a new expression with the value of the given variable.
-    pub fn from_var(var: RichVar) -> Self {
-        let type_id = var.get_type_id().clone();
+    /// Creates a new expression with the value of the given symbol.
+    pub fn from_symbol(symbol: RichSymbol) -> Self {
+        let type_id = symbol.get_type_id().clone();
         RichExpr {
-            kind: RichExprKind::Variable(var),
+            kind: RichExprKind::Symbol(symbol),
             type_id,
         }
     }
@@ -545,9 +545,9 @@ mod tests {
     use crate::analyzer::func::RichFn;
     use crate::analyzer::func_call::RichFnCall;
     use crate::analyzer::func_sig::RichFnSig;
-    use crate::analyzer::prog_context::{ProgramContext, ScopedVar};
+    use crate::analyzer::prog_context::{ProgramContext, ScopedSymbol};
     use crate::analyzer::r#type::{RichType, TypeId};
-    use crate::analyzer::var::RichVar;
+    use crate::analyzer::symbol::RichSymbol;
     use crate::parser::arg::Argument;
     use crate::parser::bool_lit::BoolLit;
     use crate::parser::closure::Closure;
@@ -558,7 +558,7 @@ mod tests {
     use crate::parser::op::Operator;
     use crate::parser::r#type::Type;
     use crate::parser::str_lit::StrLit;
-    use crate::parser::var::Var;
+    use crate::parser::symbol::Symbol;
 
     #[test]
     fn analyze_i64_literal() {
@@ -608,16 +608,16 @@ mod tests {
     #[test]
     fn analyze_var() {
         let mut ctx = ProgramContext::new();
-        ctx.add_var(ScopedVar::new("myvar", TypeId::str(), false, false));
+        ctx.add_symbol(ScopedSymbol::new("myvar", TypeId::str(), false, false));
         let result = RichExpr::from(
             &mut ctx,
-            Expression::Variable(Var::new_with_default_pos("myvar")),
+            Expression::Symbol(Symbol::new_with_default_pos("myvar")),
         );
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
             RichExpr {
-                kind: RichExprKind::Variable(RichVar::new_with_default_pos(
+                kind: RichExprKind::Symbol(RichSymbol::new_with_default_pos(
                     "myvar",
                     TypeId::str(),
                     None
@@ -632,12 +632,12 @@ mod tests {
         let mut ctx = ProgramContext::new();
         let result = RichExpr::from(
             &mut ctx,
-            Expression::Variable(Var::new_with_default_pos("myvar")),
+            Expression::Symbol(Symbol::new_with_default_pos("myvar")),
         );
         assert_eq!(
             result,
             RichExpr {
-                kind: RichExprKind::Variable(RichVar::new_with_default_pos(
+                kind: RichExprKind::Symbol(RichSymbol::new_with_default_pos(
                     "myvar",
                     TypeId::unknown(),
                     None,
@@ -706,7 +706,7 @@ mod tests {
             result,
             RichExpr {
                 kind: RichExprKind::FunctionCall(RichFnCall {
-                    fn_var: RichVar::new_with_default_pos(
+                    fn_symbol: RichSymbol::new_with_default_pos(
                         "do_thing",
                         rich_fn.signature.type_id,
                         None,
@@ -862,7 +862,7 @@ mod tests {
             result,
             RichExpr {
                 kind: RichExprKind::FunctionCall(RichFnCall {
-                    fn_var: RichVar::new_with_default_pos(
+                    fn_symbol: RichSymbol::new_with_default_pos(
                         "do_thing",
                         rich_fn.signature.type_id.clone(),
                         None,
@@ -880,8 +880,8 @@ mod tests {
         match result.kind {
             RichExprKind::FunctionCall(call) => {
                 assert_eq!(
-                    call.fn_var,
-                    RichVar::new_with_default_pos("do_thing", rich_fn.signature.type_id, None,)
+                    call.fn_symbol,
+                    RichSymbol::new_with_default_pos("do_thing", rich_fn.signature.type_id, None,)
                 );
                 assert_eq!(call.ret_type_id, Some(TypeId::bool()));
                 assert_eq!(call.args.len(), 1);
@@ -956,7 +956,7 @@ mod tests {
             result,
             RichExpr {
                 kind: RichExprKind::FunctionCall(RichFnCall {
-                    fn_var: RichVar::new_with_default_pos(
+                    fn_symbol: RichSymbol::new_with_default_pos(
                         "do_thing",
                         rich_fn.signature.type_id,
                         None,

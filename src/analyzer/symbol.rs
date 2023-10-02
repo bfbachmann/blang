@@ -3,31 +3,31 @@ use std::fmt::{Display, Formatter};
 use colored::Colorize;
 
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::prog_context::{ProgramContext, ScopedVar};
+use crate::analyzer::prog_context::{ProgramContext, ScopedSymbol};
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::member::MemberAccess;
 use crate::parser::r#type::Type;
-use crate::parser::var::Var;
+use crate::parser::symbol::Symbol;
 use crate::{format_code, util};
 
-/// Represents a variable, either by name or by access to one of its members.
+/// A symbol that can represent a variable, variable access, function, type, or constant.
 #[derive(Debug, Clone)]
-pub struct RichVar {
-    pub var_name: String,
-    /// The type ID of the parent variable (i.e. not the member(s) being accessed).
-    pub var_type_id: TypeId,
+pub struct RichSymbol {
+    pub name: String,
+    /// The type ID of the parent symbol (i.e. not the member(s) being accessed).
+    pub parent_type_id: TypeId,
     pub member_access: Option<RichMemberAccess>,
-    /// This will be set to true if the name of this variable matches a type name and no variable
+    /// This will be set to true if the name of this symbol matches a type name and no variable
     /// names. If this is the case, the `var_type_id` field will hold the ID of the matching type.
     pub is_type: bool,
-    /// This will be set to true if this variable actually resolves to a constant.
+    /// This will be set to true if this symbol actually resolves to a constant.
     pub is_const: bool,
     start_pos: Position,
     end_pos: Position,
 }
 
-impl Locatable for RichVar {
+impl Locatable for RichSymbol {
     fn start_pos(&self) -> &Position {
         &self.start_pos
     }
@@ -37,9 +37,9 @@ impl Locatable for RichVar {
     }
 }
 
-impl Display for RichVar {
+impl Display for RichSymbol {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.var_name)?;
+        write!(f, "{}", self.name)?;
 
         if let Some(access) = &self.member_access {
             write!(f, ".{}", access)?;
@@ -49,24 +49,24 @@ impl Display for RichVar {
     }
 }
 
-impl PartialEq for RichVar {
+impl PartialEq for RichSymbol {
     fn eq(&self, other: &Self) -> bool {
-        self.var_name == other.var_name
-            && self.var_type_id == other.var_type_id
+        self.name == other.name
+            && self.parent_type_id == other.parent_type_id
             && util::optionals_are_equal(&self.member_access, &other.member_access)
     }
 }
 
-impl RichVar {
-    /// Creates a new variable with default start and end positions.
+impl RichSymbol {
+    /// Creates a new symbol with default start and end positions.
     pub fn new_with_default_pos(
         name: &str,
         type_id: TypeId,
         member_access: Option<RichMemberAccess>,
     ) -> Self {
-        RichVar {
-            var_name: name.to_string(),
-            var_type_id: type_id,
+        RichSymbol {
+            name: name.to_string(),
+            parent_type_id: type_id,
             member_access,
             is_type: false,
             is_const: false,
@@ -75,25 +75,25 @@ impl RichVar {
         }
     }
 
-    /// Attempts to analyze the variable (including member accesses). If `include_fns` is
-    /// `true`, functions and extern functions will also be searched for the variable name.
-    /// Otherwise, only variables will be searched.
+    /// Attempts to analyze the symbol (including member accesses). If `include_fns` is
+    /// `true`, functions and extern functions will also be searched for the symbol name.
+    /// Otherwise, only variables, types, and constants will be searched.
     pub fn from(
         ctx: &mut ProgramContext,
-        var: &Var,
+        var: &Symbol,
         include_fns: bool,
         maybe_impl_type_id: Option<&TypeId>,
     ) -> Self {
-        let var_name = var.var_name.as_str();
+        let var_name = var.name.as_str();
 
-        // Find the type ID for the variable or member being accessed.
-        // Return a placeholder value if we failed to resolve the variable type ID.
-        let (mut maybe_type_id, maybe_var) =
-            RichVar::get_type_id_by_var_name(ctx, var.var_name.as_str(), include_fns);
+        // Find the type ID for the symbol or member being accessed.
+        // Return a placeholder value if we failed to resolve the symbol type ID.
+        let (mut maybe_type_id, maybe_symbol) =
+            RichSymbol::get_type_id_by_symbol_name(ctx, var.name.as_str(), include_fns);
 
         if maybe_type_id.is_none() && include_fns {
-            // We could not find the variable or function with the given name, so if there is
-            // an impl_type_id, check if this function is defined as a member function on
+            // We could not find the variable, constant, or function with the given name, so if
+            // there is an impl_type_id, check if this function is defined as a member function on
             // that type.
             if let Some(impl_type_id) = maybe_impl_type_id {
                 if let Some(mem_fn) = ctx.get_type_member_fn(impl_type_id, var_name) {
@@ -116,16 +116,16 @@ impl RichVar {
         let var_type_id = match maybe_type_id {
             Some(t) => t,
             None => {
-                // We could not find the variable or function with the given name, so record the
-                // error and return a placeholder value.
+                // We could not find the value with the given name, so record the error and return
+                // a placeholder value.
                 ctx.add_err(AnalyzeError::new(
                     ErrorKind::SymbolNotDefined,
                     format_code!("{} is not defined in this scope", var_name).as_str(),
                     var,
                 ));
 
-                return RichVar::new_with_default_pos(
-                    var.var_name.as_str(),
+                return RichSymbol::new_with_default_pos(
+                    var.name.as_str(),
                     TypeId::unknown(),
                     None,
                 );
@@ -138,15 +138,15 @@ impl RichVar {
             None => None,
         };
 
-        // Check if this var is actually a constant.
-        let is_const = match maybe_var {
+        // Check if this symbol is actually a constant.
+        let is_const = match maybe_symbol {
             Some(var) => var.is_const,
             None => false,
         };
 
-        RichVar {
-            var_name: var_name.to_string(),
-            var_type_id,
+        RichSymbol {
+            name: var_name.to_string(),
+            parent_type_id: var_type_id,
             member_access,
             is_type: var_is_type,
             is_const,
@@ -156,32 +156,32 @@ impl RichVar {
     }
 
     /// Returns the type ID of the accessed submember (i.e. the type of the member at the end of
-    /// the member access chain), or of the variable itself if there is no member access.
+    /// the member access chain), or of the symbol itself if there is no member access.
     pub fn get_type_id(&self) -> &TypeId {
         match &self.member_access {
             Some(ma) => ma.get_type_id(),
-            None => &self.var_type_id,
+            None => &self.parent_type_id,
         }
     }
 
-    /// Returns the name of the lowest level member on this variable access, or just the variable
+    /// Returns the name of the lowest level member on this variable access, or just the symbol
     /// name if there is no member access.
     pub fn get_last_member_name(&self) -> String {
         match &self.member_access {
             Some(access) => access.get_last_member_name(),
-            None => self.var_name.to_string(),
+            None => self.name.to_string(),
         }
     }
 
     /// Attempts to find the type ID of a symbol with the given name. Additionally, if `name`
     /// can be resolved to an actual variable, the variable will be returned.
-    fn get_type_id_by_var_name(
+    fn get_type_id_by_symbol_name(
         ctx: &ProgramContext,
         name: &str,
         include_fns: bool,
-    ) -> (Option<TypeId>, Option<ScopedVar>) {
+    ) -> (Option<TypeId>, Option<ScopedSymbol>) {
         // Search for a variable with the given name. Variables take precedence over functions.
-        match ctx.get_var(name) {
+        match ctx.get_symbol(name) {
             Some(var) => {
                 return (Some(var.type_id.clone()), Some(var.clone()));
             }

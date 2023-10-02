@@ -13,9 +13,9 @@ use crate::analyzer::warn::AnalyzeWarning;
 use crate::lexer::pos::Position;
 use crate::parser::r#struct::StructType;
 
-/// Represents a variable defined in a specific scope.
+/// Represents a symbol defined in a specific scope.
 #[derive(Clone)]
-pub struct ScopedVar {
+pub struct ScopedSymbol {
     pub name: String,
     pub type_id: TypeId,
     pub is_mut: bool,
@@ -23,9 +23,9 @@ pub struct ScopedVar {
     pub is_const: bool,
 }
 
-impl ScopedVar {
+impl ScopedSymbol {
     pub fn new(name: &str, type_id: TypeId, is_mut: bool, is_arg: bool) -> Self {
-        ScopedVar {
+        ScopedSymbol {
             name: name.to_string(),
             type_id,
             is_mut,
@@ -35,7 +35,7 @@ impl ScopedVar {
     }
 
     pub fn new_const(name: &str, type_id: TypeId) -> Self {
-        ScopedVar {
+        ScopedSymbol {
             name: name.to_string(),
             type_id,
             is_mut: false,
@@ -45,7 +45,7 @@ impl ScopedVar {
     }
 }
 
-/// Represents a kind of scope in which variables can be defined.
+/// Represents a kind of scope in which symbols can be defined.
 #[derive(PartialEq, Clone)]
 pub enum ScopeKind {
     FnBody,
@@ -68,7 +68,7 @@ impl fmt::Display for ScopeKind {
 /// Represents a scope in the program. Each scope corresponds to a unique closure which can
 /// be a function body, an inline closure, a branch, or a loop.
 pub struct Scope {
-    vars: HashMap<String, ScopedVar>,
+    symbols: HashMap<String, ScopedSymbol>,
     /// Extern functions are functions that are defined outside the program and linked to it
     /// after compilation.
     extern_fns: HashMap<String, RichFnSig>,
@@ -86,17 +86,17 @@ pub struct Scope {
 impl Scope {
     /// Creates a new scope.
     pub fn new(kind: ScopeKind, args: Vec<RichArg>, return_type: Option<TypeId>) -> Self {
-        // If there are args, add them to the current scope variables.
-        let mut vars = HashMap::new();
+        // If there are args, add them to the current scope symbols.
+        let mut symbols = HashMap::new();
         for arg in args {
-            vars.insert(
+            symbols.insert(
                 arg.name.clone(),
-                ScopedVar::new(arg.name.as_str(), arg.type_id, arg.is_mut, true),
+                ScopedSymbol::new(arg.name.as_str(), arg.type_id, arg.is_mut, true),
             );
         }
 
         Scope {
-            vars,
+            symbols,
             extern_fns: HashMap::new(),
             fns: HashMap::new(),
             extern_structs: HashMap::new(),
@@ -155,10 +155,10 @@ impl Scope {
         self.structs.insert(s.name.to_string(), s)
     }
 
-    // Adds the variable to the scope. If there was already a variable with the same name in
-    // the scope, returns the old variable.
-    fn add_var(&mut self, var: ScopedVar) -> Option<ScopedVar> {
-        self.vars.insert(var.name.clone(), var)
+    // Adds the symbol to the scope. If there was already a symbol with the same name in
+    // the scope, returns the old symbol.
+    fn add_symbol(&mut self, symbol: ScopedSymbol) -> Option<ScopedSymbol> {
+        self.symbols.insert(symbol.name.clone(), symbol)
     }
 
     // Returns the invalid type with the given name from the scope, if it exists.
@@ -192,10 +192,10 @@ impl Scope {
         self.structs.get(name)
     }
 
-    // Returns the variable with the given name from the scope, or None if no such variable
+    // Returns the symbol with the given name from the scope, or None if no such symbol
     // exists.
-    fn get_var(&self, name: &str) -> Option<&ScopedVar> {
-        self.vars.get(name)
+    fn get_symbol(&self, name: &str) -> Option<&ScopedSymbol> {
+        self.symbols.get(name)
     }
 }
 
@@ -347,10 +347,10 @@ impl ProgramContext {
         self.stack.back_mut().unwrap().add_struct(s)
     }
 
-    /// Adds the variable type ID to the context. If there was already a variable with the same
-    /// name, returns the old variable type ID.
-    pub fn add_var(&mut self, var: ScopedVar) -> Option<ScopedVar> {
-        self.stack.back_mut().unwrap().add_var(var)
+    /// Adds the symbol type ID to the context. If there was already a symbol with the same
+    /// name, returns the old symbol type ID.
+    pub fn add_symbol(&mut self, symbol: ScopedSymbol) -> Option<ScopedSymbol> {
+        self.stack.back_mut().unwrap().add_symbol(symbol)
     }
 
     /// Attempts to locate the invalid type with the given name and returns it, if found.
@@ -368,9 +368,9 @@ impl ProgramContext {
     /// Attempts to locate the resolved type corresponding to the given type ID and returns it,
     /// if found.
     pub fn get_resolved_type(&self, id: &TypeId) -> Option<&RichType> {
-        // Unlike with variable resolution, we're going to search the stack top-down here because
+        // Unlike with symbol resolution, we're going to search the stack top-down here because
         // types are generally defined at the top level of the program, and type names cannot
-        // collide like variable names.
+        // collide like symbol names.
         for scope in self.stack.iter() {
             if let Some(resolved) = scope.get_resolved_type(id) {
                 return Some(resolved);
@@ -449,12 +449,12 @@ impl ProgramContext {
         extern_structs
     }
 
-    /// Attempts to locate the variable with the given name and returns it, if found.
-    pub fn get_var(&self, name: &str) -> Option<&ScopedVar> {
+    /// Attempts to locate the symbol with the given name and returns it, if found.
+    pub fn get_symbol(&self, name: &str) -> Option<&ScopedSymbol> {
         // Search up the stack from the current scope.
         for scope in self.stack.iter().rev() {
-            if let Some(var) = scope.get_var(name) {
-                return Some(var);
+            if let Some(symbol) = scope.get_symbol(name) {
+                return Some(symbol);
             }
         }
 

@@ -10,19 +10,19 @@ use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::member::MemberAccess;
 use crate::parser::stream::Stream;
 
-/// Represents a variable. Variables can be made via simply naming a variable or by accessing a
-/// member of a variable.
+/// Represents a a named value. These can be variables, variable member accesses, functions,
+/// constants, or types.
 #[derive(Debug, PartialEq, Clone)]
-pub struct Var {
-    pub var_name: String,
+pub struct Symbol {
+    pub name: String,
     pub member_access: Option<MemberAccess>,
     pub start_pos: Position,
     pub end_pos: Position,
 }
 
-impl Display for Var {
+impl Display for Symbol {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.var_name)?;
+        write!(f, "{}", self.name)?;
 
         if let Some(ma) = &self.member_access {
             write!(f, ".{}", ma)?;
@@ -32,7 +32,7 @@ impl Display for Var {
     }
 }
 
-impl Locatable for Var {
+impl Locatable for Symbol {
     fn start_pos(&self) -> &Position {
         &self.start_pos
     }
@@ -42,38 +42,38 @@ impl Locatable for Var {
     }
 }
 
-impl Var {
-    /// Creates a new variable.
-    pub fn new(var_name: &str, start_pos: Position, end_pos: Position) -> Self {
-        Var {
-            var_name: var_name.to_string(),
+impl Symbol {
+    /// Creates a new symbol.
+    pub fn new(name: &str, start_pos: Position, end_pos: Position) -> Self {
+        Symbol {
+            name: name.to_string(),
             member_access: None,
             start_pos,
             end_pos,
         }
     }
 
-    /// Creates a new variable with default (zero) start and end positions.
+    /// Creates a new symbol with default (zero) start and end positions.
     #[cfg(test)]
-    pub fn new_with_default_pos(var_name: &str) -> Self {
-        Var {
-            var_name: var_name.to_string(),
+    pub fn new_with_default_pos(name: &str) -> Self {
+        Symbol {
+            name: name.to_string(),
             member_access: None,
             start_pos: Position::default(),
             end_pos: Position::default(),
         }
     }
 
-    /// Attempts to parse a variable from the given token sequence. A variable can be an identifier
-    /// representing the variable name or a type member access.
+    /// Attempts to parse a symbol from the given token sequence. A symbol can be an identifier
+    /// representing a variable, constant, type, or function, or a type member access.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         match tokens.next() {
             Some(&Token {
-                kind: TokenKind::Identifier(ref var_name),
+                kind: TokenKind::Identifier(ref name),
                 start,
                 end,
             }) => {
-                let var_name = var_name.clone();
+                let name = name.clone();
 
                 // Check if the next token is `.`. If so, we're accessing a member on this variable
                 // or type.
@@ -85,8 +85,8 @@ impl Var {
                     _ => None,
                 };
 
-                Ok(Var {
-                    var_name,
+                Ok(Symbol {
+                    name,
                     member_access,
                     start_pos: start,
                     end_pos: end,
@@ -108,8 +108,8 @@ impl Var {
                     _ => None,
                 };
 
-                Ok(Var {
-                    var_name: TokenKind::This.to_string(),
+                Ok(Symbol {
+                    name: TokenKind::This.to_string(),
                     member_access,
                     start_pos: start,
                     end_pos: end,

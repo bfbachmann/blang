@@ -21,7 +21,7 @@ use crate::parser::r#loop::Loop;
 use crate::parser::r#struct::StructType;
 use crate::parser::ret::Ret;
 use crate::parser::stream::Stream;
-use crate::parser::var::Var;
+use crate::parser::symbol::Symbol;
 use crate::parser::var_assign::VariableAssignment;
 use crate::parser::var_dec::VariableDeclaration;
 
@@ -55,7 +55,7 @@ impl fmt::Display for Statement {
                 }
             }
             Statement::VariableAssignment(var_assign) => {
-                write!(f, "{} = ...", var_assign.var)
+                write!(f, "{} = ...", var_assign.symbol)
             }
             Statement::FunctionDeclaration(func) => {
                 write!(f, "{}", func.signature)
@@ -64,7 +64,7 @@ impl fmt::Display for Statement {
                 write!(f, "{{ ... }}")
             }
             Statement::FunctionCall(call) => {
-                write!(f, "{}(...)", call.fn_var)
+                write!(f, "{}(...)", call.fn_symbol)
             }
             Statement::Conditional(_) => {
                 write!(f, "if ...")
@@ -399,7 +399,7 @@ impl Statement {
                 },
             ) => {
                 // Parse the member access.
-                let var = Var::from(tokens)?;
+                let var = Symbol::from(tokens)?;
 
                 // If the next token is `(`, it's a function call. Otherwise, it should be "=" for
                 // member assignment.

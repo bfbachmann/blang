@@ -16,7 +16,7 @@ use crate::analyzer::r#struct::RichStructInit;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::ret::RichRet;
 use crate::analyzer::statement::RichStatement;
-use crate::analyzer::var::RichVar;
+use crate::analyzer::symbol::RichSymbol;
 use crate::analyzer::var_assign::RichVarAssign;
 use crate::analyzer::var_dec::RichVarDecl;
 use crate::format_code;
@@ -48,7 +48,7 @@ impl Display for Move {
 
 impl Move {
     /// Creates a new move from `var`.
-    fn from(var: &RichVar) -> Self {
+    fn from(var: &RichSymbol) -> Self {
         Move {
             path: var.to_string().split(".").map(|s| s.to_string()).collect(),
             start_pos: var.start_pos().clone(),
@@ -268,12 +268,12 @@ impl<'a> MoveChecker<'a> {
     }
 
     /// Returns true only if `var` was declared inside the current scope.
-    fn var_declared_in_cur_scope(&self, var: &RichVar) -> bool {
+    fn var_declared_in_cur_scope(&self, var: &RichSymbol) -> bool {
         self.stack
             .last()
             .unwrap()
             .declared_vars
-            .contains(var.var_name.as_str())
+            .contains(var.name.as_str())
     }
 
     /// Recursively performs move checks on `prog`.
@@ -396,7 +396,7 @@ impl<'a> MoveChecker<'a> {
     /// Recursively performs move checks on `expr`.
     fn check_expr(&mut self, kind: &RichExprKind) {
         match kind {
-            RichExprKind::Variable(var) => {
+            RichExprKind::Symbol(var) => {
                 self.check_var(var);
             }
             RichExprKind::FunctionCall(call) => {
@@ -488,10 +488,10 @@ impl<'a> MoveChecker<'a> {
     }
 
     /// Performs move checks on `var`.
-    fn check_var(&mut self, var: &RichVar) {
+    fn check_var(&mut self, var: &RichSymbol) {
         // Skip the move check entirely if the root variable is of some type that doesn't require
         // moves.
-        if !self.types.get(&var.var_type_id).unwrap().requires_move() {
+        if !self.types.get(&var.parent_type_id).unwrap().requires_move() {
             return;
         }
 
@@ -531,7 +531,7 @@ impl<'a> MoveChecker<'a> {
             }
 
             // Break as soon as we've checked up to the scope in which the variable was declared.
-            if scope.declared_vars.contains(var.var_name.as_str()) {
+            if scope.declared_vars.contains(var.name.as_str()) {
                 break;
             }
         }

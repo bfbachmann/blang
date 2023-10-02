@@ -21,8 +21,8 @@ use crate::analyzer::r#struct::RichStructInit;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::ret::RichRet;
 use crate::analyzer::statement::RichStatement;
+use crate::analyzer::symbol::{RichMemberAccess, RichSymbol};
 use crate::analyzer::tuple::RichTupleInit;
-use crate::analyzer::var::{RichMemberAccess, RichVar};
 use crate::analyzer::var_assign::RichVarAssign;
 use crate::compiler::context::{
     BranchContext, CompilationContext, FnContext, LoopContext, StatementContext,
@@ -317,7 +317,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         let ll_expr_val = self.compile_expr(&assign.val);
 
         // Get a pointer to the target variable (or variable member).
-        let ll_var_ptr = self.get_var_ptr(&assign.var);
+        let ll_var_ptr = self.get_var_ptr(&assign.symbol);
 
         // Most primitive values can be assigned (i.e. copied) with a store instruction. Composite
         // values like structs need to be copied differently.
@@ -452,17 +452,17 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Gets a pointer to the given variable or member.
-    fn get_var_ptr(&mut self, var: &RichVar) -> PointerValue<'ctx> {
-        let ll_var_ptr = self.get_var_ptr_by_name(var.var_name.as_str());
+    fn get_var_ptr(&mut self, var: &RichSymbol) -> PointerValue<'ctx> {
+        let ll_var_ptr = self.get_var_ptr_by_name(var.name.as_str());
         if let Some(access) = &var.member_access {
-            self.get_var_member_ptr(ll_var_ptr, &var.var_type_id, access)
+            self.get_var_member_ptr(ll_var_ptr, &var.parent_type_id, access)
         } else {
             ll_var_ptr
         }
     }
 
     /// Gets a variable (or member) and returns its value.
-    fn get_var_value(&mut self, var: &RichVar) -> BasicValueEnum<'ctx> {
+    fn get_var_value(&mut self, var: &RichSymbol) -> BasicValueEnum<'ctx> {
         // Get a pointer to the variable or member.
         let ll_var_ptr = self.get_var_ptr(var);
 
@@ -863,7 +863,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// Compiles an arbitrary expression.
     fn compile_expr(&mut self, expr: &RichExpr) -> BasicValueEnum<'ctx> {
         let result = match &expr.kind {
-            RichExprKind::Variable(var) => self.get_var_value(var),
+            RichExprKind::Symbol(var) => self.get_var_value(var),
 
             RichExprKind::BoolLiteral(b) => self
                 .ctx
@@ -1024,7 +1024,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // TODO: get functions from variables.
         let fn_sig = self
             .types
-            .get(call.fn_var.get_type_id())
+            .get(call.fn_symbol.get_type_id())
             .unwrap()
             .to_fn_sig();
         let ll_fn = self
@@ -1071,7 +1071,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             .build_call(
                 ll_fn,
                 args.as_slice(),
-                call.fn_var.get_last_member_name().as_str(),
+                call.fn_symbol.get_last_member_name().as_str(),
             )
             .try_as_basic_value();
 
