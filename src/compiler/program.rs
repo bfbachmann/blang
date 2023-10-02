@@ -10,7 +10,7 @@ use inkwell::targets::TargetTriple;
 use inkwell::types::AnyType;
 use inkwell::values::FunctionValue;
 
-use crate::analyzer::func::RichFnSig;
+use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::program::{ProgramAnalysis, RichProg};
 use crate::analyzer::r#const::RichConst;
 use crate::analyzer::r#type::{RichType, TypeId};

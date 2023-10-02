@@ -6,7 +6,7 @@ use std::hash::Hash;
 use colored::*;
 
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::func::RichFnSig;
+use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#struct::RichStructType;
 use crate::analyzer::tuple::RichTupleType;
@@ -428,7 +428,8 @@ impl RichType {
 
 #[cfg(test)]
 mod tests {
-    use crate::analyzer::func::{RichArg, RichFnSig};
+    use crate::analyzer::arg::RichArg;
+    use crate::analyzer::func_sig::RichFnSig;
     use crate::analyzer::r#struct::{RichField, RichStructType};
     use crate::analyzer::r#type::{RichType, TypeId};
     use crate::parser::arg::Argument;

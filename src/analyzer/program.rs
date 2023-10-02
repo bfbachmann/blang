@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use colored::Colorize;
 
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::func::{analyze_fn_sig, RichFnSig};
+use crate::analyzer::func_sig::analyze_fn_sig;
+use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::move_check::MoveChecker;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#struct::RichStructType;

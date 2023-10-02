@@ -3,9 +3,9 @@ use std::fmt::Formatter;
 
 use colored::*;
 
+use crate::analyzer::arg::RichArg;
 use crate::analyzer::cond::RichCond;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::func::RichArg;
 use crate::analyzer::prog_context::{ProgramContext, Scope, ScopeKind};
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::statement::RichStatement;

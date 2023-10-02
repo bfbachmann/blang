@@ -1,10 +1,12 @@
+use crate::analyzer::arg::RichArg;
 use std::collections::hash_map::Iter;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;
 
 use crate::analyzer::error::AnalyzeError;
 use crate::analyzer::error::AnalyzeResult;
-use crate::analyzer::func::{RichArg, RichFn, RichFnSig};
+use crate::analyzer::func::RichFn;
+use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::r#struct::RichStructType;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::warn::AnalyzeWarning;

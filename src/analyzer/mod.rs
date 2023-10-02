@@ -18,16 +18,20 @@
 //! also returns a list of warnings and errors that occurred during analysis that may prevent
 //! compilation.
 
+pub mod arg;
 pub mod closure;
 pub mod cond;
 pub mod r#const;
 pub mod error;
 pub mod expr;
 pub mod func;
+pub mod func_call;
+pub mod func_sig;
 pub mod r#impl;
 mod move_check;
 pub mod prog_context;
 pub mod program;
+pub mod ret;
 pub mod statement;
 pub mod r#struct;
 pub mod tuple;

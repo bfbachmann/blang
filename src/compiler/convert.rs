@@ -9,7 +9,7 @@ use inkwell::AddressSpace;
 use llvm_sys::core::LLVMFunctionType;
 use llvm_sys::prelude::LLVMTypeRef;
 
-use crate::analyzer::func::RichFnSig;
+use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::r#struct::RichStructType;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::tuple::RichTupleType;

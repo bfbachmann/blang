@@ -5,7 +5,9 @@ use colored::Colorize;
 
 use crate::analyzer::closure::RichClosure;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::func::{RichFn, RichFnCall, RichFnSig};
+use crate::analyzer::func::RichFn;
+use crate::analyzer::func_call::RichFnCall;
+use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#struct::{RichStructInit, RichStructType};
 use crate::analyzer::r#type::{RichType, TypeId};
@@ -534,10 +536,13 @@ impl RichExpr {
 
 #[cfg(test)]
 mod tests {
+    use crate::analyzer::arg::RichArg;
     use crate::analyzer::closure::RichClosure;
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
     use crate::analyzer::expr::{RichExpr, RichExprKind};
-    use crate::analyzer::func::{RichArg, RichFn, RichFnCall, RichFnSig};
+    use crate::analyzer::func::RichFn;
+    use crate::analyzer::func_call::RichFnCall;
+    use crate::analyzer::func_sig::RichFnSig;
     use crate::analyzer::prog_context::{ProgramContext, ScopedVar};
     use crate::analyzer::r#type::{RichType, TypeId};
     use crate::analyzer::var::RichVar;
