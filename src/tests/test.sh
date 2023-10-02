@@ -22,6 +22,8 @@ for src_path in ./*.bl; do
     obj_path="$output_dir"/"$base_file_name".o
     exe_path="$output_dir"/"$base_file_name"
 
+    echo --- "$base_file_name".bl ---
+
     # Compile Blang to LLVM IR.
     cargo -q run -- build -o "$ll_path" "$src_path" || fail "$base_file_name".bl
 
@@ -35,5 +37,7 @@ for src_path in ./*.bl; do
     # test cases from muddying the test output.
     ./"$exe_path" 1> /dev/null 2> /dev/null || fail "$base_file_name".bl
 
-    echo "$base_file_name".bl PASS
+    echo PASS
+    echo --- "$base_file_name".bl ---
+    echo
 done

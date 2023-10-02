@@ -3,6 +3,7 @@ use std::io::{BufRead, BufReader, Result};
 use std::path::{Path, PathBuf};
 use std::process;
 use std::process::exit;
+use std::time::Instant;
 
 use clap::{arg, ArgAction, Command};
 use colored::*;
@@ -185,6 +186,8 @@ fn compile(
     target: Option<&String>,
     simplify_ir: bool,
 ) {
+    let start_time = Instant::now();
+
     // Read and analyze the program.
     let prog_analysis = match analyze(src_path) {
         Some(v) => v,
@@ -210,4 +213,13 @@ fn compile(
     ) {
         fatalln!("{}", e);
     }
+
+    // Print the success message with the compile time.
+    let compile_time = Instant::now() - start_time;
+    println!(
+        "Compiled {} in {}.{}s.",
+        src_path,
+        compile_time.as_secs(),
+        compile_time.subsec_millis()
+    )
 }
