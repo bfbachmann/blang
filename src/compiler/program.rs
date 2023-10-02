@@ -440,10 +440,26 @@ mod tests {
     fn infinite_loop() {
         assert_compiles(
             r#"
-        fn main() {
-            loop {}
-        }
-        "#,
+            fn main() {
+                loop {}
+            }
+            "#,
+        );
+    }
+
+    #[test]
+    fn chained_method_calls() {
+        assert_compiles(
+            r#"
+            impl i64 {
+                fn add(this, v: i64) ~ i64 { return this + v }
+                fn sub(this, v: i64) ~ i64 { return this - v }
+            }
+            fn main() {
+                let i = 1
+                let v = i.add(10).sub(50).sub(2).add(-24)
+            }
+            "#,
         );
     }
 }
