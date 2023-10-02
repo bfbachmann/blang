@@ -77,21 +77,50 @@ impl RichFnCall {
         // signature, or a variable.
         let rich_fn_var = RichVar::from(ctx, &call.fn_var, true, maybe_impl_type_id);
         let var_type = ctx.get_resolved_type(rich_fn_var.get_type_id()).unwrap();
-        let fn_sig = match var_type {
-            RichType::Function(fn_sig) => fn_sig,
-            other => {
-                // The value being used here is not a function.
-                errors.push(AnalyzeError::new(
-                    ErrorKind::MismatchedTypes,
-                    format_code!("type {} is not callable", other).as_str(),
-                    &call,
-                ));
 
-                return RichFnCall {
-                    fn_var: rich_fn_var,
-                    args: vec![],
-                    ret_type_id: Some(TypeId::unknown()),
-                };
+        // Try to locate the function signature for this function call. If it's a call on a type
+        // member function we'll look up the function using the type ID. Otherwise, we just extract
+        // the function signature from the variable type, as it should be a function type.
+        let fn_sig = if rich_fn_var.is_type {
+            let method_name = rich_fn_var.get_last_member_name();
+            match ctx.get_type_member_fn(&rich_fn_var.var_type_id, method_name.as_str()) {
+                Some(fn_sig) => fn_sig,
+                None => {
+                    errors.push(AnalyzeError::new(
+                        ErrorKind::MismatchedTypes,
+                        format_code!(
+                            "type {} has no member function {}",
+                            rich_fn_var.var_name,
+                            method_name
+                        )
+                        .as_str(),
+                        &call,
+                    ));
+
+                    return RichFnCall {
+                        fn_var: rich_fn_var,
+                        args: vec![],
+                        ret_type_id: Some(TypeId::unknown()),
+                    };
+                }
+            }
+        } else {
+            match var_type {
+                RichType::Function(fn_sig) => fn_sig,
+                other => {
+                    // The value being used here is not a function.
+                    errors.push(AnalyzeError::new(
+                        ErrorKind::MismatchedTypes,
+                        format_code!("type {} is not callable", other).as_str(),
+                        &call,
+                    ));
+
+                    return RichFnCall {
+                        fn_var: rich_fn_var,
+                        args: vec![],
+                        ret_type_id: Some(TypeId::unknown()),
+                    };
+                }
             }
         };
 
@@ -102,32 +131,42 @@ impl RichFnCall {
         // fully-qualified name, add the special `this` argument.
         let maybe_this = rich_fn_var.clone().without_last_member();
         let called_on_this = fn_sig.impl_type_id.is_some()
-            && maybe_this.get_type_id() == fn_sig.impl_type_id.as_ref().unwrap();
-        if fn_sig.takes_this() && called_on_this {
-            passed_args.push_front(RichExpr::from_var(maybe_this));
-        } else if !fn_sig.takes_this() && called_on_this {
-            errors.push(
-                AnalyzeError::new(
-                    ErrorKind::MemberNotDefined,
-                    format_code!(
-                        "cannot call function {} on value of type {}",
-                        fn_sig.name,
-                        maybe_this.get_type_id(),
+            && maybe_this.get_type_id() == fn_sig.impl_type_id.as_ref().unwrap()
+            && !rich_fn_var.is_type;
+
+        // If the function call is to an instance method, make sure the method takes `this` as its
+        // first argument.
+        if called_on_this {
+            if fn_sig.takes_this() {
+                // Add `this` as the first argument since the method is being called on it.
+                passed_args.push_front(RichExpr::from_var(maybe_this));
+            } else {
+                // This is a call to a method that does not take `this` as its first argument.
+                errors.push(
+                    AnalyzeError::new(
+                        ErrorKind::MemberNotDefined,
+                        format_code!(
+                            "cannot call function {} on value of type {}",
+                            fn_sig.name,
+                            maybe_this.get_type_id(),
+                        )
+                        .as_str(),
+                        &call,
                     )
-                    .as_str(),
-                    &call,
-                )
-                .with_detail(
-                    format_code!(
-                        "Member function {} on type {} does not take {} as its first argument.",
-                        fn_sig,
-                        fn_sig.impl_type_id.as_ref().unwrap(),
-                        "this",
+                    .with_detail(
+                        format_code!(
+                            "Member function {} on type {} does not take {} as its first argument.",
+                            fn_sig,
+                            fn_sig.impl_type_id.as_ref().unwrap(),
+                            "this",
+                        )
+                        .as_str(),
                     )
-                    .as_str(),
-                )
-                .with_help(format_code!("Did you mean to call {}?", fn_sig.full_name()).as_str()),
-            );
+                    .with_help(
+                        format_code!("Did you mean to call {}?", fn_sig.full_name()).as_str(),
+                    ),
+                );
+            }
         }
 
         // Make sure the right number of arguments were passed.

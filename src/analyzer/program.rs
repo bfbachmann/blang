@@ -362,7 +362,7 @@ mod tests {
         assert!(matches!(
             result,
             Err(AnalyzeError {
-                kind: ErrorKind::VariableNotDefined,
+                kind: ErrorKind::SymbolNotDefined,
                 ..
             })
         ));

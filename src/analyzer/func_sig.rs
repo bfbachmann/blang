@@ -97,7 +97,7 @@ impl RichFnSig {
     /// just be the function name. If it's a member function, it will be `<type>::<fn_name>`.
     pub fn full_name(&self) -> String {
         match &self.impl_type_id {
-            Some(type_id) => format!("{}#{}", type_id.to_string(), self.name),
+            Some(type_id) => format!("{}.{}", type_id.to_string(), self.name),
             None => self.name.to_string(),
         }
     }

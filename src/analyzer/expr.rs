@@ -41,7 +41,7 @@ pub enum RichExprKind {
 impl fmt::Display for RichExprKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            RichExprKind::Variable(var) => write!(f, "variable {}", var),
+            RichExprKind::Variable(var) => write!(f, "{}", var),
             RichExprKind::BoolLiteral(b) => write!(f, "{}", b),
             RichExprKind::I64Literal(i) => write!(f, "{}", i),
             RichExprKind::UnsafeNull => write!(f, "unsafe_null"),
@@ -126,9 +126,11 @@ impl RichExprKind {
                 true
             }
 
-            // Function calls and variables are never constants.
-            RichExprKind::Variable(_)
-            | RichExprKind::FunctionCall(_)
+            // Variables can be constants.
+            RichExprKind::Variable(var) => var.is_const,
+
+            // Function calls and unknown values are never constants.
+            RichExprKind::FunctionCall(_)
             | RichExprKind::AnonFunction(_)
             | RichExprKind::Unknown => false,
         }
@@ -646,7 +648,7 @@ mod tests {
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {
-                kind: ErrorKind::VariableNotDefined,
+                kind: ErrorKind::SymbolNotDefined,
                 ..
             }
         ));

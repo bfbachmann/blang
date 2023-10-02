@@ -68,7 +68,7 @@ impl RichVarAssign {
             None => {
                 // The variable does not exist. Record the error and skip any further checks.
                 ctx.add_err(AnalyzeError::new(
-                    ErrorKind::VariableNotDefined,
+                    ErrorKind::SymbolNotDefined,
                     format_code!("cannot assign to undefined variable {}", var_name).as_str(),
                     &assign,
                 ));

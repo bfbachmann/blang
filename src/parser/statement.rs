@@ -276,7 +276,7 @@ impl Statement {
                     ..
                 },
             ) => {
-                let call = FunctionCall::from_single(tokens)?;
+                let call = FunctionCall::from(tokens)?;
                 Ok(Statement::FunctionCall(call))
             }
 

@@ -3,10 +3,11 @@ use std::fmt::{Display, Formatter};
 use colored::Colorize;
 
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::prog_context::{ProgramContext, ScopedVar};
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::member::MemberAccess;
+use crate::parser::r#type::Type;
 use crate::parser::var::Var;
 use crate::{format_code, util};
 
@@ -17,6 +18,11 @@ pub struct RichVar {
     /// The type ID of the parent variable (i.e. not the member(s) being accessed).
     pub var_type_id: TypeId,
     pub member_access: Option<RichMemberAccess>,
+    /// This will be set to true if the name of this variable matches a type name and no variable
+    /// names. If this is the case, the `var_type_id` field will hold the ID of the matching type.
+    pub is_type: bool,
+    /// This will be set to true if this variable actually resolves to a constant.
+    pub is_const: bool,
     start_pos: Position,
     end_pos: Position,
 }
@@ -62,6 +68,8 @@ impl RichVar {
             var_name: name.to_string(),
             var_type_id: type_id,
             member_access,
+            is_type: false,
+            is_const: false,
             start_pos: Position::default(),
             end_pos: Position::default(),
         }
@@ -76,29 +84,43 @@ impl RichVar {
         include_fns: bool,
         maybe_impl_type_id: Option<&TypeId>,
     ) -> Self {
+        let var_name = var.var_name.as_str();
+
         // Find the type ID for the variable or member being accessed.
         // Return a placeholder value if we failed to resolve the variable type ID.
-        let mut maybe_type_id =
+        let (mut maybe_type_id, maybe_var) =
             RichVar::get_type_id_by_var_name(ctx, var.var_name.as_str(), include_fns);
+
         if maybe_type_id.is_none() && include_fns {
             // We could not find the variable or function with the given name, so if there is
             // an impl_type_id, check if this function is defined as a member function on
             // that type.
             if let Some(impl_type_id) = maybe_impl_type_id {
-                if let Some(mem_fn) = ctx.get_type_member_fn(impl_type_id, var.var_name.as_str()) {
+                if let Some(mem_fn) = ctx.get_type_member_fn(impl_type_id, var_name) {
                     maybe_type_id = Some(mem_fn.type_id.clone());
                 }
             }
         };
 
-        let type_id = match maybe_type_id {
+        // If the symbol still has not been resolved, check if it's a type.
+        let mut var_is_type = false;
+        if maybe_type_id.is_none() {
+            let type_id = TypeId::from(Type::new_unknown(var_name));
+            if ctx.get_resolved_type(&type_id).is_some() {
+                maybe_type_id = Some(type_id);
+                var_is_type = true;
+            }
+        }
+
+        // At this point the symbol must be resolved, or it doesn't exist in this scope.
+        let var_type_id = match maybe_type_id {
             Some(t) => t,
             None => {
                 // We could not find the variable or function with the given name, so record the
                 // error and return a placeholder value.
                 ctx.add_err(AnalyzeError::new(
-                    ErrorKind::VariableNotDefined,
-                    format_code!("{} is not defined in this scope", var.var_name).as_str(),
+                    ErrorKind::SymbolNotDefined,
+                    format_code!("{} is not defined in this scope", var_name).as_str(),
                     var,
                 ));
 
@@ -112,14 +134,22 @@ impl RichVar {
 
         // Recursively analyze member accesses, if any.
         let member_access = match &var.member_access {
-            Some(access) => Some(RichMemberAccess::from(ctx, &type_id, access)),
+            Some(access) => Some(RichMemberAccess::from(ctx, &var_type_id, access)),
             None => None,
         };
 
+        // Check if this var is actually a constant.
+        let is_const = match maybe_var {
+            Some(var) => var.is_const,
+            None => false,
+        };
+
         RichVar {
-            var_name: var.var_name.clone(),
-            var_type_id: type_id,
+            var_name: var_name.to_string(),
+            var_type_id,
             member_access,
+            is_type: var_is_type,
+            is_const,
             start_pos: var.start_pos().clone(),
             end_pos: var.end_pos().clone(),
         }
@@ -143,16 +173,17 @@ impl RichVar {
         }
     }
 
-    /// Attempts to find the type ID of a variable given the variable name.
+    /// Attempts to find the type ID of a symbol with the given name. Additionally, if `name`
+    /// can be resolved to an actual variable, the variable will be returned.
     fn get_type_id_by_var_name(
         ctx: &ProgramContext,
         name: &str,
         include_fns: bool,
-    ) -> Option<TypeId> {
+    ) -> (Option<TypeId>, Option<ScopedVar>) {
         // Search for a variable with the given name. Variables take precedence over functions.
         match ctx.get_var(name) {
             Some(var) => {
-                return Some(var.type_id.clone());
+                return (Some(var.type_id.clone()), Some(var.clone()));
             }
             None => {}
         }
@@ -161,18 +192,18 @@ impl RichVar {
             // Search for a function with the given name. Functions take precedence over extern
             // functions.
             match ctx.get_fn(name) {
-                Some(func) => return Some(func.signature.type_id.clone()),
+                Some(func) => return (Some(func.signature.type_id.clone()), None),
                 None => {}
             };
 
             // Search for an extern function with the given name. Extern functions take precedence over
             // types.
             match ctx.get_extern_fn(name) {
-                Some(fn_sig) => return Some(fn_sig.type_id.clone()),
-                None => None,
+                Some(fn_sig) => return (Some(fn_sig.type_id.clone()), None),
+                None => (None, None),
             }
         } else {
-            None
+            (None, None)
         }
     }
 

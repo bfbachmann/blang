@@ -14,6 +14,7 @@ use crate::lexer::pos::Position;
 use crate::parser::r#struct::StructType;
 
 /// Represents a variable defined in a specific scope.
+#[derive(Clone)]
 pub struct ScopedVar {
     pub name: String,
     pub type_id: TypeId,

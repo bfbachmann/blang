@@ -177,7 +177,7 @@ impl TokenKind {
             TokenKind::BoolLiteral(v) => v.to_string(),
             TokenKind::I64Literal(v) => v.to_string(),
             TokenKind::UnsafePtr => "unsafeptr".to_string(),
-            TokenKind::UnsafeNull => "unsafe_null".to_string(),
+            TokenKind::UnsafeNull => "UNSAFE_NULL".to_string(),
             TokenKind::USize => "usize".to_string(),
             TokenKind::Str => "str".to_string(),
             TokenKind::StrLiteral(v) => v.to_string(),

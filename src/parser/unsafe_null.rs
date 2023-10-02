@@ -18,7 +18,7 @@ pub struct UnsafeNull {
 
 impl Display for UnsafeNull {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "unsafe_null")
+        write!(f, "{}", TokenKind::UnsafeNull)
     }
 }
 
@@ -33,7 +33,7 @@ impl Locatable for UnsafeNull {
 }
 
 impl UnsafeNull {
-    /// Attempts to parse an `unsafe_null` value from the token sequence.
+    /// Attempts to parse an `UNSAFE_NULL` value from the token sequence.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         match tokens.next() {
             Some(&Token {

@@ -14,6 +14,10 @@ impl T {
     fn get_value(this) ~ i64 {
         return this.value
     }
+
+    fn new(value: i64) ~ T {
+        return T{value: value}
+    }
 }
 
 impl i64 {
@@ -32,6 +36,9 @@ fn main() {
     
     let two = 2
     assert(two.mul(5).add(10).add(1) == 21, 2)
+
+    let new_t = T.new(-52)
+    assert(new_t.get_value().mul(-2) == 104, 4)
 
     exit(0)
 }
