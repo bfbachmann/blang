@@ -13,18 +13,50 @@ enum E {
     Four(S)
 }
 
+enum OptionalI64 {
+    None
+    Some(i64)
+}
+
+impl OptionalI64 {
+    fn new_some(i: i64) ~ OptionalI64 {
+        return OptionalI64::Some(i)
+    }
+
+    fn new_none() ~ OptionalI64 {
+        return OptionalI64::None
+    }
+}
+
 fn main() {
-    let e_one = E::One
+    // Check that enum variant initialization works.
+    {
+        let e_one = E::One
+        let e_two = E::Two(-42)
+        let e_three = E::Three(true)
+        let e_four = E::Four(S{
+            i: 12
+            b: false
+            s: "test"
+        })
+    }
 
-    let e_two = E::Two(-42)
+    // Check that enums work as return values.
+    {
+        let some = OptionalI64.new_some(10)
+        let none = OptionalI64.new_none()
+    }
 
-    let e_three = E::Three(true)
-
-    let e_four = E::Four(S{
-        i: 12
-        b: false
-        s: "test"
-    })
+    // Check that enums work as arguments.
+    {
+        take_enum(E::Four(S{
+            i: 65,
+            b: true,
+            s: "does this work?"
+        }))
+    }
 
     exit(0)
 }
+
+fn take_enum(e: E) {}

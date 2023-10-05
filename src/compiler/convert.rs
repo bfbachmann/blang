@@ -115,6 +115,9 @@ pub fn to_fn_type<'a>(
         Some(RichType::Struct(struct_type)) => {
             Some(to_struct_type(ctx, types, struct_type).ptr_type(AddressSpace::default()))
         }
+        Some(RichType::Enum(enum_type)) => {
+            Some(enum_to_struct_type(ctx, enum_type).ptr_type(AddressSpace::default()))
+        }
         Some(RichType::Tuple(tuple_type)) => {
             Some(tuple_to_struct_type(ctx, types, tuple_type).ptr_type(AddressSpace::default()))
         }
@@ -205,7 +208,7 @@ pub fn enum_to_struct_type<'a>(ctx: &'a Context, enum_type: &RichEnumType) -> St
         &[
             ctx.i8_type().as_basic_type_enum(),
             ctx.i8_type()
-                .array_type(enum_type.largest_variant_size_bytes)
+                .array_type(enum_type.max_variant_size_bytes)
                 .as_basic_type_enum(),
         ],
         false,
@@ -244,9 +247,11 @@ pub fn to_metadata_type_enum<'a>(
         RichType::Str => {
             BasicMetadataTypeEnum::from(ctx.i32_type().ptr_type(AddressSpace::default()))
         }
-        RichType::Struct(_) | RichType::Tuple(_) => BasicMetadataTypeEnum::from(
-            to_basic_type(ctx, types, typ).ptr_type(AddressSpace::default()),
-        ),
+        RichType::Struct(_) | RichType::Tuple(_) | RichType::Enum(_) => {
+            BasicMetadataTypeEnum::from(
+                to_basic_type(ctx, types, typ).ptr_type(AddressSpace::default()),
+            )
+        }
         RichType::Function(func) => {
             let fn_type = types.get(&func.type_id).unwrap();
             BasicMetadataTypeEnum::from(to_basic_type(ctx, types, fn_type))

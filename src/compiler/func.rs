@@ -390,6 +390,54 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 }
             }
 
+            RichType::Enum(enum_type) => {
+                let ll_src_val_type = convert::to_basic_type(self.ctx, self.types, typ);
+
+                // Copy the enum number.
+                let ll_enum_number = self.builder.build_load(
+                    self.ctx.i8_type(),
+                    ll_src_val.into_pointer_value(),
+                    format!("{}.number", enum_type.name).as_str(),
+                );
+                self.builder.build_store(ll_dst_ptr, ll_enum_number);
+
+                // Copy the enum variant value, if necessary.
+                // TODO: does `max_variant_size_bytes` need to be even for the `memcpy` to work?
+                if enum_type.max_variant_size_bytes > 0 {
+                    let ll_src_value_ptr = self
+                        .builder
+                        .build_struct_gep(
+                            ll_src_val_type,
+                            ll_src_val.into_pointer_value(),
+                            1u32,
+                            format!("{}.src_value_ptr", enum_type.name).as_str(),
+                        )
+                        .unwrap();
+
+                    let ll_dst_value_ptr = self
+                        .builder
+                        .build_struct_gep(
+                            ll_src_val_type,
+                            ll_dst_ptr,
+                            1u32,
+                            format!("{}.dst_value_ptr", enum_type.name).as_str(),
+                        )
+                        .unwrap();
+
+                    self.builder
+                        .build_memcpy(
+                            ll_dst_value_ptr,
+                            2,
+                            ll_src_value_ptr,
+                            2,
+                            self.ctx
+                                .i32_type()
+                                .const_int(enum_type.max_variant_size_bytes as u64, false),
+                        )
+                        .unwrap();
+                }
+            }
+
             RichType::Tuple(tuple_type) => {
                 let ll_src_val_type = convert::to_basic_type(self.ctx, self.types, typ);
 
@@ -833,7 +881,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 // If the value being returned is some structured type, we need to copy it to the
                 // memory pointed to by the first argument and return void.
                 let expr_type = self.types.get(&expr.type_id).unwrap();
-                if let RichType::Struct(_) | RichType::Tuple(_) = expr_type {
+                if let RichType::Struct(_) | RichType::Tuple(_) | RichType::Enum(_) = expr_type {
                     // Load the return value from the result pointer.
                     let expr_type = self.types.get(&expr.type_id).unwrap();
                     let ret_val = self.builder.build_load(

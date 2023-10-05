@@ -57,7 +57,7 @@ impl Display for RichEnumTypeVariant {
 pub struct RichEnumType {
     pub name: String,
     pub variants: HashMap<String, RichEnumTypeVariant>,
-    pub largest_variant_size_bytes: u32,
+    pub max_variant_size_bytes: u32,
 }
 
 impl PartialEq for RichEnumType {
@@ -71,7 +71,7 @@ impl Clone for RichEnumType {
         RichEnumType {
             name: self.name.clone(),
             variants: self.variants.clone(),
-            largest_variant_size_bytes: self.largest_variant_size_bytes,
+            max_variant_size_bytes: self.max_variant_size_bytes,
         }
     }
 }
@@ -104,7 +104,7 @@ impl RichEnumType {
             RichType::Enum(RichEnumType {
                 name: enum_type.name.clone(),
                 variants: HashMap::new(),
-                largest_variant_size_bytes: 0,
+                max_variant_size_bytes: 0,
             }),
         );
 
@@ -157,7 +157,7 @@ impl RichEnumType {
         let rich_enum = RichEnumType {
             name: enum_type.name.clone(),
             variants,
-            largest_variant_size_bytes,
+            max_variant_size_bytes: largest_variant_size_bytes,
         };
 
         // Make sure the enum doesn't contain itself via other types.

@@ -227,6 +227,11 @@ impl Scope {
         self.structs.get(name)
     }
 
+    // Returns the enum type with the given name from the scope, or None if no such type exists.
+    fn get_enum(&self, name: &str) -> Option<&RichEnumType> {
+        self.enums.get(name)
+    }
+
     // Returns the symbol with the given name from the scope, or None if no such symbol
     // exists.
     fn get_symbol(&self, name: &str) -> Option<&ScopedSymbol> {
@@ -494,6 +499,18 @@ impl ProgramContext {
         // Search up the stack from the current scope.
         for scope in self.stack.iter().rev() {
             if let Some(s) = scope.get_struct(name) {
+                return Some(s);
+            }
+        }
+
+        None
+    }
+
+    /// Attempts to locate the enum type with the given name and returns it, if found.
+    pub fn get_enum(&self, name: &str) -> Option<&RichEnumType> {
+        // Search up the stack from the current scope.
+        for scope in self.stack.iter().rev() {
+            if let Some(s) = scope.get_enum(name) {
                 return Some(s);
             }
         }

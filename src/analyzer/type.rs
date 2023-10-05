@@ -192,6 +192,9 @@ impl RichType {
                 if let Some(rich_struct_type) = ctx.get_struct(type_name) {
                     return RichType::Struct(rich_struct_type.clone());
                 }
+                if let Some(rich_enum_type) = ctx.get_enum(type_name) {
+                    return RichType::Enum(rich_enum_type.clone());
+                }
                 if let Some(fn_sig) = ctx.get_extern_fn(type_name) {
                     return RichType::Function(Box::new(fn_sig.clone()));
                 }
@@ -204,6 +207,10 @@ impl RichType {
                 if let Some(struct_type) = ctx.get_extern_struct(type_name) {
                     let rich_struct_type = RichStructType::from(ctx, &struct_type.clone(), false);
                     return RichType::Struct(rich_struct_type);
+                }
+                if let Some(enum_type) = ctx.get_extern_enum(type_name) {
+                    let rich_enum_type = RichEnumType::from(ctx, &enum_type.clone());
+                    return RichType::Enum(rich_enum_type);
                 }
 
                 ctx.add_err(AnalyzeError::new(
