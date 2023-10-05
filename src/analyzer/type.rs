@@ -6,12 +6,12 @@ use std::hash::Hash;
 
 use colored::*;
 
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::r#enum::RichEnumType;
-use crate::analyzer::r#struct::RichStructType;
-use crate::analyzer::tuple::RichTupleType;
+use crate::analyzer::r#enum::{check_enum_containment_cycles, RichEnumType};
+use crate::analyzer::r#struct::{check_struct_containment_cycles, RichStructType};
+use crate::analyzer::tuple::{check_tuple_containment_cycles, RichTupleType};
 use crate::parser::r#type::Type;
 use crate::parser::unresolved::UnresolvedType;
 use crate::{format_code, util};
@@ -479,6 +479,52 @@ impl RichType {
             _ => panic!("type {} is not a struct", self),
         }
     }
+}
+
+/// Analyzes type containment and returns an error if there are any illegal type containment cycles
+/// that would result in infinite-sized types.
+pub fn check_type_containment(
+    ctx: &ProgramContext,
+    typ: &Type,
+    hierarchy: &mut Vec<String>,
+) -> AnalyzeResult<()> {
+    match typ {
+        Type::Unresolved(unresolved_type) => {
+            if let Some(struct_type) = ctx.get_extern_struct(unresolved_type.name.as_str()) {
+                check_struct_containment_cycles(ctx, struct_type, hierarchy)?;
+            } else if let Some(enum_type) = ctx.get_extern_enum(unresolved_type.name.as_str()) {
+                check_enum_containment_cycles(ctx, enum_type, hierarchy)?;
+            }
+        }
+
+        Type::Struct(field_struct_type) => {
+            check_struct_containment_cycles(ctx, field_struct_type, hierarchy)?;
+        }
+
+        Type::Enum(field_enum_type) => {
+            check_enum_containment_cycles(ctx, field_enum_type, hierarchy)?;
+        }
+
+        Type::Tuple(field_tuple_type) => {
+            check_tuple_containment_cycles(ctx, field_tuple_type, hierarchy)?;
+        }
+
+        Type::This(_) => {
+            // This should never happen because struct types declared at the top-level of
+            // the program cannot reference type `This` because they're not in an `impl`.
+            unreachable!();
+        }
+
+        // These types can't have containment cycles.
+        Type::I64(_)
+        | Type::Str(_)
+        | Type::Bool(_)
+        | Type::Function(_)
+        | Type::UnsafePtr(_)
+        | Type::USize(_) => {}
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
