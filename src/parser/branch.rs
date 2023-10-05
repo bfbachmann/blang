@@ -1,5 +1,6 @@
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::locatable_impl;
 use crate::parser::closure::Closure;
 use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
@@ -16,15 +17,7 @@ pub struct Branch {
     pub end_pos: Position,
 }
 
-impl Locatable for Branch {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(Branch);
 
 impl Branch {
     /// Creates a new branch.

@@ -8,7 +8,7 @@ use crate::parser::error::ParseResult;
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::program::Program;
 use crate::parser::stream::Stream;
-use crate::util;
+use crate::{locatable_impl, util};
 
 /// Represents a set of external function declarations.
 #[derive(Debug)]
@@ -48,15 +48,7 @@ impl Display for Extern {
     }
 }
 
-impl Locatable for Extern {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(Extern);
 
 impl Extern {
     /// Attempts to parse a set of external function declarations from the token sequence. Expects

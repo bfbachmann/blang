@@ -9,7 +9,7 @@ use crate::parser::expr::Expression;
 use crate::parser::program::Program;
 use crate::parser::stream::Stream;
 use crate::parser::symbol::Symbol;
-use crate::util;
+use crate::{locatable_impl, util};
 
 /// Represents the calling of a function.
 #[derive(Debug, Clone)]
@@ -47,15 +47,7 @@ impl fmt::Display for FunctionCall {
     }
 }
 
-impl Locatable for FunctionCall {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(FunctionCall);
 
 impl FunctionCall {
     /// Creates a new function call with default (zero) start and end positions.

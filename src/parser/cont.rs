@@ -1,6 +1,7 @@
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::locatable_impl;
 use crate::parser::error::ParseResult;
 use crate::parser::program::Program;
 use crate::parser::stream::Stream;
@@ -12,15 +13,7 @@ pub struct Continue {
     pub end_pos: Position,
 }
 
-impl Locatable for Continue {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(Continue);
 
 impl Continue {
     /// Parses a continue statement from the given token sequence.

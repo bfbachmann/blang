@@ -1,4 +1,5 @@
 use crate::lexer::pos::{Locatable, Position};
+use crate::locatable_impl;
 use crate::parser::expr::Expression;
 
 /// Represents a return statement.
@@ -9,15 +10,7 @@ pub struct Ret {
     end_pos: Position,
 }
 
-impl Locatable for Ret {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(Ret);
 
 impl Ret {
     /// Creates a new return statement.

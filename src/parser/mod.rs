@@ -12,6 +12,7 @@ pub mod closure;
 pub mod cond;
 pub mod r#const;
 pub mod cont;
+pub mod r#enum;
 pub mod error;
 pub mod expr;
 pub mod ext;

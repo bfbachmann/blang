@@ -15,7 +15,7 @@ use crate::parser::program::Program;
 use crate::parser::r#type::Type;
 use crate::parser::stream::Stream;
 use crate::parser::unresolved::UnresolvedType;
-use crate::util;
+use crate::{locatable_impl, util};
 
 /// Represents a field in a struct with a type and a name.
 #[derive(Debug, Clone, Eq)]
@@ -39,15 +39,7 @@ impl Hash for StructField {
     }
 }
 
-impl Locatable for StructField {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(StructField);
 
 /// Represents a struct with a set of named fields.
 #[derive(Debug, Clone, Eq)]
@@ -83,15 +75,7 @@ impl PartialEq for StructType {
     }
 }
 
-impl Locatable for StructType {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(StructType);
 
 impl StructType {
     /// Parses a struct declaration. Expects token sequences of the form
@@ -204,21 +188,13 @@ impl Display for StructInit {
 impl PartialEq for StructInit {
     fn eq(&self, other: &Self) -> bool {
         self.typ == other.typ
-            && util::hashmaps_are_equal(&self.field_values, &other.field_values)
+            && util::hashmaps_eq(&self.field_values, &other.field_values)
             && self.start_pos == other.start_pos
             && self.end_pos == other.end_pos
     }
 }
 
-impl Locatable for StructInit {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(StructInit);
 
 impl StructInit {
     /// Parses struct initialization. Expects token sequences of the form

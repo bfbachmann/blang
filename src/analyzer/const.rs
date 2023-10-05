@@ -22,7 +22,7 @@ pub struct RichConst {
 impl PartialEq for RichConst {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
-            && util::optionals_are_equal(&self.declared_type_id, &other.declared_type_id)
+            && util::opts_eq(&self.declared_type_id, &other.declared_type_id)
             && self.value == other.value
     }
 }

@@ -17,7 +17,8 @@ pub enum ErrorKind {
     StructFieldNotDefined,
     StructFieldNotInitialized,
     MemberNotDefined,
-    DuplicateStructFieldName,
+    DuplicateStructField,
+    DuplicateEnumVariant,
     WrongNumberOfArgs,
     UnexpectedBreak,
     UnexpectedContinue,
@@ -31,6 +32,7 @@ pub enum ErrorKind {
     InvalidStatement,
     ImmutableAssignment,
     UseOfMovedValue,
+    TypeIsNotEnum,
 }
 
 impl fmt::Display for ErrorKind {
@@ -46,7 +48,8 @@ impl fmt::Display for ErrorKind {
             ErrorKind::SymbolNotDefined => write!(f, "symbol not defined"),
             ErrorKind::StructFieldNotDefined => write!(f, "struct field not defined"),
             ErrorKind::StructFieldNotInitialized => write!(f, "struct field not initialized"),
-            ErrorKind::DuplicateStructFieldName => write!(f, "duplicate struct field name"),
+            ErrorKind::DuplicateStructField => write!(f, "duplicate struct field"),
+            ErrorKind::DuplicateEnumVariant => write!(f, "duplicate enum variant"),
             ErrorKind::WrongNumberOfArgs => write!(f, "wrong number of arguments"),
             ErrorKind::UnexpectedBreak => write!(f, "unexpected break"),
             ErrorKind::UnexpectedContinue => write!(f, "unexpected continue"),
@@ -61,6 +64,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::InvalidStatement => write!(f, "invalid statement"),
             ErrorKind::ImmutableAssignment => write!(f, "assignment to immutable value"),
             ErrorKind::UseOfMovedValue => write!(f, "use of moved value"),
+            ErrorKind::TypeIsNotEnum => write!(f, "type is not enum"),
         }
     }
 }

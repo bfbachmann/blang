@@ -8,7 +8,7 @@ use crate::parser::expr::Expression;
 use crate::parser::program::Program;
 use crate::parser::r#type::Type;
 use crate::parser::stream::Stream;
-use crate::util;
+use crate::{locatable_impl, util};
 
 /// Represents a single module-level constant declaration.
 #[derive(Debug, Clone)]
@@ -22,9 +22,7 @@ pub struct Const {
 
 impl PartialEq for Const {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-            && util::optionals_are_equal(&self.typ, &other.typ)
-            && self.value == other.value
+        self.name == other.name && util::opts_eq(&self.typ, &other.typ) && self.value == other.value
     }
 }
 
@@ -40,15 +38,7 @@ impl Display for Const {
     }
 }
 
-impl Locatable for Const {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(Const);
 
 impl Const {
     /// Parses a single constant declaration from the token stream. Expects token sequences of the
@@ -116,15 +106,7 @@ impl Display for ConstBlock {
     }
 }
 
-impl Locatable for ConstBlock {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(ConstBlock);
 
 impl ConstBlock {
     /// Parses a `const` statement from the given token sequence. Expects token sequences of the

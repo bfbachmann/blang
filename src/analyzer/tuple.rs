@@ -1,7 +1,9 @@
 use std::fmt::{Display, Formatter};
 
+use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::program::check_type_containment;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::parser::r#type::Type;
 use crate::parser::tuple::{TupleInit, TupleType};
@@ -45,6 +47,7 @@ impl Display for RichTupleType {
 }
 
 impl RichTupleType {
+    /// Performs semantic analysis on a tuple type declaration.
     pub fn from(ctx: &mut ProgramContext, tuple_type: &TupleType) -> Self {
         let mut type_ids = vec![];
         for typ in &tuple_type.field_types {
@@ -87,6 +90,7 @@ impl PartialEq for RichTupleInit {
 }
 
 impl RichTupleInit {
+    /// Creates a new empty tuple.
     pub fn new_empty(ctx: &mut ProgramContext) -> Self {
         RichTupleInit {
             type_id: RichType::analyze(ctx, &Type::Tuple(TupleType::new(vec![]))),
@@ -94,6 +98,7 @@ impl RichTupleInit {
         }
     }
 
+    /// Performs semantic analysis on a tuple initialization.
     pub fn from(ctx: &mut ProgramContext, tuple_init: &TupleInit) -> Self {
         let mut values = vec![];
         let mut types = vec![];
@@ -108,4 +113,19 @@ impl RichTupleInit {
             values,
         }
     }
+}
+
+/// Analyzes type containment within the given tuple type and returns an error if there are any
+/// illegal type containment cycles that would result in infinite-sized types.
+pub fn check_tuple_containment_cycles(
+    ctx: &ProgramContext,
+    tuple_type: &TupleType,
+    hierarchy: &mut Vec<String>,
+) -> AnalyzeResult<()> {
+    // Recursively check each tuple field type.
+    for typ in &tuple_type.field_types {
+        check_type_containment(ctx, &typ, hierarchy)?;
+    }
+
+    Ok(())
 }

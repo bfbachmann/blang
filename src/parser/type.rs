@@ -1,6 +1,8 @@
 use std::fmt;
 use std::hash::Hash;
 
+use colored::Colorize;
+
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -9,6 +11,7 @@ use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::i64::I64Type;
+use crate::parser::r#enum::EnumType;
 use crate::parser::r#struct::StructType;
 use crate::parser::str::StrType;
 use crate::parser::stream::Stream;
@@ -26,6 +29,8 @@ pub enum Type {
     UnsafePtr(UnsafePtrType),
     USize(USizeType),
     Struct(StructType),
+    #[allow(dead_code)]
+    Enum(EnumType),
     Tuple(TupleType),
     Function(Box<FunctionSignature>),
     /// Represents a named user-defined (i.e. non-primitive) type.
@@ -57,6 +62,7 @@ impl PartialEq for Type {
                 }
             }
             (Type::Struct(s1), Type::Struct(s2)) => s1 == s2,
+            (Type::Enum(s1), Type::Enum(s2)) => s1 == s2,
             (Type::Tuple(t1), Type::Tuple(t2)) => t1 == t2,
             (Type::Unresolved(u1), Type::Unresolved(u2)) => u1 == u2,
             (_, _) => false,
@@ -74,6 +80,7 @@ impl fmt::Display for Type {
             Type::USize(_) => write!(f, "{}", TokenKind::USize),
             Type::Function(fn_sig) => write!(f, "{}", fn_sig),
             Type::Struct(s) => write!(f, "{}", s),
+            Type::Enum(s) => write!(f, "{}", s),
             Type::Tuple(t) => write!(f, "{}", t),
             Type::Unresolved(u) => write!(f, "{}", u.name),
             Type::This(_) => write!(f, "{}", TokenKind::ThisType),
@@ -90,6 +97,7 @@ impl Locatable for Type {
             Type::UnsafePtr(uptr) => uptr.start_pos(),
             Type::USize(usz) => usz.start_pos(),
             Type::Struct(struct_type) => struct_type.start_pos(),
+            Type::Enum(enum_type) => enum_type.start_pos(),
             Type::Tuple(tuple_type) => tuple_type.start_pos(),
             Type::Function(fn_sig) => fn_sig.start_pos(),
             Type::Unresolved(unresolved) => unresolved.start_pos(),
@@ -105,6 +113,7 @@ impl Locatable for Type {
             Type::UnsafePtr(uptr) => uptr.end_pos(),
             Type::USize(usz) => usz.end_pos(),
             Type::Struct(struct_type) => struct_type.end_pos(),
+            Type::Enum(enum_type) => enum_type.end_pos(),
             Type::Tuple(tuple_type) => tuple_type.end_pos(),
             Type::Function(fn_sig) => fn_sig.end_pos(),
             Type::Unresolved(unresolved) => unresolved.end_pos(),
@@ -195,7 +204,7 @@ impl Type {
             Some(other) => {
                 return Err(ParseError::new(
                     ErrorKind::ExpectedType,
-                    format!(r#"expected type, but found "{}""#, other).as_str(),
+                    format_code!("expected type, but found {}", other).as_str(),
                     Some(other.clone()),
                     other.start,
                     other.end,

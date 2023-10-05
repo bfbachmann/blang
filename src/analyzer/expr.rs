@@ -9,7 +9,8 @@ use crate::analyzer::func::RichFn;
 use crate::analyzer::func_call::RichFnCall;
 use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
-use crate::analyzer::r#struct::{RichStructInit, RichStructType};
+use crate::analyzer::r#enum::{RichEnumTypeVariant, RichEnumVariantInit};
+use crate::analyzer::r#struct::RichStructInit;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::symbol::RichSymbol;
 use crate::analyzer::tuple::RichTupleInit;
@@ -30,6 +31,7 @@ pub enum RichExprKind {
     USizeLiteral(u64),
     StrLiteral(String),
     StructInit(RichStructInit),
+    EnumInit(RichEnumVariantInit),
     TupleInit(RichTupleInit),
     FunctionCall(RichFnCall),
     AnonFunction(Box<RichFn>),
@@ -48,6 +50,7 @@ impl fmt::Display for RichExprKind {
             RichExprKind::USizeLiteral(usz) => write!(f, "{}", usz),
             RichExprKind::StrLiteral(s) => write!(f, "{}", s),
             RichExprKind::StructInit(s) => write!(f, "{}", s),
+            RichExprKind::EnumInit(e) => write!(f, "{}", e),
             RichExprKind::TupleInit(t) => write!(f, "{}", t),
             RichExprKind::FunctionCall(call) => write!(f, "{}", call),
             RichExprKind::AnonFunction(func) => write!(f, "{}", *func),
@@ -71,6 +74,7 @@ impl PartialEq for RichExprKind {
             (RichExprKind::UnsafeNull, RichExprKind::UnsafeNull) => true,
             (RichExprKind::StrLiteral(s1), RichExprKind::StrLiteral(s2)) => s1 == s2,
             (RichExprKind::StructInit(s1), RichExprKind::StructInit(s2)) => s1 == s2,
+            (RichExprKind::EnumInit(e1), RichExprKind::EnumInit(e2)) => e1 == e2,
             (RichExprKind::TupleInit(t1), RichExprKind::TupleInit(t2)) => t1 == t2,
             (RichExprKind::FunctionCall(f1), RichExprKind::FunctionCall(f2)) => f1 == f2,
             (RichExprKind::AnonFunction(a1), RichExprKind::AnonFunction(a2)) => a1 == a2,
@@ -108,6 +112,18 @@ impl RichExprKind {
             RichExprKind::StructInit(struct_init) => {
                 for (_, field_val) in &struct_init.field_values {
                     if !field_val.kind.is_const() {
+                        return false;
+                    }
+                }
+
+                true
+            }
+
+            // Enum variant initializations are constants if they have no values or their values
+            // are constants.
+            RichExprKind::EnumInit(enum_init) => {
+                if let Some(val) = &enum_init.maybe_value {
+                    if !val.kind.is_const() {
                         return false;
                     }
                 }
@@ -187,7 +203,16 @@ impl RichExpr {
                 let rich_init = RichStructInit::from(ctx, &struct_init);
                 RichExpr {
                     kind: RichExprKind::StructInit(rich_init),
-                    type_id: TypeId::from(struct_init.typ),
+                    type_id: TypeId::from(struct_init.typ), // TODO: can this just be `type_id`?
+                }
+            }
+
+            Expression::EnumInit(enum_init) => {
+                let rich_init = RichEnumVariantInit::from(ctx, &enum_init);
+                let type_id = rich_init.enum_type_id.clone();
+                RichExpr {
+                    kind: RichExprKind::EnumInit(rich_init),
+                    type_id,
                 }
             }
 
@@ -205,7 +230,7 @@ impl RichExpr {
                 let type_id = RichType::analyze(ctx, &sizeof.typ);
                 let typ = ctx.get_resolved_type(&type_id).unwrap();
                 RichExpr {
-                    kind: RichExprKind::USizeLiteral(typ.size_bytes(ctx)),
+                    kind: RichExprKind::USizeLiteral(typ.size_bytes(ctx) as u64),
                     type_id: TypeId::usize(),
                 }
             }
@@ -415,11 +440,21 @@ impl RichExpr {
 
             Type::Struct(struct_type) => RichExpr {
                 kind: RichExprKind::StructInit(RichStructInit {
-                    typ: RichStructType {
-                        name: struct_type.name.clone(),
-                        fields: vec![],
-                    },
+                    type_id: TypeId::from(Type::new_unknown(struct_type.name.as_str())),
                     field_values: Default::default(),
+                }),
+                type_id,
+            },
+
+            Type::Enum(enum_type) => RichExpr {
+                kind: RichExprKind::EnumInit(RichEnumVariantInit {
+                    enum_type_id: TypeId::from(Type::new_unknown(enum_type.name.as_str())),
+                    variant: RichEnumTypeVariant {
+                        number: 0,
+                        name: "<unknown>".to_string(),
+                        maybe_type_id: None,
+                    },
+                    maybe_value: None,
                 }),
                 type_id,
             },

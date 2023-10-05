@@ -1,6 +1,7 @@
 use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Locatable, Position};
+use crate::locatable_impl;
 
 /// Represents a static type (i.e. a string literal that is allocated globally).
 #[derive(Debug, Clone, Eq)]
@@ -22,15 +23,7 @@ impl Hash for StrType {
     }
 }
 
-impl Locatable for StrType {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(StrType);
 
 impl StrType {
     pub fn new(start_pos: Position, end_pos: Position) -> Self {

@@ -8,7 +8,7 @@ use crate::parser::branch::Branch;
 use crate::parser::error::ParseResult;
 use crate::parser::program::Program;
 use crate::parser::stream::Stream;
-use crate::util;
+use crate::{locatable_impl, util};
 
 /// Represents a conditional (i.e. branching if/else if/else statements).
 #[derive(Debug, Clone)]
@@ -33,15 +33,7 @@ impl PartialEq for Conditional {
     }
 }
 
-impl Locatable for Conditional {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(Conditional);
 
 impl Conditional {
     /// Creates a new conditional.

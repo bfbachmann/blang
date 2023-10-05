@@ -1,4 +1,3 @@
-
 use std::fmt::{Display, Formatter};
 
 use colored::Colorize;
@@ -6,6 +5,7 @@ use colored::Colorize;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::locatable_impl;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::program::Program;
 use crate::parser::stream::Stream;
@@ -21,15 +21,7 @@ pub struct MemberAccess {
     end_pos: Position,
 }
 
-impl Locatable for MemberAccess {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(MemberAccess);
 
 impl PartialEq for MemberAccess {
     fn eq(&self, other: &Self) -> bool {

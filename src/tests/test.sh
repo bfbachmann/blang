@@ -7,7 +7,7 @@ CC=${CC:-clang}
 LLC=${LLC:-llc}
 
 fail() {
-    echo "$1" FAIL
+    echo FAIL
     exit 1
 }
 

@@ -14,6 +14,7 @@ use crate::parser::func_call::FunctionCall;
 use crate::parser::i64_lit::I64Lit;
 use crate::parser::op::Operator;
 use crate::parser::program::Program;
+use crate::parser::r#enum::EnumVariantInit;
 use crate::parser::r#struct::StructInit;
 use crate::parser::sizeof::SizeOf;
 use crate::parser::str_lit::StrLit;
@@ -52,6 +53,7 @@ pub enum Expression {
     AnonFunction(Box<Function>),
     UnaryOperation(Operator, Box<Expression>),
     StructInit(StructInit),
+    EnumInit(EnumVariantInit),
     TupleInit(TupleInit),
     SizeOf(SizeOf),
 
@@ -76,6 +78,9 @@ impl fmt::Display for Expression {
             Expression::StructInit(struct_init) => {
                 write!(f, "struct initialization {}", struct_init)
             }
+            Expression::EnumInit(enum_init) => {
+                write!(f, "enum initialization {}", enum_init)
+            }
             Expression::TupleInit(tuple_init) => {
                 write!(f, "tuple initialization {}", tuple_init)
             }
@@ -98,6 +103,7 @@ impl Locatable for Expression {
             Expression::AnonFunction(func) => func.start_pos(),
             Expression::UnaryOperation(_, expr) => expr.start_pos(),
             Expression::StructInit(struct_init) => struct_init.start_pos(),
+            Expression::EnumInit(enum_init) => enum_init.start_pos(),
             Expression::TupleInit(tuple_init) => tuple_init.start_pos(),
             Expression::BinaryOperation(left, _, _) => left.start_pos(),
             Expression::SizeOf(so) => so.start_pos(),
@@ -115,6 +121,7 @@ impl Locatable for Expression {
             Expression::AnonFunction(func) => func.end_pos(),
             Expression::UnaryOperation(_, expr) => expr.end_pos(),
             Expression::StructInit(struct_init) => struct_init.end_pos(),
+            Expression::EnumInit(enum_init) => enum_init.end_pos(),
             Expression::TupleInit(tuple_init) => tuple_init.end_pos(),
             Expression::BinaryOperation(left, _, _) => left.end_pos(),
             Expression::SizeOf(so) => so.end_pos(),
@@ -155,7 +162,8 @@ impl Expression {
     ///  - a literal value (includes anonymous functions)
     ///  - a function call
     ///  - a unary operator followed by a composite expression (`<unary_op> <comp_expr>`)
-    ///  - a struct initialization (see `StructInit::from`)
+    ///  - struct initialization (see `StructInit::from`)
+    ///  - enum initialization (see `EnumInit::from`)
     ///  - a `sizeof` expression (see `SizeOf::from`)
     fn from_basic(tokens: &mut Stream<Token>, is_arg: bool) -> ParseResult<Option<Expression>> {
         match tokens.peek_next() {
@@ -197,7 +205,7 @@ impl Expression {
             }
 
             // If the first token is an identifier, the expression can be a function call,
-            // a symbol, or a struct initialization.
+            // a symbol, or a struct initialization, or enum variant initialization.
             Some(Token {
                 kind: TokenKind::Identifier(_),
                 ..
@@ -208,10 +216,16 @@ impl Expression {
                     return Ok(Some(Expression::FunctionCall(call)));
                 }
 
-                // It's not a call chain. Try parse it as struct initialization.
+                // Try parse it as struct initialization.
                 tokens.set_cursor(cursor);
                 if let Ok(struct_init) = StructInit::from(tokens) {
                     return Ok(Some(Expression::StructInit(struct_init)));
+                }
+
+                // Try parse it as enum variant initialization.
+                tokens.set_cursor(cursor);
+                if let Ok(enum_init) = EnumVariantInit::from(tokens) {
+                    return Ok(Some(Expression::EnumInit(enum_init)));
                 }
 
                 // At this point it can only possibly be a symbol. Otherwise, it's invalid code.

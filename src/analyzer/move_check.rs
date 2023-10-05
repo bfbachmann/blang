@@ -19,8 +19,8 @@ use crate::analyzer::statement::RichStatement;
 use crate::analyzer::symbol::RichSymbol;
 use crate::analyzer::var_assign::RichVarAssign;
 use crate::analyzer::var_dec::RichVarDecl;
-use crate::format_code;
 use crate::lexer::pos::{Locatable, Position};
+use crate::{format_code, locatable_impl};
 
 /// Represents the change in ownership of a variable or value.
 #[derive(Clone)]
@@ -30,15 +30,7 @@ struct Move {
     end_pos: Position,
 }
 
-impl Locatable for Move {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(Move);
 
 impl Display for Move {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -295,6 +287,7 @@ impl<'a> MoveChecker<'a> {
     fn check_statement(&mut self, statement: &RichStatement) {
         match statement {
             RichStatement::StructTypeDeclaration(_)
+            | RichStatement::EnumTypeDeclaration(_)
             | RichStatement::ExternFns(_)
             | RichStatement::Consts(_)
             | RichStatement::Continue

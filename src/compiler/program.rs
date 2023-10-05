@@ -150,8 +150,8 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
                         )?;
                     }
                 }
-                RichStatement::StructTypeDeclaration(_) => {
-                    // Nothing to do here because struct types are compiled only when they're used.
+                RichStatement::StructTypeDeclaration(_) | RichStatement::EnumTypeDeclaration(_) => {
+                    // Nothing to do here because types are compiled only when they're used.
                 }
                 RichStatement::ExternFns(_) => {
                     // Nothing to do here because extern functions are compiled in the call to
@@ -459,6 +459,37 @@ mod tests {
                 let i = 1
                 let v = i.add(10).sub(50).sub(2).add(-24)
                 i.sub(10).add(1)
+            }
+            "#,
+        );
+    }
+
+    #[test]
+    fn enums() {
+        assert_compiles(
+            r#"
+            struct S {
+                i: i64
+                b: bool
+                s: str
+            }
+            
+            enum E {
+                One
+                Two(i64)
+                Three(bool)
+                Four(S)
+            }
+            
+            fn main() {
+                let e_one = E::One
+                let e_two = E::Two(-42)
+                let e_three = E::Three(true)
+                let e_four = E::Four(S{
+                    i: 12
+                    b: false
+                    s: "test"
+                })
             }
             "#,
         );

@@ -2,17 +2,20 @@ use std::collections::HashMap;
 
 use colored::Colorize;
 
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::func_sig::analyze_fn_sig;
 use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::move_check::MoveChecker;
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::r#struct::RichStructType;
+use crate::analyzer::r#enum::check_enum_containment_cycles;
+use crate::analyzer::r#struct::check_struct_containment_cycles;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::statement::RichStatement;
+use crate::analyzer::tuple::check_tuple_containment_cycles;
 use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
 use crate::format_code;
 use crate::parser::program::Program;
+use crate::parser::r#type::Type;
 use crate::parser::statement::Statement;
 
 /// Represents a semantically valid and type-rich program.
@@ -56,8 +59,8 @@ impl RichProg {
 
     /// Performs semantic analysis on the given program and returns a type-rich version of it.
     pub fn from(ctx: &mut ProgramContext, prog: Program) -> Self {
-        // Analyze top-level struct declarations.
-        define_structs(ctx, &prog);
+        // Analyze top-level type declarations.
+        define_types(ctx, &prog);
 
         // Analyze top-level function declarations.
         define_fns(ctx, &prog);
@@ -70,6 +73,7 @@ impl RichProg {
                 | Statement::ExternFns(_)
                 | Statement::Consts(_)
                 | Statement::StructDeclaration(_)
+                | Statement::EnumDeclaration(_)
                 | Statement::Impl(_) => {
                     analyzed_statements.push(RichStatement::from(ctx, statement));
                 }
@@ -89,16 +93,18 @@ impl RichProg {
     }
 }
 
-/// Defines top-level struct types in the program context without deeply analyzing their fields, so
-/// they can be referenced later. This will simply check for struct type name collisions and
+/// Defines top-level types in the program context without deeply analyzing their fields, so
+/// they can be referenced later. This will simply check for type name collisions and
 /// containment cycles. We do this before fully analyzing types to prevent infinite recursion.
-fn define_structs(ctx: &mut ProgramContext, prog: &Program) {
-    // First pass: Define all structs without analyzing their fields. In this pass, we will only
-    // check that there are no struct name collisions.
+fn define_types(ctx: &mut ProgramContext, prog: &Program) {
+    // First pass: Define all types without analyzing their fields. In this pass, we will only
+    // check that there are no type name collisions.
     for statement in &prog.statements {
         match statement {
             Statement::StructDeclaration(struct_type) => {
-                if ctx.add_extern_struct(struct_type.clone()).is_some() {
+                if ctx.get_extern_struct(&struct_type.name).is_some()
+                    || ctx.get_extern_enum(&struct_type.name).is_some()
+                {
                     ctx.add_err(AnalyzeError::new(
                         ErrorKind::TypeAlreadyDefined,
                         format_code!(
@@ -108,30 +114,107 @@ fn define_structs(ctx: &mut ProgramContext, prog: &Program) {
                         .as_str(),
                         struct_type,
                     ));
+                    continue;
                 }
+
+                ctx.add_extern_struct(struct_type.clone());
+            }
+
+            Statement::EnumDeclaration(enum_type) => {
+                if ctx.get_extern_struct(&enum_type.name).is_some()
+                    || ctx.get_extern_enum(&enum_type.name).is_some()
+                {
+                    ctx.add_err(AnalyzeError::new(
+                        ErrorKind::TypeAlreadyDefined,
+                        format_code!(
+                            "another type with the name {} already exists",
+                            enum_type.name
+                        )
+                        .as_str(),
+                        enum_type,
+                    ));
+                    continue;
+                }
+
+                ctx.add_extern_enum(enum_type.clone());
             }
 
             _ => {}
         }
     }
 
-    // Second pass: Check for struct containment cycles.
-    let extern_structs = ctx.extern_structs();
+    // Second pass: Check for type containment cycles.
     let mut results = vec![];
-    for struct_type in extern_structs {
-        let result = RichStructType::analyze_containment(ctx, struct_type);
-        results.push((result, struct_type.name.clone()));
-    }
+    {
+        let extern_structs = ctx.extern_structs();
+        for struct_type in extern_structs {
+            let result = check_struct_containment_cycles(ctx, struct_type, &mut vec![]);
+            results.push((result, struct_type.name.clone()));
+        }
 
-    // Remove struct types that have containment cycles from the program context and add them as
-    // invalid types instead. We do this so we can safely continue with semantic analysis without
-    // having to worry about stack overflows during recursive type resolution.
-    for (result, struct_type_name) in results {
-        if ctx.consume_error(result).is_none() {
-            ctx.remove_extern_struct(struct_type_name.as_str());
-            ctx.add_invalid_type(struct_type_name.as_str());
+        let extern_enums = ctx.extern_enums();
+        for enum_type in extern_enums {
+            let result = check_enum_containment_cycles(ctx, enum_type, &mut vec![]);
+            results.push((result, enum_type.name.clone()));
         }
     }
+
+    // Remove types that have illegal containment cycles from the program context and add them as
+    // invalid types instead. We do this so we can safely continue with semantic analysis without
+    // having to worry about stack overflows during recursive type resolution.
+    for (result, type_name) in results {
+        if ctx.consume_error(result).is_none() {
+            ctx.remove_extern_struct(type_name.as_str());
+            ctx.remove_extern_enum(type_name.as_str());
+            ctx.add_invalid_type(type_name.as_str());
+        }
+    }
+}
+
+/// Analyzes type containment and returns an error if there are any illegal type containment cycles
+/// that would result in infinite-sized types.
+pub fn check_type_containment(
+    ctx: &ProgramContext,
+    typ: &Type,
+    hierarchy: &mut Vec<String>,
+) -> AnalyzeResult<()> {
+    match typ {
+        Type::Unresolved(unresolved_type) => {
+            if let Some(struct_type) = ctx.get_extern_struct(unresolved_type.name.as_str()) {
+                check_struct_containment_cycles(ctx, struct_type, hierarchy)?;
+            } else if let Some(enum_type) = ctx.get_extern_enum(unresolved_type.name.as_str()) {
+                check_enum_containment_cycles(ctx, enum_type, hierarchy)?;
+            }
+        }
+
+        Type::Struct(field_struct_type) => {
+            check_struct_containment_cycles(ctx, field_struct_type, hierarchy)?;
+        }
+
+        Type::Enum(field_enum_type) => {
+            check_enum_containment_cycles(ctx, field_enum_type, hierarchy)?;
+        }
+
+        Type::Tuple(field_tuple_type) => {
+            check_tuple_containment_cycles(ctx, field_tuple_type, hierarchy)?;
+        }
+
+        Type::This(_) => {
+            // This should never happen because struct types declared at the top-level of
+            // the program cannot reference type `This` because they're not in an `impl`.
+            unreachable!();
+        }
+
+        // These types can't have containment cycles.
+        Type::I64(_)
+        | Type::Str(_)
+        | Type::Bool(_)
+        | Type::Function(_)
+        | Type::UnsafePtr(_)
+        | Type::USize(_) => {}
+    }
+
+    Ok(())
 }
 
 /// Analyzes all top-level function signatures and defines them in the program context so they
@@ -1132,6 +1215,82 @@ mod tests {
             result,
             Err(AnalyzeError {
                 kind: ErrorKind::FunctionAlreadyDefined,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn duplicate_enum_variant() {
+        let result = analyze_prog(
+            r#"
+            enum E {
+                Thing
+                Thing
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::DuplicateEnumVariant,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn type_already_defined() {
+        let result = analyze_prog(
+            r#"
+            enum E {}
+            struct E {}
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::TypeAlreadyDefined,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn illegal_direct_enum_containment_cycle() {
+        let result = analyze_prog(
+            r#"
+            enum E {
+                Thing(T)
+            }
+            
+            struct T {
+                e: E
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::InfiniteSizedType,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn illegal_indirect_enum_containment_cycle() {
+        let result = analyze_prog(
+            r#"
+            enum E {
+                Thing(E)
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::InfiniteSizedType,
                 ..
             })
         ))

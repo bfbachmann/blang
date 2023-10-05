@@ -6,7 +6,7 @@ use crate::parser::expr::Expression;
 use crate::parser::program::Program;
 use crate::parser::statement::Statement;
 use crate::parser::stream::Stream;
-use crate::util;
+use crate::{locatable_impl, util};
 
 /// Represents a closure, which is just a series of statements with their own scope.
 #[derive(Debug, Clone)]
@@ -26,15 +26,7 @@ impl PartialEq for Closure {
     }
 }
 
-impl Locatable for Closure {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(Closure);
 
 impl Closure {
     /// Creates a new empty closure with default (zero) start and end positions.

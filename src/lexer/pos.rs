@@ -30,3 +30,19 @@ pub trait Locatable {
     fn start_pos(&self) -> &Position;
     fn end_pos(&self) -> &Position;
 }
+
+/// Implements the `Locatable` trait for any type that has `start_pos` and `end_pos` fields.
+#[macro_export]
+macro_rules! locatable_impl {
+    ($t:ident) => {
+        impl Locatable for $t {
+            fn start_pos(&self) -> &Position {
+                &self.start_pos
+            }
+
+            fn end_pos(&self) -> &Position {
+                &self.end_pos
+            }
+        }
+    };
+}

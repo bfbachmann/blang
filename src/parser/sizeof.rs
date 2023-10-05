@@ -1,9 +1,9 @@
-
 use std::fmt::{Display, Formatter};
 
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::locatable_impl;
 use crate::parser::error::ParseResult;
 use crate::parser::program::Program;
 use crate::parser::r#type::Type;
@@ -23,15 +23,7 @@ impl Display for SizeOf {
     }
 }
 
-impl Locatable for SizeOf {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(SizeOf);
 
 impl SizeOf {
     /// Parses a `sizeof` statement from the given token sequence. Expects token sequences of the

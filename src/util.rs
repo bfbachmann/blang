@@ -7,7 +7,7 @@ pub fn vecs_eq<T: PartialEq>(a: &Vec<T>, b: &Vec<T>) -> bool {
 }
 
 /// Returns true if the two optional values are equal.
-pub fn optionals_are_equal<T: PartialEq>(a: &Option<T>, b: &Option<T>) -> bool {
+pub fn opts_eq<T: PartialEq>(a: &Option<T>, b: &Option<T>) -> bool {
     match (a, b) {
         (Some(av), Some(bv)) => av == bv,
         (None, None) => true,
@@ -16,7 +16,7 @@ pub fn optionals_are_equal<T: PartialEq>(a: &Option<T>, b: &Option<T>) -> bool {
 }
 
 /// Returns true if both maps have the exact same set of keys and share equal values for each key.
-pub fn hashmaps_are_equal<K, V>(a: &HashMap<K, V>, b: &HashMap<K, V>) -> bool
+pub fn hashmaps_eq<K, V>(a: &HashMap<K, V>, b: &HashMap<K, V>) -> bool
 where
     K: Eq + std::hash::Hash,
     V: PartialEq,

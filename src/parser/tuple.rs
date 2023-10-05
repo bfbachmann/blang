@@ -12,7 +12,7 @@ use crate::parser::expr::Expression;
 use crate::parser::program::Program;
 use crate::parser::r#type::Type;
 use crate::parser::stream::Stream;
-use crate::util;
+use crate::{locatable_impl, util};
 
 /// Represents tuple type declaration.
 #[derive(Debug, Eq)]
@@ -22,15 +22,7 @@ pub struct TupleType {
     end_pos: Position,
 }
 
-impl Locatable for TupleType {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(TupleType);
 
 impl Hash for TupleType {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -162,15 +154,7 @@ pub struct TupleInit {
     end_pos: Position,
 }
 
-impl Locatable for TupleInit {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(TupleInit);
 
 impl Display for TupleInit {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

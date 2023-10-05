@@ -9,33 +9,25 @@ use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::lexer::pos::{Locatable, Position};
-use crate::parser::branch::Branch;
 use crate::parser::cond::Conditional;
-use crate::{format_code, util};
+use crate::{format_code, locatable_impl, util};
 
 /// Represents a semantically valid and type-rich branch.
 #[derive(Clone, Debug)]
 pub struct RichBranch {
     pub cond: Option<RichExpr>,
     pub body: RichClosure,
-    original: Branch,
+    start_pos: Position,
+    end_pos: Position,
 }
 
 impl PartialEq for RichBranch {
     fn eq(&self, other: &Self) -> bool {
-        util::optionals_are_equal(&self.cond, &other.cond) && self.body == other.body
+        util::opts_eq(&self.cond, &other.cond) && self.body == other.body
     }
 }
 
-impl Locatable for RichBranch {
-    fn start_pos(&self) -> &Position {
-        self.original.start_pos()
-    }
-
-    fn end_pos(&self) -> &Position {
-        self.original.end_pos()
-    }
-}
+locatable_impl!(RichBranch);
 
 /// Represents a semantically valid and type-rich conditional.
 #[derive(Clone, Debug)]
@@ -54,7 +46,7 @@ impl fmt::Display for RichCond {
 impl PartialEq for RichCond {
     fn eq(&self, other: &Self) -> bool {
         util::vecs_eq(&self.branches, &other.branches)
-            && util::optionals_are_equal(&self.ret_type_id, &other.ret_type_id)
+            && util::opts_eq(&self.ret_type_id, &other.ret_type_id)
     }
 }
 
@@ -107,7 +99,8 @@ impl RichCond {
             rich_branches.push(RichBranch {
                 cond: rich_expr,
                 body: rich_closure,
-                original: branch,
+                start_pos: branch.start_pos,
+                end_pos: branch.end_pos,
             });
         }
 

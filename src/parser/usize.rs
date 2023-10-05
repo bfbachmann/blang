@@ -1,6 +1,7 @@
 use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Locatable, Position};
+use crate::locatable_impl;
 
 /// Represents a pointer-sized unsigned integer.
 #[derive(Debug, Clone, Eq)]
@@ -22,15 +23,7 @@ impl Hash for USizeType {
     }
 }
 
-impl Locatable for USizeType {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(USizeType);
 
 impl USizeType {
     pub fn new(start_pos: Position, end_pos: Position) -> Self {

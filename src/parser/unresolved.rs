@@ -1,6 +1,7 @@
 use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Locatable, Position};
+use crate::locatable_impl;
 
 /// Represents a user-defined type that has not yet been resolved (i.e. is not primitive).
 #[derive(Debug, Clone, Eq)]
@@ -22,15 +23,7 @@ impl Hash for UnresolvedType {
     }
 }
 
-impl Locatable for UnresolvedType {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(UnresolvedType);
 
 impl UnresolvedType {
     /// Creates a new unresolved type with the given type name.

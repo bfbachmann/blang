@@ -8,7 +8,7 @@ use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::ret::Ret;
-use crate::{format_code, util};
+use crate::{format_code, locatable_impl, util};
 
 /// Represents an analyzed return statement.
 #[derive(Clone, Debug)]
@@ -30,19 +30,11 @@ impl fmt::Display for RichRet {
 
 impl PartialEq for RichRet {
     fn eq(&self, other: &Self) -> bool {
-        util::optionals_are_equal(&self.val, &other.val)
+        util::opts_eq(&self.val, &other.val)
     }
 }
 
-impl Locatable for RichRet {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(RichRet);
 
 impl RichRet {
     pub fn from(ctx: &mut ProgramContext, ret: Ret) -> Self {

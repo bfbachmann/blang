@@ -1,5 +1,7 @@
-use crate::lexer::pos::{Locatable, Position};
 use std::hash::{Hash, Hasher};
+
+use crate::lexer::pos::{Locatable, Position};
+use crate::locatable_impl;
 
 /// Represents a 64 bit signed integer type.
 #[derive(Debug, Clone, Eq)]
@@ -21,15 +23,7 @@ impl Hash for I64Type {
     }
 }
 
-impl Locatable for I64Type {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(I64Type);
 
 impl I64Type {
     pub fn new(start_pos: Position, end_pos: Position) -> Self {

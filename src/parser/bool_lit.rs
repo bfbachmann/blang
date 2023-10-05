@@ -5,6 +5,7 @@ use colored::Colorize;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::locatable_impl;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::stream::Stream;
@@ -23,15 +24,7 @@ impl Display for BoolLit {
     }
 }
 
-impl Locatable for BoolLit {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(BoolLit);
 
 impl BoolLit {
     /// Creates a new boolean literal with default (zero) start and end positions.

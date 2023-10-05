@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter};
 
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::locatable_impl;
 
 pub type ParseResult<T> = Result<T, ParseError>;
 
@@ -102,12 +103,4 @@ impl ParseError {
     }
 }
 
-impl Locatable for ParseError {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(ParseError);

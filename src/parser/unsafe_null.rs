@@ -5,6 +5,7 @@ use colored::Colorize;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::locatable_impl;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::stream::Stream;
@@ -22,15 +23,7 @@ impl Display for UnsafeNull {
     }
 }
 
-impl Locatable for UnsafeNull {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(UnsafeNull);
 
 impl UnsafeNull {
     /// Attempts to parse an `UNSAFE_NULL` value from the token sequence.

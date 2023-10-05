@@ -27,7 +27,7 @@ impl PartialEq for RichFnSig {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && util::vecs_eq(&self.args, &other.args)
-            && util::optionals_are_equal(&self.ret_type_id, &other.ret_type_id)
+            && util::opts_eq(&self.ret_type_id, &other.ret_type_id)
     }
 }
 

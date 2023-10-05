@@ -12,7 +12,7 @@ use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::program::Program;
 use crate::parser::stream::Stream;
 use crate::parser::Type;
-use crate::util;
+use crate::{locatable_impl, util};
 
 /// Represents the name, arguments, and return type of a function. Anonymous functions have empty
 /// names.
@@ -66,15 +66,7 @@ impl PartialEq for FunctionSignature {
     }
 }
 
-impl Locatable for FunctionSignature {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(FunctionSignature);
 
 impl FunctionSignature {
     /// Creates a new function signature with default start and end positions.

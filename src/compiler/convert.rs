@@ -10,6 +10,7 @@ use llvm_sys::core::LLVMFunctionType;
 use llvm_sys::prelude::LLVMTypeRef;
 
 use crate::analyzer::func_sig::RichFnSig;
+use crate::analyzer::r#enum::RichEnumType;
 use crate::analyzer::r#struct::RichStructType;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::tuple::RichTupleType;
@@ -46,6 +47,8 @@ pub fn to_basic_type<'a>(
         RichType::Struct(struct_type) => {
             to_struct_type(ctx, types, struct_type).as_basic_type_enum()
         }
+
+        RichType::Enum(enum_type) => enum_to_struct_type(ctx, enum_type).as_basic_type_enum(),
 
         RichType::Tuple(tuple_type) => {
             tuple_to_struct_type(ctx, types, tuple_type).as_basic_type_enum()
@@ -157,7 +160,7 @@ fn get_struct_field_types<'a>(
         .collect()
 }
 
-/// Converts the given `RichStruct` to an LLVM `StructType`.
+/// Converts the given `struct_type` to an LLVM `StructType`.
 pub fn to_struct_type<'a>(
     ctx: &'a Context,
     types: &HashMap<TypeId, RichType>,
@@ -187,6 +190,26 @@ pub fn to_struct_type<'a>(
         // Create and return the LLVM struct type.
         ctx.struct_type(ll_field_types.as_slice(), false)
     }
+}
+
+/// Converts the given `enum_type` to an LLVM `StructType`.
+pub fn enum_to_struct_type<'a>(ctx: &'a Context, enum_type: &RichEnumType) -> StructType<'a> {
+    // If the corresponding LLVM struct type already exists, just return it.
+    if let Some(ll_struct_type) = ctx.get_struct_type(enum_type.name.as_str()) {
+        return ll_struct_type;
+    }
+
+    // Create the struct type with two fields. The first stores the enum variant number and the
+    // second stores the enum variant value, if any.
+    ctx.struct_type(
+        &[
+            ctx.i8_type().as_basic_type_enum(),
+            ctx.i8_type()
+                .array_type(enum_type.largest_variant_size_bytes)
+                .as_basic_type_enum(),
+        ],
+        false,
+    )
 }
 
 /// Gets the LLVM "any" type that corresponds to the given type.

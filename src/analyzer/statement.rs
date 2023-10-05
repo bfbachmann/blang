@@ -9,6 +9,7 @@ use crate::analyzer::func_call::RichFnCall;
 use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#const::RichConst;
+use crate::analyzer::r#enum::RichEnumType;
 use crate::analyzer::r#impl::RichImpl;
 use crate::analyzer::r#struct::RichStructType;
 use crate::analyzer::ret::RichRet;
@@ -30,6 +31,7 @@ pub enum RichStatement {
     Continue,
     Return(RichRet),
     StructTypeDeclaration(RichStructType),
+    EnumTypeDeclaration(RichEnumType),
     /// A set of external function declarations.
     ExternFns(Vec<RichFnSig>),
     Consts(Vec<RichConst>),
@@ -50,6 +52,7 @@ impl fmt::Display for RichStatement {
             RichStatement::Continue => write!(f, "continue"),
             RichStatement::Return(v) => write!(f, "{}", v),
             RichStatement::StructTypeDeclaration(s) => write!(f, "{}", s),
+            RichStatement::EnumTypeDeclaration(e) => write!(f, "{}", e),
             RichStatement::ExternFns(e) => {
                 if e.len() == 1 {
                     write!(f, "extern {}", e.first().unwrap())
@@ -134,6 +137,10 @@ impl RichStatement {
 
             Statement::StructDeclaration(s) => {
                 RichStatement::StructTypeDeclaration(RichStructType::from(ctx, &s, false))
+            }
+
+            Statement::EnumDeclaration(e) => {
+                RichStatement::EnumTypeDeclaration(RichEnumType::from(ctx, &e))
             }
 
             Statement::Impl(impl_) => RichStatement::Impl(RichImpl::from(ctx, &impl_)),

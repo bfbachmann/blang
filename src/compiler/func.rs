@@ -17,6 +17,7 @@ use crate::analyzer::expr::{RichExpr, RichExprKind};
 use crate::analyzer::func::RichFn;
 use crate::analyzer::func_call::RichFnCall;
 use crate::analyzer::r#const::RichConst;
+use crate::analyzer::r#enum::RichEnumVariantInit;
 use crate::analyzer::r#struct::RichStructInit;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::ret::RichRet;
@@ -626,8 +627,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 let var_type = self.types.get(&var_decl.type_id).unwrap();
                 self.create_var(var_decl.name.as_str(), var_type, ll_expr_val);
             }
-            RichStatement::StructTypeDeclaration(_) => {
-                // Nothing to do here. Struct types are compiled upon initialization.
+            RichStatement::StructTypeDeclaration(_) | RichStatement::EnumTypeDeclaration(_) => {
+                // Nothing to do here. Types are compiled upon initialization.
             }
             RichStatement::VariableAssignment(assign) => {
                 self.assign_var(assign);
@@ -927,6 +928,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
             RichExprKind::StructInit(struct_init) => self.compile_struct_init(struct_init),
 
+            RichExprKind::EnumInit(enum_init) => self.compile_enum_variant_init(enum_init),
+
             RichExprKind::TupleInit(tuple_init) => self.compile_tuple_init(tuple_init),
 
             // TODO
@@ -983,19 +986,71 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         ll_struct_ptr.as_basic_value_enum()
     }
 
+    /// Compiles enum variant initialization.
+    fn compile_enum_variant_init(
+        &mut self,
+        enum_init: &RichEnumVariantInit,
+    ) -> BasicValueEnum<'ctx> {
+        // Assemble the LLVM struct type for this enum value.
+        let enum_type = match self.types.get(&enum_init.enum_type_id).unwrap() {
+            RichType::Enum(enum_type) => enum_type,
+            other => panic!("unexpected type {}", other),
+        };
+        let ll_struct_type = convert::enum_to_struct_type(self.ctx, enum_type);
+
+        // Allocate space for the struct on the stack.
+        let ll_struct_ptr = self.builder.build_alloca(ll_struct_type, "enum_init_ptr");
+
+        // Set the number variant number on the struct.
+        let ll_number_field_ptr = self
+            .builder
+            .build_struct_gep(
+                ll_struct_type,
+                ll_struct_ptr,
+                0u32,
+                "enum.variant_number_ptr",
+            )
+            .unwrap();
+        self.builder.build_store(
+            ll_number_field_ptr,
+            self.ctx
+                .i8_type()
+                .const_int(enum_init.variant.number as u64, false),
+        );
+
+        // Set the variant value field, if necessary.
+        if let Some(value) = &enum_init.maybe_value {
+            let ll_value = self.compile_expr(value.as_ref());
+            let ll_value_field_ptr = self
+                .builder
+                .build_struct_gep(ll_struct_type, ll_struct_ptr, 1u32, "enum.value_ptr")
+                .unwrap();
+            let value_type = self.types.get(&value.type_id).unwrap();
+
+            self.copy_value(ll_value, ll_value_field_ptr, value_type);
+        }
+
+        ll_struct_ptr.as_basic_value_enum()
+    }
+
     /// Compiles a struct initialization.
     fn compile_struct_init(&mut self, struct_init: &RichStructInit) -> BasicValueEnum<'ctx> {
         // Assemble the LLVM struct type.
-        let ll_struct_type = convert::to_struct_type(self.ctx, self.types, &struct_init.typ);
+        let struct_type = self
+            .types
+            .get(&struct_init.type_id)
+            .unwrap()
+            .to_struct_type();
+        let ll_struct_type = convert::to_struct_type(self.ctx, self.types, struct_type);
 
         // Allocate space for the struct on the stack.
         let ll_struct_ptr = self.builder.build_alloca(
             ll_struct_type,
-            format!("{}.init_ptr", struct_init.typ.name).as_str(),
+            format!("{}.init_ptr", struct_type.name).as_str(),
         );
 
         // Assign values to initialized struct fields.
-        for (i, field) in struct_init.typ.fields.iter().enumerate() {
+        for (i, field) in struct_type.fields.iter().enumerate() {
             if let Some(field_val) = struct_init.field_values.get(field.name.as_str()) {
                 // Get a pointer to the struct field we're initializing.
                 let ll_field_ptr = self
@@ -1004,7 +1059,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                         ll_struct_type,
                         ll_struct_ptr,
                         i as u32,
-                        format!("{}.{}_ptr", struct_init.typ.name, field.name).as_str(),
+                        format!("{}.{}_ptr", struct_type.name, field.name).as_str(),
                     )
                     .unwrap();
 
@@ -1281,14 +1336,20 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// the value is simply returned.
     fn deref_if_ptr(&self, ll_val: BasicValueEnum<'ctx>, typ: &RichType) -> BasicValueEnum<'ctx> {
         match typ {
-            // Strings, structs, tuples, and unsafe pointers should already be represented as
+            // Strings, structs, enums, tuples, and unsafe pointers should already be represented as
             // pointers.
-            RichType::Str | RichType::Struct(_) | RichType::Tuple(_) | RichType::UnsafePtr => {
-                ll_val
-            }
+            RichType::Str
+            | RichType::Struct(_)
+            | RichType::Enum(_)
+            | RichType::Tuple(_)
+            | RichType::UnsafePtr => ll_val,
+
             RichType::I64 | RichType::USize => self.get_int(ll_val).as_basic_value_enum(),
+
             RichType::Bool => self.get_bool(ll_val).as_basic_value_enum(),
+
             RichType::Function(_) => ll_val.as_basic_value_enum(),
+
             RichType::Unknown(name) => {
                 panic!("encountered unknown type {}", name)
             }

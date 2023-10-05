@@ -16,6 +16,7 @@ use crate::parser::func_call::FunctionCall;
 use crate::parser::program::Program;
 use crate::parser::r#break::Break;
 use crate::parser::r#const::ConstBlock;
+use crate::parser::r#enum::EnumType;
 use crate::parser::r#impl::Impl;
 use crate::parser::r#loop::Loop;
 use crate::parser::r#struct::StructType;
@@ -39,6 +40,7 @@ pub enum Statement {
     Continue(Continue),
     Return(Ret),
     StructDeclaration(StructType),
+    EnumDeclaration(EnumType),
     ExternFns(Extern),
     Consts(ConstBlock),
     Impl(Impl),
@@ -88,6 +90,9 @@ impl fmt::Display for Statement {
             Statement::StructDeclaration(s) => {
                 write!(f, "{}", s)
             }
+            Statement::EnumDeclaration(e) => {
+                write!(f, "{}", e)
+            }
             Statement::ExternFns(extern_fn) => {
                 write!(f, "{}", extern_fn)
             }
@@ -119,6 +124,7 @@ impl Locatable for Statement {
             Statement::Continue(cont) => cont.start_pos(),
             Statement::Return(ret) => ret.start_pos(),
             Statement::StructDeclaration(s) => s.start_pos(),
+            Statement::EnumDeclaration(e) => e.start_pos(),
             Statement::ExternFns(e) => e.start_pos(),
             Statement::Consts(c) => c.start_pos(),
             Statement::Impl(i) => i.start_pos(),
@@ -138,6 +144,7 @@ impl Locatable for Statement {
             Statement::Continue(cont) => cont.end_pos(),
             Statement::Return(ret) => ret.end_pos(),
             Statement::StructDeclaration(s) => s.end_pos(),
+            Statement::EnumDeclaration(e) => e.end_pos(),
             Statement::ExternFns(e) => e.end_pos(),
             Statement::Consts(c) => c.end_pos(),
             Statement::Impl(i) => i.end_pos(),
@@ -374,7 +381,7 @@ impl Statement {
                 )))
             }
 
-            // If the first token is `struct` it must be a struct declaration.
+            // If the first token is `struct`, it must be a struct declaration.
             (
                 Token {
                     kind: TokenKind::Struct,
@@ -384,6 +391,18 @@ impl Statement {
             ) => {
                 let struct_decl = StructType::from(tokens)?;
                 Ok(Statement::StructDeclaration(struct_decl))
+            }
+
+            // If the first token is `enum`, it must be a struct declaration.
+            (
+                Token {
+                    kind: TokenKind::Enum,
+                    ..
+                },
+                _,
+            ) => {
+                let enum_decl = EnumType::from(tokens)?;
+                Ok(Statement::EnumDeclaration(enum_decl))
             }
 
             // If the first two tokens are `<identifier>.`, it's a member access that can either be

@@ -1,16 +1,18 @@
-use crate::analyzer::arg::RichArg;
 use std::collections::hash_map::Iter;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;
 
+use crate::analyzer::arg::RichArg;
 use crate::analyzer::error::AnalyzeError;
 use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::func::RichFn;
 use crate::analyzer::func_sig::RichFnSig;
+use crate::analyzer::r#enum::RichEnumType;
 use crate::analyzer::r#struct::RichStructType;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::lexer::pos::Position;
+use crate::parser::r#enum::EnumType;
 use crate::parser::r#struct::StructType;
 
 /// Represents a symbol defined in a specific scope.
@@ -75,7 +77,10 @@ pub struct Scope {
     fns: HashMap<String, RichFn>,
     /// Extern structs are structs that have been detected but not yet analyzed.
     extern_structs: HashMap<String, StructType>,
+    /// Extern enums are enums that have been detected but not yet analyzed.
+    extern_enums: HashMap<String, EnumType>,
     structs: HashMap<String, RichStructType>,
+    enums: HashMap<String, RichEnumType>,
     /// Invalid types are types that failed semantic analysis.
     invalid_types: HashSet<String>,
     resolved_types: HashMap<TypeId, RichType>,
@@ -100,7 +105,9 @@ impl Scope {
             extern_fns: HashMap::new(),
             fns: HashMap::new(),
             extern_structs: HashMap::new(),
+            extern_enums: HashMap::new(),
             structs: HashMap::new(),
+            enums: HashMap::new(),
             invalid_types: HashSet::new(),
             resolved_types: HashMap::new(),
             kind,
@@ -144,15 +151,32 @@ impl Scope {
         self.extern_structs.insert(s.name.to_string(), s)
     }
 
+    // Adds the external enum type to the scope. If there was already a enum type with the same
+    // name in the scope, returns the old type.
+    fn add_extern_enum(&mut self, e: EnumType) -> Option<EnumType> {
+        self.extern_enums.insert(e.name.to_string(), e)
+    }
+
     /// Removes the extern struct type with the given name from the scope.
     pub fn remove_extern_struct(&mut self, name: &str) {
         self.extern_structs.remove(name);
+    }
+
+    /// Removes the extern enum type with the given name from the scope.
+    pub fn remove_extern_enum(&mut self, name: &str) {
+        self.extern_enums.remove(name);
     }
 
     // Adds the struct type to the scope. If there was already a struct type with the same name in
     // the scope, returns the old type.
     fn add_struct(&mut self, s: RichStructType) -> Option<RichStructType> {
         self.structs.insert(s.name.to_string(), s)
+    }
+
+    // Adds the enum type to the scope. If there was already a enum type with the same name in
+    // the scope, returns the old type.
+    fn add_enum(&mut self, e: RichEnumType) -> Option<RichEnumType> {
+        self.enums.insert(e.name.to_string(), e)
     }
 
     // Adds the symbol to the scope. If there was already a symbol with the same name in
@@ -182,9 +206,20 @@ impl Scope {
         self.extern_structs.get(name)
     }
 
+    // Returns the extern enum type with the given name from the scope, or None if no such type
+    // exists.
+    fn get_extern_enum(&self, name: &str) -> Option<&EnumType> {
+        self.extern_enums.get(name)
+    }
+
     /// Returns an iterator over all extern structs in this scope.
     fn extern_structs(&self) -> Iter<String, StructType> {
         self.extern_structs.iter()
+    }
+
+    /// Returns an iterator over all extern enums in this scope.
+    fn extern_enums(&self) -> Iter<String, EnumType> {
+        self.extern_enums.iter()
     }
 
     // Returns the struct type with the given name from the scope, or None if no such type exists.
@@ -336,15 +371,32 @@ impl ProgramContext {
         self.stack.back_mut().unwrap().add_extern_struct(s)
     }
 
+    /// Adds the external enum type to the context. If there was already a enum type with the
+    /// same name, returns the old type.
+    pub fn add_extern_enum(&mut self, s: EnumType) -> Option<EnumType> {
+        self.stack.back_mut().unwrap().add_extern_enum(s)
+    }
+
     /// Removes the extern struct type with the given name from the program context.
     pub fn remove_extern_struct(&mut self, name: &str) {
         self.stack.back_mut().unwrap().remove_extern_struct(name);
+    }
+
+    /// Removes the extern enum type with the given name from the program context.
+    pub fn remove_extern_enum(&mut self, name: &str) {
+        self.stack.back_mut().unwrap().remove_extern_enum(name);
     }
 
     /// Adds the struct type to the context. If there was already a struct type with the same name,
     /// returns the old type.
     pub fn add_struct(&mut self, s: RichStructType) -> Option<RichStructType> {
         self.stack.back_mut().unwrap().add_struct(s)
+    }
+
+    /// Adds the enum type to the context. If there was already a enum type with the same name,
+    /// returns the old type.
+    pub fn add_enum(&mut self, e: RichEnumType) -> Option<RichEnumType> {
+        self.stack.back_mut().unwrap().add_enum(e)
     }
 
     /// Adds the symbol type ID to the context. If there was already a symbol with the same
@@ -425,6 +477,18 @@ impl ProgramContext {
         None
     }
 
+    /// Attempts to locate the extern enum type with the given name and returns it, if found.
+    pub fn get_extern_enum(&self, name: &str) -> Option<&EnumType> {
+        // Search up the stack from the current scope.
+        for scope in self.stack.iter().rev() {
+            if let Some(e) = scope.get_extern_enum(name) {
+                return Some(e);
+            }
+        }
+
+        None
+    }
+
     /// Attempts to locate the struct type with the given name and returns it, if found.
     pub fn get_struct(&self, name: &str) -> Option<&RichStructType> {
         // Search up the stack from the current scope.
@@ -447,6 +511,18 @@ impl ProgramContext {
         }
 
         extern_structs
+    }
+
+    /// Returns all extern enums in the program context.
+    pub fn extern_enums(&self) -> Vec<&EnumType> {
+        let mut extern_enums = vec![];
+        for scope in self.stack.iter() {
+            for (_, struct_type) in scope.extern_enums() {
+                extern_enums.push(struct_type);
+            }
+        }
+
+        extern_enums
     }
 
     /// Attempts to locate the symbol with the given name and returns it, if found.

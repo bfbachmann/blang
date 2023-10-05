@@ -9,7 +9,7 @@ use crate::lexer::pos::{Locatable, Position};
 use crate::parser::member::MemberAccess;
 use crate::parser::r#type::Type;
 use crate::parser::symbol::Symbol;
-use crate::{format_code, util};
+use crate::{format_code, locatable_impl, util};
 
 /// A symbol that can represent a variable, variable access, function, type, or constant.
 #[derive(Debug, Clone)]
@@ -27,15 +27,7 @@ pub struct RichSymbol {
     end_pos: Position,
 }
 
-impl Locatable for RichSymbol {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(RichSymbol);
 
 impl Display for RichSymbol {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -53,7 +45,7 @@ impl PartialEq for RichSymbol {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && self.parent_type_id == other.parent_type_id
-            && util::optionals_are_equal(&self.member_access, &other.member_access)
+            && util::opts_eq(&self.member_access, &other.member_access)
     }
 }
 
@@ -246,7 +238,7 @@ impl PartialEq for RichMemberAccess {
     fn eq(&self, other: &Self) -> bool {
         self.member_name == other.member_name
             && self.member_type_id == other.member_type_id
-            && util::optionals_are_equal(&self.submember, &other.submember)
+            && util::opts_eq(&self.submember, &other.submember)
     }
 }
 

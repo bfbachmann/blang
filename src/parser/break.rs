@@ -1,8 +1,7 @@
-
-
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::locatable_impl;
 use crate::parser::error::ParseResult;
 use crate::parser::program::Program;
 use crate::parser::stream::Stream;
@@ -14,15 +13,7 @@ pub struct Break {
     pub end_pos: Position,
 }
 
-impl Locatable for Break {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(Break);
 
 impl Break {
     /// Parses a break statement from the given token sequence.

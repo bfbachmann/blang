@@ -6,7 +6,7 @@ use crate::parser::func::Function;
 use crate::parser::program::Program;
 use crate::parser::r#type::Type;
 use crate::parser::stream::Stream;
-use crate::util;
+use crate::{locatable_impl, util};
 
 /// Represents the implementation of a series of member functions on a type.
 #[derive(Debug)]
@@ -34,15 +34,7 @@ impl Clone for Impl {
     }
 }
 
-impl Locatable for Impl {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(Impl);
 
 impl Impl {
     /// Parses an implementation (a set of member functions) for a type. Expects token sequences

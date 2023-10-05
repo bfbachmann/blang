@@ -42,6 +42,7 @@ pub enum TokenKind {
     StrLiteral(String),
     Fn,
     Struct,
+    Enum,
 
     // Keywords and control flow
     Let,
@@ -70,11 +71,13 @@ pub enum TokenKind {
     Comma,
     SemiColon,
     Colon,
+    DoubleColon,
     Dot,
     LineComment,
     BeginBlockComment,
     EndBlockComment,
     Tilde,
+    At,
 
     // User-defined values
     Identifier(String),
@@ -126,6 +129,7 @@ impl Clone for TokenKind {
             TokenKind::Comma => TokenKind::Comma,
             TokenKind::SemiColon => TokenKind::SemiColon,
             TokenKind::Colon => TokenKind::Colon,
+            TokenKind::DoubleColon => TokenKind::DoubleColon,
             TokenKind::Dot => TokenKind::Dot,
             TokenKind::LineComment => TokenKind::LineComment,
             TokenKind::BeginBlockComment => TokenKind::BeginBlockComment,
@@ -139,6 +143,8 @@ impl Clone for TokenKind {
             TokenKind::This => TokenKind::This,
             TokenKind::ThisType => TokenKind::ThisType,
             TokenKind::Impl => TokenKind::Impl,
+            TokenKind::Enum => TokenKind::Enum,
+            TokenKind::At => TokenKind::At,
         }
     }
 }
@@ -200,6 +206,7 @@ impl TokenKind {
             TokenKind::Comma => ",".to_string(),
             TokenKind::SemiColon => ";".to_string(),
             TokenKind::Colon => ":".to_string(),
+            TokenKind::DoubleColon => "::".to_string(),
             TokenKind::Dot => ".".to_string(),
             TokenKind::Break => "break".to_string(),
             TokenKind::Return => "return".to_string(),
@@ -214,6 +221,8 @@ impl TokenKind {
             TokenKind::This => "this".to_string(),
             TokenKind::ThisType => "This".to_string(),
             TokenKind::Impl => "impl".to_string(),
+            TokenKind::Enum => "enum".to_string(),
+            TokenKind::At => "@".to_string(),
         }
     }
 
@@ -289,6 +298,7 @@ impl TokenKind {
             (TokenKind::Comma.to_string(), TokenKind::Comma),
             (TokenKind::SemiColon.to_string(), TokenKind::SemiColon),
             (TokenKind::Colon.to_string(), TokenKind::Colon),
+            (TokenKind::DoubleColon.to_string(), TokenKind::DoubleColon),
             (TokenKind::Dot.to_string(), TokenKind::Dot),
             (TokenKind::Fn.to_string(), TokenKind::Fn),
             (TokenKind::Struct.to_string(), TokenKind::Struct),
@@ -312,6 +322,8 @@ impl TokenKind {
             (TokenKind::This.to_string(), TokenKind::This),
             (TokenKind::ThisType.to_string(), TokenKind::ThisType),
             (TokenKind::Impl.to_string(), TokenKind::Impl),
+            (TokenKind::Enum.to_string(), TokenKind::Enum),
+            (TokenKind::At.to_string(), TokenKind::At),
         ]);
 
         if let Some(v) = basic_kinds.get(segment.trim()) {

@@ -1,0 +1,30 @@
+extern fn exit(code: i64)
+
+struct S {
+    i: i64
+    b: bool
+    s: str
+}
+
+enum E {
+    One
+    Two(i64)
+    Three(bool)
+    Four(S)
+}
+
+fn main() {
+    let e_one = E::One
+
+    let e_two = E::Two(-42)
+
+    let e_three = E::Three(true)
+
+    let e_four = E::Four(S{
+        i: 12
+        b: false
+        s: "test"
+    })
+
+    exit(0)
+}

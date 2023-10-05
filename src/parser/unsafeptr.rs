@@ -1,6 +1,7 @@
 use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Locatable, Position};
+use crate::locatable_impl;
 
 /// Represents a raw pointer that is not automatically garbage collected and allows pointer
 /// arithmetic. This type translates directly to `void *` in C.
@@ -23,15 +24,7 @@ impl Hash for UnsafePtrType {
     }
 }
 
-impl Locatable for UnsafePtrType {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.end_pos
-    }
-}
+locatable_impl!(UnsafePtrType);
 
 impl UnsafePtrType {
     pub fn new(start_pos: Position, end_pos: Position) -> Self {

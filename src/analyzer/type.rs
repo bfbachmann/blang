@@ -1,4 +1,5 @@
 use core::fmt;
+use std::cmp::max;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
@@ -8,6 +9,7 @@ use colored::*;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::r#enum::RichEnumType;
 use crate::analyzer::r#struct::RichStructType;
 use crate::analyzer::tuple::RichTupleType;
 use crate::parser::r#type::Type;
@@ -99,6 +101,7 @@ pub enum RichType {
     /// Represents a pointer-sized unsigned integer.
     USize,
     Struct(RichStructType),
+    Enum(RichEnumType),
     Tuple(RichTupleType),
     Function(Box<RichFnSig>),
     /// Represents a type that did not pass semantic analysis and thus was never properly resolved.
@@ -114,6 +117,7 @@ impl Display for RichType {
             RichType::USize => write!(f, "usize"),
             RichType::UnsafePtr => write!(f, "unsafeptr"),
             RichType::Struct(s) => write!(f, "{}", s),
+            RichType::Enum(e) => write!(f, "{}", e),
             RichType::Tuple(t) => write!(f, "{}", t),
             RichType::Function(func) => write!(f, "{}", func),
             RichType::Unknown(name) => write!(f, "{}", name),
@@ -130,6 +134,7 @@ impl PartialEq for RichType {
             | (RichType::UnsafePtr, RichType::UnsafePtr)
             | (RichType::USize, RichType::USize) => true,
             (RichType::Struct(s1), RichType::Struct(s2)) => s1 == s2,
+            (RichType::Enum(e1), RichType::Enum(e2)) => e1 == e2,
             (RichType::Tuple(t1), RichType::Tuple(t2)) => t1 == t2,
             (RichType::Function(f1), RichType::Function(f2)) => *f1 == *f2,
             (_, _) => false,
@@ -231,6 +236,11 @@ impl RichType {
                 return RichType::Struct(rich_struct_type);
             }
 
+            Type::Enum(enum_type) => {
+                let rich_enum_type = RichEnumType::from(ctx, enum_type);
+                return RichType::Enum(rich_enum_type);
+            }
+
             Type::Tuple(tuple_type) => {
                 let rich_tuple_type = RichTupleType::from(ctx, tuple_type);
                 return RichType::Tuple(rich_tuple_type);
@@ -283,7 +293,7 @@ impl RichType {
                     }
                 }
 
-                util::optionals_are_equal(&f1.ret_type_id, &f2.ret_type_id)
+                util::opts_eq(&f1.ret_type_id, &f2.ret_type_id)
             }
             (a, b) => a == b,
         }
@@ -328,6 +338,7 @@ impl RichType {
             | RichType::Str
             | RichType::Function(_)
             | RichType::Unknown(_) => false,
+
             RichType::Struct(s) => {
                 for field in &s.fields {
                     let field_type = ctx.get_resolved_type(&field.type_id).unwrap();
@@ -341,6 +352,23 @@ impl RichType {
 
                 false
             }
+
+            RichType::Enum(e) => {
+                for variant in e.variants.values() {
+                    if let Some(type_id) = &variant.maybe_type_id {
+                        let variant_type = ctx.get_resolved_type(type_id).unwrap();
+                        if variant_type == typ {
+                            hierarchy.push(variant_type);
+                            return true;
+                        } else if variant_type.get_type_hierarchy(ctx, typ, hierarchy) {
+                            return true;
+                        }
+                    }
+                }
+
+                false
+            }
+
             RichType::Tuple(t) => {
                 for type_id in &t.type_ids {
                     let field_type = ctx.get_resolved_type(type_id).unwrap();
@@ -375,6 +403,7 @@ impl RichType {
             | RichType::UnsafePtr
             | RichType::USize
             | RichType::Struct(_)
+            | RichType::Enum(_)
             | RichType::Tuple(_)
             | RichType::Function(_)
             | RichType::Unknown(_) => false,
@@ -382,16 +411,19 @@ impl RichType {
     }
 
     /// Returns the size of this type (i.e. the amount of memory required to store it) in bytes.
-    pub fn size_bytes(&self, ctx: &ProgramContext) -> u64 {
+    pub fn size_bytes(&self, ctx: &ProgramContext) -> u32 {
         match self {
+            // Bools are 1 byte.
             RichType::Bool => 1,
 
+            // All of the following types are 64 bits (8 bytes).
             RichType::I64
             | RichType::UnsafePtr
             | RichType::USize
             | RichType::Function(_)
             | RichType::Str => 8,
 
+            // The size of a struct type is the sum of the sizes of all of its fields.
             RichType::Struct(struct_type) => {
                 let mut size = 0;
                 for field in &struct_type.fields {
@@ -400,6 +432,20 @@ impl RichType {
                 }
 
                 size
+            }
+
+            // The size of an enum type is 1 byte (to hold the variant number) plus the greatest
+            // size of all of its variants.
+            RichType::Enum(enum_type) => {
+                let mut size = 0;
+                for variant in enum_type.variants.values() {
+                    if let Some(type_id) = &variant.maybe_type_id {
+                        let variant_type = ctx.get_resolved_type(type_id).unwrap();
+                        size = max(size, variant_type.size_bytes(ctx));
+                    }
+                }
+
+                size + 1
             }
 
             RichType::Tuple(tuple_type) => {
@@ -422,6 +468,15 @@ impl RichType {
         match self {
             RichType::Function(fn_sig) => fn_sig,
             _ => panic!("type {} is not a function", self),
+        }
+    }
+
+    /// Returns the struct type corresponding to this type. Panics if this type is not a
+    /// struct type.
+    pub fn to_struct_type(&self) -> &RichStructType {
+        match self {
+            RichType::Struct(struct_type) => struct_type,
+            _ => panic!("type {} is not a struct", self),
         }
     }
 }
