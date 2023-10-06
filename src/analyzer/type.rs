@@ -1,6 +1,6 @@
 use core::fmt;
 use std::cmp::max;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 
@@ -263,6 +263,12 @@ impl RichType {
     /// Creates a new rich function type from the given signature.
     pub fn from_fn_sig(sig: RichFnSig) -> Self {
         RichType::Function(Box::new(sig))
+    }
+
+    /// Returns true if `name` matches a primitive type name.
+    pub fn is_primitive_type_name(name: &str) -> bool {
+        // TODO: make this static
+        HashSet::from(["bool", "i64", "str", "unsafeptr", "usize"]).contains(name)
     }
 
     /// Returns a mapping from primitive type ID to analyzed primitive type.

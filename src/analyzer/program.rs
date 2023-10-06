@@ -102,6 +102,7 @@ fn define_types(ctx: &mut ProgramContext, prog: &Program) {
             Statement::StructDeclaration(struct_type) => {
                 if ctx.get_extern_struct(&struct_type.name).is_some()
                     || ctx.get_extern_enum(&struct_type.name).is_some()
+                    || RichType::is_primitive_type_name(struct_type.name.as_str())
                 {
                     ctx.add_err(AnalyzeError::new(
                         ErrorKind::TypeAlreadyDefined,
@@ -121,6 +122,7 @@ fn define_types(ctx: &mut ProgramContext, prog: &Program) {
             Statement::EnumDeclaration(enum_type) => {
                 if ctx.get_extern_struct(&enum_type.name).is_some()
                     || ctx.get_extern_enum(&enum_type.name).is_some()
+                    || RichType::is_primitive_type_name(enum_type.name.as_str())
                 {
                     ctx.add_err(AnalyzeError::new(
                         ErrorKind::TypeAlreadyDefined,
@@ -1205,7 +1207,20 @@ mod tests {
                 kind: ErrorKind::TypeAlreadyDefined,
                 ..
             })
-        ))
+        ));
+
+        let result = analyze_prog(
+            r#"
+            enum i64 {}
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::TypeAlreadyDefined,
+                ..
+            })
+        ));
     }
 
     #[test]
