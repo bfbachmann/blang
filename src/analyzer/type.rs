@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 
-use colored::*;
+use colored::Colorize;
 
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::func_sig::RichFnSig;
@@ -181,6 +181,11 @@ impl RichType {
         match typ {
             Type::Unresolved(unresolved_type) => {
                 let type_name = unresolved_type.name.as_str();
+
+                // Check if the type is a primitive.
+                if let Some(typ) = RichType::primitives().get(&TypeId::from(typ.clone())) {
+                    return typ.clone();
+                }
 
                 // Check if the type has already been marked as invalid. If so, we should avoid
                 // trying to resolve it and simply return the ID of the unknown type.

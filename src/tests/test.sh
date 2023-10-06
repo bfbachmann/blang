@@ -7,7 +7,7 @@ CC=${CC:-clang}
 LLC=${LLC:-llc}
 
 fail() {
-    echo FAIL
+    echo FAIL "$1" "$2"
     exit 1
 }
 
@@ -22,22 +22,18 @@ for src_path in ./*.bl; do
     obj_path="$output_dir"/"$base_file_name".o
     exe_path="$output_dir"/"$base_file_name"
 
-    echo --- "$base_file_name".bl ---
-
     # Compile Blang to LLVM IR.
-    cargo -q run -- build -o "$ll_path" "$src_path" || fail "$base_file_name".bl
+    compile_output=$(cargo -q run -- build -o "$ll_path" "$src_path") || fail "$base_file_name".bl "did not compile"
 
     # Compile LLVM IR to an object file.
-    $LLC -filetype=obj "$ll_path" -o "$obj_path" -O0 || fail "$base_file_name".bl
+    $LLC -filetype=obj "$ll_path" -o "$obj_path" -O0 || fail "$base_file_name".bl "LLVM IR did not compile"
 
     # Link the object file with libc and create an executable.
-    $CC "$obj_path" -o "$exe_path" || fail "$base_file_name".bl
+    $CC "$obj_path" -o "$exe_path" || fail "$base_file_name".bl "did not link"
 
     # Execute the executable. Pipe stdout to /dev/null to prevent output from
     # test cases from muddying the test output.
-    ./"$exe_path" 1> /dev/null 2> /dev/null || fail "$base_file_name".bl
+    ./"$exe_path" 1> /dev/null 2> /dev/null || fail "$base_file_name".bl "did not execute correctly"
 
-    echo PASS
-    echo --- "$base_file_name".bl ---
-    echo
+    echo PASS "$compile_output Executed correctly."
 done

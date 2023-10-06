@@ -262,10 +262,7 @@ impl FunctionSignature {
 
                 Some(Token {
                     kind:
-                        TokenKind::Str
-                        | TokenKind::I64
-                        | TokenKind::Bool
-                        | TokenKind::Fn
+                        TokenKind::Fn
                         | TokenKind::Identifier(_)
                         | TokenKind::Struct
                         | TokenKind::Mut

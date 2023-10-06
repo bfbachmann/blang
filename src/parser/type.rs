@@ -73,11 +73,11 @@ impl PartialEq for Type {
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Type::Bool(_) => write!(f, "{}", TokenKind::Bool),
-            Type::Str(_) => write!(f, "{}", TokenKind::Str),
-            Type::I64(_) => write!(f, "{}", TokenKind::I64),
-            Type::UnsafePtr(_) => write!(f, "{}", TokenKind::UnsafePtr),
-            Type::USize(_) => write!(f, "{}", TokenKind::USize),
+            Type::Bool(_) => write!(f, "bool"),
+            Type::Str(_) => write!(f, "str"),
+            Type::I64(_) => write!(f, "i64"),
+            Type::UnsafePtr(_) => write!(f, "unsafeptr"),
+            Type::USize(_) => write!(f, "usize"),
             Type::Function(fn_sig) => write!(f, "{}", fn_sig),
             Type::Struct(s) => write!(f, "{}", s),
             Type::Enum(s) => write!(f, "{}", s),
@@ -127,41 +127,6 @@ impl Type {
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         match tokens.next() {
             Some(
-                token @ Token {
-                    kind: TokenKind::Bool,
-                    ..
-                },
-            ) => Ok(Type::Bool(BoolType::new(token.start, token.end))),
-
-            Some(
-                token @ Token {
-                    kind: TokenKind::I64,
-                    ..
-                },
-            ) => Ok(Type::I64(I64Type::new(token.start, token.end))),
-
-            Some(
-                token @ Token {
-                    kind: TokenKind::UnsafePtr,
-                    ..
-                },
-            ) => Ok(Type::UnsafePtr(UnsafePtrType::new(token.start, token.end))),
-
-            Some(
-                token @ Token {
-                    kind: TokenKind::USize,
-                    ..
-                },
-            ) => Ok(Type::USize(USizeType::new(token.start, token.end))),
-
-            Some(
-                token @ Token {
-                    kind: TokenKind::Str,
-                    ..
-                },
-            ) => Ok(Type::Str(StrType::new(token.start, token.end))),
-
-            Some(
                 _token @ Token {
                     kind: TokenKind::Fn,
                     ..
@@ -195,11 +160,18 @@ impl Type {
                     kind: TokenKind::Identifier(ref type_name),
                     ..
                 },
-            ) => Ok(Type::Unresolved(UnresolvedType::new(
-                type_name.as_str(),
-                token.start,
-                token.end,
-            ))),
+            ) => match type_name.as_str() {
+                "i64" => Ok(Type::I64(I64Type::new(token.start, token.end))),
+                "bool" => Ok(Type::Bool(BoolType::new(token.start, token.end))),
+                "str" => Ok(Type::Str(StrType::new(token.start, token.end))),
+                "usize" => Ok(Type::USize(USizeType::new(token.start, token.end))),
+                "unsafeptr" => Ok(Type::UnsafePtr(UnsafePtrType::new(token.start, token.end))),
+                _ => Ok(Type::Unresolved(UnresolvedType::new(
+                    type_name.as_str(),
+                    token.start,
+                    token.end,
+                ))),
+            },
 
             Some(other) => {
                 return Err(ParseError::new(
