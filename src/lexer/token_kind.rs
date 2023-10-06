@@ -326,7 +326,10 @@ impl TokenKind {
             (TokenKind::At.to_string(), TokenKind::At),
         ]);
 
-        if let Some(v) = basic_kinds.get(segment.trim()) {
+        // Trim syntactically meaningless whitespace.
+        let segment = segment.trim();
+
+        if let Some(v) = basic_kinds.get(segment) {
             return Some(v.clone());
         }
 
@@ -350,14 +353,27 @@ impl TokenKind {
     }
 
     fn lex_bool_literal(segment: &str) -> Option<TokenKind> {
-        match segment.trim().parse::<bool>() {
+        match segment.parse::<bool>() {
             Ok(b) => Some(TokenKind::BoolLiteral(b)),
             Err(_) => None,
         }
     }
 
     fn lex_i64_literal(segment: &str) -> Option<TokenKind> {
-        match segment.trim().parse::<i64>() {
+        // If the segment starts with `_`, it can't be an i64. We're doing this check here because
+        // `_` will be stripped below.
+        if segment.starts_with("_") {
+            return None;
+        }
+
+        // Remove all `_` and the optional trailing `i64` from the segment. If what is left is an
+        // integer, the segment is a valid i64 literal.
+        let segment = segment.replace("_", "");
+        let stripped = match segment.strip_suffix("i64") {
+            Some(seg) => seg.to_string(),
+            None => segment.to_string(),
+        };
+        match stripped.parse::<i64>() {
             Ok(i) => Some(TokenKind::I64Literal(i)),
             Err(_) => None,
         }
@@ -367,8 +383,8 @@ impl TokenKind {
         lazy_static! {
             static ref RE_IDENTIFIER: Regex = Regex::new(r"^[a-zA-Z_]+[a-zA-Z0-9_]*$").unwrap();
         }
-        match RE_IDENTIFIER.is_match(segment.trim()) {
-            true => Some(TokenKind::Identifier(String::from(segment.trim()))),
+        match RE_IDENTIFIER.is_match(segment) {
+            true => Some(TokenKind::Identifier(String::from(segment))),
             false => None,
         }
     }
@@ -377,13 +393,10 @@ impl TokenKind {
         lazy_static! {
             static ref RE_STRING_LITERAL: Regex = Regex::new(r#"^"(?:[^"\\]|\\.)*"$"#).unwrap();
         }
-        match RE_STRING_LITERAL.is_match(segment.trim()) {
+        match RE_STRING_LITERAL.is_match(segment) {
             true => {
-                // Trim leading and trailing whitespace.
-                let formatted = segment.trim();
-
                 // Removing opening and closing quotes.
-                let formatted = &formatted[1..formatted.len() - 1];
+                let formatted = &segment[1..segment.len() - 1];
 
                 // Handle whitespace characters and escaped quotes and backslashes.
                 let mut replaced = String::from("");

@@ -923,7 +923,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             RichExprKind::I64Literal(i) => self
                 .ctx
                 .i64_type()
-                .const_int(i.abs() as u64, *i < 0)
+                .const_int(*i as u64, *i < 0)
                 .as_basic_value_enum(),
 
             RichExprKind::USizeLiteral(u) => self
@@ -1334,20 +1334,14 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             Operator::Add => self.builder.build_int_add(lhs, rhs, "sum"),
             Operator::Subtract => self.builder.build_int_sub(lhs, rhs, "diff"),
             Operator::Multiply => self.builder.build_int_mul(lhs, rhs, "prod"),
-            Operator::Divide => {
-                if signed {
-                    self.builder.build_int_signed_div(lhs, rhs, "quot")
-                } else {
-                    self.builder.build_int_unsigned_div(lhs, rhs, "quot")
-                }
-            }
-            Operator::Modulo => {
-                if signed {
-                    self.builder.build_int_signed_rem(lhs, rhs, "rem")
-                } else {
-                    self.builder.build_int_unsigned_rem(lhs, rhs, "rem")
-                }
-            }
+            Operator::Divide => match signed {
+                true => self.builder.build_int_signed_div(lhs, rhs, "quot"),
+                false => self.builder.build_int_unsigned_div(lhs, rhs, "quot"),
+            },
+            Operator::Modulo => match signed {
+                true => self.builder.build_int_signed_rem(lhs, rhs, "rem"),
+                false => self.builder.build_int_unsigned_rem(lhs, rhs, "rem"),
+            },
             other => panic!("unexpected arithmetic operator {other}"),
         }
     }
