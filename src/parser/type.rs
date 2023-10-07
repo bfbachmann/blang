@@ -126,12 +126,10 @@ impl Type {
     /// Parses a type.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         match tokens.next() {
-            Some(
-                _token @ Token {
-                    kind: TokenKind::Fn,
-                    ..
-                },
-            ) => {
+            Some(Token {
+                kind: TokenKind::Fn,
+                ..
+            }) => {
                 tokens.rewind(1);
                 let sig = FunctionSignature::from_anon(tokens, false)?;
                 Ok(Type::Function(Box::new(sig)))

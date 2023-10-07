@@ -154,7 +154,8 @@ impl RichType {
                 None => {
                     ctx.add_err(AnalyzeError::new(
                         ErrorKind::TypeNotDefined,
-                        format_code!("type {} is not defined", this_type.name).as_str(),
+                        format_code!("type {} is not defined in this scope", this_type.name)
+                            .as_str(),
                         this_type,
                     ));
 
@@ -331,10 +332,9 @@ impl RichType {
         typ: &RichType,
     ) -> Option<Vec<&RichType>> {
         let mut hierarchy = vec![];
-        if self.get_type_hierarchy(ctx, typ, &mut hierarchy) {
-            Some(hierarchy)
-        } else {
-            None
+        match self.get_type_hierarchy(ctx, typ, &mut hierarchy) {
+            true => Some(hierarchy),
+            false => None,
         }
     }
 

@@ -290,6 +290,7 @@ impl<'a> MoveChecker<'a> {
             | RichStatement::EnumTypeDeclaration(_)
             | RichStatement::ExternFns(_)
             | RichStatement::Consts(_)
+            | RichStatement::Trait(_)
             | RichStatement::Continue
             | RichStatement::Break => {
                 // Nothing to do here since moves cannot occur in these types of statements.

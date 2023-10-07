@@ -120,7 +120,7 @@ impl FunctionSignature {
 
     /// Parses function signatures. Expects token sequences of the forms
     ///
-    ///      fn <fn_name>(<arg_name>: <arg_type>, ...) ~ (<return_type>, ...)
+    ///      fn <fn_name>(<arg_name>: <arg_type>, ...) ~ <return_type>
     ///      fn <fn_name>(<arg_name>: <arg_type>, ...)
     ///
     /// where

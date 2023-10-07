@@ -36,6 +36,7 @@ pub mod ret;
 pub mod statement;
 pub mod r#struct;
 pub mod symbol;
+pub mod r#trait;
 pub mod tuple;
 pub mod r#type;
 pub mod var_assign;

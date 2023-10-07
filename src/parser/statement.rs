@@ -20,6 +20,7 @@ use crate::parser::r#enum::EnumType;
 use crate::parser::r#impl::Impl;
 use crate::parser::r#loop::Loop;
 use crate::parser::r#struct::StructType;
+use crate::parser::r#trait::Trait;
 use crate::parser::ret::Ret;
 use crate::parser::stream::Stream;
 use crate::parser::symbol::Symbol;
@@ -44,6 +45,7 @@ pub enum Statement {
     ExternFns(Extern),
     Consts(ConstBlock),
     Impl(Impl),
+    Trait(Trait),
 }
 
 impl fmt::Display for Statement {
@@ -102,8 +104,17 @@ impl fmt::Display for Statement {
             Statement::Impl(impl_) => {
                 write!(
                     f,
-                    "impl {{ <{} member functions> }}",
-                    impl_.member_fns.len()
+                    "impl {} {{ <{} member functions> }}",
+                    impl_.typ,
+                    impl_.member_fns.len(),
+                )
+            }
+            Statement::Trait(trait_) => {
+                write!(
+                    f,
+                    "trait {} {{ <{} functions> }}",
+                    trait_.name,
+                    trait_.fn_sigs.len()
                 )
             }
         }
@@ -128,6 +139,7 @@ impl Locatable for Statement {
             Statement::ExternFns(e) => e.start_pos(),
             Statement::Consts(c) => c.start_pos(),
             Statement::Impl(i) => i.start_pos(),
+            Statement::Trait(t) => t.start_pos(),
         }
     }
 
@@ -148,6 +160,7 @@ impl Locatable for Statement {
             Statement::ExternFns(e) => e.end_pos(),
             Statement::Consts(c) => c.end_pos(),
             Statement::Impl(i) => i.end_pos(),
+            Statement::Trait(t) => t.end_pos(),
         }
     }
 }
@@ -345,6 +358,18 @@ impl Statement {
             ) => {
                 let impl_ = Impl::from(tokens)?;
                 Ok(Statement::Impl(impl_))
+            }
+
+            // If the first token is `trait`, it's a trait declaration.
+            (
+                Token {
+                    kind: TokenKind::Trait,
+                    ..
+                },
+                _,
+            ) => {
+                let trait_ = Trait::from(tokens)?;
+                Ok(Statement::Trait(trait_))
             }
 
             // If the first token is `return`, it must be a return statement.

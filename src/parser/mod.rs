@@ -34,6 +34,7 @@ pub mod str_lit;
 pub mod stream;
 pub mod r#struct;
 pub mod symbol;
+pub mod r#trait;
 pub mod tuple;
 pub mod r#type;
 pub mod unresolved;

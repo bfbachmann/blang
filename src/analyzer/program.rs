@@ -72,13 +72,14 @@ impl RichProg {
                 | Statement::Consts(_)
                 | Statement::StructDeclaration(_)
                 | Statement::EnumDeclaration(_)
-                | Statement::Impl(_) => {
+                | Statement::Impl(_)
+                | Statement::Trait(_) => {
                     analyzed_statements.push(RichStatement::from(ctx, statement));
                 }
                 other => {
                     ctx.add_err(AnalyzeError::new(
                         ErrorKind::InvalidStatement,
-                        "expected type, constant, or function declaration",
+                        "expected type, constant, trait, or function declaration",
                         &other,
                     ));
                 }
@@ -212,7 +213,7 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
                 // Set the current impl type ID on the program context so we can access it when
                 // resolving type `This`.
                 let type_id = TypeId::from(impl_.typ.clone());
-                ctx.set_impl_type_id(Some(type_id.clone()));
+                ctx.set_this_type_id(Some(type_id.clone()));
 
                 // Analyze each member function signature and record it as a member of this type
                 // in the program context.
@@ -239,7 +240,7 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
 
                 // Remove the current impl type ID from the program context now that we're done
                 // checking the function signatures inside the impl block.
-                ctx.set_impl_type_id(None);
+                ctx.set_this_type_id(None);
             }
 
             _ => {}
@@ -1209,11 +1210,7 @@ mod tests {
             })
         ));
 
-        let result = analyze_prog(
-            r#"
-            enum i64 {}
-            "#,
-        );
+        let result = analyze_prog(r#"enum i64 {}"#);
         assert!(matches!(
             result,
             Err(AnalyzeError {
@@ -1258,6 +1255,23 @@ mod tests {
             result,
             Err(AnalyzeError {
                 kind: ErrorKind::InfiniteSizedType,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn duplicate_trait() {
+        let result = analyze_prog(
+            r#"
+            trait A {}
+            trait A {}
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::TraitAlreadyDefined,
                 ..
             })
         ))

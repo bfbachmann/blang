@@ -9,6 +9,7 @@ use crate::analyzer::func::RichFn;
 use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::r#enum::RichEnumType;
 use crate::analyzer::r#struct::RichStructType;
+use crate::analyzer::r#trait::RichTrait;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::lexer::pos::Position;
@@ -242,14 +243,15 @@ impl Scope {
 /// Represents the current program stack and analysis state.
 pub struct ProgramContext {
     stack: VecDeque<Scope>,
-    /// The type ID that corresponds to the current `impl` block, if we're inside an `impl` block.
-    cur_impl_type_id: Option<TypeId>,
+    /// The type ID that instances of the type `This` will resolve to.
+    cur_this_type_id: Option<TypeId>,
     errors: HashMap<Position, AnalyzeError>,
     warnings: HashMap<Position, AnalyzeWarning>,
     /// Maps type IDs to mappings of member function name to member function signature.
     type_member_fn_sigs: HashMap<TypeId, HashMap<String, RichFnSig>>,
     /// Stores all resolved types.
     pub types: HashMap<TypeId, RichType>,
+    pub traits: HashMap<String, RichTrait>,
 }
 
 impl ProgramContext {
@@ -265,11 +267,12 @@ impl ProgramContext {
 
         ProgramContext {
             stack: VecDeque::from([top_scope]),
-            cur_impl_type_id: None,
+            cur_this_type_id: None,
             errors: HashMap::new(),
             warnings: HashMap::new(),
             type_member_fn_sigs: HashMap::new(),
             types: HashMap::new(),
+            traits: HashMap::new(),
         }
     }
 
@@ -408,6 +411,12 @@ impl ProgramContext {
     /// name, returns the old symbol type ID.
     pub fn add_symbol(&mut self, symbol: ScopedSymbol) -> Option<ScopedSymbol> {
         self.stack.back_mut().unwrap().add_symbol(symbol)
+    }
+
+    /// Adds `trait_` to the program context. Returns an existing trait if its name matches that of
+    /// `trait_`.
+    pub fn add_trait(&mut self, trait_: RichTrait) -> Option<RichTrait> {
+        self.traits.insert(trait_.name.clone(), trait_)
     }
 
     /// Attempts to locate the invalid type with the given name and returns it, if found.
@@ -554,6 +563,11 @@ impl ProgramContext {
         None
     }
 
+    /// Returns the trait with the given name, or `None` if there is no such trait.
+    pub fn get_trait(&self, name: &str) -> Option<&RichTrait> {
+        self.traits.get(name)
+    }
+
     /// Adds the given scope to the top of the stack.
     pub fn push_scope(&mut self, scope: Scope) {
         self.stack.push_back(scope);
@@ -604,13 +618,14 @@ impl ProgramContext {
         &None
     }
 
-    /// Sets the type ID of the current `impl` block.
-    pub fn set_impl_type_id(&mut self, maybe_type_id: Option<TypeId>) {
-        self.cur_impl_type_id = maybe_type_id;
+    /// Sets the type ID that will correspond to the type `This`. In other words, after this is
+    /// called, all instances of the type `This` will resolve to `maybe_type_id`.
+    pub fn set_this_type_id(&mut self, maybe_type_id: Option<TypeId>) {
+        self.cur_this_type_id = maybe_type_id;
     }
 
     /// Returns the type ID of the current `impl` block, or `None` if we're not in an `impl` block.
     pub fn get_impl_type_id(&self) -> Option<&TypeId> {
-        self.cur_impl_type_id.as_ref()
+        self.cur_this_type_id.as_ref()
     }
 }

@@ -709,8 +709,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 // Nothing to do here. This is already handled in
                 // `ProgramCompiler::compile_program`.
             }
-            RichStatement::Impl(_) => {
-                // `impl` blocks should not occur inside functions.
+            RichStatement::Impl(_) | RichStatement::Trait(_) => {
+                // These blocks should not occur inside functions.
                 unreachable!();
             }
         };

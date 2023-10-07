@@ -12,6 +12,7 @@ use crate::analyzer::r#const::RichConst;
 use crate::analyzer::r#enum::RichEnumType;
 use crate::analyzer::r#impl::RichImpl;
 use crate::analyzer::r#struct::RichStructType;
+use crate::analyzer::r#trait::RichTrait;
 use crate::analyzer::ret::RichRet;
 use crate::analyzer::var_assign::RichVarAssign;
 use crate::analyzer::var_dec::RichVarDecl;
@@ -36,6 +37,7 @@ pub enum RichStatement {
     ExternFns(Vec<RichFnSig>),
     Consts(Vec<RichConst>),
     Impl(RichImpl),
+    Trait(RichTrait),
 }
 
 impl fmt::Display for RichStatement {
@@ -70,8 +72,17 @@ impl fmt::Display for RichStatement {
             RichStatement::Impl(impl_) => {
                 write!(
                     f,
-                    "impl {{ <{} member functions> }}",
+                    "impl {} {{ <{} member functions> }}",
+                    impl_.type_id,
                     impl_.member_fns.len()
+                )
+            }
+            RichStatement::Trait(trait_) => {
+                write!(
+                    f,
+                    "trait {} {{ <{} function signature> }}",
+                    trait_.name,
+                    trait_.fn_sigs.len()
                 )
             }
         }
@@ -183,6 +194,8 @@ impl RichStatement {
 
                 RichStatement::Consts(consts)
             }
+
+            Statement::Trait(trait_) => RichStatement::Trait(RichTrait::from(ctx, &trait_)),
         }
     }
 }

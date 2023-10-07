@@ -44,7 +44,7 @@ impl RichImpl {
         let type_id = RichType::analyze(ctx, &impl_.typ);
 
         // Set the impl type ID in the program context so we can use it when resolving type `This`.
-        ctx.set_impl_type_id(Some(type_id.clone()));
+        ctx.set_this_type_id(Some(type_id.clone()));
 
         // Analyze member functions.
         let member_fns = impl_
@@ -54,7 +54,7 @@ impl RichImpl {
             .collect();
 
         // Remove the impl type ID from the program context now that we're done analyzing the impl.
-        ctx.set_impl_type_id(None);
+        ctx.set_this_type_id(None);
 
         RichImpl {
             type_id,
