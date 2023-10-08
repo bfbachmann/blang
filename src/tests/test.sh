@@ -7,7 +7,7 @@ CC=${CC:-clang}
 LLC=${LLC:-llc}
 
 fail() {
-    echo FAIL "$1" "$2"
+    echo "FAIL:" "$1" "$2"
     exit 1
 }
 
@@ -35,5 +35,5 @@ for src_path in ./*.bl; do
     # test cases from muddying the test output.
     ./"$exe_path" 1> /dev/null 2> /dev/null || fail "$base_file_name".bl "did not execute correctly"
 
-    echo PASS "$compile_output Executed correctly."
+    echo "PASS:" "$compile_output Executed correctly."
 done
