@@ -33,7 +33,7 @@ pub enum ErrorKind {
     ImmutableAssignment,
     UseOfMovedValue,
     TypeIsNotEnum,
-    TraitAlreadyDefined,
+    SpecAlreadyDefined,
 }
 
 impl fmt::Display for ErrorKind {
@@ -66,7 +66,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::ImmutableAssignment => write!(f, "assignment to immutable value"),
             ErrorKind::UseOfMovedValue => write!(f, "use of moved value"),
             ErrorKind::TypeIsNotEnum => write!(f, "type is not enum"),
-            ErrorKind::TraitAlreadyDefined => write!(f, "trait already defined"),
+            ErrorKind::SpecAlreadyDefined => write!(f, "spec already defined"),
         }
     }
 }

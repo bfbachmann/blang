@@ -161,8 +161,8 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
                     // Nothing to do here because constants are compiled in the call to
                     // `ProgramCompiler::define_consts` above.
                 }
-                RichStatement::Trait(_) => {
-                    // Nothing to do here because traits don't contain logic.
+                RichStatement::Spec(_) => {
+                    // Nothing to do here because specs don't contain logic.
                 }
                 other => {
                     panic!("unexpected top-level statement {other}");
@@ -499,10 +499,10 @@ mod tests {
     }
 
     #[test]
-    fn traits() {
+    fn specs() {
         assert_compiles(
             r#"
-            trait Valid {
+            spec Valid {
                 fn is_valid(this) ~ bool
             }
         "#,

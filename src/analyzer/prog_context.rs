@@ -8,8 +8,8 @@ use crate::analyzer::error::AnalyzeResult;
 use crate::analyzer::func::RichFn;
 use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::r#enum::RichEnumType;
+use crate::analyzer::r#spec::RichSpec;
 use crate::analyzer::r#struct::RichStructType;
-use crate::analyzer::r#trait::RichTrait;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::lexer::pos::Position;
@@ -251,7 +251,7 @@ pub struct ProgramContext {
     type_member_fn_sigs: HashMap<TypeId, HashMap<String, RichFnSig>>,
     /// Stores all resolved types.
     pub types: HashMap<TypeId, RichType>,
-    pub traits: HashMap<String, RichTrait>,
+    pub specs: HashMap<String, RichSpec>,
 }
 
 impl ProgramContext {
@@ -272,7 +272,7 @@ impl ProgramContext {
             warnings: HashMap::new(),
             type_member_fn_sigs: HashMap::new(),
             types: HashMap::new(),
-            traits: HashMap::new(),
+            specs: HashMap::new(),
         }
     }
 
@@ -413,10 +413,10 @@ impl ProgramContext {
         self.stack.back_mut().unwrap().add_symbol(symbol)
     }
 
-    /// Adds `trait_` to the program context. Returns an existing trait if its name matches that of
-    /// `trait_`.
-    pub fn add_trait(&mut self, trait_: RichTrait) -> Option<RichTrait> {
-        self.traits.insert(trait_.name.clone(), trait_)
+    /// Adds `spec_` to the program context. Returns an existing spec if its name matches that of
+    /// `spec_`.
+    pub fn add_spec(&mut self, spec_: RichSpec) -> Option<RichSpec> {
+        self.specs.insert(spec_.name.clone(), spec_)
     }
 
     /// Attempts to locate the invalid type with the given name and returns it, if found.
@@ -563,9 +563,9 @@ impl ProgramContext {
         None
     }
 
-    /// Returns the trait with the given name, or `None` if there is no such trait.
-    pub fn get_trait(&self, name: &str) -> Option<&RichTrait> {
-        self.traits.get(name)
+    /// Returns the spec with the given name, or `None` if there is no such spec.
+    pub fn get_spec(&self, name: &str) -> Option<&RichSpec> {
+        self.specs.get(name)
     }
 
     /// Adds the given scope to the top of the stack.

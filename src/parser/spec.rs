@@ -8,42 +8,42 @@ use crate::parser::program::Program;
 use crate::parser::stream::Stream;
 use crate::{locatable_impl, util};
 
-/// Represents a trait declaration.
+/// Represents a spec declaration.
 #[derive(Debug, Clone)]
-pub struct Trait {
+pub struct Spec {
     pub name: String,
     pub fn_sigs: Vec<FunctionSignature>,
     start_pos: Position,
     end_pos: Position,
 }
 
-impl PartialEq for Trait {
+impl PartialEq for Spec {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name && util::vecs_eq(&self.fn_sigs, &other.fn_sigs)
     }
 }
 
-locatable_impl!(Trait);
+locatable_impl!(Spec);
 
-impl Trait {
-    /// Parses a trait declaration. Expects token sequences of the form
+impl Spec {
+    /// Parses a spec declaration. Expects token sequences of the form
     ///
-    ///     trait <name> {
+    ///     spec <name> {
     ///         <fn_sig>...
     ///     }
     ///
     /// where
-    ///  - `name` is an identifier representing the name of the trait
-    ///  - `fn_sig` is a function signature in the trait (see `FunctionSignature::from`).
+    ///  - `name` is an identifier representing the name of the spec
+    ///  - `fn_sig` is a function signature in the spec (see `FunctionSignature::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        // Parse `trait` and get this trait declaration starting position.
-        let start_pos = Program::parse_expecting(tokens, TokenKind::Trait)?.start;
+        // Parse `spec` and get this spec declaration starting position.
+        let start_pos = Program::parse_expecting(tokens, TokenKind::Spec)?.start;
 
-        // Parse the trait name and left brace.
+        // Parse the spec name and left brace.
         let name = Program::parse_identifier(tokens)?;
         Program::parse_expecting(tokens, TokenKind::LeftBrace)?;
 
-        // Parse all the function signatures in the trait, followed by the closing brace.
+        // Parse all the function signatures in the spec, followed by the closing brace.
         let mut fn_sigs = vec![];
         let end_pos = loop {
             if let Some(token) = Program::parse_optional(tokens, TokenKind::RightBrace) {
@@ -53,7 +53,7 @@ impl Trait {
             fn_sigs.push(FunctionSignature::from(tokens)?);
         };
 
-        Ok(Trait {
+        Ok(Spec {
             name,
             fn_sigs,
             start_pos,

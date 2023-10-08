@@ -73,13 +73,13 @@ impl RichProg {
                 | Statement::StructDeclaration(_)
                 | Statement::EnumDeclaration(_)
                 | Statement::Impl(_)
-                | Statement::Trait(_) => {
+                | Statement::Spec(_) => {
                     analyzed_statements.push(RichStatement::from(ctx, statement));
                 }
                 other => {
                     ctx.add_err(AnalyzeError::new(
                         ErrorKind::InvalidStatement,
-                        "expected type, constant, trait, or function declaration",
+                        "expected type, constant, spec, or function declaration",
                         &other,
                     ));
                 }
@@ -1261,17 +1261,17 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_trait() {
+    fn duplicate_spec() {
         let result = analyze_prog(
             r#"
-            trait A {}
-            trait A {}
+            spec A {}
+            spec A {}
             "#,
         );
         assert!(matches!(
             result,
             Err(AnalyzeError {
-                kind: ErrorKind::TraitAlreadyDefined,
+                kind: ErrorKind::SpecAlreadyDefined,
                 ..
             })
         ))

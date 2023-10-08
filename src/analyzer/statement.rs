@@ -11,8 +11,8 @@ use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#const::RichConst;
 use crate::analyzer::r#enum::RichEnumType;
 use crate::analyzer::r#impl::RichImpl;
+use crate::analyzer::r#spec::RichSpec;
 use crate::analyzer::r#struct::RichStructType;
-use crate::analyzer::r#trait::RichTrait;
 use crate::analyzer::ret::RichRet;
 use crate::analyzer::var_assign::RichVarAssign;
 use crate::analyzer::var_dec::RichVarDecl;
@@ -37,7 +37,7 @@ pub enum RichStatement {
     ExternFns(Vec<RichFnSig>),
     Consts(Vec<RichConst>),
     Impl(RichImpl),
-    Trait(RichTrait),
+    Spec(RichSpec),
 }
 
 impl fmt::Display for RichStatement {
@@ -77,12 +77,12 @@ impl fmt::Display for RichStatement {
                     impl_.member_fns.len()
                 )
             }
-            RichStatement::Trait(trait_) => {
+            RichStatement::Spec(spec_) => {
                 write!(
                     f,
-                    "trait {} {{ <{} function signature> }}",
-                    trait_.name,
-                    trait_.fn_sigs.len()
+                    "spec {} {{ <{} function signature> }}",
+                    spec_.name,
+                    spec_.fn_sigs.len()
                 )
             }
         }
@@ -195,7 +195,7 @@ impl RichStatement {
                 RichStatement::Consts(consts)
             }
 
-            Statement::Trait(trait_) => RichStatement::Trait(RichTrait::from(ctx, &trait_)),
+            Statement::Spec(spec_) => RichStatement::Spec(RichSpec::from(ctx, &spec_)),
         }
     }
 }

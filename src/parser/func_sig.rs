@@ -11,6 +11,7 @@ use crate::parser::arg::Argument;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::program::Program;
 use crate::parser::stream::Stream;
+use crate::parser::tmpl_params::TmplParams;
 use crate::parser::Type;
 use crate::{locatable_impl, util};
 
@@ -19,6 +20,9 @@ use crate::{locatable_impl, util};
 #[derive(Debug, Clone, Eq)]
 pub struct FunctionSignature {
     pub name: String,
+    /// Function template parameters will be Some if this is a function template (a generic
+    /// function).
+    pub tmpl_params: Option<TmplParams>,
     pub args: Vec<Argument>,
     pub return_type: Option<Type>,
     start_pos: Position,
@@ -78,6 +82,7 @@ impl FunctionSignature {
     ) -> Self {
         FunctionSignature {
             name: name.to_string(),
+            tmpl_params: None,
             args,
             return_type,
             start_pos: Position::default(),
@@ -95,6 +100,7 @@ impl FunctionSignature {
     ) -> Self {
         FunctionSignature {
             name: name.to_string(),
+            tmpl_params: None,
             args,
             return_type,
             start_pos,
@@ -111,6 +117,7 @@ impl FunctionSignature {
     ) -> Self {
         FunctionSignature {
             name: "".to_string(),
+            tmpl_params: None,
             args,
             return_type,
             start_pos,
@@ -122,20 +129,41 @@ impl FunctionSignature {
     ///
     ///      fn <fn_name>(<arg_name>: <arg_type>, ...) ~ <return_type>
     ///      fn <fn_name>(<arg_name>: <arg_type>, ...)
+    ///      fn <tmpl_params> <fn_name>(<arg_name>: <arg_type>, ...) ~ <return_type>
+    ///      fn <tmpl_params> <fn_name>(<arg_name>: <arg_type>, ...)
     ///
     /// where
+    ///  - `tmpl_params` are optional template parameters (see `TmplParams::from`)
     ///  - `fn_name` is an identifier representing the name of the function
     ///  - `arg_type` is the type of the argument
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return type
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Record the function signature starting position.
+        let start_pos = Program::parse_expecting(tokens, TokenKind::Fn)?.start;
+
+        // Optionally parse template parameters.
+        let tmpl_params = match Program::parse_optional(tokens, TokenKind::LeftBracket) {
+            Some(_) => {
+                tokens.rewind(1);
+                Some(TmplParams::from(tokens)?)
+            }
+            None => None,
+        };
+
+        // Parse the rest of the function signature.
+        let mut sig = FunctionSignature::from_name_args_and_return(tokens)?;
+
+        sig.start_pos = start_pos;
+        sig.tmpl_params = tmpl_params;
+
+        Ok(sig)
+    }
+
+    /// Parses the name, arguments, and return type of a function signature. Expects token
+    /// sequences of the same forms as `from`, only without the leading `fn` token.
+    pub fn from_name_args_and_return(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         let start_pos = Program::current_position(tokens);
-
-        // The first token should be `fn`.
-        Program::parse_expecting(tokens, TokenKind::Fn)?;
-
-        // The second token should be an identifier that represents the function name.
         let fn_name = Program::parse_identifier(tokens)?;
 
         // The next tokens should represent function arguments and optional return type.
