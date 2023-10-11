@@ -86,7 +86,7 @@ impl RichVarAssign {
             Some(typ) => {
                 // Make sure the variable type is the same as the expression type.
                 let expr_type = ctx.get_resolved_type(&rich_expr.type_id).unwrap();
-                if !typ.same_as(expr_type) {
+                if !typ.is_same_as(expr_type) {
                     ctx.add_err(AnalyzeError::new(
                         ErrorKind::MismatchedTypes,
                         format_code!(

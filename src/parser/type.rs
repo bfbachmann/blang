@@ -29,6 +29,7 @@ pub enum Type {
     UnsafePtr(UnsafePtrType),
     USize(USizeType),
     Struct(StructType),
+    // TODO: Remove? This only needs to exist here if enums can be declared inline like structs.
     #[allow(dead_code)]
     Enum(EnumType),
     Tuple(TupleType),

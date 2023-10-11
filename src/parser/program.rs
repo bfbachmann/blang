@@ -140,7 +140,7 @@ impl Program {
             Some(other) => {
                 return Err(ParseError::new_with_token(
                     ErrorKind::ExpectedIdent,
-                    format!(r#"expected identifier, but found "{}""#, other).as_str(),
+                    format_code!("expected identifier, but found {}", other).as_str(),
                     other.clone(),
                 ))
             }

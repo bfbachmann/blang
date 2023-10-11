@@ -45,7 +45,7 @@ impl AnalyzeWarning {
     }
 
     /// Creates a new warning message with start and end positions cloned from the locatable.
-    pub fn new_from_locatable(kind: WarnKind, message: &str, loc: Box<dyn Locatable>) -> Self {
+    pub fn new<T: Locatable>(kind: WarnKind, message: &str, loc: &T) -> Self {
         AnalyzeWarning {
             kind,
             message: message.to_string(),

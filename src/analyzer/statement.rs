@@ -102,6 +102,16 @@ impl RichStatement {
             }
 
             Statement::FunctionDeclaration(fn_decl) => {
+                // Make sure we are not already inside a function. For now, functions cannot be defined
+                // within other functions.
+                if ctx.is_in_fn() {
+                    ctx.add_err(AnalyzeError::new(
+                        ErrorKind::InvalidStatement,
+                        "cannot declare functions inside other functions",
+                        &fn_decl.signature,
+                    ));
+                }
+
                 // Analyze the function and add it to the program context so we can reference it
                 // later.
                 let rich_fn = RichFn::from(ctx, fn_decl);
@@ -167,7 +177,7 @@ impl RichStatement {
                     ));
                 }
 
-                // Analyze all the function signatures in the `ext` block.
+                // Analyze all the function signatures in the `extern` block.
                 let mut rich_fn_sigs = vec![];
                 for ext_fn_sig in &ext.fn_sigs {
                     rich_fn_sigs.push(RichFnSig::from(ctx, ext_fn_sig));
@@ -196,6 +206,16 @@ impl RichStatement {
             }
 
             Statement::Spec(spec_) => RichStatement::Spec(RichSpec::from(ctx, &spec_)),
+        }
+    }
+
+    /// Returns true if this statement is a templated statement (and therefore should not actually
+    /// be included in the AST that results from semantic analysis).
+    pub fn is_templated(&self) -> bool {
+        match self {
+            RichStatement::FunctionDeclaration(func) => func.signature.is_templated(),
+            RichStatement::Spec(_) => true,
+            _ => false,
         }
     }
 }

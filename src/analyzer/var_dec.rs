@@ -108,10 +108,7 @@ mod tests {
             RichVarDecl {
                 type_id: TypeId::str(),
                 name: "my_var".to_string(),
-                val: RichExpr {
-                    kind: RichExprKind::StrLiteral("bingo".to_string()),
-                    type_id: TypeId::str(),
-                }
+                val: RichExpr::new(RichExprKind::StrLiteral("bingo".to_string()), TypeId::str())
             }
         );
         assert_eq!(ctx.get_symbol("my_var").unwrap().type_id, TypeId::str());
@@ -132,10 +129,7 @@ mod tests {
             RichVarDecl {
                 type_id: TypeId::bool(),
                 name: "my_var".to_string(),
-                val: RichExpr {
-                    kind: RichExprKind::BoolLiteral(true),
-                    type_id: TypeId::bool(),
-                }
+                val: RichExpr::new(RichExprKind::BoolLiteral(true), TypeId::bool())
             }
         );
         assert_eq!(ctx.get_symbol("my_var").unwrap().type_id, TypeId::bool());

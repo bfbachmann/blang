@@ -25,7 +25,6 @@ pub enum ErrorKind {
     UnexpectedEOF,
     InvalidStatement,
     UseOfDoubleNegative,
-    DuplicateArgName,
 }
 
 impl Display for ErrorKind {
@@ -49,7 +48,6 @@ impl Display for ErrorKind {
             ErrorKind::UnexpectedEOF => write!(f, "unexpected EOF"),
             ErrorKind::InvalidStatement => write!(f, "invalid statement"),
             ErrorKind::UseOfDoubleNegative => write!(f, "use of double negative"),
-            ErrorKind::DuplicateArgName => write!(f, "duplicate argument name"),
         }
     }
 }

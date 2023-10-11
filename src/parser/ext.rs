@@ -65,7 +65,7 @@ impl Extern {
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         let start_pos = Program::current_position(tokens);
 
-        // Parse the `ext` token.
+        // Parse the `extern` token.
         Program::parse_expecting(tokens, TokenKind::Extern)?;
 
         // The next token should either be `{` or `fn`.
@@ -77,7 +77,7 @@ impl Extern {
                 kind: TokenKind::LeftBrace,
                 ..
             } => {
-                // We're inside an `ext` block, so we need to parse a series of function signatures
+                // We're inside an `extern` block, so we need to parse a series of function signatures
                 // until we reach the closing curly brace.
                 let mut fn_sigs = vec![];
                 let end_pos = loop {
@@ -99,7 +99,7 @@ impl Extern {
                 kind: TokenKind::Fn,
                 ..
             } => {
-                // This is just a single `ext` function declaration.
+                // This is just a single `extern` function declaration.
                 tokens.rewind(1);
                 let fn_sig = FunctionSignature::from(tokens)?;
                 let end_pos = fn_sig.end_pos().clone();

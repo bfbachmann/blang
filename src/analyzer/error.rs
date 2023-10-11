@@ -34,6 +34,10 @@ pub enum ErrorKind {
     UseOfMovedValue,
     TypeIsNotEnum,
     SpecAlreadyDefined,
+    SpecNotDefined,
+    DuplicateTmplParam,
+    DuplicateFnArg,
+    SpecNotSatisfied,
 }
 
 impl fmt::Display for ErrorKind {
@@ -67,6 +71,10 @@ impl fmt::Display for ErrorKind {
             ErrorKind::UseOfMovedValue => write!(f, "use of moved value"),
             ErrorKind::TypeIsNotEnum => write!(f, "type is not enum"),
             ErrorKind::SpecAlreadyDefined => write!(f, "spec already defined"),
+            ErrorKind::DuplicateTmplParam => write!(f, "duplicate template parameter"),
+            ErrorKind::DuplicateFnArg => write!(f, "duplicate function argument"),
+            ErrorKind::SpecNotDefined => write!(f, "spec not defined"),
+            ErrorKind::SpecNotSatisfied => write!(f, "spec not satisfied"),
         }
     }
 }

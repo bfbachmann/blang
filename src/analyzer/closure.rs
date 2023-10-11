@@ -10,23 +10,27 @@ use crate::analyzer::prog_context::{ProgramContext, Scope, ScopeKind};
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::statement::RichStatement;
 use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
+use crate::lexer::pos::{Locatable, Position};
 use crate::parser::arg::Argument;
 use crate::parser::closure::Closure;
 use crate::parser::cont::Continue;
 use crate::parser::r#break::Break;
 use crate::parser::r#type::Type;
-use crate::{format_code, util};
+use crate::{format_code, locatable_impl, util};
 
 /// Represents a semantically valid and type-rich closure.
 #[derive(Debug, Clone)]
 pub struct RichClosure {
     pub statements: Vec<RichStatement>,
     pub ret_type_id: Option<TypeId>,
-    pub original: Closure,
     pub has_break: bool,
     pub has_continue: bool,
     pub has_return: bool,
+    start_pos: Position,
+    end_pos: Position,
 }
+
+locatable_impl!(RichClosure);
 
 impl fmt::Display for RichClosure {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -42,6 +46,19 @@ impl PartialEq for RichClosure {
 }
 
 impl RichClosure {
+    /// Creates a new empty closure.
+    pub fn new_empty() -> Self {
+        RichClosure {
+            statements: vec![],
+            ret_type_id: None,
+            has_break: false,
+            has_continue: false,
+            has_return: false,
+            start_pos: Position::default(),
+            end_pos: Position::default(),
+        }
+    }
+
     /// Performs semantic analysis on the given closure and returns a type-rich version of it.
     pub fn from(
         ctx: &mut ProgramContext,
@@ -55,19 +72,31 @@ impl RichClosure {
             rich_args.push(RichArg::from(ctx, &arg));
         }
 
+        let rich_expected_ret_type = match &expected_ret_type {
+            Some(typ) => Some(RichType::analyze(ctx, &typ)),
+            None => None,
+        };
+
+        RichClosure::from_analyzed(ctx, closure, kind, rich_args, rich_expected_ret_type)
+    }
+
+    /// Performs semantic analysis on the given closure with the already-analyzed arguments and
+    /// expected return type ID.
+    pub fn from_analyzed(
+        ctx: &mut ProgramContext,
+        closure: Closure,
+        kind: ScopeKind,
+        rich_args: Vec<RichArg>,
+        expected_ret_type_id: Option<TypeId>,
+    ) -> Self {
+        let start_pos = closure.start_pos().clone();
+        let end_pos = closure.end_pos().clone();
+
         // Add a new scope to the program context, since each closure gets its own scope.
-        let scope = Scope::new(
-            kind.clone(),
-            rich_args,
-            match &expected_ret_type {
-                Some(typ) => Some(RichType::analyze(ctx, &typ)),
-                None => None,
-            },
-        );
+        let scope = Scope::new(kind.clone(), rich_args, expected_ret_type_id.clone());
         ctx.push_scope(scope);
 
         // Analyze all the statements in the closure and record return type.
-        let original = closure.clone();
         let mut rich_statements = vec![];
         let num_statements = closure.statements.len();
         let mut has_break = false;
@@ -97,11 +126,11 @@ impl RichClosure {
             // never be executed.
             if has_break || has_continue || has_return {
                 if i + 1 != num_statements {
-                    ctx.add_warn(AnalyzeWarning::new_from_locatable(
+                    ctx.add_warn(AnalyzeWarning::new(
                         WarnKind::UnreachableCode,
                         format_code!("statements following {} will never be executed", statement)
                             .as_str(),
-                        Box::new(statement.clone()),
+                        &statement,
                     ));
                     rich_statements.push(rich_statement);
                     break;
@@ -113,21 +142,16 @@ impl RichClosure {
 
         // TODO: handle closure result.
 
-        // Analyze the return type.
-        let ret_type = match &expected_ret_type {
-            Some(typ) => Some(RichType::analyze(ctx, &typ)),
-            None => None,
-        };
-
         // Pop the scope from the stack before returning since we're exiting the closure scope.
         ctx.pop_scope();
         RichClosure {
             statements: rich_statements,
-            ret_type_id: ret_type,
-            original,
+            ret_type_id: expected_ret_type_id,
             has_break,
             has_continue,
             has_return,
+            start_pos,
+            end_pos,
         }
     }
 }
@@ -176,7 +200,7 @@ pub fn check_closure_returns(
                     ctx.add_err(AnalyzeError::new(
                         ErrorKind::MissingReturn,
                         "missing return statement",
-                        &closure.original,
+                        closure,
                     ));
                 }
             };
@@ -193,7 +217,7 @@ pub fn check_closure_returns(
                             AnalyzeError::new(
                                 ErrorKind::MissingReturn,
                                 "missing return statement",
-                                &closure.original,
+                                closure,
                             )
                             .with_detail(
                                 "The last statement in this closure is a loop that contains \
@@ -228,7 +252,7 @@ pub fn check_closure_returns(
                     AnalyzeError::new(
                         ErrorKind::MissingReturn,
                         "missing return statement",
-                        &closure.original,
+                        closure,
                     )
                     .with_detail(
                         "The last statement in this closure is a loop that does not return.",

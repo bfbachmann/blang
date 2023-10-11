@@ -237,7 +237,7 @@ impl Statement {
                 Ok(Statement::VariableAssignment(assign))
             }
 
-            // If the first token is `ext`, it's a set of external function declarations.
+            // If the first token is `extern`, it's a set of external function declarations.
             (
                 Token {
                     kind: TokenKind::Extern,

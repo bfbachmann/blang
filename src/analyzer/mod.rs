@@ -37,6 +37,7 @@ pub mod spec;
 pub mod statement;
 pub mod r#struct;
 pub mod symbol;
+pub mod tmpl_params;
 pub mod tuple;
 pub mod r#type;
 pub mod var_assign;

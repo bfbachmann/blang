@@ -499,11 +499,34 @@ mod tests {
     }
 
     #[test]
-    fn specs() {
+    fn function_template_using_specs() {
         assert_compiles(
             r#"
-            spec Valid {
-                fn is_valid(this) ~ bool
+            extern fn write(fd: i64, msg: str, len: i64) ~ i64
+
+            spec Task {
+                fn run(this) ~ bool
+            }
+            
+            struct PrintTask {
+                msg: str
+            }
+            
+            impl PrintTask {
+                fn run(this) ~ bool {
+                    write(1, this.msg, 100)
+                    return true
+                }
+            }
+            
+            fn run_task(task: T) ~ bool
+            with [T: Task] {
+                return task.run()
+            }
+            
+            fn main() {
+                let task = PrintTask{msg: "hello world"}
+                run_task(task)
             }
         "#,
         )

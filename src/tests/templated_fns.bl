@@ -1,0 +1,66 @@
+extern fn exit(code: i64)
+
+fn assert(b: bool, code: i64) {
+    if !b {
+        exit(code)
+    }
+}
+
+fn apply(func: T, v: i64) ~ i64
+with [T = fn (i64) ~ i64]
+{
+    return func(v)
+}
+
+fn double_if(v: T, b: B) ~ i64
+with [T = i64, B = bool]
+{
+    if b {
+        return v * 2
+    }
+    return v
+}
+
+fn double(v: i64) ~ i64 {
+    return v * 2
+}
+
+spec Task {
+    fn run(this) ~ bool
+}
+
+struct BasicTask {
+    succeed: bool
+}
+
+impl BasicTask {
+    fn new(succeed: bool) ~ BasicTask {
+        return BasicTask{succeed: succeed}
+    }
+
+    fn run(this) ~ bool {
+        return this.succeed
+    }
+}
+
+fn run_task(task: T) ~ bool
+with [T: Task]
+{
+    return task.run()
+}
+
+fn main() {
+    // Check that template parameters work in place of concrete types.
+    {
+        assert(apply(double, 2) == 4, 1)
+        assert(double_if(5, true) == 10, 2)
+    }
+
+    // Check that template parameters work in place of specs.
+    {
+        let task = BasicTask.new(true)
+        assert(run_task(task) == true, 3)
+    }
+
+    exit(0)
+}

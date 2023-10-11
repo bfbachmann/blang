@@ -7,6 +7,7 @@ use crate::analyzer::r#type::TypeId;
 use crate::format_code;
 use crate::parser::r#type::Type;
 use crate::parser::spec::Spec;
+use crate::parser::unresolved::UnresolvedType;
 
 /// Represents a semantically valid spec declaration.
 #[derive(PartialEq, Clone, Debug)]
@@ -54,5 +55,12 @@ impl RichSpec {
         // Add the new spec to the program context so we can reference it by name later.
         ctx.add_spec(rich_spec.clone());
         rich_spec
+    }
+
+    /// Returns the type ID that corresponds to this spec type.
+    pub fn type_id(&self) -> TypeId {
+        TypeId::from(Type::Unresolved(UnresolvedType::new_with_default_pos(
+            self.name.as_str(),
+        )))
     }
 }

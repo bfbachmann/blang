@@ -144,6 +144,8 @@ fn analyze(input_path: &str) -> Option<ProgramAnalysis> {
                 Some(warn.start_pos.col)
             ),
         );
+
+        println!();
     }
 
     // Print errors.

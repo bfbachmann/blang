@@ -13,8 +13,8 @@ use crate::{locatable_impl, util};
 pub struct Closure {
     pub statements: Vec<Statement>,
     pub result: Option<Expression>,
-    pub start_pos: Position,
-    pub end_pos: Position,
+    start_pos: Position,
+    end_pos: Position,
 }
 
 impl PartialEq for Closure {
@@ -29,17 +29,6 @@ impl PartialEq for Closure {
 locatable_impl!(Closure);
 
 impl Closure {
-    /// Creates a new empty closure with default (zero) start and end positions.
-    #[cfg(test)]
-    pub fn new_empty() -> Self {
-        Closure {
-            statements: vec![],
-            result: None,
-            start_pos: Position::default(),
-            end_pos: Position::default(),
-        }
-    }
-
     /// Creates a new closure.
     pub fn new(
         statements: Vec<Statement>,

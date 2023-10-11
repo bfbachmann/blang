@@ -1395,6 +1395,10 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             RichType::Unknown(name) => {
                 panic!("encountered unknown type {}", name)
             }
+
+            RichType::Templated(param) => {
+                panic!("encountered templated type {}", param)
+            }
         }
     }
 }

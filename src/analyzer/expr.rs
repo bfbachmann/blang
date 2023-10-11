@@ -14,12 +14,12 @@ use crate::analyzer::r#struct::RichStructInit;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::symbol::RichSymbol;
 use crate::analyzer::tuple::RichTupleInit;
-use crate::format_code;
-use crate::parser::closure::Closure;
+use crate::lexer::pos::{Locatable, Position};
 use crate::parser::expr::Expression;
 use crate::parser::op::Operator;
 use crate::parser::r#type::Type;
 use crate::parser::unresolved::UnresolvedType;
+use crate::{format_code, locatable_impl};
 
 /// Represents a kind of expression.
 #[derive(Debug, Clone)]
@@ -158,6 +158,8 @@ impl RichExprKind {
 pub struct RichExpr {
     pub kind: RichExprKind,
     pub type_id: TypeId,
+    start_pos: Position,
+    end_pos: Position,
 }
 
 impl fmt::Display for RichExpr {
@@ -166,9 +168,14 @@ impl fmt::Display for RichExpr {
     }
 }
 
+locatable_impl!(RichExpr);
+
 impl RichExpr {
     /// Performs semantic analysis on the given expression and returns a type-rich version of it.
     pub fn from(ctx: &mut ProgramContext, expr: Expression) -> RichExpr {
+        let start_pos = expr.start_pos().clone();
+        let end_pos = expr.end_pos().clone();
+
         match expr {
             Expression::Symbol(ref symbol) => {
                 let rich_symbol = RichSymbol::from(ctx, symbol, true, None);
@@ -176,27 +183,37 @@ impl RichExpr {
                 RichExpr {
                     kind: RichExprKind::Symbol(rich_symbol),
                     type_id,
+                    start_pos,
+                    end_pos,
                 }
             }
 
             Expression::BoolLiteral(b) => RichExpr {
                 kind: RichExprKind::BoolLiteral(b.value),
                 type_id: TypeId::bool(),
+                start_pos,
+                end_pos,
             },
 
             Expression::I64Literal(i) => RichExpr {
                 kind: RichExprKind::I64Literal(i.value),
                 type_id: TypeId::i64(),
+                start_pos,
+                end_pos,
             },
 
             Expression::UnsafeNull(_) => RichExpr {
                 kind: RichExprKind::UnsafeNull,
                 type_id: TypeId::unsafeptr(),
+                start_pos,
+                end_pos,
             },
 
             Expression::StrLiteral(s) => RichExpr {
                 kind: RichExprKind::StrLiteral(s.value),
                 type_id: TypeId::str(),
+                start_pos,
+                end_pos,
             },
 
             Expression::StructInit(struct_init) => {
@@ -204,6 +221,8 @@ impl RichExpr {
                 RichExpr {
                     kind: RichExprKind::StructInit(rich_init),
                     type_id: TypeId::from(struct_init.typ), // TODO: can this just be `type_id`?
+                    start_pos,
+                    end_pos,
                 }
             }
 
@@ -213,6 +232,8 @@ impl RichExpr {
                 RichExpr {
                     kind: RichExprKind::EnumInit(rich_init),
                     type_id,
+                    start_pos,
+                    end_pos,
                 }
             }
 
@@ -222,6 +243,8 @@ impl RichExpr {
                 RichExpr {
                     kind: RichExprKind::TupleInit(rich_init),
                     type_id,
+                    start_pos,
+                    end_pos,
                 }
             }
 
@@ -232,6 +255,8 @@ impl RichExpr {
                 RichExpr {
                     kind: RichExprKind::USizeLiteral(typ.size_bytes(ctx) as u64),
                     type_id: TypeId::usize(),
+                    start_pos,
+                    end_pos,
                 }
             }
 
@@ -242,6 +267,8 @@ impl RichExpr {
                     return RichExpr {
                         kind: RichExprKind::FunctionCall(rich_call),
                         type_id,
+                        start_pos,
+                        end_pos,
                     };
                 }
 
@@ -273,6 +300,8 @@ impl RichExpr {
                     sig.return_type.clone(),
                 );
                 RichExpr {
+                    start_pos,
+                    end_pos,
                     kind: RichExprKind::AnonFunction(Box::new(RichFn {
                         signature: RichFnSig::from(ctx, &anon_fn.signature),
                         body: rich_closure,
@@ -293,6 +322,8 @@ impl RichExpr {
                     RichExpr {
                         kind: RichExprKind::UnaryOperation(Operator::Not, Box::new(rich_expr)),
                         type_id: TypeId::bool(),
+                        start_pos,
+                        end_pos,
                     }
                 } else {
                     // The expression has the wrong type. Record the error and insert a
@@ -329,6 +360,8 @@ impl RichExpr {
                             Box::new(rich_right),
                         ),
                         type_id: RichExpr::get_result_type(op, None),
+                        start_pos,
+                        end_pos,
                     };
                 }
 
@@ -395,6 +428,8 @@ impl RichExpr {
                         Box::new(rich_right),
                     ),
                     type_id: RichExpr::get_result_type(op, operand_type_id),
+                    start_pos,
+                    end_pos,
                 }
             }
         }
@@ -404,8 +439,21 @@ impl RichExpr {
     pub fn from_symbol(symbol: RichSymbol) -> Self {
         let type_id = symbol.get_type_id().clone();
         RichExpr {
+            start_pos: symbol.start_pos().clone(),
+            end_pos: symbol.end_pos().clone(),
             kind: RichExprKind::Symbol(symbol),
             type_id,
+        }
+    }
+
+    /// Creates a new expression.
+    #[cfg(test)]
+    pub fn new(kind: RichExprKind, type_id: TypeId) -> Self {
+        RichExpr {
+            kind,
+            type_id,
+            start_pos: Position::default(),
+            end_pos: Position::default(),
         }
     }
 
@@ -416,26 +464,36 @@ impl RichExpr {
             Type::Bool(_) => RichExpr {
                 kind: RichExprKind::BoolLiteral(false),
                 type_id,
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             },
 
             Type::Str(_) => RichExpr {
                 kind: RichExprKind::StrLiteral("".to_string()),
                 type_id,
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             },
 
             Type::I64(_) => RichExpr {
                 kind: RichExprKind::I64Literal(0),
                 type_id,
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             },
 
             Type::UnsafePtr(_) => RichExpr {
                 kind: RichExprKind::UnsafeNull,
                 type_id,
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             },
 
             Type::USize(_) => RichExpr {
                 kind: RichExprKind::USizeLiteral(0),
                 type_id,
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             },
 
             Type::Struct(struct_type) => RichExpr {
@@ -444,6 +502,8 @@ impl RichExpr {
                     field_values: Default::default(),
                 }),
                 type_id,
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             },
 
             Type::Enum(enum_type) => RichExpr {
@@ -457,11 +517,15 @@ impl RichExpr {
                     maybe_value: None,
                 }),
                 type_id,
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             },
 
             Type::Tuple(_) => RichExpr {
                 kind: RichExprKind::TupleInit(RichTupleInit::new_empty(ctx)),
                 type_id,
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             },
 
             func_type @ Type::Function(_) => RichExpr {
@@ -472,27 +536,20 @@ impl RichExpr {
                         ret_type_id: None,
                         type_id: TypeId::from(func_type.clone()),
                         impl_type_id: None,
+                        tmpl_params: None,
                     },
-                    body: RichClosure {
-                        statements: vec![],
-                        ret_type_id: None,
-                        original: Closure {
-                            statements: vec![],
-                            result: None,
-                            start_pos: Default::default(),
-                            end_pos: Default::default(),
-                        },
-                        has_break: false,
-                        has_continue: false,
-                        has_return: false,
-                    },
+                    body: RichClosure::new_empty(),
                 })),
                 type_id,
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             },
 
             Type::Unresolved(_) => RichExpr {
                 kind: RichExprKind::Unknown,
                 type_id,
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             },
 
             Type::This(_) => {
@@ -583,9 +640,9 @@ mod tests {
     use crate::analyzer::prog_context::{ProgramContext, ScopedSymbol};
     use crate::analyzer::r#type::{RichType, TypeId};
     use crate::analyzer::symbol::RichSymbol;
+    use crate::lexer::pos::Position;
     use crate::parser::arg::Argument;
     use crate::parser::bool_lit::BoolLit;
-    use crate::parser::closure::Closure;
     use crate::parser::expr::Expression;
     use crate::parser::func_call::FunctionCall;
     use crate::parser::func_sig::FunctionSignature;
@@ -605,7 +662,9 @@ mod tests {
             result,
             RichExpr {
                 kind: RichExprKind::I64Literal(1),
-                type_id: TypeId::i64()
+                type_id: TypeId::i64(),
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             }
         );
     }
@@ -621,6 +680,8 @@ mod tests {
             RichExpr {
                 kind: RichExprKind::BoolLiteral(false),
                 type_id: TypeId::bool(),
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             },
         );
     }
@@ -635,7 +696,9 @@ mod tests {
             result,
             RichExpr {
                 kind: RichExprKind::StrLiteral(String::from("test")),
-                type_id: TypeId::str()
+                type_id: TypeId::str(),
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             }
         );
     }
@@ -657,7 +720,9 @@ mod tests {
                     TypeId::str(),
                     None
                 )),
-                type_id: TypeId::str()
+                type_id: TypeId::str(),
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             }
         );
     }
@@ -678,6 +743,8 @@ mod tests {
                     None,
                 )),
                 type_id: TypeId::unknown(),
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             }
         );
         assert!(matches!(
@@ -708,15 +775,9 @@ mod tests {
                 ret_type_id: Some(TypeId::str()),
                 type_id: TypeId::from(Type::Function(Box::new(fn_sig.clone()))),
                 impl_type_id: None,
+                tmpl_params: None,
             },
-            body: RichClosure {
-                statements: vec![],
-                ret_type_id: None,
-                original: Closure::new_empty(),
-                has_break: false,
-                has_continue: false,
-                has_return: false,
-            },
+            body: RichClosure::new_empty(),
         };
 
         // Add the function and its type to the context so they can be retrieved when analyzing
@@ -748,11 +809,15 @@ mod tests {
                     ),
                     args: vec![RichExpr {
                         kind: RichExprKind::BoolLiteral(true),
-                        type_id: TypeId::bool()
+                        type_id: TypeId::bool(),
+                        start_pos: Position::default(),
+                        end_pos: Position::default(),
                     }],
                     ret_type_id: Some(TypeId::str()),
                 }),
                 type_id: TypeId::str(),
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             },
         );
     }
@@ -772,15 +837,9 @@ mod tests {
                 ret_type_id: None,
                 type_id: TypeId::from(Type::Function(Box::new(fn_sig.clone()))),
                 impl_type_id: None,
+                tmpl_params: None,
             },
-            body: RichClosure {
-                statements: vec![],
-                ret_type_id: None,
-                original: Closure::new_empty(),
-                has_break: false,
-                has_continue: false,
-                has_return: false,
-            },
+            body: RichClosure::new_empty(),
         };
 
         // Add the function and its type to the context so they can be retrieved when analyzing
@@ -807,12 +866,15 @@ mod tests {
             RichExpr {
                 kind: RichExprKind::BinaryOperation(left, Operator::Add, right),
                 type_id,
+                ..
             } => {
                 assert_eq!(
                     *left,
                     RichExpr {
                         kind: RichExprKind::I64Literal(1),
                         type_id: TypeId::i64(),
+                        start_pos: Position::default(),
+                        end_pos: Position::default(),
                     }
                 );
                 assert_eq!(
@@ -820,6 +882,8 @@ mod tests {
                     RichExpr {
                         kind: RichExprKind::Unknown,
                         type_id: TypeId::none(),
+                        start_pos: Position::default(),
+                        end_pos: Position::default(),
                     }
                 );
                 assert_eq!(type_id, TypeId::i64())
@@ -865,15 +929,9 @@ mod tests {
                 ret_type_id: Some(TypeId::bool()),
                 type_id: TypeId::from(Type::Function(Box::new(fn_sig.clone()))),
                 impl_type_id: None,
+                tmpl_params: None,
             },
-            body: RichClosure {
-                statements: vec![],
-                ret_type_id: None,
-                original: Closure::new_empty(),
-                has_break: false,
-                has_continue: false,
-                has_return: false,
-            },
+            body: RichClosure::new_empty(),
         };
 
         // Add the function and its type to the context so they can be retrieved when analyzing
@@ -905,10 +963,14 @@ mod tests {
                     args: vec![RichExpr {
                         kind: RichExprKind::BoolLiteral(true),
                         type_id: TypeId::bool(),
+                        start_pos: Position::default(),
+                        end_pos: Position::default(),
                     }],
                     ret_type_id: Some(TypeId::bool()),
                 }),
                 type_id: TypeId::bool(),
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             }
         );
 
@@ -925,6 +987,8 @@ mod tests {
                     Some(&RichExpr {
                         kind: RichExprKind::BoolLiteral(true),
                         type_id: TypeId::bool(),
+                        start_pos: Position::default(),
+                        end_pos: Position::default(),
                     })
                 );
             }
@@ -959,15 +1023,9 @@ mod tests {
                 ret_type_id: Some(TypeId::bool()),
                 type_id: TypeId::from(Type::Function(Box::new(fn_sig.clone()))),
                 impl_type_id: None,
+                tmpl_params: None,
             },
-            body: RichClosure {
-                statements: vec![],
-                ret_type_id: None,
-                original: Closure::new_empty(),
-                has_break: false,
-                has_continue: false,
-                has_return: false,
-            },
+            body: RichClosure::new_empty(),
         };
 
         // Add the function and its type to the context so they can be retrieved when analyzing
@@ -989,8 +1047,8 @@ mod tests {
 
         assert_eq!(
             result,
-            RichExpr {
-                kind: RichExprKind::FunctionCall(RichFnCall {
+            RichExpr::new(
+                RichExprKind::FunctionCall(RichFnCall {
                     fn_symbol: RichSymbol::new_with_default_pos(
                         "do_thing",
                         rich_fn.signature.type_id,
@@ -999,11 +1057,13 @@ mod tests {
                     args: vec![RichExpr {
                         kind: RichExprKind::I64Literal(1),
                         type_id: TypeId::i64(),
+                        start_pos: Position::default(),
+                        end_pos: Position::default(),
                     }],
                     ret_type_id: Some(TypeId::bool()),
                 }),
-                type_id: TypeId::bool(),
-            }
+                TypeId::bool(),
+            )
         );
 
         assert!(matches!(
@@ -1034,14 +1094,20 @@ mod tests {
                     Box::new(RichExpr {
                         kind: RichExprKind::I64Literal(1),
                         type_id: TypeId::i64(),
+                        start_pos: Position::default(),
+                        end_pos: Position::default(),
                     }),
                     Operator::Add,
                     Box::new(RichExpr {
                         kind: RichExprKind::StrLiteral("asdf".to_string()),
                         type_id: TypeId::str(),
+                        start_pos: Position::default(),
+                        end_pos: Position::default(),
                     })
                 ),
                 type_id: TypeId::i64(),
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             }
         );
 
@@ -1070,14 +1136,20 @@ mod tests {
                     Box::new(RichExpr {
                         kind: RichExprKind::StrLiteral("asdf".to_string()),
                         type_id: TypeId::str(),
+                        start_pos: Position::default(),
+                        end_pos: Position::default(),
                     }),
                     Operator::Add,
                     Box::new(RichExpr {
                         kind: RichExprKind::I64Literal(1),
                         type_id: TypeId::i64(),
+                        start_pos: Position::default(),
+                        end_pos: Position::default(),
                     })
                 ),
                 type_id: TypeId::i64(),
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             }
         );
 
@@ -1106,6 +1178,8 @@ mod tests {
             RichExpr {
                 kind: RichExprKind::BoolLiteral(false),
                 type_id: TypeId::bool(),
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             }
         );
 
@@ -1134,6 +1208,8 @@ mod tests {
             RichExpr {
                 kind: RichExprKind::BoolLiteral(false),
                 type_id: TypeId::bool(),
+                start_pos: Position::default(),
+                end_pos: Position::default(),
             }
         );
 

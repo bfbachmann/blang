@@ -74,7 +74,11 @@ impl RichProg {
                 | Statement::EnumDeclaration(_)
                 | Statement::Impl(_)
                 | Statement::Spec(_) => {
-                    analyzed_statements.push(RichStatement::from(ctx, statement));
+                    // Only include the statement in the output AST if it's not templated.
+                    let statement = RichStatement::from(ctx, statement);
+                    if !statement.is_templated() {
+                        analyzed_statements.push(statement);
+                    }
                 }
                 other => {
                     ctx.add_err(AnalyzeError::new(
@@ -85,6 +89,10 @@ impl RichProg {
                 }
             }
         }
+
+        // Append all functions that were rendered from templates during analysis to the list
+        // of program statements.
+        analyzed_statements.extend(ctx.get_rendered_functions_as_statements());
 
         RichProg {
             statements: analyzed_statements,
@@ -101,14 +109,11 @@ fn define_types(ctx: &mut ProgramContext, prog: &Program) {
     for statement in &prog.statements {
         match statement {
             Statement::StructDeclaration(struct_type) => {
-                if ctx.get_extern_struct(&struct_type.name).is_some()
-                    || ctx.get_extern_enum(&struct_type.name).is_some()
-                    || RichType::is_primitive_type_name(struct_type.name.as_str())
-                {
+                if ctx.is_type_or_spec_name_used(struct_type.name.as_str()) {
                     ctx.add_err(AnalyzeError::new(
                         ErrorKind::TypeAlreadyDefined,
                         format_code!(
-                            "another type with the name {} already exists",
+                            "another type or spec with the name {} already exists",
                             struct_type.name
                         )
                         .as_str(),
@@ -121,14 +126,11 @@ fn define_types(ctx: &mut ProgramContext, prog: &Program) {
             }
 
             Statement::EnumDeclaration(enum_type) => {
-                if ctx.get_extern_struct(&enum_type.name).is_some()
-                    || ctx.get_extern_enum(&enum_type.name).is_some()
-                    || RichType::is_primitive_type_name(enum_type.name.as_str())
-                {
+                if ctx.is_type_or_spec_name_used(enum_type.name.as_str()) {
                     ctx.add_err(AnalyzeError::new(
                         ErrorKind::TypeAlreadyDefined,
                         format_code!(
-                            "another type with the name {} already exists",
+                            "another type or spec with the name {} already exists",
                             enum_type.name
                         )
                         .as_str(),
@@ -138,6 +140,23 @@ fn define_types(ctx: &mut ProgramContext, prog: &Program) {
                 }
 
                 ctx.add_extern_enum(enum_type.clone());
+            }
+
+            Statement::Spec(spec) => {
+                if ctx.is_type_or_spec_name_used(spec.name.as_str()) {
+                    ctx.add_err(AnalyzeError::new(
+                        ErrorKind::TypeAlreadyDefined,
+                        format_code!(
+                            "another type or spec with the name {} already exists",
+                            spec.name
+                        )
+                        .as_str(),
+                        spec,
+                    ));
+                    continue;
+                }
+
+                ctx.add_extern_spec(spec.clone());
             }
 
             _ => {}
@@ -200,6 +219,13 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
                             &func.signature,
                         ));
                     }
+                }
+
+                // If the function is templated, add it to the program context to we can retrieve
+                // it whenever we need to render it.
+                if func.signature.tmpl_params.is_some() {
+                    let rich_fn_sig = RichFnSig::from(ctx, &func.signature);
+                    ctx.add_templated_fn(rich_fn_sig.full_name().as_str(), func.clone());
                 }
             }
 
@@ -1272,6 +1298,94 @@ mod tests {
             result,
             Err(AnalyzeError {
                 kind: ErrorKind::SpecAlreadyDefined,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn duplicate_fn_arg() {
+        let result = analyze_prog(
+            r#"
+            fn test(a: i64, a: bool) {}
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::DuplicateFnArg,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn function_template_with_invalid_spec() {
+        let result = analyze_prog(
+            r#"
+            fn test(t: T) 
+            with [T: Thing] 
+            {}
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::SpecNotDefined,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn function_template_with_unsatisfied_spec() {
+        let result = analyze_prog(
+            r#"
+            spec Thing {
+                fn do_thing()
+            }
+            
+            struct Doer {}
+            
+            fn test(t: T) 
+            with [T: Thing] 
+            {}
+            
+            fn main() {
+                let doer = Doer{}
+                test(doer)
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::SpecNotSatisfied,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn function_template_with_unmatched_required_type() {
+        let result = analyze_prog(
+            r#"
+            struct Doer {}
+            
+            fn test(t: T) 
+            with [T = Doer] 
+            {}
+            
+            fn main() {
+                let doer = 1
+                test(doer)
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::MismatchedTypes,
                 ..
             })
         ))

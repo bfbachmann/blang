@@ -20,11 +20,11 @@ use crate::{locatable_impl, util};
 #[derive(Debug, Clone, Eq)]
 pub struct FunctionSignature {
     pub name: String,
-    /// Function template parameters will be Some if this is a function template (a generic
-    /// function).
-    pub tmpl_params: Option<TmplParams>,
     pub args: Vec<Argument>,
     pub return_type: Option<Type>,
+    /// Function template parameters will be Some if this is a templated function (a function with
+    /// generics).
+    pub tmpl_params: Option<TmplParams>,
     start_pos: Position,
     end_pos: Position,
 }
@@ -32,12 +32,17 @@ pub struct FunctionSignature {
 impl Hash for FunctionSignature {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state);
+
         for arg in &self.args {
             arg.hash(state);
         }
 
         if let Some(typ) = &self.return_type {
             typ.hash(state);
+        }
+
+        if let Some(tmpl_params) = &self.tmpl_params {
+            tmpl_params.hash(state);
         }
     }
 }
@@ -67,6 +72,7 @@ impl PartialEq for FunctionSignature {
         self.name == other.name
             && util::vecs_eq(&self.args, &other.args)
             && self.return_type == other.return_type
+            && util::opts_eq(&self.tmpl_params, &other.tmpl_params)
     }
 }
 
@@ -129,8 +135,8 @@ impl FunctionSignature {
     ///
     ///      fn <fn_name>(<arg_name>: <arg_type>, ...) ~ <return_type>
     ///      fn <fn_name>(<arg_name>: <arg_type>, ...)
-    ///      fn <tmpl_params> <fn_name>(<arg_name>: <arg_type>, ...) ~ <return_type>
-    ///      fn <tmpl_params> <fn_name>(<arg_name>: <arg_type>, ...)
+    ///      fn <fn_name>(<arg_name>: <arg_type>, ...) ~ <return_type> with <tmpl_params>
+    ///      fn <fn_name>(<arg_name>: <arg_type>, ...) with <tmpl_params>
     ///
     /// where
     ///  - `tmpl_params` are optional template parameters (see `TmplParams::from`)
@@ -142,17 +148,17 @@ impl FunctionSignature {
         // Record the function signature starting position.
         let start_pos = Program::parse_expecting(tokens, TokenKind::Fn)?.start;
 
-        // Optionally parse template parameters.
-        let tmpl_params = match Program::parse_optional(tokens, TokenKind::LeftBracket) {
+        // Parse the rest of the function signature.
+        let mut sig = FunctionSignature::from_name_args_and_return(tokens)?;
+
+        // Parse the optional template parameters.
+        let tmpl_params = match Program::parse_optional(tokens, TokenKind::With) {
             Some(_) => {
                 tokens.rewind(1);
                 Some(TmplParams::from(tokens)?)
             }
             None => None,
         };
-
-        // Parse the rest of the function signature.
-        let mut sig = FunctionSignature::from_name_args_and_return(tokens)?;
 
         sig.start_pos = start_pos;
         sig.tmpl_params = tmpl_params;
@@ -272,7 +278,6 @@ impl FunctionSignature {
 
         // The next token(s) should be arguments or a closing parenthesis.
         let mut args = vec![];
-        let mut arg_names = HashSet::new();
         loop {
             // The next token should be an argument, or `)`.
             let token = tokens.next();
@@ -298,21 +303,9 @@ impl FunctionSignature {
                     ..
                 }) => {
                     // The next few tokens represent an argument.
-                    let token = token.unwrap().clone();
                     tokens.rewind(1);
                     let arg = if named {
-                        let arg = Argument::from(tokens)?;
-
-                        // Make sure the arg name isn't already used.
-                        if !arg_names.insert(arg.name.clone()) {
-                            return Err(ParseError::new_with_token(
-                                ErrorKind::DuplicateArgName,
-                                format!("duplicate argument name {}", arg.name).as_str(),
-                                token,
-                            ));
-                        }
-
-                        arg
+                        Argument::from(tokens)?
                     } else {
                         Argument::unnamed_from(tokens)?
                     };
@@ -380,24 +373,8 @@ mod tests {
     use std::io::{BufRead, Cursor};
 
     use crate::lexer::token::Token;
-    use crate::parser::error::ErrorKind;
-    use crate::parser::error::ParseError;
     use crate::parser::program::Program;
     use crate::parser::stream::Stream;
-
-    #[test]
-    fn duplicate_arg_name() {
-        let raw = r#"fn one(a: i64, b: i64, a: i64) {}"#;
-        let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        let result = Program::from(&mut Stream::from(tokens));
-        assert!(matches!(
-            result,
-            Err(ParseError {
-                kind: ErrorKind::DuplicateArgName,
-                ..
-            })
-        ));
-    }
 
     #[test]
     fn inline_struct_types_in_fn_sig() {

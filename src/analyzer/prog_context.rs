@@ -11,10 +11,13 @@ use crate::analyzer::r#enum::RichEnumType;
 use crate::analyzer::r#spec::RichSpec;
 use crate::analyzer::r#struct::RichStructType;
 use crate::analyzer::r#type::{RichType, TypeId};
+use crate::analyzer::statement::RichStatement;
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::lexer::pos::Position;
+use crate::parser::func::Function;
 use crate::parser::r#enum::EnumType;
 use crate::parser::r#struct::StructType;
+use crate::parser::spec::Spec;
 
 /// Represents a symbol defined in a specific scope.
 #[derive(Clone)]
@@ -122,9 +125,15 @@ impl Scope {
         self.invalid_types.insert(name.to_string())
     }
 
-    /// Adds the mapping from type ID to resolved type to the scope.
-    fn add_resolved_type(&mut self, id: TypeId, resolved: RichType) {
-        self.resolved_types.insert(id, resolved);
+    /// Adds the mapping from type ID to resolved type to the scope and returns the old type
+    /// that used to correspond to `id`, if one exists.
+    fn add_resolved_type(&mut self, id: TypeId, resolved: RichType) -> Option<RichType> {
+        self.resolved_types.insert(id, resolved)
+    }
+
+    /// Removes the type corresponding to `id` from the scope and returns it, if found.
+    fn remove_resolved_type(&mut self, id: &TypeId) -> Option<RichType> {
+        self.resolved_types.remove(id)
     }
 
     // Adds the signature of the external function to the scope. If there was already a function
@@ -249,9 +258,13 @@ pub struct ProgramContext {
     warnings: HashMap<Position, AnalyzeWarning>,
     /// Maps type IDs to mappings of member function name to member function signature.
     type_member_fn_sigs: HashMap<TypeId, HashMap<String, RichFnSig>>,
+    /// Tracks specs that have not yet been analyzed.
+    extern_specs: HashMap<String, Spec>,
     /// Stores all resolved types.
     pub types: HashMap<TypeId, RichType>,
-    pub specs: HashMap<String, RichSpec>,
+    specs: HashMap<String, RichSpec>,
+    templated_fns: HashMap<String, Function>,
+    rendered_fns: Vec<RichFn>,
 }
 
 impl ProgramContext {
@@ -271,8 +284,11 @@ impl ProgramContext {
             errors: HashMap::new(),
             warnings: HashMap::new(),
             type_member_fn_sigs: HashMap::new(),
+            extern_specs: HashMap::new(),
             types: HashMap::new(),
             specs: HashMap::new(),
+            templated_fns: HashMap::new(),
+            rendered_fns: vec![],
         }
     }
 
@@ -339,12 +355,18 @@ impl ProgramContext {
     }
 
     /// Adds the given mapping from type ID to resolved type to current scope in the program
-    /// context.
-    pub fn add_resolved_type(&mut self, id: TypeId, resolved: RichType) {
+    /// context and returns the old type that used to correspond to `id`, if one exists.
+    pub fn add_resolved_type(&mut self, id: TypeId, resolved: RichType) -> Option<RichType> {
         self.stack
             .back_mut()
             .unwrap()
             .add_resolved_type(id, resolved)
+    }
+
+    /// Removes the resolved type that corresponds to `id` from the current scope only and returns
+    /// it, if found.
+    pub fn remove_resolved_type(&mut self, id: &TypeId) -> Option<RichType> {
+        self.stack.back_mut().unwrap().remove_resolved_type(id)
     }
 
     /// Adds the member function signature `mem_fn_sig` to the given type in the program context.
@@ -383,6 +405,11 @@ impl ProgramContext {
     /// same name, returns the old type.
     pub fn add_extern_enum(&mut self, s: EnumType) -> Option<EnumType> {
         self.stack.back_mut().unwrap().add_extern_enum(s)
+    }
+
+    /// Adds the given un-analyzed spec to the program context.
+    pub fn add_extern_spec(&mut self, spec: Spec) -> Option<Spec> {
+        self.extern_specs.insert(spec.name.clone(), spec)
     }
 
     /// Removes the extern struct type with the given name from the program context.
@@ -434,10 +461,7 @@ impl ProgramContext {
     /// Attempts to locate the resolved type corresponding to the given type ID and returns it,
     /// if found.
     pub fn get_resolved_type(&self, id: &TypeId) -> Option<&RichType> {
-        // Unlike with symbol resolution, we're going to search the stack top-down here because
-        // types are generally defined at the top level of the program, and type names cannot
-        // collide like symbol names.
-        for scope in self.stack.iter() {
+        for scope in self.stack.iter().rev() {
             if let Some(resolved) = scope.get_resolved_type(id) {
                 return Some(resolved);
             }
@@ -452,6 +476,12 @@ impl ProgramContext {
             Some(member_fns) => member_fns.get(name),
             None => None,
         }
+    }
+
+    /// Returns the mapping from member function name to member function signature for all member
+    /// functions corresponding to the given type ID.
+    pub fn get_type_member_fns(&self, id: &TypeId) -> Option<&HashMap<String, RichFnSig>> {
+        self.type_member_fn_sigs.get(id)
     }
 
     /// Attempts to locate the external function signature with the given name and returns it,
@@ -501,6 +531,11 @@ impl ProgramContext {
         }
 
         None
+    }
+
+    /// Attempts to locate the un-analyzed spec with the given name.
+    pub fn get_extern_spec(&self, name: &str) -> Option<&Spec> {
+        self.extern_specs.get(name)
     }
 
     /// Attempts to locate the struct type with the given name and returns it, if found.
@@ -624,8 +659,44 @@ impl ProgramContext {
         self.cur_this_type_id = maybe_type_id;
     }
 
-    /// Returns the type ID of the current `impl` block, or `None` if we're not in an `impl` block.
-    pub fn get_impl_type_id(&self) -> Option<&TypeId> {
+    /// Returns the type ID of the current `impl` or `spec` block, or `None` if we're not in an
+    /// `impl` or `spec` block.
+    pub fn get_this_type_id(&self) -> Option<&TypeId> {
         self.cur_this_type_id.as_ref()
+    }
+
+    /// Returns true if the given type or spec name has already been used.
+    pub fn is_type_or_spec_name_used(&self, name: &str) -> bool {
+        self.extern_specs.contains_key(name)
+            || self.get_extern_struct(name).is_some()
+            || self.get_extern_enum(name).is_some()
+            || RichType::is_primitive_type_name(name)
+    }
+
+    /// Adds the given un-analyzed function to the program context. Note that `full_name` should
+    /// be the fully-qualified name of the function.
+    pub fn add_templated_fn(&mut self, full_name: &str, func: Function) {
+        self.templated_fns.insert(full_name.to_string(), func);
+    }
+
+    /// Attempts to locate and return a templated function by the given name. Note that `full_name`
+    /// should be the fully-qualified name of the function.
+    pub fn get_templated_fn(&mut self, full_name: &str) -> Option<&Function> {
+        self.templated_fns.get(full_name)
+    }
+
+    /// Adds the given rendered function to the program context.
+    pub fn add_rendered_fn(&mut self, rendered_fn: RichFn) {
+        self.rendered_fns.push(rendered_fn);
+    }
+
+    /// Turns all rendered functions in the program context into statements and returns them.
+    pub fn get_rendered_functions_as_statements(&self) -> Vec<RichStatement> {
+        let mut statements = vec![];
+        for func in &self.rendered_fns {
+            statements.push(RichStatement::FunctionDeclaration(func.clone()));
+        }
+
+        statements
     }
 }

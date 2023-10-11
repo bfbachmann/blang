@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
@@ -21,6 +22,20 @@ pub struct TmplParam {
     pub required_type: Option<Type>,
     start_pos: Position,
     end_pos: Position,
+}
+
+impl Hash for TmplParam {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+
+        for spec in &self.required_specs {
+            spec.hash(state);
+        }
+
+        if let Some(typ) = &self.required_type {
+            typ.hash(state);
+        }
+    }
 }
 
 impl TmplParam {
@@ -104,9 +119,17 @@ locatable_impl!(TmplParam);
 /// each with an optional set of specs that the type implements, or a single concrete type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TmplParams {
-    pub tmpl_params: Vec<TmplParam>,
+    pub params: Vec<TmplParam>,
     start_pos: Position,
     end_pos: Position,
+}
+
+impl Hash for TmplParams {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        for param in &self.params {
+            param.hash(state);
+        }
+    }
 }
 
 locatable_impl!(TmplParams);
@@ -114,12 +137,14 @@ locatable_impl!(TmplParams);
 impl TmplParams {
     /// Parses a set of template parameters. Expects token sequences of the forms
     ///
-    ///     [<type_param>,...]
+    ///     with [<type_param>,...]
     ///
     /// where
     ///  - `tmpl_param` is a template parameter (see `TmplParam::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let start_pos = Program::parse_expecting(tokens, TokenKind::LeftBracket)?.start;
+        // Parse `with [`.
+        let start_pos = Program::parse_expecting(tokens, TokenKind::With)?.start;
+        Program::parse_expecting(tokens, TokenKind::LeftBracket)?;
 
         // Parse all template params and the closing bracket.
         let mut tmpl_params = vec![];
@@ -150,7 +175,7 @@ impl TmplParams {
         };
 
         Ok(TmplParams {
-            tmpl_params,
+            params: tmpl_params,
             start_pos,
             end_pos,
         })

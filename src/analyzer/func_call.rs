@@ -6,6 +6,7 @@ use pluralizer::pluralize;
 
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
+use crate::analyzer::func::RichFn;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::symbol::RichSymbol;
@@ -75,11 +76,11 @@ impl RichFnCall {
 
         // Make sure the function exists, either as a fully analyzed function, an external function
         // signature, or a variable.
-        let rich_fn_symbol = RichSymbol::from(ctx, &call.fn_symbol, true, maybe_impl_type_id);
+        let mut rich_fn_symbol = RichSymbol::from(ctx, &call.fn_symbol, true, maybe_impl_type_id);
         let var_type = ctx.get_resolved_type(rich_fn_symbol.get_type_id()).unwrap();
 
-        // Try to locate the function signature for this function call. If it's a call on a type
-        // member function we'll look up the function using the type ID. Otherwise, we just extract
+        // Try to locate the function signature for this function call. If it's a call to a type
+        // member function, we'll look up the function using the type ID. Otherwise, we just extract
         // the function signature from the variable type, as it should be a function type.
         let fn_sig = if rich_fn_symbol.is_type {
             let method_name = rich_fn_symbol.get_last_member_name();
@@ -125,6 +126,7 @@ impl RichFnCall {
         };
 
         // Clone here to avoid borrow issues.
+        let mut fn_sig = fn_sig.clone();
         let ret_type = fn_sig.ret_type_id.clone();
 
         // If this function takes the special argument `this` and was not called directly via its
@@ -184,28 +186,47 @@ impl RichFnCall {
             ));
         }
 
-        // Make sure the arguments are of the right types.
-        for (passed_type_id, defined) in
-            passed_args.iter().map(|arg| &arg.type_id).zip(&fn_sig.args)
-        {
-            // Skip the check if the argument type is unknown. This will happen if the argument
-            // already failed semantic analysis.
-            if ctx.get_resolved_type(passed_type_id).unwrap().is_unknown() {
-                continue;
+        let passed_arg_type_ids: Vec<&TypeId> = passed_args.iter().map(|a| &a.type_id).collect();
+
+        // If the function is templated, try render it. The rendered function will be placed
+        // inside the program context.
+        if fn_sig.is_templated() {
+            let func = ctx
+                .get_templated_fn(fn_sig.full_name().as_str())
+                .unwrap()
+                .clone();
+            if let Err(err) = RichFn::render(ctx, &mut fn_sig, func, &passed_args) {
+                errors.push(err);
             }
 
-            if passed_type_id != &defined.type_id {
-                errors.push(AnalyzeError::new(
-                    ErrorKind::MismatchedTypes,
-                    format_code!(
-                        "cannot use value of type {} as argument {} to {}",
-                        &passed_type_id,
-                        &defined,
-                        &fn_sig,
-                    )
-                    .as_str(),
-                    &call,
-                ));
+            // Update the function symbol name to match the rendered function name.
+            rich_fn_symbol.set_last_member_name(fn_sig.full_name().as_str());
+
+            // Update the type ID of the symbol to point to the rendered function.
+            rich_fn_symbol.set_type_id(fn_sig.type_id);
+        } else {
+            // Make sure the arguments are of the right types.
+            for (passed_type_id, defined) in passed_arg_type_ids.into_iter().zip(fn_sig.args.iter())
+            {
+                // Skip the check if the argument type is unknown. This will happen if the argument
+                // already failed semantic analysis.
+                if ctx.get_resolved_type(passed_type_id).unwrap().is_unknown() {
+                    continue;
+                }
+
+                if passed_type_id != &defined.type_id {
+                    errors.push(AnalyzeError::new(
+                        ErrorKind::MismatchedTypes,
+                        format_code!(
+                            "cannot use value of type {} as argument {} to {}",
+                            &passed_type_id,
+                            &defined,
+                            &fn_sig,
+                        )
+                        .as_str(),
+                        &call,
+                    ));
+                }
             }
         }
 

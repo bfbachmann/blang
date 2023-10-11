@@ -74,6 +74,7 @@ pub enum TokenKind {
     EndBlockComment,
     Tilde,
     At,
+    With,
 
     // User-defined values
     Identifier(String),
@@ -137,6 +138,7 @@ impl Clone for TokenKind {
             TokenKind::Enum => TokenKind::Enum,
             TokenKind::At => TokenKind::At,
             TokenKind::Spec => TokenKind::Spec,
+            TokenKind::With => TokenKind::With,
         }
     }
 }
@@ -211,6 +213,7 @@ impl TokenKind {
             TokenKind::Enum => "enum".to_string(),
             TokenKind::At => "@".to_string(),
             TokenKind::Spec => "spec".to_string(),
+            TokenKind::With => "with".to_string(),
         }
     }
 
@@ -308,6 +311,7 @@ impl TokenKind {
             (TokenKind::Enum.to_string(), TokenKind::Enum),
             (TokenKind::At.to_string(), TokenKind::At),
             (TokenKind::Spec.to_string(), TokenKind::Spec),
+            (TokenKind::With.to_string(), TokenKind::With),
         ]);
 
         // Trim syntactically meaningless whitespace.

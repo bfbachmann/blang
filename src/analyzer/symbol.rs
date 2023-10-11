@@ -23,6 +23,10 @@ pub struct RichSymbol {
     pub is_type: bool,
     /// This will be set to true if this symbol actually resolves to a constant.
     pub is_const: bool,
+    /// This will be set to true if the top-level member of this symbol is an actual variable
+    /// that was declared inside a function (or is a function argument). In other words, it will
+    /// be false if the top-level symbol refers to a declared function, type, or constant.
+    pub is_var: bool,
     start_pos: Position,
     end_pos: Position,
 }
@@ -62,6 +66,7 @@ impl RichSymbol {
             member_access,
             is_type: false,
             is_const: false,
+            is_var: true,
             start_pos: Position::default(),
             end_pos: Position::default(),
         }
@@ -131,9 +136,9 @@ impl RichSymbol {
         };
 
         // Check if this symbol is actually a constant.
-        let is_const = match maybe_symbol {
-            Some(var) => var.is_const,
-            None => false,
+        let (is_const, is_var) = match maybe_symbol {
+            Some(var) => (var.is_const, true),
+            None => (false, false),
         };
 
         RichSymbol {
@@ -142,6 +147,7 @@ impl RichSymbol {
             member_access,
             is_type: var_is_type,
             is_const,
+            is_var,
             start_pos: var.start_pos().clone(),
             end_pos: var.end_pos().clone(),
         }
@@ -156,6 +162,14 @@ impl RichSymbol {
         }
     }
 
+    /// Sets the type ID of the last member of this symbol to `type_id`.
+    pub fn set_type_id(&mut self, type_id: TypeId) {
+        match &mut self.member_access {
+            Some(ma) => ma.set_type_id(type_id),
+            None => self.parent_type_id = type_id,
+        };
+    }
+
     /// Returns the name of the lowest level member on this variable access, or just the symbol
     /// name if there is no member access.
     pub fn get_last_member_name(&self) -> String {
@@ -163,6 +177,14 @@ impl RichSymbol {
             Some(access) => access.get_last_member_name(),
             None => self.name.to_string(),
         }
+    }
+
+    /// Sets `name` as the last member name on this symbol.
+    pub fn set_last_member_name(&mut self, name: &str) {
+        match &mut self.member_access {
+            Some(access) => access.set_last_member_name(name),
+            None => self.name = name.to_string(),
+        };
     }
 
     /// Attempts to find the type ID of a symbol with the given name. Additionally, if `name`
@@ -188,8 +210,7 @@ impl RichSymbol {
                 None => {}
             };
 
-            // Search for an extern function with the given name. Extern functions take precedence over
-            // types.
+            // Search for an extern function with the given name.
             match ctx.get_extern_fn(name) {
                 Some(fn_sig) => return (Some(fn_sig.type_id.clone()), None),
                 None => (None, None),
@@ -246,9 +267,9 @@ impl RichMemberAccess {
     /// Attempts to recursively analyze a member access on the given type.
     fn from(ctx: &mut ProgramContext, type_id: &TypeId, member_access: &MemberAccess) -> Self {
         let typ = ctx.get_resolved_type(type_id).unwrap();
+        let member_name = &member_access.member_name;
 
         // Check if the member access is accessing a field on a struct or tuple type.
-        let member_name = &member_access.member_name;
         let maybe_field_type_id = match typ {
             RichType::Struct(struct_type) => struct_type.get_field_type(member_name.as_str()),
             RichType::Tuple(tuple_type) => {
@@ -312,6 +333,22 @@ impl RichMemberAccess {
             Some(sub) => sub.get_type_id(),
             None => &self.member_type_id,
         }
+    }
+
+    /// Sets the type ID of the last member on this member access chain to `type_id`.
+    fn set_type_id(&mut self, type_id: TypeId) {
+        match &mut self.submember {
+            Some(sub) => sub.set_type_id(type_id),
+            None => self.member_type_id = type_id,
+        };
+    }
+
+    /// Sets the last member name to `name`.
+    pub fn set_last_member_name(&mut self, name: &str) {
+        match &mut self.submember {
+            Some(sub) => sub.set_last_member_name(name),
+            None => self.member_name = name.to_string(),
+        };
     }
 
     /// Returns the name of the lowest level member on this member access, or just the member

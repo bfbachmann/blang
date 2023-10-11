@@ -11,10 +11,12 @@ use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#enum::{check_enum_containment_cycles, RichEnumType};
 use crate::analyzer::r#struct::{check_struct_containment_cycles, RichStructType};
+use crate::analyzer::spec::RichSpec;
+use crate::analyzer::tmpl_params::RichTmplParam;
 use crate::analyzer::tuple::{check_tuple_containment_cycles, RichTupleType};
+use crate::format_code;
 use crate::parser::r#type::Type;
 use crate::parser::unresolved::UnresolvedType;
-use crate::{format_code, util};
 
 /// Represents a unique identifier for a type that can be used to look up the corresponding
 /// fully-resolved type. Under the hood, a type ID is really just a parsed type without any
@@ -104,6 +106,8 @@ pub enum RichType {
     Enum(RichEnumType),
     Tuple(RichTupleType),
     Function(Box<RichFnSig>),
+    /// A templated (generic) type parameter.
+    Templated(RichTmplParam),
     /// Represents a type that did not pass semantic analysis and thus was never properly resolved.
     Unknown(String),
 }
@@ -120,6 +124,7 @@ impl Display for RichType {
             RichType::Enum(e) => write!(f, "{}", e),
             RichType::Tuple(t) => write!(f, "{}", t),
             RichType::Function(func) => write!(f, "{}", func),
+            RichType::Templated(param) => write!(f, "{}", param),
             RichType::Unknown(name) => write!(f, "{}", name),
         }
     }
@@ -137,6 +142,7 @@ impl PartialEq for RichType {
             (RichType::Enum(e1), RichType::Enum(e2)) => e1 == e2,
             (RichType::Tuple(t1), RichType::Tuple(t2)) => t1 == t2,
             (RichType::Function(f1), RichType::Function(f2)) => *f1 == *f2,
+            (RichType::Templated(t1), RichType::Templated(t2)) => t1 == t2,
             (_, _) => false,
         }
     }
@@ -146,10 +152,9 @@ impl RichType {
     /// Analyzes and resolves the given type (if unresolved), stores the resolved type in the
     /// program context, and returns its type ID.
     pub fn analyze(ctx: &mut ProgramContext, typ: &Type) -> TypeId {
-        // If the type is `This`, just return the type ID that corresponds to the current `impl`
-        // block.
+        // If the type is `This`, just return it. It will be substituted for an actual type later.
         if let Type::This(this_type) = typ {
-            return match ctx.get_impl_type_id() {
+            return match ctx.get_this_type_id() {
                 Some(type_id) => type_id.clone(),
                 None => {
                     ctx.add_err(AnalyzeError::new(
@@ -164,7 +169,8 @@ impl RichType {
             };
         }
 
-        // Check if the type has already been resolved and, if so, just return its ID.
+        // Check if the type has already been resolved and, if so, just return its ID as long as
+        // it's not a template param type (because template params might need to be replaced).
         let id = TypeId::from(typ.clone());
         if ctx.get_resolved_type(&id).is_some() {
             return id;
@@ -299,21 +305,9 @@ impl RichType {
     ///  - For struct types, they must be exactly the same type.
     ///  - For function types, they must have arguments of the same type in the same order and the
     ///    same return types.
-    pub fn same_as(&self, other: &RichType) -> bool {
+    pub fn is_same_as(&self, other: &RichType) -> bool {
         match (self, other) {
-            (RichType::Function(f1), RichType::Function(f2)) => {
-                if f1.args.len() != f2.args.len() {
-                    return false;
-                }
-
-                for (a, b) in f1.args.iter().zip(f2.args.iter()) {
-                    if a.type_id != b.type_id {
-                        return false;
-                    }
-                }
-
-                util::opts_eq(&f1.ret_type_id, &f2.ret_type_id)
-            }
+            (RichType::Function(f1), RichType::Function(f2)) => f1.is_same_as(f2, HashMap::new()),
             (a, b) => a == b,
         }
     }
@@ -355,6 +349,7 @@ impl RichType {
             | RichType::USize
             | RichType::Str
             | RichType::Function(_)
+            | RichType::Templated(_)
             | RichType::Unknown(_) => false,
 
             RichType::Struct(s) => {
@@ -424,6 +419,7 @@ impl RichType {
             | RichType::Enum(_)
             | RichType::Tuple(_)
             | RichType::Function(_)
+            | RichType::Templated(_)
             | RichType::Unknown(_) => false,
         }
     }
@@ -477,6 +473,8 @@ impl RichType {
             }
 
             RichType::Unknown(_) => 0,
+
+            RichType::Templated(_) => panic!("templated types are not sized"),
         }
     }
 
@@ -545,6 +543,51 @@ pub fn check_type_containment(
     Ok(())
 }
 
+/// Checks whether this type satisfies the given spec and returns an error if it doesn't.
+pub fn check_type_satisfies_spec(
+    ctx: &ProgramContext,
+    type_id: &TypeId,
+    spec: &RichSpec,
+) -> Result<(), String> {
+    let member_fns = HashMap::new();
+    let member_fns = match ctx.get_type_member_fns(type_id) {
+        Some(mem_fns) => mem_fns,
+        None => &member_fns,
+    };
+
+    for spec_fn_sig in &spec.fn_sigs {
+        match member_fns.get(spec_fn_sig.name.as_str()) {
+            Some(fn_sig) => {
+                // Create a mapping from the spec type ID to the given type. This mapping will be
+                // used to replace instances of the spec type ID in the function signature when
+                // checking that the function signatures match.
+                let replacement_type_ids = HashMap::from([(spec.type_id(), type_id.clone())]);
+                if !fn_sig.is_same_as(spec_fn_sig, replacement_type_ids) {
+                    return Err(format_code!(
+                        "Function {} on type {} doesn't match function {} on spec {}.",
+                        fn_sig,
+                        type_id,
+                        spec_fn_sig,
+                        spec.name
+                    )
+                    .to_string());
+                }
+            }
+            None => {
+                return Err(format_code!(
+                    "Type {} is missing function {} from spec {}.",
+                    type_id,
+                    spec_fn_sig,
+                    spec.name,
+                )
+                .to_string())
+            }
+        };
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use crate::analyzer::arg::RichArg;
@@ -593,6 +636,7 @@ mod tests {
                     )
                 ))),
                 impl_type_id: None,
+                tmpl_params: None,
             })),
             RichType::Function(Box::new(RichFnSig {
                 name: "test_func".to_string(),
@@ -610,6 +654,7 @@ mod tests {
                     )
                 ))),
                 impl_type_id: None,
+                tmpl_params: None,
             }))
         )
     }
