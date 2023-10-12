@@ -49,6 +49,8 @@ with [T: Task]
     return task.run()
 }
 
+fn do_nothing(a: T, b: T) with [T] {}
+
 fn main() {
     // Check that template parameters work in place of concrete types.
     {
@@ -60,6 +62,13 @@ fn main() {
     {
         let task = BasicTask.new(true)
         assert(run_task(task) == true, 3)
+    }
+
+    // Check that functions with arguments that share template parameters
+    // work.
+    {
+        do_nothing(1, 2)
+        do_nothing("another", "test")
     }
 
     exit(0)

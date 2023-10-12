@@ -161,9 +161,6 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
                     // Nothing to do here because constants are compiled in the call to
                     // `ProgramCompiler::define_consts` above.
                 }
-                RichStatement::Spec(_) => {
-                    // Nothing to do here because specs don't contain logic.
-                }
                 other => {
                     panic!("unexpected top-level statement {other}");
                 }

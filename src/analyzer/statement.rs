@@ -11,7 +11,6 @@ use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#const::RichConst;
 use crate::analyzer::r#enum::RichEnumType;
 use crate::analyzer::r#impl::RichImpl;
-use crate::analyzer::r#spec::RichSpec;
 use crate::analyzer::r#struct::RichStructType;
 use crate::analyzer::ret::RichRet;
 use crate::analyzer::var_assign::RichVarAssign;
@@ -37,7 +36,6 @@ pub enum RichStatement {
     ExternFns(Vec<RichFnSig>),
     Consts(Vec<RichConst>),
     Impl(RichImpl),
-    Spec(RichSpec),
 }
 
 impl fmt::Display for RichStatement {
@@ -75,14 +73,6 @@ impl fmt::Display for RichStatement {
                     "impl {} {{ <{} member functions> }}",
                     impl_.type_id,
                     impl_.member_fns.len()
-                )
-            }
-            RichStatement::Spec(spec_) => {
-                write!(
-                    f,
-                    "spec {} {{ <{} function signature> }}",
-                    spec_.name,
-                    spec_.fn_sigs.len()
                 )
             }
         }
@@ -205,7 +195,11 @@ impl RichStatement {
                 RichStatement::Consts(consts)
             }
 
-            Statement::Spec(spec_) => RichStatement::Spec(RichSpec::from(ctx, &spec_)),
+            Statement::Spec(_) => {
+                // This should never happen as specs should be skipped – they're analyzed before
+                // we start analyzing other program statements.
+                unreachable!()
+            }
         }
     }
 
@@ -214,7 +208,6 @@ impl RichStatement {
     pub fn is_templated(&self) -> bool {
         match self {
             RichStatement::FunctionDeclaration(func) => func.signature.is_templated(),
-            RichStatement::Spec(_) => true,
             _ => false,
         }
     }

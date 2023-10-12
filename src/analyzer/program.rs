@@ -10,6 +10,7 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#enum::check_enum_containment_cycles;
 use crate::analyzer::r#struct::check_struct_containment_cycles;
 use crate::analyzer::r#type::{RichType, TypeId};
+use crate::analyzer::spec::RichSpec;
 use crate::analyzer::statement::RichStatement;
 use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
 use crate::format_code;
@@ -72,13 +73,16 @@ impl RichProg {
                 | Statement::Consts(_)
                 | Statement::StructDeclaration(_)
                 | Statement::EnumDeclaration(_)
-                | Statement::Impl(_)
-                | Statement::Spec(_) => {
+                | Statement::Impl(_) => {
                     // Only include the statement in the output AST if it's not templated.
                     let statement = RichStatement::from(ctx, statement);
                     if !statement.is_templated() {
                         analyzed_statements.push(statement);
                     }
+                }
+                Statement::Spec(_) => {
+                    // We can safely skip specs here because they'll be full analyzed in
+                    // `Program::define_fns`.
                 }
                 other => {
                     ctx.add_err(AnalyzeError::new(
@@ -100,8 +104,8 @@ impl RichProg {
     }
 }
 
-/// Defines top-level types in the program context without deeply analyzing their fields, so
-/// they can be referenced later. This will simply check for type name collisions and
+/// Defines top-level types and specs in the program context without deeply analyzing their fields,
+/// so they can be referenced later. This will simply check for type name collisions and
 /// containment cycles. We do this before fully analyzing types to prevent infinite recursion.
 fn define_types(ctx: &mut ProgramContext, prog: &Program) {
     // First pass: Define all types without analyzing their fields. In this pass, we will only
@@ -191,8 +195,9 @@ fn define_types(ctx: &mut ProgramContext, prog: &Program) {
     }
 }
 
-/// Analyzes all top-level function signatures and defines them in the program context so they
-/// can be referenced later. This will not perform any analysis of function bodies.
+/// Analyzes all top-level function signatures (this includes those inside specs) and defines them
+/// in the program context so they can be referenced later. This will not perform any analysis of
+/// function bodies.
 fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
     let mut main_defined = false;
     for statement in &prog.statements {
@@ -267,6 +272,13 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
                 // Remove the current impl type ID from the program context now that we're done
                 // checking the function signatures inside the impl block.
                 ctx.set_this_type_id(None);
+            }
+
+            Statement::Spec(spec) => {
+                // Analyze the spec and add it to the program context so we can retrieve and render
+                // it later.
+                let rich_spec = RichSpec::from(ctx, spec);
+                ctx.add_spec(rich_spec);
             }
 
             _ => {}
@@ -1379,6 +1391,26 @@ mod tests {
             fn main() {
                 let doer = 1
                 test(doer)
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::MismatchedTypes,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn function_template_with_mismatched_shared_templated_types() {
+        let result = analyze_prog(
+            r#"
+            fn do_nothing(a: T, b: T) with [T] {}
+            
+            fn main() {
+                do_nothing(1, "test")
             }
             "#,
         );

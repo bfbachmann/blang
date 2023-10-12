@@ -290,7 +290,6 @@ impl<'a> MoveChecker<'a> {
             | RichStatement::EnumTypeDeclaration(_)
             | RichStatement::ExternFns(_)
             | RichStatement::Consts(_)
-            | RichStatement::Spec(_)
             | RichStatement::Continue
             | RichStatement::Break => {
                 // Nothing to do here since moves cannot occur in these types of statements.
@@ -509,10 +508,11 @@ impl<'a> MoveChecker<'a> {
                     )
                     .with_detail(
                         format!(
-                            "The conflicting move of {} occurs at {}:{}.",
-                            format_code!(conflicting_move),
+                            "The conflicting move occurs at {}:{} because {} is not copied \
+                            automatically.",
                             conflicting_move.start_pos.line,
                             conflicting_move.start_pos.col,
+                            format_code!(conflicting_move),
                         )
                         .as_str(),
                     )

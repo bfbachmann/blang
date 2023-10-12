@@ -495,6 +495,11 @@ impl RichType {
             _ => panic!("type {} is not a struct", self),
         }
     }
+
+    /// Returns true if this type is a templated type.
+    pub fn is_templated(&self) -> bool {
+        matches!(self, RichType::Templated(_))
+    }
 }
 
 /// Analyzes type containment and returns an error if there are any illegal type containment cycles

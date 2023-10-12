@@ -12,11 +12,13 @@ use crate::analyzer::r#spec::RichSpec;
 use crate::analyzer::r#struct::RichStructType;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::statement::RichStatement;
+use crate::analyzer::tmpl_params::RichTmplParams;
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::lexer::pos::Position;
 use crate::parser::func::Function;
 use crate::parser::r#enum::EnumType;
 use crate::parser::r#struct::StructType;
+use crate::parser::r#type::Type;
 use crate::parser::spec::Spec;
 
 /// Represents a symbol defined in a specific scope.
@@ -698,5 +700,34 @@ impl ProgramContext {
         }
 
         statements
+    }
+
+    /// Adds templated types as resolved types to the current scope in the program context. This
+    /// should only be used when rendering templated statements. Returns all type mappings for
+    /// types in the current scope that were shadowed by template types.
+    pub fn add_template_types(
+        &mut self,
+        tmpl_params: &RichTmplParams,
+    ) -> HashMap<TypeId, Option<RichType>> {
+        let mut shadowed_type_mappings: HashMap<TypeId, Option<RichType>> = HashMap::new();
+        for (name, param) in &tmpl_params.params {
+            let param_type_id = TypeId::from(Type::new_unknown(name.as_str()));
+            let templated_type = RichType::Templated(param.clone());
+            let maybe_shadowed_type = self.add_resolved_type(param_type_id.clone(), templated_type);
+            shadowed_type_mappings.insert(param_type_id, maybe_shadowed_type);
+        }
+
+        shadowed_type_mappings
+    }
+
+    /// Updates the current scope in the program context with the given type mappings. Any type ID
+    /// in `mappings` that maps to `None` will be removed from this program context's type mappings.
+    pub fn restore_type_mappings(&mut self, mappings: HashMap<TypeId, Option<RichType>>) {
+        for (type_id, maybe_shadowed_type) in mappings {
+            match maybe_shadowed_type {
+                Some(shadowed_type) => self.add_resolved_type(type_id, shadowed_type),
+                None => self.remove_resolved_type(&type_id),
+            };
+        }
     }
 }
