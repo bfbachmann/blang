@@ -515,11 +515,13 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // Get a pointer to the variable or member.
         let ll_var_ptr = self.get_var_ptr(var);
 
-        // Load the value from the pointer (unless its a composite struct that is passed with
-        // pointers (like structs or tuples).
+        // Load the value from the pointer (unless its a composite value that is passed with
+        // pointers).
         let var_type = self.types.get(&var.get_type_id()).unwrap();
         match var_type {
-            RichType::Struct(_) | RichType::Tuple(_) => ll_var_ptr.as_basic_value_enum(),
+            RichType::Struct(_) | RichType::Tuple(_) | RichType::Enum(_) => {
+                ll_var_ptr.as_basic_value_enum()
+            }
             _ => {
                 let ll_var_type = convert::to_basic_type(self.ctx, self.types, var_type);
                 self.builder.build_load(

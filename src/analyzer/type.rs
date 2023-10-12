@@ -401,8 +401,8 @@ impl RichType {
     /// Returns true only if this type is moved on assignment or when passed as an argument.
     pub fn requires_move(&self) -> bool {
         match self {
-            RichType::Bool | RichType::I64 | RichType::Function(_) => false,
-            _ => true,
+            RichType::Enum(_) | RichType::Struct(_) | RichType::Tuple(_) => true,
+            _ => false,
         }
     }
 
