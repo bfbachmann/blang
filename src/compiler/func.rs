@@ -254,7 +254,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             // other words, when the caller wishes to pass a struct by value, the caller will
             // allocate new space on its stack and store a copy of the struct there, and will then
             // pass a pointer to that space to the callee.
-            if let RichType::Struct(_) | RichType::Tuple(_) = arg_type {
+            if arg_type.is_composite() {
                 self.vars
                     .insert(arg.name.to_string(), ll_arg_val.into_pointer_value());
             } else {
@@ -366,26 +366,22 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                         .unwrap();
 
                     // Copy the field value.
-                    match field_type {
-                        RichType::Struct(_) | RichType::Tuple(_) => {
-                            self.copy_value(
-                                ll_src_field_ptr.as_basic_value_enum(),
-                                ll_dst_field_ptr,
-                                field_type,
-                            );
-                        }
+                    if field_type.is_composite() {
+                        self.copy_value(
+                            ll_src_field_ptr.as_basic_value_enum(),
+                            ll_dst_field_ptr,
+                            field_type,
+                        );
+                    } else {
+                        // Load the field value from the pointer.
+                        let ll_src_field_val = self.builder.build_load(
+                            ll_field_type,
+                            ll_src_field_ptr,
+                            field.name.as_str(),
+                        );
 
-                        _ => {
-                            // Load the field value from the pointer.
-                            let ll_src_field_val = self.builder.build_load(
-                                ll_field_type,
-                                ll_src_field_ptr,
-                                field.name.as_str(),
-                            );
-
-                            // Copy the value to the target field pointer.
-                            self.copy_value(ll_src_field_val, ll_dst_field_ptr, field_type)
-                        }
+                        // Copy the value to the target field pointer.
+                        self.copy_value(ll_src_field_val, ll_dst_field_ptr, field_type)
                     }
                 }
             }
@@ -469,26 +465,22 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                         .unwrap();
 
                     // Copy the field value.
-                    match field_type {
-                        RichType::Struct(_) | RichType::Tuple(_) => {
-                            self.copy_value(
-                                ll_src_field_ptr.as_basic_value_enum(),
-                                ll_dst_field_ptr,
-                                field_type,
-                            );
-                        }
+                    if field_type.is_composite() {
+                        self.copy_value(
+                            ll_src_field_ptr.as_basic_value_enum(),
+                            ll_dst_field_ptr,
+                            field_type,
+                        );
+                    } else {
+                        // Load the field value from the pointer.
+                        let ll_src_field_val = self.builder.build_load(
+                            ll_field_type,
+                            ll_src_field_ptr,
+                            format!("tuple.{}", ll_field_index).as_str(),
+                        );
 
-                        _ => {
-                            // Load the field value from the pointer.
-                            let ll_src_field_val = self.builder.build_load(
-                                ll_field_type,
-                                ll_src_field_ptr,
-                                format!("tuple.{}", ll_field_index).as_str(),
-                            );
-
-                            // Copy the value to the target field pointer.
-                            self.copy_value(ll_src_field_val, ll_dst_field_ptr, field_type)
-                        }
+                        // Copy the value to the target field pointer.
+                        self.copy_value(ll_src_field_val, ll_dst_field_ptr, field_type)
                     }
                 }
             }
@@ -518,18 +510,12 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // Load the value from the pointer (unless its a composite value that is passed with
         // pointers).
         let var_type = self.types.get(&var.get_type_id()).unwrap();
-        match var_type {
-            RichType::Struct(_) | RichType::Tuple(_) | RichType::Enum(_) => {
-                ll_var_ptr.as_basic_value_enum()
-            }
-            _ => {
-                let ll_var_type = convert::to_basic_type(self.ctx, self.types, var_type);
-                self.builder.build_load(
-                    ll_var_type,
-                    ll_var_ptr,
-                    var.get_last_member_name().as_str(),
-                )
-            }
+        if var_type.is_composite() {
+            ll_var_ptr.as_basic_value_enum()
+        } else {
+            let ll_var_type = convert::to_basic_type(self.ctx, self.types, var_type);
+            self.builder
+                .build_load(ll_var_type, ll_var_ptr, var.get_last_member_name().as_str())
         }
     }
 
@@ -883,7 +869,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 // If the value being returned is some structured type, we need to copy it to the
                 // memory pointed to by the first argument and return void.
                 let expr_type = self.types.get(&expr.type_id).unwrap();
-                if let RichType::Struct(_) | RichType::Tuple(_) | RichType::Enum(_) = expr_type {
+                if expr_type.is_composite() {
                     // Load the return value from the result pointer.
                     let expr_type = self.types.get(&expr.type_id).unwrap();
                     let ret_val = self.builder.build_load(
@@ -1161,7 +1147,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             // struct "by value" (the callee can modify the data being pointed to safely, because
             // it's a copy).
             let arg_type = self.types.get(&arg.type_id).unwrap();
-            if let RichType::Struct(_) | RichType::Tuple(_) = arg_type {
+            if arg_type.is_composite() {
                 let ll_copy_ptr = self.create_entry_alloc("copy_arg", arg_type, ll_arg_val);
                 self.copy_value(ll_arg_val, ll_copy_ptr, arg_type);
                 args.push(ll_copy_ptr.as_basic_value_enum().into());

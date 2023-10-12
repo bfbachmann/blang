@@ -500,6 +500,14 @@ impl RichType {
     pub fn is_templated(&self) -> bool {
         matches!(self, RichType::Templated(_))
     }
+
+    /// Returns true if this is a composite type (i.e. a type that can contain other types).
+    pub fn is_composite(&self) -> bool {
+        matches!(
+            self,
+            RichType::Struct(_) | RichType::Enum(_) | RichType::Tuple(_)
+        )
+    }
 }
 
 /// Analyzes type containment and returns an error if there are any illegal type containment cycles
