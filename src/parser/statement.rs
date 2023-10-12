@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 use std::fmt;
 
+use colored::Colorize;
+
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -480,10 +482,15 @@ impl Statement {
             }
 
             // If the tokens are anything else, we error because it's an invalid statement.
-            (&ref token, _) => Err(ParseError::new_with_token(
+            (&ref first_token, &ref second_token) => Err(ParseError::new_with_token(
                 ErrorKind::InvalidStatement,
-                "expected statement or expression",
-                token.clone(),
+                format_code!(
+                    "expected statement or expression, but found tokens {} {}",
+                    first_token,
+                    second_token
+                )
+                .as_str(),
+                first_token.clone(),
             )),
         }
     }

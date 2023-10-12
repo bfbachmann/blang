@@ -242,4 +242,9 @@ impl RichFnCall {
             ret_type_id: ret_type,
         }
     }
+
+    /// Returns true if this is a method call (either on a type or an instance).
+    pub fn is_method_call(&self) -> bool {
+        self.fn_symbol.is_method()
+    }
 }

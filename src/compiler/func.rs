@@ -502,15 +502,26 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
     }
 
+    /// Returns true if `var` refers directly to a function in this module. Note that this function
+    /// will return false if `var` is has a function type, but refers to a local variable rather
+    /// than a function defined within this module.
+    fn is_var_module_fn(&self, var: &RichSymbol) -> bool {
+        if var.member_access.is_some() {
+            false
+        } else {
+            self.module.get_function(var.name.as_str()).is_some()
+        }
+    }
+
     /// Gets a variable (or member) and returns its value.
     fn get_var_value(&mut self, var: &RichSymbol) -> BasicValueEnum<'ctx> {
         // Get a pointer to the variable or member.
         let ll_var_ptr = self.get_var_ptr(var);
 
         // Load the value from the pointer (unless its a composite value that is passed with
-        // pointers).
+        // pointers, or a pointer to a module-level function).
         let var_type = self.types.get(&var.get_type_id()).unwrap();
-        if var_type.is_composite() {
+        if var_type.is_composite() || self.is_var_module_fn(var) {
             ll_var_ptr.as_basic_value_enum()
         } else {
             let ll_var_type = convert::to_basic_type(self.ctx, self.types, var_type);
@@ -556,7 +567,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                     .unwrap()
             }
             other => {
-                panic!("invalid member access {}", other)
+                panic!("invalid member access of type {} on {}", other, access)
             }
         };
 
@@ -1111,24 +1122,20 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// Compiles a function call, returning the result if one exists.
     fn compile_call(&mut self, call: &RichFnCall) -> Option<BasicValueEnum<'ctx>> {
-        // Get the function value from the module using the fully-qualified function name.
-        // TODO: get functions from variables.
+        // Look up the function signature and convert it to the corresponding LLVM function type.
         let fn_sig = self
             .types
             .get(call.fn_symbol.get_type_id())
             .unwrap()
             .to_fn_sig();
-        let ll_fn = self
-            .module
-            .get_function(fn_sig.full_name().as_str())
-            .unwrap();
+        let ll_fn_type = convert::to_fn_type(self.ctx, self.types, fn_sig);
         let mut args: Vec<BasicMetadataValueEnum> = vec![];
 
         // Check if we're short one argument. If so, it means the function signature expects
         // the return value to be written to the address pointed to by the first argument, so we
         // need to add that argument. This should only be the case for functions that return
         // structured types.
-        if ll_fn.count_params() == call.args.len() as u32 + 1 {
+        if ll_fn_type.count_param_types() == call.args.len() as u32 + 1 {
             let ret_type = self.types.get(call.ret_type_id.as_ref().unwrap()).unwrap();
             let ptr = self.builder.build_alloca(
                 convert::to_basic_type(self.ctx, self.types, ret_type),
@@ -1157,14 +1164,33 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
 
         // Compile the function call and return the result.
-        let result = self
-            .builder
-            .build_call(
-                ll_fn,
-                args.as_slice(),
-                call.fn_symbol.get_last_member_name().as_str(),
-            )
-            .try_as_basic_value();
+        let result = if self.is_var_module_fn(&call.fn_symbol) || call.is_method_call() {
+            // The function is being called directly, so we can just look it up by name in the
+            // module and compile this as a direct call.
+            let ll_fn = self
+                .module
+                .get_function(fn_sig.full_name().as_str())
+                .unwrap();
+            self.builder
+                .build_call(
+                    ll_fn,
+                    args.as_slice(),
+                    call.fn_symbol.get_last_member_name().as_str(),
+                )
+                .try_as_basic_value()
+        } else {
+            // The function is actually a variable, so we need to load the function pointer from
+            // the variable value and call it indirectly.
+            let ll_fn_ptr = self.get_var_value(&call.fn_symbol).into_pointer_value();
+            self.builder
+                .build_indirect_call(
+                    ll_fn_type,
+                    ll_fn_ptr,
+                    args.as_slice(),
+                    fn_sig.full_name().as_str(),
+                )
+                .try_as_basic_value()
+        };
 
         // If there is a return value, return it. Otherwise, check if this function has a defined
         // return type. If the function has a return type and the call had no return value, it means

@@ -27,6 +27,9 @@ pub struct RichSymbol {
     /// that was declared inside a function (or is a function argument). In other words, it will
     /// be false if the top-level symbol refers to a declared function, type, or constant.
     pub is_var: bool,
+    /// This will be true if this symbol refers to a method (either on a type or an instance of
+    /// a type).
+    is_method: bool,
     start_pos: Position,
     end_pos: Position,
 }
@@ -67,6 +70,7 @@ impl RichSymbol {
             is_type: false,
             is_const: false,
             is_var: true,
+            is_method: false,
             start_pos: Position::default(),
             end_pos: Position::default(),
         }
@@ -88,6 +92,7 @@ impl RichSymbol {
         let (mut maybe_type_id, maybe_symbol) =
             RichSymbol::get_type_id_by_symbol_name(ctx, var.name.as_str(), include_fns);
 
+        let mut is_method = false;
         if maybe_type_id.is_none() && include_fns {
             // We could not find the variable, constant, or function with the given name, so if
             // there is an impl_type_id, check if this function is defined as a member function on
@@ -95,6 +100,7 @@ impl RichSymbol {
             if let Some(impl_type_id) = maybe_impl_type_id {
                 if let Some(mem_fn) = ctx.get_type_member_fn(impl_type_id, var_name) {
                     maybe_type_id = Some(mem_fn.type_id.clone());
+                    is_method = true;
                 }
             }
         };
@@ -148,6 +154,7 @@ impl RichSymbol {
             is_type: var_is_type,
             is_const,
             is_var,
+            is_method,
             start_pos: var.start_pos().clone(),
             end_pos: var.end_pos().clone(),
         }
@@ -233,6 +240,14 @@ impl RichSymbol {
 
         self
     }
+
+    /// Returns true if the last member on this symbol refers to a method on a type or instance.
+    pub fn is_method(&self) -> bool {
+        match &self.member_access {
+            Some(access) => access.is_method(),
+            None => self.is_method,
+        }
+    }
 }
 
 /// Represents a member access on a variable or type.
@@ -241,6 +256,9 @@ pub struct RichMemberAccess {
     pub member_name: String,
     pub member_type_id: TypeId,
     pub submember: Option<Box<RichMemberAccess>>,
+    /// This will be true if this member access refers to a method (either on an instance or a
+    /// type).
+    is_method: bool,
 }
 
 impl Display for RichMemberAccess {
@@ -281,9 +299,13 @@ impl RichMemberAccess {
 
         // If we failed to find a field on this type with a matching name, check for a member
         // function with a matching name.
+        let mut is_method = false;
         let maybe_field_type_id = if maybe_field_type_id.is_none() {
             match ctx.get_type_member_fn(type_id, member_name) {
-                Some(member_fn_sig) => Some(&member_fn_sig.type_id),
+                Some(member_fn_sig) => {
+                    is_method = true;
+                    Some(&member_fn_sig.type_id)
+                }
                 None => None,
             }
         } else {
@@ -302,6 +324,7 @@ impl RichMemberAccess {
                 member_name: member_name.to_string(),
                 member_type_id: TypeId::unknown(),
                 submember: None,
+                is_method,
             };
         }
 
@@ -316,12 +339,14 @@ impl RichMemberAccess {
                     member_name: member_name.to_string(),
                     member_type_id: field_type_id,
                     submember: Some(Box::new(submember_access)),
+                    is_method,
                 }
             }
             None => RichMemberAccess {
                 member_name: member_name.to_string(),
                 member_type_id: field_type_id,
                 submember: None,
+                is_method,
             },
         }
     }
@@ -372,5 +397,14 @@ impl RichMemberAccess {
         }
 
         self
+    }
+
+    /// Returns true if the last member on this member access chain is a method on a type or
+    /// instance.
+    pub fn is_method(&self) -> bool {
+        match &self.submember {
+            Some(sub) => sub.is_method(),
+            None => self.is_method,
+        }
     }
 }
