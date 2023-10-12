@@ -86,29 +86,6 @@ impl Symbol {
                 })
             }
 
-            Some(&Token {
-                kind: TokenKind::This,
-                start,
-                end,
-            }) => {
-                // Check if the next token is `.`. If so, we're accessing a member on this variable
-                // or type.
-                let member_access = match tokens.peek_next() {
-                    Some(&Token {
-                        kind: TokenKind::Dot,
-                        ..
-                    }) => Some(MemberAccess::from(tokens)?),
-                    _ => None,
-                };
-
-                Ok(Symbol {
-                    name: TokenKind::This.to_string(),
-                    member_access,
-                    start_pos: start,
-                    end_pos: end,
-                })
-            }
-
             Some(other) => Err(ParseError::new(
                 ErrorKind::ExpectedIdent,
                 format_code!("expected identifier, but found {}", other).as_str(),

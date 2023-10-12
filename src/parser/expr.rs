@@ -196,14 +196,6 @@ impl Expression {
                 Err(_) => Ok(None),
             },
 
-            Some(Token {
-                kind: TokenKind::This,
-                ..
-            }) => {
-                let sym = Symbol::from(tokens)?;
-                Ok(Some(Expression::Symbol(sym)))
-            }
-
             // If the first token is an identifier, the expression can be a function call,
             // a symbol, or a struct initialization, or enum variant initialization.
             Some(Token {

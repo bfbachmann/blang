@@ -295,11 +295,7 @@ impl FunctionSignature {
 
                 Some(Token {
                     kind:
-                        TokenKind::Fn
-                        | TokenKind::Identifier(_)
-                        | TokenKind::Struct
-                        | TokenKind::Mut
-                        | TokenKind::This,
+                        TokenKind::Fn | TokenKind::Identifier(_) | TokenKind::Struct | TokenKind::Mut,
                     ..
                 }) => {
                     // The next few tokens represent an argument.
