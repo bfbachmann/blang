@@ -1170,7 +1170,9 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             let ll_fn = self
                 .module
                 .get_function(fn_sig.full_name().as_str())
-                .unwrap();
+                .expect(
+                    format!("failed to locate function {} in module", fn_sig.full_name()).as_str(),
+                );
             self.builder
                 .build_call(
                     ll_fn,

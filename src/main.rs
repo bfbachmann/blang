@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::io::prelude::*;
 use std::io::{BufRead, BufReader, Result};
 use std::path::{Path, PathBuf};
 use std::process;
@@ -58,7 +59,8 @@ fn main() {
     let cmd = cmd.subcommand(
         Command::new("check")
             .about("Perform static analysis only")
-            .arg(arg!([SRC_PATH] "Path to the source code to check").required(true)),
+            .arg(arg!([SRC_PATH] "Path to the source code to check").required(true))
+            .arg(arg!(-d --dump <DUMP_PATH> "Dump the analyzed AST to a file").required(false)),
     );
 
     // Handle the command.
@@ -75,7 +77,8 @@ fn main() {
         },
         Some(("check", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(file_path) => {
-                if analyze(file_path).is_none() {
+                let maybe_dump_path = sub_matches.get_one::<String>("dump");
+                if analyze(file_path, maybe_dump_path).is_none() {
                     exit(1);
                 }
             }
@@ -93,7 +96,7 @@ fn open_file(file_path: &str) -> Result<BufReader<File>> {
 
 /// Performs static analysis on the source code at the given path. Returns a successfully analyzed
 /// program and extern functions, or `None`.
-fn analyze(input_path: &str) -> Option<ProgramAnalysis> {
+fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> Option<ProgramAnalysis> {
     // Get a reader from the source file.
     let reader = match open_file(input_path) {
         Ok(r) => r,
@@ -171,6 +174,29 @@ fn analyze(input_path: &str) -> Option<ProgramAnalysis> {
         println!();
     }
 
+    // Dump the AST to a file, if necessary.
+    if let Some(dump_path) = maybe_dump_path {
+        let dst = Path::new(dump_path.as_str());
+        let mut dst_file = match File::create(dst.clone()) {
+            Err(err) => {
+                fatalln!(
+                    "Error opening file {}: {}",
+                    dst.to_str().unwrap_or_default(),
+                    err
+                );
+            }
+            Ok(result) => result,
+        };
+
+        if let Err(err) = write!(dst_file, "{:#?}", &prog_analysis.prog) {
+            fatalln!(
+                "Error writing AST to file {}: {}",
+                dst.to_str().unwrap_or_default(),
+                err
+            );
+        }
+    }
+
     // Return the program only if there were no errors.
     if prog_analysis.errors.is_empty() {
         return Some(prog_analysis);
@@ -191,7 +217,7 @@ fn compile(
     let start_time = Instant::now();
 
     // Read and analyze the program.
-    let prog_analysis = match analyze(src_path) {
+    let prog_analysis = match analyze(src_path, None) {
         Some(v) => v,
         None => exit(1),
     };

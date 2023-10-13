@@ -250,6 +250,8 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
                 // in the program context.
                 for member_fn in &impl_.member_fns {
                     let fn_sig = RichFnSig::from(ctx, &member_fn.signature);
+
+                    // Make sure this isn't a duplicate member function.
                     if ctx
                         .get_type_member_fn(&type_id, fn_sig.name.as_str())
                         .is_some()
@@ -265,6 +267,12 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
                             &member_fn.signature,
                         ));
                     } else {
+                        // If the member function is templated, add it to the program context so it
+                        // can be retrieved and rendered later.
+                        if fn_sig.is_templated() {
+                            ctx.add_templated_fn(fn_sig.full_name().as_str(), member_fn.clone());
+                        }
+
                         ctx.add_type_member_fn(type_id.clone(), fn_sig);
                     }
                 }

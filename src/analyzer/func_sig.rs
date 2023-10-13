@@ -148,7 +148,7 @@ impl RichFnSig {
     }
 
     /// Returns the fully qualified name of this function. If it's a regular function, this will
-    /// just be the function name. If it's a member function, it will be `<type>::<fn_name>`.
+    /// just be the function name. If it's a member function, it will be `<type>.<fn_name>`.
     /// If it's a templated function, argument types and the return type will be appended to the
     /// function name.
     pub fn full_name(&self) -> String {

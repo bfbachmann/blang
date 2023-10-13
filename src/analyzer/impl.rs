@@ -47,11 +47,15 @@ impl RichImpl {
         ctx.set_this_type_id(Some(type_id.clone()));
 
         // Analyze member functions.
-        let member_fns = impl_
-            .member_fns
-            .iter()
-            .map(|f| RichFn::from(ctx, f.clone()))
-            .collect();
+        let mut member_fns = vec![];
+        for mem_fn in &impl_.member_fns {
+            let rich_fn = RichFn::from(ctx, mem_fn.clone());
+
+            // Only add the member function if it's not templated.
+            if !rich_fn.signature.is_templated() {
+                member_fns.push(rich_fn);
+            }
+        }
 
         // Remove the impl type ID from the program context now that we're done analyzing the impl.
         ctx.set_this_type_id(None);

@@ -137,7 +137,9 @@ pub fn to_fn_type<'a>(
 
     // Get arg types.
     for arg in &sig.args {
-        let arg_type = types.get(&arg.type_id).unwrap();
+        let arg_type = types
+            .get(&arg.type_id)
+            .expect(format!("error locating type {}", arg.type_id).as_str());
         ll_arg_types.push(to_metadata_type_enum(ctx, types, arg_type));
     }
 

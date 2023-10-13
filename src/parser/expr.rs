@@ -341,7 +341,11 @@ impl Expression {
                 if expect_binop_or_end {
                     return Err(ParseError::new_with_token(
                         ErrorKind::ExpectedBinOpOrEndOfExpr,
-                        "expected binary operator or end of expression",
+                        format_code!(
+                            "expected binary operator or end of expression, but found {}",
+                            op1_token
+                        )
+                        .as_str(),
                         op1_token,
                     ));
                 }
@@ -411,7 +415,11 @@ impl Expression {
                 if expect_binop_or_end {
                     return Err(ParseError::new_with_token(
                         ErrorKind::ExpectedBinOpOrEndOfExpr,
-                        "expected binary operator or end of expression",
+                        format_code!(
+                            "expected binary operator or end of expression, but found {}",
+                            op1_token
+                        )
+                        .as_str(),
                         op1_token,
                     ));
                 }
