@@ -6,7 +6,7 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::passes::PassManager;
-use inkwell::targets::TargetTriple;
+use inkwell::targets::{TargetMachine, TargetTriple};
 use inkwell::types::AnyType;
 use inkwell::values::FunctionValue;
 
@@ -52,9 +52,11 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
         let builder = ctx.create_builder();
         let module = ctx.create_module("main");
 
-        // Set target triple, if one was provided.
+        // Set target triple.
         if let Some(target) = target_triple {
             module.set_triple(&TargetTriple::create(target));
+        } else {
+            module.set_triple(&TargetMachine::get_default_triple());
         }
 
         // Set up function pass manager.
@@ -66,8 +68,6 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
             fpm.add_cfg_simplification_pass();
             fpm.add_basic_alias_analysis_pass();
             fpm.add_promote_memory_to_register_pass();
-            fpm.add_instruction_combining_pass();
-            fpm.add_reassociate_pass();
         }
         fpm.initialize();
 

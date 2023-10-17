@@ -4,6 +4,9 @@ export RUST_LOG=trace
 # Enable stack traces.
 export RUST_BACKTRACE=full
 
+# The path to the GC library.
+GCLIB_PATH := /opt/homebrew/Cellar/bdw-gc/8.2.4/lib
+
 # Run tests.
 .PHONY: test
 test:
@@ -32,7 +35,7 @@ inspect:
 # Creates an executable from the source code in "source.bl".
 .PHONY: exec
 exec: source
-	@llc -filetype=obj bin/out.ll -o bin/out.o -O0 && clang bin/out.o -o bin/out
+	clang bin/out.ll -o bin/out -L $(GCLIB_PATH) -lgc
 
 # Runs end-to-end tests. These tests compile a set of Blang source files and execute the binaries, ensuring all steps
 # succeed.
