@@ -10,9 +10,9 @@ use crate::analyzer::expr::RichExpr;
 use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#type::{check_type_satisfies_spec, RichType, TypeId};
+use crate::fmt::format_hashset;
 use crate::format_code;
 use crate::parser::func::Function;
-use crate::parser::r#type::Type;
 
 /// Represents a semantically valid and type-rich function.
 #[derive(PartialEq, Debug, Clone)]
@@ -100,11 +100,54 @@ fn render_fn(
     func: Function,
     passed_args: &VecDeque<RichExpr>,
 ) -> AnalyzeResult<()> {
-    // Render function arguments.
-    render_fn_args(ctx, sig, passed_args)?;
+    // Render function arguments. This will return a mapping from type IDs that we need to replace
+    // to their replacements.
+    let remapped_type_ids = render_fn_args(ctx, sig, passed_args)?;
 
-    // Render the return type.
+    // TODO: Render the return type.
     render_fn_return(ctx, sig)?;
+
+    // Check that every template parameter has been replaced with a concrete type before
+    // proceeding. If this is not the case, it means that we were unable to infer the types of
+    // some template parameters and cannot proceed with function analysis.
+    {
+        let mut unresolved_params = HashSet::new();
+        if let Some(tmpl_params) = &sig.tmpl_params {
+            for param in tmpl_params.params.keys() {
+                if !remapped_type_ids.contains_key(&TypeId::new_unresolved(param.as_str())) {
+                    unresolved_params.insert(param);
+                }
+            }
+        }
+
+        if !unresolved_params.is_empty() {
+            return Err(AnalyzeError::new(
+                ErrorKind::UnresolvedTmplParams,
+                format!(
+                    "parameters [{}] on templated function {} could not be resolved to concrete types",
+                    format_hashset(unresolved_params),
+                    format_code!(sig),
+                )
+                .as_str(),
+                &func,
+            ).with_help("Consider adding type annotations here."));
+        }
+    }
+
+    // Make the required type ID replacements in the function signature.
+    {
+        for arg in sig.args.iter_mut() {
+            if let Some(new_type_id) = remapped_type_ids.get(&arg.type_id) {
+                arg.type_id = new_type_id.clone();
+            }
+        }
+
+        if let Some(ret_type_id) = &mut sig.ret_type_id {
+            if let Some(new_type_id) = remapped_type_ids.get(ret_type_id) {
+                sig.ret_type_id = Some(new_type_id.clone());
+            }
+        }
+    }
 
     // Now that all template parameters have been substituted with concrete types, analyze the
     // function and add the result to the program context.
@@ -132,7 +175,7 @@ fn render_fn(
         // Recompute the type ID, since the signature has changed. This type ID is guaranteed
         // to be unique to this rendered function because it is created from the function name
         // which will contain characters that are illegal in identifiers.
-        sig.type_id = TypeId::from(Type::new_unknown(sig.name.as_str()));
+        sig.type_id = TypeId::new_unresolved(sig.name.as_str());
 
         // Add the rendered function as a resolved type with the new type ID so it can be
         // looked up later.
@@ -151,19 +194,21 @@ fn render_fn(
 
 /// Replaces templated argument types with concrete types and checks that they match the template
 /// parameter requirements.
+/// Returns a mapping from the type IDs of the current (un-rendered, still templated) function
+/// arguments to their newly-resolved type IDs (the IDs of their rendered concrete types).
 fn render_fn_args(
     ctx: &mut ProgramContext,
-    sig: &mut RichFnSig,
+    sig: &RichFnSig,
     passed_args: &VecDeque<RichExpr>,
-) -> AnalyzeResult<()> {
+) -> AnalyzeResult<HashMap<TypeId, TypeId>> {
     // Make a copy of the original function signature so we can print it unedited into error
     // messages.
     let original_fn_sig = sig.clone();
 
     // Check that all the passed arguments match the template requirements and substitute
     // concrete types for templated argument types.
-    let mut remapped_types: HashSet<TypeId> = HashSet::new();
-    for (defined_arg, passed_arg) in sig.args.iter_mut().zip(passed_args.iter()) {
+    let mut remapped_type_ids: HashMap<TypeId, TypeId> = HashMap::new();
+    for (defined_arg, passed_arg) in sig.args.iter().zip(passed_args.iter()) {
         // Skip checks if the type is unknown (i.e. already failed analysis).
         let passed_type = ctx.get_resolved_type(&passed_arg.type_id).unwrap();
         if passed_type.is_unknown() {
@@ -223,9 +268,12 @@ fn render_fn_args(
 
             // Add the mapping from the templated type ID to the passed argument type so we
             // can resolved this templated type when rendering the function.
-            let param_type_id = TypeId::from(Type::new_unknown(tmpl_param.name.as_str()));
-            remapped_types.insert(param_type_id.clone());
+            let param_type_id = TypeId::new_unresolved(tmpl_param.name.as_str());
             ctx.add_resolved_type(param_type_id.clone(), passed_type.clone());
+
+            // Store the mapping from the original function argument type ID to the newly-rendered
+            // concrete type.
+            remapped_type_ids.insert(param_type_id, passed_arg.type_id.clone());
         } else if !passed_type.is_same_as(defined_type) {
             let mut err = AnalyzeError::new(
                 ErrorKind::MismatchedTypes,
@@ -241,7 +289,7 @@ fn render_fn_args(
 
             // Let the user know if their argument type has changed because it is a template
             // parameter that has been rendered as a specific concrete type.
-            if remapped_types.contains(&defined_arg.type_id) {
+            if remapped_type_ids.contains_key(&defined_arg.type_id) {
                 err = err.with_detail(
                     format_code!(
                         "Type {} is expected in place of template parameter {} for argument {} in \
@@ -256,13 +304,9 @@ fn render_fn_args(
 
             return Err(err);
         }
-
-        // Update the function signature by replacing the templated argument type ID with the
-        // passed argument's concrete type ID.
-        defined_arg.type_id = passed_arg.type_id.clone();
     }
 
-    Ok(())
+    Ok(remapped_type_ids)
 }
 
 /// Replaces the templated return type with a concrete type and checks that it matches the template

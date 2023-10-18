@@ -70,7 +70,7 @@ impl RichFnSig {
                 // params. This way, the type analyzer can look them up when resolving templated
                 // types for this function signature.
                 for (name, param) in &tmpl_params.params {
-                    let param_type_id = TypeId::from(Type::new_unknown(name));
+                    let param_type_id = TypeId::new_unresolved(name);
                     ctx.add_resolved_type(
                         param_type_id.clone(),
                         RichType::Templated(param.clone()),

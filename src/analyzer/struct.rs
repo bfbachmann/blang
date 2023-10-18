@@ -11,7 +11,6 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#type::{check_type_containment, RichType, TypeId};
 use crate::fmt::hierarchy_to_string;
 use crate::parser::r#struct::{StructInit, StructType};
-use crate::parser::r#type::Type;
 use crate::{format_code, util};
 
 /// Represents a semantically valid and type-rich struct field.
@@ -95,7 +94,7 @@ impl RichStructType {
         // type to the program context. This way, if any of the field types make use of this struct
         // type, we won't get into an infinitely recursive type resolution cycle. When we're done
         // analyzing this struct type, the mapping will be updated in the program context.
-        let type_id = TypeId::from(Type::new_unknown(struct_type.name.as_str()));
+        let type_id = TypeId::new_unresolved(struct_type.name.as_str());
         ctx.add_resolved_type(
             type_id.clone(),
             RichType::Struct(RichStructType {
@@ -221,7 +220,7 @@ impl RichStructInit {
                 // The struct type has already failed semantic analysis, so we should avoid
                 // analyzing its initialization and just return some zero-value placeholder instead.
                 return RichStructInit {
-                    type_id: TypeId::from(Type::new_unknown(type_name.as_str())),
+                    type_id: TypeId::new_unresolved(type_name.as_str()),
                     field_values: Default::default(),
                 };
             }

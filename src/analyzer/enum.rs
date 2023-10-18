@@ -11,7 +11,6 @@ use crate::analyzer::r#type::{check_type_containment, RichType, TypeId};
 use crate::fmt::hierarchy_to_string;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::r#enum::{EnumType, EnumVariantInit};
-use crate::parser::r#type::Type;
 use crate::{format_code, util};
 
 /// Represents a semantically valid enum type variant declaration.
@@ -98,7 +97,7 @@ impl RichEnumType {
         // type to the program context. This way, if any of the variant types make use of this enum
         // type, we won't get into an infinitely recursive type resolution cycle. When we're done
         // analyzing this type, the mapping will be updated in the program context.
-        let type_id = TypeId::from(Type::new_unknown(enum_type.name.as_str()));
+        let type_id = TypeId::new_unresolved(enum_type.name.as_str());
         ctx.add_resolved_type(
             type_id.clone(),
             RichType::Enum(RichEnumType {

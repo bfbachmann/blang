@@ -36,7 +36,7 @@ impl RichSpec {
 
         // Set the current spec type ID in the program context so instances of the type `This` in
         // the spec methods can be resolved to this spec type.
-        ctx.set_this_type_id(Some(TypeId::from(Type::new_unknown(spec_.name.as_str()))));
+        ctx.set_this_type_id(Some(TypeId::new_unresolved(spec_.name.as_str())));
 
         // Analyze all the function signatures in the spec.
         let mut fn_sigs = vec![];

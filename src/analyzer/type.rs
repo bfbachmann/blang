@@ -39,6 +39,11 @@ impl TypeId {
         TypeId { typ }
     }
 
+    /// Creates a new type ID that would correspond to the unresolved type with the given name.
+    pub fn new_unresolved(type_name: &str) -> Self {
+        TypeId::from(Type::new_unknown(type_name))
+    }
+
     /// Returns the type ID for the `bool` type.
     pub fn bool() -> Self {
         TypeId { typ: Type::bool() }

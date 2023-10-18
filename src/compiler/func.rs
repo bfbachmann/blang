@@ -1136,7 +1136,10 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // need to add that argument. This should only be the case for functions that return
         // structured types.
         if ll_fn_type.count_param_types() == call.args.len() as u32 + 1 {
-            let ret_type = self.types.get(call.ret_type_id.as_ref().unwrap()).unwrap();
+            let ret_type = self
+                .types
+                .get(call.maybe_ret_type_id.as_ref().unwrap())
+                .unwrap();
             let ptr = self.builder.build_alloca(
                 convert::to_basic_type(self.ctx, self.types, ret_type),
                 "ret_val_ptr",
@@ -1200,7 +1203,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // This will only be the case for functions that return structured values.
         if result.left().is_some() {
             result.left()
-        } else if call.ret_type_id.is_some() {
+        } else if call.maybe_ret_type_id.is_some() {
             Some(
                 args.first()
                     .unwrap()

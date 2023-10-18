@@ -263,7 +263,7 @@ impl RichExpr {
             Expression::FunctionCall(fn_call) => {
                 // Analyze the function call and ensure it has a return type.
                 let rich_call = RichFnCall::from(ctx, fn_call.clone());
-                if let Some(type_id) = rich_call.ret_type_id.clone() {
+                if let Some(type_id) = rich_call.maybe_ret_type_id.clone() {
                     return RichExpr {
                         kind: RichExprKind::FunctionCall(rich_call),
                         type_id,
@@ -498,7 +498,7 @@ impl RichExpr {
 
             Type::Struct(struct_type) => RichExpr {
                 kind: RichExprKind::StructInit(RichStructInit {
-                    type_id: TypeId::from(Type::new_unknown(struct_type.name.as_str())),
+                    type_id: TypeId::new_unresolved(struct_type.name.as_str()),
                     field_values: Default::default(),
                 }),
                 type_id,
@@ -508,7 +508,7 @@ impl RichExpr {
 
             Type::Enum(enum_type) => RichExpr {
                 kind: RichExprKind::EnumInit(RichEnumVariantInit {
-                    enum_type_id: TypeId::from(Type::new_unknown(enum_type.name.as_str())),
+                    enum_type_id: TypeId::new_unresolved(enum_type.name.as_str()),
                     variant: RichEnumTypeVariant {
                         number: 0,
                         name: "<unknown>".to_string(),
@@ -813,7 +813,7 @@ mod tests {
                         start_pos: Position::default(),
                         end_pos: Position::default(),
                     }],
-                    ret_type_id: Some(TypeId::str()),
+                    maybe_ret_type_id: Some(TypeId::str()),
                 }),
                 type_id: TypeId::str(),
                 start_pos: Position::default(),
@@ -966,7 +966,7 @@ mod tests {
                         start_pos: Position::default(),
                         end_pos: Position::default(),
                     }],
-                    ret_type_id: Some(TypeId::bool()),
+                    maybe_ret_type_id: Some(TypeId::bool()),
                 }),
                 type_id: TypeId::bool(),
                 start_pos: Position::default(),
@@ -980,7 +980,7 @@ mod tests {
                     call.fn_symbol,
                     RichSymbol::new_with_default_pos("do_thing", rich_fn.signature.type_id, None,)
                 );
-                assert_eq!(call.ret_type_id, Some(TypeId::bool()));
+                assert_eq!(call.maybe_ret_type_id, Some(TypeId::bool()));
                 assert_eq!(call.args.len(), 1);
                 assert_eq!(
                     call.args.get(0),
@@ -1060,7 +1060,7 @@ mod tests {
                         start_pos: Position::default(),
                         end_pos: Position::default(),
                     }],
-                    ret_type_id: Some(TypeId::bool()),
+                    maybe_ret_type_id: Some(TypeId::bool()),
                 }),
                 TypeId::bool(),
             )

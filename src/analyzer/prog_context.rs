@@ -18,7 +18,6 @@ use crate::lexer::pos::Position;
 use crate::parser::func::Function;
 use crate::parser::r#enum::EnumType;
 use crate::parser::r#struct::StructType;
-use crate::parser::r#type::Type;
 use crate::parser::spec::Spec;
 
 /// Represents a symbol defined in a specific scope.
@@ -711,7 +710,7 @@ impl ProgramContext {
     ) -> HashMap<TypeId, Option<RichType>> {
         let mut shadowed_type_mappings: HashMap<TypeId, Option<RichType>> = HashMap::new();
         for (name, param) in &tmpl_params.params {
-            let param_type_id = TypeId::from(Type::new_unknown(name.as_str()));
+            let param_type_id = TypeId::new_unresolved(name.as_str());
             let templated_type = RichType::Templated(param.clone());
             let maybe_shadowed_type = self.add_resolved_type(param_type_id.clone(), templated_type);
             shadowed_type_mappings.insert(param_type_id, maybe_shadowed_type);

@@ -7,7 +7,6 @@ use crate::analyzer::prog_context::{ProgramContext, ScopedSymbol};
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::member::MemberAccess;
-use crate::parser::r#type::Type;
 use crate::parser::symbol::Symbol;
 use crate::{format_code, locatable_impl, util};
 
@@ -108,7 +107,7 @@ impl RichSymbol {
         // If the symbol still has not been resolved, check if it's a type.
         let mut var_is_type = false;
         if maybe_type_id.is_none() {
-            let type_id = TypeId::from(Type::new_unknown(var_name));
+            let type_id = TypeId::new_unresolved(var_name);
             if ctx.get_resolved_type(&type_id).is_some() {
                 maybe_type_id = Some(type_id);
                 var_is_type = true;

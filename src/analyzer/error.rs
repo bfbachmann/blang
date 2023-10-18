@@ -36,6 +36,7 @@ pub enum ErrorKind {
     SpecAlreadyDefined,
     SpecNotDefined,
     DuplicateTmplParam,
+    UnresolvedTmplParams,
     DuplicateFnArg,
     SpecNotSatisfied,
 }
@@ -72,6 +73,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::TypeIsNotEnum => write!(f, "type is not enum"),
             ErrorKind::SpecAlreadyDefined => write!(f, "spec already defined"),
             ErrorKind::DuplicateTmplParam => write!(f, "duplicate template parameter"),
+            ErrorKind::UnresolvedTmplParams => write!(f, "unresolved template parameters"),
             ErrorKind::DuplicateFnArg => write!(f, "duplicate function argument"),
             ErrorKind::SpecNotDefined => write!(f, "spec not defined"),
             ErrorKind::SpecNotSatisfied => write!(f, "spec not satisfied"),

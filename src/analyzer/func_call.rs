@@ -4,9 +4,10 @@ use std::fmt;
 use colored::Colorize;
 use pluralizer::pluralize;
 
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::func::RichFn;
+use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::symbol::RichSymbol;
@@ -18,7 +19,7 @@ use crate::{format_code, util};
 pub struct RichFnCall {
     pub fn_symbol: RichSymbol,
     pub args: Vec<RichExpr>,
-    pub ret_type_id: Option<TypeId>,
+    pub maybe_ret_type_id: Option<TypeId>,
 }
 
 impl fmt::Display for RichFnCall {
@@ -41,18 +42,16 @@ impl PartialEq for RichFnCall {
     fn eq(&self, other: &Self) -> bool {
         self.fn_symbol == other.fn_symbol
             && util::vecs_eq(&self.args, &other.args)
-            && util::opts_eq(&self.ret_type_id, &other.ret_type_id)
+            && util::opts_eq(&self.maybe_ret_type_id, &other.maybe_ret_type_id)
     }
 }
 
 impl RichFnCall {
     /// Analyzes the given function call and returns a type-rich version of it.
     pub fn from(ctx: &mut ProgramContext, call: FunctionCall) -> Self {
-        let mut errors = vec![];
-
         // Calls to "main" should not be allowed.
         if call.has_fn_name("main") {
-            errors.push(AnalyzeError::new(
+            ctx.add_err(AnalyzeError::new(
                 ErrorKind::CallToMain,
                 "cannot call entrypoint main",
                 &call,
@@ -77,57 +76,30 @@ impl RichFnCall {
         // Make sure the function exists, either as a fully analyzed function, an external function
         // signature, or a variable.
         let mut rich_fn_symbol = RichSymbol::from(ctx, &call.fn_symbol, true, maybe_impl_type_id);
-        let var_type = ctx.get_resolved_type(rich_fn_symbol.get_type_id()).unwrap();
+        let var_type = ctx
+            .get_resolved_type(rich_fn_symbol.get_type_id())
+            .unwrap()
+            .clone();
 
         // Try to locate the function signature for this function call. If it's a call to a type
         // member function, we'll look up the function using the type ID. Otherwise, we just extract
         // the function signature from the variable type, as it should be a function type.
-        let fn_sig = if rich_fn_symbol.is_type {
-            let method_name = rich_fn_symbol.get_last_member_name();
-            match ctx.get_type_member_fn(&rich_fn_symbol.parent_type_id, method_name.as_str()) {
-                Some(fn_sig) => fn_sig,
-                None => {
-                    errors.push(AnalyzeError::new(
-                        ErrorKind::MismatchedTypes,
-                        format_code!(
-                            "type {} has no member function {}",
-                            rich_fn_symbol.name,
-                            method_name
-                        )
-                        .as_str(),
-                        &call,
-                    ));
+        let fn_sig = match RichFnCall::get_fn_sig(ctx, &rich_fn_symbol, &call, &var_type) {
+            Ok(sig) => sig,
+            Err(err) => {
+                ctx.add_err(err);
 
-                    return RichFnCall {
-                        fn_symbol: rich_fn_symbol,
-                        args: vec![],
-                        ret_type_id: Some(TypeId::unknown()),
-                    };
-                }
-            }
-        } else {
-            match var_type {
-                RichType::Function(fn_sig) => fn_sig,
-                other => {
-                    // The value being used here is not a function.
-                    errors.push(AnalyzeError::new(
-                        ErrorKind::MismatchedTypes,
-                        format_code!("type {} is not callable", other).as_str(),
-                        &call,
-                    ));
-
-                    return RichFnCall {
-                        fn_symbol: rich_fn_symbol,
-                        args: vec![],
-                        ret_type_id: Some(TypeId::unknown()),
-                    };
-                }
+                return RichFnCall {
+                    fn_symbol: rich_fn_symbol,
+                    args: vec![],
+                    maybe_ret_type_id: Some(TypeId::unknown()),
+                };
             }
         };
 
         // Clone here to avoid borrow issues.
         let mut fn_sig = fn_sig.clone();
-        let ret_type = fn_sig.ret_type_id.clone();
+        let mut maybe_ret_type_id = fn_sig.ret_type_id.clone();
 
         // If this function takes the special argument `this` and was not called directly via its
         // fully-qualified name, add the special `this` argument.
@@ -144,7 +116,7 @@ impl RichFnCall {
                 passed_args.push_front(RichExpr::from_symbol(maybe_this));
             } else {
                 // This is a call to a method that does not take `this` as its first argument.
-                errors.push(
+                ctx.add_err(
                     AnalyzeError::new(
                         ErrorKind::MemberNotDefined,
                         format_code!(
@@ -168,12 +140,18 @@ impl RichFnCall {
                         format_code!("Did you mean to call {}?", fn_sig.full_name()).as_str(),
                     ),
                 );
+
+                return RichFnCall {
+                    fn_symbol: rich_fn_symbol,
+                    args: vec![],
+                    maybe_ret_type_id,
+                };
             }
         }
 
         // Make sure the right number of arguments were passed.
         if passed_args.len() != fn_sig.args.len() {
-            errors.push(AnalyzeError::new(
+            ctx.add_err(AnalyzeError::new(
                 ErrorKind::WrongNumberOfArgs,
                 format!(
                     "{} expects {}, but {} provided",
@@ -184,9 +162,13 @@ impl RichFnCall {
                 .as_str(),
                 &call,
             ));
-        }
 
-        let passed_arg_type_ids: Vec<&TypeId> = passed_args.iter().map(|a| &a.type_id).collect();
+            return RichFnCall {
+                fn_symbol: rich_fn_symbol,
+                args: passed_args.into(),
+                maybe_ret_type_id,
+            };
+        }
 
         // If the function is templated, try render it. The rendered function will be placed
         // inside the program context.
@@ -195,8 +177,18 @@ impl RichFnCall {
                 .get_templated_fn(fn_sig.full_name().as_str())
                 .unwrap()
                 .clone();
-            if let Err(err) = RichFn::render(ctx, &mut fn_sig, func, &passed_args) {
-                errors.push(err);
+            if let Err(mut err) = RichFn::render(ctx, &mut fn_sig, func, &passed_args) {
+                // We failed to render the function being called, so we should update the error,
+                // store it, and return a placeholder function call.
+                err.start_pos = call.start_pos.clone();
+                err.end_pos = call.end_pos.clone();
+                ctx.add_err(err);
+
+                return RichFnCall {
+                    fn_symbol: rich_fn_symbol,
+                    args: vec![],
+                    maybe_ret_type_id,
+                };
             }
 
             // Update the function symbol name to match the rendered function name.
@@ -204,8 +196,13 @@ impl RichFnCall {
 
             // Update the type ID of the symbol to point to the rendered function.
             rich_fn_symbol.set_type_id(fn_sig.type_id);
+
+            // Update the return type ID to be the new rendered type ID.
+            maybe_ret_type_id = fn_sig.ret_type_id;
         } else {
             // Make sure the arguments are of the right types.
+            let passed_arg_type_ids: Vec<&TypeId> =
+                passed_args.iter().map(|a| &a.type_id).collect();
             for (passed_type_id, defined) in passed_arg_type_ids.into_iter().zip(fn_sig.args.iter())
             {
                 // Skip the check if the argument type is unknown. This will happen if the argument
@@ -215,7 +212,7 @@ impl RichFnCall {
                 }
 
                 if passed_type_id != &defined.type_id {
-                    errors.push(AnalyzeError::new(
+                    ctx.add_err(AnalyzeError::new(
                         ErrorKind::MismatchedTypes,
                         format_code!(
                             "cannot use value of type {} as argument {} to {}",
@@ -230,16 +227,47 @@ impl RichFnCall {
             }
         }
 
-        // Now that we've finished our analysis, add all the errors to the program context. We're
-        // doing it this way instead of adding errors immediately to avoid borrow issues.
-        for err in errors {
-            ctx.add_err(err);
-        }
-
         RichFnCall {
             fn_symbol: rich_fn_symbol,
             args: passed_args.into(),
-            ret_type_id: ret_type,
+            maybe_ret_type_id,
+        }
+    }
+
+    /// Resolves the function signature for the given call.
+    fn get_fn_sig<'a>(
+        ctx: &'a mut ProgramContext,
+        rich_fn_symbol: &'a RichSymbol,
+        call: &FunctionCall,
+        var_type: &'a RichType,
+    ) -> AnalyzeResult<&'a RichFnSig> {
+        if rich_fn_symbol.is_type {
+            let method_name = rich_fn_symbol.get_last_member_name();
+            match ctx.get_type_member_fn(&rich_fn_symbol.parent_type_id, method_name.as_str()) {
+                Some(fn_sig) => Ok(fn_sig),
+                None => Err(AnalyzeError::new(
+                    ErrorKind::MismatchedTypes,
+                    format_code!(
+                        "type {} has no member function {}",
+                        rich_fn_symbol.name,
+                        method_name
+                    )
+                    .as_str(),
+                    call,
+                )),
+            }
+        } else {
+            match var_type {
+                RichType::Function(fn_sig) => Ok(fn_sig),
+                other => {
+                    // The value being used here is not a function.
+                    Err(AnalyzeError::new(
+                        ErrorKind::MismatchedTypes,
+                        format_code!("type {} is not callable", other).as_str(),
+                        call,
+                    ))
+                }
+            }
         }
     }
 

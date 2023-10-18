@@ -1430,4 +1430,26 @@ mod tests {
             })
         ))
     }
+
+    #[test]
+    fn unresolved_tmpl_params() {
+        let result = analyze_prog(
+            r#"
+            fn test(a: A, b: B) ~ C with [A, B, C] {
+                return a + b
+            }
+            
+            fn main() {
+                test(1, 2)
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::UnresolvedTmplParams,
+                ..
+            })
+        ))
+    }
 }
