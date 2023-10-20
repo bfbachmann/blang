@@ -13,3 +13,4 @@ out
 tests/bin
 bin
 *.dump
+env.nu
