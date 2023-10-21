@@ -510,11 +510,6 @@ impl RichType {
         }
     }
 
-    /// Returns true if this type is a templated type.
-    pub fn is_templated(&self) -> bool {
-        matches!(self, RichType::Templated(_))
-    }
-
     /// Returns true if this is a composite type (i.e. a type that can contain other types).
     pub fn is_composite(&self) -> bool {
         matches!(

@@ -255,14 +255,14 @@ fn check_ret_type(
     }
 
     // Return early if the return type is not templated.
+    #[allow(dead_code)]
     let ret_type_id = sig.ret_type_id.as_ref().unwrap();
+
+    #[allow(unused_variables)]
     let ret_type = match remapped_type_ids.get(&ret_type_id) {
         Some(remapped_type_id) => ctx.must_get_resolved_type(remapped_type_id),
         None => ctx.must_get_resolved_type(ret_type_id),
     };
-    if !ret_type.is_templated() {
-        return Ok(());
-    }
 
     // TODO: Check that the return type is what is expected.
 
