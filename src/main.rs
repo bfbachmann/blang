@@ -46,6 +46,11 @@ fn main() {
                     .required(false)
                     .action(ArgAction::SetTrue),
             )
+            .arg(
+                arg!(-q --quiet ... "Don't print log messages")
+                    .required(false)
+                    .action(ArgAction::SetFalse),
+            )
             .arg(arg!(-t --target <TARGET> "Target ISA triple").required(false))
             .arg(
                 arg!(-b --bitcode "Output LLVM bitcode")
@@ -71,7 +76,8 @@ fn main() {
                 let as_bitcode = sub_matches.get_flag("bitcode");
                 let dst_path = sub_matches.get_one::<String>("out");
                 let simplify_ir = !sub_matches.get_flag("unoptimized");
-                compile(src_path, dst_path, as_bitcode, target, simplify_ir);
+                let quiet = sub_matches.get_flag("quiet");
+                compile(src_path, dst_path, as_bitcode, target, simplify_ir, quiet);
             }
             _ => fatalln!("expected source path"),
         },
@@ -213,6 +219,7 @@ fn compile(
     as_bitcode: bool,
     target: Option<&String>,
     simplify_ir: bool,
+    quiet: bool,
 ) {
     let start_time = Instant::now();
 
@@ -243,11 +250,13 @@ fn compile(
     }
 
     // Print the success message with the compile time.
-    let compile_time = Instant::now() - start_time;
-    println!(
-        "Compiled {} in {}.{}s.",
-        src_path,
-        compile_time.as_secs(),
-        compile_time.subsec_millis()
-    )
+    if !quiet {
+        let compile_time = Instant::now() - start_time;
+        println!(
+            "Compiled {} in {}.{}s.",
+            src_path,
+            compile_time.as_secs(),
+            compile_time.subsec_millis()
+        )
+    }
 }

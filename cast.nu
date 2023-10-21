@@ -14,24 +14,33 @@ def test [] {
 }
 
 # Runs unit tests.
-def unittest [] {
-    cargo llvm-cov -- --nocapture
+def "test unit" [] {
+    cargo ($env.CARGO_FLAGS | str join) llvm-cov -- --nocapture
 }
 
 # Runs end-to-end tests.
-def e2etest [] {
-    cd src/tests
-    ./test.sh
+def "test e2e" [] {
+    mkdir src/tests/bin
+    ls src/tests | find .bl | get name | ansi strip | each {|src_file|
+        print -n $"test ($src_file)... "
+
+        let exit_code = run $src_file
+        if $exit_code == 0 {
+            print $"(ansi green)ok(ansi reset)"
+        } else {
+            print $"(ansi red)fail(ansi reset)"
+        }
+    }
 }
 
 # Generates documentation.
 def docs [] {
-    cargo doc
+    cargo ($env.CARGO_FLAGS | str join) doc
 }
 
 # Automatically fixes rustfmt lint errors.
 def fix [] {
-    cargo fix --allow-dirty --allow-staged
+    cargo ($env.CARGO_FLAGS | str join) fix --allow-dirty --allow-staged
 }
 
 # Runs the Blang compiler "check" command which performs static analysis on the given
@@ -39,20 +48,20 @@ def fix [] {
 def check [
     src: path = "source.bl"     # The path to the Blang source code to check.
 ] {
-    cargo run -- check --dump bin/dump.txt ($src)
+    cargo ($env.CARGO_FLAGS | str join) run -- check --dump bin/dump.txt ($src)
 }
 
 # Compiles Blang source code to LLVM IR.
 def build [
     src: path = "source.bl"     # The path to the Blang source code to compile.
 ] {
-    cargo run -- build -o bin/out.ll ($src)
+    cargo ($env.CARGO_FLAGS | str join) run -- build -o bin/out.ll ($src)
 }
 
 # Builds and executes Blang source code.
 def run [
-    src: path = "source.bl"     # The path to the Blang source code to run.
-    ...cflags: string           # Additional flags to pass to the LLVM IR compiler (clang).
+    src: path = "source.bl"             # The path to the Blang source code to run.
+    ...cflags: string                   # Additional flags to pass to the LLVM IR compiler (clang).
 ] {
     # Compile Blang source code to LLVM IR.
     build $src
@@ -62,4 +71,6 @@ def run [
 
     # Run the executable.
     ./bin/out
+
+    return $env.LAST_EXIT_CODE
 }
