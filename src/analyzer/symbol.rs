@@ -283,7 +283,7 @@ impl PartialEq for RichMemberAccess {
 impl RichMemberAccess {
     /// Attempts to recursively analyze a member access on the given type.
     fn from(ctx: &mut ProgramContext, type_id: &TypeId, member_access: &MemberAccess) -> Self {
-        let typ = ctx.get_resolved_type(type_id).unwrap();
+        let typ = ctx.must_get_resolved_type(type_id);
         let member_name = &member_access.member_name;
 
         // Check if the member access is accessing a field on a struct or tuple type.

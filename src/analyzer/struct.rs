@@ -213,7 +213,7 @@ impl RichStructInit {
     pub fn from(ctx: &mut ProgramContext, struct_init: &StructInit) -> Self {
         // Resolve the struct type.
         let type_id = RichType::analyze(ctx, &struct_init.typ);
-        let rich_type = ctx.get_resolved_type(&type_id).unwrap().clone();
+        let rich_type = ctx.must_get_resolved_type(&type_id).clone();
         let struct_type = match rich_type {
             RichType::Struct(s) => s,
             RichType::Unknown(type_name) => {

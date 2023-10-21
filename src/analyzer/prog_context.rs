@@ -471,6 +471,18 @@ impl ProgramContext {
         None
     }
 
+    /// Attempts to locate the resolved type corresponding to the given type ID and returns it,
+    /// if found. Panics if the type is not found.
+    pub fn must_get_resolved_type(&self, id: &TypeId) -> &RichType {
+        for scope in self.stack.iter().rev() {
+            if let Some(resolved) = scope.get_resolved_type(id) {
+                return resolved;
+            }
+        }
+
+        panic!("type {} does not exist in the program context", id);
+    }
+
     /// Returns the member function with name `name` on the type with ID `id`, if one exists.
     pub fn get_type_member_fn(&self, id: &TypeId, name: &str) -> Option<&RichFnSig> {
         match self.type_member_fn_sigs.get(id) {
@@ -709,8 +721,8 @@ impl ProgramContext {
         tmpl_params: &RichTmplParams,
     ) -> HashMap<TypeId, Option<RichType>> {
         let mut shadowed_type_mappings: HashMap<TypeId, Option<RichType>> = HashMap::new();
-        for (name, param) in &tmpl_params.params {
-            let param_type_id = TypeId::new_unresolved(name.as_str());
+        for param in &tmpl_params.params {
+            let param_type_id = param.get_type_id();
             let templated_type = RichType::Templated(param.clone());
             let maybe_shadowed_type = self.add_resolved_type(param_type_id.clone(), templated_type);
             shadowed_type_mappings.insert(param_type_id, maybe_shadowed_type);

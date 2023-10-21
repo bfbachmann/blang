@@ -69,8 +69,8 @@ impl RichFnSig {
                 // Add the template params to the program context as the current function template
                 // params. This way, the type analyzer can look them up when resolving templated
                 // types for this function signature.
-                for (name, param) in &tmpl_params.params {
-                    let param_type_id = TypeId::new_unresolved(name);
+                for param in &tmpl_params.params {
+                    let param_type_id = param.get_type_id();
                     ctx.add_resolved_type(
                         param_type_id.clone(),
                         RichType::Templated(param.clone()),
@@ -184,16 +184,20 @@ impl RichFnSig {
     }
 
     /// Returns true if `other` has arguments of the same type in the same order and the
-    /// same return type as `self`. `type_id_map` will be used to convert type IDs from `other`
-    /// before checks are performed.
-    pub fn is_same_as(&self, other: &RichFnSig, type_id_map: HashMap<TypeId, TypeId>) -> bool {
+    /// same return type as `self`. `remapped_type_ids` will be used to convert type IDs from
+    /// `other` before checks are performed.
+    pub fn is_same_as(
+        &self,
+        other: &RichFnSig,
+        remapped_type_ids: &HashMap<TypeId, TypeId>,
+    ) -> bool {
         if self.args.len() != other.args.len() {
             return false;
         }
 
         for (a, b) in self.args.iter().zip(other.args.iter()) {
             // Replace type IDs for b using the provided mapping.
-            let b_type_id = match type_id_map.get(&b.type_id) {
+            let b_type_id = match remapped_type_ids.get(&b.type_id) {
                 Some(replacement_id) => replacement_id,
                 None => &b.type_id,
             };
@@ -205,7 +209,7 @@ impl RichFnSig {
 
         // Replace the return type of `other` using the provided mapping.
         let other_ret_type_id = match &other.ret_type_id {
-            Some(id) => match type_id_map.get(id) {
+            Some(id) => match remapped_type_ids.get(id) {
                 Some(replacement_id) => Some(replacement_id.clone()),
                 None => Some(id.clone()),
             },

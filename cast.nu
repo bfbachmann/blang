@@ -34,6 +34,14 @@ def fix [] {
     cargo fix --allow-dirty --allow-staged
 }
 
+# Runs the Blang compiler "check" command which performs static analysis on the given
+# Blang source code and dumps the resulting AST to `bin/dump.txt`.
+def check [
+    src: path = "source.bl"     # The path to the Blang source code to check.
+] {
+    cargo run -- check --dump bin/dump.txt ($src)
+}
+
 # Compiles Blang source code to LLVM IR.
 def build [
     src: path = "source.bl"     # The path to the Blang source code to compile.

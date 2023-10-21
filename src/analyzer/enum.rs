@@ -134,7 +134,7 @@ impl RichEnumType {
                     let variant_type_id = RichType::analyze(ctx, &typ);
 
                     // Update the size of the largest variant, if necessary.
-                    let variant_type = ctx.get_resolved_type(&variant_type_id).unwrap();
+                    let variant_type = ctx.must_get_resolved_type(&variant_type_id);
                     largest_variant_size_bytes =
                         max(largest_variant_size_bytes, variant_type.size_bytes(ctx));
 
@@ -240,7 +240,7 @@ impl RichEnumVariantInit {
     pub fn from(ctx: &mut ProgramContext, enum_init: &EnumVariantInit) -> Self {
         // Make sure the enum type exists.
         let enum_type_id = RichType::analyze(ctx, &enum_init.enum_type);
-        let enum_type = match ctx.get_resolved_type(&enum_type_id).unwrap() {
+        let enum_type = match ctx.must_get_resolved_type(&enum_type_id) {
             RichType::Enum(enum_type) => enum_type,
             other => {
                 // This is not an enum type. Record the error and return a placeholder value.

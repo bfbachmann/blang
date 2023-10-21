@@ -251,7 +251,7 @@ impl RichExpr {
             Expression::SizeOf(sizeof) => {
                 // Get the size of the type and just represent it as a usize literal.
                 let type_id = RichType::analyze(ctx, &sizeof.typ);
-                let typ = ctx.get_resolved_type(&type_id).unwrap();
+                let typ = ctx.must_get_resolved_type(&type_id);
                 RichExpr {
                     kind: RichExprKind::USizeLiteral(typ.size_bytes(ctx) as u64),
                     type_id: TypeId::usize(),
@@ -350,8 +350,8 @@ impl RichExpr {
 
                 // If we couldn't resolve both of the operand types, we'll skip any further
                 // type checks by returning early.
-                let left_type = ctx.get_resolved_type(&rich_left.type_id).unwrap();
-                let right_type = ctx.get_resolved_type(&rich_right.type_id).unwrap();
+                let left_type = ctx.must_get_resolved_type(&rich_left.type_id);
+                let right_type = ctx.must_get_resolved_type(&rich_right.type_id);
                 if left_type.is_unknown() || right_type.is_unknown() {
                     return RichExpr {
                         kind: RichExprKind::BinaryOperation(

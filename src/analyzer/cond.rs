@@ -69,7 +69,7 @@ impl RichCond {
             let rich_expr = match &branch.condition {
                 Some(branch_cond) => {
                     let rich_expr = RichExpr::from(ctx, branch_cond.clone());
-                    let rich_expr_type = ctx.get_resolved_type(&rich_expr.type_id).unwrap();
+                    let rich_expr_type = ctx.must_get_resolved_type(&rich_expr.type_id);
 
                     // Skip the type check if the expression type is unknown (meaning it failed
                     // analysis).

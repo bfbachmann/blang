@@ -6,10 +6,12 @@ fn assert(b: bool, code: i64) {
     }
 }
 
-fn apply(func: T, v: i64) ~ i64
-with [T = fn (i64) ~ i64]
-{
-    return func(v)
+fn apply(f: F, arg: T) ~ T
+with [
+    T,
+    F = fn (T) ~ T,
+] {
+    return f(arg)
 }
 
 fn double_if(v: T, b: B) ~ i64

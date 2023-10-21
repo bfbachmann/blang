@@ -1,4 +1,5 @@
 use core::fmt;
+use std::collections::HashMap;
 use std::fmt::Formatter;
 
 use colored::Colorize;
@@ -85,8 +86,8 @@ impl RichVarAssign {
         match referenced_type {
             Some(typ) => {
                 // Make sure the variable type is the same as the expression type.
-                let expr_type = ctx.get_resolved_type(&rich_expr.type_id).unwrap();
-                if !typ.is_same_as(expr_type) {
+                let expr_type = ctx.must_get_resolved_type(&rich_expr.type_id);
+                if !typ.is_same_as(expr_type, &HashMap::new()) {
                     ctx.add_err(AnalyzeError::new(
                         ErrorKind::MismatchedTypes,
                         format_code!(

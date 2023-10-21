@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 
 use colored::*;
@@ -99,28 +99,34 @@ impl RichTmplParam {
             end_pos: tmpl_param.end_pos().clone(),
         }
     }
+
+    /// Returns the type ID corresponding to the simple named version of this template param.
+    pub fn get_type_id(&self) -> TypeId {
+        TypeId::new_unresolved(self.name.as_str())
+    }
 }
 
 /// A list of template parameters.
 #[derive(Debug, Clone)]
 pub struct RichTmplParams {
-    pub params: HashMap<String, RichTmplParam>,
+    pub params: Vec<RichTmplParam>,
 }
 
 impl PartialEq for RichTmplParams {
     fn eq(&self, other: &Self) -> bool {
-        util::hashmaps_eq(&self.params, &other.params)
+        util::vecs_eq(&self.params, &other.params)
     }
 }
 
 impl RichTmplParams {
     /// Performs semantic analysis on a set of template parameters.
     pub fn from(ctx: &mut ProgramContext, tmpl_params: &TmplParams) -> Self {
-        let mut params = HashMap::new();
+        let mut params = vec![];
+        let mut param_names = HashSet::new();
         for param in &tmpl_params.params {
             // Record an error and skip this param if another param with the same name already
             // exists.
-            if params.contains_key(&param.name) {
+            if param_names.contains(&param.name) {
                 ctx.add_err(AnalyzeError::new(
                     ErrorKind::DuplicateTmplParam,
                     format_code!("parameter {} already exists in this template", param.name)
@@ -131,7 +137,24 @@ impl RichTmplParams {
                 continue;
             }
 
-            params.insert(param.name.clone(), RichTmplParam::from(ctx, param));
+            // Analyze the param.
+            let rich_param = RichTmplParam::from(ctx, param);
+
+            // Add the param type mapping to the program context in case it is used in other params
+            // that follow it.
+            ctx.add_resolved_type(
+                rich_param.get_type_id(),
+                RichType::Templated(rich_param.clone()),
+            );
+
+            param_names.insert(rich_param.name.clone());
+            params.push(rich_param);
+        }
+
+        // Drop the template param type mappings we added to the program context now that we're
+        // done with them.
+        for param in &params {
+            ctx.remove_resolved_type(&param.get_type_id());
         }
 
         RichTmplParams { params }

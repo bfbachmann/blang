@@ -65,8 +65,8 @@ impl RichRet {
                     Some(expected_type_id) => {
                         // Skip the type check if either type is unknown. This will be the case if
                         // semantic analysis on either type already failed.
-                        let expected_type = ctx.get_resolved_type(expected_type_id).unwrap();
-                        let expr_type = ctx.get_resolved_type(&rich_expr.type_id).unwrap();
+                        let expected_type = ctx.must_get_resolved_type(expected_type_id);
+                        let expr_type = ctx.must_get_resolved_type(&rich_expr.type_id);
                         if !expected_type.is_unknown()
                             && !expr_type.is_unknown()
                             && expected_type != expr_type

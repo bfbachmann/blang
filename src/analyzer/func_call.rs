@@ -207,7 +207,7 @@ impl RichFnCall {
             {
                 // Skip the check if the argument type is unknown. This will happen if the argument
                 // already failed semantic analysis.
-                if ctx.get_resolved_type(passed_type_id).unwrap().is_unknown() {
+                if ctx.must_get_resolved_type(passed_type_id).is_unknown() {
                     continue;
                 }
 

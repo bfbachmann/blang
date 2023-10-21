@@ -594,4 +594,27 @@ mod tests {
         "#,
         )
     }
+
+    #[test]
+    fn nested_tmpl_params() {
+        assert_compiles(
+            r#"
+            fn apply(f: F, arg: T) ~ T
+            with [
+                T,
+                F = fn (T) ~ T,
+            ] {
+                return f(arg)
+            }
+            
+            fn double(v: i64) ~ i64 {
+                return v * 2
+            }
+            
+            fn main() {
+                let result: i64 = apply(double, 1)
+            }
+        "#,
+        )
+    }
 }

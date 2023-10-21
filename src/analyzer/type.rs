@@ -310,9 +310,18 @@ impl RichType {
     ///  - For struct types, they must be exactly the same type.
     ///  - For function types, they must have arguments of the same type in the same order and the
     ///    same return types.
-    pub fn is_same_as(&self, other: &RichType) -> bool {
+    ///
+    /// `remapped_type_ids` will be used to replace type IDs in `other` before comparisons are
+    /// performed.
+    pub fn is_same_as(
+        &self,
+        other: &RichType,
+        remapped_type_ids: &HashMap<TypeId, TypeId>,
+    ) -> bool {
         match (self, other) {
-            (RichType::Function(f1), RichType::Function(f2)) => f1.is_same_as(f2, HashMap::new()),
+            (RichType::Function(f1), RichType::Function(f2)) => {
+                f1.is_same_as(f2, remapped_type_ids)
+            }
             (a, b) => a == b,
         }
     }
@@ -359,7 +368,7 @@ impl RichType {
 
             RichType::Struct(s) => {
                 for field in &s.fields {
-                    let field_type = ctx.get_resolved_type(&field.type_id).unwrap();
+                    let field_type = ctx.must_get_resolved_type(&field.type_id);
                     if field_type == typ {
                         hierarchy.push(field_type);
                         return true;
@@ -374,7 +383,7 @@ impl RichType {
             RichType::Enum(e) => {
                 for variant in e.variants.values() {
                     if let Some(type_id) = &variant.maybe_type_id {
-                        let variant_type = ctx.get_resolved_type(type_id).unwrap();
+                        let variant_type = ctx.must_get_resolved_type(type_id);
                         if variant_type == typ {
                             hierarchy.push(variant_type);
                             return true;
@@ -389,7 +398,7 @@ impl RichType {
 
             RichType::Tuple(t) => {
                 for type_id in &t.type_ids {
-                    let field_type = ctx.get_resolved_type(type_id).unwrap();
+                    let field_type = ctx.must_get_resolved_type(type_id);
                     if field_type == typ {
                         hierarchy.push(field_type);
                         return true;
@@ -446,7 +455,7 @@ impl RichType {
             RichType::Struct(struct_type) => {
                 let mut size = 0;
                 for field in &struct_type.fields {
-                    let field_type = ctx.get_resolved_type(&field.type_id).unwrap();
+                    let field_type = ctx.must_get_resolved_type(&field.type_id);
                     size += field_type.size_bytes(ctx);
                 }
 
@@ -459,7 +468,7 @@ impl RichType {
                 let mut size = 0;
                 for variant in enum_type.variants.values() {
                     if let Some(type_id) = &variant.maybe_type_id {
-                        let variant_type = ctx.get_resolved_type(type_id).unwrap();
+                        let variant_type = ctx.must_get_resolved_type(type_id);
                         size = max(size, variant_type.size_bytes(ctx));
                     }
                 }
@@ -470,7 +479,7 @@ impl RichType {
             RichType::Tuple(tuple_type) => {
                 let mut size = 0;
                 for type_id in &tuple_type.type_ids {
-                    let field_type = ctx.get_resolved_type(&type_id).unwrap();
+                    let field_type = ctx.must_get_resolved_type(&type_id);
                     size += field_type.size_bytes(ctx)
                 }
 
@@ -561,7 +570,8 @@ pub fn check_type_containment(
     Ok(())
 }
 
-/// Checks whether this type satisfies the given spec and returns an error if it doesn't.
+/// Checks whether the type corresponding to the given ID satisfies the given spec and returns an
+/// error if it doesn't.
 pub fn check_type_satisfies_spec(
     ctx: &ProgramContext,
     type_id: &TypeId,
@@ -579,8 +589,8 @@ pub fn check_type_satisfies_spec(
                 // Create a mapping from the spec type ID to the given type. This mapping will be
                 // used to replace instances of the spec type ID in the function signature when
                 // checking that the function signatures match.
-                let replacement_type_ids = HashMap::from([(spec.type_id(), type_id.clone())]);
-                if !fn_sig.is_same_as(spec_fn_sig, replacement_type_ids) {
+                let remapped_type_ids = HashMap::from([(spec.type_id(), type_id.clone())]);
+                if !fn_sig.is_same_as(spec_fn_sig, &remapped_type_ids) {
                     return Err(format_code!(
                         "Function {} on type {} doesn't match function {} on spec {}.",
                         fn_sig,

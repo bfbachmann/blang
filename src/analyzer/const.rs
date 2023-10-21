@@ -77,10 +77,10 @@ impl RichConst {
         let type_id = if let Some(parsed_type) = &const_decl.typ {
             // Make sure the expression type matches the declared constant type.
             let declared_type_id = RichType::analyze(ctx, parsed_type);
-            let value_type = ctx.get_resolved_type(&value.type_id).unwrap();
+            let value_type = ctx.must_get_resolved_type(&value.type_id);
 
             // Skip the check if the declared type could not be resolved.
-            let declared_type = ctx.get_resolved_type(&declared_type_id).unwrap();
+            let declared_type = ctx.must_get_resolved_type(&declared_type_id);
             if !declared_type.is_unknown() && value_type != declared_type {
                 ctx.add_err(AnalyzeError::new(
                     ErrorKind::MismatchedTypes,
