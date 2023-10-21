@@ -15,7 +15,7 @@ def test [] {
 
 # Runs unit tests.
 def "test unit" [] {
-    cargo ($env.CARGO_FLAGS | str join) llvm-cov -- --nocapture
+    cargo $env.CARGO_FLAGS llvm-cov -- --nocapture
 }
 
 # Runs end-to-end tests.
@@ -35,12 +35,12 @@ def "test e2e" [] {
 
 # Generates documentation.
 def docs [] {
-    cargo ($env.CARGO_FLAGS | str join) doc
+    cargo $env.CARGO_FLAGS doc
 }
 
 # Automatically fixes rustfmt lint errors.
 def fix [] {
-    cargo ($env.CARGO_FLAGS | str join) fix --allow-dirty --allow-staged
+    cargo $env.CARGO_FLAGS fix --allow-dirty --allow-staged
 }
 
 # Runs the Blang compiler "check" command which performs static analysis on the given
@@ -48,14 +48,14 @@ def fix [] {
 def check [
     src: path = "source.bl"     # The path to the Blang source code to check.
 ] {
-    cargo ($env.CARGO_FLAGS | str join) run -- check --dump bin/dump.txt ($src)
+    cargo $env.CARGO_FLAGS run -- check --dump bin/dump.txt ($src)
 }
 
 # Compiles Blang source code to LLVM IR.
 def build [
     src: path = "source.bl"     # The path to the Blang source code to compile.
 ] {
-    cargo ($env.CARGO_FLAGS | str join) run -- build -o bin/out.ll ($src)
+    cargo $env.CARGO_FLAGS run -- build -o bin/out.ll ($src)
 }
 
 # Builds and executes Blang source code.
