@@ -8,7 +8,7 @@ use crate::analyzer::closure::{check_closure_returns, RichClosure};
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::func_sig::RichFnSig;
-use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
+use crate::analyzer::prog_context::{ProgramContext, Scope, ScopeKind};
 use crate::analyzer::r#type::{check_type_satisfies_spec, RichType, TypeId};
 use crate::analyzer::tmpl_params::RichTmplParam;
 use crate::format_code;
@@ -74,19 +74,20 @@ impl RichFn {
         func: Function,
         passed_args: &VecDeque<RichExpr>,
     ) -> AnalyzeResult<()> {
-        // Define templated types in the program context to prevent them from being resolved as
-        // existing concrete types with the same names.
-        let shadowed_type_mappings = match &sig.tmpl_params {
-            Some(tmpl_params) => ctx.add_template_types(tmpl_params),
-            None => HashMap::new(),
+        let tmpl_params = match &sig.tmpl_params {
+            Some(tp) => tp.params.clone(),
+            None => vec![],
         };
+
+        // Create a new template rendering scope and push it onto the stack.
+        let scope = Scope::new_tmpl(tmpl_params, sig.ret_type_id.clone());
+        ctx.push_scope(scope);
 
         // Render the function.
         let result = render_fn(ctx, sig, func, passed_args);
 
-        // Before returning, restore old type mappings that we overwrote with template parameters
-        // and remove any mappings for template parameters that were added in this function.
-        ctx.restore_type_mappings(shadowed_type_mappings);
+        // Pop the scope now that we're done rendering the function.
+        ctx.pop_scope();
 
         result
     }

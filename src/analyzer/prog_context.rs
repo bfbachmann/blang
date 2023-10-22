@@ -12,7 +12,7 @@ use crate::analyzer::r#spec::RichSpec;
 use crate::analyzer::r#struct::RichStructType;
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::analyzer::statement::RichStatement;
-use crate::analyzer::tmpl_params::RichTmplParams;
+use crate::analyzer::tmpl_params::RichTmplParam;
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::lexer::pos::Position;
 use crate::parser::func::Function;
@@ -59,6 +59,7 @@ pub enum ScopeKind {
     Inline,
     Branch,
     Loop,
+    Tmpl,
 }
 
 impl fmt::Display for ScopeKind {
@@ -68,6 +69,7 @@ impl fmt::Display for ScopeKind {
             ScopeKind::Inline => write!(f, "inline closure"),
             ScopeKind::Branch => write!(f, "branch body"),
             ScopeKind::Loop => write!(f, "loop body"),
+            ScopeKind::Tmpl => write!(f, "template"),
         }
     }
 }
@@ -116,6 +118,28 @@ impl Scope {
             invalid_types: HashSet::new(),
             resolved_types: HashMap::new(),
             kind,
+            return_type,
+        }
+    }
+
+    /// Creates a new template scope (a scope in which some types may be templated).
+    pub fn new_tmpl(tmpl_params: Vec<RichTmplParam>, return_type: Option<TypeId>) -> Self {
+        let mut resolved_types = HashMap::new();
+        for param in &tmpl_params {
+            resolved_types.insert(param.get_type_id(), RichType::Templated(param.clone()));
+        }
+
+        Scope {
+            symbols: Default::default(),
+            extern_fns: Default::default(),
+            fns: Default::default(),
+            extern_structs: Default::default(),
+            extern_enums: Default::default(),
+            structs: Default::default(),
+            enums: Default::default(),
+            invalid_types: Default::default(),
+            resolved_types,
+            kind: ScopeKind::Tmpl,
             return_type,
         }
     }
@@ -293,6 +317,51 @@ impl ProgramContext {
         }
     }
 
+    /// Visits each stack in the scope in reverse, calling `visit` on each one until one of the
+    /// following occurs
+    /// - `visit` returns `Some`
+    /// - a template rendering scope has been reached (in this case the template scope and the
+    ///   top-level scope will be searched before returning)
+    /// - the entire stack has been searched.
+    /// Returns the value returned by the last call to `visit`.
+    fn reverse_search_stack<F, R>(&self, visit: F) -> Option<&R>
+    where
+        F: Fn(&Scope) -> Option<&R>,
+    {
+        for scope in self.stack.iter().rev() {
+            if let Some(result) = visit(scope) {
+                return Some(result);
+            }
+
+            // Don't search beyond template rendering boundaries. If we didn't do this, types and
+            // functions rendered where they're used would be able to access types and variables
+            // declared in the context where they're used, which would be broken.
+            if scope.kind == ScopeKind::Tmpl {
+                // Visit the top level of the program before returning, as types and functions
+                // declared there should be accessible everywhere.
+                return visit(self.stack.front().unwrap());
+            }
+        }
+
+        None
+    }
+
+    /// Works the same way as `reverse_search_stack`, except that this function returns when
+    /// `visit` returns `(_, true)` rather than `Some` as in `reverse_search_stack`.
+    fn reverse_search_stack_until<F, R>(&self, visit: F) -> Option<R>
+    where
+        F: Fn(&Scope) -> (Option<R>, bool),
+    {
+        for scope in self.stack.iter().rev() {
+            let (result, stop) = visit(scope);
+            if stop {
+                return result;
+            }
+        }
+
+        None
+    }
+
     /// Returns all type mappings store in the program context.
     pub fn types(mut self) -> HashMap<TypeId, RichType> {
         // Make sure we move all type mappings from any existing scopes.
@@ -449,38 +518,22 @@ impl ProgramContext {
 
     /// Attempts to locate the invalid type with the given name and returns it, if found.
     pub fn get_invalid_type(&self, name: &str) -> Option<&String> {
-        // Search up the stack from the current scope.
-        for scope in self.stack.iter().rev() {
-            if let Some(sig) = scope.get_invalid_type(name) {
-                return Some(sig);
-            }
-        }
-
-        None
+        self.reverse_search_stack(|scope| scope.get_invalid_type(name))
     }
 
     /// Attempts to locate the resolved type corresponding to the given type ID and returns it,
     /// if found.
     pub fn get_resolved_type(&self, id: &TypeId) -> Option<&RichType> {
-        for scope in self.stack.iter().rev() {
-            if let Some(resolved) = scope.get_resolved_type(id) {
-                return Some(resolved);
-            }
-        }
-
-        None
+        self.reverse_search_stack(|scope| scope.get_resolved_type(id))
     }
 
     /// Attempts to locate the resolved type corresponding to the given type ID and returns it,
     /// if found. Panics if the type is not found.
     pub fn must_get_resolved_type(&self, id: &TypeId) -> &RichType {
-        for scope in self.stack.iter().rev() {
-            if let Some(resolved) = scope.get_resolved_type(id) {
-                return resolved;
-            }
+        match self.reverse_search_stack(|scope| scope.get_resolved_type(id)) {
+            Some(typ) => typ,
+            None => panic!("type {} does not exist in the program context", id),
         }
-
-        panic!("type {} does not exist in the program context", id);
     }
 
     /// Returns the member function with name `name` on the type with ID `id`, if one exists.
@@ -500,50 +553,22 @@ impl ProgramContext {
     /// Attempts to locate the external function signature with the given name and returns it,
     /// if found.
     pub fn get_extern_fn(&self, name: &str) -> Option<&RichFnSig> {
-        // Search up the stack from the current scope.
-        for scope in self.stack.iter().rev() {
-            if let Some(sig) = scope.get_extern_fn(name) {
-                return Some(sig);
-            }
-        }
-
-        None
+        self.reverse_search_stack(|scope| scope.get_extern_fn(name))
     }
 
     /// Attempts to locate the function with the given name and returns it, if found.
     pub fn get_fn(&self, name: &str) -> Option<&RichFn> {
-        // Search up the stack from the current scope.
-        for scope in self.stack.iter().rev() {
-            if let Some(func) = scope.get_fn(name) {
-                return Some(func);
-            }
-        }
-
-        None
+        self.reverse_search_stack(|scope| scope.get_fn(name))
     }
 
     /// Attempts to locate the extern struct type with the given name and returns it, if found.
     pub fn get_extern_struct(&self, name: &str) -> Option<&StructType> {
-        // Search up the stack from the current scope.
-        for scope in self.stack.iter().rev() {
-            if let Some(s) = scope.get_extern_struct(name) {
-                return Some(s);
-            }
-        }
-
-        None
+        self.reverse_search_stack(|scope| scope.get_extern_struct(name))
     }
 
     /// Attempts to locate the extern enum type with the given name and returns it, if found.
     pub fn get_extern_enum(&self, name: &str) -> Option<&EnumType> {
-        // Search up the stack from the current scope.
-        for scope in self.stack.iter().rev() {
-            if let Some(e) = scope.get_extern_enum(name) {
-                return Some(e);
-            }
-        }
-
-        None
+        self.reverse_search_stack(|scope| scope.get_extern_enum(name))
     }
 
     /// Attempts to locate the un-analyzed spec with the given name.
@@ -553,26 +578,12 @@ impl ProgramContext {
 
     /// Attempts to locate the struct type with the given name and returns it, if found.
     pub fn get_struct(&self, name: &str) -> Option<&RichStructType> {
-        // Search up the stack from the current scope.
-        for scope in self.stack.iter().rev() {
-            if let Some(s) = scope.get_struct(name) {
-                return Some(s);
-            }
-        }
-
-        None
+        self.reverse_search_stack(|scope| scope.get_struct(name))
     }
 
     /// Attempts to locate the enum type with the given name and returns it, if found.
     pub fn get_enum(&self, name: &str) -> Option<&RichEnumType> {
-        // Search up the stack from the current scope.
-        for scope in self.stack.iter().rev() {
-            if let Some(s) = scope.get_enum(name) {
-                return Some(s);
-            }
-        }
-
-        None
+        self.reverse_search_stack(|scope| scope.get_enum(name))
     }
 
     /// Returns all extern structs in the program context.
@@ -601,14 +612,7 @@ impl ProgramContext {
 
     /// Attempts to locate the symbol with the given name and returns it, if found.
     pub fn get_symbol(&self, name: &str) -> Option<&ScopedSymbol> {
-        // Search up the stack from the current scope.
-        for scope in self.stack.iter().rev() {
-            if let Some(symbol) = scope.get_symbol(name) {
-                return Some(symbol);
-            }
-        }
-
-        None
+        self.reverse_search_stack(|scope| scope.get_symbol(name))
     }
 
     /// Returns the spec with the given name, or `None` if there is no such spec.
@@ -632,38 +636,34 @@ impl ProgramContext {
 
     /// Returns true if the current scope falls within a function body at any depth.
     pub fn is_in_fn(&self) -> bool {
-        // Search up the stack from the current scope to see if we are inside a function body.
-        for scope in self.stack.iter().rev() {
-            if scope.kind == ScopeKind::FnBody {
-                return true;
-            }
-        }
-
-        false
+        self.reverse_search_stack(|scope| match scope.kind == ScopeKind::FnBody {
+            true => Some(&()),
+            false => None,
+        })
+        .is_some()
     }
 
     /// Returns true if the current scope falls within a loop.
     pub fn is_in_loop(&self) -> bool {
-        for scope in self.stack.iter().rev() {
-            if scope.kind == ScopeKind::Loop {
-                return true;
-            } else if scope.kind == ScopeKind::FnBody {
-                return false;
-            }
-        }
-
-        false
+        self.reverse_search_stack_until(|scope| match scope.kind {
+            ScopeKind::Loop => (Some(()), true),
+            ScopeKind::FnBody => (None, true),
+            _ => (None, false),
+        })
+        .is_some()
     }
 
     /// Returns the return type ID of the current scope, or none if there is no return type.
     pub fn return_type(&self) -> &Option<TypeId> {
-        for scope in self.stack.iter().rev() {
-            if scope.kind == ScopeKind::FnBody {
-                return &scope.return_type;
-            }
-        }
+        let result = self.reverse_search_stack(|scope| match &scope.kind {
+            ScopeKind::FnBody => Some(&scope.return_type),
+            _ => None,
+        });
 
-        &None
+        match result {
+            Some(maybe_ret_type_id) => maybe_ret_type_id,
+            None => &None,
+        }
     }
 
     /// Sets the type ID that will correspond to the type `This`. In other words, after this is
@@ -711,34 +711,5 @@ impl ProgramContext {
         }
 
         statements
-    }
-
-    /// Adds templated types as resolved types to the current scope in the program context. This
-    /// should only be used when rendering templated statements. Returns all type mappings for
-    /// types in the current scope that were shadowed by template types.
-    pub fn add_template_types(
-        &mut self,
-        tmpl_params: &RichTmplParams,
-    ) -> HashMap<TypeId, Option<RichType>> {
-        let mut shadowed_type_mappings: HashMap<TypeId, Option<RichType>> = HashMap::new();
-        for param in &tmpl_params.params {
-            let param_type_id = param.get_type_id();
-            let templated_type = RichType::Templated(param.clone());
-            let maybe_shadowed_type = self.add_resolved_type(param_type_id.clone(), templated_type);
-            shadowed_type_mappings.insert(param_type_id, maybe_shadowed_type);
-        }
-
-        shadowed_type_mappings
-    }
-
-    /// Updates the current scope in the program context with the given type mappings. Any type ID
-    /// in `mappings` that maps to `None` will be removed from this program context's type mappings.
-    pub fn restore_type_mappings(&mut self, mappings: HashMap<TypeId, Option<RichType>>) {
-        for (type_id, maybe_shadowed_type) in mappings {
-            match maybe_shadowed_type {
-                Some(shadowed_type) => self.add_resolved_type(type_id, shadowed_type),
-                None => self.remove_resolved_type(&type_id),
-            };
-        }
     }
 }

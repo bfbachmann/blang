@@ -9,8 +9,8 @@ if ("env.nu" | path exists) {
 
 # Runs all unit and end-to-end tests.
 def test [] {
-    unittest
-    e2etest
+    test unit
+    test e2e
 }
 
 # Runs unit tests.

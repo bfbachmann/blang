@@ -156,7 +156,8 @@ impl RichClosure {
     }
 }
 
-/// Checks that the given closure returns the given type.
+/// Checks that the given closure returns the given type. If there is an error, it will be added
+/// to the program context.
 pub fn check_closure_returns(
     ctx: &mut ProgramContext,
     closure: &RichClosure,
@@ -175,7 +176,7 @@ pub fn check_closure_returns(
     match kind {
         // If this closure is a function body, branch body, or inline closure, we need to ensure
         // that the final statement satisfies the return conditions.
-        ScopeKind::FnBody | ScopeKind::Branch | ScopeKind::Inline => {
+        ScopeKind::FnBody | ScopeKind::Branch | ScopeKind::Inline | ScopeKind::Tmpl => {
             match closure.statements.last() {
                 // If it's a return, we're done checking. We don't need to validate the return
                 // itself because return statements are validated in `RichRet::from`.
