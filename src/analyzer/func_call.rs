@@ -81,6 +81,15 @@ impl RichFnCall {
             .unwrap()
             .clone();
 
+        // If the function symbol failed analysis, we can return early.
+        if var_type.is_unknown() {
+            return RichFnCall {
+                fn_symbol: rich_fn_symbol,
+                args: vec![],
+                maybe_ret_type_id: Some(TypeId::unknown()),
+            };
+        }
+
         // Try to locate the function signature for this function call. If it's a call to a type
         // member function, we'll look up the function using the type ID. Otherwise, we just extract
         // the function signature from the variable type, as it should be a function type.
@@ -246,7 +255,7 @@ impl RichFnCall {
             match ctx.get_type_member_fn(&rich_fn_symbol.parent_type_id, method_name.as_str()) {
                 Some(fn_sig) => Ok(fn_sig),
                 None => Err(AnalyzeError::new(
-                    ErrorKind::MismatchedTypes,
+                    ErrorKind::MemberNotDefined,
                     format_code!(
                         "type {} has no member function {}",
                         rich_fn_symbol.name,

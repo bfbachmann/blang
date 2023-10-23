@@ -93,6 +93,9 @@ pub struct Scope {
     resolved_types: HashMap<TypeId, RichType>,
     kind: ScopeKind,
     return_type: Option<TypeId>,
+    /// Tracks type IDs that should be remapped before being resolved to concrete types. This is
+    /// used for type replacement in templated types and functions.
+    remapped_type_ids: HashMap<TypeId, TypeId>,
 }
 
 impl Scope {
@@ -119,6 +122,7 @@ impl Scope {
             resolved_types: HashMap::new(),
             kind,
             return_type,
+            remapped_type_ids: HashMap::new(),
         }
     }
 
@@ -141,6 +145,7 @@ impl Scope {
             resolved_types,
             kind: ScopeKind::Tmpl,
             return_type,
+            remapped_type_ids: HashMap::new(),
         }
     }
 
@@ -220,6 +225,11 @@ impl Scope {
         self.symbols.insert(symbol.name.clone(), symbol)
     }
 
+    /// Adds a mapping from `src_type_id` to `dst_type_id`.
+    fn add_remapped_type_id(&mut self, src_type_id: TypeId, dst_type_id: TypeId) {
+        self.remapped_type_ids.insert(src_type_id, dst_type_id);
+    }
+
     // Returns the invalid type with the given name from the scope, if it exists.
     fn get_invalid_type(&self, name: &str) -> Option<&String> {
         self.invalid_types.get(name)
@@ -272,6 +282,11 @@ impl Scope {
     fn get_symbol(&self, name: &str) -> Option<&ScopedSymbol> {
         self.symbols.get(name)
     }
+
+    /// Attempts to locate the remapped type ID corresponding to `src_type_id`.
+    fn get_remapped_type_id(&self, src_type_id: &TypeId) -> Option<&TypeId> {
+        self.remapped_type_ids.get(src_type_id)
+    }
 }
 
 /// Represents the current program stack and analysis state.
@@ -290,6 +305,9 @@ pub struct ProgramContext {
     specs: HashMap<String, RichSpec>,
     templated_fns: HashMap<String, Function>,
     rendered_fns: Vec<RichFn>,
+    /// Tracks the indices of all the scopes with `ScopeKind::Tmpl`. This is just used to make
+    /// finding and accessing template scopes fast and easy.
+    tmpl_scope_indices: Vec<usize>,
 }
 
 impl ProgramContext {
@@ -314,6 +332,7 @@ impl ProgramContext {
             specs: HashMap::new(),
             templated_fns: HashMap::new(),
             rendered_fns: vec![],
+            tmpl_scope_indices: vec![],
         }
     }
 
@@ -360,6 +379,37 @@ impl ProgramContext {
         }
 
         None
+    }
+
+    /// Gets the current template scope from the stack.
+    fn get_cur_tmpl_scope(&self) -> Option<&Scope> {
+        if let Some(index) = self.tmpl_scope_indices.last() {
+            return self.stack.get(*index);
+        }
+
+        None
+    }
+
+    /// Gets a mutable reference to the current template scope from the stack.
+    fn get_cur_tmpl_scope_mut(&mut self) -> Option<&mut Scope> {
+        if let Some(index) = self.tmpl_scope_indices.last() {
+            return self.stack.get_mut(*index);
+        }
+
+        None
+    }
+
+    /// Remaps `src_type_id` to a new type ID if it should be remapped (based on whether there is
+    /// a template scope in the stack that remaps `src_type_id`. Returns `src_type_id` if the type
+    /// ID doesn't need to be remapped.
+    fn maybe_remap_type_id<'a>(&'a self, src_type_id: &'a TypeId) -> &TypeId {
+        if let Some(scope) = self.get_cur_tmpl_scope() {
+            if let Some(new_type_id) = scope.get_remapped_type_id(src_type_id) {
+                return new_type_id;
+            }
+        }
+
+        src_type_id
     }
 
     /// Returns all type mappings store in the program context.
@@ -524,12 +574,14 @@ impl ProgramContext {
     /// Attempts to locate the resolved type corresponding to the given type ID and returns it,
     /// if found.
     pub fn get_resolved_type(&self, id: &TypeId) -> Option<&RichType> {
+        let id = self.maybe_remap_type_id(id);
         self.reverse_search_stack(|scope| scope.get_resolved_type(id))
     }
 
     /// Attempts to locate the resolved type corresponding to the given type ID and returns it,
     /// if found. Panics if the type is not found.
     pub fn must_get_resolved_type(&self, id: &TypeId) -> &RichType {
+        let id = self.maybe_remap_type_id(id);
         match self.reverse_search_stack(|scope| scope.get_resolved_type(id)) {
             Some(typ) => typ,
             None => panic!("type {} does not exist in the program context", id),
@@ -538,6 +590,7 @@ impl ProgramContext {
 
     /// Returns the member function with name `name` on the type with ID `id`, if one exists.
     pub fn get_type_member_fn(&self, id: &TypeId, name: &str) -> Option<&RichFnSig> {
+        let id = self.maybe_remap_type_id(id);
         match self.type_member_fn_sigs.get(id) {
             Some(member_fns) => member_fns.get(name),
             None => None,
@@ -547,6 +600,7 @@ impl ProgramContext {
     /// Returns the mapping from member function name to member function signature for all member
     /// functions corresponding to the given type ID.
     pub fn get_type_member_fns(&self, id: &TypeId) -> Option<&HashMap<String, RichFnSig>> {
+        let id = self.maybe_remap_type_id(id);
         self.type_member_fn_sigs.get(id)
     }
 
@@ -622,6 +676,11 @@ impl ProgramContext {
 
     /// Adds the given scope to the top of the stack.
     pub fn push_scope(&mut self, scope: Scope) {
+        // Push the new template scope index onto the index stack so we can find with easily.
+        if scope.kind == ScopeKind::Tmpl {
+            self.tmpl_scope_indices.push(self.stack.len());
+        }
+
         self.stack.push_back(scope);
     }
 
@@ -629,6 +688,12 @@ impl ProgramContext {
     /// context.
     pub fn pop_scope(&mut self) {
         let scope = self.stack.pop_back().unwrap();
+
+        // If the scope was a template scope, we need to pop its index from the index stack since
+        // it can no longer be found.
+        if scope.kind == ScopeKind::Tmpl {
+            self.tmpl_scope_indices.pop();
+        }
 
         // Copy all types from the scope into the program context. We'll need them later.
         self.types.extend(scope.resolved_types);
@@ -711,5 +776,13 @@ impl ProgramContext {
         }
 
         statements
+    }
+
+    /// Remaps type ID `src_type_id` to `dst_type_id` in the program context so that every time
+    /// any method on the program context sees `src_type_id`, it is translated into `dst_type_id`
+    /// before it is used by the program context to look up other program info.
+    pub fn add_type_id_remapping(&mut self, src_type_id: TypeId, dst_type_id: TypeId) {
+        let scope = self.get_cur_tmpl_scope_mut().unwrap();
+        scope.add_remapped_type_id(src_type_id, dst_type_id);
     }
 }

@@ -617,4 +617,30 @@ mod tests {
         "#,
         )
     }
+
+    #[test]
+    fn tmpl_param_type_remap() {
+        assert_compiles(
+            r#"
+            impl i64 {
+                fn zero() ~ i64 {
+                    return 0
+                }
+            }
+            
+            spec Zero {
+                fn zero() ~ i64
+            }
+            
+            fn is_zero_value(v: T) ~ bool
+            with [T: Zero] {
+                return v == T.zero()
+            }
+            
+            fn main() {
+                is_zero_value(0)
+            }
+        "#,
+        )
+    }
 }

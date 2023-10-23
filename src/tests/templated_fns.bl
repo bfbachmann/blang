@@ -53,6 +53,21 @@ with [T: Task]
 
 fn do_nothing(a: T, b: T) with [T] {}
 
+impl i64 {
+    fn zero() ~ i64 {
+        return 0
+    }
+}
+
+spec Zero {
+    fn zero() ~ i64
+}
+
+fn is_zero_value(v: T) ~ bool
+with [T: Zero] {
+    return v == T.zero()
+}
+
 fn main() {
     // Check that template parameters work in place of concrete types.
     {
@@ -71,6 +86,12 @@ fn main() {
     {
         do_nothing(1, 2)
         do_nothing("another", "test")
+    }
+
+    // Check that we can use templated methods that call type member functions
+    // on our templated types.
+    {
+        assert(is_zero_value(0), 4)
     }
 
     exit(0)

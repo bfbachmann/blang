@@ -32,10 +32,10 @@ impl RichFn {
     pub fn from(ctx: &mut ProgramContext, func: Function) -> Self {
         let signature = RichFnSig::from(ctx, &func.signature);
 
-        // Avoid any further analysis if the function is templated. Templated functions will be
-        // rendered and analyzed when we analyze statements or expressions where they're used. This
-        // way, we can use information from the context in which they're used to render and check
-        // templated values.
+        // If this is a templated function, we'll define
+        // Templated functions will be rendered and analyzed when we analyze statements or
+        // expressions where they're used. This way, we can use information from the context in
+        // which they're used to render and check templated values.
         if func.signature.tmpl_params.is_some() {
             return RichFn {
                 signature,
@@ -109,13 +109,19 @@ fn render_fn(
             match resolve_param_type(ctx, sig, passed_args, &param, &remapped_type_ids) {
                 Ok(new_type_id) => {
                     let param_type_id = param.get_type_id();
-                    remapped_type_ids.insert(param_type_id.clone(), new_type_id.clone())
+                    remapped_type_ids.insert(param_type_id.clone(), new_type_id.clone());
                 }
                 Err(err) => {
                     return Err(err);
                 }
             };
         }
+    }
+
+    // Add the remapped type IDs to the program context so they're also remapped during any
+    // type lookups that occur during function analysis.
+    for (src_id, dst_id) in &remapped_type_ids {
+        ctx.add_type_id_remapping(src_id.clone(), dst_id.clone());
     }
 
     // Check that the values passed as function arguments have the right types.
