@@ -54,16 +54,14 @@ impl TypeId {
         TypeId { typ: Type::i64() }
     }
 
-    /// Returns the type ID for the `unsafeptr` type.
-    pub fn unsafeptr() -> Self {
-        TypeId {
-            typ: Type::unsafeptr(),
-        }
+    /// Returns the type ID for the `ptr` type.
+    pub fn ptr() -> Self {
+        TypeId { typ: Type::ptr() }
     }
 
-    /// Returns the type ID for the `usize` type.
-    pub fn usize() -> Self {
-        TypeId { typ: Type::usize() }
+    /// Returns the type ID for the `u64` type.
+    pub fn u64() -> Self {
+        TypeId { typ: Type::u64() }
     }
 
     /// Returns the type ID for the `str` type.
@@ -104,9 +102,9 @@ pub enum RichType {
     I64,
     /// These are pointers that are not garbage collected and allow pointer arithmetic.
     /// This type translates directly to `void *` in C.
-    UnsafePtr,
+    Ptr,
     /// Represents a pointer-sized unsigned integer.
-    USize,
+    U64,
     Struct(RichStructType),
     Enum(RichEnumType),
     Tuple(RichTupleType),
@@ -123,8 +121,8 @@ impl Display for RichType {
             RichType::Bool => write!(f, "bool"),
             RichType::Str => write!(f, "str"),
             RichType::I64 => write!(f, "i64"),
-            RichType::USize => write!(f, "usize"),
-            RichType::UnsafePtr => write!(f, "unsafeptr"),
+            RichType::U64 => write!(f, "u64"),
+            RichType::Ptr => write!(f, "ptr"),
             RichType::Struct(s) => write!(f, "{}", s),
             RichType::Enum(e) => write!(f, "{}", e),
             RichType::Tuple(t) => write!(f, "{}", t),
@@ -141,8 +139,8 @@ impl PartialEq for RichType {
             (RichType::Bool, RichType::Bool)
             | (RichType::I64, RichType::I64)
             | (RichType::Str, RichType::Str)
-            | (RichType::UnsafePtr, RichType::UnsafePtr)
-            | (RichType::USize, RichType::USize) => true,
+            | (RichType::Ptr, RichType::Ptr)
+            | (RichType::U64, RichType::U64) => true,
             (RichType::Struct(s1), RichType::Struct(s2)) => s1 == s2,
             (RichType::Enum(e1), RichType::Enum(e2)) => e1 == e2,
             (RichType::Tuple(t1), RichType::Tuple(t2)) => t1 == t2,
@@ -245,9 +243,9 @@ impl RichType {
 
             Type::I64(_) => RichType::I64,
 
-            Type::UnsafePtr(_) => RichType::UnsafePtr,
+            Type::Ptr(_) => RichType::Ptr,
 
-            Type::USize(_) => RichType::USize,
+            Type::U64(_) => RichType::U64,
 
             Type::Bool(_) => RichType::Bool,
 
@@ -280,7 +278,7 @@ impl RichType {
     /// Returns true if `name` matches a primitive type name.
     pub fn is_primitive_type_name(name: &str) -> bool {
         // TODO: make this static
-        HashSet::from(["bool", "i64", "str", "unsafeptr", "usize"]).contains(name)
+        HashSet::from(["bool", "i64", "str", "ptr", "u64"]).contains(name)
     }
 
     /// Returns a mapping from primitive type ID to analyzed primitive type.
@@ -290,8 +288,8 @@ impl RichType {
             (TypeId::bool(), RichType::Bool),
             (TypeId::i64(), RichType::I64),
             (TypeId::str(), RichType::Str),
-            (TypeId::unsafeptr(), RichType::UnsafePtr),
-            (TypeId::usize(), RichType::USize),
+            (TypeId::ptr(), RichType::Ptr),
+            (TypeId::u64(), RichType::U64),
             (
                 TypeId::unknown(),
                 RichType::Unknown("<unknown>".to_string()),
@@ -359,8 +357,8 @@ impl RichType {
         return match self {
             RichType::Bool
             | RichType::I64
-            | RichType::UnsafePtr
-            | RichType::USize
+            | RichType::Ptr
+            | RichType::U64
             | RichType::Str
             | RichType::Function(_)
             | RichType::Templated(_)
@@ -427,8 +425,8 @@ impl RichType {
             RichType::I64 => true,
             RichType::Bool
             | RichType::Str
-            | RichType::UnsafePtr
-            | RichType::USize
+            | RichType::Ptr
+            | RichType::U64
             | RichType::Struct(_)
             | RichType::Enum(_)
             | RichType::Tuple(_)
@@ -446,8 +444,8 @@ impl RichType {
 
             // All of the following types are 64 bits (8 bytes).
             RichType::I64
-            | RichType::UnsafePtr
-            | RichType::USize
+            | RichType::Ptr
+            | RichType::U64
             | RichType::Function(_)
             | RichType::Str => 8,
 
@@ -558,8 +556,8 @@ pub fn check_type_containment(
         | Type::Str(_)
         | Type::Bool(_)
         | Type::Function(_)
-        | Type::UnsafePtr(_)
-        | Type::USize(_) => {}
+        | Type::Ptr(_)
+        | Type::U64(_) => {}
     }
 
     Ok(())
@@ -626,6 +624,7 @@ mod tests {
         assert_eq!(RichType::Bool, RichType::Bool);
         assert_eq!(RichType::Str, RichType::Str);
         assert_eq!(RichType::I64, RichType::I64);
+        assert_eq!(RichType::U64, RichType::U64);
         assert_eq!(
             RichType::Struct(RichStructType {
                 name: "asdf".to_string(),

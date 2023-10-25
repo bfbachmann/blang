@@ -6,33 +6,33 @@ use crate::locatable_impl;
 /// Represents a raw pointer that is not automatically garbage collected and allows pointer
 /// arithmetic. This type translates directly to `void *` in C.
 #[derive(Debug, Clone, Eq)]
-pub struct UnsafePtrType {
+pub struct PtrType {
     start_pos: Position,
     end_pos: Position,
 }
 
-impl PartialEq for UnsafePtrType {
+impl PartialEq for PtrType {
     fn eq(&self, _other: &Self) -> bool {
-        // Two unsafeptr types are always considered equal.
+        // Two ptr types are always considered equal.
         true
     }
 }
 
-impl Hash for UnsafePtrType {
+impl Hash for PtrType {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        "unsafeptr".hash(state);
+        "ptr".hash(state);
     }
 }
 
-locatable_impl!(UnsafePtrType);
+locatable_impl!(PtrType);
 
-impl UnsafePtrType {
+impl PtrType {
     pub fn new(start_pos: Position, end_pos: Position) -> Self {
-        UnsafePtrType { start_pos, end_pos }
+        PtrType { start_pos, end_pos }
     }
 
     pub fn default() -> Self {
-        UnsafePtrType {
+        PtrType {
             start_pos: Default::default(),
             end_pos: Default::default(),
         }

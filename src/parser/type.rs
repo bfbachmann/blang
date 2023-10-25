@@ -11,14 +11,14 @@ use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::i64::I64Type;
+use crate::parser::ptr::PtrType;
 use crate::parser::r#enum::EnumType;
 use crate::parser::r#struct::StructType;
 use crate::parser::str::StrType;
 use crate::parser::stream::Stream;
 use crate::parser::tuple::TupleType;
+use crate::parser::u64::U64Type;
 use crate::parser::unresolved::UnresolvedType;
-use crate::parser::unsafeptr::UnsafePtrType;
-use crate::parser::usize::USizeType;
 
 /// Represents a type referenced in a program.
 #[derive(Debug, Clone, Hash, Eq)]
@@ -26,8 +26,8 @@ pub enum Type {
     Bool(BoolType),
     Str(StrType),
     I64(I64Type),
-    UnsafePtr(UnsafePtrType),
-    USize(USizeType),
+    Ptr(PtrType),
+    U64(U64Type),
     Struct(StructType),
     // TODO: Remove? This only needs to exist here if enums can be declared inline like structs.
     #[allow(dead_code)]
@@ -45,8 +45,8 @@ impl PartialEq for Type {
             (Type::Bool(_), Type::Bool(_))
             | (Type::Str(_), Type::Str(_))
             | (Type::I64(_), Type::I64(_))
-            | (Type::UnsafePtr(_), Type::UnsafePtr(_))
-            | (Type::USize(_), Type::USize(_))
+            | (Type::Ptr(_), Type::Ptr(_))
+            | (Type::U64(_), Type::U64(_))
             | (Type::This(_), Type::This(_)) => true,
             (Type::Function(f1), Type::Function(f2)) => {
                 if f1.args.len() != f2.args.len() {
@@ -77,8 +77,8 @@ impl fmt::Display for Type {
             Type::Bool(_) => write!(f, "bool"),
             Type::Str(_) => write!(f, "str"),
             Type::I64(_) => write!(f, "i64"),
-            Type::UnsafePtr(_) => write!(f, "unsafeptr"),
-            Type::USize(_) => write!(f, "usize"),
+            Type::Ptr(_) => write!(f, "ptr"),
+            Type::U64(_) => write!(f, "u64"),
             Type::Function(fn_sig) => write!(f, "{}", fn_sig),
             Type::Struct(s) => write!(f, "{}", s),
             Type::Enum(s) => write!(f, "{}", s),
@@ -95,8 +95,8 @@ impl Locatable for Type {
             Type::Bool(bool_type) => bool_type.start_pos(),
             Type::Str(string_type) => string_type.start_pos(),
             Type::I64(i64_type) => i64_type.start_pos(),
-            Type::UnsafePtr(uptr) => uptr.start_pos(),
-            Type::USize(usz) => usz.start_pos(),
+            Type::Ptr(uptr) => uptr.start_pos(),
+            Type::U64(u) => u.start_pos(),
             Type::Struct(struct_type) => struct_type.start_pos(),
             Type::Enum(enum_type) => enum_type.start_pos(),
             Type::Tuple(tuple_type) => tuple_type.start_pos(),
@@ -111,8 +111,8 @@ impl Locatable for Type {
             Type::Bool(bool_type) => bool_type.end_pos(),
             Type::Str(string_type) => string_type.end_pos(),
             Type::I64(i64_type) => i64_type.end_pos(),
-            Type::UnsafePtr(uptr) => uptr.end_pos(),
-            Type::USize(usz) => usz.end_pos(),
+            Type::Ptr(uptr) => uptr.end_pos(),
+            Type::U64(u) => u.end_pos(),
             Type::Struct(struct_type) => struct_type.end_pos(),
             Type::Enum(enum_type) => enum_type.end_pos(),
             Type::Tuple(tuple_type) => tuple_type.end_pos(),
@@ -163,8 +163,8 @@ impl Type {
                 "i64" => Ok(Type::I64(I64Type::new(token.start, token.end))),
                 "bool" => Ok(Type::Bool(BoolType::new(token.start, token.end))),
                 "str" => Ok(Type::Str(StrType::new(token.start, token.end))),
-                "usize" => Ok(Type::USize(USizeType::new(token.start, token.end))),
-                "unsafeptr" => Ok(Type::UnsafePtr(UnsafePtrType::new(token.start, token.end))),
+                "u64" => Ok(Type::U64(U64Type::new(token.start, token.end))),
+                "ptr" => Ok(Type::Ptr(PtrType::new(token.start, token.end))),
                 _ => Ok(Type::Unresolved(UnresolvedType::new(
                     type_name.as_str(),
                     token.start,
@@ -199,14 +199,14 @@ impl Type {
         Type::I64(I64Type::default())
     }
 
-    /// Returns a new unsafeptr type.
-    pub fn unsafeptr() -> Self {
-        Type::UnsafePtr(UnsafePtrType::default())
+    /// Returns a new ptr type.
+    pub fn ptr() -> Self {
+        Type::Ptr(PtrType::default())
     }
 
-    /// Returns a new usize type.
-    pub fn usize() -> Self {
-        Type::USize(USizeType::default())
+    /// Returns a new u64 type.
+    pub fn u64() -> Self {
+        Type::U64(U64Type::default())
     }
 
     /// Returns a default bool type.

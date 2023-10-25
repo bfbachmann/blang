@@ -925,13 +925,13 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 .const_int(*i as u64, *i < 0)
                 .as_basic_value_enum(),
 
-            RichExprKind::USizeLiteral(u) => self
+            RichExprKind::U64Literal(u) => self
                 .ctx
                 .i64_type()
                 .const_int(*u, false)
                 .as_basic_value_enum(),
 
-            RichExprKind::UnsafeNull => self
+            RichExprKind::Null => self
                 .ctx
                 .i64_type()
                 .ptr_type(AddressSpace::default())
@@ -1403,9 +1403,9 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             | RichType::Struct(_)
             | RichType::Enum(_)
             | RichType::Tuple(_)
-            | RichType::UnsafePtr => ll_val,
+            | RichType::Ptr => ll_val,
 
-            RichType::I64 | RichType::USize => self.get_int(ll_val).as_basic_value_enum(),
+            RichType::I64 | RichType::U64 => self.get_int(ll_val).as_basic_value_enum(),
 
             RichType::Bool => self.get_bool(ll_val).as_basic_value_enum(),
 

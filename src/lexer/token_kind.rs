@@ -33,7 +33,8 @@ pub enum TokenKind {
     // Built-in/primitive types and values
     BoolLiteral(bool),
     I64Literal(i64),
-    UnsafeNull,
+    U64Literal(u64),
+    Null,
     StrLiteral(String),
     Fn,
     Struct,
@@ -99,7 +100,8 @@ impl Clone for TokenKind {
             TokenKind::LessThanOrEqual => TokenKind::LessThanOrEqual,
             TokenKind::BoolLiteral(v) => TokenKind::BoolLiteral(*v),
             TokenKind::I64Literal(v) => TokenKind::I64Literal(*v),
-            TokenKind::UnsafeNull => TokenKind::UnsafeNull,
+            TokenKind::U64Literal(v) => TokenKind::U64Literal(*v),
+            TokenKind::Null => TokenKind::Null,
             TokenKind::StrLiteral(v) => TokenKind::StrLiteral(v.clone()),
             TokenKind::Fn => TokenKind::Fn,
             TokenKind::Struct => TokenKind::Struct,
@@ -146,6 +148,7 @@ impl fmt::Display for TokenKind {
         match self {
             TokenKind::BoolLiteral(b) => write!(f, "{}", b),
             TokenKind::I64Literal(i) => write!(f, "{}", i),
+            TokenKind::U64Literal(u) => write!(f, "{}", u),
             TokenKind::StrLiteral(s) => write!(f, r#""{}""#, s),
             TokenKind::Identifier(s) => write!(f, "{}", s),
             other => write!(f, "{}", other.to_string()),
@@ -173,7 +176,8 @@ impl TokenKind {
             TokenKind::LessThanOrEqual => "<=".to_string(),
             TokenKind::BoolLiteral(v) => v.to_string(),
             TokenKind::I64Literal(v) => v.to_string(),
-            TokenKind::UnsafeNull => "UNSAFE_NULL".to_string(),
+            TokenKind::U64Literal(v) => v.to_string(),
+            TokenKind::Null => "NULL".to_string(),
             TokenKind::StrLiteral(v) => v.to_string(),
             TokenKind::Fn => "fn".to_string(),
             TokenKind::Struct => "struct".to_string(),
@@ -254,7 +258,7 @@ impl TokenKind {
             (TokenKind::LogicalOr.to_string(), TokenKind::LogicalOr),
             (TokenKind::LogicalNot.to_string(), TokenKind::LogicalNot),
             (TokenKind::Equal.to_string(), TokenKind::Equal),
-            (TokenKind::UnsafeNull.to_string(), TokenKind::UnsafeNull),
+            (TokenKind::Null.to_string(), TokenKind::Null),
             (TokenKind::EqualTo.to_string(), TokenKind::EqualTo),
             (TokenKind::NotEqualTo.to_string(), TokenKind::NotEqualTo),
             (TokenKind::GreaterThan.to_string(), TokenKind::GreaterThan),
@@ -325,6 +329,10 @@ impl TokenKind {
             return Some(v);
         }
 
+        if let Some(v) = TokenKind::lex_u64_literal(segment) {
+            return Some(v);
+        }
+
         if let Some(v) = TokenKind::lex_string_literal(segment) {
             return Some(v);
         }
@@ -359,6 +367,26 @@ impl TokenKind {
         };
         match stripped.parse::<i64>() {
             Ok(i) => Some(TokenKind::I64Literal(i)),
+            Err(_) => None,
+        }
+    }
+
+    fn lex_u64_literal(segment: &str) -> Option<TokenKind> {
+        // If the segment starts with `_`, it can't be a u64. We're doing this check here because
+        // `_` will be stripped below.
+        if segment.starts_with("_") {
+            return None;
+        }
+
+        // Remove all `_` and the optional trailing `u64` from the segment. If what is left is an
+        // integer, the segment is a valid u64 literal.
+        let segment = segment.replace("_", "");
+        let stripped = match segment.strip_suffix("u64") {
+            Some(seg) => seg.to_string(),
+            None => segment.to_string(),
+        };
+        match stripped.parse::<u64>() {
+            Ok(i) => Some(TokenKind::U64Literal(i)),
             Err(_) => None,
         }
     }

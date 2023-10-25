@@ -5,33 +5,33 @@ use crate::locatable_impl;
 
 /// Represents a pointer-sized unsigned integer.
 #[derive(Debug, Clone, Eq)]
-pub struct USizeType {
+pub struct U64Type {
     start_pos: Position,
     end_pos: Position,
 }
 
-impl PartialEq for USizeType {
+impl PartialEq for U64Type {
     fn eq(&self, _other: &Self) -> bool {
-        // Two usize types are always considered equal.
+        // Two u64 types are always considered equal.
         true
     }
 }
 
-impl Hash for USizeType {
+impl Hash for U64Type {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        "usize".hash(state);
+        "u64".hash(state);
     }
 }
 
-locatable_impl!(USizeType);
+locatable_impl!(U64Type);
 
-impl USizeType {
+impl U64Type {
     pub fn new(start_pos: Position, end_pos: Position) -> Self {
-        USizeType { start_pos, end_pos }
+        U64Type { start_pos, end_pos }
     }
 
     pub fn default() -> Self {
-        USizeType {
+        U64Type {
             start_pos: Default::default(),
             end_pos: Default::default(),
         }

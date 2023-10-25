@@ -12,6 +12,7 @@ use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
 use crate::parser::i64_lit::I64Lit;
+use crate::parser::null::Null;
 use crate::parser::op::Operator;
 use crate::parser::program::Program;
 use crate::parser::r#enum::EnumVariantInit;
@@ -21,7 +22,7 @@ use crate::parser::str_lit::StrLit;
 use crate::parser::stream::Stream;
 use crate::parser::symbol::Symbol;
 use crate::parser::tuple::TupleInit;
-use crate::parser::unsafe_null::UnsafeNull;
+use crate::parser::u64_lit::U64Lit;
 
 #[derive(Debug)]
 enum OutputNode {
@@ -47,7 +48,8 @@ pub enum Expression {
     Symbol(Symbol),
     BoolLiteral(BoolLit),
     I64Literal(I64Lit),
-    UnsafeNull(UnsafeNull),
+    U64Literal(U64Lit),
+    Null(Null),
     StrLiteral(StrLit),
     FunctionCall(FunctionCall),
     AnonFunction(Box<Function>),
@@ -67,7 +69,8 @@ impl fmt::Display for Expression {
             Expression::Symbol(s) => write!(f, "{}", s),
             Expression::BoolLiteral(b) => write!(f, "{}", b),
             Expression::I64Literal(i) => write!(f, "{}", i),
-            Expression::UnsafeNull(unsafe_null) => write!(f, "{}", unsafe_null),
+            Expression::U64Literal(i) => write!(f, "{}", i),
+            Expression::Null(null) => write!(f, "{}", null),
             Expression::StrLiteral(s) => write!(f, "{}", s),
             Expression::FunctionCall(chain) => write!(f, "{}", chain),
             Expression::AnonFunction(func) => write!(f, "{}", func),
@@ -97,7 +100,8 @@ impl Locatable for Expression {
             Expression::Symbol(sym) => sym.start_pos(),
             Expression::BoolLiteral(bool_lit) => bool_lit.start_pos(),
             Expression::I64Literal(i64_lit) => i64_lit.start_pos(),
-            Expression::UnsafeNull(unsafe_null) => unsafe_null.start_pos(),
+            Expression::U64Literal(u64_lit) => u64_lit.start_pos(),
+            Expression::Null(null) => null.start_pos(),
             Expression::StrLiteral(string_lit) => string_lit.start_pos(),
             Expression::FunctionCall(fn_call) => fn_call.start_pos(),
             Expression::AnonFunction(func) => func.start_pos(),
@@ -115,7 +119,8 @@ impl Locatable for Expression {
             Expression::Symbol(sym) => sym.end_pos(),
             Expression::BoolLiteral(bool_lit) => bool_lit.end_pos(),
             Expression::I64Literal(i64_lit) => i64_lit.end_pos(),
-            Expression::UnsafeNull(unsafe_null) => unsafe_null.end_pos(),
+            Expression::U64Literal(u64_lit) => u64_lit.end_pos(),
+            Expression::Null(null) => null.end_pos(),
             Expression::StrLiteral(string_lit) => string_lit.end_pos(),
             Expression::FunctionCall(fn_call) => fn_call.end_pos(),
             Expression::AnonFunction(func) => func.end_pos(),
@@ -257,6 +262,15 @@ impl Expression {
                 Ok(Some(Expression::I64Literal(i64_lit)))
             }
 
+            // Check if it's an unsigned integer literal.
+            Some(Token {
+                kind: TokenKind::U64Literal(_),
+                ..
+            }) => {
+                let u64_lit = U64Lit::from(tokens)?;
+                Ok(Some(Expression::U64Literal(u64_lit)))
+            }
+
             // Check if it's a str literal.
             Some(Token {
                 kind: TokenKind::StrLiteral(_),
@@ -268,11 +282,11 @@ impl Expression {
 
             // Check if it's an unsafe null value.
             Some(Token {
-                kind: TokenKind::UnsafeNull,
+                kind: TokenKind::Null,
                 ..
             }) => {
-                let unsafe_null = UnsafeNull::from(tokens)?;
-                Ok(Some(Expression::UnsafeNull(unsafe_null)))
+                let null = Null::from(tokens)?;
+                Ok(Some(Expression::Null(null)))
             }
 
             // Check if it's a `sizeof <type>` expression.

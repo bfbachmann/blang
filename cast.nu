@@ -20,7 +20,6 @@ def "test unit" [] {
 
 # Runs end-to-end tests.
 def "test e2e" [] {
-    mkdir src/tests/bin
     ls src/tests | find .bl | get name | ansi strip | par-each {|src_file|
         let exit_code = run $src_file
         if $exit_code == 0 {

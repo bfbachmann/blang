@@ -27,8 +27,8 @@ pub enum RichExprKind {
     Symbol(RichSymbol),
     BoolLiteral(bool),
     I64Literal(i64),
-    UnsafeNull,
-    USizeLiteral(u64),
+    U64Literal(u64),
+    Null,
     StrLiteral(String),
     StructInit(RichStructInit),
     EnumInit(RichEnumVariantInit),
@@ -46,8 +46,8 @@ impl fmt::Display for RichExprKind {
             RichExprKind::Symbol(sym) => write!(f, "{}", sym),
             RichExprKind::BoolLiteral(b) => write!(f, "{}", b),
             RichExprKind::I64Literal(i) => write!(f, "{}", i),
-            RichExprKind::UnsafeNull => write!(f, "unsafe_null"),
-            RichExprKind::USizeLiteral(usz) => write!(f, "{}", usz),
+            RichExprKind::U64Literal(i) => write!(f, "{}", i),
+            RichExprKind::Null => write!(f, "null"),
             RichExprKind::StrLiteral(s) => write!(f, "{}", s),
             RichExprKind::StructInit(s) => write!(f, "{}", s),
             RichExprKind::EnumInit(e) => write!(f, "{}", e),
@@ -71,7 +71,8 @@ impl PartialEq for RichExprKind {
             (RichExprKind::Symbol(v1), RichExprKind::Symbol(v2)) => v1 == v2,
             (RichExprKind::BoolLiteral(b1), RichExprKind::BoolLiteral(b2)) => b1 == b2,
             (RichExprKind::I64Literal(i1), RichExprKind::I64Literal(i2)) => i1 == i2,
-            (RichExprKind::UnsafeNull, RichExprKind::UnsafeNull) => true,
+            (RichExprKind::U64Literal(i1), RichExprKind::U64Literal(i2)) => i1 == i2,
+            (RichExprKind::Null, RichExprKind::Null) => true,
             (RichExprKind::StrLiteral(s1), RichExprKind::StrLiteral(s2)) => s1 == s2,
             (RichExprKind::StructInit(s1), RichExprKind::StructInit(s2)) => s1 == s2,
             (RichExprKind::EnumInit(e1), RichExprKind::EnumInit(e2)) => e1 == e2,
@@ -98,8 +99,8 @@ impl RichExprKind {
             // Primitive literals are valid constants.
             RichExprKind::BoolLiteral(_)
             | RichExprKind::I64Literal(_)
-            | RichExprKind::UnsafeNull
-            | RichExprKind::USizeLiteral(_)
+            | RichExprKind::Null
+            | RichExprKind::U64Literal(_)
             | RichExprKind::StrLiteral(_) => true,
 
             // Unary and binary operations are constants if they only operate on constants.
@@ -202,9 +203,16 @@ impl RichExpr {
                 end_pos,
             },
 
-            Expression::UnsafeNull(_) => RichExpr {
-                kind: RichExprKind::UnsafeNull,
-                type_id: TypeId::unsafeptr(),
+            Expression::U64Literal(i) => RichExpr {
+                kind: RichExprKind::U64Literal(i.value),
+                type_id: TypeId::u64(),
+                start_pos,
+                end_pos,
+            },
+
+            Expression::Null(_) => RichExpr {
+                kind: RichExprKind::Null,
+                type_id: TypeId::ptr(),
                 start_pos,
                 end_pos,
             },
@@ -249,12 +257,12 @@ impl RichExpr {
             }
 
             Expression::SizeOf(sizeof) => {
-                // Get the size of the type and just represent it as a usize literal.
+                // Get the size of the type and just represent it as a u64 literal.
                 let type_id = RichType::analyze(ctx, &sizeof.typ);
                 let typ = ctx.must_get_resolved_type(&type_id);
                 RichExpr {
-                    kind: RichExprKind::USizeLiteral(typ.size_bytes(ctx) as u64),
-                    type_id: TypeId::usize(),
+                    kind: RichExprKind::U64Literal(typ.size_bytes(ctx) as u64),
+                    type_id: TypeId::u64(),
                     start_pos,
                     end_pos,
                 }
@@ -482,15 +490,15 @@ impl RichExpr {
                 end_pos: Position::default(),
             },
 
-            Type::UnsafePtr(_) => RichExpr {
-                kind: RichExprKind::UnsafeNull,
+            Type::Ptr(_) => RichExpr {
+                kind: RichExprKind::Null,
                 type_id,
                 start_pos: Position::default(),
                 end_pos: Position::default(),
             },
 
-            Type::USize(_) => RichExpr {
-                kind: RichExprKind::USizeLiteral(0),
+            Type::U64(_) => RichExpr {
+                kind: RichExprKind::U64Literal(0),
                 type_id,
                 start_pos: Position::default(),
                 end_pos: Position::default(),
@@ -569,10 +577,9 @@ impl RichExpr {
             | Operator::Subtract
             | Operator::Multiply
             | Operator::Divide
-            | Operator::Modulo => matches!(
-                operand_type,
-                RichType::I64 | RichType::UnsafePtr | RichType::USize
-            ),
+            | Operator::Modulo => {
+                matches!(operand_type, RichType::I64 | RichType::Ptr | RichType::U64)
+            }
 
             // Logical operators only work on bools.
             Operator::LogicalAnd | Operator::LogicalOr => matches!(operand_type, RichType::Bool),
@@ -581,7 +588,7 @@ impl RichExpr {
             Operator::EqualTo | Operator::NotEqualTo => {
                 matches!(
                     operand_type,
-                    RichType::Bool | RichType::I64 | RichType::UnsafePtr | RichType::USize
+                    RichType::Bool | RichType::I64 | RichType::Ptr | RichType::U64
                 )
             }
 
@@ -589,7 +596,7 @@ impl RichExpr {
             Operator::GreaterThan
             | Operator::LessThan
             | Operator::GreaterThanOrEqual
-            | Operator::LessThanOrEqual => matches!(operand_type, RichType::I64 | RichType::USize),
+            | Operator::LessThanOrEqual => matches!(operand_type, RichType::I64 | RichType::U64),
 
             // If this happens, something is badly broken.
             other => panic!("unexpected operator {}", other),
