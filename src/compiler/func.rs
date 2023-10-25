@@ -1397,7 +1397,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// the value is simply returned.
     fn deref_if_ptr(&self, ll_val: BasicValueEnum<'ctx>, typ: &RichType) -> BasicValueEnum<'ctx> {
         match typ {
-            // Strings, structs, enums, tuples, and unsafe pointers should already be represented as
+            // Strings, structs, enums, tuples, and pointers should already be represented as
             // pointers.
             RichType::Str
             | RichType::Struct(_)

@@ -280,7 +280,7 @@ impl Expression {
                 Ok(Some(Expression::StrLiteral(str_lit)))
             }
 
-            // Check if it's an unsafe null value.
+            // Check if it's a null value.
             Some(Token {
                 kind: TokenKind::Null,
                 ..

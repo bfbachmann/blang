@@ -177,6 +177,13 @@ pub struct MoveChecker<'a> {
 }
 
 impl<'a> MoveChecker<'a> {
+    fn must_get_type(&self, type_id: &TypeId) -> &RichType {
+        match self.types.get(type_id) {
+            Some(typ) => typ,
+            None => panic!("failed to locate type {}", type_id),
+        }
+    }
+
     /// Pushes `scope` onto the stack.
     fn push_scope(&mut self, scope: Scope) {
         self.stack.push(scope);
@@ -484,7 +491,7 @@ impl<'a> MoveChecker<'a> {
     fn check_var(&mut self, var: &RichSymbol) {
         // Skip the move check entirely if the root variable is of some type that doesn't require
         // moves.
-        if !self.types.get(&var.parent_type_id).unwrap().requires_move() {
+        if !self.must_get_type(&var.parent_type_id).requires_move() {
             return;
         }
 
@@ -574,7 +581,7 @@ impl<'a> MoveChecker<'a> {
 
         // Only record a move if the type of the value being used requires a move. Some
         // basic types like bools and numerics are always copied instead of being moved.
-        if self.types.get(var.get_type_id()).unwrap().requires_move() {
+        if self.must_get_type(var.get_type_id()).requires_move() {
             self.add_move(mv);
         }
     }

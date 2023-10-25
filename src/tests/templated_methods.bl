@@ -22,8 +22,7 @@ impl Calculator {
     }
 
     fn update(mut this, value: i64) ~ Calculator {
-        let func = this.calc_fn
-        this.accumulator = func(this.accumulator, value)
+        this.accumulator = this.calc_fn(this.accumulator, value)
         return this
     }
 

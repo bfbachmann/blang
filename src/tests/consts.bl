@@ -7,7 +7,7 @@ const {
         b: false
     }
     TUPLE = {345, true}
-    UNSAFE_PTR = NULL
+    PTR = NULL
     OTHER_INT = INT + 1
 }
 
@@ -23,7 +23,7 @@ fn main() {
     assert(STRUCT.b == false, 3)
     assert(TUPLE.0 == 345, 4)
     assert(TUPLE.1 == true, 5)
-    assert(UNSAFE_PTR == NULL, 6)
+    assert(PTR == NULL, 6)
     assert(OTHER_INT == INT + 1, 7)
 
     exit(0)

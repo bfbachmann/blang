@@ -119,7 +119,7 @@ impl RichFnCall {
 
         // If the function call is to an instance method, make sure the method takes `this` as its
         // first argument.
-        if called_on_this {
+        if called_on_this && rich_fn_symbol.is_method() {
             if fn_sig.takes_this() {
                 // Add `this` as the first argument since the method is being called on it.
                 passed_args.push_front(RichExpr::from_symbol(maybe_this));

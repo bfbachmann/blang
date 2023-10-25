@@ -32,7 +32,6 @@ impl RichFn {
     pub fn from(ctx: &mut ProgramContext, func: Function) -> Self {
         let signature = RichFnSig::from(ctx, &func.signature);
 
-        // If this is a templated function, we'll define
         // Templated functions will be rendered and analyzed when we analyze statements or
         // expressions where they're used. This way, we can use information from the context in
         // which they're used to render and check templated values.
