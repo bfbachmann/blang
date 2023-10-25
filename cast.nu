@@ -21,14 +21,12 @@ def "test unit" [] {
 # Runs end-to-end tests.
 def "test e2e" [] {
     mkdir src/tests/bin
-    ls src/tests | find .bl | get name | ansi strip | each {|src_file|
-        print -n $"test ($src_file)... "
-
+    ls src/tests | find .bl | get name | ansi strip | par-each {|src_file|
         let exit_code = run $src_file
         if $exit_code == 0 {
-            print $"(ansi green)ok(ansi reset)"
+            print $"(ansi green)PASS(ansi reset) ($src_file)"
         } else {
-            print $"(ansi red)fail(ansi reset)"
+            print $"(ansi red)FAIL(ansi reset) ($src_file)"
         }
     }
 }
@@ -55,7 +53,8 @@ def check [
 def build [
     src: path = "source.bl"     # The path to the Blang source code to compile.
 ] {
-    cargo $env.CARGO_FLAGS run -- build -o bin/out.ll ($src)
+    let out_path = $"bin/($src | path parse | get stem).ll"
+    cargo $env.CARGO_FLAGS run -- build -o $out_path $src
 }
 
 # Builds and executes Blang source code.
@@ -67,10 +66,12 @@ def run [
     build $src
 
     # Compile the LLVM IR to an executable.
-    ^$"($env.IR_COMPILER)" bin/out.ll -o bin/out ($env.CFLAGS) ($cflags | str join)
+    let src_path = $"bin/($src | path parse | get stem).ll"
+    let out_path = $"bin/($src | path parse | get stem)"
+    ^$"($env.IR_COMPILER)" $src_path -o $out_path ($env.CFLAGS) ($cflags | str join)
 
     # Run the executable.
-    ./bin/out
+    ^$"($out_path)"
 
     return $env.LAST_EXIT_CODE
 }
