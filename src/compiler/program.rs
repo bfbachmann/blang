@@ -643,4 +643,17 @@ mod tests {
         "#,
         )
     }
+
+    #[test]
+    fn valid_type_cast() {
+        assert_compiles(
+            r#"
+            fn main() {
+                let a = 10i64
+                let b = a as u64
+                let c: u64 = b + 8i64 as u64
+            }
+        "#,
+        )
+    }
 }

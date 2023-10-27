@@ -4,7 +4,7 @@ use crate::lexer::pos::{Locatable, Position};
 use crate::locatable_impl;
 
 /// Represents a pointer-sized unsigned integer.
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone, Eq, Default)]
 pub struct U64Type {
     start_pos: Position,
     end_pos: Position,
@@ -28,12 +28,5 @@ locatable_impl!(U64Type);
 impl U64Type {
     pub fn new(start_pos: Position, end_pos: Position) -> Self {
         U64Type { start_pos, end_pos }
-    }
-
-    pub fn default() -> Self {
-        U64Type {
-            start_pos: Default::default(),
-            end_pos: Default::default(),
-        }
     }
 }

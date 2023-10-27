@@ -21,7 +21,7 @@ def "test unit" [] {
 # Runs end-to-end tests.
 def "test e2e" [] {
     ls src/tests | find .bl | get name | ansi strip | par-each {|src_file|
-        let exit_code = run $src_file
+        let exit_code = run -q $src_file
         if $exit_code == 0 {
             print $"(ansi green)PASS(ansi reset) ($src_file)"
         } else {
@@ -51,18 +51,29 @@ def check [
 # Compiles Blang source code to LLVM IR.
 def build [
     src: path = "source.bl"     # The path to the Blang source code to compile.
+    --quiet (-q)                # Disable Blang compiler logging.
 ] {
     let out_path = $"bin/($src | path parse | get stem).ll"
-    cargo $env.CARGO_FLAGS run -- build -o $out_path $src
+
+    if $quiet {
+        cargo $env.CARGO_FLAGS run -- build -q -o $out_path $src
+    } else {
+        cargo $env.CARGO_FLAGS run -- build -o $out_path $src
+    }
 }
 
 # Builds and executes Blang source code.
 def run [
     src: path = "source.bl"             # The path to the Blang source code to run.
+    --quiet (-q)                        # Disable Blang compiler logging.
     ...cflags: string                   # Additional flags to pass to the LLVM IR compiler (clang).
 ] {
     # Compile Blang source code to LLVM IR.
-    build $src
+    if $quiet {
+        build -q $src
+    } else {
+        build $src
+    }
 
     # Compile the LLVM IR to an executable.
     let src_path = $"bin/($src | path parse | get stem).ll"

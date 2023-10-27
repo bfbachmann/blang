@@ -367,60 +367,18 @@ impl RichExpr {
                             op.clone(),
                             Box::new(rich_right),
                         ),
-                        type_id: RichExpr::get_result_type(op, None),
+                        type_id: get_result_type(op, None),
                         start_pos,
                         end_pos,
                     };
                 }
 
-                // Make sure the left-side expression is of the right type.
-                let mut errors = vec![];
-                let mut operand_type_id = None;
-                if !RichExpr::is_valid_operand_type(op, left_type) {
-                    errors.push(AnalyzeError::new(
-                        ErrorKind::MismatchedTypes,
-                        format_code!(
-                            "cannot apply operator {} to left-side expression of type {}",
-                            &op,
-                            &rich_left.type_id,
-                        )
-                        .as_str(),
-                        left_expr.as_ref(),
-                    ));
-                } else {
-                    operand_type_id = Some(rich_left.type_id.clone());
-                }
-
-                // Make sure the right-side expression is of the right type.
-                if !RichExpr::is_valid_operand_type(op, right_type) {
-                    errors.push(AnalyzeError::new(
-                        ErrorKind::MismatchedTypes,
-                        format_code!(
-                            "cannot apply operator {} to right-side expression of type {}",
-                            &op,
-                            &rich_right.type_id,
-                        )
-                        .as_str(),
-                        right_expr.as_ref(),
-                    ));
-                } else {
-                    operand_type_id = Some(rich_right.type_id.clone());
-                }
-
-                // Make sure both operands are of the same type.
-                if right_type != left_type {
-                    errors.push(AnalyzeError::new(
-                        ErrorKind::MismatchedTypes,
-                        format_code!(
-                            "{} operands have mismatched types {} and {}",
-                            op,
-                            left_type,
-                            right_type,
-                        )
-                        .as_str(),
-                        right_expr.as_ref(),
-                    ));
-                }
+                // Check that the operands are compatible with the operator and one another.
+                let (maybe_operand_type_id, errors) =
+                    match check_operand_types(&rich_left, left_type, op, &rich_right, right_type) {
+                        Ok(maybe_type_id) => (maybe_type_id, vec![]),
+                        Err(errs) => (None, errs),
+                    };
 
                 // Add any errors we collected to the program context. We're doing it this way
                 // instead of adding errors to the program context immediately to avoid borrowing
@@ -435,7 +393,7 @@ impl RichExpr {
                         op.clone(),
                         Box::new(rich_right),
                     ),
-                    type_id: RichExpr::get_result_type(op, operand_type_id),
+                    type_id: get_result_type(op, maybe_operand_type_id),
                     start_pos,
                     end_pos,
                 }
@@ -567,71 +525,167 @@ impl RichExpr {
             }
         }
     }
+}
 
-    /// Returns true only if `operand_type` is valid for operator `op`.
-    fn is_valid_operand_type(op: &Operator, operand_type: &RichType) -> bool {
-        // Determine the expected operand types on the operator.
-        match op {
-            // Mathematical operators only work on numeric types.
-            Operator::Add
-            | Operator::Subtract
-            | Operator::Multiply
-            | Operator::Divide
-            | Operator::Modulo => {
-                matches!(operand_type, RichType::I64 | RichType::Ptr | RichType::U64)
-            }
-
-            // Logical operators only work on bools.
-            Operator::LogicalAnd | Operator::LogicalOr => matches!(operand_type, RichType::Bool),
-
-            // Equality operators only work on numerics and bools.
-            Operator::EqualTo | Operator::NotEqualTo => {
-                matches!(
-                    operand_type,
-                    RichType::Bool | RichType::I64 | RichType::Ptr | RichType::U64
+/// Checks that the operands of a binary operation are compatible with the operator and one
+/// another. If successful, returns the type ID of the operands (their types should be the
+/// same).
+fn check_operand_types(
+    left_expr: &RichExpr,
+    left_type: &RichType,
+    op: &Operator,
+    right_expr: &RichExpr,
+    right_type: &RichType,
+) -> Result<Option<TypeId>, Vec<AnalyzeError>> {
+    if op == &Operator::As {
+        return match is_valid_type_cast(left_type, right_type) {
+            true => Ok(Some(right_expr.type_id.clone())),
+            false => Err(vec![AnalyzeError::new(
+                ErrorKind::InvalidTypeCast,
+                format_code!(
+                    "cannot cast value of type {} to type {}",
+                    left_type,
+                    right_type
                 )
-            }
-
-            // Comparators only work on numeric types.
-            Operator::GreaterThan
-            | Operator::LessThan
-            | Operator::GreaterThanOrEqual
-            | Operator::LessThanOrEqual => matches!(operand_type, RichType::I64 | RichType::U64),
-
-            // If this happens, something is badly broken.
-            other => panic!("unexpected operator {}", other),
-        }
+                .as_str(),
+                left_expr,
+            )]),
+        };
     }
 
-    /// Returns the type of the value that would result from performing `op` on operands with
-    /// `operand_type_id`. If no `operand_type_id` was specified, falls back to default result type.
-    fn get_result_type(op: &Operator, operand_type_id: Option<TypeId>) -> TypeId {
-        match op {
-            // Mathematical operations result in the same type as their operands.
-            Operator::Add
-            | Operator::Subtract
-            | Operator::Multiply
-            | Operator::Divide
-            | Operator::Modulo => match operand_type_id {
-                Some(type_id) => type_id,
-                None => TypeId::i64(),
-            },
+    let mut operand_type_id = None;
+    let mut errors = vec![];
 
-            // Logical operators result in bools.
-            Operator::LogicalAnd | Operator::LogicalOr => TypeId::bool(),
+    if !is_valid_operand_type(op, left_type) {
+        errors.push(AnalyzeError::new(
+            ErrorKind::MismatchedTypes,
+            format_code!(
+                "cannot apply operator {} to left-side expression of type {}",
+                &op,
+                &left_expr.type_id,
+            )
+            .as_str(),
+            left_expr,
+        ));
+    } else {
+        operand_type_id = Some(left_expr.type_id.clone());
+    }
 
-            // Equality operators result in bools.
-            Operator::EqualTo | Operator::NotEqualTo => TypeId::bool(),
+    if !is_valid_operand_type(op, right_type) {
+        errors.push(AnalyzeError::new(
+            ErrorKind::MismatchedTypes,
+            format_code!(
+                "cannot apply operator {} to right-side expression of type {}",
+                &op,
+                &right_expr.type_id,
+            )
+            .as_str(),
+            right_expr,
+        ));
+    } else {
+        operand_type_id = Some(right_expr.type_id.clone());
+    }
 
-            // Comparators result in bools.
-            Operator::GreaterThan
-            | Operator::LessThan
-            | Operator::GreaterThanOrEqual
-            | Operator::LessThanOrEqual => TypeId::bool(),
+    if right_type != left_type {
+        errors.push(AnalyzeError::new(
+            ErrorKind::MismatchedTypes,
+            format_code!(
+                "{} operands have mismatched types {} and {}",
+                op,
+                left_type,
+                right_type,
+            )
+            .as_str(),
+            right_expr,
+        ));
+    }
 
-            // If this happens, the something is badly broken.
-            other => panic!("unexpected operator {}", other),
+    match errors.is_empty() {
+        true => Ok(operand_type_id),
+        false => Err(errors),
+    }
+}
+
+/// Returns true only if `operand_type` is valid for operator `op`.
+fn is_valid_operand_type(op: &Operator, operand_type: &RichType) -> bool {
+    // Determine the expected operand types on the operator.
+    match op {
+        // Mathematical operators only work on numeric types.
+        Operator::Add
+        | Operator::Subtract
+        | Operator::Multiply
+        | Operator::Divide
+        | Operator::Modulo => {
+            matches!(operand_type, RichType::I64 | RichType::Ptr | RichType::U64)
         }
+
+        // Logical operators only work on bools.
+        Operator::LogicalAnd | Operator::LogicalOr => matches!(operand_type, RichType::Bool),
+
+        // Equality operators only work on numerics and bools.
+        Operator::EqualTo | Operator::NotEqualTo => {
+            matches!(
+                operand_type,
+                RichType::Bool | RichType::I64 | RichType::Ptr | RichType::U64
+            )
+        }
+
+        // Comparators only work on numeric types.
+        Operator::GreaterThan
+        | Operator::LessThan
+        | Operator::GreaterThanOrEqual
+        | Operator::LessThanOrEqual => matches!(operand_type, RichType::I64 | RichType::U64),
+
+        // If this happens, something is badly broken.
+        other => panic!("unexpected operator {}", other),
+    }
+}
+
+/// Returns true only if it is possible to cast from `left_type` to `right_type`.
+fn is_valid_type_cast(left_type: &RichType, right_type: &RichType) -> bool {
+    if left_type.is_numeric() && right_type.is_numeric() {
+        return true;
+    }
+
+    match (left_type, right_type) {
+        (RichType::Ptr, RichType::U64) | (RichType::U64, RichType::Ptr) => true,
+        _ => false,
+    }
+}
+
+/// Returns the type of the value that would result from performing `op` on operands with
+/// `operand_type_id`. If no `operand_type_id` was specified, falls back to default result type.
+fn get_result_type(op: &Operator, operand_type_id: Option<TypeId>) -> TypeId {
+    match op {
+        // Mathematical operations result in the same type as their operands.
+        Operator::Add
+        | Operator::Subtract
+        | Operator::Multiply
+        | Operator::Divide
+        | Operator::Modulo => match operand_type_id {
+            Some(type_id) => type_id,
+            None => TypeId::i64(),
+        },
+
+        // Logical operators result in bools.
+        Operator::LogicalAnd | Operator::LogicalOr => TypeId::bool(),
+
+        // Equality operators result in bools.
+        Operator::EqualTo | Operator::NotEqualTo => TypeId::bool(),
+
+        // Comparators result in bools.
+        Operator::GreaterThan
+        | Operator::LessThan
+        | Operator::GreaterThanOrEqual
+        | Operator::LessThanOrEqual => TypeId::bool(),
+
+        Operator::As => match operand_type_id {
+            Some(type_id) => type_id,
+            None => TypeId::unknown(),
+        },
+
+        // If this happens, the something is badly broken.
+        other => panic!("unexpected operator {}", other),
     }
 }
 

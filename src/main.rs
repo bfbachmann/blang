@@ -49,7 +49,7 @@ fn main() {
             .arg(
                 arg!(-q --quiet ... "Don't print log messages")
                     .required(false)
-                    .action(ArgAction::SetFalse),
+                    .action(ArgAction::SetTrue),
             )
             .arg(arg!(-t --target <TARGET> "Target ISA triple").required(false))
             .arg(

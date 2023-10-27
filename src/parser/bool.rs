@@ -4,7 +4,7 @@ use crate::lexer::pos::{Locatable, Position};
 use crate::locatable_impl;
 
 /// Represents a boolean type.
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone, Eq, Default)]
 pub struct BoolType {
     start_pos: Position,
     end_pos: Position,
@@ -28,12 +28,5 @@ locatable_impl!(BoolType);
 impl BoolType {
     pub fn new(start_pos: Position, end_pos: Position) -> Self {
         BoolType { start_pos, end_pos }
-    }
-
-    pub fn default() -> Self {
-        BoolType {
-            start_pos: Default::default(),
-            end_pos: Default::default(),
-        }
     }
 }

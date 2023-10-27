@@ -13,6 +13,7 @@ pub enum Operator {
     Modulo,
     LogicalAnd,
     LogicalOr,
+    As,
 
     // Basic unary operators
     Not,
@@ -57,6 +58,7 @@ impl Operator {
             TokenKind::LessThanOrEqual => Some(Operator::LessThanOrEqual),
             TokenKind::LeftParen => Some(Operator::LeftParen),
             TokenKind::RightParen => Some(Operator::RightParen),
+            TokenKind::As => Some(Operator::As),
             _ => None,
         }
     }
@@ -79,6 +81,7 @@ impl Operator {
             Operator::LessThanOrEqual => TokenKind::LessThanOrEqual.to_string(),
             Operator::LeftParen => TokenKind::LeftParen.to_string(),
             Operator::RightParen => TokenKind::RightParen.to_string(),
+            Operator::As => TokenKind::As.to_string(),
         }
     }
 
@@ -86,6 +89,7 @@ impl Operator {
     /// standard.
     pub fn precedence(&self) -> u32 {
         100 - match self {
+            Operator::As => 0,
             Operator::LeftParen | Operator::RightParen => 1,
             Operator::Not => 2,
             Operator::Multiply | Operator::Divide | Operator::Modulo => 3,

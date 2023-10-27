@@ -56,6 +56,7 @@ pub enum TokenKind {
     ThisType,
     Impl,
     Spec,
+    As,
 
     // Delimiters
     LeftBrace,
@@ -139,6 +140,7 @@ impl Clone for TokenKind {
             TokenKind::At => TokenKind::At,
             TokenKind::Spec => TokenKind::Spec,
             TokenKind::With => TokenKind::With,
+            TokenKind::As => TokenKind::As,
         }
     }
 }
@@ -215,6 +217,7 @@ impl TokenKind {
             TokenKind::At => "@".to_string(),
             TokenKind::Spec => "spec".to_string(),
             TokenKind::With => "with".to_string(),
+            TokenKind::As => "as".to_string(),
         }
     }
 
@@ -312,6 +315,7 @@ impl TokenKind {
             (TokenKind::At.to_string(), TokenKind::At),
             (TokenKind::Spec.to_string(), TokenKind::Spec),
             (TokenKind::With.to_string(), TokenKind::With),
+            (TokenKind::As.to_string(), TokenKind::As),
         ]);
 
         // Trim syntactically meaningless whitespace.

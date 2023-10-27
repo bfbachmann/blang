@@ -1,6 +1,6 @@
 use core::fmt;
 use std::cmp::max;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 
@@ -37,6 +37,18 @@ impl TypeId {
     /// Creates a new type ID from the given parsed type.
     pub fn from(typ: Type) -> Self {
         TypeId { typ }
+    }
+
+    /// Returns the type ID corresponding to the type with the given name.
+    pub fn from_name(name: &str) -> Self {
+        match name {
+            "bool" => TypeId::bool(),
+            "i64" => TypeId::i64(),
+            "u64" => TypeId::u64(),
+            "ptr" => TypeId::ptr(),
+            "str" => TypeId::str(),
+            _ => TypeId::new_unresolved(name),
+        }
     }
 
     /// Creates a new type ID that would correspond to the unresolved type with the given name.
@@ -270,15 +282,43 @@ impl RichType {
         }
     }
 
+    /// Returns the type name.
+    pub fn name(&self) -> String {
+        match self {
+            RichType::Bool => "bool".to_string(),
+            RichType::Str => "str".to_string(),
+            RichType::I64 => "i64".to_string(),
+            RichType::Ptr => "ptr".to_string(),
+            RichType::U64 => "u64".to_string(),
+            RichType::Struct(s) => s.name.clone(),
+            RichType::Enum(e) => e.name.clone(),
+            RichType::Tuple(_) => "tuple".to_string(),
+            RichType::Function(f) => f.name.clone(),
+            RichType::Templated(t) => t.name.clone(),
+            RichType::Unknown(_) => "<unknown>".to_string(),
+        }
+    }
+
     /// Creates a new rich function type from the given signature.
     pub fn from_fn_sig(sig: RichFnSig) -> Self {
         RichType::Function(Box::new(sig))
     }
 
-    /// Returns true if `name` matches a primitive type name.
-    pub fn is_primitive_type_name(name: &str) -> bool {
-        // TODO: make this static
-        HashSet::from(["bool", "i64", "str", "ptr", "u64"]).contains(name)
+    /// Returns the primitive type with the given name, if one exists.
+    pub fn get_primitive(name: &str) -> Option<RichType> {
+        match name {
+            "bool" => Some(RichType::Bool),
+            "i64" => Some(RichType::I64),
+            "u64" => Some(RichType::U64),
+            "str" => Some(RichType::Str),
+            "ptr" => Some(RichType::Ptr),
+            _ => None,
+        }
+    }
+
+    /// Returns true if this is a numeric type.
+    pub fn is_numeric(&self) -> bool {
+        matches!(self, RichType::I64 | RichType::U64)
     }
 
     /// Returns a mapping from primitive type ID to analyzed primitive type.

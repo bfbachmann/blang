@@ -39,6 +39,7 @@ pub enum ErrorKind {
     UnresolvedTmplParams,
     DuplicateFnArg,
     SpecNotSatisfied,
+    InvalidTypeCast,
 }
 
 impl fmt::Display for ErrorKind {
@@ -77,6 +78,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::DuplicateFnArg => write!(f, "duplicate function argument"),
             ErrorKind::SpecNotDefined => write!(f, "spec not defined"),
             ErrorKind::SpecNotSatisfied => write!(f, "spec not satisfied"),
+            ErrorKind::InvalidTypeCast => write!(f, "invalid type cast"),
         }
     }
 }

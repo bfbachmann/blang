@@ -4,7 +4,7 @@ use crate::lexer::pos::{Locatable, Position};
 use crate::locatable_impl;
 
 /// Represents a static type (i.e. a string literal that is allocated globally).
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone, Eq, Default)]
 pub struct StrType {
     start_pos: Position,
     end_pos: Position,
@@ -28,12 +28,5 @@ locatable_impl!(StrType);
 impl StrType {
     pub fn new(start_pos: Position, end_pos: Position) -> Self {
         StrType { start_pos, end_pos }
-    }
-
-    pub fn default() -> Self {
-        StrType {
-            start_pos: Default::default(),
-            end_pos: Default::default(),
-        }
     }
 }

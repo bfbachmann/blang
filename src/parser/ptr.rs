@@ -5,7 +5,7 @@ use crate::locatable_impl;
 
 /// Represents a raw pointer that is not automatically garbage collected and allows pointer
 /// arithmetic. This type translates directly to `void *` in C.
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone, Eq, Default)]
 pub struct PtrType {
     start_pos: Position,
     end_pos: Position,
@@ -29,12 +29,5 @@ locatable_impl!(PtrType);
 impl PtrType {
     pub fn new(start_pos: Position, end_pos: Position) -> Self {
         PtrType { start_pos, end_pos }
-    }
-
-    pub fn default() -> Self {
-        PtrType {
-            start_pos: Default::default(),
-            end_pos: Default::default(),
-        }
     }
 }

@@ -80,16 +80,16 @@ impl RichSymbol {
     /// Otherwise, only variables, types, and constants will be searched.
     pub fn from(
         ctx: &mut ProgramContext,
-        var: &Symbol,
+        symbol: &Symbol,
         include_fns: bool,
         maybe_impl_type_id: Option<&TypeId>,
     ) -> Self {
-        let var_name = var.name.as_str();
+        let var_name = symbol.name.as_str();
 
         // Find the type ID for the symbol or member being accessed.
         // Return a placeholder value if we failed to resolve the symbol type ID.
         let (mut maybe_type_id, maybe_symbol) =
-            RichSymbol::get_type_id_by_symbol_name(ctx, var.name.as_str(), include_fns);
+            RichSymbol::get_type_id_by_symbol_name(ctx, symbol.name.as_str(), include_fns);
 
         let mut is_method = false;
         if maybe_type_id.is_none() && include_fns {
@@ -107,10 +107,13 @@ impl RichSymbol {
         // If the symbol still has not been resolved, check if it's a type.
         let mut var_is_type = false;
         if maybe_type_id.is_none() {
-            let type_id = TypeId::new_unresolved(var_name);
-            if ctx.get_resolved_type(&type_id).is_some() {
-                maybe_type_id = Some(type_id);
-                var_is_type = true;
+            let type_id = TypeId::from_name(var_name);
+            match ctx.get_resolved_type(&type_id) {
+                Some(typ) if !typ.is_unknown() => {
+                    maybe_type_id = Some(type_id);
+                    var_is_type = true;
+                }
+                _ => {}
             }
         }
 
@@ -123,11 +126,11 @@ impl RichSymbol {
                 ctx.add_err(AnalyzeError::new(
                     ErrorKind::SymbolNotDefined,
                     format_code!("{} is not defined in this scope", var_name).as_str(),
-                    var,
+                    symbol,
                 ));
 
                 return RichSymbol::new_with_default_pos(
-                    var.name.as_str(),
+                    symbol.name.as_str(),
                     TypeId::unknown(),
                     None,
                 );
@@ -135,7 +138,7 @@ impl RichSymbol {
         };
 
         // Recursively analyze member accesses, if any.
-        let member_access = match &var.member_access {
+        let member_access = match &symbol.member_access {
             Some(access) => Some(RichMemberAccess::from(ctx, &var_type_id, access)),
             None => None,
         };
@@ -154,8 +157,8 @@ impl RichSymbol {
             is_const,
             is_var,
             is_method,
-            start_pos: var.start_pos().clone(),
-            end_pos: var.end_pos().clone(),
+            start_pos: symbol.start_pos().clone(),
+            end_pos: symbol.end_pos().clone(),
         }
     }
 

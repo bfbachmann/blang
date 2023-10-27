@@ -748,7 +748,7 @@ impl ProgramContext {
         self.extern_specs.contains_key(name)
             || self.get_extern_struct(name).is_some()
             || self.get_extern_enum(name).is_some()
-            || RichType::is_primitive_type_name(name)
+            || RichType::get_primitive(name).is_some()
     }
 
     /// Adds the given un-analyzed function to the program context. Note that `full_name` should

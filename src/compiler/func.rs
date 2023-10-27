@@ -1250,14 +1250,36 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         right_expr: &RichExpr,
     ) -> BasicValueEnum<'ctx> {
         let lhs = self.compile_expr(left_expr);
+
+        if op == &Operator::As {
+            return self
+                .compile_type_cast(lhs, &right_expr.type_id)
+                .as_basic_value_enum();
+        }
+
         let rhs = self.compile_expr(right_expr);
 
         // Determine whether the operation should be signed or unsigned based on the operand types.
         let signed = self.types.get(&left_expr.type_id).unwrap().is_signed();
 
         if op.is_arithmetic() {
-            self.compile_arith_op(lhs, op, rhs, signed)
-                .as_basic_value_enum()
+            let result = self
+                .compile_arith_op(lhs, op, rhs, signed)
+                .as_basic_value_enum();
+
+            // If the left operator was a pointer, then we just did pointer arithmetic and need
+            // to return a pointer rather than an int.
+            if lhs.is_pointer_value() {
+                self.builder
+                    .build_int_to_ptr(
+                        result.into_int_value(),
+                        self.ctx.i64_type().ptr_type(AddressSpace::default()),
+                        "int_to_ptr",
+                    )
+                    .as_basic_value_enum()
+            } else {
+                result
+            }
         } else if op.is_comparator() {
             self.compile_cmp(lhs, op, rhs, signed).as_basic_value_enum()
         } else if op.is_logical() {
@@ -1265,6 +1287,45 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         } else {
             panic!("unsupported operator {op}")
         }
+    }
+
+    /// Compiles a bitcast of `ll_val` to type `target_type_id`.
+    fn compile_type_cast(
+        &self,
+        mut ll_val: BasicValueEnum<'ctx>,
+        target_type_id: &TypeId,
+    ) -> BasicValueEnum<'ctx> {
+        let target_type = self.types.get(target_type_id).unwrap();
+        let ll_target_type = convert::to_basic_type(self.ctx, self.types, target_type);
+
+        // TODO: When we support numeric types that are larger or smaller than 64 bits, we need to
+        // think about sign extension and zero extension when casting.
+
+        if ll_val.is_pointer_value() {
+            ll_val = self
+                .builder
+                .build_ptr_to_int(
+                    ll_val.into_pointer_value(),
+                    ll_target_type.into_int_type(),
+                    "ptr_as_int",
+                )
+                .as_basic_value_enum();
+        } else if ll_target_type.is_pointer_type() {
+            ll_val = self
+                .builder
+                .build_int_to_ptr(
+                    ll_val.into_int_value(),
+                    ll_target_type.into_pointer_type(),
+                    "int_as_ptr",
+                )
+                .as_basic_value_enum();
+        }
+
+        self.builder.build_bitcast(
+            ll_val,
+            ll_target_type,
+            format!("as_{}", target_type.name()).as_str(),
+        )
     }
 
     /// Compiles a logical (boolean) operation expression.
@@ -1345,7 +1406,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         ll_rhs: BasicValueEnum<'ctx>,
         signed: bool,
     ) -> IntValue<'ctx> {
-        // Expect both operands to be of type i64.
+        // Expect both operands to be of some integer type.
         let lhs = self.get_int(ll_lhs);
         let rhs = self.get_int(ll_rhs);
 

@@ -1452,4 +1452,23 @@ mod tests {
             })
         ))
     }
+
+    #[test]
+    fn invalid_type_cast() {
+        let result = analyze_prog(
+            r#"
+            fn main() {
+                let a = 5u64
+                let b = a as bool
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::InvalidTypeCast,
+                ..
+            })
+        ))
+    }
 }

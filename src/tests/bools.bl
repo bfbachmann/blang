@@ -18,6 +18,7 @@ fn main() {
     assert(1 + 1 == 2, 9)
     assert(-123_123i64 < 0, 10)
     assert(-123_123i64 != 123123, 11)
+    assert(123u64 as i64 == 123, 12)
 
     exit(0)
 }
