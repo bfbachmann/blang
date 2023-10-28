@@ -102,7 +102,7 @@ impl RichTupleInit {
         let mut values = vec![];
         let mut types = vec![];
         for expr in &tuple_init.values {
-            let val = RichExpr::from(ctx, expr.clone());
+            let val = RichExpr::from(ctx, expr.clone(), None);
             types.push(val.type_id.typ().clone());
             values.push(val);
         }

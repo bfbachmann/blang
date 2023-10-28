@@ -54,7 +54,7 @@ impl fmt::Display for Statement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Statement::VariableDeclaration(var_dec) => {
-                if let Some(typ) = &var_dec.typ {
+                if let Some(typ) = &var_dec.maybe_type {
                     write!(f, "let {}: {} = ...", var_dec.name, typ)
                 } else {
                     write!(f, "let {} = ...", var_dec.name)

@@ -14,7 +14,7 @@ use crate::{locatable_impl, util};
 #[derive(Debug, Clone)]
 pub struct Const {
     pub name: String,
-    pub typ: Option<Type>,
+    pub maybe_type: Option<Type>,
     pub value: Expression,
     start_pos: Position,
     end_pos: Position,
@@ -22,7 +22,9 @@ pub struct Const {
 
 impl PartialEq for Const {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && util::opts_eq(&self.typ, &other.typ) && self.value == other.value
+        self.name == other.name
+            && util::opts_eq(&self.maybe_type, &other.maybe_type)
+            && self.value == other.value
     }
 }
 
@@ -30,7 +32,7 @@ impl Display for Const {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name)?;
 
-        if let Some(typ) = &self.typ {
+        if let Some(typ) = &self.maybe_type {
             write!(f, ": {}", typ)?;
         }
 
@@ -70,7 +72,7 @@ impl Const {
 
         Ok(Const {
             name,
-            typ,
+            maybe_type: typ,
             value,
             start_pos,
             end_pos,

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -173,11 +174,17 @@ locatable_impl!(RichExpr);
 
 impl RichExpr {
     /// Performs semantic analysis on the given expression and returns a type-rich version of it.
-    pub fn from(ctx: &mut ProgramContext, expr: Expression) -> RichExpr {
+    /// `expected_type_id` is the optional type ID of the expected type that this expression should
+    /// have.
+    pub fn from(
+        ctx: &mut ProgramContext,
+        expr: Expression,
+        expected_type_id: Option<&TypeId>,
+    ) -> RichExpr {
         let start_pos = expr.start_pos().clone();
         let end_pos = expr.end_pos().clone();
 
-        match expr {
+        let result = match &expr {
             Expression::Symbol(ref symbol) => {
                 let rich_symbol = RichSymbol::from(ctx, symbol, true, None);
                 let type_id = rich_symbol.get_type_id().clone();
@@ -218,7 +225,7 @@ impl RichExpr {
             },
 
             Expression::StrLiteral(s) => RichExpr {
-                kind: RichExprKind::StrLiteral(s.value),
+                kind: RichExprKind::StrLiteral(s.value.clone()),
                 type_id: TypeId::str(),
                 start_pos,
                 end_pos,
@@ -228,7 +235,7 @@ impl RichExpr {
                 let rich_init = RichStructInit::from(ctx, &struct_init);
                 RichExpr {
                     kind: RichExprKind::StructInit(rich_init),
-                    type_id: TypeId::from(struct_init.typ), // TODO: can this just be `type_id`?
+                    type_id: TypeId::from(struct_init.typ.clone()), // TODO: can this just be `type_id`?
                     start_pos,
                     end_pos,
                 }
@@ -290,7 +297,7 @@ impl RichExpr {
                         &fn_call.fn_symbol,
                     )
                     .as_str(),
-                    &fn_call,
+                    fn_call,
                 ));
 
                 RichExpr::new_zero_value(ctx, Type::Unresolved(UnresolvedType::none()))
@@ -302,7 +309,7 @@ impl RichExpr {
                 let sig = anon_fn.signature.clone();
                 let rich_closure = RichClosure::from(
                     ctx,
-                    anon_fn.body,
+                    anon_fn.body.clone(),
                     ScopeKind::FnBody,
                     sig.args.clone(),
                     sig.return_type.clone(),
@@ -318,14 +325,14 @@ impl RichExpr {
                 }
             }
 
-            ref expr @ Expression::UnaryOperation(ref op, ref right_expr) => {
+            Expression::UnaryOperation(ref op, ref right_expr) => {
                 if *op != Operator::Not {
                     // If this happens, the parser is badly broken.
                     panic!("invalid unary operator {}", op)
                 }
 
                 // Make sure the expression has type bool.
-                let rich_expr = RichExpr::from(ctx, *right_expr.clone());
+                let rich_expr = RichExpr::from(ctx, *right_expr.clone(), Some(&TypeId::bool()));
                 if rich_expr.type_id.is_bool() {
                     RichExpr {
                         kind: RichExprKind::UnaryOperation(Operator::Not, Box::new(rich_expr)),
@@ -344,7 +351,7 @@ impl RichExpr {
                             rich_expr.type_id,
                         )
                         .as_str(),
-                        expr,
+                        &expr,
                     ));
 
                     RichExpr::new_zero_value(ctx, Type::bool())
@@ -352,8 +359,13 @@ impl RichExpr {
             }
 
             Expression::BinaryOperation(ref left_expr, ref op, ref right_expr) => {
-                // Analyze the left and right operands.
-                let rich_left = RichExpr::from(ctx, *left_expr.clone());
+                let expected_operand_tid = match expected_type_id {
+                    Some(tid) => get_expected_operand_type_id(op, tid),
+                    None => None,
+                };
+
+                let rich_left =
+                    RichExpr::from(ctx, *left_expr.clone(), expected_operand_tid.as_ref());
 
                 // Handle the special case where the operator is the type cast operator `as`. In
                 // this case, the right expression should actually be a type.
@@ -385,7 +397,7 @@ impl RichExpr {
                         };
                     }
                 } else {
-                    RichExpr::from(ctx, *right_expr.clone())
+                    RichExpr::from(ctx, *right_expr.clone(), expected_operand_tid.as_ref())
                 };
 
                 // If we couldn't resolve both of the operand types, we'll skip any further
@@ -430,7 +442,35 @@ impl RichExpr {
                     end_pos,
                 }
             }
+        };
+
+        // If it's expected that this expression has a specific type, we need to check that it
+        // has that type.
+        if let Some(expected_tid) = expected_type_id {
+            // Compare the analyzed types rather than the type IDs to be safe, as multiple type
+            // IDs can map to the same analyzed type.
+            let expected_type = ctx.must_get_resolved_type(expected_tid);
+            let actual_type = ctx.must_get_resolved_type(&result.type_id);
+
+            // Check the type check if either type is unknown, as this implies that semantic
+            // analysis has already failed somewhere else in this expression or wherever it's being
+            // used.
+            let skip_type_check = expected_type.is_unknown() || actual_type.is_unknown();
+            if !skip_type_check && !actual_type.is_same_as(expected_type, &HashMap::new()) {
+                ctx.add_err(AnalyzeError::new(
+                    ErrorKind::MismatchedTypes,
+                    format_code!(
+                        "expected expression of type {}, but found {}",
+                        expected_type,
+                        actual_type,
+                    )
+                    .as_str(),
+                    &expr,
+                ));
+            }
         }
+
+        result
     }
 
     /// Creates a new expression with the value of the given symbol.
@@ -721,6 +761,32 @@ fn get_result_type(op: &Operator, operand_type_id: Option<TypeId>) -> TypeId {
     }
 }
 
+/// Computes the operand type that should be expected for operator `op` that yields a result of
+/// `expected_result_type_id`. Returns `None` if it's unclear what the operand type should be.
+fn get_expected_operand_type_id(op: &Operator, expected_result_type_id: &TypeId) -> Option<TypeId> {
+    match op {
+        Operator::Add
+        | Operator::Subtract
+        | Operator::Multiply
+        | Operator::Divide
+        | Operator::Modulo => Some(expected_result_type_id.clone()),
+
+        Operator::LogicalAnd | Operator::LogicalOr => Some(TypeId::bool()),
+
+        Operator::EqualTo | Operator::NotEqualTo => None,
+
+        Operator::GreaterThan
+        | Operator::LessThan
+        | Operator::GreaterThanOrEqual
+        | Operator::LessThanOrEqual => None,
+
+        Operator::As => None,
+
+        // If this happens, the something is badly broken.
+        other => panic!("unexpected operator {}", other),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::analyzer::arg::RichArg;
@@ -749,7 +815,7 @@ mod tests {
     fn analyze_i64_literal() {
         let mut ctx = ProgramContext::new();
         let expr = Expression::I64Literal(I64Lit::new_with_default_pos(1));
-        let result = RichExpr::from(&mut ctx, expr);
+        let result = RichExpr::from(&mut ctx, expr, None);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
@@ -766,7 +832,7 @@ mod tests {
     fn analyze_bool_literal() {
         let mut ctx = ProgramContext::new();
         let expr = Expression::BoolLiteral(BoolLit::new_with_default_pos(false));
-        let result = RichExpr::from(&mut ctx, expr);
+        let result = RichExpr::from(&mut ctx, expr, None);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
@@ -783,7 +849,7 @@ mod tests {
     fn analyze_string_literal() {
         let mut ctx = ProgramContext::new();
         let expr = Expression::StrLiteral(StrLit::new_with_default_pos("test"));
-        let result = RichExpr::from(&mut ctx, expr);
+        let result = RichExpr::from(&mut ctx, expr, None);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
@@ -803,6 +869,7 @@ mod tests {
         let result = RichExpr::from(
             &mut ctx,
             Expression::Symbol(Symbol::new_with_default_pos("myvar")),
+            None,
         );
         assert!(ctx.errors().is_empty());
         assert_eq!(
@@ -826,6 +893,7 @@ mod tests {
         let result = RichExpr::from(
             &mut ctx,
             Expression::Symbol(Symbol::new_with_default_pos("myvar")),
+            None,
         );
         assert_eq!(
             result,
@@ -887,7 +955,7 @@ mod tests {
             vec![Expression::BoolLiteral(BoolLit::new_with_default_pos(true))],
         );
         let call_expr = Expression::FunctionCall(fn_call.clone());
-        let result = RichExpr::from(&mut ctx, call_expr);
+        let result = RichExpr::from(&mut ctx, call_expr, None);
 
         // Check that analysis succeeded.
         assert!(ctx.errors().is_empty());
@@ -953,6 +1021,7 @@ mod tests {
                     FunctionCall::new_with_default_pos("do_thing", vec![]),
                 )),
             ),
+            None,
         );
 
         match result {
@@ -1042,6 +1111,7 @@ mod tests {
                 "do_thing",
                 vec![Expression::BoolLiteral(BoolLit::new_with_default_pos(true))],
             )),
+            None,
         );
 
         assert_eq!(
@@ -1136,6 +1206,7 @@ mod tests {
                 "do_thing",
                 vec![Expression::I64Literal(I64Lit::new_with_default_pos(1))],
             )),
+            None,
         );
 
         assert_eq!(
@@ -1178,6 +1249,7 @@ mod tests {
                 Operator::Add,
                 Box::new(Expression::StrLiteral(StrLit::new_with_default_pos("asdf"))),
             ),
+            None,
         );
 
         assert_eq!(
@@ -1220,6 +1292,7 @@ mod tests {
                 Operator::Add,
                 Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
             ),
+            None,
         );
 
         assert_eq!(
@@ -1264,6 +1337,7 @@ mod tests {
                 Operator::Not,
                 Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
             ),
+            None,
         );
 
         assert_eq!(
@@ -1294,6 +1368,7 @@ mod tests {
                 Operator::Not,
                 Box::new(Expression::StrLiteral(StrLit::new_with_default_pos("s"))),
             ),
+            None,
         );
 
         assert_eq!(

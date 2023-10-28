@@ -12,7 +12,7 @@ use crate::parser::stream::Stream;
 /// and some value as the result of an expression.
 #[derive(Debug, PartialEq, Clone)]
 pub struct VariableDeclaration {
-    pub typ: Option<Type>,
+    pub maybe_type: Option<Type>,
     pub is_mut: bool,
     pub name: String,
     pub value: Expression,
@@ -32,7 +32,7 @@ impl VariableDeclaration {
         end_pos: Position,
     ) -> Self {
         VariableDeclaration {
-            typ,
+            maybe_type: typ,
             is_mut,
             name,
             value,

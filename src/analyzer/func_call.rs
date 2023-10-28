@@ -62,7 +62,7 @@ impl RichFnCall {
         let mut passed_args: VecDeque<RichExpr> = call
             .args
             .iter()
-            .map(|arg| RichExpr::from(ctx, arg.clone()))
+            .map(|arg| RichExpr::from(ctx, arg.clone(), None))
             .collect();
 
         // Get the type ID of the first argument so we can pass it as a hint to the variable

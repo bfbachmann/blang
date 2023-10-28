@@ -1,13 +1,9 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use colored::Colorize;
-
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::{ProgramContext, ScopedSymbol};
 use crate::analyzer::r#type::{RichType, TypeId};
-use crate::format_code;
 use crate::parser::var_dec::VariableDeclaration;
 
 /// Represents a semantically valid and type-rich variable declaration.
@@ -28,35 +24,21 @@ impl RichVarDecl {
     /// Performs semantic analysis on the given variable declaration and returns a type-rich version
     /// of it.
     pub fn from(ctx: &mut ProgramContext, var_decl: VariableDeclaration) -> Self {
+        // Analyze the variable type. It might be empty because type annotations are optional
+        // in variable declarations.
+        let maybe_declared_tid = match &var_decl.maybe_type {
+            Some(typ) => Some(RichType::analyze(ctx, typ)),
+            None => None,
+        };
+
         // Check the expression being assigned to this new variable. Note that it's okay for
         // the variable name to collide with that of another variable. In this case, the old
         // variable will simply be replaced with this one in the current scope.
-        let rich_expr = RichExpr::from(ctx, var_decl.value.clone());
+        let rich_expr = RichExpr::from(ctx, var_decl.value.clone(), maybe_declared_tid.as_ref());
 
-        // Analyze the variable type. It might be empty because type annotations are optional
-        // in variable declarations. If the type is not specified, it will be inferred from the
-        // assigned expression.
-        let var_type = match &var_decl.typ {
-            // If the variable was declared with a type, analyze it and make sure it matches the
-            // expression type.
-            Some(typ) => {
-                let declared_type = RichType::analyze(ctx, &typ);
-                if &rich_expr.type_id != &declared_type {
-                    ctx.add_err(AnalyzeError::new(
-                        ErrorKind::MismatchedTypes,
-                        format_code!(
-                            "cannot assign value of type {} to variable {}",
-                            &rich_expr.type_id,
-                            format!("{}: {}", &var_decl.name, &declared_type),
-                        )
-                        .as_str(),
-                        &var_decl,
-                    ));
-                }
-
-                declared_type
-            }
-            // Otherwise, use the expression type.
+        // If the type is not specified, it will be inferred from the assigned expression.
+        let type_id = match maybe_declared_tid {
+            Some(tid) => tid,
             None => rich_expr.type_id.clone(),
         };
 
@@ -69,7 +51,7 @@ impl RichVarDecl {
         ));
 
         RichVarDecl {
-            type_id: var_type,
+            type_id,
             name: var_decl.name,
             val: rich_expr,
         }

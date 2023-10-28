@@ -252,22 +252,7 @@ impl RichStructInit {
             };
 
             // Analyze the value being assigned to the struct field.
-            let expr = RichExpr::from(ctx, field_value.clone());
-
-            // Make sure the value being assigned to the field has the expected type.
-            if &expr.type_id != field_type {
-                errors.push(AnalyzeError::new(
-                    ErrorKind::MismatchedTypes,
-                    format_code!(
-                        "cannot assign expression of type {} to field {} on struct type {}",
-                        format!("{}", &expr.type_id),
-                        format!("{}: {}", &field_name, &field_type),
-                        format!("{}", &struct_type),
-                    )
-                    .as_str(),
-                    field_value,
-                ));
-            }
+            let expr = RichExpr::from(ctx, field_value.clone(), Some(field_type));
 
             // Insert the analyzed struct field value, making sure that it was not already assigned.
             if field_values.insert(field_name.to_string(), expr).is_some() {

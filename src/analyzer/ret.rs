@@ -60,29 +60,9 @@ impl RichRet {
         match ret.value {
             Some(expr) => {
                 // We're returning a value. Make sure the value is of the expected type.
-                let rich_expr = RichExpr::from(ctx, expr.clone());
-                match ctx.return_type() {
+                let rich_expr = match ctx.return_type() {
                     Some(expected_type_id) => {
-                        // Skip the type check if either type is unknown. This will be the case if
-                        // semantic analysis on either type already failed.
-                        let expected_type = ctx.must_get_resolved_type(expected_type_id);
-                        let expr_type = ctx.must_get_resolved_type(&rich_expr.type_id);
-                        if !expected_type.is_unknown()
-                            && !expr_type.is_unknown()
-                            && expected_type != expr_type
-                        {
-                            ctx.add_err(AnalyzeError::new(
-                                ErrorKind::MismatchedTypes,
-                                format_code!(
-                                    "cannot return value of type {} from function with return \
-                                    type {}",
-                                    expr_type,
-                                    expected_type,
-                                )
-                                .as_str(),
-                                &expr,
-                            ));
-                        }
+                        RichExpr::from(ctx, expr.clone(), Some(&expected_type_id.clone()))
                     }
                     None => {
                         ctx.add_err(AnalyzeError::new(
@@ -90,6 +70,8 @@ impl RichRet {
                             "cannot return value from function with no return type",
                             &expr,
                         ));
+
+                        RichExpr::from(ctx, expr.clone(), None)
                     }
                 };
 

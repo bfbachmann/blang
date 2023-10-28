@@ -58,8 +58,14 @@ impl RichConst {
             return RichConst::new_zero_value(ctx, const_decl.name.as_str());
         }
 
+        // Analyze the optional constant type.
+        let declared_tid = match &const_decl.maybe_type {
+            Some(typ) => Some(RichType::analyze(ctx, typ)),
+            None => None,
+        };
+
         // Make sure the constant value is a valid constant.
-        let value = RichExpr::from(ctx, const_decl.value.clone());
+        let value = RichExpr::from(ctx, const_decl.value.clone(), declared_tid.as_ref());
         if !value.kind.is_const() {
             ctx.add_err(
                 AnalyzeError::new(
@@ -73,35 +79,6 @@ impl RichConst {
             return RichConst::new_zero_value(ctx, const_decl.name.as_str());
         }
 
-        // Analyze the optional constant type.
-        let type_id = if let Some(parsed_type) = &const_decl.typ {
-            // Make sure the expression type matches the declared constant type.
-            let declared_type_id = RichType::analyze(ctx, parsed_type);
-            let value_type = ctx.must_get_resolved_type(&value.type_id);
-
-            // Skip the check if the declared type could not be resolved.
-            let declared_type = ctx.must_get_resolved_type(&declared_type_id);
-            if !declared_type.is_unknown() && value_type != declared_type {
-                ctx.add_err(AnalyzeError::new(
-                    ErrorKind::MismatchedTypes,
-                    format_code!(
-                        "constant value {} has type {} that does not have declared type {}",
-                        value,
-                        value_type,
-                        declared_type
-                    )
-                    .as_str(),
-                    const_decl,
-                ));
-
-                return RichConst::new_zero_value(ctx, const_decl.name.as_str());
-            }
-
-            Some(declared_type_id)
-        } else {
-            None
-        };
-
         // Add the constant to the program context so it can be used later.
         ctx.add_symbol(ScopedSymbol::new_const(
             const_decl.name.as_str(),
@@ -110,7 +87,7 @@ impl RichConst {
 
         RichConst {
             name: const_decl.name.clone(),
-            declared_type_id: type_id,
+            declared_type_id: declared_tid,
             value,
         }
     }

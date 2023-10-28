@@ -1,5 +1,4 @@
 use core::fmt;
-use std::collections::HashMap;
 use std::fmt::Formatter;
 
 use colored::Colorize;
@@ -28,9 +27,6 @@ impl RichVarAssign {
     /// Performs semantic analysis on the given variable assignment and returns a type-rich version
     /// of it.
     pub fn from(ctx: &mut ProgramContext, assign: VariableAssignment) -> Self {
-        // Analyze the expression representing the value assigned to the variable.
-        let rich_expr = RichExpr::from(ctx, assign.value.clone());
-
         // Make sure the variable being assigned to exists and is mutable.
         let symbol = RichSymbol::from(ctx, &assign.symbol, false, None);
         let var_name = assign.symbol.name.clone();
@@ -76,35 +72,14 @@ impl RichVarAssign {
 
                 return RichVarAssign {
                     symbol,
-                    val: rich_expr,
+                    val: RichExpr::from(ctx, assign.value.clone(), None),
                 };
             }
         };
 
-        // Make sure the variable type matches the expression type.
-        let referenced_type = ctx.get_resolved_type(symbol.get_type_id());
-        match referenced_type {
-            Some(typ) => {
-                // Make sure the variable type is the same as the expression type.
-                let expr_type = ctx.must_get_resolved_type(&rich_expr.type_id);
-                if !typ.is_same_as(expr_type, &HashMap::new()) {
-                    ctx.add_err(AnalyzeError::new(
-                        ErrorKind::MismatchedTypes,
-                        format_code!(
-                            "cannot assign value of type {} to variable {}",
-                            &expr_type,
-                            format!("{}: {}", &assign.symbol, &typ),
-                        )
-                        .as_str(),
-                        &assign.value,
-                    ));
-                }
-            }
-            None => {
-                // The variable reference being assigned to is invalid, so we'll skip any further
-                // analysis on this statement.
-            }
-        }
+        // Analyze the expression representing the value assigned to the variable.
+        let symbol_tid = symbol.get_type_id();
+        let rich_expr = RichExpr::from(ctx, assign.value.clone(), Some(symbol_tid));
 
         RichVarAssign {
             symbol,

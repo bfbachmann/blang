@@ -312,7 +312,11 @@ impl RichEnumVariantInit {
                     };
                 }
 
-                Some(Box::new(RichExpr::from(ctx, value.as_ref().clone())))
+                Some(Box::new(RichExpr::from(
+                    ctx,
+                    value.as_ref().clone(),
+                    variant.maybe_type_id.as_ref(),
+                )))
             }
             None => {
                 if let Some(type_id) = &variant.maybe_type_id {

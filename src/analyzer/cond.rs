@@ -1,16 +1,13 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use colored::Colorize;
-
 use crate::analyzer::closure::RichClosure;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
-use crate::analyzer::r#type::{RichType, TypeId};
+use crate::analyzer::r#type::TypeId;
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::cond::Conditional;
-use crate::{format_code, locatable_impl, util};
+use crate::{locatable_impl, util};
 
 /// Represents a semantically valid and type-rich branch.
 #[derive(Clone, Debug)]
@@ -68,24 +65,7 @@ impl RichCond {
             // Check that the branch expression evaluates to a bool, if one exists.
             let rich_expr = match &branch.condition {
                 Some(branch_cond) => {
-                    let rich_expr = RichExpr::from(ctx, branch_cond.clone());
-                    let rich_expr_type = ctx.must_get_resolved_type(&rich_expr.type_id);
-
-                    // Skip the type check if the expression type is unknown (meaning it failed
-                    // analysis).
-                    if !rich_expr_type.is_unknown() && rich_expr.type_id != TypeId::bool() {
-                        ctx.add_err(AnalyzeError::new(
-                            ErrorKind::MismatchedTypes,
-                            format_code!(
-                                "expected branch condition to have type {}, but found type {}",
-                                RichType::Bool,
-                                &rich_expr.type_id,
-                            )
-                            .as_str(),
-                            branch_cond,
-                        ));
-                    }
-
+                    let rich_expr = RichExpr::from(ctx, branch_cond.clone(), Some(&TypeId::bool()));
                     Some(rich_expr)
                 }
                 None => None,
