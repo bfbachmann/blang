@@ -354,7 +354,39 @@ impl RichExpr {
             Expression::BinaryOperation(ref left_expr, ref op, ref right_expr) => {
                 // Analyze the left and right operands.
                 let rich_left = RichExpr::from(ctx, *left_expr.clone());
-                let rich_right = RichExpr::from(ctx, *right_expr.clone());
+
+                // Handle the special case where the operator is the type cast operator `as`. In
+                // this case, the right expression should actually be a type.
+                let rich_right = if op == &Operator::As {
+                    if let Expression::Symbol(symbol) = right_expr.as_ref() {
+                        let rich_symbol = RichSymbol::from_type(ctx, symbol);
+                        RichExpr::from_symbol(rich_symbol)
+                    } else {
+                        ctx.add_err(AnalyzeError::new(
+                            ErrorKind::ExpectedType,
+                            format_code!(
+                                "expected type after cast operator {}, but found {}",
+                                Operator::As,
+                                right_expr
+                            )
+                            .as_str(),
+                            right_expr.as_ref(),
+                        ));
+
+                        return RichExpr {
+                            kind: RichExprKind::BinaryOperation(
+                                Box::new(rich_left.clone()),
+                                op.clone(),
+                                Box::new(RichExpr::new_zero_value(ctx, Type::new_unknown(""))),
+                            ),
+                            type_id: get_result_type(op, None),
+                            start_pos,
+                            end_pos,
+                        };
+                    }
+                } else {
+                    RichExpr::from(ctx, *right_expr.clone())
+                };
 
                 // If we couldn't resolve both of the operand types, we'll skip any further
                 // type checks by returning early.

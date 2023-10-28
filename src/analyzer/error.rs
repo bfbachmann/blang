@@ -8,6 +8,8 @@ pub type AnalyzeResult<T> = Result<T, AnalyzeError>;
 pub enum ErrorKind {
     MismatchedTypes,
     ExpectedReturnValue,
+    ExpectedType,
+    ExpectedExpr,
     FunctionAlreadyDefined,
     ConstAlreadyDefined,
     InvalidConst,
@@ -79,6 +81,8 @@ impl fmt::Display for ErrorKind {
             ErrorKind::SpecNotDefined => write!(f, "spec not defined"),
             ErrorKind::SpecNotSatisfied => write!(f, "spec not satisfied"),
             ErrorKind::InvalidTypeCast => write!(f, "invalid type cast"),
+            ErrorKind::ExpectedType => write!(f, "expected type"),
+            ErrorKind::ExpectedExpr => write!(f, "expected expression"),
         }
     }
 }

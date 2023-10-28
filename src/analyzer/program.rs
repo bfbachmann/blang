@@ -1454,7 +1454,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_type_cast() {
+    fn incompatible_type_cast() {
         let result = analyze_prog(
             r#"
             fn main() {
@@ -1467,6 +1467,43 @@ mod tests {
             result,
             Err(AnalyzeError {
                 kind: ErrorKind::InvalidTypeCast,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn invalid_type_cast() {
+        let result = analyze_prog(
+            r#"
+            fn main() {
+                let a = 5u64
+                let b = a as 543
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::ExpectedType,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn invalid_expression_is_type() {
+        let result = analyze_prog(
+            r#"
+            fn main() {
+                let a = u64
+            }
+            "#,
+        );
+        assert!(matches!(
+            result,
+            Err(AnalyzeError {
+                kind: ErrorKind::ExpectedExpr,
                 ..
             })
         ))

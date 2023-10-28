@@ -106,7 +106,7 @@ impl RichSymbol {
 
         // If the symbol still has not been resolved, check if it's a type.
         let mut var_is_type = false;
-        if maybe_type_id.is_none() {
+        if maybe_type_id.is_none() && include_fns {
             let type_id = TypeId::from_name(var_name);
             match ctx.get_resolved_type(&type_id) {
                 Some(typ) if !typ.is_unknown() => {
@@ -143,6 +143,18 @@ impl RichSymbol {
             None => None,
         };
 
+        // If there is no member access, we need to make sure the symbol is not just a type. This
+        // prevents types from being valid expressions.
+        if var_is_type && member_access.is_none() {
+            ctx.add_err(AnalyzeError::new(
+                ErrorKind::ExpectedExpr,
+                format_code!("expected expression, but found type {}", var_type_id).as_str(),
+                symbol,
+            ));
+
+            return RichSymbol::new_with_default_pos(symbol.name.as_str(), TypeId::unknown(), None);
+        }
+
         // Check if this symbol is actually a constant.
         let (is_const, is_var) = match maybe_symbol {
             Some(var) => (var.is_const, true),
@@ -159,6 +171,37 @@ impl RichSymbol {
             is_method,
             start_pos: symbol.start_pos().clone(),
             end_pos: symbol.end_pos().clone(),
+        }
+    }
+
+    /// Analyzes `symbol`, where `symbol` must be a type and nothing else.
+    pub fn from_type(ctx: &mut ProgramContext, symbol: &Symbol) -> Self {
+        // Try resolve the type from the symbol name.
+        let type_id = TypeId::from_name(symbol.name.as_str());
+        let maybe_type = ctx.get_resolved_type(&type_id);
+
+        // Make sure we could resolve the type.
+        // Since we're expecting a type here, also make sure there is no member access.
+        if maybe_type.is_none() || symbol.member_access.is_some() {
+            ctx.add_err(AnalyzeError::new(
+                ErrorKind::ExpectedType,
+                format_code!("expected type, but found {}", symbol).as_str(),
+                symbol,
+            ));
+
+            return RichSymbol::new_with_default_pos(symbol.name.as_str(), TypeId::unknown(), None);
+        }
+
+        RichSymbol {
+            name: symbol.name.clone(),
+            parent_type_id: type_id,
+            member_access: None,
+            is_type: true,
+            is_const: false,
+            is_var: false,
+            is_method: false,
+            start_pos: symbol.start_pos.clone(),
+            end_pos: symbol.end_pos.clone(),
         }
     }
 
