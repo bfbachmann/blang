@@ -179,12 +179,12 @@ impl RichExpr {
     pub fn from(
         ctx: &mut ProgramContext,
         expr: Expression,
-        expected_type_id: Option<&TypeId>,
+        maybe_expected_type_id: Option<&TypeId>,
     ) -> RichExpr {
         let start_pos = expr.start_pos().clone();
         let end_pos = expr.end_pos().clone();
 
-        let result = match &expr {
+        let mut result = match &expr {
             Expression::Symbol(ref symbol) => {
                 let rich_symbol = RichSymbol::from(ctx, symbol, true, None);
                 let type_id = rich_symbol.get_type_id().clone();
@@ -277,7 +277,7 @@ impl RichExpr {
 
             Expression::FunctionCall(fn_call) => {
                 // Analyze the function call and ensure it has a return type.
-                let rich_call = RichFnCall::from(ctx, fn_call.clone());
+                let rich_call = RichFnCall::from(ctx, fn_call.clone(), maybe_expected_type_id);
                 if let Some(type_id) = rich_call.maybe_ret_type_id.clone() {
                     return RichExpr {
                         kind: RichExprKind::FunctionCall(rich_call),
@@ -359,7 +359,7 @@ impl RichExpr {
             }
 
             Expression::BinaryOperation(ref left_expr, ref op, ref right_expr) => {
-                let expected_operand_tid = match expected_type_id {
+                let expected_operand_tid = match maybe_expected_type_id {
                     Some(tid) => get_expected_operand_type_id(op, tid),
                     None => None,
                 };
@@ -446,15 +446,15 @@ impl RichExpr {
 
         // If it's expected that this expression has a specific type, we need to check that it
         // has that type.
-        if let Some(expected_tid) = expected_type_id {
-            // Compare the analyzed types rather than the type IDs to be safe, as multiple type
-            // IDs can map to the same analyzed type.
+        if let Some(expected_tid) = maybe_expected_type_id {
+            // Try coerce this expression to the expected type before doing the type check.
             let expected_type = ctx.must_get_resolved_type(expected_tid);
-            let actual_type = ctx.must_get_resolved_type(&result.type_id);
+            result = result.try_coerce_to(expected_type);
 
             // Check the type check if either type is unknown, as this implies that semantic
             // analysis has already failed somewhere else in this expression or wherever it's being
             // used.
+            let actual_type = ctx.must_get_resolved_type(&result.type_id);
             let skip_type_check = expected_type.is_unknown() || actual_type.is_unknown();
             if !skip_type_check && !actual_type.is_same_as(expected_type, &HashMap::new()) {
                 ctx.add_err(AnalyzeError::new(
@@ -471,6 +471,32 @@ impl RichExpr {
         }
 
         result
+    }
+
+    /// Tries to coerce this expression to the target type. If coercion is successful, returns
+    /// the coerced expression, otherwise just returns the expression as-is.
+    fn try_coerce_to(mut self, target_type: &RichType) -> Self {
+        match &self.kind {
+            RichExprKind::I64Literal(i) if *i >= 0 => match target_type {
+                RichType::U64 => {
+                    self.kind = RichExprKind::U64Literal(*i as u64);
+                    self.type_id = TypeId::u64();
+                }
+                _ => {}
+            },
+
+            RichExprKind::U64Literal(u) => match target_type {
+                RichType::I64 => {
+                    self.kind = RichExprKind::I64Literal(*u as i64);
+                    self.type_id = TypeId::i64();
+                }
+                _ => {}
+            },
+
+            _ => {}
+        };
+
+        self
     }
 
     /// Creates a new expression with the value of the given symbol.

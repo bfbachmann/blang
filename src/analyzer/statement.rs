@@ -118,7 +118,7 @@ impl RichStatement {
             )),
 
             Statement::FunctionCall(call) => {
-                RichStatement::FunctionCall(RichFnCall::from(ctx, call))
+                RichStatement::FunctionCall(RichFnCall::from(ctx, call, None))
             }
 
             Statement::Conditional(cond) => RichStatement::Conditional(RichCond::from(ctx, cond)),

@@ -116,6 +116,17 @@ impl AnalyzeError {
         }
     }
 
+    pub fn new_with_default_pos(kind: ErrorKind, message: &str) -> Self {
+        AnalyzeError {
+            kind,
+            message: message.to_string(),
+            detail: None,
+            help: None,
+            start_pos: Position::default(),
+            end_pos: Position::default(),
+        }
+    }
+
     pub fn with_detail(self, detail: &str) -> Self {
         AnalyzeError {
             kind: self.kind,

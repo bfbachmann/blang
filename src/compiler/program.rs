@@ -656,4 +656,52 @@ mod tests {
         "#,
         )
     }
+
+    #[test]
+    fn templated_return_types() {
+        assert_compiles(
+            r#"
+            // Any type that has an associated default member function implments the 
+            // Default spec.
+            spec Default {
+                fn default() ~ T with [T]
+            }
+            
+            // Returns the default value any type that implements the Default spec.
+            fn default() ~ T with [T: Default] {
+                return T.default()
+            }
+            
+            impl i64 {
+                fn default() ~ i64 {
+                    return 0
+                }
+            }
+            
+            impl u64 {
+                fn default() ~ u64 {
+                    return 0
+                }
+            }
+            
+            struct MyStruct {
+                i: i64
+                u: u64
+            }
+            
+            impl MyStruct {
+                fn default() ~ MyStruct {
+                    return MyStruct{
+                        i: default()
+                        u: default()
+                    }
+                }
+            }
+            
+            fn main() {
+                let my_struct: MyStruct = default()
+            }
+        "#,
+        )
+    }
 }

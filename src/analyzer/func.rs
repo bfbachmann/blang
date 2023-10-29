@@ -72,6 +72,7 @@ impl RichFn {
         sig: &mut RichFnSig,
         func: Function,
         passed_args: &VecDeque<RichExpr>,
+        maybe_expected_ret_tid: Option<&TypeId>,
     ) -> AnalyzeResult<()> {
         let tmpl_params = match &sig.tmpl_params {
             Some(tp) => tp.params.clone(),
@@ -83,7 +84,7 @@ impl RichFn {
         ctx.push_scope(scope);
 
         // Render the function.
-        let result = render_fn(ctx, sig, func, passed_args);
+        let result = render_fn(ctx, sig, func, passed_args, maybe_expected_ret_tid);
 
         // Pop the scope now that we're done rendering the function.
         ctx.pop_scope();
@@ -99,13 +100,21 @@ fn render_fn(
     sig: &mut RichFnSig,
     func: Function,
     passed_args: &VecDeque<RichExpr>,
+    maybe_expected_ret_tid: Option<&TypeId>,
 ) -> AnalyzeResult<()> {
     // Iterate through template params and try to resolve each one to a concrete type.
     let mut remapped_type_ids: HashMap<TypeId, TypeId> = HashMap::new();
     if let Some(tmpl_params) = &sig.tmpl_params {
         for param in &tmpl_params.params {
             // Try resolve the concrete type that should be expected in place of this param.
-            match resolve_param_type(ctx, sig, passed_args, &param, &remapped_type_ids) {
+            match resolve_param_type(
+                ctx,
+                sig,
+                passed_args,
+                maybe_expected_ret_tid,
+                &param,
+                &remapped_type_ids,
+            ) {
                 Ok(new_type_id) => {
                     let param_type_id = param.get_type_id();
                     remapped_type_ids.insert(param_type_id.clone(), new_type_id.clone());
@@ -127,7 +136,7 @@ fn render_fn(
     check_fn_arg_types(ctx, sig, passed_args, &remapped_type_ids)?;
 
     // Check that the function returns the expected type.
-    check_ret_type(ctx, sig, &remapped_type_ids)?;
+    check_ret_type(ctx, sig, &remapped_type_ids, maybe_expected_ret_tid)?;
 
     // Make the required type ID replacements in the function signature.
     {
@@ -254,41 +263,82 @@ fn check_ret_type(
     ctx: &ProgramContext,
     sig: &RichFnSig,
     remapped_type_ids: &HashMap<TypeId, TypeId>,
+    maybe_expected_ret_tid: Option<&TypeId>,
 ) -> AnalyzeResult<()> {
-    // Return early if there is no return type.
-    if sig.ret_type_id.is_none() {
+    if maybe_expected_ret_tid.is_none() {
         return Ok(());
     }
 
-    // Return early if the return type is not templated.
-    #[allow(dead_code)]
-    let ret_type_id = sig.ret_type_id.as_ref().unwrap();
+    if sig.ret_type_id.is_none() {
+        return Err(AnalyzeError::new_with_default_pos(
+            ErrorKind::ExpectedReturnValue,
+            format_code!(
+                "{} has no return type, but was used in a context where one is expected",
+                sig
+            )
+            .as_str(),
+        ));
+    }
 
-    #[allow(unused_variables)]
-    let ret_type = match remapped_type_ids.get(&ret_type_id) {
-        Some(remapped_type_id) => ctx.must_get_resolved_type(remapped_type_id),
-        None => ctx.must_get_resolved_type(ret_type_id),
-    };
+    let expected_tid = maybe_expected_ret_tid.unwrap();
+    let expected_tid = remapped_type_ids.get(expected_tid).unwrap_or(expected_tid);
 
-    // TODO: Check that the return type is what is expected.
+    let actual_tid = sig.ret_type_id.as_ref().unwrap();
+    let actual_tid = remapped_type_ids.get(actual_tid).unwrap_or(actual_tid);
+
+    let expected_type = ctx.must_get_resolved_type(expected_tid);
+    let actual_type = ctx.must_get_resolved_type(actual_tid);
+
+    // Only do the type check if neither type failed analysis.
+    let skip_check = expected_type.is_unknown() || actual_type.is_unknown();
+    if !skip_check && !actual_type.is_same_as(expected_type, remapped_type_ids) {
+        return Err(AnalyzeError::new_with_default_pos(
+            ErrorKind::MismatchedTypes,
+            format_code!(
+                "expected return type {}, but found {}",
+                expected_type,
+                actual_type
+            )
+            .as_str(),
+        ));
+    }
 
     Ok(())
 }
 
 /// Tries to resolve and return the type ID of the concrete type that should take the place of
-/// `param` in the function signature using the passed arguments. If resolved, maps the param
-/// type ID to the resolved concrete type in the Program context and returns the resolved type ID.
+/// `param` in the function signature using the passed arguments and expected return type. If
+/// resolved, maps the param  type ID to the resolved concrete type in the Program context and
+/// returns the resolved type ID.
 fn resolve_param_type<'a>(
     ctx: &'a mut ProgramContext,
     sig: &'a RichFnSig,
     passed_args: &'a VecDeque<RichExpr>,
+    maybe_expected_ret_tid: Option<&'a TypeId>,
     param: &'a RichTmplParam,
     remapped_type_ids: &'a HashMap<TypeId, TypeId>,
 ) -> AnalyzeResult<&'a TypeId> {
     // Find the concrete type that should be expected in place of this parameterized type.
     let passed_arg = match find_passed_arg_for_param(sig, passed_args, param) {
         Ok(arg) => arg,
-        Err(err) => return Err(err),
+        Err(err) => {
+            // There is no argument that has this param as its type, so check if it's the return
+            // type.
+            if let Some(ret_tid) = &sig.ret_type_id {
+                let ret_type = ctx.must_get_resolved_type(ret_tid);
+                if let RichType::Templated(ret_param) = ret_type {
+                    if ret_param.name == param.name {
+                        if let Some(tid) = maybe_expected_ret_tid {
+                            let concrete_type = ctx.must_get_resolved_type(tid);
+                            ctx.add_resolved_type(param.get_type_id(), concrete_type.clone());
+                            return Ok(tid);
+                        };
+                    }
+                }
+            }
+
+            return Err(err);
+        }
     };
 
     // Now check that the concrete type used in place of the template parameter actually meets the

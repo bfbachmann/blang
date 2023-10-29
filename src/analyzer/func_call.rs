@@ -48,7 +48,11 @@ impl PartialEq for RichFnCall {
 
 impl RichFnCall {
     /// Analyzes the given function call and returns a type-rich version of it.
-    pub fn from(ctx: &mut ProgramContext, call: FunctionCall) -> Self {
+    pub fn from(
+        ctx: &mut ProgramContext,
+        call: FunctionCall,
+        maybe_expected_ret_tid: Option<&TypeId>,
+    ) -> Self {
         // Calls to "main" should not be allowed.
         if call.has_fn_name("main") {
             ctx.add_err(AnalyzeError::new(
@@ -186,7 +190,9 @@ impl RichFnCall {
                 .get_templated_fn(fn_sig.full_name().as_str())
                 .unwrap()
                 .clone();
-            if let Err(mut err) = RichFn::render(ctx, &mut fn_sig, func, &passed_args) {
+            if let Err(mut err) =
+                RichFn::render(ctx, &mut fn_sig, func, &passed_args, maybe_expected_ret_tid)
+            {
                 // We failed to render the function being called, so we should update the error,
                 // store it, and return a placeholder function call.
                 err.start_pos = call.start_pos.clone();
