@@ -423,7 +423,7 @@ impl Expression {
                 }
             }
             // Check if the token is a unary operator.
-            else if let Some(Operator::Not) = Operator::from(&op1_token.kind) {
+            else if let Some(Operator::LogicalNot) = Operator::from(&op1_token.kind) {
                 // We should not be here if we we're expecting a binary operator or the end of the
                 // expression.
                 if expect_binop_or_end {
@@ -714,7 +714,7 @@ mod tests {
                         Symbol::new("other", Position::new(1, 17), Position::new(1, 22)),
                         vec![
                             Expression::UnaryOperation(
-                                Operator::Not,
+                                Operator::LogicalNot,
                                 Box::new(Expression::Symbol(Symbol {
                                     name: "thing".to_string(),
                                     member_access: None,

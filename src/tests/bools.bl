@@ -19,6 +19,12 @@ fn main() {
     assert(-123_123i64 < 0, 10)
     assert(-123_123i64 != 123123, 11)
     assert(123u64 as i64 == 123, 12)
+    assert((true and false) == false, 13)
+    assert((true and true) == true, 14)
+    assert((false and false) == false, 15)
+    assert((true or true) == true, 16)
+    assert((true or false) == true, 17)
+    assert((false or false) == false, 18)
 
     exit(0)
 }

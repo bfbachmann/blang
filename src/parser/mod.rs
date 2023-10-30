@@ -377,7 +377,7 @@ mod tests {
 
     #[test]
     fn invalid_missing_close_paren() {
-        let raw = r#"do(((x+3) > 2) || other"#;
+        let raw = r#"do(((x+3) > 2) or other"#;
         let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let result = Program::from(&mut Stream::from(tokens));
         assert!(matches!(
@@ -394,7 +394,7 @@ mod tests {
 
     #[test]
     fn invalid_start_of_expression() {
-        let raw = r#"do(&& true)"#;
+        let raw = r#"do(and true)"#;
         let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let result = Program::from(&mut Stream::from(tokens));
         assert!(matches!(
@@ -405,10 +405,10 @@ mod tests {
                 token: Some(Token {
                     kind: TokenKind::LogicalAnd,
                     start: Position { line: 1, col: 4 },
-                    end: Position { line: 1, col: 6 },
+                    end: Position { line: 1, col: 7 },
                 }),
                 start_pos: Position { line: 1, col: 4 },
-                end_pos: Position { line: 1, col: 6 },
+                end_pos: Position { line: 1, col: 7 },
             })
         ));
     }

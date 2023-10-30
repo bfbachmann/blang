@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::fmt;
 
 use colored::Colorize;
@@ -217,23 +217,26 @@ impl RichFnCall {
             maybe_ret_type_id = fn_sig.ret_type_id;
         } else {
             // Make sure the arguments are of the right types.
-            let passed_arg_type_ids: Vec<&TypeId> =
-                passed_args.iter().map(|a| &a.type_id).collect();
-            for (passed_type_id, defined) in passed_arg_type_ids.into_iter().zip(fn_sig.args.iter())
-            {
+            for (passed_arg, defined_arg) in passed_args.iter().zip(fn_sig.args.iter()) {
+                // Try coerce the passed expression to the right type before performing the type
+                // check.
+                let defined_type = ctx.must_get_resolved_type(&defined_arg.type_id);
+                let passed_arg = passed_arg.clone().try_coerce_to(defined_type);
+
                 // Skip the check if the argument type is unknown. This will happen if the argument
                 // already failed semantic analysis.
-                if ctx.must_get_resolved_type(passed_type_id).is_unknown() {
+                let passed_type = ctx.must_get_resolved_type(&passed_arg.type_id);
+                if passed_type.is_unknown() {
                     continue;
                 }
 
-                if passed_type_id != &defined.type_id {
+                if !passed_type.is_same_as(defined_type, &HashMap::new()) {
                     ctx.add_err(AnalyzeError::new(
                         ErrorKind::MismatchedTypes,
                         format_code!(
                             "cannot use value of type {} as argument {} to {}",
-                            &passed_type_id,
-                            &defined,
+                            &passed_type,
+                            &defined_arg,
                             &fn_sig,
                         )
                         .as_str(),

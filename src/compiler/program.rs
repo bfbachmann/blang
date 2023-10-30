@@ -285,7 +285,7 @@ mod tests {
             
             fn thing(b: bool) ~ bool {
                 let a = true
-                return !a || b
+                return !a or b
             }
             
             fn other(a: i64, b: i64) ~ i64 {

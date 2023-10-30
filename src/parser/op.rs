@@ -16,7 +16,7 @@ pub enum Operator {
     As,
 
     // Basic unary operators
-    Not,
+    LogicalNot,
 
     // Comparators
     EqualTo,
@@ -49,7 +49,7 @@ impl Operator {
             TokenKind::Modulo => Some(Operator::Modulo),
             TokenKind::LogicalAnd => Some(Operator::LogicalAnd),
             TokenKind::LogicalOr => Some(Operator::LogicalOr),
-            TokenKind::LogicalNot => Some(Operator::Not),
+            TokenKind::LogicalNot => Some(Operator::LogicalNot),
             TokenKind::EqualTo => Some(Operator::EqualTo),
             TokenKind::NotEqualTo => Some(Operator::NotEqualTo),
             TokenKind::GreaterThan => Some(Operator::GreaterThan),
@@ -72,7 +72,7 @@ impl Operator {
             Operator::Modulo => TokenKind::Modulo.to_string(),
             Operator::LogicalAnd => TokenKind::LogicalAnd.to_string(),
             Operator::LogicalOr => TokenKind::LogicalOr.to_string(),
-            Operator::Not => TokenKind::LogicalNot.to_string(),
+            Operator::LogicalNot => TokenKind::LogicalNot.to_string(),
             Operator::EqualTo => TokenKind::EqualTo.to_string(),
             Operator::NotEqualTo => TokenKind::NotEqualTo.to_string(),
             Operator::GreaterThan => TokenKind::GreaterThan.to_string(),
@@ -91,7 +91,7 @@ impl Operator {
         100 - match self {
             Operator::As => 0,
             Operator::LeftParen | Operator::RightParen => 1,
-            Operator::Not => 2,
+            Operator::LogicalNot => 2,
             Operator::Multiply | Operator::Divide | Operator::Modulo => 3,
             Operator::Add | Operator::Subtract => 4,
             Operator::GreaterThan
@@ -108,7 +108,7 @@ impl Operator {
     /// the C standard.
     pub fn is_left_associative(&self) -> bool {
         match self {
-            Operator::Not => false,
+            Operator::LogicalNot => false,
             _ => true,
         }
     }
@@ -116,7 +116,7 @@ impl Operator {
     /// Returns true if this is a binary operator.
     pub fn is_binary(&self) -> bool {
         match self {
-            Operator::Not => false,
+            Operator::LogicalNot => false,
             _ => true,
         }
     }

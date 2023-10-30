@@ -326,7 +326,7 @@ impl RichExpr {
             }
 
             Expression::UnaryOperation(ref op, ref right_expr) => {
-                if *op != Operator::Not {
+                if *op != Operator::LogicalNot {
                     // If this happens, the parser is badly broken.
                     panic!("invalid unary operator {}", op)
                 }
@@ -335,7 +335,10 @@ impl RichExpr {
                 let rich_expr = RichExpr::from(ctx, *right_expr.clone(), Some(&TypeId::bool()));
                 if rich_expr.type_id.is_bool() {
                     RichExpr {
-                        kind: RichExprKind::UnaryOperation(Operator::Not, Box::new(rich_expr)),
+                        kind: RichExprKind::UnaryOperation(
+                            Operator::LogicalNot,
+                            Box::new(rich_expr),
+                        ),
                         type_id: TypeId::bool(),
                         start_pos,
                         end_pos,
@@ -475,7 +478,7 @@ impl RichExpr {
 
     /// Tries to coerce this expression to the target type. If coercion is successful, returns
     /// the coerced expression, otherwise just returns the expression as-is.
-    fn try_coerce_to(mut self, target_type: &RichType) -> Self {
+    pub fn try_coerce_to(mut self, target_type: &RichType) -> Self {
         match &self.kind {
             RichExprKind::I64Literal(i) if *i >= 0 => match target_type {
                 RichType::U64 => {
@@ -1360,7 +1363,7 @@ mod tests {
         let result = RichExpr::from(
             &mut ctx,
             Expression::UnaryOperation(
-                Operator::Not,
+                Operator::LogicalNot,
                 Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
             ),
             None,
@@ -1391,7 +1394,7 @@ mod tests {
         let result = RichExpr::from(
             &mut ctx,
             Expression::UnaryOperation(
-                Operator::Not,
+                Operator::LogicalNot,
                 Box::new(Expression::StrLiteral(StrLit::new_with_default_pos("s"))),
             ),
             None,

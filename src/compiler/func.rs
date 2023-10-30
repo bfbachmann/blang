@@ -1218,7 +1218,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// Compiles a unary operation expression.
     fn compile_unary_op(&mut self, op: &Operator, expr: &RichExpr) -> BasicValueEnum<'ctx> {
         // Only the not operator is supported as a unary operator at the moment.
-        if *op != Operator::Not {
+        if *op != Operator::LogicalNot {
             panic!("unsupported unary operator {op}");
         }
 
