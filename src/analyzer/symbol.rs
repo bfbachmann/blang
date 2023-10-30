@@ -124,7 +124,7 @@ impl RichSymbol {
                 // We could not find the value with the given name, so record the error and return
                 // a placeholder value.
                 ctx.add_err(AnalyzeError::new(
-                    ErrorKind::SymbolNotDefined,
+                    ErrorKind::UndefSymbol,
                     format_code!("{} is not defined in this scope", var_name).as_str(),
                     symbol,
                 ));
@@ -360,7 +360,7 @@ impl RichMemberAccess {
         // Error and return a placeholder value if we couldn't locate the member being accessed.
         if maybe_field_type_id.is_none() {
             ctx.add_err(AnalyzeError::new(
-                ErrorKind::MemberNotDefined,
+                ErrorKind::UndefMember,
                 format_code!("type {} has no member {}", typ, member_name).as_str(),
                 member_access,
             ));

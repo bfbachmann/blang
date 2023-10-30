@@ -71,7 +71,7 @@ impl RichTmplParam {
                     // Make sure the spec exists.
                     if ctx.get_extern_spec(name).is_none() {
                         ctx.add_err(AnalyzeError::new(
-                            ErrorKind::SpecNotDefined,
+                            ErrorKind::UndefSpec,
                             format_code!("spec {} is not defined in this context", name).as_str(),
                             required_spec,
                         ));

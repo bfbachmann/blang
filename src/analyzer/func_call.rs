@@ -6,10 +6,10 @@ use pluralizer::pluralize;
 
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::expr::RichExpr;
-use crate::analyzer::func::RichFn;
 use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#type::{RichType, TypeId};
+use crate::analyzer::render_tmpl::render_fn_tmpl;
 use crate::analyzer::symbol::RichSymbol;
 use crate::parser::func_call::FunctionCall;
 use crate::{format_code, util};
@@ -131,7 +131,7 @@ impl RichFnCall {
                 // This is a call to a method that does not take `this` as its first argument.
                 ctx.add_err(
                     AnalyzeError::new(
-                        ErrorKind::MemberNotDefined,
+                        ErrorKind::UndefMember,
                         format_code!(
                             "cannot call function {} on value of type {}",
                             fn_sig.name,
@@ -190,9 +190,10 @@ impl RichFnCall {
                 .get_templated_fn(fn_sig.full_name().as_str())
                 .unwrap()
                 .clone();
-            if let Err(mut err) =
-                RichFn::render(ctx, &mut fn_sig, func, &passed_args, maybe_expected_ret_tid)
-            {
+            let render_result =
+                render_fn_tmpl(ctx, &mut fn_sig, func, &passed_args, maybe_expected_ret_tid);
+
+            if let Err(mut err) = render_result {
                 // We failed to render the function being called, so we should update the error,
                 // store it, and return a placeholder function call.
                 err.start_pos = call.start_pos.clone();
@@ -261,7 +262,7 @@ impl RichFnCall {
             match ctx.get_type_member_fn(&rich_fn_symbol.parent_type_id, method_name.as_str()) {
                 Some(fn_sig) => Ok(fn_sig),
                 None => Err(AnalyzeError::new(
-                    ErrorKind::MemberNotDefined,
+                    ErrorKind::UndefMember,
                     format_code!(
                         "type {} has no member function {}",
                         rich_fn_symbol.name,

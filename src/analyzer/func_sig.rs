@@ -228,7 +228,7 @@ pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) -> Rich
     let rich_fn_sig = RichFnSig::from(ctx, &sig);
     if ctx.add_extern_fn(rich_fn_sig.clone()).is_some() {
         ctx.add_err(AnalyzeError::new(
-            ErrorKind::FunctionAlreadyDefined,
+            ErrorKind::DuplicateFunction,
             format_code!("function {} was already defined in this scope", sig.name).as_str(),
             sig,
         ));

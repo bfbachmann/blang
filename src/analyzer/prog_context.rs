@@ -304,6 +304,7 @@ pub struct ProgramContext {
     pub types: HashMap<TypeId, RichType>,
     specs: HashMap<String, RichSpec>,
     templated_fns: HashMap<String, Function>,
+    /// Contains functions that were templated but have been rendered.
     rendered_fns: Vec<RichFn>,
     /// Tracks the indices of all the scopes with `ScopeKind::Tmpl`. This is just used to make
     /// finding and accessing template scopes fast and easy.
@@ -765,6 +766,7 @@ impl ProgramContext {
 
     /// Adds the given rendered function to the program context.
     pub fn add_rendered_fn(&mut self, rendered_fn: RichFn) {
+        assert!(!rendered_fn.signature.is_templated());
         self.rendered_fns.push(rendered_fn);
     }
 

@@ -937,7 +937,7 @@ mod tests {
         assert!(matches!(
             ctx.errors().remove(0),
             AnalyzeError {
-                kind: ErrorKind::SymbolNotDefined,
+                kind: ErrorKind::UndefSymbol,
                 ..
             }
         ));

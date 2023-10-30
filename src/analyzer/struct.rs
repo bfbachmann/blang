@@ -238,7 +238,7 @@ impl RichStructInit {
                 Some(typ) => typ,
                 None => {
                     errors.push(AnalyzeError::new(
-                        ErrorKind::StructFieldNotDefined,
+                        ErrorKind::UndefStructField,
                         format_code!("struct type {} has no field {}", struct_type, field_name)
                             .as_str(),
                         // TODO: This should be the location of the bad field instead of the entire

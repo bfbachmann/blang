@@ -173,7 +173,7 @@ impl RichType {
                 Some(type_id) => type_id.clone(),
                 None => {
                     ctx.add_err(AnalyzeError::new(
-                        ErrorKind::TypeNotDefined,
+                        ErrorKind::UndefType,
                         format_code!("type {} is not defined in this scope", this_type.name)
                             .as_str(),
                         this_type,
@@ -241,7 +241,7 @@ impl RichType {
                 }
 
                 ctx.add_err(AnalyzeError::new(
-                    ErrorKind::TypeNotDefined,
+                    ErrorKind::UndefType,
                     format_code!("type {} is not defined", type_name).as_str(),
                     unresolved_type,
                 ));

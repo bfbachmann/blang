@@ -46,7 +46,7 @@ impl RichConst {
         // Make sure this const name doesn't collide with any other const names.
         if ctx.get_symbol(const_decl.name.as_str()).is_some() {
             ctx.add_err(AnalyzeError::new(
-                ErrorKind::ConstAlreadyDefined,
+                ErrorKind::DuplicateConst,
                 format_code!(
                     "constant {} is already defined in this scope",
                     const_decl.name

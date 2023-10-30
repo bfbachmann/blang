@@ -115,7 +115,7 @@ fn define_types(ctx: &mut ProgramContext, prog: &Program) {
             Statement::StructDeclaration(struct_type) => {
                 if ctx.is_type_or_spec_name_used(struct_type.name.as_str()) {
                     ctx.add_err(AnalyzeError::new(
-                        ErrorKind::TypeAlreadyDefined,
+                        ErrorKind::DuplicateType,
                         format_code!(
                             "another type or spec with the name {} already exists",
                             struct_type.name
@@ -132,7 +132,7 @@ fn define_types(ctx: &mut ProgramContext, prog: &Program) {
             Statement::EnumDeclaration(enum_type) => {
                 if ctx.is_type_or_spec_name_used(enum_type.name.as_str()) {
                     ctx.add_err(AnalyzeError::new(
-                        ErrorKind::TypeAlreadyDefined,
+                        ErrorKind::DuplicateType,
                         format_code!(
                             "another type or spec with the name {} already exists",
                             enum_type.name
@@ -149,7 +149,7 @@ fn define_types(ctx: &mut ProgramContext, prog: &Program) {
             Statement::Spec(spec) => {
                 if ctx.is_type_or_spec_name_used(spec.name.as_str()) {
                     ctx.add_err(AnalyzeError::new(
-                        ErrorKind::TypeAlreadyDefined,
+                        ErrorKind::DuplicateType,
                         format_code!(
                             "another type or spec with the name {} already exists",
                             spec.name
@@ -236,6 +236,15 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
 
             Statement::ExternFns(ext) => {
                 for sig in &ext.fn_sigs {
+                    if sig.tmpl_params.is_some() {
+                        ctx.add_err(AnalyzeError::new(
+                            ErrorKind::InvalidExtern,
+                            "extern functions cannot be templated",
+                            sig,
+                        ));
+                        continue;
+                    }
+
                     analyze_fn_sig(ctx, sig);
                 }
             }
@@ -257,7 +266,7 @@ fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
                         .is_some()
                     {
                         ctx.add_err(AnalyzeError::new(
-                            ErrorKind::FunctionAlreadyDefined,
+                            ErrorKind::DuplicateFunction,
                             format_code!(
                                 "function {} was already defined for type {}",
                                 member_fn.signature.name,
@@ -328,6 +337,13 @@ mod tests {
         }
     }
 
+    fn check_result(result: AnalyzeResult<RichProg>, expected_err_kind: Option<ErrorKind>) {
+        match expected_err_kind {
+            Some(kind) => assert_eq!(result.unwrap_err().kind, kind),
+            None => assert!(result.is_ok()),
+        }
+    }
+
     #[test]
     fn call_to_main() {
         let raw = r#"
@@ -340,13 +356,7 @@ mod tests {
         }
         "#;
         let result = analyze_prog(raw);
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::CallToMain,
-                ..
-            })
-        ));
+        check_result(result, Some(ErrorKind::CallToMain));
     }
 
     #[test]
@@ -358,7 +368,7 @@ mod tests {
         }
         "#;
         let result = analyze_prog(raw);
-        assert!(matches!(result, Ok(_)));
+        check_result(result, None);
     }
 
     #[test]
@@ -370,13 +380,7 @@ mod tests {
         }
         "#;
         let result = analyze_prog(raw);
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::ImmutableAssignment,
-                ..
-            })
-        ));
+        check_result(result, Some(ErrorKind::ImmutableAssignment));
     }
 
     #[test]
@@ -387,7 +391,7 @@ mod tests {
             }
         "#;
         let result = analyze_prog(raw);
-        assert!(result.is_ok());
+        check_result(result, None);
     }
 
     #[test]
@@ -398,13 +402,7 @@ mod tests {
             }
         "#;
         let result = analyze_prog(raw);
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::InvalidStatement,
-                ..
-            })
-        ));
+        check_result(result, Some(ErrorKind::InvalidStatement));
     }
 
     #[test]
@@ -415,13 +413,7 @@ mod tests {
             }
         "#;
         let result = analyze_prog(raw);
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::ImmutableAssignment,
-                ..
-            })
-        ));
+        check_result(result, Some(ErrorKind::ImmutableAssignment));
     }
 
     #[test]
@@ -432,7 +424,7 @@ mod tests {
             let s = "hello world!" 
         }"#;
         let result = analyze_prog(raw);
-        assert!(matches!(result, Ok(_)));
+        check_result(result, None);
     }
 
     #[test]
@@ -443,13 +435,7 @@ mod tests {
         }
         "#;
         let result = analyze_prog(raw);
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::SymbolNotDefined,
-                ..
-            })
-        ));
+        check_result(result, Some(ErrorKind::UndefSymbol));
     }
 
     #[test]
@@ -459,13 +445,7 @@ mod tests {
         fn test(thing: str) {}
         "#;
         let result = analyze_prog(raw);
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::FunctionAlreadyDefined,
-                ..
-            })
-        ));
+        check_result(result, Some(ErrorKind::DuplicateFunction));
     }
 
     #[test]
@@ -482,7 +462,7 @@ mod tests {
         "#;
 
         let result = analyze_prog(raw);
-        assert!(matches!(result, Ok(_)));
+        check_result(result, None);
     }
 
     #[test]
@@ -547,7 +527,7 @@ mod tests {
         fn check_struct(s: MyStruct) {}
         "#;
         let result = analyze_prog(raw);
-        assert!(matches!(result, Ok(_)));
+        check_result(result, None);
     }
 
     #[test]
@@ -601,7 +581,7 @@ mod tests {
             }
         "#;
         let result = analyze_prog(raw);
-        assert!(matches!(result, Ok(_)));
+        check_result(result, None);
     }
 
     #[test]
@@ -612,13 +592,7 @@ mod tests {
             }
         "#;
         let result = analyze_prog(raw);
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::InfiniteSizedType,
-                ..
-            })
-        ));
+        check_result(result, Some(ErrorKind::InfiniteSizedType));
     }
 
     #[test]
@@ -635,13 +609,7 @@ mod tests {
             }
         "#;
         let result = analyze_prog(raw);
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::InfiniteSizedType,
-                ..
-            })
-        ));
+        check_result(result, Some(ErrorKind::InfiniteSizedType));
     }
 
     #[test]
@@ -658,13 +626,7 @@ mod tests {
             }
         "#;
         let result = analyze_prog(raw);
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::InfiniteSizedType,
-                ..
-            })
-        ));
+        check_result(result, Some(ErrorKind::InfiniteSizedType));
     }
 
     #[test]
@@ -716,7 +678,7 @@ mod tests {
         assert!(matches!(
             result,
             Err(AnalyzeError {
-                kind: ErrorKind::TypeAlreadyDefined,
+                kind: ErrorKind::DuplicateType,
                 ..
             })
         ))
@@ -753,7 +715,7 @@ mod tests {
            }
         "#,
         );
-        assert!(result.is_ok());
+        check_result(result, None);
     }
 
     #[test]
@@ -768,8 +730,7 @@ mod tests {
 
         for prog in programs {
             let result = analyze_prog(prog);
-            assert!(result.is_err());
-            assert_eq!(result.err().unwrap().kind, ErrorKind::InvalidStatement);
+            check_result(result, Some(ErrorKind::InvalidStatement));
         }
     }
 
@@ -786,13 +747,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::UseOfMovedValue,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::UseOfMovedValue));
     }
 
     #[test]
@@ -812,13 +767,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::UseOfMovedValue,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::UseOfMovedValue));
     }
 
     #[test]
@@ -830,13 +779,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::TypeNotDefined,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::UndefType));
     }
 
     #[test]
@@ -854,13 +797,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::UseOfMovedValue,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::UseOfMovedValue));
     }
 
     #[test]
@@ -879,7 +816,7 @@ mod tests {
             }
             "#,
         );
-        assert!(result.is_ok())
+        check_result(result, None);
     }
 
     #[test]
@@ -901,7 +838,7 @@ mod tests {
             }
             "#,
         );
-        assert!(result.is_ok())
+        check_result(result, None);
     }
 
     #[test]
@@ -924,13 +861,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::UseOfMovedValue,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::UseOfMovedValue));
     }
 
     #[test]
@@ -952,7 +883,7 @@ mod tests {
             }
             "#,
         );
-        assert!(result.is_ok());
+        check_result(result, None);
     }
 
     #[test]
@@ -976,13 +907,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::UseOfMovedValue,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::UseOfMovedValue));
     }
 
     #[test]
@@ -1003,13 +928,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::UseOfMovedValue,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::UseOfMovedValue));
     }
 
     #[test]
@@ -1030,7 +949,7 @@ mod tests {
             }
             "#,
         );
-        assert!(result.is_ok())
+        check_result(result, None);
     }
 
     #[test]
@@ -1055,7 +974,7 @@ mod tests {
             }
             "#,
         );
-        assert!(result.is_ok())
+        check_result(result, None);
     }
 
     #[test]
@@ -1073,13 +992,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::MismatchedTypes,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -1092,13 +1005,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::MemberNotDefined,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::UndefMember));
     }
 
     #[test]
@@ -1111,13 +1018,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::MismatchedTypes,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -1129,13 +1030,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::InvalidStatement,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::InvalidStatement));
     }
 
     #[test]
@@ -1148,13 +1043,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::ConstAlreadyDefined,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::DuplicateConst));
     }
 
     #[test]
@@ -1164,13 +1053,7 @@ mod tests {
             const a: {bool, i64, i64} = {1, 2, true}
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::MismatchedTypes,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -1184,13 +1067,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::ImmutableAssignment,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::ImmutableAssignment));
     }
 
     #[test]
@@ -1212,13 +1089,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::FunctionAlreadyDefined,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::DuplicateFunction));
     }
 
     #[test]
@@ -1231,13 +1102,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::DuplicateEnumVariant,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::DuplicateEnumVariant));
     }
 
     #[test]
@@ -1248,22 +1113,10 @@ mod tests {
             struct E {}
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::TypeAlreadyDefined,
-                ..
-            })
-        ));
+        check_result(result, Some(ErrorKind::DuplicateType));
 
         let result = analyze_prog(r#"enum i64 {}"#);
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::TypeAlreadyDefined,
-                ..
-            })
-        ));
+        check_result(result, Some(ErrorKind::DuplicateType));
     }
 
     #[test]
@@ -1279,13 +1132,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::InfiniteSizedType,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::InfiniteSizedType));
     }
 
     #[test]
@@ -1297,13 +1144,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::InfiniteSizedType,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::InfiniteSizedType));
     }
 
     #[test]
@@ -1314,13 +1155,7 @@ mod tests {
             spec A {}
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::SpecAlreadyDefined,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::DuplicateSpec));
     }
 
     #[test]
@@ -1330,13 +1165,7 @@ mod tests {
             fn test(a: i64, a: bool) {}
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::DuplicateFnArg,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::DuplicateFnArg));
     }
 
     #[test]
@@ -1348,13 +1177,7 @@ mod tests {
             {}
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::SpecNotDefined,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::UndefSpec));
     }
 
     #[test]
@@ -1377,13 +1200,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::SpecNotSatisfied,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::SpecNotSatisfied));
     }
 
     #[test]
@@ -1402,13 +1219,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::MismatchedTypes,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -1422,13 +1233,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::MismatchedTypes,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -1444,13 +1249,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::UnresolvedTmplParams,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::UnresolvedTmplParams));
     }
 
     #[test]
@@ -1463,13 +1262,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::InvalidTypeCast,
-                ..
-            })
-        ));
+        check_result(result, Some(ErrorKind::InvalidTypeCast));
     }
 
     #[test]
@@ -1482,13 +1275,7 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::ExpectedType,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::ExpectedType));
     }
 
     #[test]
@@ -1500,12 +1287,12 @@ mod tests {
             }
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::ExpectedExpr,
-                ..
-            })
-        ))
+        check_result(result, Some(ErrorKind::ExpectedExpr));
+    }
+
+    #[test]
+    fn invalid_tmpl_extern_fn() {
+        let result = analyze_prog(r#"extern fn free(ptr: T) with [T]"#);
+        check_result(result, Some(ErrorKind::InvalidExtern));
     }
 }

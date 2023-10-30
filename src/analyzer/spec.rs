@@ -23,7 +23,7 @@ impl RichSpec {
         if ctx.get_spec(spec_.name.as_str()).is_some() {
             // Record the error and return a placeholder value.
             ctx.add_err(AnalyzeError::new(
-                ErrorKind::SpecAlreadyDefined,
+                ErrorKind::DuplicateSpec,
                 format_code!("another spec named {} already exists", spec_.name).as_str(),
                 spec_,
             ));
