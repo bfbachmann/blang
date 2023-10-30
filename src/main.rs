@@ -194,7 +194,11 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> Option<Program
             Ok(result) => result,
         };
 
-        if let Err(err) = write!(dst_file, "{:#?}", &prog_analysis.prog) {
+        if let Err(err) = write!(
+            dst_file,
+            "program: {:#?}\ntypes: {:#?}",
+            &prog_analysis.prog, &prog_analysis.types
+        ) {
             fatalln!(
                 "Error writing AST to file {}: {}",
                 dst.to_str().unwrap_or_default(),
