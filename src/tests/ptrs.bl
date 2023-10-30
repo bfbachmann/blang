@@ -1,10 +1,10 @@
 extern {
-    fn exit(code: i64)
+    fn exit(code: u64)
     fn malloc(size: u64) ~ ptr
     fn free(ptr: ptr)
 }
 
-fn assert(b: bool, code: i64) {
+fn assert(b: bool, code: u64) {
     if !b {
         exit(code)
     }

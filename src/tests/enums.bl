@@ -1,4 +1,4 @@
-extern fn exit(code: i64)
+extern fn exit(code: u64)
 
 struct S {
     i: i64

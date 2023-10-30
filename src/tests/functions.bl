@@ -1,4 +1,4 @@
-extern fn exit(code: i64)
+extern fn exit(code: u64)
 
 fn cumulative_sum(n: i64) ~ i64 {
     let mut result = 0
@@ -21,7 +21,7 @@ fn fib(n: i64) ~ i64 {
     return fib(n-1) + fib(n-2)
 }
 
-fn assert(b: bool, exit_code: i64) {
+fn assert(b: bool, exit_code: u64) {
     if !b {
         exit(exit_code)
     }

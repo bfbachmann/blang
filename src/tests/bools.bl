@@ -1,6 +1,6 @@
-extern fn exit(code: i64)
+extern fn exit(code: u64)
 
-fn assert(b: bool, exit_code: i64) {
+fn assert(b: bool, exit_code: u64) {
     if !b {
         exit(exit_code)
     }
