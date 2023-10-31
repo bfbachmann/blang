@@ -44,7 +44,7 @@ pub fn render_fn_tmpl(
 
     // Add the rendered function as a resolved type with the new type ID so it can be
     // looked up later.
-    ctx.add_resolved_type(sig.type_id.clone(), RichType::from_fn_sig(sig.clone()));
+    ctx.add_rendered_type(sig.type_id.clone(), RichType::from_fn_sig(sig.clone()));
 
     // Add the rendered function to the program context so it can be included in the AST
     // later.
@@ -288,7 +288,7 @@ fn resolve_param_type<'a>(
 ) -> AnalyzeResult<&'a TypeId> {
     // Find the concrete type that should be expected in place of this parameterized type.
     let resolved_tid = match resolve_type_for_param(sig, passed_arg_tids, param) {
-        Ok(arg) => arg,
+        Ok(tid) => tid,
         Err(err) => {
             // There is no argument that has this param as its type, so check if it's the return
             // type.
@@ -359,7 +359,7 @@ fn check_type_for_param<'a>(
     param: &'a RichTmplParam,
     remapped_type_ids: &'a HashMap<TypeId, TypeId>,
 ) -> AnalyzeResult<()> {
-    let passed_type = ctx.must_get_resolved_type(resolved_tid);
+    let resolved_type = ctx.must_get_resolved_type(resolved_tid);
 
     if let Some(expected_type_id) = &param.required_type_id {
         // This is a template parameter that is just an alias for a concrete type, so make
@@ -372,14 +372,14 @@ fn check_type_for_param<'a>(
             not_templated => not_templated,
         };
 
-        if !passed_type.is_same_as(expected_type, remapped_type_ids) {
+        if !resolved_type.is_same_as(expected_type, remapped_type_ids) {
             return Err(AnalyzeError::new_with_default_pos(
                 ErrorKind::MismatchedTypes,
                 format_code!(
                     "expected argument type {} (in place of parameter {}), but found {}",
                     expected_type,
                     param,
-                    passed_type,
+                    resolved_type,
                 )
                 .as_str(),
             ));
@@ -395,7 +395,7 @@ fn check_type_for_param<'a>(
                     ErrorKind::SpecNotSatisfied,
                     format_code!(
                         "argument has type {} which doesn't satisfy spec {}",
-                        passed_type,
+                        resolved_type,
                         spec.name,
                     )
                     .as_str(),

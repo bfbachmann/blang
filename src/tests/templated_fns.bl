@@ -68,6 +68,11 @@ with [T: Zero] {
     return v == T.zero()
 }
 
+fn get_value(t: T) ~ T
+with [T] {
+    return t
+}
+
 fn main() {
     // Check that template parameters work in place of concrete types.
     {
@@ -88,10 +93,16 @@ fn main() {
         do_nothing("another", "test")
     }
 
-    // Check that we can use templated methods that call type member functions
+    // Check that we can use templated functions that call type member functions
     // on our templated types.
     {
         assert(is_zero_value(0), 4)
+    }
+
+    // Check that we can use templated functions as variables.
+    {
+        let f: fn (u64) ~ u64 = get_value
+        assert(apply(f, 10u64) == 10u64, 5)
     }
 
     exit(0)

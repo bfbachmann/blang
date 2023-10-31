@@ -53,7 +53,7 @@ impl ScopedSymbol {
 }
 
 /// Represents a kind of scope in which symbols can be defined.
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum ScopeKind {
     FnBody,
     Inline,
@@ -484,6 +484,15 @@ impl ProgramContext {
             .add_resolved_type(id, resolved)
     }
 
+    /// Adds the given type mapping to the top level scope in the program context. This should only
+    /// be used for templated types that have been rendered.
+    pub fn add_rendered_type(&mut self, id: TypeId, resolved: RichType) -> Option<RichType> {
+        self.stack
+            .front_mut()
+            .unwrap()
+            .add_resolved_type(id, resolved)
+    }
+
     /// Removes the resolved type that corresponds to `id` from the current scope only and returns
     /// it, if found.
     pub fn remove_resolved_type(&mut self, id: &TypeId) -> Option<RichType> {
@@ -582,8 +591,7 @@ impl ProgramContext {
     /// Attempts to locate the resolved type corresponding to the given type ID and returns it,
     /// if found. Panics if the type is not found.
     pub fn must_get_resolved_type(&self, id: &TypeId) -> &RichType {
-        let id = self.maybe_remap_type_id(id);
-        match self.reverse_search_stack(|scope| scope.get_resolved_type(id)) {
+        match self.get_resolved_type(id) {
             Some(typ) => typ,
             None => panic!("type {} does not exist in the program context", id),
         }

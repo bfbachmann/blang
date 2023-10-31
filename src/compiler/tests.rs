@@ -460,8 +460,15 @@ mod tests {
                 return t
             }
             
+            fn apply(f: F, t: T) ~ T
+            with [T, F = fn (T) ~ T] {
+                return f(t)
+            }
+            
             fn main() {
-                let test_fn: fn (i64) ~ i64 = test
+                let result: i64 = test(1)
+                let t: fn (u64) ~ u64 = test
+                let result = apply(t, 234u64)
             }
             "#,
         )
