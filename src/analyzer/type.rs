@@ -321,6 +321,14 @@ impl RichType {
         matches!(self, RichType::I64 | RichType::U64)
     }
 
+    /// Returns true if the type is templated.
+    pub fn is_templated(&self) -> bool {
+        match self {
+            RichType::Function(sig) => sig.is_templated(),
+            _ => false,
+        }
+    }
+
     /// Returns a mapping from primitive type ID to analyzed primitive type.
     pub fn primitives() -> HashMap<TypeId, RichType> {
         // TODO: make this static?

@@ -2,10 +2,16 @@ use std::fmt;
 
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::token::Token;
+use crate::parser::arg::Argument;
 use crate::parser::closure::Closure;
 use crate::parser::error::ParseResult;
 use crate::parser::func_sig::FunctionSignature;
+use crate::parser::lambda::LambdaDecl;
+use crate::parser::r#type::Type;
+use crate::parser::ret::Ret;
+use crate::parser::statement::Statement;
 use crate::parser::stream::Stream;
+use crate::parser::tmpl_params::{TmplParam, TmplParams};
 
 /// Represents a function declaration.
 #[derive(Debug, PartialEq, Clone)]
@@ -77,5 +83,66 @@ impl Function {
 
         // Now that we have the function name and args, create the node.
         Ok(Function::new(sig, body))
+    }
+
+    /// Converts the given lambda into a function.
+    pub fn from_lambda(lambda: LambdaDecl) -> Self {
+        let start_pos = lambda.start_pos().clone();
+        let end_pos = lambda.end_pos().clone();
+        let mut tmpl_params = TmplParams::new_with_default_pos();
+        let mut args = vec![];
+
+        // Convert lambda arguments.
+        for arg in lambda.args {
+            let start_pos = arg.start_pos().clone();
+            let end_pos = arg.end_pos().clone();
+
+            let typ = match arg.maybe_type {
+                Some(typ) => typ,
+                None => {
+                    let type_name = format!("{}Type", arg.name);
+                    tmpl_params
+                        .params
+                        .push(TmplParam::new_with_default_pos(type_name.as_str()));
+                    Type::new_unknown(type_name.as_str())
+                }
+            };
+
+            args.push(Argument::new(
+                arg.name.as_str(),
+                typ,
+                arg.is_mut,
+                start_pos,
+                end_pos,
+            ))
+        }
+
+        // Convert lambda return type.
+        let ret_type_name = "R";
+        tmpl_params
+            .params
+            .push(TmplParam::new_with_default_pos(ret_type_name));
+        let ret_type = Type::new_unknown(ret_type_name);
+
+        // Convert the lambda expression to a function body containing only a return statement.
+        let ret_start = lambda.expr.start_pos();
+        let ret_end = lambda.expr.end_pos();
+        let return_statement = Statement::Return(Ret::new(
+            Some(lambda.expr.clone()),
+            ret_start.clone(),
+            ret_end.clone(),
+        ));
+
+        let signature =
+            FunctionSignature::new_tmpl("", args, Some(ret_type), tmpl_params, start_pos, end_pos);
+
+        let body = Closure::new(
+            vec![return_statement],
+            None,
+            ret_start.clone(),
+            ret_end.clone(),
+        );
+
+        Function { signature, body }
     }
 }

@@ -504,10 +504,10 @@ impl ProgramContext {
         }
     }
 
-    /// Adds the external function signature to the context. If there was already a function with
-    /// the same name, returns the old function signature.
+    /// Adds the external function signature to the top level of the program context. If there was
+    /// already a function with the same name, returns the old function signature.
     pub fn add_extern_fn(&mut self, sig: RichFnSig) -> Option<RichFnSig> {
-        self.stack.back_mut().unwrap().add_extern_fn(sig)
+        self.stack.front_mut().unwrap().add_extern_fn(sig)
     }
 
     /// Adds the function to the context. If there was already a function with the same name,
@@ -759,9 +759,15 @@ impl ProgramContext {
     }
 
     /// Attempts to locate and return a templated function by the given name. Note that `full_name`
-    /// should be the fully-qualified name of the function.
-    pub fn get_templated_fn(&mut self, full_name: &str) -> Option<&Function> {
-        self.templated_fns.get(full_name)
+    /// should be the fully-qualified name of the function. Panics if the function is not found.
+    pub fn must_get_templated_fn(&mut self, full_name: &str) -> &Function {
+        match self.templated_fns.get(full_name) {
+            Some(f) => f,
+            None => panic!(
+                "function {} does not exist in the program context",
+                full_name
+            ),
+        }
     }
 
     /// Adds the given rendered function to the program context.

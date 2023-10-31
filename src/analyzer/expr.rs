@@ -8,17 +8,19 @@ use crate::analyzer::closure::RichClosure;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::func::RichFn;
 use crate::analyzer::func_call::RichFnCall;
-use crate::analyzer::func_sig::RichFnSig;
+use crate::analyzer::func_sig::{analyze_fn_sig, RichFnSig};
 use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
 use crate::analyzer::r#enum::{RichEnumTypeVariant, RichEnumVariantInit};
 use crate::analyzer::r#struct::RichStructInit;
 use crate::analyzer::r#type::{RichType, TypeId};
+use crate::analyzer::render_tmpl::render_fn_tmpl;
 use crate::analyzer::symbol::RichSymbol;
 use crate::analyzer::tuple::RichTupleInit;
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::expr::Expression;
 use crate::parser::op::Operator;
 use crate::parser::r#type::Type;
+use crate::parser::symbol::Symbol;
 use crate::parser::unresolved::UnresolvedType;
 use crate::{format_code, locatable_impl};
 
@@ -325,6 +327,38 @@ impl RichExpr {
                 }
             }
 
+            Expression::Lambda(lambda_fn) => {
+                let mut lambda_fn = lambda_fn.clone();
+
+                // TODO: Is this going to work if there are two lambdas at the same position in
+                // separate source files?
+                let name = format!("lambda{}", lambda_fn.start_pos());
+                lambda_fn.signature.name = name.to_string();
+
+                // Analyze the function signature so it is at least defined as an "extern function"
+                // in the program context.
+                let fn_sig = analyze_fn_sig(ctx, &lambda_fn.signature);
+                let full_fn_name = fn_sig.full_name();
+
+                // Add the templated function to the program context so we can create a symbol
+                // that refers to it.
+                ctx.add_templated_fn(full_fn_name.as_str(), *lambda_fn.clone());
+
+                // Return an expression that is just a symbol referencing the function by name.
+                let symbol = RichSymbol::from(
+                    ctx,
+                    &Symbol::new_with_default_pos(full_fn_name.as_str()),
+                    true,
+                    None,
+                );
+                RichExpr {
+                    kind: RichExprKind::Symbol(symbol),
+                    type_id: fn_sig.type_id,
+                    start_pos: lambda_fn.start_pos().clone(),
+                    end_pos: lambda_fn.end_pos().clone(),
+                }
+            }
+
             Expression::UnaryOperation(ref op, ref right_expr) => {
                 if *op != Operator::LogicalNot {
                     // If this happens, the parser is badly broken.
@@ -447,38 +481,71 @@ impl RichExpr {
             }
         };
 
-        // If it's expected that this expression has a specific type, we need to check that it
-        // has that type.
-        if let Some(expected_tid) = maybe_expected_type_id {
-            // Try coerce this expression to the expected type before doing the type check.
-            let expected_type = ctx.must_get_resolved_type(expected_tid);
-            result = result.try_coerce_to(expected_type);
+        // Try to (safely) coerce the expression to the right type (this may involve template
+        // rendering).
+        result = result.coerce_and_check_types(ctx, maybe_expected_type_id, &expr);
 
-            // Check the type check if either type is unknown, as this implies that semantic
-            // analysis has already failed somewhere else in this expression or wherever it's being
-            // used.
-            let actual_type = ctx.must_get_resolved_type(&result.type_id);
-            let skip_type_check = expected_type.is_unknown() || actual_type.is_unknown();
-            if !skip_type_check && !actual_type.is_same_as(expected_type, &HashMap::new()) {
-                ctx.add_err(AnalyzeError::new(
-                    ErrorKind::MismatchedTypes,
-                    format_code!(
-                        "expected expression of type {}, but found {}",
-                        expected_type,
-                        actual_type,
-                    )
-                    .as_str(),
-                    &expr,
-                ));
-            }
+        // Make sure the resulting type is not still templated. If it is, coercion/rendering failed.
+        let actual_type = ctx.must_get_resolved_type(&result.type_id).clone();
+        if actual_type.is_templated() {
+            ctx.add_err(AnalyzeError::new(
+                ErrorKind::UnresolvedTmplParams,
+                format_code!("failed to resolve template parameters for {}", expr).as_str(),
+                &expr,
+            ));
         }
 
         result
     }
 
+    /// Checks if type coercion to the expected type is necessary and, if so, attempts it before
+    /// performing type checks. Adds an error to the program context if type checks fail. No
+    /// type checks are performed if `maybe_expected_type_id` is None.
+    fn coerce_and_check_types(
+        mut self,
+        ctx: &mut ProgramContext,
+        maybe_expected_type_id: Option<&TypeId>,
+        expr: &Expression,
+    ) -> Self {
+        let expected_tid = match maybe_expected_type_id {
+            Some(tid) => tid,
+            None => return self,
+        };
+
+        let expected_type = ctx.must_get_resolved_type(expected_tid).clone();
+        if expected_tid == &self.type_id || expected_type.is_unknown() {
+            return self;
+        }
+
+        // Try coerce this expression to the expected type before doing the type check.
+        self = self.try_coerce_to(ctx, &expected_type);
+
+        // Skip the type check if either type is unknown, as this implies that semantic analysis
+        // has already failed somewhere else in this expression or wherever it's being used.
+        let actual_type = ctx.must_get_resolved_type(&self.type_id).clone();
+        if actual_type.is_unknown() {
+            return self;
+        }
+
+        if !actual_type.is_same_as(&expected_type, &HashMap::new()) {
+            ctx.add_err(AnalyzeError::new(
+                ErrorKind::MismatchedTypes,
+                format_code!(
+                    "expected expression of type {}, but found {}",
+                    expected_type,
+                    actual_type,
+                )
+                .as_str(),
+                expr,
+            ));
+        }
+
+        self
+    }
+
     /// Tries to coerce this expression to the target type. If coercion is successful, returns
     /// the coerced expression, otherwise just returns the expression as-is.
-    pub fn try_coerce_to(mut self, target_type: &RichType) -> Self {
+    pub fn try_coerce_to(mut self, ctx: &mut ProgramContext, target_type: &RichType) -> Self {
         match &self.kind {
             RichExprKind::I64Literal(i) if *i >= 0 => match target_type {
                 RichType::U64 => {
@@ -495,6 +562,56 @@ impl RichExpr {
                 }
                 _ => {}
             },
+
+            RichExprKind::Symbol(symbol) => {
+                let tid = symbol.get_type_id();
+                let mut fn_sig = match ctx.must_get_resolved_type(tid) {
+                    // Only continue if the symbol refers to a templated function.
+                    RichType::Function(sig) if sig.is_templated() => sig.clone(),
+                    _ => return self,
+                };
+
+                let func = ctx
+                    .must_get_templated_fn(fn_sig.full_name().as_str())
+                    .clone();
+
+                // Collect argument and return type info from the target type.
+                let target_fn_sig = match target_type {
+                    RichType::Function(sig) => sig,
+                    _ => return self,
+                };
+
+                let passed_arg_tids: Vec<TypeId> = target_fn_sig
+                    .args
+                    .iter()
+                    .map(|a| a.type_id.clone())
+                    .collect();
+                let maybe_expected_ret_tid = target_fn_sig.ret_type_id.clone();
+
+                // Try render the templated function.
+                let render_result = render_fn_tmpl(
+                    ctx,
+                    &mut fn_sig,
+                    func,
+                    &passed_arg_tids,
+                    maybe_expected_ret_tid.as_ref(),
+                );
+
+                // Update the function type ID and symbol name even if rendering failed.
+                match &mut self.kind {
+                    RichExprKind::Symbol(symbol) => symbol.name = fn_sig.full_name(),
+                    _ => unreachable!(),
+                };
+                self.type_id = fn_sig.type_id;
+
+                // Record the rendering error if there was one and return early.
+                if let Err(mut err) = render_result {
+                    err.start_pos = self.start_pos.clone();
+                    err.end_pos = self.end_pos.clone();
+                    ctx.add_err(err);
+                    return self;
+                }
+            }
 
             _ => {}
         };

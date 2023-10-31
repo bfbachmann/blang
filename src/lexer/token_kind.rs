@@ -76,6 +76,7 @@ pub enum TokenKind {
     Tilde,
     At,
     With,
+    DollarSign,
 
     // User-defined values
     Identifier(String),
@@ -141,6 +142,7 @@ impl Clone for TokenKind {
             TokenKind::Spec => TokenKind::Spec,
             TokenKind::With => TokenKind::With,
             TokenKind::As => TokenKind::As,
+            TokenKind::DollarSign => TokenKind::DollarSign,
         }
     }
 }
@@ -218,6 +220,7 @@ impl TokenKind {
             TokenKind::Spec => "spec".to_string(),
             TokenKind::With => "with".to_string(),
             TokenKind::As => "as".to_string(),
+            TokenKind::DollarSign => "$".to_string(),
         }
     }
 
@@ -316,6 +319,7 @@ impl TokenKind {
             (TokenKind::Spec.to_string(), TokenKind::Spec),
             (TokenKind::With.to_string(), TokenKind::With),
             (TokenKind::As.to_string(), TokenKind::As),
+            (TokenKind::DollarSign.to_string(), TokenKind::DollarSign),
         ]);
 
         // Trim syntactically meaningless whitespace.

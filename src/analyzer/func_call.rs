@@ -68,6 +68,7 @@ impl RichFnCall {
             .iter()
             .map(|arg| RichExpr::from(ctx, arg.clone(), None))
             .collect();
+        let passed_arg_tids: Vec<TypeId> = passed_args.iter().map(|a| a.type_id.clone()).collect();
 
         // Get the type ID of the first argument so we can pass it as a hint to the variable
         // resolver. The variable resolver can use it as a means of locating member functions
@@ -187,11 +188,15 @@ impl RichFnCall {
         // inside the program context.
         if fn_sig.is_templated() {
             let func = ctx
-                .get_templated_fn(fn_sig.full_name().as_str())
-                .unwrap()
+                .must_get_templated_fn(fn_sig.full_name().as_str())
                 .clone();
-            let render_result =
-                render_fn_tmpl(ctx, &mut fn_sig, func, &passed_args, maybe_expected_ret_tid);
+            let render_result = render_fn_tmpl(
+                ctx,
+                &mut fn_sig,
+                func,
+                &passed_arg_tids,
+                maybe_expected_ret_tid,
+            );
 
             if let Err(mut err) = render_result {
                 // We failed to render the function being called, so we should update the error,
@@ -220,8 +225,8 @@ impl RichFnCall {
             for (passed_arg, defined_arg) in passed_args.iter().zip(fn_sig.args.iter()) {
                 // Try coerce the passed expression to the right type before performing the type
                 // check.
-                let defined_type = ctx.must_get_resolved_type(&defined_arg.type_id);
-                let passed_arg = passed_arg.clone().try_coerce_to(defined_type);
+                let defined_type = ctx.must_get_resolved_type(&defined_arg.type_id).clone();
+                let passed_arg = passed_arg.clone().try_coerce_to(ctx, &defined_type);
 
                 // Skip the check if the argument type is unknown. This will happen if the argument
                 // already failed semantic analysis.
@@ -230,7 +235,7 @@ impl RichFnCall {
                     continue;
                 }
 
-                if !passed_type.is_same_as(defined_type, &HashMap::new()) {
+                if !passed_type.is_same_as(&defined_type, &HashMap::new()) {
                     ctx.add_err(AnalyzeError::new(
                         ErrorKind::MismatchedTypes,
                         format_code!(

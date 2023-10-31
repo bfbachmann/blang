@@ -38,6 +38,7 @@ pub mod spec;
 pub mod statement;
 pub mod r#struct;
 pub mod symbol;
+mod tests;
 pub mod tmpl_params;
 pub mod tuple;
 pub mod r#type;

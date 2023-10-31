@@ -28,6 +28,11 @@ impl<T> Stream<T> {
         tok
     }
 
+    /// Returns the previous value in the stream without moving the cursor.
+    pub fn prev(&self) -> Option<&T> {
+        self.tokens.get(self.cursor - 1)
+    }
+
     /// Moves the cursor position back by 1.
     pub fn rewind(&mut self, n: usize) {
         self.cursor -= n;

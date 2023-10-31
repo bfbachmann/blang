@@ -109,6 +109,15 @@ impl Program {
         }
     }
 
+    /// Returns true if the next token in the stream has the given kind.
+    pub fn next_token_is(tokens: &Stream<Token>, kind: &TokenKind) -> bool {
+        if let Some(token) = tokens.peek_next() {
+            return &token.kind == kind;
+        }
+
+        false
+    }
+
     /// Checks if the first token is the given kind and, if so, pops the token and returns
     /// it.
     pub fn parse_optional(tokens: &mut Stream<Token>, expected: TokenKind) -> Option<&Token> {
@@ -153,6 +162,17 @@ impl Program {
             Some(Token { kind: _, start, .. }) => Position {
                 line: start.line,
                 col: start.col,
+            },
+            None => Position::new(0, 0),
+        }
+    }
+
+    /// Returns the end position of the previous token in the stream.
+    pub fn prev_position(tokens: &Stream<Token>) -> Position {
+        match tokens.prev() {
+            Some(Token { kind: _, end, .. }) => Position {
+                line: end.line,
+                col: end.col,
             },
             None => Position::new(0, 0),
         }

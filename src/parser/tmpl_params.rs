@@ -111,6 +111,17 @@ impl TmplParam {
 
         Ok(tmpl_param)
     }
+
+    /// Creates a new template param with default start and end positions
+    pub fn new_with_default_pos(name: &str) -> Self {
+        TmplParam {
+            name: name.to_string(),
+            required_specs: vec![],
+            required_type: None,
+            start_pos: Default::default(),
+            end_pos: Default::default(),
+        }
+    }
 }
 
 locatable_impl!(TmplParam);
@@ -179,5 +190,14 @@ impl TmplParams {
             start_pos,
             end_pos,
         })
+    }
+
+    /// Creates a new set of template params with default (zero) start and end position.
+    pub fn new_with_default_pos() -> Self {
+        TmplParams {
+            params: vec![],
+            start_pos: Default::default(),
+            end_pos: Default::default(),
+        }
     }
 }

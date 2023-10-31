@@ -47,7 +47,6 @@ impl Symbol {
     }
 
     /// Creates a new symbol with default (zero) start and end positions.
-    #[cfg(test)]
     pub fn new_with_default_pos(name: &str) -> Self {
         Symbol {
             name: name.to_string(),

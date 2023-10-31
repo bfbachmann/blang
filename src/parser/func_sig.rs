@@ -114,6 +114,25 @@ impl FunctionSignature {
         }
     }
 
+    /// Creates a new templated function signature for a named function.
+    pub fn new_tmpl(
+        name: &str,
+        args: Vec<Argument>,
+        return_type: Option<Type>,
+        tmpl_params: TmplParams,
+        start_pos: Position,
+        end_pos: Position,
+    ) -> Self {
+        FunctionSignature {
+            name: name.to_string(),
+            tmpl_params: Some(tmpl_params),
+            args,
+            return_type,
+            start_pos,
+            end_pos,
+        }
+    }
+
     /// Creates a new function signature for an anonymous function.
     pub fn new_anon(
         args: Vec<Argument>,

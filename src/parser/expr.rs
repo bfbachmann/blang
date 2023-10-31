@@ -12,6 +12,7 @@ use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
 use crate::parser::i64_lit::I64Lit;
+use crate::parser::lambda::LambdaDecl;
 use crate::parser::null::Null;
 use crate::parser::op::Operator;
 use crate::parser::program::Program;
@@ -53,6 +54,7 @@ pub enum Expression {
     StrLiteral(StrLit),
     FunctionCall(FunctionCall),
     AnonFunction(Box<Function>),
+    Lambda(Box<Function>),
     UnaryOperation(Operator, Box<Expression>),
     StructInit(StructInit),
     EnumInit(EnumVariantInit),
@@ -74,6 +76,7 @@ impl fmt::Display for Expression {
             Expression::StrLiteral(s) => write!(f, "{}", s),
             Expression::FunctionCall(chain) => write!(f, "{}", chain),
             Expression::AnonFunction(func) => write!(f, "{}", func),
+            Expression::Lambda(func) => write!(f, "{}", func),
             Expression::UnaryOperation(op, expr) => write!(f, "{}{}", op, expr),
             Expression::BinaryOperation(left_expr, op, right_expr) => {
                 write!(f, "{} {} {}", left_expr, op, right_expr)
@@ -105,6 +108,7 @@ impl Locatable for Expression {
             Expression::StrLiteral(string_lit) => string_lit.start_pos(),
             Expression::FunctionCall(fn_call) => fn_call.start_pos(),
             Expression::AnonFunction(func) => func.start_pos(),
+            Expression::Lambda(func) => func.start_pos(),
             Expression::UnaryOperation(_, expr) => expr.start_pos(),
             Expression::StructInit(struct_init) => struct_init.start_pos(),
             Expression::EnumInit(enum_init) => enum_init.start_pos(),
@@ -124,6 +128,7 @@ impl Locatable for Expression {
             Expression::StrLiteral(string_lit) => string_lit.end_pos(),
             Expression::FunctionCall(fn_call) => fn_call.end_pos(),
             Expression::AnonFunction(func) => func.end_pos(),
+            Expression::Lambda(func) => func.end_pos(),
             Expression::UnaryOperation(_, expr) => expr.end_pos(),
             Expression::StructInit(struct_init) => struct_init.end_pos(),
             Expression::EnumInit(enum_init) => enum_init.end_pos(),
@@ -180,6 +185,17 @@ impl Expression {
                 // Parse the anonymous function and return it.
                 let func = Function::from_anon(tokens)?;
                 Ok(Some(Expression::AnonFunction(Box::new(func))))
+            }
+
+            // If the first token is `$`, we'll assume the expression is a lambda function
+            // declaration.
+            Some(Token {
+                kind: TokenKind::DollarSign,
+                ..
+            }) => {
+                let lambda = LambdaDecl::from(tokens)?;
+                let func = Function::from_lambda(lambda);
+                Ok(Some(Expression::Lambda(Box::new(func))))
             }
 
             // If the first token is `struct`, it's an inline struct initialization.

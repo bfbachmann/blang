@@ -1,10 +1,9 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 
 use colored::Colorize;
 
 use crate::analyzer::closure::{check_closure_returns, RichClosure};
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
-use crate::analyzer::expr::RichExpr;
 use crate::analyzer::func::RichFn;
 use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::prog_context::{ProgramContext, Scope, ScopeKind};
@@ -15,13 +14,13 @@ use crate::parser::func::Function;
 
 /// Renders the given templated function. Rendering templates is just the process of replacing
 /// parameterized (generic) types with concrete types based on the context in which the
-/// template is being used. The length of `passed_arg_type_ids` should match the number of
+/// template is being used. The length of `passed_arg_tids` should match the number of
 /// arguments for the function and `sig` should be the analyzed signature of `func`.
 pub fn render_fn_tmpl(
     ctx: &mut ProgramContext,
     sig: &mut RichFnSig,
     func: Function,
-    passed_args: &VecDeque<RichExpr>,
+    passed_arg_tids: &Vec<TypeId>,
     maybe_expected_ret_tid: Option<&TypeId>,
 ) -> AnalyzeResult<()> {
     let tmpl_params = match &sig.tmpl_params {
@@ -34,11 +33,7 @@ pub fn render_fn_tmpl(
     ctx.push_scope(scope);
 
     // Render the function.
-    let result = render_fn(ctx, sig, func, passed_args, maybe_expected_ret_tid);
-
-    // Add the rendered function as a resolved type with the new type ID so it can be
-    // looked up later.
-    ctx.add_resolved_type(sig.type_id.clone(), RichType::from_fn_sig(sig.clone()));
+    let result = render_fn(ctx, sig, func, passed_arg_tids, maybe_expected_ret_tid);
 
     // Pop the scope now that we're done rendering the function.
     ctx.pop_scope();
@@ -46,6 +41,10 @@ pub fn render_fn_tmpl(
     if let Err(err) = result {
         return Err(err);
     }
+
+    // Add the rendered function as a resolved type with the new type ID so it can be
+    // looked up later.
+    ctx.add_resolved_type(sig.type_id.clone(), RichType::from_fn_sig(sig.clone()));
 
     // Add the rendered function to the program context so it can be included in the AST
     // later.
@@ -63,10 +62,10 @@ fn render_fn(
     ctx: &mut ProgramContext,
     sig: &mut RichFnSig,
     func: Function,
-    passed_args: &VecDeque<RichExpr>,
+    passed_arg_tids: &Vec<TypeId>,
     maybe_expected_ret_tid: Option<&TypeId>,
 ) -> AnalyzeResult<RichClosure> {
-    render_fn_sig(ctx, sig, passed_args, maybe_expected_ret_tid)?;
+    render_fn_sig(ctx, sig, passed_arg_tids, maybe_expected_ret_tid)?;
 
     // Now that all template parameters have been substituted with concrete types, analyze the
     // function and add the result to the program context.
@@ -78,7 +77,7 @@ fn render_fn(
 fn render_fn_sig(
     ctx: &mut ProgramContext,
     sig: &mut RichFnSig,
-    passed_args: &VecDeque<RichExpr>,
+    passed_arg_tids: &Vec<TypeId>,
     maybe_expected_ret_tid: Option<&TypeId>,
 ) -> AnalyzeResult<()> {
     // Iterate through template params and try to resolve each one to a concrete type.
@@ -89,7 +88,7 @@ fn render_fn_sig(
             match resolve_param_type(
                 ctx,
                 sig,
-                passed_args,
+                passed_arg_tids,
                 maybe_expected_ret_tid,
                 &param,
                 &remapped_type_ids,
@@ -112,7 +111,7 @@ fn render_fn_sig(
     }
 
     // Check that the values passed as function arguments have the right types.
-    check_fn_arg_types(ctx, sig, passed_args, &remapped_type_ids)?;
+    check_fn_arg_types(ctx, sig, passed_arg_tids, &remapped_type_ids)?;
 
     // Check that the function returns the expected type.
     check_ret_type(ctx, sig, &remapped_type_ids, maybe_expected_ret_tid)?;
@@ -170,7 +169,7 @@ fn render_fn_body(ctx: &mut ProgramContext, sig: &mut RichFnSig, func: Function)
 fn check_fn_arg_types(
     ctx: &mut ProgramContext,
     sig: &RichFnSig,
-    passed_args: &VecDeque<RichExpr>,
+    passed_arg_tids: &Vec<TypeId>,
     remapped_type_ids: &HashMap<TypeId, TypeId>,
 ) -> AnalyzeResult<()> {
     // Make a copy of the original function signature so we can print it unedited into error
@@ -179,9 +178,9 @@ fn check_fn_arg_types(
 
     // Check that all the passed arguments match the template requirements and substitute
     // concrete types for templated argument types.
-    for (defined_arg, passed_arg) in sig.args.iter().zip(passed_args.iter()) {
+    for (defined_arg, expected_arg_tid) in sig.args.iter().zip(passed_arg_tids.iter()) {
         // Skip checks if the type is unknown (i.e. already failed analysis).
-        let passed_type = ctx.must_get_resolved_type(&passed_arg.type_id);
+        let passed_type = ctx.must_get_resolved_type(expected_arg_tid);
         if passed_type.is_unknown() {
             continue;
         }
@@ -194,7 +193,7 @@ fn check_fn_arg_types(
         };
 
         if !passed_type.is_same_as(expected_type, remapped_type_ids) {
-            let mut err = AnalyzeError::new(
+            let mut err = AnalyzeError::new_with_default_pos(
                 ErrorKind::MismatchedTypes,
                 format_code!(
                     "cannot use value of type {} as argument {} to templated function {}",
@@ -203,7 +202,6 @@ fn check_fn_arg_types(
                     original_fn_sig,
                 )
                 .as_str(),
-                passed_arg,
             );
 
             // Let the user know if their argument type has changed because it is a template
@@ -283,13 +281,13 @@ fn check_ret_type(
 fn resolve_param_type<'a>(
     ctx: &'a mut ProgramContext,
     sig: &'a RichFnSig,
-    passed_args: &'a VecDeque<RichExpr>,
+    passed_arg_tids: &'a Vec<TypeId>,
     maybe_expected_ret_tid: Option<&'a TypeId>,
     param: &'a RichTmplParam,
     remapped_type_ids: &'a HashMap<TypeId, TypeId>,
 ) -> AnalyzeResult<&'a TypeId> {
     // Find the concrete type that should be expected in place of this parameterized type.
-    let passed_arg = match find_passed_arg_for_param(sig, passed_args, param) {
+    let resolved_tid = match resolve_type_for_param(sig, passed_arg_tids, param) {
         Ok(arg) => arg,
         Err(err) => {
             // There is no argument that has this param as its type, so check if it's the return
@@ -313,29 +311,29 @@ fn resolve_param_type<'a>(
 
     // Now check that the concrete type used in place of the template parameter actually meets the
     // parameter's requirements.
-    if let Err(err) = check_arg_type_for_param(ctx, passed_arg, param, remapped_type_ids) {
+    if let Err(err) = check_type_for_param(ctx, resolved_tid, param, remapped_type_ids) {
         return Err(err);
     }
 
     // Map this param type ID to the concrete type we found so we can resolve the concrete type
     // wherever this param is used in the function.
-    let concrete_type = ctx.must_get_resolved_type(&passed_arg.type_id);
+    let concrete_type = ctx.must_get_resolved_type(resolved_tid);
     ctx.add_resolved_type(param.get_type_id(), concrete_type.clone());
-    Ok(&passed_arg.type_id)
+    Ok(resolved_tid)
 }
 
 /// Tries to find the concrete type to use in place of `param`.
-fn find_passed_arg_for_param<'a>(
+fn resolve_type_for_param<'a>(
     sig: &'a RichFnSig,
-    passed_args: &'a VecDeque<RichExpr>,
+    passed_arg_tids: &'a Vec<TypeId>,
     param: &'a RichTmplParam,
-) -> AnalyzeResult<&'a RichExpr> {
+) -> AnalyzeResult<&'a TypeId> {
     let param_type_id = param.get_type_id();
 
     // Find the first argument that uses this template param.
-    for (defined_arg, passed_arg) in sig.args.iter().zip(passed_args.iter()) {
+    for (defined_arg, passed_tid) in sig.args.iter().zip(passed_arg_tids.iter()) {
         if defined_arg.type_id == param_type_id {
-            return Ok(passed_arg);
+            return Ok(passed_tid);
         }
     }
 
@@ -355,13 +353,13 @@ fn find_passed_arg_for_param<'a>(
 }
 
 /// Checks that `passed_arg` has a type that satisfies the requirements of `param`.
-fn check_arg_type_for_param<'a>(
+fn check_type_for_param<'a>(
     ctx: &'a ProgramContext,
-    passed_arg: &'a RichExpr,
+    resolved_tid: &'a TypeId,
     param: &'a RichTmplParam,
     remapped_type_ids: &'a HashMap<TypeId, TypeId>,
 ) -> AnalyzeResult<()> {
-    let passed_type = ctx.must_get_resolved_type(&passed_arg.type_id);
+    let passed_type = ctx.must_get_resolved_type(resolved_tid);
 
     if let Some(expected_type_id) = &param.required_type_id {
         // This is a template parameter that is just an alias for a concrete type, so make
@@ -375,7 +373,7 @@ fn check_arg_type_for_param<'a>(
         };
 
         if !passed_type.is_same_as(expected_type, remapped_type_ids) {
-            return Err(AnalyzeError::new(
+            return Err(AnalyzeError::new_with_default_pos(
                 ErrorKind::MismatchedTypes,
                 format_code!(
                     "expected argument type {} (in place of parameter {}), but found {}",
@@ -384,7 +382,6 @@ fn check_arg_type_for_param<'a>(
                     passed_type,
                 )
                 .as_str(),
-                passed_arg,
             ));
         }
     } else {
@@ -393,8 +390,8 @@ fn check_arg_type_for_param<'a>(
         // specs.
         for spec_name in &param.required_spec_names {
             let spec = ctx.get_spec(spec_name).unwrap();
-            if let Err(err_msg) = check_type_satisfies_spec(ctx, &passed_arg.type_id, spec) {
-                return Err(AnalyzeError::new(
+            if let Err(err_msg) = check_type_satisfies_spec(ctx, resolved_tid, spec) {
+                return Err(AnalyzeError::new_with_default_pos(
                     ErrorKind::SpecNotSatisfied,
                     format_code!(
                         "argument has type {} which doesn't satisfy spec {}",
@@ -402,7 +399,6 @@ fn check_arg_type_for_param<'a>(
                         spec.name,
                     )
                     .as_str(),
-                    passed_arg,
                 )
                 .with_detail(err_msg.as_str()));
             }

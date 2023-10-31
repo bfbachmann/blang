@@ -22,6 +22,7 @@ pub mod func_sig;
 pub mod i64;
 pub mod i64_lit;
 pub mod r#impl;
+pub mod lambda;
 pub mod r#loop;
 pub mod member;
 pub mod null;
