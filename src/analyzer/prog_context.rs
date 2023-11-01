@@ -613,6 +613,15 @@ impl ProgramContext {
         self.type_member_fn_sigs.get(id)
     }
 
+    /// Returns remapped type IDs for the current template rendering scope, or None if there is no
+    /// current template rendering scope.
+    pub fn get_remapped_type_ids(&mut self) -> Option<&mut HashMap<TypeId, TypeId>> {
+        match self.get_cur_tmpl_scope_mut() {
+            Some(scope) => Some(&mut scope.remapped_type_ids),
+            None => None,
+        }
+    }
+
     /// Attempts to locate the external function signature with the given name and returns it,
     /// if found.
     pub fn get_extern_fn(&self, name: &str) -> Option<&RichFnSig> {

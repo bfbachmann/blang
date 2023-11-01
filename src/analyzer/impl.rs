@@ -8,19 +8,10 @@ use crate::parser::r#impl::Impl;
 use crate::{format_code, util};
 
 /// Represents a semantically valid `impl` block that declares member functions for a type.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RichImpl {
     pub type_id: TypeId,
     pub member_fns: Vec<RichFn>,
-}
-
-impl Clone for RichImpl {
-    fn clone(&self) -> Self {
-        RichImpl {
-            type_id: self.type_id.clone(),
-            member_fns: self.member_fns.iter().map(|f| f.clone()).collect(),
-        }
-    }
 }
 
 impl PartialEq for RichImpl {

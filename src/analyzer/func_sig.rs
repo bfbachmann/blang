@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -184,39 +184,41 @@ impl RichFnSig {
     }
 
     /// Returns true if `other` has arguments of the same type in the same order and the
-    /// same return type as `self`. `remapped_type_ids` will be used to convert type IDs from
-    /// `other` before checks are performed.
-    pub fn is_same_as(
-        &self,
-        other: &RichFnSig,
-        remapped_type_ids: &HashMap<TypeId, TypeId>,
-    ) -> bool {
+    /// same return type as `self`.
+    pub fn is_same_as(&self, ctx: &ProgramContext, other: &RichFnSig) -> bool {
         if self.args.len() != other.args.len() {
             return false;
         }
 
-        for (a, b) in self.args.iter().zip(other.args.iter()) {
-            // Replace type IDs for b using the provided mapping.
-            let b_type_id = match remapped_type_ids.get(&b.type_id) {
-                Some(replacement_id) => replacement_id,
-                None => &b.type_id,
-            };
+        for (this_arg, other_arg) in self.args.iter().zip(other.args.iter()) {
+            // Skip the more complex arg type check if the type IDs already match.
+            if this_arg.type_id == other_arg.type_id {
+                continue;
+            }
 
-            if &a.type_id != b_type_id {
+            let this_type = ctx.must_get_resolved_type(&this_arg.type_id);
+            let other_type = ctx.must_get_resolved_type(&other_arg.type_id);
+            if !this_type.is_same_as(ctx, other_type) {
                 return false;
             }
         }
 
-        // Replace the return type of `other` using the provided mapping.
-        let other_ret_type_id = match &other.ret_type_id {
-            Some(id) => match remapped_type_ids.get(id) {
-                Some(replacement_id) => Some(replacement_id.clone()),
-                None => Some(id.clone()),
-            },
+        // Skip the more complex return type check if the return type IDs already match.
+        if util::opts_eq(&self.ret_type_id, &other.ret_type_id) {
+            return true;
+        }
+
+        let this_ret_type = match &self.ret_type_id {
+            Some(id) => Some(ctx.must_get_resolved_type(id)),
             None => None,
         };
 
-        util::opts_eq(&self.ret_type_id, &other_ret_type_id)
+        let other_ret_type = match &other.ret_type_id {
+            Some(id) => Some(ctx.must_get_resolved_type(id)),
+            None => None,
+        };
+
+        util::opts_eq(&this_ret_type, &other_ret_type)
     }
 }
 

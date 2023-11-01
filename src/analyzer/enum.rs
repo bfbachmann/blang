@@ -14,21 +14,11 @@ use crate::parser::r#enum::{EnumType, EnumVariantInit};
 use crate::{format_code, util};
 
 /// Represents a semantically valid enum type variant declaration.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RichEnumTypeVariant {
     pub number: usize,
     pub name: String,
     pub maybe_type_id: Option<TypeId>,
-}
-
-impl Clone for RichEnumTypeVariant {
-    fn clone(&self) -> Self {
-        RichEnumTypeVariant {
-            number: self.number,
-            name: self.name.clone(),
-            maybe_type_id: self.maybe_type_id.clone(),
-        }
-    }
 }
 
 impl PartialEq for RichEnumTypeVariant {

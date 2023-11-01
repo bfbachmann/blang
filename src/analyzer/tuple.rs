@@ -8,17 +8,9 @@ use crate::parser::r#type::Type;
 use crate::parser::tuple::{TupleInit, TupleType};
 use crate::util;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RichTupleType {
     pub type_ids: Vec<TypeId>,
-}
-
-impl Clone for RichTupleType {
-    fn clone(&self) -> Self {
-        RichTupleType {
-            type_ids: self.type_ids.iter().map(|t| t.clone()).collect(),
-        }
-    }
 }
 
 impl PartialEq for RichTupleType {

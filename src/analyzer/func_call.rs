@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::fmt;
 
 use colored::Colorize;
@@ -235,7 +235,7 @@ impl RichFnCall {
                     continue;
                 }
 
-                if !passed_type.is_same_as(&defined_type, &HashMap::new()) {
+                if !passed_type.is_same_as(ctx, &defined_type) {
                     ctx.add_err(AnalyzeError::new(
                         ErrorKind::MismatchedTypes,
                         format_code!(

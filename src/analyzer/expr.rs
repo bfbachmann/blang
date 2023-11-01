@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -527,7 +526,7 @@ impl RichExpr {
             return self;
         }
 
-        if !actual_type.is_same_as(&expected_type, &HashMap::new()) {
+        if !actual_type.is_same_as(ctx, &expected_type) {
             ctx.add_err(AnalyzeError::new(
                 ErrorKind::MismatchedTypes,
                 format_code!(

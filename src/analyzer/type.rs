@@ -11,6 +11,7 @@ use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::r#enum::{check_enum_containment_cycles, RichEnumType};
 use crate::analyzer::r#struct::{check_struct_containment_cycles, RichStructType};
+use crate::analyzer::render_tmpl::render_fn_sig_tmpl;
 use crate::analyzer::spec::RichSpec;
 use crate::analyzer::tmpl_params::RichTmplParam;
 use crate::analyzer::tuple::{check_tuple_containment_cycles, RichTupleType};
@@ -356,18 +357,9 @@ impl RichType {
     ///  - For struct types, they must be exactly the same type.
     ///  - For function types, they must have arguments of the same type in the same order and the
     ///    same return types.
-    ///
-    /// `remapped_type_ids` will be used to replace type IDs in `other` before comparisons are
-    /// performed.
-    pub fn is_same_as(
-        &self,
-        other: &RichType,
-        remapped_type_ids: &HashMap<TypeId, TypeId>,
-    ) -> bool {
+    pub fn is_same_as(&self, ctx: &ProgramContext, other: &RichType) -> bool {
         match (self, other) {
-            (RichType::Function(f1), RichType::Function(f2)) => {
-                f1.is_same_as(f2, remapped_type_ids)
-            }
+            (RichType::Function(f1), RichType::Function(f2)) => f1.is_same_as(ctx, f2),
             (a, b) => a == b,
         }
     }
@@ -614,24 +606,46 @@ pub fn check_type_containment(
 /// Checks whether the type corresponding to the given ID satisfies the given spec and returns an
 /// error if it doesn't.
 pub fn check_type_satisfies_spec(
-    ctx: &ProgramContext,
+    ctx: &mut ProgramContext,
     type_id: &TypeId,
     spec: &RichSpec,
 ) -> Result<(), String> {
     let member_fns = HashMap::new();
     let member_fns = match ctx.get_type_member_fns(type_id) {
-        Some(mem_fns) => mem_fns,
-        None => &member_fns,
+        Some(mem_fns) => mem_fns.clone(),
+        None => member_fns,
     };
 
     for spec_fn_sig in &spec.fn_sigs {
         match member_fns.get(spec_fn_sig.name.as_str()) {
             Some(fn_sig) => {
+                // Before we check that the member function signature matches the spec function
+                // signature, we need to make sure that we render the spec function signature in
+                // case it's templated. If rendering succeeds, it means the function signatures
+                // are compatible.
+                if spec_fn_sig.is_templated() {
+                    let mut spec_fn_sig = spec_fn_sig.clone();
+                    let mut passed_arg_tids =
+                        fn_sig.args.iter().map(|a| a.type_id.clone()).collect();
+                    match render_fn_sig_tmpl(
+                        ctx,
+                        &mut spec_fn_sig,
+                        &mut passed_arg_tids,
+                        fn_sig.ret_type_id.as_ref(),
+                    ) {
+                        Ok(_) => continue,
+                        Err(err) => {
+                            // TODO: make pretty
+                            return Err(err.message);
+                        }
+                    };
+                }
+
                 // Create a mapping from the spec type ID to the given type. This mapping will be
                 // used to replace instances of the spec type ID in the function signature when
                 // checking that the function signatures match.
-                let remapped_type_ids = HashMap::from([(spec.type_id(), type_id.clone())]);
-                if !fn_sig.is_same_as(spec_fn_sig, &remapped_type_ids) {
+                ctx.add_type_id_remapping(spec.type_id(), type_id.clone());
+                if !fn_sig.is_same_as(ctx, spec_fn_sig) {
                     return Err(format_code!(
                         "Function {} on type {} doesn't match function {} on spec {}.",
                         fn_sig,
