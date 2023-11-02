@@ -306,6 +306,7 @@ impl RichEnumVariantInit {
                     ctx,
                     value.as_ref().clone(),
                     variant.maybe_type_id.as_ref(),
+                    false,
                 )))
             }
             None => {

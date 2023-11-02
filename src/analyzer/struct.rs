@@ -252,7 +252,7 @@ impl RichStructInit {
             };
 
             // Analyze the value being assigned to the struct field.
-            let expr = RichExpr::from(ctx, field_value.clone(), Some(field_type));
+            let expr = RichExpr::from(ctx, field_value.clone(), Some(field_type), false);
 
             // Insert the analyzed struct field value, making sure that it was not already assigned.
             if field_values.insert(field_name.to_string(), expr).is_some() {

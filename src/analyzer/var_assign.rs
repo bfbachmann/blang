@@ -72,14 +72,14 @@ impl RichVarAssign {
 
                 return RichVarAssign {
                     symbol,
-                    val: RichExpr::from(ctx, assign.value.clone(), None),
+                    val: RichExpr::from(ctx, assign.value.clone(), None, false),
                 };
             }
         };
 
         // Analyze the expression representing the value assigned to the variable.
         let symbol_tid = symbol.get_type_id();
-        let rich_expr = RichExpr::from(ctx, assign.value.clone(), Some(symbol_tid));
+        let rich_expr = RichExpr::from(ctx, assign.value.clone(), Some(symbol_tid), false);
 
         RichVarAssign {
             symbol,

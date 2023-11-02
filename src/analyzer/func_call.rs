@@ -66,7 +66,7 @@ impl RichFnCall {
         let mut passed_args: VecDeque<RichExpr> = call
             .args
             .iter()
-            .map(|arg| RichExpr::from(ctx, arg.clone(), None))
+            .map(|arg| RichExpr::from(ctx, arg.clone(), None, true))
             .collect();
         let passed_arg_tids: Vec<TypeId> = passed_args.iter().map(|a| a.type_id.clone()).collect();
 
@@ -190,12 +190,14 @@ impl RichFnCall {
             let func = ctx
                 .must_get_templated_fn(fn_sig.full_name().as_str())
                 .clone();
+
             let render_result = render_fn_tmpl(
                 ctx,
                 &mut fn_sig,
                 func,
                 &passed_arg_tids,
                 maybe_expected_ret_tid,
+                Some(&mut passed_args),
             );
 
             if let Err(mut err) = render_result {

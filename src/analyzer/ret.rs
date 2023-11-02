@@ -62,7 +62,7 @@ impl RichRet {
                 // We're returning a value. Make sure the value is of the expected type.
                 let rich_expr = match ctx.return_type() {
                     Some(expected_type_id) => {
-                        RichExpr::from(ctx, expr.clone(), Some(&expected_type_id.clone()))
+                        RichExpr::from(ctx, expr.clone(), Some(&expected_type_id.clone()), false)
                     }
                     None => {
                         ctx.add_err(AnalyzeError::new(
@@ -71,7 +71,7 @@ impl RichRet {
                             &expr,
                         ));
 
-                        RichExpr::from(ctx, expr.clone(), None)
+                        RichExpr::from(ctx, expr.clone(), None, false)
                     }
                 };
 

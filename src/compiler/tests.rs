@@ -473,4 +473,43 @@ mod tests {
             "#,
         )
     }
+
+    #[test]
+    fn lambda_as_variable() {
+        assert_compiles(
+            r#"
+            fn max(a: T, b: T) ~ T
+            with [T] {
+                if a > b {
+                    return a
+                }
+                return b
+            }
+    
+            fn main() {
+                let f1: fn (i64, i64) ~ i64 = max
+                let f2: fn (u64, u64) ~ u64 = max
+                
+                let result1 = f1(-3, 4)
+                let result2 = f2(12, 642)
+            }
+            "#,
+        )
+    }
+
+    #[test]
+    fn lambda_as_argument() {
+        assert_compiles(
+            r#"
+            fn select(selector: F, a: T, b: T) ~ T
+            with [T, F = fn (T, T) ~ T] {
+                return selector(a, b)
+            }
+            
+            fn main() {
+                let result = select($(a, b) b, "not this", "this")
+            }
+            "#,
+        )
+    }
 }

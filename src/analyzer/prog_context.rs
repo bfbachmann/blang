@@ -96,6 +96,7 @@ pub struct Scope {
     /// Tracks type IDs that should be remapped before being resolved to concrete types. This is
     /// used for type replacement in templated types and functions.
     remapped_type_ids: HashMap<TypeId, TypeId>,
+    is_boundary: bool,
 }
 
 impl Scope {
@@ -123,6 +124,7 @@ impl Scope {
             kind,
             return_type,
             remapped_type_ids: HashMap::new(),
+            is_boundary: false,
         }
     }
 
@@ -146,6 +148,7 @@ impl Scope {
             kind: ScopeKind::Tmpl,
             return_type,
             remapped_type_ids: HashMap::new(),
+            is_boundary: false,
         }
     }
 
@@ -182,7 +185,8 @@ impl Scope {
     // Adds the function to the scope. If there was already a function with the same name in the
     // scope, returns the old function.
     fn add_fn(&mut self, func: RichFn) -> Option<RichFn> {
-        self.fns.insert(func.signature.name.to_string(), func)
+        self.fns
+            .insert(func.signature.full_name().to_string(), func)
     }
 
     // Adds the external struct type to the scope. If there was already a struct type with the same
@@ -356,7 +360,7 @@ impl ProgramContext {
             // Don't search beyond template rendering boundaries. If we didn't do this, types and
             // functions rendered where they're used would be able to access types and variables
             // declared in the context where they're used, which would be broken.
-            if scope.kind == ScopeKind::Tmpl {
+            if scope.is_boundary {
                 // Visit the top level of the program before returning, as types and functions
                 // declared there should be accessible everywhere.
                 return visit(self.stack.front().unwrap());
@@ -368,24 +372,21 @@ impl ProgramContext {
 
     /// Works the same way as `reverse_search_stack`, except that this function returns when
     /// `visit` returns `(_, true)` rather than `Some` as in `reverse_search_stack`.
-    fn reverse_search_stack_until<F, R>(&self, visit: F) -> Option<R>
+    fn reverse_search_stack_until<F, R>(&self, visit: F) -> Option<&R>
     where
-        F: Fn(&Scope) -> (Option<R>, bool),
+        F: Fn(&Scope) -> (Option<&R>, bool),
     {
         for scope in self.stack.iter().rev() {
             let (result, stop) = visit(scope);
             if stop {
                 return result;
             }
-        }
 
-        None
-    }
-
-    /// Gets the current template scope from the stack.
-    fn get_cur_tmpl_scope(&self) -> Option<&Scope> {
-        if let Some(index) = self.tmpl_scope_indices.last() {
-            return self.stack.get(*index);
+            if scope.is_boundary {
+                // Visit the top level of the program before returning, as types and functions
+                // declared there should be accessible everywhere.
+                return visit(self.stack.front().unwrap()).0;
+            }
         }
 
         None
@@ -404,7 +405,8 @@ impl ProgramContext {
     /// a template scope in the stack that remaps `src_type_id`. Returns `src_type_id` if the type
     /// ID doesn't need to be remapped.
     fn maybe_remap_type_id<'a>(&'a self, src_type_id: &'a TypeId) -> &TypeId {
-        if let Some(scope) = self.get_cur_tmpl_scope() {
+        for scope_index in &self.tmpl_scope_indices {
+            let scope = self.stack.get(*scope_index).unwrap();
             if let Some(new_type_id) = scope.get_remapped_type_id(src_type_id) {
                 return new_type_id;
             }
@@ -480,6 +482,15 @@ impl ProgramContext {
     pub fn add_resolved_type(&mut self, id: TypeId, resolved: RichType) -> Option<RichType> {
         self.stack
             .back_mut()
+            .unwrap()
+            .add_resolved_type(id, resolved)
+    }
+
+    /// Adds the given mapping from type ID to resolved type to the top-level scope in the program
+    /// context and returns the old type that used to correspond to `id`, if one exists.
+    pub fn add_global_resolved_type(&mut self, id: TypeId, resolved: RichType) -> Option<RichType> {
+        self.stack
+            .front_mut()
             .unwrap()
             .add_resolved_type(id, resolved)
     }
@@ -616,6 +627,7 @@ impl ProgramContext {
     /// Returns remapped type IDs for the current template rendering scope, or None if there is no
     /// current template rendering scope.
     pub fn get_remapped_type_ids(&mut self) -> Option<&mut HashMap<TypeId, TypeId>> {
+        // TODO: IS THIS BROKEN??? SHOULD IT GET ALL TMPLS?
         match self.get_cur_tmpl_scope_mut() {
             Some(scope) => Some(&mut scope.remapped_type_ids),
             None => None,
@@ -693,9 +705,10 @@ impl ProgramContext {
     }
 
     /// Adds the given scope to the top of the stack.
-    pub fn push_scope(&mut self, scope: Scope) {
+    pub fn push_scope(&mut self, mut scope: Scope) {
         // Push the new template scope index onto the index stack so we can find with easily.
         if scope.kind == ScopeKind::Tmpl {
+            scope.is_boundary = self.tmpl_scope_indices.is_empty();
             self.tmpl_scope_indices.push(self.stack.len());
         }
 
@@ -729,7 +742,7 @@ impl ProgramContext {
     /// Returns true if the current scope falls within a loop.
     pub fn is_in_loop(&self) -> bool {
         self.reverse_search_stack_until(|scope| match scope.kind {
-            ScopeKind::Loop => (Some(()), true),
+            ScopeKind::Loop => (Some(&()), true),
             ScopeKind::FnBody => (None, true),
             _ => (None, false),
         })
@@ -772,13 +785,20 @@ impl ProgramContext {
     /// Adds the given un-analyzed function to the program context. Note that `full_name` should
     /// be the fully-qualified name of the function.
     pub fn add_templated_fn(&mut self, full_name: &str, func: Function) {
+        assert!(func.signature.tmpl_params.is_some());
         self.templated_fns.insert(full_name.to_string(), func);
+    }
+
+    /// Attempts to locate and return a templated function by the given name. Note that `full_name`
+    /// should be the fully-qualified name of the function.
+    pub fn get_templated_fn(&mut self, full_name: &str) -> Option<&Function> {
+        self.templated_fns.get(full_name)
     }
 
     /// Attempts to locate and return a templated function by the given name. Note that `full_name`
     /// should be the fully-qualified name of the function. Panics if the function is not found.
     pub fn must_get_templated_fn(&mut self, full_name: &str) -> &Function {
-        match self.templated_fns.get(full_name) {
+        match self.get_templated_fn(full_name) {
             Some(f) => f,
             None => panic!(
                 "function {} does not exist in the program context",

@@ -34,7 +34,12 @@ impl RichVarDecl {
         // Check the expression being assigned to this new variable. Note that it's okay for
         // the variable name to collide with that of another variable. In this case, the old
         // variable will simply be replaced with this one in the current scope.
-        let rich_expr = RichExpr::from(ctx, var_decl.value.clone(), maybe_declared_tid.as_ref());
+        let rich_expr = RichExpr::from(
+            ctx,
+            var_decl.value.clone(),
+            maybe_declared_tid.as_ref(),
+            false,
+        );
 
         // If the type is not specified, it will be inferred from the assigned expression.
         let type_id = match maybe_declared_tid {

@@ -1,13 +1,15 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use colored::Colorize;
 
 use crate::analyzer::closure::{check_closure_returns, RichClosure};
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
+use crate::analyzer::expr::{RichExpr, RichExprKind};
 use crate::analyzer::func::RichFn;
 use crate::analyzer::func_sig::RichFnSig;
 use crate::analyzer::prog_context::{ProgramContext, Scope, ScopeKind};
 use crate::analyzer::r#type::{check_type_satisfies_spec, RichType, TypeId};
+use crate::analyzer::symbol::RichSymbol;
 use crate::analyzer::tmpl_params::RichTmplParam;
 use crate::format_code;
 use crate::parser::func::Function;
@@ -16,12 +18,16 @@ use crate::parser::func::Function;
 /// parameterized (generic) types with concrete types based on the context in which the
 /// template is being used. The length of `passed_arg_tids` should match the number of
 /// arguments for the function and `sig` should be the analyzed signature of `func`.
+/// If `maybe_passed_args` is provided, it should be the arguments to the given function, and must
+/// have the right length. After rendering completes, the arguments in `maybe_passed_args` will be
+/// coerced to their required types.
 pub fn render_fn_tmpl(
     ctx: &mut ProgramContext,
     sig: &mut RichFnSig,
     func: Function,
     passed_arg_tids: &Vec<TypeId>,
     maybe_expected_ret_tid: Option<&TypeId>,
+    maybe_passed_args: Option<&mut VecDeque<RichExpr>>,
 ) -> AnalyzeResult<()> {
     let tmpl_params = match &sig.tmpl_params {
         Some(tp) => tp.params.clone(),
@@ -34,6 +40,19 @@ pub fn render_fn_tmpl(
 
     // Render the function.
     let result = render_fn(ctx, sig, func, passed_arg_tids, maybe_expected_ret_tid);
+
+    // If rendering succeeded and argument expressions were given, try coerce them to the
+    // newly-rendered types.
+    if result.is_ok() {
+        if let Some(passed_args) = maybe_passed_args {
+            for (i, defined_arg) in sig.args.iter().enumerate() {
+                let defined_type = ctx.must_get_resolved_type(&defined_arg.type_id).clone();
+                let passed_arg = passed_args.remove(i).unwrap();
+                let coerced_arg = passed_arg.try_coerce_to(ctx, &defined_type);
+                passed_args.insert(i, coerced_arg);
+            }
+        }
+    }
 
     // Pop the scope now that we're done rendering the function.
     ctx.pop_scope();
@@ -187,9 +206,9 @@ fn check_fn_arg_types(
 
     // Check that all the passed arguments match the template requirements and substitute
     // concrete types for templated argument types.
-    for (defined_arg, expected_arg_tid) in sig.args.iter().zip(passed_arg_tids.iter()) {
+    for (defined_arg, passed_arg_tid) in sig.args.iter().zip(passed_arg_tids.iter()) {
         // Skip checks if the type is unknown (i.e. already failed analysis).
-        let passed_type = ctx.must_get_resolved_type(expected_arg_tid);
+        let passed_type = ctx.must_get_resolved_type(passed_arg_tid);
         if passed_type.is_unknown() {
             continue;
         }
@@ -197,6 +216,27 @@ fn check_fn_arg_types(
         // Find the expected type for this argument as defined in the function signature (and
         // perform type ID remapping if necessary).
         let expected_type = ctx.must_get_resolved_type(&defined_arg.type_id);
+
+        match passed_type {
+            RichType::Function(passed_fn_sig) if passed_fn_sig.is_templated() => {
+                let symbol_expr = RichExpr::new(
+                    RichExprKind::Symbol(RichSymbol::new_with_default_pos(
+                        passed_fn_sig.name.as_str(),
+                        passed_fn_sig.type_id.clone(),
+                        None,
+                    )),
+                    passed_fn_sig.type_id.clone(),
+                );
+
+                // If the type rendering and coercion fails, an error will be placed in the
+                // program context. Otherwise, the types are compatible and there is no need
+                // for further type checking.
+                let expected_type = expected_type.clone();
+                symbol_expr.try_coerce_to(ctx, &expected_type);
+                return Ok(());
+            }
+            _ => {}
+        }
 
         if !passed_type.is_same_as(ctx, &expected_type) {
             let mut err = AnalyzeError::new_with_default_pos(

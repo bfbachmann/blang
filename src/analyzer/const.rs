@@ -65,7 +65,7 @@ impl RichConst {
         };
 
         // Make sure the constant value is a valid constant.
-        let value = RichExpr::from(ctx, const_decl.value.clone(), declared_tid.as_ref());
+        let value = RichExpr::from(ctx, const_decl.value.clone(), declared_tid.as_ref(), false);
         if !value.kind.is_const() {
             ctx.add_err(
                 AnalyzeError::new(

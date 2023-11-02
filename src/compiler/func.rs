@@ -979,10 +979,21 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
             RichExprKind::TupleInit(tuple_init) => self.compile_tuple_init(tuple_init),
 
-            // TODO
-            RichExprKind::AnonFunction(anon_fn) => {
-                panic!("{anon_fn} not implemented");
-            }
+            // TODO: Compiling this function works fine, but trying to actually use it will cause
+            // a panic because it has no name. The fix likely involves giving anon functions unique
+            // auto-generated names.
+            RichExprKind::AnonFunction(anon_fn) => FnCompiler::compile(
+                self.ctx,
+                self.builder,
+                self.fpm,
+                self.module,
+                self.types,
+                self.consts,
+                anon_fn,
+            )
+            .unwrap()
+            .as_global_value()
+            .as_basic_value_enum(),
 
             RichExprKind::Unknown => {
                 panic!("encountered unknown expression");

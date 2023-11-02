@@ -7,6 +7,7 @@ use crate::analyzer::prog_context::{ProgramContext, ScopedSymbol};
 use crate::analyzer::r#type::{RichType, TypeId};
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::member::MemberAccess;
+use crate::parser::r#type::Type;
 use crate::parser::symbol::Symbol;
 use crate::{format_code, locatable_impl, util};
 
@@ -88,6 +89,7 @@ impl RichSymbol {
 
         // Find the type ID for the symbol or member being accessed.
         // Return a placeholder value if we failed to resolve the symbol type ID.
+        // TODO: Refactor
         let (mut maybe_type_id, maybe_symbol) =
             RichSymbol::get_type_id_by_symbol_name(ctx, symbol.name.as_str(), include_fns);
 
@@ -117,6 +119,15 @@ impl RichSymbol {
             }
         }
 
+        // If the symbol still has not been resolved, check if it's a templated function.
+        if maybe_type_id.is_none() && include_fns {
+            if let Some(tmpl_fn) = ctx.get_templated_fn(var_name) {
+                maybe_type_id = Some(TypeId::from(Type::Function(Box::new(
+                    tmpl_fn.signature.clone(),
+                ))));
+            }
+        }
+
         // At this point the symbol must be resolved, or it doesn't exist in this scope.
         let var_type_id = match maybe_type_id {
             Some(t) => t,
@@ -125,7 +136,7 @@ impl RichSymbol {
                 // a placeholder value.
                 ctx.add_err(AnalyzeError::new(
                     ErrorKind::UndefSymbol,
-                    format_code!("{} is not defined in this scope", var_name).as_str(),
+                    format_code!("symbol {} is not defined in this scope", var_name).as_str(),
                     symbol,
                 ));
 

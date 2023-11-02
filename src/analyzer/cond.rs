@@ -65,7 +65,8 @@ impl RichCond {
             // Check that the branch expression evaluates to a bool, if one exists.
             let rich_expr = match &branch.condition {
                 Some(branch_cond) => {
-                    let rich_expr = RichExpr::from(ctx, branch_cond.clone(), Some(&TypeId::bool()));
+                    let rich_expr =
+                        RichExpr::from(ctx, branch_cond.clone(), Some(&TypeId::bool()), false);
                     Some(rich_expr)
                 }
                 None => None,

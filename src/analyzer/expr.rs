@@ -177,10 +177,14 @@ impl RichExpr {
     /// Performs semantic analysis on the given expression and returns a type-rich version of it.
     /// `expected_type_id` is the optional type ID of the expected type that this expression should
     /// have.
+    /// If `allow_templated_result` is false, this function will check that the resulting expression
+    /// type is not templated and record an error if it is. Otherwise, templated result types will
+    /// be allowed.
     pub fn from(
         ctx: &mut ProgramContext,
         expr: Expression,
         maybe_expected_type_id: Option<&TypeId>,
+        allow_templated_result: bool,
     ) -> RichExpr {
         let start_pos = expr.start_pos().clone();
         let end_pos = expr.end_pos().clone();
@@ -350,6 +354,17 @@ impl RichExpr {
                     true,
                     None,
                 );
+
+                // Make sure that the lambda is defined globally so we can access it from anywhere.
+                // This is required for cases where lambdas are passed as arguments to templated
+                // functions.
+                // TODO: See if there is a sane way to solve this problem without defining the type
+                // globally.
+                ctx.add_global_resolved_type(
+                    fn_sig.type_id.clone(),
+                    RichType::Function(Box::new(fn_sig.clone())),
+                );
+
                 RichExpr {
                     kind: RichExprKind::Symbol(symbol),
                     type_id: fn_sig.type_id,
@@ -365,7 +380,8 @@ impl RichExpr {
                 }
 
                 // Make sure the expression has type bool.
-                let rich_expr = RichExpr::from(ctx, *right_expr.clone(), Some(&TypeId::bool()));
+                let rich_expr =
+                    RichExpr::from(ctx, *right_expr.clone(), Some(&TypeId::bool()), false);
                 if rich_expr.type_id.is_bool() {
                     RichExpr {
                         kind: RichExprKind::UnaryOperation(
@@ -400,8 +416,12 @@ impl RichExpr {
                     None => None,
                 };
 
-                let rich_left =
-                    RichExpr::from(ctx, *left_expr.clone(), expected_operand_tid.as_ref());
+                let rich_left = RichExpr::from(
+                    ctx,
+                    *left_expr.clone(),
+                    expected_operand_tid.as_ref(),
+                    false,
+                );
 
                 // Handle the special case where the operator is the type cast operator `as`. In
                 // this case, the right expression should actually be a type.
@@ -433,7 +453,12 @@ impl RichExpr {
                         };
                     }
                 } else {
-                    RichExpr::from(ctx, *right_expr.clone(), expected_operand_tid.as_ref())
+                    RichExpr::from(
+                        ctx,
+                        *right_expr.clone(),
+                        expected_operand_tid.as_ref(),
+                        false,
+                    )
                 };
 
                 // If we couldn't resolve both of the operand types, we'll skip any further
@@ -484,14 +509,16 @@ impl RichExpr {
         // rendering).
         result = result.coerce_and_check_types(ctx, maybe_expected_type_id, &expr);
 
-        // Make sure the resulting type is not still templated. If it is, coercion/rendering failed.
-        let actual_type = ctx.must_get_resolved_type(&result.type_id).clone();
-        if actual_type.is_templated() {
-            ctx.add_err(AnalyzeError::new(
-                ErrorKind::UnresolvedTmplParams,
-                format_code!("failed to resolve template parameters for {}", expr).as_str(),
-                &expr,
-            ));
+        if !allow_templated_result {
+            // Make sure the resulting type is not still templated. If it is, coercion/rendering failed.
+            let actual_type = ctx.must_get_resolved_type(&result.type_id).clone();
+            if actual_type.is_templated() {
+                ctx.add_err(AnalyzeError::new(
+                    ErrorKind::UnresolvedTmplParams,
+                    format_code!("failed to resolve template parameters for {}", expr).as_str(),
+                    &expr,
+                ));
+            }
         }
 
         result
@@ -545,6 +572,10 @@ impl RichExpr {
     /// Tries to coerce this expression to the target type. If coercion is successful, returns
     /// the coerced expression, otherwise just returns the expression as-is.
     pub fn try_coerce_to(mut self, ctx: &mut ProgramContext, target_type: &RichType) -> Self {
+        if target_type.is_unknown() {
+            return self;
+        }
+
         match &self.kind {
             RichExprKind::I64Literal(i) if *i >= 0 => match target_type {
                 RichType::U64 => {
@@ -594,6 +625,7 @@ impl RichExpr {
                     func,
                     &passed_arg_tids,
                     maybe_expected_ret_tid.as_ref(),
+                    None,
                 );
 
                 // Update the function type ID and symbol name even if rendering failed.
@@ -630,7 +662,6 @@ impl RichExpr {
     }
 
     /// Creates a new expression.
-    #[cfg(test)]
     pub fn new(kind: RichExprKind, type_id: TypeId) -> Self {
         RichExpr {
             kind,
@@ -960,7 +991,7 @@ mod tests {
     fn analyze_i64_literal() {
         let mut ctx = ProgramContext::new();
         let expr = Expression::I64Literal(I64Lit::new_with_default_pos(1));
-        let result = RichExpr::from(&mut ctx, expr, None);
+        let result = RichExpr::from(&mut ctx, expr, None, false);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
@@ -977,7 +1008,7 @@ mod tests {
     fn analyze_bool_literal() {
         let mut ctx = ProgramContext::new();
         let expr = Expression::BoolLiteral(BoolLit::new_with_default_pos(false));
-        let result = RichExpr::from(&mut ctx, expr, None);
+        let result = RichExpr::from(&mut ctx, expr, None, false);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
@@ -994,7 +1025,7 @@ mod tests {
     fn analyze_string_literal() {
         let mut ctx = ProgramContext::new();
         let expr = Expression::StrLiteral(StrLit::new_with_default_pos("test"));
-        let result = RichExpr::from(&mut ctx, expr, None);
+        let result = RichExpr::from(&mut ctx, expr, None, false);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
@@ -1015,6 +1046,7 @@ mod tests {
             &mut ctx,
             Expression::Symbol(Symbol::new_with_default_pos("myvar")),
             None,
+            false,
         );
         assert!(ctx.errors().is_empty());
         assert_eq!(
@@ -1039,6 +1071,7 @@ mod tests {
             &mut ctx,
             Expression::Symbol(Symbol::new_with_default_pos("myvar")),
             None,
+            false,
         );
         assert_eq!(
             result,
@@ -1100,7 +1133,7 @@ mod tests {
             vec![Expression::BoolLiteral(BoolLit::new_with_default_pos(true))],
         );
         let call_expr = Expression::FunctionCall(fn_call.clone());
-        let result = RichExpr::from(&mut ctx, call_expr, None);
+        let result = RichExpr::from(&mut ctx, call_expr, None, false);
 
         // Check that analysis succeeded.
         assert!(ctx.errors().is_empty());
@@ -1167,6 +1200,7 @@ mod tests {
                 )),
             ),
             None,
+            false,
         );
 
         match result {
@@ -1257,6 +1291,7 @@ mod tests {
                 vec![Expression::BoolLiteral(BoolLit::new_with_default_pos(true))],
             )),
             None,
+            false,
         );
 
         assert_eq!(
@@ -1352,6 +1387,7 @@ mod tests {
                 vec![Expression::I64Literal(I64Lit::new_with_default_pos(1))],
             )),
             None,
+            false,
         );
 
         assert_eq!(
@@ -1395,6 +1431,7 @@ mod tests {
                 Box::new(Expression::StrLiteral(StrLit::new_with_default_pos("asdf"))),
             ),
             None,
+            false,
         );
 
         assert_eq!(
@@ -1438,6 +1475,7 @@ mod tests {
                 Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
             ),
             None,
+            false,
         );
 
         assert_eq!(
@@ -1483,6 +1521,7 @@ mod tests {
                 Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
             ),
             None,
+            false,
         );
 
         assert_eq!(
@@ -1514,6 +1553,7 @@ mod tests {
                 Box::new(Expression::StrLiteral(StrLit::new_with_default_pos("s"))),
             ),
             None,
+            false,
         );
 
         assert_eq!(
