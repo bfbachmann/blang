@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 
 use colored::Colorize;
 
@@ -151,14 +151,14 @@ fn render_fn_sig(
         }
     }
 
+    // Make the required type ID replacements in the function signature.
+    replace_type_ids(ctx, sig);
+
     // Check that the values passed as function arguments have the right types.
     check_fn_arg_types(ctx, sig, passed_arg_tids)?;
 
     // Check that the function returns the expected type.
     check_ret_type(ctx, sig, maybe_expected_ret_tid)?;
-
-    // Make the required type ID replacements in the function signature.
-    replace_type_ids(sig, ctx.get_remapped_type_ids().unwrap());
 
     // Change the function signature name to its fully resolved name (with type info).
     sig.name = sig.full_name();
@@ -207,8 +207,17 @@ fn check_fn_arg_types(
     // Check that all the passed arguments match the template requirements and substitute
     // concrete types for templated argument types.
     for (defined_arg, passed_arg_tid) in sig.args.iter().zip(passed_arg_tids.iter()) {
+        // Try get the resolved type for the passed argument. We may have to analyze it from
+        // scratch if it was some template parameter that has been resolved during rendering.
+        let passed_type = match ctx.get_resolved_type(passed_arg_tid) {
+            Some(typ) => typ,
+            None => {
+                let passed_arg_tid = RichType::analyze(ctx, passed_arg_tid.typ());
+                ctx.must_get_resolved_type(&passed_arg_tid)
+            }
+        };
+
         // Skip checks if the type is unknown (i.e. already failed analysis).
-        let passed_type = ctx.must_get_resolved_type(passed_arg_tid);
         if passed_type.is_unknown() {
             continue;
         }
@@ -368,8 +377,7 @@ fn get_type_used_for_param<'a>(
         }
     }
 
-    // There is no argument that has this param as its type, so check if it's the return
-    // type.
+    // There is no argument that has this param as its type, so check if it's the return type.
     if let Some(ret_tid) = &sig.ret_type_id {
         let ret_type = ctx.must_get_resolved_type(ret_tid);
         if let RichType::Templated(ret_param) = ret_type {
@@ -452,16 +460,34 @@ fn check_type_used_for_param<'a>(
 }
 
 /// Replaces type IDs in `sig` using the mappings in `remapped_type_ids`.
-fn replace_type_ids(sig: &mut RichFnSig, remapped_type_ids: &HashMap<TypeId, TypeId>) {
+fn replace_type_ids(ctx: &mut ProgramContext, sig: &mut RichFnSig) {
     for arg in sig.args.iter_mut() {
-        if let Some(new_type_id) = remapped_type_ids.get(&arg.type_id) {
+        if let Some(new_type_id) = ctx.get_remapped_type_ids().unwrap().get(&arg.type_id) {
             arg.type_id = new_type_id.clone();
+        } else {
+            let typ = ctx.must_get_resolved_type(&arg.type_id).clone();
+            match typ {
+                RichType::Function(mut sig) => {
+                    replace_type_ids(ctx, &mut sig);
+                    ctx.add_resolved_type(arg.type_id.clone(), RichType::from_fn_sig(*sig));
+                }
+                _ => {}
+            };
         }
     }
 
     if let Some(ret_type_id) = &mut sig.ret_type_id {
-        if let Some(new_type_id) = remapped_type_ids.get(ret_type_id) {
+        if let Some(new_type_id) = ctx.get_remapped_type_ids().unwrap().get(ret_type_id) {
             sig.ret_type_id = Some(new_type_id.clone());
+        } else {
+            let typ = ctx.must_get_resolved_type(&ret_type_id).clone();
+            match typ {
+                RichType::Function(mut sig) => {
+                    replace_type_ids(ctx, &mut sig);
+                    ctx.add_resolved_type(ret_type_id.clone(), RichType::from_fn_sig(*sig));
+                }
+                _ => {}
+            };
         }
     }
 }

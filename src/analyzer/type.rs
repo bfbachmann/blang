@@ -264,7 +264,7 @@ impl RichType {
 
             Type::Str(_) => RichType::Str,
 
-            Type::Function(sig) => RichType::Function(Box::new(RichFnSig::from(ctx, &*sig))),
+            Type::Function(sig) => RichType::from_fn_sig(RichFnSig::from(ctx, &*sig)),
 
             Type::Struct(struct_type) => {
                 let rich_struct_type = RichStructType::from(ctx, struct_type, true);

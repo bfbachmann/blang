@@ -135,8 +135,10 @@ impl RichFnSig {
 
         // Add the function as a resolved type to the program context. This is done because
         // functions can be used as variables and therefore need types.
-        let type_id = TypeId::from(Type::Function(Box::new(sig.clone())));
-        ctx.add_resolved_type(type_id, RichType::from_fn_sig(rich_fn_sig.clone()));
+        ctx.add_resolved_type(
+            rich_fn_sig.type_id.clone(),
+            RichType::from_fn_sig(rich_fn_sig.clone()),
+        );
 
         // Drop the function template parameters now that we're done analyzing the function
         // signature.
