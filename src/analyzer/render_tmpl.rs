@@ -63,7 +63,7 @@ pub fn render_fn_tmpl(
 
     // Add the rendered function as a resolved type with the new type ID so it can be
     // looked up later.
-    ctx.add_rendered_type(sig.type_id.clone(), RichType::from_fn_sig(sig.clone()));
+    ctx.add_global_resolved_type(sig.type_id.clone(), RichType::from_fn_sig(sig.clone()));
 
     // Add the rendered function to the program context so it can be included in the AST
     // later.
@@ -106,7 +106,7 @@ pub fn render_fn_sig_tmpl(
 
     // Add the rendered function as a resolved type with the new type ID so it can be
     // looked up later.
-    ctx.add_rendered_type(sig.type_id.clone(), RichType::from_fn_sig(sig.clone()));
+    ctx.add_global_resolved_type(sig.type_id.clone(), RichType::from_fn_sig(sig.clone()));
 
     Ok(())
 }
@@ -138,10 +138,17 @@ fn render_fn_sig(
     // Iterate through template params and try to resolve each one to a concrete type.
     if let Some(tmpl_params) = &sig.tmpl_params {
         for param in &tmpl_params.params {
+            let param_type_id = param.get_type_id();
+
+            // If this param is just an alias for some concrete type, then all we need to do is
+            // remap the param type ID to the concrete type's type ID.
+            if let Some(required_tid) = &param.required_type_id {
+                ctx.add_type_id_remapping(param_type_id.clone(), required_tid.clone());
+            }
+
             // Try resolve the concrete type that should be expected in place of this param.
             match resolve_param_type(ctx, sig, passed_arg_tids, maybe_expected_ret_tid, &param) {
                 Ok(new_type_id) => {
-                    let param_type_id = param.get_type_id();
                     ctx.add_type_id_remapping(param_type_id.clone(), new_type_id.clone());
                 }
                 Err(err) => {
@@ -151,14 +158,14 @@ fn render_fn_sig(
         }
     }
 
-    // Make the required type ID replacements in the function signature.
-    replace_type_ids(ctx, sig);
-
     // Check that the values passed as function arguments have the right types.
     check_fn_arg_types(ctx, sig, passed_arg_tids)?;
 
     // Check that the function returns the expected type.
     check_ret_type(ctx, sig, maybe_expected_ret_tid)?;
+
+    // Make the required type ID replacements in the function signature.
+    replace_type_ids(ctx, sig, passed_arg_tids, maybe_expected_ret_tid);
 
     // Change the function signature name to its fully resolved name (with type info).
     sig.name = sig.full_name();
@@ -372,8 +379,40 @@ fn get_type_used_for_param<'a>(
 
     // Try find the first argument that uses this template param.
     for (defined_arg, passed_tid) in sig.args.iter().zip(passed_arg_tids.iter()) {
-        if defined_arg.type_id == param_type_id {
+        // If the defined argument type ID matches that of the param, just return the passed
+        // arg type ID.
+        if &defined_arg.type_id == &param_type_id {
             return Ok(passed_tid.clone());
+        }
+
+        // Otherwise, we need to recursively search the defined argument for the param. This is
+        // necessary for cases where the templated function looks something like this:
+        //
+        //      fn something(f: fn (T)) with [T]
+        //
+        // In other words, where the template parameter is buried somewhere inside the defined
+        // argument type rather than being the type itself.
+        let defined_arg_type = ctx.must_get_resolved_type(&defined_arg.type_id).clone();
+        let passed_arg_type = ctx.must_get_resolved_type(passed_tid).clone();
+        match (defined_arg_type, passed_arg_type) {
+            (RichType::Function(defined_arg_sig), RichType::Function(passed_arg_sig)) => {
+                let passed_arg_tids: Vec<TypeId> = passed_arg_sig
+                    .args
+                    .iter()
+                    .map(|a| a.type_id.clone())
+                    .collect();
+
+                if let Ok(tid) = get_type_used_for_param(
+                    ctx,
+                    &defined_arg_sig,
+                    &passed_arg_tids,
+                    passed_arg_sig.ret_type_id.as_ref(),
+                    param,
+                ) {
+                    return Ok(tid);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -459,35 +498,23 @@ fn check_type_used_for_param<'a>(
     Ok(())
 }
 
-/// Replaces type IDs in `sig` using the mappings in `remapped_type_ids`.
-fn replace_type_ids(ctx: &mut ProgramContext, sig: &mut RichFnSig) {
-    for arg in sig.args.iter_mut() {
-        if let Some(new_type_id) = ctx.get_remapped_type_ids().unwrap().get(&arg.type_id) {
-            arg.type_id = new_type_id.clone();
-        } else {
-            let typ = ctx.must_get_resolved_type(&arg.type_id).clone();
-            match typ {
-                RichType::Function(mut sig) => {
-                    replace_type_ids(ctx, &mut sig);
-                    ctx.add_resolved_type(arg.type_id.clone(), RichType::from_fn_sig(*sig));
-                }
-                _ => {}
-            };
+/// Replaces type IDs in `sig` with the type IDs from `passed_arg_tids` and `maybe_expected_ret_tid`
+/// only if the type IDs don't resolve to templated types that still need to be rendered.
+fn replace_type_ids(
+    ctx: &ProgramContext,
+    sig: &mut RichFnSig,
+    passed_arg_tids: &Vec<TypeId>,
+    maybe_expected_ret_tid: Option<&TypeId>,
+) {
+    for (defined_arg, passed_arg_tid) in sig.args.iter_mut().zip(passed_arg_tids.iter()) {
+        if !ctx.must_get_resolved_type(passed_arg_tid).is_templated() {
+            defined_arg.type_id = passed_arg_tid.clone();
         }
     }
 
-    if let Some(ret_type_id) = &mut sig.ret_type_id {
-        if let Some(new_type_id) = ctx.get_remapped_type_ids().unwrap().get(ret_type_id) {
-            sig.ret_type_id = Some(new_type_id.clone());
-        } else {
-            let typ = ctx.must_get_resolved_type(&ret_type_id).clone();
-            match typ {
-                RichType::Function(mut sig) => {
-                    replace_type_ids(ctx, &mut sig);
-                    ctx.add_resolved_type(ret_type_id.clone(), RichType::from_fn_sig(*sig));
-                }
-                _ => {}
-            };
+    if let Some(expected_ret_tid) = maybe_expected_ret_tid {
+        if !ctx.must_get_resolved_type(expected_ret_tid).is_templated() {
+            sig.ret_type_id = Some(expected_ret_tid.clone());
         }
     }
 }

@@ -32,6 +32,7 @@ pub mod r#impl;
 mod move_check;
 pub mod prog_context;
 pub mod program;
+pub mod render;
 pub mod render_tmpl;
 pub mod ret;
 pub mod spec;

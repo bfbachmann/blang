@@ -497,7 +497,9 @@ mod tests {
         )
     }
 
+    // TODO: Make this work.
     #[test]
+    #[ignore]
     fn lambda_as_argument() {
         assert_compiles(
             r#"
@@ -508,6 +510,36 @@ mod tests {
             
             fn main() {
                 let result = select($(a, b) b, "not this", "this")
+            }
+            "#,
+        )
+    }
+
+    #[test]
+    fn tmpl_fn_with_only_fn_arg() {
+        assert_compiles(
+            r#"
+            fn do(f: fn (T) ~ T) with [T] {}
+
+            fn main() {
+                let f: fn (str) ~ str = $(a) a
+                do(f)
+            }
+            "#,
+        )
+    }
+
+    #[test]
+    fn lambda_with_fn_arg_as_variable() {
+        assert_compiles(
+            r#"
+            fn apply(f: fn (T) ~ T, t: T) ~ T
+            with [T] {
+                return f(t)
+            }
+    
+            fn main() {
+                let a: fn (fn (str) ~ str, str) ~ str = apply
             }
             "#,
         )

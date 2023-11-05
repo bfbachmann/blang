@@ -96,7 +96,6 @@ pub struct Scope {
     /// Tracks type IDs that should be remapped before being resolved to concrete types. This is
     /// used for type replacement in templated types and functions.
     remapped_type_ids: HashMap<TypeId, TypeId>,
-    is_boundary: bool,
 }
 
 impl Scope {
@@ -124,7 +123,6 @@ impl Scope {
             kind,
             return_type,
             remapped_type_ids: HashMap::new(),
-            is_boundary: false,
         }
     }
 
@@ -148,7 +146,6 @@ impl Scope {
             kind: ScopeKind::Tmpl,
             return_type,
             remapped_type_ids: HashMap::new(),
-            is_boundary: false,
         }
     }
 
@@ -356,15 +353,6 @@ impl ProgramContext {
             if let Some(result) = visit(scope) {
                 return Some(result);
             }
-
-            // Don't search beyond template rendering boundaries. If we didn't do this, types and
-            // functions rendered where they're used would be able to access types and variables
-            // declared in the context where they're used, which would be broken.
-            if scope.is_boundary {
-                // Visit the top level of the program before returning, as types and functions
-                // declared there should be accessible everywhere.
-                return visit(self.stack.front().unwrap());
-            }
         }
 
         None
@@ -380,12 +368,6 @@ impl ProgramContext {
             let (result, stop) = visit(scope);
             if stop {
                 return result;
-            }
-
-            if scope.is_boundary {
-                // Visit the top level of the program before returning, as types and functions
-                // declared there should be accessible everywhere.
-                return visit(self.stack.front().unwrap()).0;
             }
         }
 
@@ -489,15 +471,6 @@ impl ProgramContext {
     /// Adds the given mapping from type ID to resolved type to the top-level scope in the program
     /// context and returns the old type that used to correspond to `id`, if one exists.
     pub fn add_global_resolved_type(&mut self, id: TypeId, resolved: RichType) -> Option<RichType> {
-        self.stack
-            .front_mut()
-            .unwrap()
-            .add_resolved_type(id, resolved)
-    }
-
-    /// Adds the given type mapping to the top level scope in the program context. This should only
-    /// be used for templated types that have been rendered.
-    pub fn add_rendered_type(&mut self, id: TypeId, resolved: RichType) -> Option<RichType> {
         self.stack
             .front_mut()
             .unwrap()
@@ -705,10 +678,9 @@ impl ProgramContext {
     }
 
     /// Adds the given scope to the top of the stack.
-    pub fn push_scope(&mut self, mut scope: Scope) {
+    pub fn push_scope(&mut self, scope: Scope) {
         // Push the new template scope index onto the index stack so we can find with easily.
         if scope.kind == ScopeKind::Tmpl {
-            scope.is_boundary = self.tmpl_scope_indices.is_empty();
             self.tmpl_scope_indices.push(self.stack.len());
         }
 
