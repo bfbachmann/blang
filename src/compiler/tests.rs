@@ -189,6 +189,8 @@ mod tests {
             r#"
             fn main() {
                 loop {}
+                
+                let a = 1
             }
             "#,
         );

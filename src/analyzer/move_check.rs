@@ -376,7 +376,7 @@ impl<'a> MoveChecker<'a> {
         self.check_expr(&var_decl.val.kind);
 
         // Track the declaration in the current scope.
-        self.add_declared_var(var_decl.name.as_str())
+        self.add_declared_var(var_decl.name.as_str());
     }
 
     /// Recursively performs move checks on `assign`.
