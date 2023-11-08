@@ -59,7 +59,7 @@ impl Move {
         self.has_prefix(&other.path) || other.has_prefix(&self.path)
     }
 
-    /// Returns true if the path represented by `prefix` it the same as or is a parent of this
+    /// Returns true if the path represented by `prefix` is the same as or is a parent of this
     /// move's path.
     fn has_prefix(&self, prefix: &Vec<String>) -> bool {
         if self.path.len() < prefix.len() {
@@ -141,6 +141,11 @@ impl Scope {
         conflicting_moves
     }
 
+    /// Removes all moves of the variable with the given name from this scope.
+    fn clear_moves(&mut self, var_name: &str) {
+        self.moved_vars.remove(var_name);
+    }
+
     /// Adds `mv` to this scope. If `deferred` is true, adds the move as a deferred move, so it
     /// will only be checked against other moves after this scope and none within or under this
     /// scope.
@@ -178,6 +183,7 @@ pub struct MoveChecker<'a> {
 }
 
 impl<'a> MoveChecker<'a> {
+    /// Returns the analyzed type corresponding to the `type_key`.
     fn must_get_type(&self, type_key: TypeKey) -> &AType {
         self.type_store.must_get(type_key)
     }
@@ -192,18 +198,23 @@ impl<'a> MoveChecker<'a> {
         self.stack.pop().unwrap()
     }
 
-    /// Adds the declared variable to the current scope.
+    /// Returns a mutable reference to the current scope.
+    fn cur_scope_mut(&mut self) -> &mut Scope {
+        self.stack.last_mut().unwrap()
+    }
+
+    /// Adds the declared variable to the current scope. If this is a redeclaration of an existing
+    /// variable by the same name that was also declared in this scope, this function will clear
+    /// all moves of that variable from the current scope.
     fn add_declared_var(&mut self, var_name: &str) {
-        self.stack
-            .last_mut()
-            .unwrap()
-            .declared_vars
-            .insert(var_name.to_string());
+        let scope = self.cur_scope_mut();
+        scope.clear_moves(var_name);
+        scope.declared_vars.insert(var_name.to_string());
     }
 
     /// Records the move in the current scope.
     fn add_move(&mut self, mv: Move) {
-        self.stack.last_mut().unwrap().add_move(mv, false);
+        self.cur_scope_mut().add_move(mv, false);
     }
 
     /// Records `err`.
@@ -231,7 +242,7 @@ impl<'a> MoveChecker<'a> {
             }
         } else {
             // Copy moves from the given scope to the current scope.
-            let cur_scope = self.stack.last_mut().unwrap();
+            let cur_scope = self.cur_scope_mut();
             cur_scope.add_moves(scope.deferred_moves, false);
             if !deferred_only {
                 cur_scope.add_moves(scope.moved_vars, false);

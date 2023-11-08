@@ -1011,4 +1011,21 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::MismatchedTypes));
     }
+
+    #[test]
+    fn redefined_moved_value() {
+        let result = analyze(
+            r#"
+            struct S {}
+            
+            fn main() {
+                let a = S{}
+                let aa = a
+                let aa = aa
+                let aa = aa
+            } 
+            "#,
+        );
+        check_result(result, None);
+    }
 }
