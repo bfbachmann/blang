@@ -24,7 +24,7 @@ pub struct AFnSig {
     pub ret_type_key: Option<TypeKey>,
     /// Represents this function signature as a type.
     pub type_key: TypeKey,
-    /// The type ID of the parent type if this is a member function.
+    /// The type key of the parent type if this is a member function.
     pub maybe_impl_type_key: Option<TypeKey>,
     /// Optional template parameters (generics) for this function.
     pub tmpl_params: Option<ATmplParams>,
@@ -104,7 +104,7 @@ impl AFnSig {
         };
 
         // Check if this function signature is for a member function on a type by getting the
-        // impl type ID.
+        // impl type key.
         let impl_type_key = match ctx.get_cur_this_type_key() {
             Some(type_key) => Some(type_key),
             None => None,
@@ -171,7 +171,7 @@ impl AFnSig {
         }
 
         for (this_arg, other_arg) in self.args.iter().zip(other.args.iter()) {
-            // Skip the more complex arg type check if the type IDs already match.
+            // Skip the more complex arg type check if the type keys already match.
             if this_arg.type_key == other_arg.type_key {
                 continue;
             }
@@ -183,7 +183,7 @@ impl AFnSig {
             }
         }
 
-        // Skip the more complex return type check if the return type IDs already match.
+        // Skip the more complex return type check if the return type keys already match.
         if util::opts_eq(&self.ret_type_key, &other.ret_type_key) {
             return true;
         }

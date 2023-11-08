@@ -166,7 +166,7 @@ fn define_extern_fns(ctx: &mut ProgramContext, ext: &Extern) {
 }
 
 fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
-    // Set the current impl type ID on the program context so we can access it when
+    // Set the current impl type key on the program context so we can access it when
     // resolving type `This`.
     let impl_type_key = ctx.resolve_type(&impl_.typ);
     ctx.set_cur_this_type_key(Some(impl_type_key));

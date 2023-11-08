@@ -14,6 +14,8 @@ use crate::parser::stream::Stream;
 #[derive(Debug, PartialEq, Clone)]
 pub struct I64Lit {
     pub value: i64,
+    /// Will be true if the i64 literal in the source code included the explicit "i64" suffix.
+    pub has_type_suffix: bool,
     pub start_pos: Position,
     pub end_pos: Position,
 }
@@ -30,6 +32,7 @@ impl I64Lit {
     pub fn new_with_default_pos(i: i64) -> I64Lit {
         I64Lit {
             value: i,
+            has_type_suffix: false,
             start_pos: Default::default(),
             end_pos: Default::default(),
         }
@@ -39,11 +42,12 @@ impl I64Lit {
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<I64Lit> {
         match tokens.next() {
             Some(&Token {
-                kind: TokenKind::I64Literal(value),
+                kind: TokenKind::I64Literal(value, has_type_suffix),
                 start,
                 end,
             }) => Ok(I64Lit {
                 value,
+                has_type_suffix,
                 start_pos: start,
                 end_pos: end,
             }),

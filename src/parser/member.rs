@@ -83,7 +83,7 @@ impl MemberAccess {
                 match tokens.next() {
                     Some(
                         token @ Token {
-                            kind: TokenKind::I64Literal(field_index),
+                            kind: TokenKind::I64Literal(field_index, _),
                             ..
                         },
                     ) => {

@@ -27,8 +27,10 @@ use crate::{format_code, locatable_impl};
 pub enum AExprKind {
     Symbol(ASymbol),
     BoolLiteral(bool),
-    I64Literal(i64),
-    U64Literal(u64),
+    /// The bool here will be true if this literal includes an explicit type suffix.
+    I64Literal(i64, bool),
+    /// The bool here will be true if this literal includes an explicit type suffix.
+    U64Literal(u64, bool),
     Null,
     StrLiteral(String),
     StructInit(AStructInit),
@@ -46,8 +48,12 @@ impl fmt::Display for AExprKind {
         match self {
             AExprKind::Symbol(sym) => write!(f, "{}", sym),
             AExprKind::BoolLiteral(b) => write!(f, "{}", b),
-            AExprKind::I64Literal(i) => write!(f, "{}", i),
-            AExprKind::U64Literal(i) => write!(f, "{}", i),
+            AExprKind::I64Literal(i, has_suffix) => {
+                write!(f, "{}{}", i, if *has_suffix { "i64" } else { "" })
+            }
+            AExprKind::U64Literal(i, has_suffix) => {
+                write!(f, "{}{}", i, if *has_suffix { "u64" } else { "" })
+            }
             AExprKind::Null => write!(f, "null"),
             AExprKind::StrLiteral(s) => write!(f, "{}", s),
             AExprKind::StructInit(s) => write!(f, "{}", s),
@@ -71,8 +77,8 @@ impl PartialEq for AExprKind {
         match (self, other) {
             (AExprKind::Symbol(v1), AExprKind::Symbol(v2)) => v1 == v2,
             (AExprKind::BoolLiteral(b1), AExprKind::BoolLiteral(b2)) => b1 == b2,
-            (AExprKind::I64Literal(i1), AExprKind::I64Literal(i2)) => i1 == i2,
-            (AExprKind::U64Literal(i1), AExprKind::U64Literal(i2)) => i1 == i2,
+            (AExprKind::I64Literal(i1, _), AExprKind::I64Literal(i2, _)) => i1 == i2,
+            (AExprKind::U64Literal(i1, _), AExprKind::U64Literal(i2, _)) => i1 == i2,
             (AExprKind::Null, AExprKind::Null) => true,
             (AExprKind::StrLiteral(s1), AExprKind::StrLiteral(s2)) => s1 == s2,
             (AExprKind::StructInit(s1), AExprKind::StructInit(s2)) => s1 == s2,
@@ -98,9 +104,9 @@ impl AExprKind {
         match self {
             // Primitive literals are valid constants.
             AExprKind::BoolLiteral(_)
-            | AExprKind::I64Literal(_)
+            | AExprKind::I64Literal(_, _)
             | AExprKind::Null
-            | AExprKind::U64Literal(_)
+            | AExprKind::U64Literal(_, _)
             | AExprKind::StrLiteral(_) => true,
 
             // Unary and binary operations are constants if they only operate on constants.
@@ -156,8 +162,8 @@ impl AExprKind {
         match self {
             AExprKind::Symbol(sym) => format!("{}", sym),
             AExprKind::BoolLiteral(b) => format!("{}", b),
-            AExprKind::I64Literal(i) => format!("{}", i),
-            AExprKind::U64Literal(i) => format!("{}", i),
+            AExprKind::I64Literal(i, _) => format!("{}", i),
+            AExprKind::U64Literal(i, _) => format!("{}", i),
             AExprKind::Null => format!("null"),
             AExprKind::StrLiteral(s) => format!("{}", s),
             AExprKind::StructInit(s) => s.display(ctx),
@@ -195,7 +201,7 @@ locatable_impl!(AExpr);
 
 impl AExpr {
     /// Performs semantic analysis on the given expression and returns a type-rich version of it.
-    /// `expected_type_key` is the optional type ID of the expected type that this expression should
+    /// `expected_type_key` is the optional type key of the expected type that this expression should
     /// have.
     /// If `allow_templated_result` is false, this function will check that the resulting expression
     /// type is not templated and record an error if it is. Otherwise, templated result types will
@@ -229,14 +235,14 @@ impl AExpr {
             },
 
             Expression::I64Literal(i) => AExpr {
-                kind: AExprKind::I64Literal(i.value),
+                kind: AExprKind::I64Literal(i.value, i.has_type_suffix),
                 type_key: ctx.i64_type_key(),
                 start_pos,
                 end_pos,
             },
 
             Expression::U64Literal(i) => AExpr {
-                kind: AExprKind::U64Literal(i.value),
+                kind: AExprKind::U64Literal(i.value, i.has_type_suffix),
                 type_key: ctx.u64_type_key(),
                 start_pos,
                 end_pos,
@@ -294,7 +300,7 @@ impl AExpr {
                 let type_key = ctx.resolve_type(&sizeof.typ);
                 let typ = ctx.must_get_type(type_key);
                 AExpr {
-                    kind: AExprKind::U64Literal(typ.size_bytes(ctx) as u64),
+                    kind: AExprKind::U64Literal(typ.size_bytes(ctx) as u64, false),
                     type_key: ctx.u64_type_key(),
                     start_pos,
                     end_pos,
@@ -389,12 +395,12 @@ impl AExpr {
             }
 
             Expression::BinaryOperation(ref left_expr, ref op, ref right_expr) => {
-                let expected_operand_tk = match maybe_expected_type_key {
+                let maybe_expected_operand_tk = match maybe_expected_type_key {
                     Some(tk) => get_expected_operand_type_key(ctx, op, tk),
                     None => None,
                 };
 
-                let a_left = AExpr::from(ctx, *left_expr.clone(), expected_operand_tk, false);
+                let a_left = AExpr::from(ctx, *left_expr.clone(), maybe_expected_operand_tk, false);
 
                 // Handle the special case where the operator is the type cast operator `as`. In
                 // this case, the right expression should actually be a type.
@@ -429,7 +435,10 @@ impl AExpr {
                         };
                     }
                 } else {
-                    AExpr::from(ctx, *right_expr.clone(), expected_operand_tk, false)
+                    // If there is no expected operand type, we should try to coerce the right
+                    // expression to the type of the left expression.
+                    let expected_tk = maybe_expected_operand_tk.unwrap_or(a_left.type_key);
+                    AExpr::from(ctx, *right_expr.clone(), Some(expected_tk), false)
                 };
 
                 // If we couldn't resolve both of the operand types, we'll skip any further
@@ -451,7 +460,7 @@ impl AExpr {
 
                 // Check that the operands are compatible with the operator and one another.
                 let (maybe_operand_type_key, errors) =
-                    match check_operand_types(ctx, &a_left, left_type, op, &a_right, right_type) {
+                    match check_operand_types(ctx, &a_left, op, &a_right) {
                         Ok(maybe_type_key) => (maybe_type_key, vec![]),
                         Err(errs) => (None, errs),
                     };
@@ -560,17 +569,21 @@ impl AExpr {
         }
 
         match &self.kind {
-            AExprKind::I64Literal(i) if *i >= 0 => match target_type {
-                AType::U64 => {
-                    self.kind = AExprKind::U64Literal(*i as u64);
-                    self.type_key = ctx.u64_type_key();
+            // Only coerce i64 literals with they don't have explicit type suffixes.
+            AExprKind::I64Literal(i, has_type_suffix) if !has_type_suffix && *i >= 0 => {
+                match target_type {
+                    AType::U64 => {
+                        self.kind = AExprKind::U64Literal(*i as u64, false);
+                        self.type_key = ctx.u64_type_key();
+                    }
+                    _ => {}
                 }
-                _ => {}
-            },
+            }
 
-            AExprKind::U64Literal(u) => match target_type {
+            // Only coerce u64 literals with they don't have explicit type suffixes.
+            AExprKind::U64Literal(u, has_type_suffix) if !has_type_suffix => match target_type {
                 AType::I64 => {
-                    self.kind = AExprKind::I64Literal(*u as i64);
+                    self.kind = AExprKind::I64Literal(*u as i64, false);
                     self.type_key = ctx.i64_type_key();
                 }
                 _ => {}
@@ -663,8 +676,8 @@ impl AExpr {
             Type::Unresolved(unresolved_type) => {
                 let kind = match unresolved_type.name.as_str() {
                     "bool" => AExprKind::BoolLiteral(false),
-                    "i64" => AExprKind::I64Literal(0),
-                    "u64" => AExprKind::U64Literal(0),
+                    "i64" => AExprKind::I64Literal(0, false),
+                    "u64" => AExprKind::U64Literal(0, false),
                     "str" => AExprKind::StrLiteral("".to_string()),
                     "ptr" => AExprKind::Null,
                     _ => AExprKind::Unknown,
@@ -682,16 +695,17 @@ impl AExpr {
 }
 
 /// Checks that the operands of a binary operation are compatible with the operator and one
-/// another. If successful, returns the type ID of the operands (their types should be the
+/// another. If successful, returns the type key of the operands (their types should be the
 /// same).
 fn check_operand_types(
     ctx: &ProgramContext,
     left_expr: &AExpr,
-    left_type: &AType,
     op: &Operator,
     right_expr: &AExpr,
-    right_type: &AType,
 ) -> Result<Option<TypeKey>, Vec<AnalyzeError>> {
+    let left_type = ctx.must_get_type(left_expr.type_key);
+    let right_type = ctx.must_get_type(right_expr.type_key);
+
     if op == &Operator::As {
         return match is_valid_type_cast(left_type, right_type) {
             true => Ok(Some(right_expr.type_key)),
@@ -911,7 +925,7 @@ mod tests {
         assert_eq!(
             result,
             AExpr {
-                kind: AExprKind::I64Literal(1),
+                kind: AExprKind::I64Literal(1, false),
                 type_key: ctx.i64_type_key(),
                 start_pos: Position::default(),
                 end_pos: Position::default(),
@@ -1135,7 +1149,7 @@ mod tests {
                 assert_eq!(
                     *left,
                     AExpr {
-                        kind: AExprKind::I64Literal(1),
+                        kind: AExprKind::I64Literal(1, false),
                         type_key: ctx.i64_type_key(),
                         start_pos: Position::default(),
                         end_pos: Position::default(),
@@ -1330,7 +1344,7 @@ mod tests {
                         None,
                     ),
                     args: vec![AExpr {
-                        kind: AExprKind::I64Literal(1),
+                        kind: AExprKind::I64Literal(1, false),
                         type_key: ctx.i64_type_key(),
                         start_pos: Position::default(),
                         end_pos: Position::default(),
@@ -1373,7 +1387,7 @@ mod tests {
             AExpr {
                 kind: AExprKind::BinaryOperation(
                     Box::new(AExpr {
-                        kind: AExprKind::I64Literal(1),
+                        kind: AExprKind::I64Literal(1, false),
                         type_key: ctx.i64_type_key(),
                         start_pos: Position::default(),
                         end_pos: Position::default(),
@@ -1428,7 +1442,7 @@ mod tests {
                     }),
                     Operator::Add,
                     Box::new(AExpr {
-                        kind: AExprKind::I64Literal(1),
+                        kind: AExprKind::I64Literal(1, false),
                         type_key: ctx.i64_type_key(),
                         start_pos: Position::default(),
                         end_pos: Position::default(),

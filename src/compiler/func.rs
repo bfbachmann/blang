@@ -534,7 +534,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// Gets a pointer to a variable member by recursively accessing sub-members.
     /// `ll_ptr` is the pointer to the value on which the member-access is taking place.
-    /// `var_type_key` is the type ID of the value pointed to by `ll_ptr`.
+    /// `var_type_key` is the type key of the value pointed to by `ll_ptr`.
     /// `access` is the member (and sub-members) being accessed.
     fn get_var_member_ptr(
         &self,
@@ -921,13 +921,13 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 .const_int(*b as u64, false)
                 .as_basic_value_enum(),
 
-            AExprKind::I64Literal(i) => self
+            AExprKind::I64Literal(i, _) => self
                 .ctx
                 .i64_type()
                 .const_int(*i as u64, *i < 0)
                 .as_basic_value_enum(),
 
-            AExprKind::U64Literal(u) => self
+            AExprKind::U64Literal(u, _) => self
                 .ctx
                 .i64_type()
                 .const_int(*u, false)

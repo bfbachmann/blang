@@ -14,6 +14,8 @@ use crate::parser::stream::Stream;
 #[derive(Debug, PartialEq, Clone)]
 pub struct U64Lit {
     pub value: u64,
+    /// Will be true if the u64 literal in the source code included the explicit "u64" suffix.
+    pub has_type_suffix: bool,
     pub start_pos: Position,
     pub end_pos: Position,
 }
@@ -31,11 +33,12 @@ impl U64Lit {
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         match tokens.next() {
             Some(&Token {
-                kind: TokenKind::U64Literal(value),
+                kind: TokenKind::U64Literal(value, has_type_suffix),
                 start,
                 end,
             }) => Ok(U64Lit {
                 value,
+                has_type_suffix,
                 start_pos: start,
                 end_pos: end,
             }),

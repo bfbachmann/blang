@@ -16,7 +16,7 @@ use crate::{format_code, locatable_impl, util};
 #[derive(Debug, Clone)]
 pub struct ASymbol {
     pub name: String,
-    /// The type ID of the parent symbol (i.e. not the member(s) being accessed).
+    /// The type key of the parent symbol (i.e. not the member(s) being accessed).
     pub parent_type_key: TypeKey,
     pub member_access: Option<AMemberAccess>,
     /// This will be set to true if the name of this symbol matches a type name and no variable
@@ -88,8 +88,8 @@ impl ASymbol {
     ) -> Self {
         let var_name = symbol.name.as_str();
 
-        // Find the type ID for the symbol or member being accessed.
-        // Return a placeholder value if we failed to resolve the symbol type ID.
+        // Find the type key for the symbol or member being accessed.
+        // Return a placeholder value if we failed to resolve the symbol type key.
         // TODO: Refactor
         let (mut maybe_type_key, maybe_symbol) =
             ASymbol::get_type_key_by_symbol_name(ctx, symbol.name.as_str(), include_fns);
@@ -218,7 +218,7 @@ impl ASymbol {
         }
     }
 
-    /// Returns the type ID of the accessed submember (i.e. the type of the member at the end of
+    /// Returns the type key of the accessed submember (i.e. the type of the member at the end of
     /// the member access chain), or of the symbol itself if there is no member access.
     pub fn get_type_key(&self) -> TypeKey {
         match &self.member_access {
@@ -236,7 +236,7 @@ impl ASymbol {
         }
     }
 
-    /// Attempts to find the type ID of a symbol with the given name. Additionally, if `name`
+    /// Attempts to find the type key of a symbol with the given name. Additionally, if `name`
     /// can be resolved to an actual variable, the variable will be returned.
     fn get_type_key_by_symbol_name(
         ctx: &ProgramContext,
@@ -390,7 +390,7 @@ impl AMemberAccess {
         }
     }
 
-    /// Returns the type ID of the accessed submember (i.e. the type of the member at the end
+    /// Returns the type key of the accessed submember (i.e. the type of the member at the end
     /// of the member access chain).
     fn get_type_key(&self) -> TypeKey {
         match &self.submember {

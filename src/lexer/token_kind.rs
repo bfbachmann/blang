@@ -32,8 +32,10 @@ pub enum TokenKind {
 
     // Built-in/primitive types and values
     BoolLiteral(bool),
-    I64Literal(i64),
-    U64Literal(u64),
+    // The bool here will be true if the "i64" suffix was included in the literal.
+    I64Literal(i64, bool),
+    // The bool here will be true if the "u64" suffix was included in the literal.
+    U64Literal(u64, bool),
     Null,
     StrLiteral(String),
     Fn,
@@ -101,8 +103,8 @@ impl Clone for TokenKind {
             TokenKind::GreaterThanOrEqual => TokenKind::GreaterThanOrEqual,
             TokenKind::LessThanOrEqual => TokenKind::LessThanOrEqual,
             TokenKind::BoolLiteral(v) => TokenKind::BoolLiteral(*v),
-            TokenKind::I64Literal(v) => TokenKind::I64Literal(*v),
-            TokenKind::U64Literal(v) => TokenKind::U64Literal(*v),
+            TokenKind::I64Literal(v, has_suffix) => TokenKind::I64Literal(*v, *has_suffix),
+            TokenKind::U64Literal(v, has_suffix) => TokenKind::U64Literal(*v, *has_suffix),
             TokenKind::Null => TokenKind::Null,
             TokenKind::StrLiteral(v) => TokenKind::StrLiteral(v.clone()),
             TokenKind::Fn => TokenKind::Fn,
@@ -151,8 +153,12 @@ impl fmt::Display for TokenKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             TokenKind::BoolLiteral(b) => write!(f, "{}", b),
-            TokenKind::I64Literal(i) => write!(f, "{}", i),
-            TokenKind::U64Literal(u) => write!(f, "{}", u),
+            TokenKind::I64Literal(i, has_suffix) => {
+                write!(f, "{}{}", i, if *has_suffix { "i64" } else { "" })
+            }
+            TokenKind::U64Literal(u, has_suffix) => {
+                write!(f, "{}{}", u, if *has_suffix { "u64" } else { "" })
+            }
             TokenKind::StrLiteral(s) => write!(f, r#""{}""#, s),
             TokenKind::Identifier(s) => write!(f, "{}", s),
             other => write!(f, "{}", other.to_string()),
@@ -179,8 +185,8 @@ impl TokenKind {
             TokenKind::GreaterThanOrEqual => ">=".to_string(),
             TokenKind::LessThanOrEqual => "<=".to_string(),
             TokenKind::BoolLiteral(v) => v.to_string(),
-            TokenKind::I64Literal(v) => v.to_string(),
-            TokenKind::U64Literal(v) => v.to_string(),
+            TokenKind::I64Literal(v, _) => v.to_string(),
+            TokenKind::U64Literal(v, _) => v.to_string(),
             TokenKind::Null => "NULL".to_string(),
             TokenKind::StrLiteral(v) => v.to_string(),
             TokenKind::Fn => "fn".to_string(),
@@ -369,12 +375,12 @@ impl TokenKind {
         // Remove all `_` and the optional trailing `i64` from the segment. If what is left is an
         // integer, the segment is a valid i64 literal.
         let segment = segment.replace("_", "");
-        let stripped = match segment.strip_suffix("i64") {
-            Some(seg) => seg.to_string(),
-            None => segment.to_string(),
+        let (stripped, has_suffix) = match segment.strip_suffix("i64") {
+            Some(seg) => (seg.to_string(), true),
+            None => (segment.to_string(), false),
         };
         match stripped.parse::<i64>() {
-            Ok(i) => Some(TokenKind::I64Literal(i)),
+            Ok(i) => Some(TokenKind::I64Literal(i, has_suffix)),
             Err(_) => None,
         }
     }
@@ -389,12 +395,12 @@ impl TokenKind {
         // Remove all `_` and the optional trailing `u64` from the segment. If what is left is an
         // integer, the segment is a valid u64 literal.
         let segment = segment.replace("_", "");
-        let stripped = match segment.strip_suffix("u64") {
-            Some(seg) => seg.to_string(),
-            None => segment.to_string(),
+        let (stripped, has_suffix) = match segment.strip_suffix("u64") {
+            Some(seg) => (seg.to_string(), true),
+            None => (segment.to_string(), false),
         };
         match stripped.parse::<u64>() {
-            Ok(i) => Some(TokenKind::U64Literal(i)),
+            Ok(i) => Some(TokenKind::U64Literal(i, has_suffix)),
             Err(_) => None,
         }
     }

@@ -82,7 +82,7 @@ impl AClosure {
     }
 
     /// Performs semantic analysis on the given closure with the already-analyzed arguments and
-    /// expected return type ID.
+    /// expected return type key.
     pub fn from_analyzed(
         ctx: &mut ProgramContext,
         closure: &Closure,

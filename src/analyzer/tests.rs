@@ -990,4 +990,25 @@ mod tests {
         let result = analyze(r#"extern fn free(ptr: T) with [T]"#);
         check_result(result, Some(ErrorKind::InvalidExtern));
     }
+
+    #[test]
+    fn binary_expr_type_coercion() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let a = 8u64 - 14 % 2 == 0
+            }
+        "#,
+        );
+        check_result(result, None);
+
+        let result = analyze(
+            r#"
+            fn main() {
+                let a: u64 = 8 - 5i64
+            }
+        "#,
+        );
+        check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
 }

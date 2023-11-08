@@ -563,7 +563,7 @@ impl ProgramContext {
         !self.loop_scope_indices.is_empty()
     }
 
-    /// Adds the symbol type ID to the current scope in the context. If there was already a symbol
+    /// Adds the symbol type key to the current scope in the context. If there was already a symbol
     /// with the same name, returns the old symbol.
     pub fn insert_symbol(&mut self, symbol: ScopedSymbol) -> Option<ScopedSymbol> {
         self.stack.back_mut().unwrap().add_symbol(symbol)

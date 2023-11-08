@@ -65,7 +65,7 @@ impl AFnCall {
             .map(|arg| AExpr::from(ctx, arg.clone(), None, true))
             .collect();
 
-        // Get the type ID of the first argument so we can pass it as a hint to the variable
+        // Get the type key of the first argument so we can pass it as a hint to the variable
         // resolver. The variable resolver can use it as a means of locating member functions
         // for types. This is necessary for chained method calls.
         let maybe_impl_type_key = match passed_args.front() {
@@ -88,7 +88,7 @@ impl AFnCall {
         }
 
         // Try to locate the function signature for this function call. If it's a call to a type
-        // member function, we'll look up the function using the type ID. Otherwise, we just extract
+        // member function, we'll look up the function using the type key. Otherwise, we just extract
         // the function signature from the variable type, as it should be a function type.
         let fn_sig = match AFnCall::get_fn_sig(ctx, &a_fn_symbol, &call) {
             Ok(sig) => sig,
