@@ -1285,7 +1285,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 result
             }
         } else if op.is_comparator() {
-            self.compile_cmp(lhs, op, rhs, signed).as_basic_value_enum()
+            self.compile_cmp(lhs, left_expr.type_key, op, rhs, signed)
+                .as_basic_value_enum()
         } else if op.is_logical() {
             self.compile_logical_op(lhs, op, rhs).as_basic_value_enum()
         } else {
@@ -1354,10 +1355,26 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     fn compile_cmp(
         &self,
         ll_lhs: BasicValueEnum<'ctx>,
+        left_type_key: TypeKey,
         op: &Operator,
         ll_rhs: BasicValueEnum<'ctx>,
         signed: bool,
     ) -> IntValue<'ctx> {
+        // Handle the special case of enum variant comparisons.
+        if op == &Operator::Like {
+            let ll_left_variant =
+                self.get_enum_variant_number(left_type_key, ll_lhs.into_pointer_value());
+            let ll_right_variant =
+                self.get_enum_variant_number(left_type_key, ll_rhs.into_pointer_value());
+
+            return self.builder.build_int_compare(
+                IntPredicate::EQ,
+                ll_left_variant,
+                ll_right_variant,
+                "variants_equal",
+            );
+        }
+
         // TODO: will it work if we always treat operands as ints?
         let lhs = self.get_int(ll_lhs);
         let rhs = self.get_int(ll_rhs);
@@ -1366,10 +1383,12 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             Operator::EqualTo => self
                 .builder
                 .build_int_compare(IntPredicate::EQ, lhs, rhs, "eq"),
+
             Operator::NotEqualTo => {
                 self.builder
                     .build_int_compare(IntPredicate::NE, lhs, rhs, "ne")
             }
+
             Operator::GreaterThan => {
                 let ll_op = match signed {
                     true => IntPredicate::SGT,
@@ -1377,6 +1396,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 };
                 self.builder.build_int_compare(ll_op, lhs, rhs, "gt")
             }
+
             Operator::LessThan => {
                 let ll_op = match signed {
                     true => IntPredicate::SLT,
@@ -1384,6 +1404,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 };
                 self.builder.build_int_compare(ll_op, lhs, rhs, "lt")
             }
+
             Operator::GreaterThanOrEqual => {
                 let ll_op = match signed {
                     true => IntPredicate::SGE,
@@ -1391,6 +1412,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 };
                 self.builder.build_int_compare(ll_op, lhs, rhs, "ge")
             }
+
             Operator::LessThanOrEqual => {
                 let ll_op = match signed {
                     true => IntPredicate::SLE,
@@ -1398,6 +1420,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 };
                 self.builder.build_int_compare(ll_op, lhs, rhs, "le")
             }
+
             other => panic!("unexpected comparison operator {other}"),
         }
     }
@@ -1476,5 +1499,27 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 panic!("encountered unknown type {}", name)
             }
         }
+    }
+
+    /// Returns the variant number of the given enum.
+    fn get_enum_variant_number(
+        &self,
+        enum_type_key: TypeKey,
+        ll_enum_ptr: PointerValue<'ctx>,
+    ) -> IntValue<'ctx> {
+        let enum_type = self.type_store.must_get(enum_type_key);
+        let ll_enum_type = convert::to_basic_type(self.ctx, self.type_store, enum_type);
+        let ll_variant_ptr = self
+            .builder
+            .build_struct_gep(
+                ll_enum_type,
+                ll_enum_ptr,
+                0,
+                format!("{}.variant_ptr", enum_type.name()).as_str(),
+            )
+            .unwrap();
+        self.builder
+            .build_load(self.ctx.i8_type(), ll_variant_ptr, "variant_number")
+            .into_int_value()
     }
 }

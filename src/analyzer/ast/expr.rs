@@ -180,6 +180,11 @@ impl AExprKind {
             }
         }
     }
+
+    /// Returns true if this expression kind is a symbol.
+    pub fn is_symbol(&self) -> bool {
+        matches!(self, AExprKind::Symbol(_))
+    }
 }
 
 /// Represents a semantically valid and type-rich expression.
@@ -201,8 +206,8 @@ locatable_impl!(AExpr);
 
 impl AExpr {
     /// Performs semantic analysis on the given expression and returns a type-rich version of it.
-    /// `expected_type_key` is the optional type key of the expected type that this expression should
-    /// have.
+    /// `maybe_expected_type_key` is the optional type key of the expected type that this expression
+    /// should have.
     /// If `allow_templated_result` is false, this function will check that the resulting expression
     /// type is not templated and record an error if it is. Otherwise, templated result types will
     /// be allowed.
@@ -538,12 +543,12 @@ impl AExpr {
 
         // Skip the type check if either type is unknown, as this implies that semantic analysis
         // has already failed somewhere else in this expression or wherever it's being used.
-        let actual_type = ctx.must_get_type(self.type_key).clone();
-        if actual_type.is_unknown() {
+        let actual_type = ctx.must_get_type(self.type_key);
+        let expected_type = ctx.must_get_type(expected_tk);
+        if actual_type.is_unknown() || expected_type.is_unknown() {
             return self;
         }
 
-        let expected_type = ctx.must_get_type(expected_tk).clone();
         if !actual_type.is_same_as(ctx, &expected_type) {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::MismatchedTypes,
@@ -755,7 +760,7 @@ fn check_operand_types(
         operand_type_key = Some(right_expr.type_key);
     }
 
-    if right_type != left_type {
+    if !right_type.is_same_as(ctx, left_type) {
         errors.push(AnalyzeError::new(
             ErrorKind::MismatchedTypes,
             format_code!(
@@ -784,9 +789,7 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
         | Operator::Subtract
         | Operator::Multiply
         | Operator::Divide
-        | Operator::Modulo => {
-            matches!(operand_type, AType::I64 | AType::Ptr | AType::U64)
-        }
+        | Operator::Modulo => matches!(operand_type, AType::I64 | AType::Ptr | AType::U64),
 
         // Logical operators only work on bools.
         Operator::LogicalAnd | Operator::LogicalOr => matches!(operand_type, AType::Bool),
@@ -798,6 +801,9 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
                 AType::Bool | AType::I64 | AType::Ptr | AType::U64
             )
         }
+
+        // Both operands of a `like` comparison should be enums.
+        Operator::Like => matches!(operand_type, AType::Enum(_)),
 
         // Comparators only work on numeric types.
         Operator::GreaterThan
@@ -844,7 +850,7 @@ fn get_result_type(
         Operator::LogicalAnd | Operator::LogicalOr => ctx.bool_type_key(),
 
         // Equality operators result in bools.
-        Operator::EqualTo | Operator::NotEqualTo => ctx.bool_type_key(),
+        Operator::EqualTo | Operator::NotEqualTo | Operator::Like => ctx.bool_type_key(),
 
         // Comparators result in bools.
         Operator::GreaterThan
@@ -878,7 +884,7 @@ fn get_expected_operand_type_key(
 
         Operator::LogicalAnd | Operator::LogicalOr => Some(ctx.bool_type_key()),
 
-        Operator::EqualTo | Operator::NotEqualTo => None,
+        Operator::EqualTo | Operator::NotEqualTo | Operator::Like => None,
 
         Operator::GreaterThan
         | Operator::LessThan

@@ -400,9 +400,19 @@ impl<'a> MoveChecker<'a> {
             AExprKind::FunctionCall(call) => {
                 self.check_fn_call(call);
             }
-            AExprKind::BinaryOperation(left, _, right) => {
-                self.check_expr(&right.kind);
-                self.check_expr(&left.kind);
+            AExprKind::BinaryOperation(left, op, right) => {
+                // Comparisons should not cause moves of their immediate operands since they don't
+                // require copying data.
+                let skip_left_check = op.is_comparator() && left.kind.is_symbol();
+                let skip_right_check = op.is_comparator() && right.kind.is_symbol();
+
+                if !skip_left_check {
+                    self.check_expr(&left.kind)
+                };
+
+                if !skip_right_check {
+                    self.check_expr(&right.kind)
+                };
             }
             AExprKind::UnaryOperation(_, expr) => {
                 self.check_expr(&expr.kind);

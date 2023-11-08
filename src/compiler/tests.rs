@@ -553,4 +553,20 @@ mod tests {
             "#,
         )
     }
+
+    #[test]
+    fn enum_comparison() {
+        assert_compiles(
+            r#"
+            enum Result { Ok, Err }
+            
+            fn main() {
+                let a = Result::Ok like Result::Err
+                let r = Result::Err
+                
+                let b = r like Result::Ok
+            }
+            "#,
+        )
+    }
 }
