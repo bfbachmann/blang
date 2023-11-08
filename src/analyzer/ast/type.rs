@@ -68,6 +68,7 @@ impl PartialEq for AType {
 }
 
 impl AType {
+    /// Analyzes `typ` and returns an analyzed version of it.
     pub fn from(ctx: &mut ProgramContext, typ: &Type) -> AType {
         match typ {
             Type::Unresolved(unresolved_type) => {
@@ -153,6 +154,8 @@ impl AType {
         ])
     }
 
+    /// Returns the name assigned to this type. Note that some types (like tuples or struct types
+    /// defined in-line) do not have names.
     pub fn name(&self) -> &str {
         match self {
             AType::Bool => "bool",
