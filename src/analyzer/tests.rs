@@ -2,9 +2,10 @@
 mod tests {
     use std::io::{BufRead, Cursor};
 
-    use crate::analyzer::error::AnalyzeResult;
-    use crate::analyzer::error::{AnalyzeError, ErrorKind};
-    use crate::analyzer::program::{ProgramAnalysis, RichProg};
+    use crate::analyzer::analyze::analyze_prog;
+    use crate::analyzer::ast::program::AProgram;
+    use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
+    use crate::analyzer::prog_context::ProgramAnalysis;
     use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
     use crate::lexer::token::Token;
     use crate::parser::program::Program;
@@ -13,10 +14,10 @@ mod tests {
     fn get_analysis(raw: &str) -> ProgramAnalysis {
         let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let prog = Program::from(&mut Stream::from(tokens)).expect("should not error");
-        RichProg::analyze(prog)
+        analyze_prog(&prog)
     }
 
-    fn analyze_prog(raw: &str) -> AnalyzeResult<RichProg> {
+    fn analyze(raw: &str) -> AnalyzeResult<AProgram> {
         let mut analysis = get_analysis(raw);
         if analysis.errors.is_empty() {
             Ok(analysis.prog)
@@ -25,7 +26,7 @@ mod tests {
         }
     }
 
-    fn check_result(result: AnalyzeResult<RichProg>, expected_err_kind: Option<ErrorKind>) {
+    fn check_result(result: AnalyzeResult<AProgram>, expected_err_kind: Option<ErrorKind>) {
         match expected_err_kind {
             Some(kind) => assert_eq!(result.unwrap_err().kind, kind),
             None => assert!(result.is_ok()),
@@ -43,7 +44,7 @@ mod tests {
             main()
         }
         "#;
-        let result = analyze_prog(raw);
+        let result = analyze(raw);
         check_result(result, Some(ErrorKind::CallToMain));
     }
 
@@ -55,7 +56,7 @@ mod tests {
             i = 11
         }
         "#;
-        let result = analyze_prog(raw);
+        let result = analyze(raw);
         check_result(result, None);
     }
 
@@ -67,7 +68,7 @@ mod tests {
             i = 11
         }
         "#;
-        let result = analyze_prog(raw);
+        let result = analyze(raw);
         check_result(result, Some(ErrorKind::ImmutableAssignment));
     }
 
@@ -78,7 +79,7 @@ mod tests {
                 arg = 2
             }
         "#;
-        let result = analyze_prog(raw);
+        let result = analyze(raw);
         check_result(result, None);
     }
 
@@ -89,7 +90,7 @@ mod tests {
                 fn another() {}
             }
         "#;
-        let result = analyze_prog(raw);
+        let result = analyze(raw);
         check_result(result, Some(ErrorKind::InvalidStatement));
     }
 
@@ -100,7 +101,7 @@ mod tests {
                 arg = 2
             }
         "#;
-        let result = analyze_prog(raw);
+        let result = analyze(raw);
         check_result(result, Some(ErrorKind::ImmutableAssignment));
     }
 
@@ -111,7 +112,7 @@ mod tests {
         fn test(a: i64, b: str) { 
             let s = "hello world!" 
         }"#;
-        let result = analyze_prog(raw);
+        let result = analyze(raw);
         check_result(result, None);
     }
 
@@ -122,7 +123,7 @@ mod tests {
             i = 1
         }
         "#;
-        let result = analyze_prog(raw);
+        let result = analyze(raw);
         check_result(result, Some(ErrorKind::UndefSymbol));
     }
 
@@ -132,7 +133,7 @@ mod tests {
         fn test() {}
         fn test(thing: str) {}
         "#;
-        let result = analyze_prog(raw);
+        let result = analyze(raw);
         check_result(result, Some(ErrorKind::DuplicateFunction));
     }
 
@@ -149,7 +150,7 @@ mod tests {
         }
         "#;
 
-        let result = analyze_prog(raw);
+        let result = analyze(raw);
         check_result(result, None);
     }
 
@@ -214,7 +215,7 @@ mod tests {
         
         fn check_struct(s: MyStruct) {}
         "#;
-        let result = analyze_prog(raw);
+        let result = analyze(raw);
         check_result(result, None);
     }
 
@@ -268,7 +269,7 @@ mod tests {
                 }
             }
         "#;
-        let result = analyze_prog(raw);
+        let result = analyze(raw);
         check_result(result, None);
     }
 
@@ -279,7 +280,7 @@ mod tests {
                 inner: Test
             }
         "#;
-        let result = analyze_prog(raw);
+        let result = analyze(raw);
         check_result(result, Some(ErrorKind::InfiniteSizedType));
     }
 
@@ -296,7 +297,7 @@ mod tests {
                 inner: Inner,
             }
         "#;
-        let result = analyze_prog(raw);
+        let result = analyze(raw);
         check_result(result, Some(ErrorKind::InfiniteSizedType));
     }
 
@@ -313,7 +314,7 @@ mod tests {
                 inner: Inner,
             }
         "#;
-        let result = analyze_prog(raw);
+        let result = analyze(raw);
         check_result(result, Some(ErrorKind::InfiniteSizedType));
     }
 
@@ -357,7 +358,7 @@ mod tests {
 
     #[test]
     fn type_already_exists() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             struct A {}
             struct A {}
@@ -374,7 +375,7 @@ mod tests {
 
     #[test]
     fn struct_member_access() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
            struct Thing {
                i: i64,
@@ -417,14 +418,14 @@ mod tests {
         ];
 
         for prog in programs {
-            let result = analyze_prog(prog);
+            let result = analyze(prog);
             check_result(result, Some(ErrorKind::InvalidStatement));
         }
     }
 
     #[test]
     fn illegal_move() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             struct T {}
             
@@ -440,7 +441,7 @@ mod tests {
 
     #[test]
     fn illegal_member_move() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             struct Inner {}
             
@@ -460,7 +461,7 @@ mod tests {
 
     #[test]
     fn undefined_type_in_struct() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             struct T {
                 inner: Inner
@@ -472,7 +473,7 @@ mod tests {
 
     #[test]
     fn illegal_loop_move() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             struct T {}
             
@@ -490,7 +491,7 @@ mod tests {
 
     #[test]
     fn loop_move() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             struct T {}
             
@@ -509,7 +510,7 @@ mod tests {
 
     #[test]
     fn nested_loop_move() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             struct T {}
             
@@ -531,7 +532,7 @@ mod tests {
 
     #[test]
     fn illegal_nested_loop_move() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             struct T {}
             
@@ -554,7 +555,7 @@ mod tests {
 
     #[test]
     fn move_in_branch_with_break() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             fn main() {
                 struct T {}
@@ -576,7 +577,7 @@ mod tests {
 
     #[test]
     fn illegal_move_in_loop_with_return() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             fn main() {
                 struct T {}
@@ -600,7 +601,7 @@ mod tests {
 
     #[test]
     fn illegal_move_in_branch_with_break() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             fn main() {
                 struct T {}
@@ -621,7 +622,7 @@ mod tests {
 
     #[test]
     fn move_in_branch_with_return() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             fn main() {
                 struct T {}
@@ -642,7 +643,7 @@ mod tests {
 
     #[test]
     fn partial_moves() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             struct Inner {}
             
@@ -667,7 +668,7 @@ mod tests {
 
     #[test]
     fn invalid_operand_types() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             struct Thing {}
             fn main() {
@@ -685,7 +686,7 @@ mod tests {
 
     #[test]
     fn invalid_tuple_access() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             fn main() {
                 let a = {1, 2, 3}
@@ -698,7 +699,7 @@ mod tests {
 
     #[test]
     fn invalid_tuple_field_assignment() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             fn main() {
                 let mut a = {1, 2, 3}
@@ -711,7 +712,7 @@ mod tests {
 
     #[test]
     fn illegal_use_of_extern() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             fn main() {
                 extern fn nothing()
@@ -723,7 +724,7 @@ mod tests {
 
     #[test]
     fn duplicate_const() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             const {
                 a = {1, 2, true}
@@ -736,7 +737,7 @@ mod tests {
 
     #[test]
     fn const_type_mismatch() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             const a: {bool, i64, i64} = {1, 2, true}
             "#,
@@ -746,7 +747,7 @@ mod tests {
 
     #[test]
     fn illegal_assign_to_const() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             const a = true
             
@@ -760,7 +761,7 @@ mod tests {
 
     #[test]
     fn duplicate_member_fn() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             struct T {
                 value: i64
@@ -782,7 +783,7 @@ mod tests {
 
     #[test]
     fn duplicate_enum_variant() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             enum E {
                 Thing
@@ -795,7 +796,7 @@ mod tests {
 
     #[test]
     fn type_already_defined() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             enum E {}
             struct E {}
@@ -803,13 +804,13 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::DuplicateType));
 
-        let result = analyze_prog(r#"enum i64 {}"#);
+        let result = analyze(r#"enum i64 {}"#);
         check_result(result, Some(ErrorKind::DuplicateType));
     }
 
     #[test]
     fn illegal_direct_enum_containment_cycle() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             enum E {
                 Thing(T)
@@ -825,7 +826,7 @@ mod tests {
 
     #[test]
     fn illegal_indirect_enum_containment_cycle() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             enum E {
                 Thing(E)
@@ -837,7 +838,7 @@ mod tests {
 
     #[test]
     fn duplicate_spec() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             spec A {}
             spec A {}
@@ -848,7 +849,7 @@ mod tests {
 
     #[test]
     fn duplicate_fn_arg() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             fn test(a: i64, a: bool) {}
             "#,
@@ -857,8 +858,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "generics")]
     fn function_template_with_invalid_spec() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             fn test(t: T) 
             with [T: Thing] 
@@ -869,8 +871,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "generics")]
     fn function_template_with_unsatisfied_spec() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             spec Thing {
                 fn do_thing()
@@ -892,8 +895,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "generics")]
     fn function_template_with_unmatched_required_type() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             struct Doer {}
             
@@ -911,8 +915,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "generics")]
     fn function_template_with_mismatched_shared_templated_types() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             fn do_nothing(a: T, b: T) with [T] {}
             
@@ -925,8 +930,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "generics")]
     fn unresolved_tmpl_params() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             fn test(a: A, b: B) ~ C with [A, B, C] {
                 return a + b
@@ -942,7 +948,7 @@ mod tests {
 
     #[test]
     fn incompatible_type_cast() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             fn main() {
                 let a = 5u64
@@ -955,7 +961,7 @@ mod tests {
 
     #[test]
     fn invalid_type_cast() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             fn main() {
                 let a = 5u64
@@ -968,7 +974,7 @@ mod tests {
 
     #[test]
     fn invalid_expression_is_type() {
-        let result = analyze_prog(
+        let result = analyze(
             r#"
             fn main() {
                 let a = u64
@@ -979,8 +985,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "generics")]
     fn invalid_tmpl_extern_fn() {
-        let result = analyze_prog(r#"extern fn free(ptr: T) with [T]"#);
+        let result = analyze(r#"extern fn free(ptr: T) with [T]"#);
         check_result(result, Some(ErrorKind::InvalidExtern));
     }
 }

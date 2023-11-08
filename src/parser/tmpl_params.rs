@@ -18,8 +18,8 @@ pub struct TmplParam {
     pub name: String,
     /// The specs that this template parameter requires.
     pub required_specs: Vec<Type>,
-    /// The type that this template parameter requires.
-    pub required_type: Option<Type>,
+    /// The type that this template parameter is an alias for.
+    pub aliased_type: Option<Type>,
     start_pos: Position,
     end_pos: Position,
 }
@@ -32,7 +32,7 @@ impl Hash for TmplParam {
             spec.hash(state);
         }
 
-        if let Some(typ) = &self.required_type {
+        if let Some(typ) = &self.aliased_type {
             typ.hash(state);
         }
     }
@@ -68,7 +68,7 @@ impl TmplParam {
         let mut tmpl_param = TmplParam {
             name: Program::parse_identifier(tokens)?,
             required_specs: vec![],
-            required_type: None,
+            aliased_type: None,
             start_pos,
             end_pos,
         };
@@ -81,7 +81,7 @@ impl TmplParam {
                 ..
             }) => {
                 tokens.next();
-                tmpl_param.required_type = Some(Type::from(tokens)?);
+                tmpl_param.aliased_type = Some(Type::from(tokens)?);
             }
 
             Some(Token {
@@ -117,7 +117,7 @@ impl TmplParam {
         TmplParam {
             name: name.to_string(),
             required_specs: vec![],
-            required_type: None,
+            aliased_type: None,
             start_pos: Default::default(),
             end_pos: Default::default(),
         }

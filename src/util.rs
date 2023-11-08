@@ -38,3 +38,26 @@ where
 
     true
 }
+
+/// Used as a type that implements Drop for defer! macros.
+pub struct ScopeCall<F: FnMut()> {
+    c: F,
+}
+
+impl<F: FnMut()> Drop for ScopeCall<F> {
+    fn drop(&mut self) {
+        (self.c)();
+    }
+}
+
+/// Defers the execution of the given expression until the end of the current block.
+#[macro_export]
+macro_rules! defer {
+    ($e:expr) => {
+        let _scope_call = ScopeCall {
+            c: || -> () {
+                $e;
+            },
+        };
+    };
+}

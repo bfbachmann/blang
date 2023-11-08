@@ -1,48 +1,10 @@
-//! The Blang analyzer checks the AST that comes from the parser for correctness. Checks include
-//! but are not limited to:
-//!  - Statement validity checks: checking that special statements like `return`, `break`,
-//!    `continue`, and others are only used in context where they make sense.
-//!  - Type checks: checking that, where a specific type is expected, a value of that same type is
-//!    provided.
-//!  - Identifier checks: checking that all types and variables used in the program have valid
-//!    definitions and are only used in scopes where those types or variables are accessible.
-//!  - Call checks: checking that function calls have the right arguments and that they aren't used
-//!    in contexts where their return values match what is expected by the caller.
-//!  - Mutability checks: checking that immutable variables are never mutated.
-//!  - Move checks: checking that, for types that aren't copied implicitly (generally composite
-//!    types like structs), the program follows move rules by not moving the same value more than
-//!    once.
-//!
-//! Once the analyzer has checked the entire program, it returns an new version of the AST it was
-//! given with additional information about each AST node like types or control flow hints. It
-//! also returns a list of warnings and errors that occurred during analysis that may prevent
-//! compilation.
-
-pub mod arg;
-pub mod closure;
-pub mod cond;
-pub mod r#const;
-pub mod r#enum;
+pub mod analyze;
+pub mod ast;
 pub mod error;
-pub mod expr;
-pub mod func;
-pub mod func_call;
-pub mod func_sig;
-pub mod r#impl;
-mod move_check;
+pub mod move_check;
 pub mod prog_context;
-pub mod program;
-pub mod render;
-pub mod render_tmpl;
-pub mod ret;
-pub mod spec;
-pub mod statement;
-pub mod r#struct;
-pub mod symbol;
+pub mod scope;
 mod tests;
-pub mod tmpl_params;
-pub mod tuple;
-pub mod r#type;
-pub mod var_assign;
-pub mod var_dec;
+mod type_containment;
+pub mod type_store;
 pub mod warn;

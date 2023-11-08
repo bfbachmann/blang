@@ -10,11 +10,12 @@ use inkwell::targets::{TargetMachine, TargetTriple};
 use inkwell::types::AnyType;
 use inkwell::values::FunctionValue;
 
-use crate::analyzer::func_sig::RichFnSig;
-use crate::analyzer::program::{ProgramAnalysis, RichProg};
-use crate::analyzer::r#const::RichConst;
-use crate::analyzer::r#type::{RichType, TypeId};
-use crate::analyzer::statement::RichStatement;
+use crate::analyzer::ast::func::AFnSig;
+use crate::analyzer::ast::program::AProgram;
+use crate::analyzer::ast::r#const::AConst;
+use crate::analyzer::ast::statement::AStatement;
+use crate::analyzer::prog_context::ProgramAnalysis;
+use crate::analyzer::type_store::TypeStore;
 use crate::compiler::convert;
 use crate::compiler::error::{CompileError, CompileResult, ErrorKind};
 use crate::compiler::func::FnCompiler;
@@ -25,9 +26,9 @@ pub struct ProgCompiler<'a, 'ctx> {
     builder: &'a Builder<'ctx>,
     fpm: &'a PassManager<FunctionValue<'ctx>>,
     module: &'a Module<'ctx>,
-    program: &'a RichProg,
-    types: &'a HashMap<TypeId, RichType>,
-    consts: &'a mut HashMap<String, RichConst>,
+    program: &'a AProgram,
+    type_store: &'a TypeStore,
+    consts: &'a mut HashMap<String, AConst>,
 }
 
 impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
@@ -78,7 +79,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
             fpm: &fpm,
             module: &module,
             program: &prog_analysis.prog,
-            types: &prog_analysis.types,
+            type_store: &prog_analysis.type_store,
             consts: &mut HashMap::new(),
         };
         compiler.compile_program()?;
@@ -111,10 +112,10 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
         // Do one shallow pass to define all top-level functions in the module.
         for statement in &self.program.statements {
             match statement {
-                RichStatement::FunctionDeclaration(func) => {
+                AStatement::FunctionDeclaration(func) => {
                     self.compile_fn_sig(&func.signature);
                 }
-                RichStatement::Impl(impl_) => {
+                AStatement::Impl(impl_) => {
                     for mem_fn in &impl_.member_fns {
                         self.compile_fn_sig(&mem_fn.signature);
                     }
@@ -126,38 +127,38 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
         // Compile all the statements in the program.
         for statement in &self.program.statements {
             match statement {
-                RichStatement::FunctionDeclaration(func) => {
+                AStatement::FunctionDeclaration(func) => {
                     FnCompiler::compile(
                         self.ctx,
                         self.builder,
                         self.fpm,
                         self.module,
-                        self.types,
+                        self.type_store,
                         self.consts,
                         func,
                     )?;
                 }
-                RichStatement::Impl(impl_) => {
+                AStatement::Impl(impl_) => {
                     for mem_fn in &impl_.member_fns {
                         FnCompiler::compile(
                             self.ctx,
                             self.builder,
                             self.fpm,
                             self.module,
-                            self.types,
+                            self.type_store,
                             self.consts,
                             mem_fn,
                         )?;
                     }
                 }
-                RichStatement::StructTypeDeclaration(_) | RichStatement::EnumTypeDeclaration(_) => {
+                AStatement::StructTypeDeclaration(_) | AStatement::EnumTypeDeclaration(_) => {
                     // Nothing to do here because types are compiled only when they're used.
                 }
-                RichStatement::ExternFns(_) => {
+                AStatement::ExternFns(_) => {
                     // Nothing to do here because extern functions are compiled in the call to
                     // `ProgramCompiler::define_extern_fns` above.
                 }
-                RichStatement::Consts(_) => {
+                AStatement::Consts(_) => {
                     // Nothing to do here because constants are compiled in the call to
                     // `ProgramCompiler::define_consts` above.
                 }
@@ -175,9 +176,9 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     }
 
     /// Defines the given function in the current module based on the function signature.
-    fn compile_fn_sig(&self, sig: &RichFnSig) {
+    fn compile_fn_sig(&self, sig: &AFnSig) {
         // Define the function in the module using the fully-qualified function name.
-        let fn_type = convert::to_fn_type(self.ctx, self.types, sig);
+        let fn_type = convert::to_fn_type(self.ctx, self.type_store, sig);
         let fn_val = self
             .module
             .add_function(sig.full_name().as_str(), fn_type, None);
@@ -226,9 +227,9 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     /// Defines external functions in the current module.
     fn define_extern_fns(&mut self) {
         for statement in &self.program.statements {
-            if let RichStatement::ExternFns(fn_sigs) = statement {
+            if let AStatement::ExternFns(fn_sigs) = statement {
                 for fn_sig in fn_sigs {
-                    let ll_fn_type = convert::to_fn_type(self.ctx, self.types, &fn_sig);
+                    let ll_fn_type = convert::to_fn_type(self.ctx, self.type_store, &fn_sig);
                     self.module.add_function(
                         fn_sig.name.as_str(),
                         ll_fn_type,
@@ -242,7 +243,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     /// Defines constants in the current module.
     fn define_consts(&mut self) {
         for statement in &self.program.statements {
-            if let RichStatement::Consts(consts) = statement {
+            if let AStatement::Consts(consts) = statement {
                 for const_decl in consts {
                     self.consts
                         .insert(const_decl.name.clone(), const_decl.clone());

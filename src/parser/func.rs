@@ -104,7 +104,7 @@ impl Function {
                     tmpl_params
                         .params
                         .push(TmplParam::new_with_default_pos(type_name.as_str()));
-                    Type::new_unknown(type_name.as_str())
+                    Type::new_unresolved(type_name.as_str())
                 }
             };
 
@@ -122,7 +122,7 @@ impl Function {
         tmpl_params
             .params
             .push(TmplParam::new_with_default_pos(ret_type_name));
-        let ret_type = Type::new_unknown(ret_type_name);
+        let ret_type = Type::new_unresolved(ret_type_name);
 
         // Convert the lambda expression to a function body containing only a return statement.
         let ret_start = lambda.expr.start_pos();

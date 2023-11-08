@@ -88,7 +88,7 @@ impl Argument {
         if name == "this" {
             return Ok(Argument::new(
                 name.as_str(),
-                Type::this(),
+                Type::new_unresolved("This"),
                 is_mut,
                 start_pos,
                 end_pos,

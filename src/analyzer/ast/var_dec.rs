@@ -1,63 +1,59 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use crate::analyzer::expr::RichExpr;
-use crate::analyzer::prog_context::{ProgramContext, ScopedSymbol};
-use crate::analyzer::r#type::{RichType, TypeId};
+use crate::analyzer::ast::expr::AExpr;
+use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::scope::ScopedSymbol;
+use crate::analyzer::type_store::TypeKey;
 use crate::parser::var_dec::VariableDeclaration;
 
 /// Represents a semantically valid and type-rich variable declaration.
 #[derive(PartialEq, Debug, Clone)]
-pub struct RichVarDecl {
-    pub type_id: TypeId,
+pub struct AVarDecl {
+    pub type_key: TypeKey,
     pub name: String,
-    pub val: RichExpr,
+    pub val: AExpr,
 }
 
-impl fmt::Display for RichVarDecl {
+impl fmt::Display for AVarDecl {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {} = {}", self.name, self.type_id, self.val)
+        write!(f, "{}: {} = {}", self.name, self.type_key, self.val)
     }
 }
 
-impl RichVarDecl {
+impl AVarDecl {
     /// Performs semantic analysis on the given variable declaration and returns a type-rich version
     /// of it.
-    pub fn from(ctx: &mut ProgramContext, var_decl: VariableDeclaration) -> Self {
+    pub fn from(ctx: &mut ProgramContext, var_decl: &VariableDeclaration) -> Self {
         // Analyze the variable type. It might be empty because type annotations are optional
         // in variable declarations.
-        let maybe_declared_tid = match &var_decl.maybe_type {
-            Some(typ) => Some(RichType::analyze(ctx, typ)),
+        let maybe_declared_tk = match &var_decl.maybe_type {
+            Some(typ) => Some(ctx.resolve_type(typ)),
             None => None,
         };
 
         // Check the expression being assigned to this new variable. Note that it's okay for
         // the variable name to collide with that of another variable. In this case, the old
         // variable will simply be replaced with this one in the current scope.
-        let rich_expr = RichExpr::from(
-            ctx,
-            var_decl.value.clone(),
-            maybe_declared_tid.as_ref(),
-            false,
-        );
+        let rich_expr = AExpr::from(ctx, var_decl.value.clone(), maybe_declared_tk, false);
 
         // If the type is not specified, it will be inferred from the assigned expression.
-        let type_id = match maybe_declared_tid {
-            Some(tid) => tid,
-            None => rich_expr.type_id.clone(),
+        let type_key = match maybe_declared_tk {
+            Some(tk) => tk,
+            None => rich_expr.type_key,
         };
 
         // The variable expression is valid. Add it to the program context.
-        ctx.add_symbol(ScopedSymbol::new(
+        ctx.insert_symbol(ScopedSymbol::new(
             var_decl.name.as_str(),
-            rich_expr.type_id.clone(),
+            rich_expr.type_key,
             var_decl.is_mut,
             false,
         ));
 
-        RichVarDecl {
-            type_id,
-            name: var_decl.name,
+        AVarDecl {
+            type_key,
+            name: var_decl.name.clone(),
             val: rich_expr,
         }
     }
@@ -65,11 +61,10 @@ impl RichVarDecl {
 
 #[cfg(test)]
 mod tests {
+    use crate::analyzer::ast::expr::{AExpr, AExprKind};
+    use crate::analyzer::ast::var_dec::AVarDecl;
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
-    use crate::analyzer::expr::{RichExpr, RichExprKind};
     use crate::analyzer::prog_context::ProgramContext;
-    use crate::analyzer::r#type::TypeId;
-    use crate::analyzer::var_dec::RichVarDecl;
     use crate::lexer::pos::Position;
     use crate::parser::bool_lit::BoolLit;
     use crate::parser::expr::Expression;
@@ -81,27 +76,33 @@ mod tests {
     fn var_redeclared() {
         let mut ctx = ProgramContext::new();
         let var_decl = VariableDeclaration::new(
-            Some(Type::str()),
+            Some(Type::new_unresolved("str")),
             false,
             "my_var".to_string(),
             Expression::StrLiteral(StrLit::new_with_default_pos("bingo")),
             Position::default(),
             Position::default(),
         );
-        let result = RichVarDecl::from(&mut ctx, var_decl.clone());
+        let result = AVarDecl::from(&mut ctx, &var_decl);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
-            RichVarDecl {
-                type_id: TypeId::str(),
+            AVarDecl {
+                type_key: ctx.str_type_key(),
                 name: "my_var".to_string(),
-                val: RichExpr::new(RichExprKind::StrLiteral("bingo".to_string()), TypeId::str())
+                val: AExpr::new(
+                    AExprKind::StrLiteral("bingo".to_string()),
+                    ctx.str_type_key()
+                )
             }
         );
-        assert_eq!(ctx.get_symbol("my_var").unwrap().type_id, TypeId::str());
+        assert_eq!(
+            ctx.get_symbol("my_var").unwrap().type_key,
+            ctx.str_type_key()
+        );
 
         let new_var_decl = VariableDeclaration::new(
-            Some(Type::bool()),
+            Some(Type::new_unresolved("bool")),
             false,
             "my_var".to_string(),
             Expression::BoolLiteral(BoolLit::new_with_default_pos(true)),
@@ -109,33 +110,40 @@ mod tests {
             Position::default(),
         );
 
-        let result = RichVarDecl::from(&mut ctx, new_var_decl);
+        let result = AVarDecl::from(&mut ctx, &new_var_decl);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
-            RichVarDecl {
-                type_id: TypeId::bool(),
+            AVarDecl {
+                type_key: ctx.bool_type_key(),
                 name: "my_var".to_string(),
-                val: RichExpr::new(RichExprKind::BoolLiteral(true), TypeId::bool())
+                val: AExpr::new(AExprKind::BoolLiteral(true), ctx.bool_type_key())
             }
         );
-        assert_eq!(ctx.get_symbol("my_var").unwrap().type_id, TypeId::bool());
+        assert_eq!(
+            ctx.get_symbol("my_var").unwrap().type_key,
+            ctx.bool_type_key()
+        );
     }
 
     #[test]
     fn type_mismatch() {
         let mut ctx = ProgramContext::new();
         let var_decl = VariableDeclaration::new(
-            Some(Type::i64()),
+            Some(Type::new_unresolved("i64")),
             false,
             "my_string".to_string(),
             Expression::StrLiteral(StrLit::new_with_default_pos("bingo")),
             Position::default(),
             Default::default(),
         );
-        RichVarDecl::from(&mut ctx, var_decl);
+        AVarDecl::from(&mut ctx, &var_decl);
         assert!(matches!(
-            ctx.errors().remove(0),
+            ctx.errors()
+                .values()
+                .collect::<Vec<&AnalyzeError>>()
+                .get(0)
+                .unwrap(),
             AnalyzeError {
                 kind: ErrorKind::MismatchedTypes,
                 ..

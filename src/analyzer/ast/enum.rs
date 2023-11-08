@@ -4,10 +4,11 @@ use std::fmt::{Display, Formatter};
 
 use colored::Colorize;
 
-use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
-use crate::analyzer::expr::RichExpr;
+use crate::analyzer::ast::expr::AExpr;
+use crate::analyzer::ast::r#type::AType;
+use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::r#type::{check_type_containment, RichType, TypeId};
+use crate::analyzer::type_store::TypeKey;
 use crate::fmt::hierarchy_to_string;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::r#enum::{EnumType, EnumVariantInit};
@@ -15,49 +16,62 @@ use crate::{format_code, util};
 
 /// Represents a semantically valid enum type variant declaration.
 #[derive(Debug, Clone)]
-pub struct RichEnumTypeVariant {
+pub struct AEnumTypeVariant {
     pub number: usize,
     pub name: String,
-    pub maybe_type_id: Option<TypeId>,
+    pub maybe_type_key: Option<TypeKey>,
 }
 
-impl PartialEq for RichEnumTypeVariant {
+impl PartialEq for AEnumTypeVariant {
     fn eq(&self, other: &Self) -> bool {
         self.number == other.number
             && self.name == other.name
-            && util::opts_eq(&self.maybe_type_id, &other.maybe_type_id)
+            && util::opts_eq(&self.maybe_type_key, &other.maybe_type_key)
     }
 }
 
-impl Display for RichEnumTypeVariant {
+impl Display for AEnumTypeVariant {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name)?;
 
-        if let Some(type_id) = &self.maybe_type_id {
-            write!(f, "({})", type_id)?;
+        if let Some(type_key) = &self.maybe_type_key {
+            write!(f, "({})", type_key)?;
         }
 
         Ok(())
     }
 }
 
+impl AEnumTypeVariant {
+    /// Returns a string containing the human-readable version of this enum variant.
+    pub fn display(&self, ctx: &ProgramContext) -> String {
+        let mut s = format!("{}", self.name);
+
+        if let Some(type_key) = &self.maybe_type_key {
+            s += format!("({})", ctx.display_type_for_key(*type_key)).as_str();
+        }
+
+        s
+    }
+}
+
 /// Represents a semantically valid enum type declaration.
 #[derive(Debug)]
-pub struct RichEnumType {
+pub struct AEnumType {
     pub name: String,
-    pub variants: HashMap<String, RichEnumTypeVariant>,
+    pub variants: HashMap<String, AEnumTypeVariant>,
     pub max_variant_size_bytes: u32,
 }
 
-impl PartialEq for RichEnumType {
+impl PartialEq for AEnumType {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name && util::hashmaps_eq(&self.variants, &other.variants)
     }
 }
 
-impl Clone for RichEnumType {
+impl Clone for AEnumType {
     fn clone(&self) -> Self {
-        RichEnumType {
+        AEnumType {
             name: self.name.clone(),
             variants: self.variants.clone(),
             max_variant_size_bytes: self.max_variant_size_bytes,
@@ -65,7 +79,7 @@ impl Clone for RichEnumType {
     }
 }
 
-impl Display for RichEnumType {
+impl Display for AEnumType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} {} {{", TokenKind::Enum, self.name)?;
 
@@ -80,30 +94,26 @@ impl Display for RichEnumType {
     }
 }
 
-impl RichEnumType {
+impl AEnumType {
     /// Performs semantic analysis on an enum type declaration.
     pub fn from(ctx: &mut ProgramContext, enum_type: &EnumType) -> Self {
         // Before analyzing enum variant types, we'll prematurely add this (currently-empty) enum
         // type to the program context. This way, if any of the variant types make use of this enum
         // type, we won't get into an infinitely recursive type resolution cycle. When we're done
         // analyzing this type, the mapping will be updated in the program context.
-        let type_id = TypeId::new_unresolved(enum_type.name.as_str());
-        ctx.add_resolved_type(
-            type_id.clone(),
-            RichType::Enum(RichEnumType {
-                name: enum_type.name.clone(),
-                variants: HashMap::new(),
-                max_variant_size_bytes: 0,
-            }),
-        );
+        let type_key = ctx.insert_type(AType::Enum(AEnumType {
+            name: enum_type.name.clone(),
+            variants: HashMap::new(),
+            max_variant_size_bytes: 0,
+        }));
 
         // Analyze each variant in the enum type.
         let mut largest_variant_size_bytes: u32 = 0;
-        let mut variants: HashMap<String, RichEnumTypeVariant> = HashMap::new();
+        let mut variants: HashMap<String, AEnumTypeVariant> = HashMap::new();
         for (i, variant) in enum_type.variants.iter().enumerate() {
             // Make sure the variant name is unique.
             if variants.contains_key(&variant.name) {
-                ctx.add_err(AnalyzeError::new(
+                ctx.insert_err(AnalyzeError::new(
                     ErrorKind::DuplicateEnumVariant,
                     format_code!(
                         "enum type {} already has a variant named {}",
@@ -119,40 +129,40 @@ impl RichEnumType {
             }
 
             // Analyze the variant type, if any.
-            let maybe_type_id = match &variant.maybe_type {
+            let maybe_type_key = match &variant.maybe_type {
                 Some(typ) => {
-                    let variant_type_id = RichType::analyze(ctx, &typ);
+                    let variant_type_key = ctx.resolve_type(&typ);
 
                     // Update the size of the largest variant, if necessary.
-                    let variant_type = ctx.must_get_resolved_type(&variant_type_id);
+                    let variant_type = ctx.must_get_type(variant_type_key);
                     largest_variant_size_bytes =
                         max(largest_variant_size_bytes, variant_type.size_bytes(ctx));
 
-                    Some(variant_type_id)
+                    Some(variant_type_key)
                 }
                 None => None,
             };
 
             variants.insert(
                 variant.name.clone(),
-                RichEnumTypeVariant {
+                AEnumTypeVariant {
                     number: i,
                     name: variant.name.clone(),
-                    maybe_type_id,
+                    maybe_type_key,
                 },
             );
         }
 
-        let rich_enum = RichEnumType {
+        let a_enum = AEnumType {
             name: enum_type.name.clone(),
             variants,
             max_variant_size_bytes: largest_variant_size_bytes,
         };
 
         // Make sure the enum doesn't contain itself via other types.
-        let rich_enum_type = RichType::Enum(rich_enum.clone());
-        if let Some(type_hierarchy) = rich_enum_type.contains_type(ctx, &rich_enum_type) {
-            ctx.add_err(
+        let a_enum_type = AType::Enum(a_enum.clone());
+        if let Some(type_hierarchy) = a_enum_type.contains_type(ctx, &a_enum_type) {
+            ctx.insert_err(
                 AnalyzeError::new(
                     ErrorKind::InfiniteSizedType,
                     format_code!(
@@ -175,34 +185,48 @@ impl RichEnumType {
 
         // Now that we have a fully analyzed enum type, we can add it to the program context so it
         // can be referenced later.
-        ctx.add_enum(rich_enum.clone());
-        ctx.add_resolved_type(type_id, RichType::Enum(rich_enum.clone()));
-        rich_enum
+        ctx.replace_type(type_key, a_enum_type);
+
+        a_enum
+    }
+
+    /// Returns a string containing the human-readable version of this enum type.
+    pub fn display(&self, ctx: &ProgramContext) -> String {
+        let mut s = format!("{} {} {{", TokenKind::Enum, self.name);
+
+        for (i, variant) in self.variants.values().enumerate() {
+            match i {
+                0 => s += format!("{}", variant.display(ctx)).as_str(),
+                _ => s += format!(", {}", variant.display(ctx)).as_str(),
+            }
+        }
+
+        s + format!("}}").as_str()
     }
 }
 
 /// Represents a semantically valid enum variant initialization.
 #[derive(Debug)]
-pub struct RichEnumVariantInit {
-    pub enum_type_id: TypeId,
-    pub variant: RichEnumTypeVariant,
-    pub maybe_value: Option<Box<RichExpr>>,
+pub struct AEnumVariantInit {
+    pub enum_type_key: TypeKey,
+    pub variant: AEnumTypeVariant,
+    pub maybe_value: Option<Box<AExpr>>,
 }
 
-impl PartialEq for RichEnumVariantInit {
+impl PartialEq for AEnumVariantInit {
     fn eq(&self, other: &Self) -> bool {
-        self.enum_type_id == other.enum_type_id
+        self.enum_type_key == other.enum_type_key
             && self.variant == other.variant
             && util::opts_eq(&self.maybe_value, &other.maybe_value)
     }
 }
 
-impl Display for RichEnumVariantInit {
+impl Display for AEnumVariantInit {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}{}{}",
-            self.enum_type_id,
+            self.enum_type_key,
             TokenKind::DoubleColon,
             self.variant.name
         )?;
@@ -215,38 +239,41 @@ impl Display for RichEnumVariantInit {
     }
 }
 
-impl Clone for RichEnumVariantInit {
+impl Clone for AEnumVariantInit {
     fn clone(&self) -> Self {
-        RichEnumVariantInit {
-            enum_type_id: self.enum_type_id.clone(),
+        AEnumVariantInit {
+            enum_type_key: self.enum_type_key,
             variant: self.variant.clone(),
             maybe_value: self.maybe_value.clone(),
         }
     }
 }
 
-impl RichEnumVariantInit {
+impl AEnumVariantInit {
     /// Performs semantic analysis on enum variant initialization.
     pub fn from(ctx: &mut ProgramContext, enum_init: &EnumVariantInit) -> Self {
         // Make sure the enum type exists.
-        let enum_type_id = RichType::analyze(ctx, &enum_init.enum_type);
-        let enum_type = match ctx.must_get_resolved_type(&enum_type_id) {
-            RichType::Enum(enum_type) => enum_type,
+        let enum_type_key = ctx.resolve_type(&enum_init.enum_type);
+        let enum_type = match ctx.must_get_type(enum_type_key) {
+            AType::Enum(enum_type) => enum_type,
             other => {
                 // This is not an enum type. Record the error and return a placeholder value.
-                ctx.add_err(AnalyzeError::new(
+                ctx.insert_err(AnalyzeError::new(
                     ErrorKind::TypeIsNotEnum,
-                    format_code!("type {} is not an enum, but is being used like one", other)
-                        .as_str(),
+                    format_code!(
+                        "type {} is not an enum, but is being used like one",
+                        other.display(ctx)
+                    )
+                    .as_str(),
                     enum_init,
                 ));
 
-                return RichEnumVariantInit {
-                    enum_type_id,
-                    variant: RichEnumTypeVariant {
+                return AEnumVariantInit {
+                    enum_type_key,
+                    variant: AEnumTypeVariant {
                         number: 0,
                         name: "<unknown>".to_string(),
-                        maybe_type_id: None,
+                        maybe_type_key: None,
                     },
                     maybe_value: None,
                 };
@@ -259,18 +286,18 @@ impl RichEnumVariantInit {
             None => {
                 // This enum type has no such variant. Record the error and return a placeholder
                 // value.
-                ctx.add_err(AnalyzeError::new(
+                ctx.insert_err(AnalyzeError::new(
                     ErrorKind::TypeIsNotEnum,
                     format_code!("enum {} has no variant", enum_init.variant_name).as_str(),
                     enum_init,
                 ));
 
-                return RichEnumVariantInit {
-                    enum_type_id,
-                    variant: RichEnumTypeVariant {
+                return AEnumVariantInit {
+                    enum_type_key,
+                    variant: AEnumTypeVariant {
                         number: 0,
                         name: "<unknown>".to_string(),
-                        maybe_type_id: None,
+                        maybe_type_key: None,
                     },
                     maybe_value: None,
                 };
@@ -281,52 +308,52 @@ impl RichEnumVariantInit {
         // matches that of the variant.
         let maybe_value = match &enum_init.maybe_value {
             Some(value) => {
-                if variant.maybe_type_id.is_none() {
+                if variant.maybe_type_key.is_none() {
                     // A value was not expected but was provided. Record the error and return a
                     // placeholder value.
-                    ctx.add_err(AnalyzeError::new(
+                    ctx.insert_err(AnalyzeError::new(
                         ErrorKind::MismatchedTypes,
                         format_code!(
                             "variant {} of enum {} has no associated type, but a value was provided",
-                            variant,
+                            variant.display(ctx),
                             enum_type.name,
                         )
-                        .as_str(),
+                            .as_str(),
                         enum_init,
                     ));
 
-                    return RichEnumVariantInit {
-                        enum_type_id,
+                    return AEnumVariantInit {
+                        enum_type_key,
                         variant,
                         maybe_value: None,
                     };
                 }
 
-                Some(Box::new(RichExpr::from(
+                Some(Box::new(AExpr::from(
                     ctx,
                     value.as_ref().clone(),
-                    variant.maybe_type_id.as_ref(),
+                    variant.maybe_type_key,
                     false,
                 )))
             }
             None => {
-                if let Some(type_id) = &variant.maybe_type_id {
+                if let Some(type_key) = &variant.maybe_type_key {
                     // A value was expected but was not provided. Record the error and return a
                     // placeholder value.
-                    ctx.add_err(AnalyzeError::new(
+                    ctx.insert_err(AnalyzeError::new(
                         ErrorKind::MismatchedTypes,
                         format_code!(
                             "missing value of type {} for variant {} of enum {}",
-                            type_id,
-                            variant,
+                            ctx.display_type_for_key(*type_key),
+                            variant.display(ctx),
                             enum_type.name
                         )
                         .as_str(),
                         enum_init,
                     ));
 
-                    return RichEnumVariantInit {
-                        enum_type_id,
+                    return AEnumVariantInit {
+                        enum_type_key,
                         variant,
                         maybe_value: None,
                     };
@@ -336,42 +363,26 @@ impl RichEnumVariantInit {
             }
         };
 
-        RichEnumVariantInit {
-            enum_type_id,
+        AEnumVariantInit {
+            enum_type_key,
             variant,
             maybe_value,
         }
     }
-}
 
-/// Analyzes type containment within the given enum type and returns an error if there are any
-/// illegal type containment cycles that would result in infinite-sized types.
-pub fn check_enum_containment_cycles(
-    ctx: &ProgramContext,
-    enum_type: &EnumType,
-    hierarchy: &mut Vec<String>,
-) -> AnalyzeResult<()> {
-    if hierarchy.contains(&enum_type.name) {
-        return Err(AnalyzeError::new(
-            ErrorKind::InfiniteSizedType,
-            format_code!("enum type {} cannot contain itself", enum_type.name).as_str(),
-            enum_type,
-        ));
-    }
+    /// Returns the human-readable version of this enum variant initialization.
+    pub fn display(&self, ctx: &ProgramContext) -> String {
+        let mut s = format!(
+            "{}{}{}",
+            ctx.display_type_for_key(self.enum_type_key),
+            TokenKind::DoubleColon,
+            self.variant.name
+        );
 
-    // Push this type name onto the hierarchy stack so it can be checked against other types.
-    hierarchy.push(enum_type.name.clone());
-
-    // Recursively check each enum variant type.
-    for variant in &enum_type.variants {
-        if let Some(typ) = &variant.maybe_type {
-            check_type_containment(ctx, typ, hierarchy)?;
+        if let Some(value) = &self.maybe_value {
+            s += format!("({})", value.display(ctx)).as_str();
         }
+
+        s
     }
-
-    // Pop this type name off the hierarchy stack because all types it contains have been
-    // checked.
-    hierarchy.pop();
-
-    Ok(())
 }

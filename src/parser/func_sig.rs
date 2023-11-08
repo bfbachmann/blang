@@ -21,7 +21,7 @@ use crate::{locatable_impl, util};
 pub struct FunctionSignature {
     pub name: String,
     pub args: Vec<Argument>,
-    pub return_type: Option<Type>,
+    pub maybe_ret_type: Option<Type>,
     /// Function template parameters will be Some if this is a templated function (a function with
     /// generics).
     pub tmpl_params: Option<TmplParams>,
@@ -37,7 +37,7 @@ impl Hash for FunctionSignature {
             arg.hash(state);
         }
 
-        if let Some(typ) = &self.return_type {
+        if let Some(typ) = &self.maybe_ret_type {
             typ.hash(state);
         }
 
@@ -59,7 +59,7 @@ impl fmt::Display for FunctionSignature {
             }
         }
 
-        if let Some(typ) = &self.return_type {
+        if let Some(typ) = &self.maybe_ret_type {
             write!(f, ") ~ {}", typ)
         } else {
             write!(f, ")")
@@ -71,7 +71,7 @@ impl PartialEq for FunctionSignature {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && util::vecs_eq(&self.args, &other.args)
-            && self.return_type == other.return_type
+            && self.maybe_ret_type == other.maybe_ret_type
             && util::opts_eq(&self.tmpl_params, &other.tmpl_params)
     }
 }
@@ -90,7 +90,7 @@ impl FunctionSignature {
             name: name.to_string(),
             tmpl_params: None,
             args,
-            return_type,
+            maybe_ret_type: return_type,
             start_pos: Position::default(),
             end_pos: Position::default(),
         }
@@ -108,7 +108,7 @@ impl FunctionSignature {
             name: name.to_string(),
             tmpl_params: None,
             args,
-            return_type,
+            maybe_ret_type: return_type,
             start_pos,
             end_pos,
         }
@@ -127,7 +127,7 @@ impl FunctionSignature {
             name: name.to_string(),
             tmpl_params: Some(tmpl_params),
             args,
-            return_type,
+            maybe_ret_type: return_type,
             start_pos,
             end_pos,
         }
@@ -144,7 +144,7 @@ impl FunctionSignature {
             name: "".to_string(),
             tmpl_params: None,
             args,
-            return_type,
+            maybe_ret_type: return_type,
             start_pos,
             end_pos,
         }
@@ -197,7 +197,7 @@ impl FunctionSignature {
         Ok(FunctionSignature::new(
             fn_name.as_str(),
             fn_sig.args,
-            fn_sig.return_type,
+            fn_sig.maybe_ret_type,
             start_pos,
             fn_sig.end_pos,
         ))

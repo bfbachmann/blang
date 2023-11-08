@@ -11,20 +11,21 @@ use inkwell::values::{
 };
 use inkwell::{AddressSpace, IntPredicate};
 
-use crate::analyzer::closure::RichClosure;
-use crate::analyzer::cond::RichCond;
-use crate::analyzer::expr::{RichExpr, RichExprKind};
-use crate::analyzer::func::RichFn;
-use crate::analyzer::func_call::RichFnCall;
-use crate::analyzer::r#const::RichConst;
-use crate::analyzer::r#enum::RichEnumVariantInit;
-use crate::analyzer::r#struct::RichStructInit;
-use crate::analyzer::r#type::{RichType, TypeId};
-use crate::analyzer::ret::RichRet;
-use crate::analyzer::statement::RichStatement;
-use crate::analyzer::symbol::{RichMemberAccess, RichSymbol};
-use crate::analyzer::tuple::RichTupleInit;
-use crate::analyzer::var_assign::RichVarAssign;
+use crate::analyzer::ast::closure::AClosure;
+use crate::analyzer::ast::cond::ACond;
+use crate::analyzer::ast::expr::{AExpr, AExprKind};
+use crate::analyzer::ast::fn_call::AFnCall;
+use crate::analyzer::ast::func::AFn;
+use crate::analyzer::ast::r#const::AConst;
+use crate::analyzer::ast::r#enum::AEnumVariantInit;
+use crate::analyzer::ast::r#struct::AStructInit;
+use crate::analyzer::ast::r#type::AType;
+use crate::analyzer::ast::ret::ARet;
+use crate::analyzer::ast::statement::AStatement;
+use crate::analyzer::ast::symbol::{AMemberAccess, ASymbol};
+use crate::analyzer::ast::tuple::ATupleInit;
+use crate::analyzer::ast::var_assign::AVarAssign;
+use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::compiler::context::{
     BranchContext, CompilationContext, FnContext, LoopContext, StatementContext,
 };
@@ -39,9 +40,8 @@ pub struct FnCompiler<'a, 'ctx> {
     builder: &'a Builder<'ctx>,
     fpm: &'a PassManager<FunctionValue<'ctx>>,
     module: &'a Module<'ctx>,
-
-    types: &'a HashMap<TypeId, RichType>,
-    consts: &'a HashMap<String, RichConst>,
+    type_store: &'a TypeStore,
+    consts: &'a HashMap<String, AConst>,
     vars: HashMap<String, PointerValue<'ctx>>,
     fn_value: Option<FunctionValue<'ctx>>,
     stack: Vec<CompilationContext<'ctx>>,
@@ -55,16 +55,16 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         builder: &'a Builder<'ctx>,
         fpm: &'a PassManager<FunctionValue<'ctx>>,
         module: &'a Module<'ctx>,
-        types: &'a HashMap<TypeId, RichType>,
-        consts: &'a HashMap<String, RichConst>,
-        func: &RichFn,
+        type_store: &'a TypeStore,
+        consts: &'a HashMap<String, AConst>,
+        func: &AFn,
     ) -> CompileResult<FunctionValue<'ctx>> {
         let mut fn_compiler = FnCompiler {
             ctx: context,
             builder,
             fpm,
             module,
-            types,
+            type_store,
             consts,
             vars: HashMap::new(),
             fn_value: None,
@@ -220,7 +220,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Compiles the given function.
-    fn compile_fn(&mut self, func: &RichFn) -> CompileResult<FunctionValue<'ctx>> {
+    fn compile_fn(&mut self, func: &AFn) -> CompileResult<FunctionValue<'ctx>> {
         // Retrieve the function and create a new "entry" block at the start of the function
         // body.
         // TODO: This will panic when accessing nested functions.
@@ -247,7 +247,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         };
 
         for (ll_arg_val, arg) in ll_fn_params.into_iter().zip(func.signature.args.iter()) {
-            let arg_type = self.types.get(&arg.type_id).unwrap();
+            let arg_type = self.type_store.must_get(arg.type_key);
 
             // Structs and tuples are passed as pointers and don't need to be copied to the callee
             // stack because they point to memory on the caller's stack that is safe to modify. In
@@ -303,7 +303,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     fn create_var(
         &mut self,
         name: &str,
-        typ: &RichType,
+        typ: &AType,
         ll_val: BasicValueEnum<'ctx>,
     ) -> PointerValue<'ctx> {
         let ll_dst_ptr = self.create_entry_alloc(name, typ, ll_val);
@@ -313,7 +313,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Assigns the value to the variable with the given name. Panics if no such variable exists.
-    fn assign_var(&mut self, assign: &RichVarAssign) {
+    fn assign_var(&mut self, assign: &AVarAssign) {
         // Compile the expression value being assigned.
         let ll_expr_val = self.compile_expr(&assign.val);
 
@@ -322,7 +322,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
         // Most primitive values can be assigned (i.e. copied) with a store instruction. Composite
         // values like structs need to be copied differently.
-        let var_type = self.types.get(&assign.val.type_id).unwrap();
+        let var_type = self.type_store.must_get(assign.val.type_key);
         self.copy_value(ll_expr_val, ll_var_ptr, var_type);
     }
 
@@ -331,16 +331,17 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         &mut self,
         ll_src_val: BasicValueEnum<'ctx>,
         ll_dst_ptr: PointerValue<'ctx>,
-        typ: &RichType,
+        typ: &AType,
     ) {
         match typ {
-            RichType::Struct(struct_type) => {
-                let ll_src_val_type = convert::to_basic_type(self.ctx, self.types, typ);
+            AType::Struct(struct_type) => {
+                let ll_src_val_type = convert::to_basic_type(self.ctx, self.type_store, typ);
 
                 // We need to copy the struct fields recursively one by one.
                 for field in &struct_type.fields {
-                    let field_type = self.types.get(&field.type_id).unwrap();
-                    let ll_field_type = convert::to_basic_type(self.ctx, self.types, field_type);
+                    let field_type = self.type_store.must_get(field.type_key);
+                    let ll_field_type =
+                        convert::to_basic_type(self.ctx, self.type_store, field_type);
                     let ll_field_index = struct_type.get_field_index(&field.name).unwrap() as u32;
 
                     // Get a pointer to the source struct field.
@@ -386,8 +387,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 }
             }
 
-            RichType::Enum(enum_type) => {
-                let ll_src_val_type = convert::to_basic_type(self.ctx, self.types, typ);
+            AType::Enum(enum_type) => {
+                let ll_src_val_type = convert::to_basic_type(self.ctx, self.type_store, typ);
 
                 // Copy the enum number.
                 let ll_enum_number = self.builder.build_load(
@@ -434,13 +435,14 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 }
             }
 
-            RichType::Tuple(tuple_type) => {
-                let ll_src_val_type = convert::to_basic_type(self.ctx, self.types, typ);
+            AType::Tuple(tuple_type) => {
+                let ll_src_val_type = convert::to_basic_type(self.ctx, self.type_store, typ);
 
                 // We need to copy the tuple fields recursively one by one.
-                for (ll_field_index, type_id) in tuple_type.type_ids.iter().enumerate() {
-                    let field_type = self.types.get(&type_id).unwrap();
-                    let ll_field_type = convert::to_basic_type(self.ctx, self.types, field_type);
+                for (ll_field_index, type_key) in tuple_type.type_keys.iter().enumerate() {
+                    let field_type = self.type_store.must_get(*type_key);
+                    let ll_field_type =
+                        convert::to_basic_type(self.ctx, self.type_store, field_type);
 
                     // Get a pointer to the source struct field.
                     let ll_src_field_ptr = self
@@ -493,10 +495,10 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Gets a pointer to the given variable or member.
-    fn get_var_ptr(&mut self, var: &RichSymbol) -> PointerValue<'ctx> {
+    fn get_var_ptr(&mut self, var: &ASymbol) -> PointerValue<'ctx> {
         let ll_var_ptr = self.get_var_ptr_by_name(var.name.as_str());
         if let Some(access) = &var.member_access {
-            self.get_var_member_ptr(ll_var_ptr, &var.parent_type_id, access)
+            self.get_var_member_ptr(ll_var_ptr, var.parent_type_key, access)
         } else {
             ll_var_ptr
         }
@@ -505,7 +507,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// Returns true if `var` refers directly to a function in this module. Note that this function
     /// will return false if `var` is has a function type, but refers to a local variable rather
     /// than a function defined within this module.
-    fn is_var_module_fn(&self, var: &RichSymbol) -> bool {
+    fn is_var_module_fn(&self, var: &ASymbol) -> bool {
         if var.member_access.is_some() {
             false
         } else {
@@ -514,17 +516,17 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Gets a variable (or member) and returns its value.
-    fn get_var_value(&mut self, var: &RichSymbol) -> BasicValueEnum<'ctx> {
+    fn get_var_value(&mut self, var: &ASymbol) -> BasicValueEnum<'ctx> {
         // Get a pointer to the variable or member.
         let ll_var_ptr = self.get_var_ptr(var);
 
         // Load the value from the pointer (unless its a composite value that is passed with
         // pointers, or a pointer to a module-level function).
-        let var_type = self.types.get(&var.get_type_id()).unwrap();
+        let var_type = self.type_store.must_get(var.get_type_key());
         if var_type.is_composite() || self.is_var_module_fn(var) {
             ll_var_ptr.as_basic_value_enum()
         } else {
-            let ll_var_type = convert::to_basic_type(self.ctx, self.types, var_type);
+            let ll_var_type = convert::to_basic_type(self.ctx, self.type_store, var_type);
             self.builder
                 .build_load(ll_var_type, ll_var_ptr, var.get_last_member_name().as_str())
         }
@@ -532,34 +534,34 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// Gets a pointer to a variable member by recursively accessing sub-members.
     /// `ll_ptr` is the pointer to the value on which the member-access is taking place.
-    /// `var_type_id` is the type ID of the value pointed to by `ll_ptr`.
+    /// `var_type_key` is the type ID of the value pointed to by `ll_ptr`.
     /// `access` is the member (and sub-members) being accessed.
     fn get_var_member_ptr(
         &self,
         ll_ptr: PointerValue<'ctx>,
-        var_type_id: &TypeId,
-        access: &RichMemberAccess,
+        var_type_key: TypeKey,
+        access: &AMemberAccess,
     ) -> PointerValue<'ctx> {
         let member_name = access.member_name.as_str();
-        let var_type = self.types.get(var_type_id).unwrap();
+        let var_type = self.type_store.must_get(var_type_key);
 
         let ll_member_ptr = match var_type {
-            RichType::Struct(struct_type) => {
+            AType::Struct(struct_type) => {
                 // Get a pointer to the struct field at the computed index.
                 self.builder
                     .build_struct_gep(
-                        convert::to_struct_type(self.ctx, self.types, struct_type),
+                        convert::to_struct_type(self.ctx, self.type_store, &struct_type),
                         ll_ptr,
                         struct_type.get_field_index(member_name).unwrap() as u32,
                         format!("{}_ptr", member_name).as_str(),
                     )
                     .unwrap()
             }
-            RichType::Tuple(tuple_type) => {
+            AType::Tuple(tuple_type) => {
                 // Get a pointer to the tuple field at the computed index.
                 self.builder
                     .build_struct_gep(
-                        convert::tuple_to_struct_type(self.ctx, self.types, tuple_type),
+                        convert::tuple_to_struct_type(self.ctx, self.type_store, &tuple_type),
                         ll_ptr,
                         member_name.parse::<u32>().unwrap(),
                         format!("{}_ptr", member_name).as_str(),
@@ -574,7 +576,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // Recursively access sub-members, if necessary.
         match &access.submember {
             Some(sub) => {
-                self.get_var_member_ptr(ll_member_ptr, &access.member_type_id, sub.as_ref())
+                self.get_var_member_ptr(ll_member_ptr, access.member_type_key, sub.as_ref())
             }
             None => ll_member_ptr,
         }
@@ -595,7 +597,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // The symbol was not a variable or function. Try look it up as a constant. If the constant
         // exists, we'll just create it inline on the stack and return a pointer to it.
         if let Some(const_) = self.consts.get(name) {
-            let const_type = self.types.get(&const_.value.type_id).unwrap();
+            let const_type = self.type_store.must_get(const_.value.type_key);
             let ll_const_val = self.compile_expr(&const_.value);
             return self.create_var(const_.name.as_str(), const_type, ll_const_val);
         }
@@ -608,7 +610,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     fn create_entry_alloc(
         &mut self,
         name: &str,
-        typ: &RichType,
+        typ: &AType,
         ll_val: BasicValueEnum<'ctx>,
     ) -> PointerValue<'ctx> {
         let entry = self.fn_value.unwrap().get_first_basic_block().unwrap();
@@ -623,12 +625,12 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         };
 
         let var_name = format!("{}_ptr", name);
-        let ll_ptr = if *typ == RichType::Str {
+        let ll_ptr = if *typ == AType::Str {
             self.builder
                 .build_alloca(ll_val.get_type(), var_name.as_str())
         } else {
             self.builder.build_alloca(
-                convert::to_basic_type(self.ctx, self.types, typ),
+                convert::to_basic_type(self.ctx, self.type_store, typ),
                 var_name.as_str(),
             )
         };
@@ -641,7 +643,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Compiles all statements in the closure.
-    fn compile_closure(&mut self, closure: &RichClosure) -> CompileResult<()> {
+    fn compile_closure(&mut self, closure: &AClosure) -> CompileResult<()> {
         for (i, statement) in closure.statements.iter().enumerate() {
             // Create a new statement context that can store information about the statement
             // we're about to compile.
@@ -664,51 +666,51 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Compiles a statement.
-    fn compile_statement(&mut self, statement: &RichStatement) -> CompileResult<()> {
+    fn compile_statement(&mut self, statement: &AStatement) -> CompileResult<()> {
         match statement {
-            RichStatement::VariableDeclaration(var_decl) => {
+            AStatement::VariableDeclaration(var_decl) => {
                 // Get the value of the expression being assigned to the variable.
                 let ll_expr_val = self.compile_expr(&var_decl.val);
 
                 // Create and initialize the variable.
-                let var_type = self.types.get(&var_decl.type_id).unwrap();
+                let var_type = self.type_store.must_get(var_decl.type_key);
                 self.create_var(var_decl.name.as_str(), var_type, ll_expr_val);
             }
-            RichStatement::StructTypeDeclaration(_) | RichStatement::EnumTypeDeclaration(_) => {
+            AStatement::StructTypeDeclaration(_) | AStatement::EnumTypeDeclaration(_) => {
                 // Nothing to do here. Types are compiled upon initialization.
             }
-            RichStatement::VariableAssignment(assign) => {
+            AStatement::VariableAssignment(assign) => {
                 self.assign_var(assign);
             }
-            RichStatement::FunctionDeclaration(func) => {
+            AStatement::FunctionDeclaration(func) => {
                 self.compile_fn(func)?;
             }
-            RichStatement::Closure(closure) => {
+            AStatement::Closure(closure) => {
                 self.compile_closure(closure)?;
             }
-            RichStatement::FunctionCall(call) => {
+            AStatement::FunctionCall(call) => {
                 self.compile_call(call);
             }
-            RichStatement::Conditional(cond) => {
+            AStatement::Conditional(cond) => {
                 self.compile_cond(cond)?;
             }
-            RichStatement::Loop(closure) => {
+            AStatement::Loop(closure) => {
                 self.compile_loop(closure)?;
             }
-            RichStatement::Break => {
+            AStatement::Break => {
                 self.compile_break();
             }
-            RichStatement::Continue => {
+            AStatement::Continue => {
                 self.compile_continue();
             }
-            RichStatement::Return(ret) => {
+            AStatement::Return(ret) => {
                 self.compile_return(ret);
             }
-            RichStatement::ExternFns(_) | RichStatement::Consts(_) => {
+            AStatement::ExternFns(_) | AStatement::Consts(_) => {
                 // Nothing to do here. This is already handled in
                 // `ProgramCompiler::compile_program`.
             }
-            RichStatement::Impl(_) => {
+            AStatement::Impl(_) => {
                 // These blocks should not occur inside functions.
                 unreachable!();
             }
@@ -732,7 +734,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Compiles a loop.
-    fn compile_loop(&mut self, loop_body: &RichClosure) -> CompileResult<()> {
+    fn compile_loop(&mut self, loop_body: &AClosure) -> CompileResult<()> {
         // Create a loop context to store information about the loop body.
         self.push_loop_ctx();
 
@@ -777,7 +779,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Compiles a conditional.
-    fn compile_cond(&mut self, cond: &RichCond) -> CompileResult<()> {
+    fn compile_cond(&mut self, cond: &ACond) -> CompileResult<()> {
         // Compile each branch, recording whether it returns.
         let mut end_block = None;
         let mut all_branches_return = true;
@@ -868,7 +870,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Compiles a return statement.
-    fn compile_return(&mut self, ret: &RichRet) {
+    fn compile_return(&mut self, ret: &ARet) {
         self.set_guarantees_return(true);
         self.set_loop_contains_return(true);
 
@@ -879,12 +881,12 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
                 // If the value being returned is some structured type, we need to copy it to the
                 // memory pointed to by the first argument and return void.
-                let expr_type = self.types.get(&expr.type_id).unwrap();
+                let expr_type = self.type_store.must_get(expr.type_key);
                 if expr_type.is_composite() {
                     // Load the return value from the result pointer.
-                    let expr_type = self.types.get(&expr.type_id).unwrap();
+                    let expr_type = self.type_store.must_get(expr.type_key);
                     let ret_val = self.builder.build_load(
-                        convert::to_basic_type(self.ctx, self.types, expr_type),
+                        convert::to_basic_type(self.ctx, self.type_store, expr_type),
                         result.into_pointer_value(),
                         "ret_val",
                     );
@@ -909,36 +911,36 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Compiles an arbitrary expression.
-    fn compile_expr(&mut self, expr: &RichExpr) -> BasicValueEnum<'ctx> {
+    fn compile_expr(&mut self, expr: &AExpr) -> BasicValueEnum<'ctx> {
         let result = match &expr.kind {
-            RichExprKind::Symbol(var) => self.get_var_value(var),
+            AExprKind::Symbol(var) => self.get_var_value(var),
 
-            RichExprKind::BoolLiteral(b) => self
+            AExprKind::BoolLiteral(b) => self
                 .ctx
                 .bool_type()
                 .const_int(*b as u64, false)
                 .as_basic_value_enum(),
 
-            RichExprKind::I64Literal(i) => self
+            AExprKind::I64Literal(i) => self
                 .ctx
                 .i64_type()
                 .const_int(*i as u64, *i < 0)
                 .as_basic_value_enum(),
 
-            RichExprKind::U64Literal(u) => self
+            AExprKind::U64Literal(u) => self
                 .ctx
                 .i64_type()
                 .const_int(*u, false)
                 .as_basic_value_enum(),
 
-            RichExprKind::Null => self
+            AExprKind::Null => self
                 .ctx
                 .i64_type()
                 .ptr_type(AddressSpace::default())
                 .const_null()
                 .as_basic_value_enum(),
 
-            RichExprKind::StrLiteral(literal) => {
+            AExprKind::StrLiteral(literal) => {
                 let char_type = self.ctx.i32_type();
 
                 // Check if this string literal already exists as a global. If not, create one.
@@ -960,34 +962,34 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
                 self.builder.build_bitcast(
                     global.as_pointer_value(),
-                    convert::to_basic_type(self.ctx, self.types, &RichType::Str),
+                    convert::to_basic_type(self.ctx, self.type_store, &AType::Str),
                     "str_lit_as_i32_ptr",
                 )
             }
 
-            RichExprKind::FunctionCall(call) => self.compile_call(call).unwrap(),
+            AExprKind::FunctionCall(call) => self.compile_call(call).unwrap(),
 
-            RichExprKind::UnaryOperation(op, expr) => self.compile_unary_op(op, expr),
+            AExprKind::UnaryOperation(op, expr) => self.compile_unary_op(op, expr),
 
-            RichExprKind::BinaryOperation(left_expr, op, right_expr) => {
+            AExprKind::BinaryOperation(left_expr, op, right_expr) => {
                 self.compile_bin_op(left_expr, op, right_expr)
             }
 
-            RichExprKind::StructInit(struct_init) => self.compile_struct_init(struct_init),
+            AExprKind::StructInit(struct_init) => self.compile_struct_init(struct_init),
 
-            RichExprKind::EnumInit(enum_init) => self.compile_enum_variant_init(enum_init),
+            AExprKind::EnumInit(enum_init) => self.compile_enum_variant_init(enum_init),
 
-            RichExprKind::TupleInit(tuple_init) => self.compile_tuple_init(tuple_init),
+            AExprKind::TupleInit(tuple_init) => self.compile_tuple_init(tuple_init),
 
             // TODO: Compiling this function works fine, but trying to actually use it will cause
             // a panic because it has no name. The fix likely involves giving anon functions unique
             // auto-generated names.
-            RichExprKind::AnonFunction(anon_fn) => FnCompiler::compile(
+            AExprKind::AnonFunction(anon_fn) => FnCompiler::compile(
                 self.ctx,
                 self.builder,
                 self.fpm,
                 self.module,
-                self.types,
+                self.type_store,
                 self.consts,
                 anon_fn,
             )
@@ -995,26 +997,26 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             .as_global_value()
             .as_basic_value_enum(),
 
-            RichExprKind::Unknown => {
+            AExprKind::Unknown => {
                 panic!("encountered unknown expression");
             }
         };
 
         // Dereference the result if it's a pointer.
-        let expr_type = self.types.get(&expr.type_id).unwrap();
+        let expr_type = self.type_store.must_get(expr.type_key);
         self.deref_if_ptr(result, expr_type)
     }
 
     /// Compiles tuple initialization.
-    fn compile_tuple_init(&mut self, tuple_init: &RichTupleInit) -> BasicValueEnum<'ctx> {
+    fn compile_tuple_init(&mut self, tuple_init: &ATupleInit) -> BasicValueEnum<'ctx> {
         // Assemble the LLVM struct type.
-        let tuple_type = match self.types.get(&tuple_init.type_id).unwrap() {
-            RichType::Tuple(tt) => tt,
+        let tuple_type = match self.type_store.must_get(tuple_init.type_key) {
+            AType::Tuple(tt) => tt,
             _ => {
-                panic!("unexpected type {}", tuple_init.type_id);
+                panic!("unexpected type {}", tuple_init.type_key);
             }
         };
-        let ll_struct_type = convert::tuple_to_struct_type(self.ctx, self.types, tuple_type);
+        let ll_struct_type = convert::tuple_to_struct_type(self.ctx, self.type_store, tuple_type);
 
         // Allocate space for the struct on the stack.
         let ll_struct_ptr = self.builder.build_alloca(ll_struct_type, "tuple_init_ptr");
@@ -1035,9 +1037,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             // Compile the expression and copy its value to the struct field pointer.
             let ll_field_val = self.compile_expr(field_val);
             let field_type = self
-                .types
-                .get(&tuple_type.type_ids.get(i).unwrap())
-                .unwrap();
+                .type_store
+                .must_get(*tuple_type.type_keys.get(i).unwrap());
             self.copy_value(ll_field_val, ll_field_ptr, field_type);
         }
 
@@ -1045,13 +1046,10 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Compiles enum variant initialization.
-    fn compile_enum_variant_init(
-        &mut self,
-        enum_init: &RichEnumVariantInit,
-    ) -> BasicValueEnum<'ctx> {
+    fn compile_enum_variant_init(&mut self, enum_init: &AEnumVariantInit) -> BasicValueEnum<'ctx> {
         // Assemble the LLVM struct type for this enum value.
-        let enum_type = match self.types.get(&enum_init.enum_type_id).unwrap() {
-            RichType::Enum(enum_type) => enum_type,
+        let enum_type = match self.type_store.must_get(enum_init.enum_type_key) {
+            AType::Enum(enum_type) => enum_type,
             other => panic!("unexpected type {}", other),
         };
         let ll_struct_type = convert::enum_to_struct_type(self.ctx, enum_type);
@@ -1083,7 +1081,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 .builder
                 .build_struct_gep(ll_struct_type, ll_struct_ptr, 1u32, "enum.value_ptr")
                 .unwrap();
-            let value_type = self.types.get(&value.type_id).unwrap();
+            let value_type = self.type_store.must_get(value.type_key);
 
             self.copy_value(ll_value, ll_value_field_ptr, value_type);
         }
@@ -1092,14 +1090,13 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Compiles a struct initialization.
-    fn compile_struct_init(&mut self, struct_init: &RichStructInit) -> BasicValueEnum<'ctx> {
+    fn compile_struct_init(&mut self, struct_init: &AStructInit) -> BasicValueEnum<'ctx> {
         // Assemble the LLVM struct type.
         let struct_type = self
-            .types
-            .get(&struct_init.type_id)
-            .unwrap()
+            .type_store
+            .must_get(struct_init.type_key)
             .to_struct_type();
-        let ll_struct_type = convert::to_struct_type(self.ctx, self.types, struct_type);
+        let ll_struct_type = convert::to_struct_type(self.ctx, self.type_store, struct_type);
 
         // Allocate space for the struct on the stack.
         let ll_struct_ptr = self.builder.build_alloca(
@@ -1123,7 +1120,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
                 // Compile the expression and copy its value to the struct field pointer.
                 let ll_field_val = self.compile_expr(field_val);
-                let field_type = self.types.get(&field.type_id).unwrap();
+                let field_type = self.type_store.must_get(field.type_key);
                 self.copy_value(ll_field_val, ll_field_ptr, field_type);
             }
         }
@@ -1132,14 +1129,13 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Compiles a function call, returning the result if one exists.
-    fn compile_call(&mut self, call: &RichFnCall) -> Option<BasicValueEnum<'ctx>> {
+    fn compile_call(&mut self, call: &AFnCall) -> Option<BasicValueEnum<'ctx>> {
         // Look up the function signature and convert it to the corresponding LLVM function type.
         let fn_sig = self
-            .types
-            .get(call.fn_symbol.get_type_id())
-            .unwrap()
+            .type_store
+            .must_get(call.fn_symbol.get_type_key())
             .to_fn_sig();
-        let ll_fn_type = convert::to_fn_type(self.ctx, self.types, fn_sig);
+        let ll_fn_type = convert::to_fn_type(self.ctx, self.type_store, fn_sig);
         let mut args: Vec<BasicMetadataValueEnum> = vec![];
 
         // Check if we're short one argument. If so, it means the function signature expects
@@ -1147,12 +1143,9 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // need to add that argument. This should only be the case for functions that return
         // structured types.
         if ll_fn_type.count_param_types() == call.args.len() as u32 + 1 {
-            let ret_type = self
-                .types
-                .get(call.maybe_ret_type_id.as_ref().unwrap())
-                .unwrap();
+            let ret_type = self.type_store.must_get(call.maybe_ret_type_key.unwrap());
             let ptr = self.builder.build_alloca(
-                convert::to_basic_type(self.ctx, self.types, ret_type),
+                convert::to_basic_type(self.ctx, self.type_store, ret_type),
                 "ret_val_ptr",
             );
             args.push(ptr.into());
@@ -1167,7 +1160,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             // pointer to the copied data instead of the original. This way, we're still passing the
             // struct "by value" (the callee can modify the data being pointed to safely, because
             // it's a copy).
-            let arg_type = self.types.get(&arg.type_id).unwrap();
+            let arg_type = self.type_store.must_get(arg.type_key);
             if arg_type.is_composite() {
                 let ll_copy_ptr = self.create_entry_alloc("copy_arg", arg_type, ll_arg_val);
                 self.copy_value(ll_arg_val, ll_copy_ptr, arg_type);
@@ -1214,7 +1207,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // This will only be the case for functions that return structured values.
         if result.left().is_some() {
             result.left()
-        } else if call.maybe_ret_type_id.is_some() {
+        } else if call.maybe_ret_type_key.is_some() {
             Some(
                 args.first()
                     .unwrap()
@@ -1227,7 +1220,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     }
 
     /// Compiles a unary operation expression.
-    fn compile_unary_op(&mut self, op: &Operator, expr: &RichExpr) -> BasicValueEnum<'ctx> {
+    fn compile_unary_op(&mut self, op: &Operator, expr: &AExpr) -> BasicValueEnum<'ctx> {
         // Only the not operator is supported as a unary operator at the moment.
         if *op != Operator::LogicalNot {
             panic!("unsupported unary operator {op}");
@@ -1256,22 +1249,22 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// Compiles a binary operation expression.
     fn compile_bin_op(
         &mut self,
-        left_expr: &RichExpr,
+        left_expr: &AExpr,
         op: &Operator,
-        right_expr: &RichExpr,
+        right_expr: &AExpr,
     ) -> BasicValueEnum<'ctx> {
         let lhs = self.compile_expr(left_expr);
 
         if op == &Operator::As {
             return self
-                .compile_type_cast(lhs, &right_expr.type_id)
+                .compile_type_cast(lhs, right_expr.type_key)
                 .as_basic_value_enum();
         }
 
         let rhs = self.compile_expr(right_expr);
 
         // Determine whether the operation should be signed or unsigned based on the operand types.
-        let signed = self.types.get(&left_expr.type_id).unwrap().is_signed();
+        let signed = self.type_store.must_get(left_expr.type_key).is_signed();
 
         if op.is_arithmetic() {
             let result = self
@@ -1300,14 +1293,14 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
     }
 
-    /// Compiles a bitcast of `ll_val` to type `target_type_id`.
+    /// Compiles a bitcast of `ll_val` to type `target_type_key`.
     fn compile_type_cast(
         &self,
         mut ll_val: BasicValueEnum<'ctx>,
-        target_type_id: &TypeId,
+        target_type_key: TypeKey,
     ) -> BasicValueEnum<'ctx> {
-        let target_type = self.types.get(target_type_id).unwrap();
-        let ll_target_type = convert::to_basic_type(self.ctx, self.types, target_type);
+        let target_type = self.type_store.must_get(target_type_key);
+        let ll_target_type = convert::to_basic_type(self.ctx, self.type_store, target_type);
 
         // TODO: When we support numeric types that are larger or smaller than 64 bits, we need to
         // think about sign extension and zero extension when casting.
@@ -1467,28 +1460,20 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// If the given value is a pointer, it will be dereferenced as the given type. Otherwise
     /// the value is simply returned.
-    fn deref_if_ptr(&self, ll_val: BasicValueEnum<'ctx>, typ: &RichType) -> BasicValueEnum<'ctx> {
+    fn deref_if_ptr(&self, ll_val: BasicValueEnum<'ctx>, typ: &AType) -> BasicValueEnum<'ctx> {
         match typ {
             // Strings, structs, enums, tuples, and pointers should already be represented as
             // pointers.
-            RichType::Str
-            | RichType::Struct(_)
-            | RichType::Enum(_)
-            | RichType::Tuple(_)
-            | RichType::Ptr => ll_val,
+            AType::Str | AType::Struct(_) | AType::Enum(_) | AType::Tuple(_) | AType::Ptr => ll_val,
 
-            RichType::I64 | RichType::U64 => self.get_int(ll_val).as_basic_value_enum(),
+            AType::I64 | AType::U64 => self.get_int(ll_val).as_basic_value_enum(),
 
-            RichType::Bool => self.get_bool(ll_val).as_basic_value_enum(),
+            AType::Bool => self.get_bool(ll_val).as_basic_value_enum(),
 
-            RichType::Function(_) => ll_val.as_basic_value_enum(),
+            AType::Function(_) => ll_val.as_basic_value_enum(),
 
-            RichType::Unknown(name) => {
+            AType::Unknown(name) => {
                 panic!("encountered unknown type {}", name)
-            }
-
-            RichType::Templated(param) => {
-                panic!("encountered templated type {}", param)
             }
         }
     }

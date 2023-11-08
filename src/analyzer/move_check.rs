@@ -3,22 +3,23 @@ use std::fmt::{Display, Formatter};
 
 use colored::Colorize;
 
-use crate::analyzer::closure::RichClosure;
-use crate::analyzer::cond::RichCond;
+use crate::analyzer::ast::closure::AClosure;
+use crate::analyzer::ast::cond::ACond;
+use crate::analyzer::ast::expr::AExprKind;
+use crate::analyzer::ast::fn_call::AFnCall;
+use crate::analyzer::ast::func::AFn;
+use crate::analyzer::ast::program::AProgram;
+use crate::analyzer::ast::r#impl::AImpl;
+use crate::analyzer::ast::r#struct::AStructInit;
+use crate::analyzer::ast::r#type::AType;
+use crate::analyzer::ast::ret::ARet;
+use crate::analyzer::ast::statement::AStatement;
+use crate::analyzer::ast::symbol::ASymbol;
+use crate::analyzer::ast::var_assign::AVarAssign;
+use crate::analyzer::ast::var_dec::AVarDecl;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::expr::RichExprKind;
-use crate::analyzer::func::RichFn;
-use crate::analyzer::func_call::RichFnCall;
-use crate::analyzer::prog_context::ScopeKind;
-use crate::analyzer::program::RichProg;
-use crate::analyzer::r#impl::RichImpl;
-use crate::analyzer::r#struct::RichStructInit;
-use crate::analyzer::r#type::{RichType, TypeId};
-use crate::analyzer::ret::RichRet;
-use crate::analyzer::statement::RichStatement;
-use crate::analyzer::symbol::RichSymbol;
-use crate::analyzer::var_assign::RichVarAssign;
-use crate::analyzer::var_dec::RichVarDecl;
+use crate::analyzer::scope::ScopeKind;
+use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::lexer::pos::{Locatable, Position};
 use crate::{format_code, locatable_impl};
 
@@ -40,7 +41,7 @@ impl Display for Move {
 
 impl Move {
     /// Creates a new move from `var`.
-    fn from(var: &RichSymbol) -> Self {
+    fn from(var: &ASymbol) -> Self {
         Move {
             path: var.to_string().split(".").map(|s| s.to_string()).collect(),
             start_pos: var.start_pos().clone(),
@@ -171,17 +172,14 @@ impl Scope {
 
 /// Checks a program to ensure that all moves of variables are legal and don't conflict.
 pub struct MoveChecker<'a> {
-    types: &'a HashMap<TypeId, RichType>,
+    type_store: &'a TypeStore,
     errors: Vec<AnalyzeError>,
     stack: Vec<Scope>,
 }
 
 impl<'a> MoveChecker<'a> {
-    fn must_get_type(&self, type_id: &TypeId) -> &RichType {
-        match self.types.get(type_id) {
-            Some(typ) => typ,
-            None => panic!("failed to locate type {}", type_id),
-        }
+    fn must_get_type(&self, type_key: TypeKey) -> &AType {
+        self.type_store.must_get(type_key)
     }
 
     /// Pushes `scope` onto the stack.
@@ -221,7 +219,7 @@ impl<'a> MoveChecker<'a> {
         if to_loop_as_deferred {
             // Find the enclosing loop scope.
             for target_scope in self.stack.iter_mut().rev() {
-                if target_scope.kind == ScopeKind::Loop {
+                if target_scope.kind == ScopeKind::LoopBody {
                     // Copy moves as deferred moves from the given scope to the target scope.
                     target_scope.add_moves(scope.deferred_moves, true);
                     if !deferred_only {
@@ -254,7 +252,7 @@ impl<'a> MoveChecker<'a> {
                 exits_loop = true;
             }
 
-            if scope.kind == ScopeKind::Loop {
+            if scope.kind == ScopeKind::LoopBody {
                 if !exits_loop {
                     return false;
                 }
@@ -267,7 +265,7 @@ impl<'a> MoveChecker<'a> {
     }
 
     /// Returns true only if `var` was declared inside the current scope.
-    fn var_declared_in_cur_scope(&self, var: &RichSymbol) -> bool {
+    fn var_declared_in_cur_scope(&self, var: &ASymbol) -> bool {
         self.stack
             .last()
             .unwrap()
@@ -276,9 +274,9 @@ impl<'a> MoveChecker<'a> {
     }
 
     /// Recursively performs move checks on `prog`.
-    pub fn check_prog(prog: &RichProg, types: &HashMap<TypeId, RichType>) -> Vec<AnalyzeError> {
+    pub fn check_prog(prog: &AProgram, type_store: &TypeStore) -> Vec<AnalyzeError> {
         let mut move_checker = MoveChecker {
-            types,
+            type_store,
             errors: vec![],
             stack: vec![],
         };
@@ -291,49 +289,49 @@ impl<'a> MoveChecker<'a> {
     }
 
     /// Recursively performs move checks on `statement`.
-    fn check_statement(&mut self, statement: &RichStatement) {
+    fn check_statement(&mut self, statement: &AStatement) {
         match statement {
-            RichStatement::StructTypeDeclaration(_)
-            | RichStatement::EnumTypeDeclaration(_)
-            | RichStatement::ExternFns(_)
-            | RichStatement::Consts(_)
-            | RichStatement::Continue
-            | RichStatement::Break => {
+            AStatement::StructTypeDeclaration(_)
+            | AStatement::EnumTypeDeclaration(_)
+            | AStatement::ExternFns(_)
+            | AStatement::Consts(_)
+            | AStatement::Continue
+            | AStatement::Break => {
                 // Nothing to do here since moves cannot occur in these types of statements.
             }
 
-            RichStatement::Loop(loop_body) => self.check_loop(loop_body),
+            AStatement::Loop(loop_body) => self.check_loop(loop_body),
 
-            RichStatement::FunctionDeclaration(fn_decl) => self.check_fn_decl(fn_decl),
+            AStatement::FunctionDeclaration(fn_decl) => self.check_fn_decl(fn_decl),
 
-            RichStatement::VariableDeclaration(var_decl) => self.check_var_decl(var_decl),
+            AStatement::VariableDeclaration(var_decl) => self.check_var_decl(var_decl),
 
-            RichStatement::VariableAssignment(assign) => self.check_var_assign(assign),
+            AStatement::VariableAssignment(assign) => self.check_var_assign(assign),
 
-            RichStatement::FunctionCall(call) => self.check_fn_call(call),
+            AStatement::FunctionCall(call) => self.check_fn_call(call),
 
-            RichStatement::Return(ret) => self.check_ret(ret),
+            AStatement::Return(ret) => self.check_ret(ret),
 
-            RichStatement::Closure(closure) => self.check_closure(closure),
+            AStatement::Closure(closure) => self.check_closure(closure),
 
-            RichStatement::Conditional(cond) => self.check_cond(cond),
+            AStatement::Conditional(cond) => self.check_cond(cond),
 
-            RichStatement::Impl(impl_) => self.check_impl(impl_),
+            AStatement::Impl(impl_) => self.check_impl(impl_),
         }
     }
 
     /// Recursively checks all member functions inside an `impl` block.
-    fn check_impl(&mut self, impl_: &RichImpl) {
+    fn check_impl(&mut self, impl_: &AImpl) {
         for mem_fn in &impl_.member_fns {
             self.check_fn_decl(&mem_fn);
         }
     }
 
     /// Recursively performs move checks on `loop_body`.
-    fn check_loop(&mut self, loop_body: &RichClosure) {
+    fn check_loop(&mut self, loop_body: &AClosure) {
         // Push a new scope for the loop body.
         self.push_scope(Scope::new(
-            ScopeKind::Loop,
+            ScopeKind::LoopBody,
             loop_body.has_return,
             loop_body.has_break,
         ));
@@ -350,7 +348,7 @@ impl<'a> MoveChecker<'a> {
     }
 
     /// Recursively performs move checks on `fn_decl`.
-    fn check_fn_decl(&mut self, fn_decl: &RichFn) {
+    fn check_fn_decl(&mut self, fn_decl: &AFn) {
         // Push a new scope onto the stack for the function body.
         self.push_scope(Scope::new_fn_body());
 
@@ -362,7 +360,7 @@ impl<'a> MoveChecker<'a> {
     }
 
     /// Recursively performs move checks on `var_decl`.
-    fn check_var_decl(&mut self, var_decl: &RichVarDecl) {
+    fn check_var_decl(&mut self, var_decl: &AVarDecl) {
         // Check the expression being assigned to the variable.
         self.check_expr(&var_decl.val.kind);
 
@@ -371,13 +369,13 @@ impl<'a> MoveChecker<'a> {
     }
 
     /// Recursively performs move checks on `assign`.
-    fn check_var_assign(&mut self, assign: &RichVarAssign) {
+    fn check_var_assign(&mut self, assign: &AVarAssign) {
         // Check if the value being assigned is a variable and, if so, track its movement.
         self.check_expr(&assign.val.kind);
     }
 
     /// Recursively performs move checks on `call`.
-    fn check_fn_call(&mut self, call: &RichFnCall) {
+    fn check_fn_call(&mut self, call: &AFnCall) {
         // Check if any of the function arguments are being moved.
         for arg in &call.args {
             self.check_expr(&arg.kind);
@@ -385,7 +383,7 @@ impl<'a> MoveChecker<'a> {
     }
 
     /// Recursively performs move checks on `ret`.
-    fn check_ret(&mut self, ret: &RichRet) {
+    fn check_ret(&mut self, ret: &ARet) {
         // Check if we're moving the return value.
         match &ret.val {
             Some(val) => self.check_expr(&val.kind),
@@ -394,22 +392,22 @@ impl<'a> MoveChecker<'a> {
     }
 
     /// Recursively performs move checks on `expr`.
-    fn check_expr(&mut self, kind: &RichExprKind) {
+    fn check_expr(&mut self, kind: &AExprKind) {
         match kind {
-            RichExprKind::Symbol(var) => {
+            AExprKind::Symbol(var) => {
                 self.check_var(var);
             }
-            RichExprKind::FunctionCall(call) => {
+            AExprKind::FunctionCall(call) => {
                 self.check_fn_call(call);
             }
-            RichExprKind::BinaryOperation(left, _, right) => {
+            AExprKind::BinaryOperation(left, _, right) => {
                 self.check_expr(&right.kind);
                 self.check_expr(&left.kind);
             }
-            RichExprKind::UnaryOperation(_, expr) => {
+            AExprKind::UnaryOperation(_, expr) => {
                 self.check_expr(&expr.kind);
             }
-            RichExprKind::StructInit(struct_init) => {
+            AExprKind::StructInit(struct_init) => {
                 self.check_struct_init(struct_init);
             }
             _ => {}
@@ -417,17 +415,17 @@ impl<'a> MoveChecker<'a> {
     }
 
     /// Recursively performs move checks on `struct_init`.
-    fn check_struct_init(&mut self, struct_init: &RichStructInit) {
+    fn check_struct_init(&mut self, struct_init: &AStructInit) {
         for (_, expr) in &struct_init.field_values {
             self.check_expr(&expr.kind);
         }
     }
 
     /// Recursively performs move checks on `closure`.
-    fn check_closure(&mut self, closure: &RichClosure) {
+    fn check_closure(&mut self, closure: &AClosure) {
         // Push a new scope onto the stack for this closure.
         self.push_scope(Scope::new(
-            ScopeKind::Inline,
+            ScopeKind::InlineClosure,
             closure.has_return,
             closure.has_break,
         ));
@@ -444,21 +442,21 @@ impl<'a> MoveChecker<'a> {
     }
 
     /// Recursively performs move checks on all statements in `statements`.
-    fn check_statements(&mut self, statements: &Vec<RichStatement>) {
+    fn check_statements(&mut self, statements: &Vec<AStatement>) {
         for statement in statements {
             self.check_statement(statement);
         }
     }
 
     /// Recursively performs move checks on all branches in `cond`.
-    fn check_cond(&mut self, cond: &RichCond) {
+    fn check_cond(&mut self, cond: &ACond) {
         // Check moves on each branch separately – that is, independently, because branch bodies
         // are mutually exclusive so their moves should never conflict with one another.
         let mut branch_scopes = vec![];
         for branch in &cond.branches {
             // Push a new scope for the branch body.
             self.push_scope(Scope::new(
-                ScopeKind::Branch,
+                ScopeKind::BranchBody,
                 branch.body.has_return,
                 branch.body.has_break,
             ));
@@ -488,10 +486,10 @@ impl<'a> MoveChecker<'a> {
     }
 
     /// Performs move checks on `var`.
-    fn check_var(&mut self, var: &RichSymbol) {
+    fn check_var(&mut self, var: &ASymbol) {
         // Skip the move check entirely if the root variable is of some type that doesn't require
         // moves.
-        if !self.must_get_type(&var.parent_type_id).requires_move() {
+        if !self.must_get_type(var.parent_type_key).requires_move() {
             return;
         }
 
@@ -510,24 +508,24 @@ impl<'a> MoveChecker<'a> {
                             var,
                             conflicting_move
                         )
-                        .as_str(),
+                            .as_str(),
                         &mv,
                     )
-                    .with_detail(
-                        format!(
-                            "The conflicting move occurs at {}:{} because {} is not copied \
-                            automatically.",
-                            conflicting_move.start_pos.line,
-                            conflicting_move.start_pos.col,
-                            format_code!(conflicting_move),
+                        .with_detail(
+                            format!(
+                                "The conflicting move occurs at {}:{} because {} is not copied \
+                                automatically.",
+                                conflicting_move.start_pos.line,
+                                conflicting_move.start_pos.col,
+                                format_code!(conflicting_move),
+                            )
+                                .as_str(),
                         )
-                        .as_str(),
-                    )
-                    .with_help(format!(
-                        "Consider either copying {} on line {} instead of moving it, or refactoring \
-                        your code to avoid the move conflict.",
-                        format_code!(conflicting_move), conflicting_move.start_pos.line
-                    ).as_mut()),
+                        .with_help(format!(
+                            "Consider either copying {} on line {} instead of moving it, or refactoring \
+                            your code to avoid the move conflict.",
+                            format_code!(conflicting_move), conflicting_move.start_pos.line
+                        ).as_mut()),
                 );
             }
 
@@ -581,7 +579,7 @@ impl<'a> MoveChecker<'a> {
 
         // Only record a move if the type of the value being used requires a move. Some
         // basic types like bools and numerics are always copied instead of being moved.
-        if self.must_get_type(var.get_type_id()).requires_move() {
+        if self.must_get_type(var.get_type_key()).requires_move() {
             self.add_move(mv);
         }
     }

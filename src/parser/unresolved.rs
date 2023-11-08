@@ -44,17 +44,8 @@ impl UnresolvedType {
         }
     }
 
-    /// Returns a new "unknown" type representing a type that could not be resolved.
-    pub fn unknown() -> Self {
-        UnresolvedType {
-            name: "<unknown>".to_string(),
-            start_pos: Position::default(),
-            end_pos: Position::default(),
-        }
-    }
-
     /// Returns a new "none" type representing something that does not have a type.
-    pub fn none() -> Self {
+    pub fn unresolved_none() -> Self {
         UnresolvedType {
             name: "<none>".to_string(),
             start_pos: Position::default(),

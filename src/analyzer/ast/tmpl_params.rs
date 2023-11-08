@@ -5,7 +5,7 @@ use colored::*;
 
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::r#type::{RichType, TypeId};
+use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::r#type::Type;
 use crate::parser::tmpl_params::{TmplParam, TmplParams};
@@ -20,20 +20,20 @@ use crate::{format_code, locatable_impl, util};
 /// all of those specs can be used where the template parameter is used.
 /// If a template parameter has no type or specs, any value can be used in its place.
 #[derive(Debug, Clone, PartialEq)]
-pub struct RichTmplParam {
+pub struct ATmplParam {
     pub name: String,
     pub required_spec_names: Vec<String>,
-    pub required_type_id: Option<TypeId>,
+    pub aliased_type_key: Option<TypeKey>,
     start_pos: Position,
     end_pos: Position,
 }
 
-impl Display for RichTmplParam {
+impl Display for ATmplParam {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name)?;
 
-        if let Some(type_id) = &self.required_type_id {
-            write!(f, " = {}", type_id)?;
+        if let Some(type_key) = &self.aliased_type_key {
+            write!(f, " = {}", type_key)?;
         } else if !self.required_spec_names.is_empty() {
             write!(f, ": ")?;
             for (i, name) in self.required_spec_names.iter().enumerate() {
@@ -48,17 +48,17 @@ impl Display for RichTmplParam {
     }
 }
 
-locatable_impl!(RichTmplParam);
+locatable_impl!(ATmplParam);
 
-impl RichTmplParam {
+impl ATmplParam {
     /// Performs semantic analysis on a template parameter.
     fn from(ctx: &mut ProgramContext, tmpl_param: &TmplParam) -> Self {
-        if let Some(required_type) = &tmpl_param.required_type {
-            let required_type_id = Some(RichType::analyze(ctx, required_type));
-            return RichTmplParam {
+        if let Some(aliased_type) = &tmpl_param.aliased_type {
+            let aliased_type_key = Some(ctx.resolve_type(aliased_type));
+            return ATmplParam {
                 name: tmpl_param.name.clone(),
                 required_spec_names: vec![],
-                required_type_id,
+                aliased_type_key,
                 start_pos: tmpl_param.start_pos().clone(),
                 end_pos: tmpl_param.end_pos().clone(),
             };
@@ -69,8 +69,8 @@ impl RichTmplParam {
             match required_spec {
                 Type::Unresolved(UnresolvedType { name, .. }) => {
                     // Make sure the spec exists.
-                    if ctx.get_extern_spec(name).is_none() {
-                        ctx.add_err(AnalyzeError::new(
+                    if ctx.get_unchecked_spec(name).is_none() {
+                        ctx.insert_err(AnalyzeError::new(
                             ErrorKind::UndefSpec,
                             format_code!("spec {} is not defined in this context", name).as_str(),
                             required_spec,
@@ -83,7 +83,7 @@ impl RichTmplParam {
                     required_spec_names.push(name.clone());
                 }
 
-                other => ctx.add_err(AnalyzeError::new(
+                other => ctx.insert_err(AnalyzeError::new(
                     ErrorKind::MismatchedTypes,
                     format_code!("type {} is not a spec", other).as_str(),
                     required_spec,
@@ -91,34 +91,29 @@ impl RichTmplParam {
             }
         }
 
-        RichTmplParam {
+        ATmplParam {
             name: tmpl_param.name.clone(),
             required_spec_names,
-            required_type_id: None,
+            aliased_type_key: None,
             start_pos: tmpl_param.start_pos().clone(),
             end_pos: tmpl_param.end_pos().clone(),
         }
-    }
-
-    /// Returns the type ID corresponding to the simple named version of this template param.
-    pub fn get_type_id(&self) -> TypeId {
-        TypeId::new_unresolved(self.name.as_str())
     }
 }
 
 /// A list of template parameters.
 #[derive(Debug, Clone)]
-pub struct RichTmplParams {
-    pub params: Vec<RichTmplParam>,
+pub struct ATmplParams {
+    pub params: Vec<ATmplParam>,
 }
 
-impl PartialEq for RichTmplParams {
+impl PartialEq for ATmplParams {
     fn eq(&self, other: &Self) -> bool {
         util::vecs_eq(&self.params, &other.params)
     }
 }
 
-impl RichTmplParams {
+impl ATmplParams {
     /// Performs semantic analysis on a set of template parameters.
     pub fn from(ctx: &mut ProgramContext, tmpl_params: &TmplParams) -> Self {
         let mut params = vec![];
@@ -127,7 +122,7 @@ impl RichTmplParams {
             // Record an error and skip this param if another param with the same name already
             // exists.
             if param_names.contains(&param.name) {
-                ctx.add_err(AnalyzeError::new(
+                ctx.insert_err(AnalyzeError::new(
                     ErrorKind::DuplicateTmplParam,
                     format_code!("parameter {} already exists in this template", param.name)
                         .as_str(),
@@ -138,25 +133,11 @@ impl RichTmplParams {
             }
 
             // Analyze the param.
-            let rich_param = RichTmplParam::from(ctx, param);
-
-            // Add the param type mapping to the program context in case it is used in other params
-            // that follow it.
-            ctx.add_resolved_type(
-                rich_param.get_type_id(),
-                RichType::Templated(rich_param.clone()),
-            );
-
-            param_names.insert(rich_param.name.clone());
-            params.push(rich_param);
+            let a_param = ATmplParam::from(ctx, param);
+            param_names.insert(a_param.name.clone());
+            params.push(a_param);
         }
 
-        // Drop the template param type mappings we added to the program context now that we're
-        // done with them.
-        for param in &params {
-            ctx.remove_resolved_type(&param.get_type_id());
-        }
-
-        RichTmplParams { params }
+        ATmplParams { params }
     }
 }

@@ -1,77 +1,77 @@
-use core::fmt;
+use std::fmt;
 use std::fmt::Formatter;
 
-use crate::analyzer::closure::{analyze_break, analyze_continue, RichClosure};
-use crate::analyzer::cond::RichCond;
+use crate::analyzer::ast::closure::{analyze_break, analyze_continue, AClosure};
+use crate::analyzer::ast::cond::ACond;
+use crate::analyzer::ast::fn_call::AFnCall;
+use crate::analyzer::ast::func::{AFn, AFnSig};
+use crate::analyzer::ast::r#const::AConst;
+use crate::analyzer::ast::r#enum::AEnumType;
+use crate::analyzer::ast::r#impl::AImpl;
+use crate::analyzer::ast::r#struct::AStructType;
+use crate::analyzer::ast::ret::ARet;
+use crate::analyzer::ast::var_assign::AVarAssign;
+use crate::analyzer::ast::var_dec::AVarDecl;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::func::RichFn;
-use crate::analyzer::func_call::RichFnCall;
-use crate::analyzer::func_sig::RichFnSig;
-use crate::analyzer::prog_context::{ProgramContext, ScopeKind};
-use crate::analyzer::r#const::RichConst;
-use crate::analyzer::r#enum::RichEnumType;
-use crate::analyzer::r#impl::RichImpl;
-use crate::analyzer::r#struct::RichStructType;
-use crate::analyzer::ret::RichRet;
-use crate::analyzer::var_assign::RichVarAssign;
-use crate::analyzer::var_dec::RichVarDecl;
+use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::scope::ScopeKind;
 use crate::parser::statement::Statement;
 
 /// Represents a semantically valid and type-rich statement.
 #[derive(PartialEq, Debug, Clone)]
-pub enum RichStatement {
-    VariableDeclaration(RichVarDecl),
-    VariableAssignment(RichVarAssign),
-    FunctionDeclaration(RichFn),
-    Closure(RichClosure),
-    FunctionCall(RichFnCall),
-    Conditional(RichCond),
-    Loop(RichClosure),
+pub enum AStatement {
+    VariableDeclaration(AVarDecl),
+    VariableAssignment(AVarAssign),
+    FunctionDeclaration(AFn),
+    Closure(AClosure),
+    FunctionCall(AFnCall),
+    Conditional(ACond),
+    Loop(AClosure),
     Break,
     Continue,
-    Return(RichRet),
-    StructTypeDeclaration(RichStructType),
-    EnumTypeDeclaration(RichEnumType),
+    Return(ARet),
+    StructTypeDeclaration(AStructType),
+    EnumTypeDeclaration(AEnumType),
     /// A set of external function declarations.
-    ExternFns(Vec<RichFnSig>),
-    Consts(Vec<RichConst>),
-    Impl(RichImpl),
+    ExternFns(Vec<AFnSig>),
+    Consts(Vec<AConst>),
+    Impl(AImpl),
 }
 
-impl fmt::Display for RichStatement {
+impl fmt::Display for AStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            RichStatement::VariableDeclaration(v) => write!(f, "{}", v),
-            RichStatement::VariableAssignment(v) => write!(f, "{}", v),
-            RichStatement::FunctionDeclaration(v) => write!(f, "{}", v),
-            RichStatement::Closure(v) => write!(f, "{}", v),
-            RichStatement::FunctionCall(v) => write!(f, "{}", v),
-            RichStatement::Conditional(v) => write!(f, "{}", v),
-            RichStatement::Loop(v) => write!(f, "{}", v),
-            RichStatement::Break => write!(f, "break"),
-            RichStatement::Continue => write!(f, "continue"),
-            RichStatement::Return(v) => write!(f, "{}", v),
-            RichStatement::StructTypeDeclaration(s) => write!(f, "{}", s),
-            RichStatement::EnumTypeDeclaration(e) => write!(f, "{}", e),
-            RichStatement::ExternFns(e) => {
+            AStatement::VariableDeclaration(v) => write!(f, "{}", v),
+            AStatement::VariableAssignment(v) => write!(f, "{}", v),
+            AStatement::FunctionDeclaration(v) => write!(f, "{}", v),
+            AStatement::Closure(v) => write!(f, "{}", v),
+            AStatement::FunctionCall(v) => write!(f, "{}", v),
+            AStatement::Conditional(v) => write!(f, "{}", v),
+            AStatement::Loop(v) => write!(f, "{}", v),
+            AStatement::Break => write!(f, "break"),
+            AStatement::Continue => write!(f, "continue"),
+            AStatement::Return(v) => write!(f, "{}", v),
+            AStatement::StructTypeDeclaration(s) => write!(f, "{}", s),
+            AStatement::EnumTypeDeclaration(e) => write!(f, "{}", e),
+            AStatement::ExternFns(e) => {
                 if e.len() == 1 {
                     write!(f, "extern {}", e.first().unwrap())
                 } else {
                     write!(f, "extern {{ <{} function signatures> }}", e.len())
                 }
             }
-            RichStatement::Consts(consts) => {
+            AStatement::Consts(consts) => {
                 if consts.len() == 1 {
                     write!(f, "const {}", consts.first().unwrap())
                 } else {
                     write!(f, "const {{ <{} constant declarations> }}", consts.len())
                 }
             }
-            RichStatement::Impl(impl_) => {
+            AStatement::Impl(impl_) => {
                 write!(
                     f,
                     "impl {} {{ <{} member functions> }}",
-                    impl_.type_id,
+                    impl_.type_key,
                     impl_.member_fns.len()
                 )
             }
@@ -79,23 +79,23 @@ impl fmt::Display for RichStatement {
     }
 }
 
-impl RichStatement {
+impl AStatement {
     /// Performs semantic analysis on the given statement and returns a type-rich version of it.
-    pub fn from(ctx: &mut ProgramContext, statement: Statement) -> Self {
+    pub fn from(ctx: &mut ProgramContext, statement: &Statement) -> Self {
         match statement {
             Statement::VariableDeclaration(var_decl) => {
-                RichStatement::VariableDeclaration(RichVarDecl::from(ctx, var_decl))
+                AStatement::VariableDeclaration(AVarDecl::from(ctx, var_decl))
             }
 
             Statement::VariableAssignment(var_assign) => {
-                RichStatement::VariableAssignment(RichVarAssign::from(ctx, var_assign))
+                AStatement::VariableAssignment(AVarAssign::from(ctx, var_assign))
             }
 
             Statement::FunctionDeclaration(fn_decl) => {
                 // Make sure we are not already inside a function. For now, functions cannot be defined
                 // within other functions.
                 if ctx.is_in_fn() {
-                    ctx.add_err(AnalyzeError::new(
+                    ctx.insert_err(AnalyzeError::new(
                         ErrorKind::InvalidStatement,
                         "cannot declare functions inside other functions",
                         &fn_decl.signature,
@@ -104,98 +104,96 @@ impl RichStatement {
 
                 // Analyze the function and add it to the program context so we can reference it
                 // later.
-                let rich_fn = RichFn::from(ctx, fn_decl);
-                ctx.add_fn(rich_fn.clone());
-                RichStatement::FunctionDeclaration(rich_fn)
+                let a_fn = AFn::from(ctx, fn_decl);
+                ctx.insert_fn(a_fn.clone());
+                AStatement::FunctionDeclaration(a_fn)
             }
 
-            Statement::Closure(closure) => RichStatement::Closure(RichClosure::from(
+            Statement::Closure(closure) => AStatement::Closure(AClosure::from(
                 ctx,
                 closure,
-                ScopeKind::Inline,
+                ScopeKind::InlineClosure,
                 vec![],
                 None,
             )),
 
-            Statement::FunctionCall(call) => {
-                RichStatement::FunctionCall(RichFnCall::from(ctx, call, None))
-            }
+            Statement::FunctionCall(call) => AStatement::FunctionCall(AFnCall::from(ctx, call)),
 
-            Statement::Conditional(cond) => RichStatement::Conditional(RichCond::from(ctx, cond)),
+            Statement::Conditional(cond) => AStatement::Conditional(ACond::from(ctx, cond)),
 
-            Statement::Loop(loop_) => RichStatement::Loop(RichClosure::from(
+            Statement::Loop(loop_) => AStatement::Loop(AClosure::from(
                 ctx,
-                loop_.closure,
-                ScopeKind::Loop,
+                &loop_.closure,
+                ScopeKind::LoopBody,
                 vec![],
                 None,
             )),
 
             Statement::Break(br) => {
                 analyze_break(ctx, &br);
-                RichStatement::Break
+                AStatement::Break
             }
 
             Statement::Continue(cont) => {
                 analyze_continue(ctx, &cont);
-                RichStatement::Continue
+                AStatement::Continue
             }
 
             Statement::Return(ret) => {
-                let rich_ret = RichRet::from(ctx, ret);
-                RichStatement::Return(rich_ret)
+                let a_ret = ARet::from(ctx, ret);
+                AStatement::Return(a_ret)
             }
 
             Statement::StructDeclaration(s) => {
-                RichStatement::StructTypeDeclaration(RichStructType::from(ctx, &s, false))
+                AStatement::StructTypeDeclaration(AStructType::from(ctx, &s, false))
             }
 
             Statement::EnumDeclaration(e) => {
-                RichStatement::EnumTypeDeclaration(RichEnumType::from(ctx, &e))
+                AStatement::EnumTypeDeclaration(AEnumType::from(ctx, &e))
             }
 
-            Statement::Impl(impl_) => RichStatement::Impl(RichImpl::from(ctx, &impl_)),
+            Statement::Impl(impl_) => AStatement::Impl(AImpl::from(ctx, &impl_)),
 
             Statement::ExternFns(ext) => {
                 // Make sure we are not already inside a function. Extern functions cannot be
                 // defined within other functions.
                 if ctx.is_in_fn() {
-                    ctx.add_err(AnalyzeError::new(
+                    ctx.insert_err(AnalyzeError::new(
                         ErrorKind::InvalidStatement,
                         "cannot declare external functions inside other functions",
-                        &ext,
+                        ext,
                     ));
                 }
 
                 // Analyze all the function signatures in the `extern` block.
-                let mut rich_fn_sigs = vec![];
+                let mut a_fn_sigs = vec![];
                 for ext_fn_sig in &ext.fn_sigs {
-                    rich_fn_sigs.push(RichFnSig::from(ctx, ext_fn_sig));
+                    a_fn_sigs.push(AFnSig::from(ctx, ext_fn_sig));
                 }
 
-                RichStatement::ExternFns(rich_fn_sigs)
+                AStatement::ExternFns(a_fn_sigs)
             }
 
             Statement::Consts(const_block) => {
                 // Make sure this const is not being declared inside a function.
                 if ctx.is_in_fn() {
-                    ctx.add_err(AnalyzeError::new(
+                    ctx.insert_err(AnalyzeError::new(
                         ErrorKind::InvalidStatement,
                         "cannot declare constant inside function",
-                        &const_block,
+                        const_block,
                     ));
                 }
 
                 // Analyze all the constant declarations.
                 let mut consts = vec![];
                 for const_decl in &const_block.consts {
-                    consts.push(RichConst::from(ctx, const_decl));
+                    consts.push(AConst::from(ctx, const_decl));
                 }
 
-                RichStatement::Consts(consts)
+                AStatement::Consts(consts)
             }
 
-            Statement::Spec(_) => {
+            Statement::SpecDeclaration(_) => {
                 // This should never happen as specs should be skipped – they're analyzed before
                 // we start analyzing other program statements.
                 unreachable!()
@@ -207,7 +205,7 @@ impl RichStatement {
     /// be included in the AST that results from semantic analysis).
     pub fn is_templated(&self) -> bool {
         match self {
-            RichStatement::FunctionDeclaration(func) => func.signature.is_templated(),
+            AStatement::FunctionDeclaration(func) => func.signature.is_templated(),
             _ => false,
         }
     }
@@ -217,21 +215,19 @@ impl RichStatement {
 mod tests {
     use std::io::{BufRead, Cursor};
 
-    use crate::analyzer::error::AnalyzeError;
-    use crate::analyzer::error::ErrorKind;
+    use crate::analyzer::ast::r#struct::{AField, AStructType};
+    use crate::analyzer::ast::statement::AStatement;
+    use crate::analyzer::error::{AnalyzeError, ErrorKind};
     use crate::analyzer::prog_context::ProgramContext;
-    use crate::analyzer::r#struct::{RichField, RichStructType};
-    use crate::analyzer::r#type::TypeId;
-    use crate::analyzer::statement::RichStatement;
     use crate::analyzer::warn::AnalyzeWarning;
     use crate::lexer::token::Token;
     use crate::parser::statement::Statement;
     use crate::parser::stream::Stream;
 
-    fn analyze_statement(raw: &str, ctx: &mut ProgramContext) -> RichStatement {
+    fn analyze_statement(raw: &str, ctx: &mut ProgramContext) -> AStatement {
         let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
         let statement = Statement::from(&mut Stream::from(tokens)).expect("should not error");
-        RichStatement::from(ctx, statement)
+        AStatement::from(ctx, &statement)
     }
 
     #[test]
@@ -283,7 +279,11 @@ mod tests {
         let mut ctx = ProgramContext::new();
         analyze_statement(raw, &mut ctx);
         assert!(matches!(
-            ctx.errors().remove(0),
+            ctx.errors()
+                .values()
+                .collect::<Vec<&AnalyzeError>>()
+                .get(0)
+                .unwrap(),
             AnalyzeError {
                 kind: ErrorKind::MissingReturn,
                 ..
@@ -306,7 +306,11 @@ mod tests {
         let mut ctx = ProgramContext::new();
         analyze_statement(raw, &mut ctx);
         assert!(matches!(
-            ctx.errors().remove(0),
+            ctx.errors()
+                .values()
+                .collect::<Vec<&AnalyzeError>>()
+                .get(0)
+                .unwrap(),
             AnalyzeError {
                 kind: ErrorKind::MissingReturn,
                 ..
@@ -357,7 +361,11 @@ mod tests {
         let mut ctx = ProgramContext::new();
         analyze_statement(raw, &mut ctx);
         assert!(matches!(
-            ctx.errors().remove(0),
+            ctx.errors()
+                .values()
+                .collect::<Vec<&AnalyzeError>>()
+                .get(0)
+                .unwrap(),
             AnalyzeError {
                 kind: ErrorKind::MissingReturn,
                 ..
@@ -445,7 +453,13 @@ mod tests {
         let mut ctx = ProgramContext::new();
         analyze_statement(raw, &mut ctx);
         assert!(ctx.errors().is_empty());
-        assert!(matches!(ctx.warnings().remove(0), AnalyzeWarning { .. }));
+        assert!(matches!(
+            ctx.warnings()
+                .values()
+                .collect::<Vec<&AnalyzeWarning>>()
+                .remove(0),
+            AnalyzeWarning { .. }
+        ));
     }
 
     #[test]
@@ -454,7 +468,11 @@ mod tests {
         let mut ctx = ProgramContext::new();
         analyze_statement(raw, &mut ctx);
         assert!(matches!(
-            ctx.errors().remove(0),
+            ctx.errors()
+                .values()
+                .collect::<Vec<&AnalyzeError>>()
+                .get(0)
+                .unwrap(),
             AnalyzeError {
                 kind: ErrorKind::UnexpectedReturn,
                 ..
@@ -480,7 +498,11 @@ mod tests {
         let mut ctx = ProgramContext::new();
         analyze_statement(raw, &mut ctx);
         assert!(matches!(
-            ctx.errors().remove(0),
+            ctx.errors()
+                .values()
+                .collect::<Vec<&AnalyzeError>>()
+                .get(0)
+                .unwrap(),
             AnalyzeError {
                 kind: ErrorKind::MissingReturn,
                 ..
@@ -502,20 +524,20 @@ mod tests {
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
-            RichStatement::StructTypeDeclaration(RichStructType {
+            AStatement::StructTypeDeclaration(AStructType {
                 name: "MyStruct".to_string(),
                 fields: vec![
-                    RichField {
+                    AField {
                         name: "counter".to_string(),
-                        type_id: TypeId::i64(),
+                        type_key: ctx.i64_type_key(),
                     },
-                    RichField {
+                    AField {
                         name: "is_even".to_string(),
-                        type_id: TypeId::bool(),
+                        type_key: ctx.bool_type_key(),
                     },
-                    RichField {
+                    AField {
                         name: "message".to_string(),
-                        type_id: TypeId::str(),
+                        type_key: ctx.str_type_key(),
                     },
                 ],
             })

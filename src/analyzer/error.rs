@@ -40,9 +40,11 @@ pub enum ErrorKind {
     DuplicateTmplParam,
     UnresolvedTmplParams,
     DuplicateFnArg,
-    SpecNotSatisfied,
     InvalidTypeCast,
     InvalidExtern,
+    #[cfg(test)]
+    #[cfg(feature = "generics")]
+    SpecNotSatisfied,
 }
 
 impl fmt::Display for ErrorKind {
@@ -80,11 +82,13 @@ impl fmt::Display for ErrorKind {
             ErrorKind::UnresolvedTmplParams => write!(f, "unresolved template parameters"),
             ErrorKind::DuplicateFnArg => write!(f, "duplicate function argument"),
             ErrorKind::UndefSpec => write!(f, "undefined spec"),
-            ErrorKind::SpecNotSatisfied => write!(f, "spec not satisfied"),
             ErrorKind::InvalidTypeCast => write!(f, "invalid type cast"),
             ErrorKind::ExpectedType => write!(f, "expected type"),
             ErrorKind::ExpectedExpr => write!(f, "expected expression"),
             ErrorKind::InvalidExtern => write!(f, "invalid extern"),
+            #[cfg(test)]
+            #[cfg(feature = "generics")]
+            ErrorKind::SpecNotSatisfied => write!(f, "unsatisfied spec"),
         }
     }
 }
@@ -102,12 +106,12 @@ pub struct AnalyzeError {
 
 impl fmt::Display for AnalyzeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}: {}", self.kind, self.message)
+        write!(f, "{}", self.message)
     }
 }
 
 impl AnalyzeError {
-    pub fn new<T: Locatable>(kind: ErrorKind, message: &str, loc: &T) -> Self {
+    pub fn new<T: Locatable>(kind: ErrorKind, message: &str, loc: &T) -> AnalyzeError {
         AnalyzeError {
             kind,
             message: message.to_string(),
@@ -118,18 +122,7 @@ impl AnalyzeError {
         }
     }
 
-    pub fn new_with_default_pos(kind: ErrorKind, message: &str) -> Self {
-        AnalyzeError {
-            kind,
-            message: message.to_string(),
-            detail: None,
-            help: None,
-            start_pos: Position::default(),
-            end_pos: Position::default(),
-        }
-    }
-
-    pub fn with_detail(self, detail: &str) -> Self {
+    pub fn with_detail(self, detail: &str) -> AnalyzeError {
         AnalyzeError {
             kind: self.kind,
             message: self.message,
@@ -140,7 +133,7 @@ impl AnalyzeError {
         }
     }
 
-    pub fn with_help(self, help: &str) -> Self {
+    pub fn with_help(self, help: &str) -> AnalyzeError {
         AnalyzeError {
             kind: self.kind,
             message: self.message,

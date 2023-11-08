@@ -4,7 +4,6 @@
 use r#type::Type;
 
 pub mod arg;
-pub mod bool;
 pub mod bool_lit;
 pub mod branch;
 pub mod r#break;
@@ -19,7 +18,6 @@ pub mod ext;
 pub mod func;
 pub mod func_call;
 pub mod func_sig;
-pub mod i64;
 pub mod i64_lit;
 pub mod r#impl;
 pub mod lambda;
@@ -28,12 +26,10 @@ pub mod member;
 pub mod null;
 pub mod op;
 pub mod program;
-pub mod ptr;
 pub mod ret;
 pub mod sizeof;
 pub mod spec;
 pub mod statement;
-pub mod str;
 pub mod str_lit;
 pub mod stream;
 pub mod r#struct;
@@ -41,7 +37,6 @@ pub mod symbol;
 pub mod tmpl_params;
 pub mod tuple;
 pub mod r#type;
-pub mod u64;
 pub mod u64_lit;
 pub mod unresolved;
 pub mod var_assign;
@@ -55,7 +50,6 @@ mod tests {
     use crate::lexer::token::Token;
     use crate::lexer::token_kind::TokenKind;
     use crate::parser::arg::Argument;
-    use crate::parser::bool::BoolType;
     use crate::parser::bool_lit::BoolLit;
     use crate::parser::branch::Branch;
     use crate::parser::closure::Closure;
@@ -65,17 +59,16 @@ mod tests {
     use crate::parser::func::Function;
     use crate::parser::func_call::FunctionCall;
     use crate::parser::func_sig::FunctionSignature;
-    use crate::parser::i64::I64Type;
     use crate::parser::i64_lit::I64Lit;
     use crate::parser::op::Operator;
     use crate::parser::program::Program;
     use crate::parser::r#type::Type;
     use crate::parser::ret::Ret;
     use crate::parser::statement::Statement;
-    use crate::parser::str::StrType;
     use crate::parser::str_lit::StrLit;
     use crate::parser::stream::Stream;
     use crate::parser::symbol::Symbol;
+    use crate::parser::unresolved::UnresolvedType;
     use crate::parser::var_dec::VariableDeclaration;
 
     #[test]
@@ -138,7 +131,7 @@ mod tests {
             Program {
                 statements: vec![
                     Statement::VariableDeclaration(VariableDeclaration::new(
-                        Some(Type::i64()),
+                        Some(Type::new_unresolved("i64")),
                         false,
                         "i".to_string(),
                         Expression::I64Literal(I64Lit {
@@ -182,20 +175,29 @@ mod tests {
                     vec![
                         Argument::new(
                             "arg1",
-                            Type::Str(StrType::new(Position::new(1, 16), Position::new(1, 19))),
+                            Type::Unresolved(UnresolvedType::new(
+                                "str",
+                                Position::new(1, 16),
+                                Position::new(1, 19)
+                            )),
                             false,
                             Position::new(1, 10),
                             Position::new(1, 19)
                         ),
                         Argument::new(
                             "arg2",
-                            Type::I64(I64Type::new(Position::new(1, 27), Position::new(1, 30))),
+                            Type::Unresolved(UnresolvedType::new(
+                                "i64",
+                                Position::new(1, 27),
+                                Position::new(1, 30)
+                            )),
                             false,
                             Position::new(1, 21),
                             Position::new(1, 30)
                         )
                     ],
-                    Some(Type::Str(StrType::new(
+                    Some(Type::Unresolved(UnresolvedType::new(
+                        "str",
                         Position::new(1, 34),
                         Position::new(1, 37)
                     ))),
@@ -240,7 +242,8 @@ mod tests {
                                 vec![
                                     Argument::new(
                                         "",
-                                        Type::Str(StrType::new(
+                                        Type::Unresolved(UnresolvedType::new(
+                                            "str",
                                             Position::new(1, 18),
                                             Position::new(1, 21)
                                         )),
@@ -250,7 +253,8 @@ mod tests {
                                     ),
                                     Argument::new(
                                         "",
-                                        Type::I64(I64Type::new(
+                                        Type::Unresolved(UnresolvedType::new(
+                                            "i64",
                                             Position::new(1, 23),
                                             Position::new(1, 26)
                                         )),
@@ -259,7 +263,8 @@ mod tests {
                                         Position::new(1, 26)
                                     )
                                 ],
-                                Some(Type::Bool(BoolType::new(
+                                Some(Type::Unresolved(UnresolvedType::new(
+                                    "bool",
                                     Position::new(1, 30),
                                     Position::new(1, 34)
                                 ))),
@@ -272,7 +277,11 @@ mod tests {
                         ),
                         Argument::new(
                             "i",
-                            Type::I64(I64Type::new(Position::new(1, 39), Position::new(1, 42))),
+                            Type::Unresolved(UnresolvedType::new(
+                                "i64",
+                                Position::new(1, 39),
+                                Position::new(1, 42)
+                            )),
                             false,
                             Position::new(1, 36),
                             Position::new(1, 42)
@@ -281,12 +290,17 @@ mod tests {
                     Some(Type::Function(Box::new(FunctionSignature::new_anon(
                         vec![Argument::new(
                             "",
-                            Type::Bool(BoolType::new(Position::new(1, 50), Position::new(1, 54))),
+                            Type::Unresolved(UnresolvedType::new(
+                                "bool",
+                                Position::new(1, 50),
+                                Position::new(1, 54)
+                            )),
                             false,
                             Position::new(1, 50),
                             Position::new(1, 54)
                         )],
-                        Some(Type::Str(StrType::new(
+                        Some(Type::Unresolved(UnresolvedType::new(
+                            "str",
                             Position::new(1, 58),
                             Position::new(1, 61)
                         ))),
@@ -433,7 +447,11 @@ mod tests {
                         "my_func",
                         vec![Argument::new(
                             "s",
-                            Type::Str(StrType::new(Position::new(1, 15), Position::new(1, 18))),
+                            Type::Unresolved(UnresolvedType::new(
+                                "str",
+                                Position::new(1, 15),
+                                Position::new(1, 18)
+                            )),
                             false,
                             Position::new(1, 12),
                             Position::new(1, 18)

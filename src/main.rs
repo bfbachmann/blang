@@ -13,16 +13,17 @@ use compiler::program::ProgCompiler;
 use lexer::token::Token;
 use parser::program::Program;
 
-use crate::analyzer::program::{ProgramAnalysis, RichProg};
+use crate::analyzer::analyze::analyze_prog;
+use crate::analyzer::prog_context::ProgramAnalysis;
 use crate::fmt::format_file_loc;
 use crate::lexer::error::LexError;
 use crate::parser::error::ParseError;
 use crate::parser::stream::Stream;
 
-mod analyzer;
 mod compiler;
 #[macro_use]
 mod fmt;
+mod analyzer;
 mod lexer;
 mod parser;
 mod util;
@@ -140,7 +141,7 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> Option<Program
     };
 
     // Analyze the program.
-    let prog_analysis = RichProg::analyze(prog);
+    let prog_analysis = analyze_prog(&prog);
 
     // Print warnings.
     for warn in &prog_analysis.warnings {
@@ -161,7 +162,7 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> Option<Program
     for err in &prog_analysis.errors {
         errorln!(
             "{}\n  {}",
-            format!("{}: {}", err.kind, err.message).bold(),
+            format!("{}", err).bold(),
             format_file_loc(
                 input_path,
                 Some(err.start_pos.line),
@@ -197,7 +198,7 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> Option<Program
         if let Err(err) = write!(
             dst_file,
             "program: {:#?}\ntypes: {:#?}",
-            &prog_analysis.prog, &prog_analysis.types
+            &prog_analysis.prog, &prog_analysis.type_store
         ) {
             fatalln!(
                 "Error writing AST to file {}: {}",

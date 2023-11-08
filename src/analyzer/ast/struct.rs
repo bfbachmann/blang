@@ -4,36 +4,43 @@ use std::fmt::{Debug, Display, Formatter};
 
 use colored::Colorize;
 
-use crate::analyzer::error::AnalyzeResult;
+use crate::analyzer::ast::expr::AExpr;
+use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::expr::RichExpr;
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::r#type::{check_type_containment, RichType, TypeId};
-use crate::fmt::hierarchy_to_string;
+use crate::analyzer::type_store::TypeKey;
 use crate::parser::r#struct::{StructInit, StructType};
+use crate::parser::r#type::Type;
 use crate::{format_code, util};
 
 /// Represents a semantically valid and type-rich struct field.
 #[derive(Clone, Debug, PartialEq)]
-pub struct RichField {
+pub struct AField {
     pub name: String,
-    pub type_id: TypeId,
+    pub type_key: TypeKey,
 }
 
-impl Display for RichField {
+impl Display for AField {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {}", self.name, self.type_id)
+        write!(f, "{}: {}", self.name, self.type_key)
+    }
+}
+
+impl AField {
+    /// Returns a string containing the human-readable version of this struct field.
+    pub fn display(&self, ctx: &ProgramContext) -> String {
+        format!("{}: {}", self.name, ctx.display_type_for_key(self.type_key))
     }
 }
 
 /// Represents a semantically valid and type-rich structure.
 #[derive(Clone, Debug)]
-pub struct RichStructType {
+pub struct AStructType {
     pub name: String,
-    pub fields: Vec<RichField>,
+    pub fields: Vec<AField>,
 }
 
-impl Display for RichStructType {
+impl Display for AStructType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if self.name == "" {
             write!(f, "struct {{")?;
@@ -49,13 +56,13 @@ impl Display for RichStructType {
     }
 }
 
-impl PartialEq for RichStructType {
+impl PartialEq for AStructType {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name && util::vecs_eq(&self.fields, &other.fields)
     }
 }
 
-impl RichStructType {
+impl AStructType {
     /// Performs semantic analysis on a struct type declaration. Note that this will also
     /// recursively analyze any types contained in the struct. On success, the struct type info will
     /// be stored in the program context.
@@ -64,7 +71,7 @@ impl RichStructType {
     pub fn from(ctx: &mut ProgramContext, struct_type: &StructType, anon: bool) -> Self {
         if !anon {
             if struct_type.name.is_empty() {
-                ctx.add_err(AnalyzeError::new(
+                ctx.insert_err(AnalyzeError::new(
                     ErrorKind::MissingTypeName,
                     "struct types declared in this context must have names",
                     struct_type,
@@ -74,11 +81,11 @@ impl RichStructType {
             // Check if the struct type is already defined in the program context. This will be the
             // case if we've already analyzed it in the process of analyzing another type that
             // contains this type.
-            if let Some(rich_struct) = ctx.get_struct(struct_type.name.as_str()) {
-                return rich_struct.clone();
+            if let Some(a_struct) = ctx.get_struct_type(struct_type.name.as_str()) {
+                return a_struct.clone();
             }
         } else if anon && !struct_type.name.is_empty() {
-            ctx.add_err(
+            ctx.insert_err(
                 AnalyzeError::new(
                     ErrorKind::UnexpectedTypeName,
                     "inline struct type definitions cannot have type names",
@@ -94,14 +101,10 @@ impl RichStructType {
         // type to the program context. This way, if any of the field types make use of this struct
         // type, we won't get into an infinitely recursive type resolution cycle. When we're done
         // analyzing this struct type, the mapping will be updated in the program context.
-        let type_id = TypeId::new_unresolved(struct_type.name.as_str());
-        ctx.add_resolved_type(
-            type_id.clone(),
-            RichType::Struct(RichStructType {
-                name: struct_type.name.clone(),
-                fields: vec![],
-            }),
-        );
+        let type_key = ctx.insert_type(AType::Struct(AStructType {
+            name: struct_type.name.clone(),
+            fields: vec![],
+        }));
 
         // Analyze the struct fields.
         let mut fields = vec![];
@@ -109,7 +112,7 @@ impl RichStructType {
         for field in &struct_type.fields {
             // Check for duplicated field name.
             if !field_names.insert(field.name.clone()) {
-                ctx.add_err(AnalyzeError::new(
+                ctx.insert_err(AnalyzeError::new(
                     ErrorKind::DuplicateStructField,
                     format_code!(
                         "struct type {} already has a field named {}",
@@ -125,51 +128,27 @@ impl RichStructType {
             }
 
             // Resolve the struct field type and add it to the list of analyzed fields.
-            fields.push(RichField {
+            fields.push(AField {
                 name: field.name.clone(),
-                type_id: RichType::analyze(ctx, &field.typ),
+                type_key: ctx.resolve_type(&field.typ),
             });
         }
 
-        let rich_struct = RichStructType {
+        let a_struct = AStructType {
             name: struct_type.name.clone(),
             fields,
         };
 
-        // Make sure the struct doesn't contain itself via other types.
-        let rich_struct_type = RichType::Struct(rich_struct.clone());
-        if let Some(type_hierarchy) = rich_struct_type.contains_type(ctx, &rich_struct_type) {
-            ctx.add_err(
-                AnalyzeError::new(
-                    ErrorKind::InfiniteSizedType,
-                    format_code!(
-                        "struct {} cannot contain itself via any of its field types",
-                        rich_struct.name,
-                    )
-                    .as_str(),
-                    struct_type,
-                )
-                .with_detail(
-                    format!(
-                        "The offending type hierarchy is {}.",
-                        hierarchy_to_string(type_hierarchy.iter().map(|t| t.to_string()).collect())
-                    )
-                    .as_str(),
-                )
-                .with_help("Consider using reference types instead."),
-            );
-        }
-
-        ctx.add_struct(rich_struct.clone());
-        ctx.add_resolved_type(type_id, RichType::Struct(rich_struct.clone()));
-        rich_struct
+        let a_struct_type = AType::Struct(a_struct.clone());
+        ctx.replace_type(type_key, a_struct_type);
+        a_struct
     }
 
     /// Returns the type of the struct field with the given name.
-    pub fn get_field_type(&self, name: &str) -> Option<&TypeId> {
+    pub fn get_field_type_key(&self, name: &str) -> Option<TypeKey> {
         for field in &self.fields {
             if field.name.as_str() == name {
-                return Some(&field.type_id);
+                return Some(field.type_key);
             }
         }
 
@@ -186,41 +165,55 @@ impl RichStructType {
 
         None
     }
+
+    /// Returns a string containing the human-readable representation of the struct type.
+    pub fn display(&self, ctx: &ProgramContext) -> String {
+        if self.name == "" {
+            let mut s = format!("struct {{");
+
+            for field in &self.fields {
+                s += format!("{}", field.display(ctx)).as_str();
+            }
+
+            s + format!("}}").as_str()
+        } else {
+            format!("{}", self.name)
+        }
+    }
 }
 
 /// Represents a semantically valid struct initialization.
 #[derive(Debug, Clone)]
-pub struct RichStructInit {
-    pub type_id: TypeId,
+pub struct AStructInit {
+    pub type_key: TypeKey,
     /// Maps struct field names to their values.
-    pub field_values: HashMap<String, RichExpr>,
+    pub field_values: HashMap<String, AExpr>,
 }
 
-impl Display for RichStructInit {
+impl Display for AStructInit {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {{ ... }}", self.type_id)
+        write!(f, "{} {{ ... }}", self.type_key)
     }
 }
 
-impl PartialEq for RichStructInit {
+impl PartialEq for AStructInit {
     fn eq(&self, other: &Self) -> bool {
-        self.type_id == other.type_id
+        self.type_key == other.type_key
     }
 }
 
-impl RichStructInit {
+impl AStructInit {
     /// Performs semantic analysis on struct initialization.
     pub fn from(ctx: &mut ProgramContext, struct_init: &StructInit) -> Self {
         // Resolve the struct type.
-        let type_id = RichType::analyze(ctx, &struct_init.typ);
-        let rich_type = ctx.must_get_resolved_type(&type_id).clone();
-        let struct_type = match rich_type {
-            RichType::Struct(s) => s,
-            RichType::Unknown(type_name) => {
+        let type_key = ctx.resolve_type(&struct_init.typ);
+        let struct_type = match ctx.must_get_type(type_key) {
+            AType::Struct(s) => s.clone(),
+            AType::Unknown(type_name) => {
                 // The struct type has already failed semantic analysis, so we should avoid
                 // analyzing its initialization and just return some zero-value placeholder instead.
-                return RichStructInit {
-                    type_id: TypeId::new_unresolved(type_name.as_str()),
+                return AStructInit {
+                    type_key: ctx.resolve_type(&Type::new_unresolved(type_name.as_str())),
                     field_values: Default::default(),
                 };
             }
@@ -231,16 +224,20 @@ impl RichStructInit {
 
         // Analyze struct field assignments and collect errors.
         let mut errors = vec![];
-        let mut field_values: HashMap<String, RichExpr> = HashMap::new();
+        let mut field_values: HashMap<String, AExpr> = HashMap::new();
         for (field_name, field_value) in &struct_init.field_values {
             // Get the struct field type, or error if the struct type has no such field.
-            let field_type = match struct_type.get_field_type(field_name.as_str()) {
+            let field_type = match struct_type.get_field_type_key(field_name.as_str()) {
                 Some(typ) => typ,
                 None => {
                     errors.push(AnalyzeError::new(
                         ErrorKind::UndefStructField,
-                        format_code!("struct type {} has no field {}", struct_type, field_name)
-                            .as_str(),
+                        format_code!(
+                            "struct type {} has no field {}",
+                            struct_type.display(ctx),
+                            field_name
+                        )
+                        .as_str(),
                         // TODO: This should be the location of the bad field instead of the entire
                         // struct init.
                         struct_init,
@@ -252,7 +249,7 @@ impl RichStructInit {
             };
 
             // Analyze the value being assigned to the struct field.
-            let expr = RichExpr::from(ctx, field_value.clone(), Some(field_type), false);
+            let expr = AExpr::from(ctx, field_value.clone(), Some(field_type), false);
 
             // Insert the analyzed struct field value, making sure that it was not already assigned.
             if field_values.insert(field_name.to_string(), expr).is_some() {
@@ -272,7 +269,7 @@ impl RichStructInit {
                     format_code!(
                         "field {} on struct type {} is uninitialized",
                         field.name,
-                        struct_type,
+                        struct_type.display(ctx),
                     )
                     .as_str(),
                     struct_init,
@@ -283,42 +280,17 @@ impl RichStructInit {
         // Move all analysis errors into the program context. We're not adding them immediately
         // to avoid borrow issues.
         for err in errors {
-            ctx.add_err(err);
+            ctx.insert_err(err);
         }
 
-        RichStructInit {
-            type_id,
+        AStructInit {
+            type_key,
             field_values,
         }
     }
-}
 
-/// Analyzes type containment within the given struct type and returns an error if there are any
-/// illegal type containment cycles that would result in infinite-sized types.
-pub fn check_struct_containment_cycles(
-    ctx: &ProgramContext,
-    struct_type: &StructType,
-    hierarchy: &mut Vec<String>,
-) -> AnalyzeResult<()> {
-    if hierarchy.contains(&struct_type.name) {
-        return Err(AnalyzeError::new(
-            ErrorKind::InfiniteSizedType,
-            format_code!("struct type {} cannot contain itself", struct_type.name).as_str(),
-            struct_type,
-        ));
+    /// Returns the human-readable version of this struct initialization.
+    pub fn display(&self, ctx: &ProgramContext) -> String {
+        format!("{} {{ ... }}", ctx.display_type_for_key(self.type_key))
     }
-
-    // Push this type name onto the hierarchy stack so it can be checked against other types.
-    hierarchy.push(struct_type.name.clone());
-
-    // Recursively check each struct field type.
-    for field in &struct_type.fields {
-        check_type_containment(ctx, &field.typ, hierarchy)?;
-    }
-
-    // Pop this type name off the hierarchy stack because all types it contains have been
-    // checked.
-    hierarchy.pop();
-
-    Ok(())
 }

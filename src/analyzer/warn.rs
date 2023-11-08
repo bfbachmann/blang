@@ -29,7 +29,7 @@ pub struct AnalyzeWarning {
 
 impl Display for AnalyzeWarning {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.kind, self.message)
+        write!(f, "{}", self.message)
     }
 }
 
@@ -45,7 +45,7 @@ impl AnalyzeWarning {
     }
 
     /// Creates a new warning message with start and end positions cloned from the locatable.
-    pub fn new<T: Locatable>(kind: WarnKind, message: &str, loc: &T) -> Self {
+    pub fn new<T: Locatable>(kind: WarnKind, message: &str, loc: &T) -> AnalyzeWarning {
         AnalyzeWarning {
             kind,
             message: message.to_string(),

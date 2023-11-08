@@ -3,7 +3,7 @@ mod tests {
     use std::io::{BufRead, Cursor};
     use std::path::Path;
 
-    use crate::analyzer::program::RichProg;
+    use crate::analyzer::analyze::analyze_prog;
     use crate::compiler::program::ProgCompiler;
     use crate::lexer::token::Token;
     use crate::parser::program::Program;
@@ -12,7 +12,7 @@ mod tests {
     fn assert_compiles(code: &str) {
         let tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
         let prog = Program::from(&mut Stream::from(tokens)).expect("should not error");
-        let analysis = RichProg::analyze(prog);
+        let analysis = analyze_prog(&prog);
         ProgCompiler::compile(analysis, None, false, Path::new("/dev/null"), false)
             .expect("should not error");
     }
@@ -178,7 +178,8 @@ mod tests {
                     count: count,
                     f: do,
                 }
-            }"#,
+            }
+            "#,
         )
     }
 
@@ -242,6 +243,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "generics")]
     fn function_template_using_specs() {
         assert_compiles(
             r#"
@@ -276,6 +278,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "generics")]
     fn templated_methods() {
         assert_compiles(
             r#"
@@ -342,6 +345,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "generics")]
     fn nested_tmpl_params() {
         assert_compiles(
             r#"
@@ -365,6 +369,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "generics")]
     fn tmpl_param_type_remap() {
         assert_compiles(
             r#"
@@ -404,6 +409,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "generics")]
     fn templated_return_types() {
         assert_compiles(
             r#"
@@ -452,6 +458,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "generics")]
     fn tmpl_fn_used_as_var() {
         assert_compiles(
             r#"
@@ -475,6 +482,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "generics")]
     fn lambda_as_variable() {
         assert_compiles(
             r#"
@@ -497,9 +505,8 @@ mod tests {
         )
     }
 
-    // TODO: Make this work.
     #[test]
-    #[ignore]
+    #[cfg(feature = "generics")]
     fn lambda_as_argument() {
         assert_compiles(
             r#"
@@ -516,6 +523,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "generics")]
     fn tmpl_fn_with_only_fn_arg() {
         assert_compiles(
             r#"
@@ -530,6 +538,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "generics")]
     fn lambda_with_fn_arg_as_variable() {
         assert_compiles(
             r#"

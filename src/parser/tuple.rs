@@ -68,7 +68,7 @@ impl PartialEq for TupleType {
 
 impl TupleType {
     /// Creates a new tuple type with default start and end positions.
-    pub fn new(types: Vec<Type>) -> Self {
+    pub fn new_with_default_pos(types: Vec<Type>) -> Self {
         TupleType {
             field_types: types,
             start_pos: Position::default(),

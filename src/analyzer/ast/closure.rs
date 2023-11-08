@@ -3,12 +3,13 @@ use std::fmt::Formatter;
 
 use colored::*;
 
-use crate::analyzer::arg::RichArg;
-use crate::analyzer::cond::RichCond;
+use crate::analyzer::ast::arg::AArg;
+use crate::analyzer::ast::cond::ACond;
+use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::prog_context::{ProgramContext, Scope, ScopeKind};
-use crate::analyzer::r#type::{RichType, TypeId};
-use crate::analyzer::statement::RichStatement;
+use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::scope::{Scope, ScopeKind};
+use crate::analyzer::type_store::TypeKey;
 use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::arg::Argument;
@@ -18,11 +19,11 @@ use crate::parser::r#break::Break;
 use crate::parser::r#type::Type;
 use crate::{format_code, locatable_impl, util};
 
-/// Represents a semantically valid and type-rich closure.
+/// Represents a semantically valid and fully analyzed closure.
 #[derive(Debug, Clone)]
-pub struct RichClosure {
-    pub statements: Vec<RichStatement>,
-    pub ret_type_id: Option<TypeId>,
+pub struct AClosure {
+    pub statements: Vec<AStatement>,
+    pub ret_type_key: Option<TypeKey>,
     pub has_break: bool,
     pub has_continue: bool,
     pub has_return: bool,
@@ -30,27 +31,27 @@ pub struct RichClosure {
     end_pos: Position,
 }
 
-locatable_impl!(RichClosure);
+locatable_impl!(AClosure);
 
-impl fmt::Display for RichClosure {
+impl fmt::Display for AClosure {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{{...}}")
     }
 }
 
-impl PartialEq for RichClosure {
+impl PartialEq for AClosure {
     fn eq(&self, other: &Self) -> bool {
         util::vecs_eq(&self.statements, &other.statements)
-            && util::opts_eq(&self.ret_type_id, &other.ret_type_id)
+            && util::opts_eq(&self.ret_type_key, &other.ret_type_key)
     }
 }
 
-impl RichClosure {
+impl AClosure {
     /// Creates a new empty closure.
     pub fn new_empty() -> Self {
-        RichClosure {
+        AClosure {
             statements: vec![],
-            ret_type_id: None,
+            ret_type_key: None,
             has_break: false,
             has_continue: false,
             has_return: false,
@@ -59,63 +60,63 @@ impl RichClosure {
         }
     }
 
-    /// Performs semantic analysis on the given closure and returns a type-rich version of it.
+    /// Performs semantic analysis on the given closure and returns a type-a version of it.
     pub fn from(
         ctx: &mut ProgramContext,
-        closure: Closure,
+        closure: &Closure,
         kind: ScopeKind,
         args: Vec<Argument>,
         expected_ret_type: Option<Type>,
     ) -> Self {
-        let mut rich_args = vec![];
+        let mut a_args = vec![];
         for arg in args {
-            rich_args.push(RichArg::from(ctx, &arg));
+            a_args.push(AArg::from(ctx, &arg));
         }
 
-        let rich_expected_ret_type = match &expected_ret_type {
-            Some(typ) => Some(RichType::analyze(ctx, &typ)),
+        let a_expected_ret_type = match &expected_ret_type {
+            Some(typ) => Some(ctx.resolve_type(&typ)),
             None => None,
         };
 
-        RichClosure::from_analyzed(ctx, closure, kind, rich_args, rich_expected_ret_type)
+        AClosure::from_analyzed(ctx, closure, kind, a_args, a_expected_ret_type)
     }
 
     /// Performs semantic analysis on the given closure with the already-analyzed arguments and
     /// expected return type ID.
     pub fn from_analyzed(
         ctx: &mut ProgramContext,
-        closure: Closure,
+        closure: &Closure,
         kind: ScopeKind,
-        rich_args: Vec<RichArg>,
-        expected_ret_type_id: Option<TypeId>,
+        a_args: Vec<AArg>,
+        expected_ret_type_key: Option<TypeKey>,
     ) -> Self {
         let start_pos = closure.start_pos().clone();
         let end_pos = closure.end_pos().clone();
 
         // Add a new scope to the program context, since each closure gets its own scope.
-        let scope = Scope::new(kind.clone(), rich_args, expected_ret_type_id.clone());
+        let scope = Scope::new(kind, a_args, expected_ret_type_key);
         ctx.push_scope(scope);
 
         // Analyze all the statements in the closure and record return type.
-        let mut rich_statements = vec![];
+        let mut a_statements = vec![];
         let num_statements = closure.statements.len();
         let mut has_break = false;
         let mut has_continue = false;
         let mut has_return = false;
-        for (i, statement) in closure.statements.into_iter().enumerate() {
+        for (i, statement) in closure.statements.iter().enumerate() {
             // Analyze the statement.
-            let rich_statement = RichStatement::from(ctx, statement.clone());
+            let a_statement = AStatement::from(ctx, statement);
 
             // Check if the statement is a break, continue, or return, so we can mark this closure
             // as containing such statements.
-            match &rich_statement {
-                RichStatement::Break => {
+            match &a_statement {
+                AStatement::Break => {
                     has_break = true;
                 }
-                RichStatement::Continue => {
+                AStatement::Continue => {
                     has_continue = true;
                 }
-                RichStatement::Return(_) => {
+                AStatement::Return(_) => {
                     has_return = true;
                 }
                 _ => {}
@@ -126,27 +127,27 @@ impl RichClosure {
             // never be executed.
             if has_break || has_continue || has_return {
                 if i + 1 != num_statements {
-                    ctx.add_warn(AnalyzeWarning::new(
+                    ctx.insert_warn(AnalyzeWarning::new(
                         WarnKind::UnreachableCode,
                         format_code!("statements following {} will never be executed", statement)
                             .as_str(),
-                        &statement,
+                        statement,
                     ));
-                    rich_statements.push(rich_statement);
+                    a_statements.push(a_statement);
                     break;
                 }
             }
 
-            rich_statements.push(rich_statement);
+            a_statements.push(a_statement);
         }
 
         // TODO: handle closure result.
 
-        // Pop the scope from the stack before returning since we're exiting the closure scope.
         ctx.pop_scope();
-        RichClosure {
-            statements: rich_statements,
-            ret_type_id: expected_ret_type_id,
+
+        AClosure {
+            statements: a_statements,
+            ret_type_key: expected_ret_type_key,
             has_break,
             has_continue,
             has_return,
@@ -160,8 +161,8 @@ impl RichClosure {
 /// to the program context.
 pub fn check_closure_returns(
     ctx: &mut ProgramContext,
-    closure: &RichClosure,
-    expected_ret_type_id: &TypeId,
+    closure: &AClosure,
+    expected_ret_type_key: TypeKey,
     kind: &ScopeKind,
 ) {
     // Given that there is an expected return type, one of the following return conditions must
@@ -176,29 +177,39 @@ pub fn check_closure_returns(
     match kind {
         // If this closure is a function body, branch body, or inline closure, we need to ensure
         // that the final statement satisfies the return conditions.
-        ScopeKind::FnBody | ScopeKind::Branch | ScopeKind::Inline | ScopeKind::Tmpl => {
+        ScopeKind::FnBody | ScopeKind::BranchBody | ScopeKind::InlineClosure => {
             match closure.statements.last() {
                 // If it's a return, we're done checking. We don't need to validate the return
-                // itself because return statements are validated in `RichRet::from`.
-                Some(RichStatement::Return(_)) => {}
+                // itself because return statements are validated in `ARet::from`.
+                Some(AStatement::Return(_)) => {}
 
                 // If it's a conditional, make sure it is exhaustive and recurse on each branch.
-                Some(RichStatement::Conditional(cond)) => {
-                    check_cond_returns(ctx, &cond, expected_ret_type_id);
+                Some(AStatement::Conditional(cond)) => {
+                    check_cond_returns(ctx, &cond, expected_ret_type_key);
                 }
 
                 // If it's a loop, recurse on the loop body.
-                Some(RichStatement::Loop(closure)) => {
-                    check_closure_returns(ctx, &closure, expected_ret_type_id, &ScopeKind::Loop);
+                Some(AStatement::Loop(closure)) => {
+                    check_closure_returns(
+                        ctx,
+                        &closure,
+                        expected_ret_type_key,
+                        &ScopeKind::LoopBody,
+                    );
                 }
 
                 // If it's an inline closure, recurse on the closure.
-                Some(RichStatement::Closure(closure)) => {
-                    check_closure_returns(ctx, &closure, expected_ret_type_id, &ScopeKind::Inline);
+                Some(AStatement::Closure(closure)) => {
+                    check_closure_returns(
+                        ctx,
+                        &closure,
+                        expected_ret_type_key,
+                        &ScopeKind::InlineClosure,
+                    );
                 }
 
                 _ => {
-                    ctx.add_err(AnalyzeError::new(
+                    ctx.insert_err(AnalyzeError::new(
                         ErrorKind::MissingReturn,
                         "missing return statement",
                         closure,
@@ -209,12 +220,12 @@ pub fn check_closure_returns(
 
         // If this closure is a loop, we need to check that it contains a return anywhere
         // that satisfies the return conditions, and that it has no breaks.
-        ScopeKind::Loop => {
+        ScopeKind::LoopBody => {
             let mut contains_return = false;
             for statement in &closure.statements {
                 match statement {
-                    RichStatement::Break => {
-                        ctx.add_err(
+                    AStatement::Break => {
+                        ctx.insert_err(
                             AnalyzeError::new(
                                 ErrorKind::MissingReturn,
                                 "missing return statement",
@@ -226,20 +237,20 @@ pub fn check_closure_returns(
                             ),
                         );
                     }
-                    RichStatement::Return(_) => {
+                    AStatement::Return(_) => {
                         contains_return = true;
                     }
-                    RichStatement::Conditional(cond) => {
+                    AStatement::Conditional(cond) => {
                         if cond_has_any_return(cond) {
                             contains_return = true;
                         }
                     }
-                    RichStatement::Loop(closure) => {
+                    AStatement::Loop(closure) => {
                         if closure_has_any_return(closure) {
                             contains_return = true;
                         }
                     }
-                    RichStatement::Closure(closure) => {
+                    AStatement::Closure(closure) => {
                         if closure_has_any_return(closure) {
                             contains_return = true;
                         }
@@ -249,7 +260,7 @@ pub fn check_closure_returns(
             }
 
             if !contains_return {
-                ctx.add_err(
+                ctx.insert_err(
                     AnalyzeError::new(
                         ErrorKind::MissingReturn,
                         "missing return statement",
@@ -265,23 +276,23 @@ pub fn check_closure_returns(
 }
 
 /// Returns true if the closure contains a return at any level.
-fn closure_has_any_return(closure: &RichClosure) -> bool {
+fn closure_has_any_return(closure: &AClosure) -> bool {
     for statement in &closure.statements {
         match statement {
-            RichStatement::Return(_) => {
+            AStatement::Return(_) => {
                 return true;
             }
-            RichStatement::Conditional(cond) => {
+            AStatement::Conditional(cond) => {
                 if cond_has_any_return(cond) {
                     return true;
                 }
             }
-            RichStatement::Loop(closure) => {
+            AStatement::Loop(closure) => {
                 if closure_has_any_return(closure) {
                     return true;
                 }
             }
-            RichStatement::Closure(closure) => {
+            AStatement::Closure(closure) => {
                 if closure_has_any_return(closure) {
                     return true;
                 }
@@ -294,7 +305,7 @@ fn closure_has_any_return(closure: &RichClosure) -> bool {
 }
 
 /// Returns true if the conditional contains a return at any level.
-fn cond_has_any_return(cond: &RichCond) -> bool {
+fn cond_has_any_return(cond: &ACond) -> bool {
     for branch in &cond.branches {
         if closure_has_any_return(&branch.body) {
             return true;
@@ -306,9 +317,9 @@ fn cond_has_any_return(cond: &RichCond) -> bool {
 
 /// Checks that the given conditional is exhaustive and that each branch satisfies return
 /// conditions.
-fn check_cond_returns(ctx: &mut ProgramContext, cond: &RichCond, expected: &TypeId) {
+fn check_cond_returns(ctx: &mut ProgramContext, cond: &ACond, expected: TypeKey) {
     if !cond.is_exhaustive() {
-        ctx.add_err(
+        ctx.insert_err(
             AnalyzeError::new(ErrorKind::MissingReturn, "missing return statement", cond)
                 .with_detail(
                     "The last statement in this closure is a conditional that is not exhaustive",
@@ -318,7 +329,7 @@ fn check_cond_returns(ctx: &mut ProgramContext, cond: &RichCond, expected: &Type
     }
 
     for branch in &cond.branches {
-        check_closure_returns(ctx, &branch.body, expected, &ScopeKind::Branch);
+        check_closure_returns(ctx, &branch.body, expected, &ScopeKind::BranchBody);
     }
 }
 
@@ -326,7 +337,7 @@ fn check_cond_returns(ctx: &mut ProgramContext, cond: &RichCond, expected: &Type
 pub fn analyze_break(ctx: &mut ProgramContext, br: &Break) {
     // Make sure we are inside a loop closure.
     if !ctx.is_in_loop() {
-        ctx.add_err(AnalyzeError::new(
+        ctx.insert_err(AnalyzeError::new(
             ErrorKind::UnexpectedBreak,
             "cannot break from outside a loop",
             br,
@@ -338,7 +349,7 @@ pub fn analyze_break(ctx: &mut ProgramContext, br: &Break) {
 pub fn analyze_continue(ctx: &mut ProgramContext, cont: &Continue) {
     // Make sure we are inside a loop closure.
     if !ctx.is_in_loop() {
-        ctx.add_err(AnalyzeError::new(
+        ctx.insert_err(AnalyzeError::new(
             ErrorKind::UnexpectedContinue,
             "cannot continue from outside a loop",
             cont,

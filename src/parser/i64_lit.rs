@@ -27,17 +27,16 @@ impl Display for I64Lit {
 locatable_impl!(I64Lit);
 
 impl I64Lit {
-    /// Creates a new i64 literal with default (zero) start and end positions.
-    pub fn new_with_default_pos(value: i64) -> Self {
+    pub fn new_with_default_pos(i: i64) -> I64Lit {
         I64Lit {
-            value,
-            start_pos: Position::default(),
-            end_pos: Position::default(),
+            value: i,
+            start_pos: Default::default(),
+            end_pos: Default::default(),
         }
     }
 
     /// Attempts to parse an i64 literal from the token sequence.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<I64Lit> {
         match tokens.next() {
             Some(&Token {
                 kind: TokenKind::I64Literal(value),

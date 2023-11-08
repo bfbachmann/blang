@@ -47,7 +47,7 @@ pub enum Statement {
     ExternFns(Extern),
     Consts(ConstBlock),
     Impl(Impl),
-    Spec(Spec),
+    SpecDeclaration(Spec),
 }
 
 impl fmt::Display for Statement {
@@ -111,7 +111,7 @@ impl fmt::Display for Statement {
                     impl_.member_fns.len(),
                 )
             }
-            Statement::Spec(spec_) => {
+            Statement::SpecDeclaration(spec_) => {
                 write!(
                     f,
                     "spec {} {{ <{} functions> }}",
@@ -141,7 +141,7 @@ impl Locatable for Statement {
             Statement::ExternFns(e) => e.start_pos(),
             Statement::Consts(c) => c.start_pos(),
             Statement::Impl(i) => i.start_pos(),
-            Statement::Spec(t) => t.start_pos(),
+            Statement::SpecDeclaration(t) => t.start_pos(),
         }
     }
 
@@ -162,7 +162,7 @@ impl Locatable for Statement {
             Statement::ExternFns(e) => e.end_pos(),
             Statement::Consts(c) => c.end_pos(),
             Statement::Impl(i) => i.end_pos(),
-            Statement::Spec(t) => t.end_pos(),
+            Statement::SpecDeclaration(t) => t.end_pos(),
         }
     }
 }
@@ -371,7 +371,7 @@ impl Statement {
                 _,
             ) => {
                 let spec_ = Spec::from(tokens)?;
-                Ok(Statement::Spec(spec_))
+                Ok(Statement::SpecDeclaration(spec_))
             }
 
             // If the first token is `return`, it must be a return statement.

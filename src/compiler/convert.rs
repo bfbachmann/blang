@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use inkwell::context::Context;
 use inkwell::types::AsTypeRef;
 use inkwell::types::{
@@ -9,58 +7,55 @@ use inkwell::AddressSpace;
 use llvm_sys::core::LLVMFunctionType;
 use llvm_sys::prelude::LLVMTypeRef;
 
-use crate::analyzer::func_sig::RichFnSig;
-use crate::analyzer::r#enum::RichEnumType;
-use crate::analyzer::r#struct::RichStructType;
-use crate::analyzer::r#type::{RichType, TypeId};
-use crate::analyzer::tuple::RichTupleType;
+use crate::analyzer::ast::func::AFnSig;
+use crate::analyzer::ast::r#enum::AEnumType;
+use crate::analyzer::ast::r#struct::AStructType;
+use crate::analyzer::ast::r#type::AType;
+use crate::analyzer::ast::tuple::ATupleType;
+use crate::analyzer::type_store::TypeStore;
 
 /// Gets the LLVM basic type that corresponds to the given type.
 pub fn to_basic_type<'a>(
     ctx: &'a Context,
-    types: &HashMap<TypeId, RichType>,
-    typ: &RichType,
+    type_store: &TypeStore,
+    typ: &AType,
 ) -> BasicTypeEnum<'a> {
     match typ {
-        RichType::Bool => ctx.bool_type().as_basic_type_enum(),
+        AType::Bool => ctx.bool_type().as_basic_type_enum(),
 
-        RichType::I64 => ctx.i64_type().as_basic_type_enum(),
+        AType::I64 => ctx.i64_type().as_basic_type_enum(),
 
         // TODO: There has to be a better way of representing `void *`... but then again, maybe not.
         // LLVM doesn't actually care about the pointee type, so really all pointers are treated
         // equally.
-        RichType::Ptr => ctx
+        AType::Ptr => ctx
             .i64_type()
             .ptr_type(AddressSpace::default())
             .as_basic_type_enum(),
 
-        RichType::U64 => ctx.i64_type().as_basic_type_enum(),
+        AType::U64 => ctx.i64_type().as_basic_type_enum(),
 
-        RichType::Str => ctx
+        AType::Str => ctx
             .i32_type()
             .ptr_type(AddressSpace::default())
             .as_basic_type_enum(),
 
-        RichType::Struct(struct_type) => {
-            to_struct_type(ctx, types, struct_type).as_basic_type_enum()
+        AType::Struct(struct_type) => {
+            to_struct_type(ctx, type_store, struct_type).as_basic_type_enum()
         }
 
-        RichType::Enum(enum_type) => enum_to_struct_type(ctx, enum_type).as_basic_type_enum(),
+        AType::Enum(enum_type) => enum_to_struct_type(ctx, enum_type).as_basic_type_enum(),
 
-        RichType::Tuple(tuple_type) => {
-            tuple_to_struct_type(ctx, types, tuple_type).as_basic_type_enum()
+        AType::Tuple(tuple_type) => {
+            tuple_to_struct_type(ctx, type_store, tuple_type).as_basic_type_enum()
         }
 
-        RichType::Function(fn_sig) => to_fn_type(ctx, &types, fn_sig)
+        AType::Function(fn_sig) => to_fn_type(ctx, &type_store, fn_sig)
             .ptr_type(AddressSpace::default())
             .as_basic_type_enum(),
 
-        RichType::Unknown(name) => {
+        AType::Unknown(name) => {
             panic!("encountered unknown type {}", name)
-        }
-
-        RichType::Templated(param) => {
-            panic!("encountered templated type {}", param)
         }
     }
 }
@@ -68,14 +63,14 @@ pub fn to_basic_type<'a>(
 /// Converts the given tuple type to its corresponding LLVM struct type.
 pub fn tuple_to_struct_type<'a>(
     ctx: &'a Context,
-    types: &HashMap<TypeId, RichType>,
-    tuple_type: &RichTupleType,
+    type_store: &TypeStore,
+    tuple_type: &ATupleType,
 ) -> StructType<'a> {
     // Assemble the tuple field types.
     let ll_field_types: Vec<BasicTypeEnum> = tuple_type
-        .type_ids
+        .type_keys
         .iter()
-        .map(|t| to_basic_type(ctx, types, types.get(&t).unwrap()))
+        .map(|t| to_basic_type(ctx, type_store, type_store.must_get(*t)))
         .collect();
 
     // Create and return the LLVM struct type.
@@ -83,17 +78,13 @@ pub fn tuple_to_struct_type<'a>(
 }
 
 /// Converts the given function signature into an LLVM `FunctionType`.
-pub fn to_fn_type<'a>(
-    ctx: &'a Context,
-    types: &HashMap<TypeId, RichType>,
-    sig: &RichFnSig,
-) -> FunctionType<'a> {
+pub fn to_fn_type<'a>(ctx: &'a Context, type_store: &TypeStore, sig: &AFnSig) -> FunctionType<'a> {
     // Get return type.
-    let ret_type = match &sig.ret_type_id {
-        Some(type_id) => types.get(&type_id),
+    let ret_type = match &sig.ret_type_key {
+        Some(type_key) => Some(type_store.must_get(*type_key)),
         None => None,
     };
-    let mut ll_ret_type = to_any_type(ctx, types, ret_type);
+    let mut ll_ret_type = to_any_type(ctx, type_store, ret_type);
     let mut ll_arg_types: Vec<BasicMetadataTypeEnum> = vec![];
 
     // If the return type is a structured type, we need to add an extra argument to the beginning
@@ -108,20 +99,20 @@ pub fn to_fn_type<'a>(
     //      fn new_person(person: *Person)
     //
     // and the `person` pointer will be written to when assigning the return value.
-    let ret_type = match &sig.ret_type_id {
-        Some(type_id) => types.get(type_id),
+    let ret_type = match sig.ret_type_key {
+        Some(type_key) => Some(type_store.must_get(type_key)),
         None => None,
     };
     let extra_arg_type = match ret_type {
-        Some(RichType::Struct(struct_type)) => {
-            Some(to_struct_type(ctx, types, struct_type).ptr_type(AddressSpace::default()))
+        Some(AType::Struct(struct_type)) => {
+            Some(to_struct_type(ctx, type_store, struct_type).ptr_type(AddressSpace::default()))
         }
-        Some(RichType::Enum(enum_type)) => {
+        Some(AType::Enum(enum_type)) => {
             Some(enum_to_struct_type(ctx, enum_type).ptr_type(AddressSpace::default()))
         }
-        Some(RichType::Tuple(tuple_type)) => {
-            Some(tuple_to_struct_type(ctx, types, tuple_type).ptr_type(AddressSpace::default()))
-        }
+        Some(AType::Tuple(tuple_type)) => Some(
+            tuple_to_struct_type(ctx, type_store, tuple_type).ptr_type(AddressSpace::default()),
+        ),
         _ => None,
     };
 
@@ -134,10 +125,8 @@ pub fn to_fn_type<'a>(
 
     // Get arg types.
     for arg in &sig.args {
-        let arg_type = types
-            .get(&arg.type_id)
-            .expect(format!("error locating type {}", arg.type_id).as_str());
-        ll_arg_types.push(to_metadata_type_enum(ctx, types, arg_type));
+        let arg_type = type_store.must_get(arg.type_key);
+        ll_arg_types.push(to_metadata_type_enum(ctx, type_store, arg_type));
     }
 
     // Create the function type.
@@ -156,21 +145,21 @@ pub fn to_fn_type<'a>(
 /// Returns the LLVM basic types corresponding to the given struct's field types.
 fn get_struct_field_types<'a>(
     ctx: &'a Context,
-    types: &HashMap<TypeId, RichType>,
-    struct_type: &RichStructType,
+    type_store: &TypeStore,
+    struct_type: &AStructType,
 ) -> Vec<BasicTypeEnum<'a>> {
     struct_type
         .fields
         .iter()
-        .map(|field| to_basic_type(ctx, types, types.get(&field.type_id).unwrap()))
+        .map(|field| to_basic_type(ctx, type_store, type_store.must_get(field.type_key)))
         .collect()
 }
 
 /// Converts the given `struct_type` to an LLVM `StructType`.
 pub fn to_struct_type<'a>(
     ctx: &'a Context,
-    types: &HashMap<TypeId, RichType>,
-    struct_type: &RichStructType,
+    type_store: &TypeStore,
+    struct_type: &AStructType,
 ) -> StructType<'a> {
     // If the struct type already exists, just return it.
     if let Some(ll_struct_type) = ctx.get_struct_type(struct_type.name.as_str()) {
@@ -184,14 +173,14 @@ pub fn to_struct_type<'a>(
 
         // Assemble the struct field types. It's important that we do this after creating
         // the opaque struct type to prevent infinite recursion on type conversion.
-        let ll_field_types = get_struct_field_types(ctx, types, struct_type);
+        let ll_field_types = get_struct_field_types(ctx, type_store, struct_type);
 
         // Create and return the LLVM struct type.
         ll_struct_type.set_body(ll_field_types.as_slice(), false);
         ll_struct_type
     } else {
         // Assemble the struct field types.
-        let ll_field_types = get_struct_field_types(ctx, types, struct_type);
+        let ll_field_types = get_struct_field_types(ctx, type_store, struct_type);
 
         // Create and return the LLVM struct type.
         ctx.struct_type(ll_field_types.as_slice(), false)
@@ -199,7 +188,7 @@ pub fn to_struct_type<'a>(
 }
 
 /// Converts the given `enum_type` to an LLVM `StructType`.
-pub fn enum_to_struct_type<'a>(ctx: &'a Context, enum_type: &RichEnumType) -> StructType<'a> {
+pub fn enum_to_struct_type<'a>(ctx: &'a Context, enum_type: &AEnumType) -> StructType<'a> {
     // If the corresponding LLVM struct type already exists, just return it.
     if let Some(ll_struct_type) = ctx.get_struct_type(enum_type.name.as_str()) {
         return ll_struct_type;
@@ -221,38 +210,32 @@ pub fn enum_to_struct_type<'a>(ctx: &'a Context, enum_type: &RichEnumType) -> St
 /// Gets the LLVM "any" type that corresponds to the given type.
 pub fn to_any_type<'a>(
     ctx: &'a Context,
-    types: &HashMap<TypeId, RichType>,
-    typ: Option<&RichType>,
+    type_store: &TypeStore,
+    typ: Option<&AType>,
 ) -> AnyTypeEnum<'a> {
     match typ {
         None => ctx.void_type().as_any_type_enum(),
-        Some(t) => to_basic_type(ctx, types, t).as_any_type_enum(),
+        Some(t) => to_basic_type(ctx, type_store, t).as_any_type_enum(),
     }
 }
 
 /// Gets the LLVM metadata type that corresponds to the given type.
 pub fn to_metadata_type_enum<'a>(
     ctx: &'a Context,
-    types: &HashMap<TypeId, RichType>,
-    typ: &RichType,
+    type_store: &TypeStore,
+    typ: &AType,
 ) -> BasicMetadataTypeEnum<'a> {
     match typ {
-        RichType::I64 | RichType::U64 => BasicMetadataTypeEnum::from(ctx.i64_type()),
-        RichType::Ptr => {
-            BasicMetadataTypeEnum::from(ctx.i64_type().ptr_type(AddressSpace::default()))
-        }
-        RichType::Bool => BasicMetadataTypeEnum::from(ctx.bool_type()),
-        RichType::Str => {
-            BasicMetadataTypeEnum::from(ctx.i32_type().ptr_type(AddressSpace::default()))
-        }
-        RichType::Struct(_) | RichType::Tuple(_) | RichType::Enum(_) => {
-            BasicMetadataTypeEnum::from(
-                to_basic_type(ctx, types, typ).ptr_type(AddressSpace::default()),
-            )
-        }
-        RichType::Function(func) => {
-            let fn_type = types.get(&func.type_id).unwrap();
-            BasicMetadataTypeEnum::from(to_basic_type(ctx, types, fn_type))
+        AType::I64 | AType::U64 => BasicMetadataTypeEnum::from(ctx.i64_type()),
+        AType::Ptr => BasicMetadataTypeEnum::from(ctx.i64_type().ptr_type(AddressSpace::default())),
+        AType::Bool => BasicMetadataTypeEnum::from(ctx.bool_type()),
+        AType::Str => BasicMetadataTypeEnum::from(ctx.i32_type().ptr_type(AddressSpace::default())),
+        AType::Struct(_) | AType::Tuple(_) | AType::Enum(_) => BasicMetadataTypeEnum::from(
+            to_basic_type(ctx, type_store, typ).ptr_type(AddressSpace::default()),
+        ),
+        AType::Function(func) => {
+            let fn_type = type_store.must_get(func.type_key);
+            BasicMetadataTypeEnum::from(to_basic_type(ctx, type_store, fn_type))
         }
         other => panic!("unsupported type {}", other),
     }
