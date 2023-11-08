@@ -292,7 +292,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
             Err(CompileError::new(
                 ErrorKind::FnVerificationFailed,
-                format_code!("failed to verify {}", func.signature).as_str(),
+                format_code!("failed to verify function {}", func.signature.full_name()).as_str(),
             ))
         }
     }

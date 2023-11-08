@@ -28,6 +28,7 @@ pub struct ProgramAnalysis {
 }
 
 impl ProgramAnalysis {
+    /// Creates a new program analysis from the given program and program context.
     pub fn from(ctx: ProgramContext, prog: AProgram) -> ProgramAnalysis {
         // Extract and sort errors and warnings by their location in the source file.
         let mut errors: Vec<(Position, AnalyzeError)> =
@@ -48,15 +49,27 @@ impl ProgramAnalysis {
 }
 
 pub struct ProgramContext {
+    /// Stores all types that are successfully analyzed during semantic analysis.
     type_store: TypeStore,
     /// Maps primitive type names to their type keys.
     primitive_type_keys: HashMap<String, TypeKey>,
+    /// Contains the names of all types that have been marked as "invalid" by the analyzer. At the
+    /// time of writing this, this should only be used for illegal cyclical types with infinite
+    /// size.
     invalid_type_names: HashSet<String>,
 
+    /// Each scope on this stack corresponds to a scope in the program. Each scope will store
+    /// information local to only that scope like variables (symbols).
     stack: VecDeque<Scope>,
+    /// Tracks the indices of function body scopes so we can locate them easily when searching the
+    /// stack.
     fn_scope_indices: Vec<usize>,
+    /// Tracks the indices of loop body scopes so we can locate them easily when searching the
+    /// stack.
     loop_scope_indices: Vec<usize>,
 
+    /// Will contain the type key corresponding to the current `spec` or `impl` block that is being
+    /// analyzed, if any.
     cur_this_type_key: Option<TypeKey>,
 
     /// Maps un-analyzed struct names to un-analyzed structs.
@@ -81,11 +94,15 @@ pub struct ProgramContext {
     /// Maps tuple type to tuple type key.
     tuple_type_keys: HashMap<ATupleType, TypeKey>,
 
+    /// Collects warnings emitted by the analyzer during analysis.
     warnings: HashMap<Position, AnalyzeWarning>,
+    /// Collects errors emitted by the analyzer during analysis.
     errors: HashMap<Position, AnalyzeError>,
 }
 
 impl ProgramContext {
+    /// Creates a new program context. The program context will be initialized with stack containing
+    /// a single scope representing the global scope and a type store containing primitive types.
     pub fn new() -> Self {
         let mut type_store = TypeStore::new();
         let mut primitive_type_keys = HashMap::new();
@@ -119,6 +136,8 @@ impl ProgramContext {
         }
     }
 
+    /// Calls `visit` on each scope on the stack starting from the current scope and ending at the
+    /// global scope until `visit` returns `Some`.
     fn search_stack_ref<F, R>(&self, visit: F) -> Option<&R>
     where
         F: Fn(&Scope) -> Option<&R>,
@@ -132,6 +151,8 @@ impl ProgramContext {
         None
     }
 
+    /// Does the same thing as `search_stack_ref`, except allows `visit` to return an owned value
+    /// rather than a reference.
     fn search_stack<F, R>(&self, visit: F) -> Option<R>
     where
         F: Fn(&Scope) -> Option<R>,
@@ -145,6 +166,7 @@ impl ProgramContext {
         None
     }
 
+    /// Inserts a mapping from `typ` to `key` into the current scope.
     fn insert_type_key(&mut self, typ: Type, key: TypeKey) {
         self.stack
             .back_mut()
@@ -152,6 +174,8 @@ impl ProgramContext {
             .insert_type_key(typ.clone(), key);
     }
 
+    /// Emits an error and returns false if there already exists a type with the given name.
+    /// Otherwise, returns true.
     fn check_type_name_not_used<T: Locatable>(&mut self, name: &str, loc: &T) -> bool {
         if self.primitive_type_keys.contains_key(name)
             || self.unchecked_struct_types.contains_key(name)
@@ -170,23 +194,28 @@ impl ProgramContext {
         return true;
     }
 
+    /// Returns a reference to the type store.
     pub fn type_store(&self) -> &TypeStore {
         &self.type_store
     }
 
+    /// Returns a mapping from error start position to the error that occurred there.
     pub fn errors(&self) -> &HashMap<Position, AnalyzeError> {
         &self.errors
     }
 
+    /// Returns a mapping from warning start position to the warning that occurred there.
     #[cfg(test)]
     pub fn warnings(&self) -> &HashMap<Position, AnalyzeWarning> {
         &self.warnings
     }
 
+    /// Inserts an error into the program context.
     pub fn insert_err(&mut self, err: AnalyzeError) {
         self.errors.insert(err.start_pos.clone(), err);
     }
 
+    /// Inserts a warning into the program context.
     pub fn insert_warn(&mut self, warn: AnalyzeWarning) {
         self.warnings.insert(warn.start_pos.clone(), warn);
     }
@@ -203,6 +232,10 @@ impl ProgramContext {
         }
     }
 
+    /// Inserts the given analyzed type into the program context. This function will also handle
+    /// tracking struct and enum types by name. If another matching struct, enum, or tuple type
+    /// already exists, `typ` will not be inserted and the type key for the existing type will be
+    /// returned.
     pub fn insert_type(&mut self, typ: AType) -> TypeKey {
         let (maybe_type_name, is_struct, is_enum, maybe_tuple_type) = match &typ {
             AType::Struct(struct_type) => {
@@ -262,6 +295,9 @@ impl ProgramContext {
         type_key
     }
 
+    /// Tries to map the given un-analyzed type to a type key and return that type key. If there is
+    /// no existing mapping for `typ`, performs semantic analysis on `typ`, inserts it into the
+    /// type store and returns the resulting type key.
     pub fn resolve_type(&mut self, typ: &Type) -> TypeKey {
         if let Type::Unresolved(unresolved_type) = typ {
             if unresolved_type.name == "This" {
@@ -301,6 +337,7 @@ impl ProgramContext {
         key
     }
 
+    /// Tries to locate and return the type key associated with the type with the given name.
     pub fn get_type_key_by_type_name(&self, name: &str) -> Option<TypeKey> {
         if let Some(key) = self.primitive_type_keys.get(name) {
             return Some(*key);
@@ -310,39 +347,48 @@ impl ProgramContext {
         self.search_stack(|scope| scope.get_type_key(&typ))
     }
 
+    /// Returns the type key for the analyzer-internal `<unknown>` type.
     pub fn unknown_type_key(&self) -> TypeKey {
         *self.primitive_type_keys.get("<unknown>").unwrap()
     }
 
+    /// Returns the type key for the analyzer-internal `<none>` type.
     #[cfg(test)]
     pub fn none_type_key(&self) -> TypeKey {
         *self.primitive_type_keys.get("<none>").unwrap()
     }
 
+    /// Returns the type key for the `bool` type.
     pub fn bool_type_key(&self) -> TypeKey {
         *self.primitive_type_keys.get("bool").unwrap()
     }
 
+    /// Returns the type key for the `i64` type.
     pub fn i64_type_key(&self) -> TypeKey {
         *self.primitive_type_keys.get("i64").unwrap()
     }
 
+    /// Returns the type key for the `u64` type.
     pub fn u64_type_key(&self) -> TypeKey {
         *self.primitive_type_keys.get("u64").unwrap()
     }
 
+    /// Returns the type key for the `str` type.
     pub fn str_type_key(&self) -> TypeKey {
         *self.primitive_type_keys.get("str").unwrap()
     }
 
+    /// Returns the type key for the `ptr` type.
     pub fn ptr_type_key(&self) -> TypeKey {
         *self.primitive_type_keys.get("ptr").unwrap()
     }
 
+    /// Returns the type key for the special `This` type.
     pub fn this_type_key(&self) -> TypeKey {
         *self.primitive_type_keys.get("This").unwrap()
     }
 
+    /// Pushes `scope` onto the stack.
     pub fn push_scope(&mut self, scope: Scope) {
         match &scope.kind {
             ScopeKind::FnBody => self.fn_scope_indices.push(self.stack.len()),
@@ -353,6 +399,7 @@ impl ProgramContext {
         self.stack.push_back(scope);
     }
 
+    /// Pops and returns the current scope from the stack.
     pub fn pop_scope(&mut self) -> Scope {
         let scope = self.stack.pop_back().unwrap();
 
@@ -369,14 +416,18 @@ impl ProgramContext {
         scope
     }
 
+    /// Returns the type associated with the given key. Panics if there is no such type.
     pub fn must_get_type(&self, type_key: TypeKey) -> &AType {
         self.type_store.must_get(type_key)
     }
 
+    /// Replaces the existing type associated with `type_key` with `typ`.
     pub fn replace_type(&mut self, type_key: TypeKey, typ: AType) {
         self.type_store.replace(type_key, typ);
     }
 
+    /// Tries to insert the un-analyzed struct type into the program context. Does nothing if the
+    /// struct type has a type name that is already used.
     pub fn try_insert_unchecked_struct_type(&mut self, struct_type: StructType) {
         if self.check_type_name_not_used(struct_type.name.as_str(), &struct_type) {
             self.unchecked_struct_types
@@ -384,6 +435,8 @@ impl ProgramContext {
         }
     }
 
+    /// Tries to insert the un-analyzed enum type into the program context. Does nothing if the
+    /// enum type has a type name that is already used.
     pub fn try_insert_unchecked_enum_type(&mut self, enum_type: EnumType) {
         if self.check_type_name_not_used(enum_type.name.as_str(), &enum_type) {
             self.unchecked_enum_types
@@ -391,20 +444,25 @@ impl ProgramContext {
         }
     }
 
+    /// Tries to insert the un-analyzed spec into the program context. Does nothing if the spec
+    /// has a name that is already used.
     pub fn try_insert_unchecked_spec(&mut self, spec: Spec) {
         if self.check_type_name_not_used(spec.name.as_str(), &spec) {
             self.unchecked_specs.insert(spec.name.clone(), spec);
         }
     }
 
+    /// Removes the un-analyzed struct type with the given name from the program context.
     pub fn remove_unchecked_struct_type(&mut self, name: &str) {
         self.unchecked_struct_types.remove(name);
     }
 
+    /// Removes the un-analyzed enum type with the given name from the program context.
     pub fn remove_unchecked_enum_type(&mut self, name: &str) {
         self.unchecked_enum_types.remove(name);
     }
 
+    /// Marks the given type name as invalid.
     pub fn insert_invalid_type_name(&mut self, name: &str) {
         self.invalid_type_names.insert(name.to_string());
     }
@@ -414,22 +472,30 @@ impl ProgramContext {
         self.invalid_type_names.contains(name)
     }
 
+    /// Inserts the given function signature into the program context, thereby declaring it as
+    /// a defined function. This is done so we can locate function signatures before having
+    /// analyzed their bodies.
     pub fn insert_defined_fn_sig(&mut self, sig: AFnSig) {
         assert!(self.defined_fn_sigs.insert(sig.name.clone(), sig).is_none());
     }
 
+    /// Gets the signatures for the function with the given name.
     pub fn get_defined_fn_sig(&self, name: &str) -> Option<&AFnSig> {
         self.defined_fn_sigs.get(name)
     }
 
+    /// Sets the type key associated with the current `impl` or `spec` type so it can be retrieved
+    /// during analysis of the `impl` or `spec` body.
     pub fn set_cur_this_type_key(&mut self, maybe_type_key: Option<TypeKey>) {
         self.cur_this_type_key = maybe_type_key;
     }
 
+    /// Returns the type key associated with the current `impl` or `spec` type being analyzed.
     pub fn get_cur_this_type_key(&mut self) -> Option<TypeKey> {
         self.cur_this_type_key
     }
 
+    /// Returns the member function with the given name on the type associated with `type_key`.
     pub fn get_member_fn(&self, type_key: TypeKey, fn_name: &str) -> Option<&AFnSig> {
         match self.type_member_fn_sigs.get(&type_key) {
             Some(member_fns) => member_fns.get(fn_name),
@@ -437,6 +503,7 @@ impl ProgramContext {
         }
     }
 
+    /// Inserts `member_fn_sig` as a member function on the type that corresponds to `type_key`.
     pub fn insert_member_fn(&mut self, type_key: TypeKey, member_fn_sig: AFnSig) {
         match self.type_member_fn_sigs.get_mut(&type_key) {
             Some(mem_fns) => {
@@ -451,10 +518,12 @@ impl ProgramContext {
         };
     }
 
+    /// Returns the un-analyzed struct type with the given name.
     pub fn get_unchecked_struct_type(&self, name: &str) -> Option<&StructType> {
         self.unchecked_struct_types.get(name)
     }
 
+    /// Returns the un-analyzed enum type with the given name.
     pub fn get_unchecked_enum_type(&self, name: &str) -> Option<&EnumType> {
         self.unchecked_enum_types.get(name)
     }

@@ -136,7 +136,7 @@ impl AFnCall {
                     .with_detail(
                         format_code!(
                             "Member function {} on type {} does not take {} as its first argument.",
-                            fn_sig,
+                            fn_sig.display(ctx),
                             fn_sig.maybe_impl_type_key.unwrap(),
                             "this",
                         )
