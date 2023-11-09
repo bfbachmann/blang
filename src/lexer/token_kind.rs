@@ -18,6 +18,7 @@ pub enum TokenKind {
 
     // Unary operators
     LogicalNot,
+    Reference,
 
     // Variable assignment
     Equal,
@@ -147,6 +148,7 @@ impl Clone for TokenKind {
             TokenKind::As => TokenKind::As,
             TokenKind::DollarSign => TokenKind::DollarSign,
             TokenKind::Like => TokenKind::Like,
+            TokenKind::Reference => TokenKind::Reference,
         }
     }
 }
@@ -230,16 +232,14 @@ impl TokenKind {
             TokenKind::As => "as".to_string(),
             TokenKind::DollarSign => "$".to_string(),
             TokenKind::Like => "like".to_string(),
+            TokenKind::Reference => "&".to_string(),
         }
     }
 
     /// Returns false if the token, when lexed, could possibly be a part of a larger token and true
     /// otherwise.
     fn is_greedy(&self) -> bool {
-        match self {
-            TokenKind::Add | TokenKind::Subtract => true,
-            _ => false,
-        }
+        matches!(self, TokenKind::Add | TokenKind::Subtract)
     }
 
     /// Finds the first valid TokenKind in the slice and the index in the slice at which the token
@@ -330,6 +330,7 @@ impl TokenKind {
             (TokenKind::As.to_string(), TokenKind::As),
             (TokenKind::DollarSign.to_string(), TokenKind::DollarSign),
             (TokenKind::Like.to_string(), TokenKind::Like),
+            (TokenKind::Reference.to_string(), TokenKind::Reference),
         ]);
 
         // Trim syntactically meaningless whitespace.

@@ -174,6 +174,7 @@ impl Expression {
     ///  - a unary operator followed by a composite expression (`<unary_op> <comp_expr>`)
     ///  - struct initialization (see `StructInit::from`)
     ///  - enum initialization (see `EnumInit::from`)
+    ///  - tuple initialization (see `TupleInit::from`)
     ///  - a `sizeof` expression (see `SizeOf::from`)
     fn from_basic(tokens: &mut Stream<Token>, is_arg: bool) -> ParseResult<Option<Expression>> {
         match tokens.peek_next() {

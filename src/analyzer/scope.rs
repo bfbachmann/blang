@@ -20,7 +20,7 @@ impl ScopedSymbol {
     pub fn new(name: &str, type_key: TypeKey, is_mut: bool, is_arg: bool) -> Self {
         ScopedSymbol {
             name: name.to_string(),
-            type_key: type_key,
+            type_key,
             is_mut,
             is_arg,
             is_const: false,

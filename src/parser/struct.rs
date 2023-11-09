@@ -155,7 +155,7 @@ impl StructType {
             });
         }
 
-        // Make sure to sort the fields by name so two equivalent struct types if different field
+        // Make sure to sort the fields by name so two equivalent struct types with different field
         // orders still look the same.
         fields.sort_by(|f1, f2| f1.name.cmp(&f2.name));
         Ok(StructType {

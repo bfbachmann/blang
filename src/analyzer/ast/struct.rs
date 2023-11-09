@@ -134,6 +134,15 @@ impl AStructType {
             });
         }
 
+        // Now sort struct fields by size. The fields should already be sorted alphabetically, so
+        // ties in their size are broken by lexicographical order. This is done to save memory by
+        // reducing the need for padding between struct fields in memory.
+        fields.sort_by(|f1, f2| {
+            let type1 = ctx.must_get_type(f1.type_key);
+            let type2 = ctx.must_get_type(f2.type_key);
+            type2.size_bytes(ctx).cmp(&type1.size_bytes(ctx))
+        });
+
         let a_struct = AStructType {
             name: struct_type.name.clone(),
             fields,

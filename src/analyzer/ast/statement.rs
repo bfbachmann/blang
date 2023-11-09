@@ -522,6 +522,9 @@ mod tests {
         let mut ctx = ProgramContext::new();
         let result = analyze_statement(raw, &mut ctx);
         assert!(ctx.errors().is_empty());
+
+        // Make sure the struct fields are all present and in the right order (from largest field
+        // to smallest with ties broken by lexicographical order).
         assert_eq!(
             result,
             AStatement::StructTypeDeclaration(AStructType {
@@ -532,12 +535,12 @@ mod tests {
                         type_key: ctx.i64_type_key(),
                     },
                     AField {
-                        name: "is_even".to_string(),
-                        type_key: ctx.bool_type_key(),
-                    },
-                    AField {
                         name: "message".to_string(),
                         type_key: ctx.str_type_key(),
+                    },
+                    AField {
+                        name: "is_even".to_string(),
+                        type_key: ctx.bool_type_key(),
                     },
                 ],
             })
