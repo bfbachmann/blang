@@ -16,6 +16,7 @@ pub struct ScopedSymbol {
 }
 
 impl ScopedSymbol {
+    /// Creates a new symbol with the given type key.
     pub fn new(name: &str, type_key: TypeKey, is_mut: bool, is_arg: bool) -> Self {
         ScopedSymbol {
             name: name.to_string(),
@@ -26,6 +27,7 @@ impl ScopedSymbol {
         }
     }
 
+    /// Creates a new symbol representing a constant with the given type key.
     pub fn new_const(name: &str, type_key: TypeKey) -> Self {
         ScopedSymbol {
             name: name.to_string(),
@@ -57,8 +59,11 @@ impl fmt::Display for ScopeKind {
     }
 }
 
+/// Represents a scope (generally a closure) in which variables and types can be defined
+/// or resolved.
 pub struct Scope {
     pub kind: ScopeKind,
+    /// Contains symbols defined in this scope.
     symbols: HashMap<String, ScopedSymbol>,
     /// Maps unchecked types from the parser to type keys that can be used to look up the
     /// corresponding analyzed types. This is just here so we can avoid re-analyzing the same
