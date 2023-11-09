@@ -134,9 +134,9 @@ fn tuple_to_struct_type<'ctx>(
 ) -> StructType<'ctx> {
     // Assemble the tuple field types.
     let ll_field_types: Vec<BasicTypeEnum> = tuple_type
-        .type_keys
+        .fields
         .iter()
-        .map(|t| to_basic_type(ctx, type_store, type_store.must_get(*t)))
+        .map(|f| to_basic_type(ctx, type_store, type_store.must_get(f.type_key)))
         .collect();
 
     // Create and return the LLVM struct type.

@@ -14,7 +14,7 @@ use crate::parser::r#type::Type;
 use crate::{format_code, util};
 
 /// Represents a semantically valid and type-rich struct field.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct AField {
     pub name: String,
     pub type_key: TypeKey,

@@ -258,8 +258,8 @@ impl AType {
             }
 
             AType::Tuple(t) => {
-                for type_key in &t.type_keys {
-                    let field_type = ctx.must_get_type(*type_key);
+                for field in &t.fields {
+                    let field_type = ctx.must_get_type(field.type_key);
                     if field_type == typ {
                         hierarchy.push(field_type);
                         return true;
@@ -339,8 +339,8 @@ impl AType {
 
             AType::Tuple(tuple_type) => {
                 let mut size = 0;
-                for type_key in &tuple_type.type_keys {
-                    let field_type = ctx.must_get_type(*type_key);
+                for field in &tuple_type.fields {
+                    let field_type = ctx.must_get_type(field.type_key);
                     size += field_type.size_bytes(ctx)
                 }
 

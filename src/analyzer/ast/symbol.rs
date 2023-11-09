@@ -329,8 +329,8 @@ impl AMemberAccess {
             AType::Struct(struct_type) => struct_type.get_field_type_key(member_name.as_str()),
             AType::Tuple(tuple_type) => {
                 let field_index = member_name.parse::<usize>().unwrap();
-                match tuple_type.type_keys.get(field_index) {
-                    Some(i) => Some(*i),
+                match tuple_type.get_field_type_key(field_index) {
+                    Some(i) => Some(i),
                     None => None,
                 }
             }

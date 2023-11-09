@@ -442,9 +442,10 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 let ll_src_val_type = self.type_converter.get_basic_type(type_key);
 
                 // We need to copy the tuple fields recursively one by one.
-                for (ll_field_index, field_type_key) in tuple_type.type_keys.iter().enumerate() {
-                    let field_type = self.type_store.must_get(*field_type_key);
-                    let ll_field_type = self.type_converter.get_basic_type(*field_type_key);
+                for (ll_field_index, field) in tuple_type.fields.iter().enumerate() {
+                    let field_type_key = field.type_key;
+                    let field_type = self.type_store.must_get(field_type_key);
+                    let ll_field_type = self.type_converter.get_basic_type(field_type_key);
 
                     // Get a pointer to the source struct field.
                     let ll_src_field_ptr = self
@@ -473,7 +474,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                         self.copy_value(
                             ll_src_field_ptr.as_basic_value_enum(),
                             ll_dst_field_ptr,
-                            *field_type_key,
+                            field_type_key,
                         );
                     } else {
                         // Load the field value from the pointer.
@@ -484,7 +485,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                         );
 
                         // Copy the value to the target field pointer.
-                        self.copy_value(ll_src_field_val, ll_dst_field_ptr, *field_type_key)
+                        self.copy_value(ll_src_field_val, ll_dst_field_ptr, field_type_key)
                     }
                 }
             }
@@ -560,13 +561,13 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                     )
                     .unwrap()
             }
-            AType::Tuple(_) => {
+            AType::Tuple(tuple_type) => {
                 // Get a pointer to the tuple field at the computed index.
                 self.builder
                     .build_struct_gep(
                         self.type_converter.get_struct_type(var_type_key),
                         ll_ptr,
-                        member_name.parse::<u32>().unwrap(),
+                        tuple_type.get_field_index(member_name) as u32,
                         format!("{}_ptr", member_name).as_str(),
                     )
                     .unwrap()
@@ -1039,7 +1040,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
             // Compile the expression and copy its value to the struct field pointer.
             let ll_field_val = self.compile_expr(field_val);
-            let field_type_key = *tuple_type.type_keys.get(i).unwrap();
+            let field_type_key = tuple_type.fields.get(i).unwrap().type_key;
             self.copy_value(ll_field_val, ll_field_ptr, field_type_key);
         }
 
