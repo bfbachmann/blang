@@ -29,7 +29,7 @@ use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::compiler::context::{
     BranchContext, CompilationContext, FnContext, LoopContext, StatementContext,
 };
-use crate::compiler::convert;
+use crate::compiler::convert::TypeConverter;
 use crate::compiler::error::{CompileError, CompileResult, ErrorKind};
 use crate::format_code;
 use crate::parser::op::Operator;
@@ -41,6 +41,7 @@ pub struct FnCompiler<'a, 'ctx> {
     fpm: &'a PassManager<FunctionValue<'ctx>>,
     module: &'a Module<'ctx>,
     type_store: &'a TypeStore,
+    type_converter: &'a mut TypeConverter<'ctx>,
     consts: &'a HashMap<String, AConst>,
     vars: HashMap<String, PointerValue<'ctx>>,
     fn_value: Option<FunctionValue<'ctx>>,
@@ -56,6 +57,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         fpm: &'a PassManager<FunctionValue<'ctx>>,
         module: &'a Module<'ctx>,
         type_store: &'a TypeStore,
+        type_converter: &'a mut TypeConverter<'ctx>,
         consts: &'a HashMap<String, AConst>,
         func: &AFn,
     ) -> CompileResult<FunctionValue<'ctx>> {
@@ -65,6 +67,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             fpm,
             module,
             type_store,
+            type_converter,
             consts,
             vars: HashMap::new(),
             fn_value: None,
@@ -258,7 +261,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 self.vars
                     .insert(arg.name.to_string(), ll_arg_val.into_pointer_value());
             } else {
-                self.create_var(arg.name.as_str(), arg_type, ll_arg_val);
+                self.create_var(arg.name.as_str(), arg.type_key, ll_arg_val);
             }
         }
 
@@ -297,17 +300,17 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
     }
 
-    /// Allocates space on the stack for a new variable of type `typ` and writes `ll_val` to the
-    /// allocated memory. Also stores a pointer to the allocated memory in `self.vars` with `name`.
-    /// Returns a pointer to the new variable.
+    /// Allocates space on the stack for a new variable of the type corresponding to `type_key` and
+    /// writes `ll_val` to the allocated memory. Also stores a pointer to the allocated memory in
+    /// `self.vars` with `name`. Returns a pointer to the new variable.
     fn create_var(
         &mut self,
         name: &str,
-        typ: &AType,
+        type_key: TypeKey,
         ll_val: BasicValueEnum<'ctx>,
     ) -> PointerValue<'ctx> {
-        let ll_dst_ptr = self.create_entry_alloc(name, typ, ll_val);
-        self.copy_value(ll_val, ll_dst_ptr, typ);
+        let ll_dst_ptr = self.create_entry_alloc(name, type_key, ll_val);
+        self.copy_value(ll_val, ll_dst_ptr, type_key);
         self.vars.insert(name.to_string(), ll_dst_ptr);
         ll_dst_ptr
     }
@@ -322,8 +325,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
         // Most primitive values can be assigned (i.e. copied) with a store instruction. Composite
         // values like structs need to be copied differently.
-        let var_type = self.type_store.must_get(assign.val.type_key);
-        self.copy_value(ll_expr_val, ll_var_ptr, var_type);
+        self.copy_value(ll_expr_val, ll_var_ptr, assign.val.type_key);
     }
 
     /// Copies the value `ll_src_val` of type `typ` to the address pointed to by `ll_dst_ptr`.
@@ -331,17 +333,18 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         &mut self,
         ll_src_val: BasicValueEnum<'ctx>,
         ll_dst_ptr: PointerValue<'ctx>,
-        typ: &AType,
+        type_key: TypeKey,
     ) {
+        let typ = self.type_store.must_get(type_key);
+
         match typ {
             AType::Struct(struct_type) => {
-                let ll_src_val_type = convert::to_basic_type(self.ctx, self.type_store, typ);
+                let ll_src_val_type = self.type_converter.get_basic_type(type_key);
 
                 // We need to copy the struct fields recursively one by one.
                 for field in &struct_type.fields {
                     let field_type = self.type_store.must_get(field.type_key);
-                    let ll_field_type =
-                        convert::to_basic_type(self.ctx, self.type_store, field_type);
+                    let ll_field_type = self.type_converter.get_basic_type(field.type_key);
                     let ll_field_index = struct_type.get_field_index(&field.name).unwrap() as u32;
 
                     // Get a pointer to the source struct field.
@@ -371,7 +374,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                         self.copy_value(
                             ll_src_field_ptr.as_basic_value_enum(),
                             ll_dst_field_ptr,
-                            field_type,
+                            field.type_key,
                         );
                     } else {
                         // Load the field value from the pointer.
@@ -382,13 +385,13 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                         );
 
                         // Copy the value to the target field pointer.
-                        self.copy_value(ll_src_field_val, ll_dst_field_ptr, field_type)
+                        self.copy_value(ll_src_field_val, ll_dst_field_ptr, field.type_key)
                     }
                 }
             }
 
             AType::Enum(enum_type) => {
-                let ll_src_val_type = convert::to_basic_type(self.ctx, self.type_store, typ);
+                let ll_src_val_type = self.type_converter.get_basic_type(type_key);
 
                 // Copy the enum number.
                 let ll_enum_number = self.builder.build_load(
@@ -436,13 +439,12 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             }
 
             AType::Tuple(tuple_type) => {
-                let ll_src_val_type = convert::to_basic_type(self.ctx, self.type_store, typ);
+                let ll_src_val_type = self.type_converter.get_basic_type(type_key);
 
                 // We need to copy the tuple fields recursively one by one.
-                for (ll_field_index, type_key) in tuple_type.type_keys.iter().enumerate() {
-                    let field_type = self.type_store.must_get(*type_key);
-                    let ll_field_type =
-                        convert::to_basic_type(self.ctx, self.type_store, field_type);
+                for (ll_field_index, field_type_key) in tuple_type.type_keys.iter().enumerate() {
+                    let field_type = self.type_store.must_get(*field_type_key);
+                    let ll_field_type = self.type_converter.get_basic_type(*field_type_key);
 
                     // Get a pointer to the source struct field.
                     let ll_src_field_ptr = self
@@ -471,7 +473,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                         self.copy_value(
                             ll_src_field_ptr.as_basic_value_enum(),
                             ll_dst_field_ptr,
-                            field_type,
+                            *field_type_key,
                         );
                     } else {
                         // Load the field value from the pointer.
@@ -482,7 +484,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                         );
 
                         // Copy the value to the target field pointer.
-                        self.copy_value(ll_src_field_val, ll_dst_field_ptr, field_type)
+                        self.copy_value(ll_src_field_val, ll_dst_field_ptr, *field_type_key)
                     }
                 }
             }
@@ -522,11 +524,12 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
         // Load the value from the pointer (unless its a composite value that is passed with
         // pointers, or a pointer to a module-level function).
-        let var_type = self.type_store.must_get(var.get_type_key());
+        let var_type_key = var.get_type_key();
+        let var_type = self.type_store.must_get(var_type_key);
         if var_type.is_composite() || self.is_var_module_fn(var) {
             ll_var_ptr.as_basic_value_enum()
         } else {
-            let ll_var_type = convert::to_basic_type(self.ctx, self.type_store, var_type);
+            let ll_var_type = self.type_converter.get_basic_type(var_type_key);
             self.builder
                 .build_load(ll_var_type, ll_var_ptr, var.get_last_member_name().as_str())
         }
@@ -537,7 +540,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// `var_type_key` is the type key of the value pointed to by `ll_ptr`.
     /// `access` is the member (and sub-members) being accessed.
     fn get_var_member_ptr(
-        &self,
+        &mut self,
         ll_ptr: PointerValue<'ctx>,
         var_type_key: TypeKey,
         access: &AMemberAccess,
@@ -550,18 +553,18 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 // Get a pointer to the struct field at the computed index.
                 self.builder
                     .build_struct_gep(
-                        convert::to_struct_type(self.ctx, self.type_store, &struct_type),
+                        self.type_converter.get_struct_type(var_type_key),
                         ll_ptr,
                         struct_type.get_field_index(member_name).unwrap() as u32,
                         format!("{}_ptr", member_name).as_str(),
                     )
                     .unwrap()
             }
-            AType::Tuple(tuple_type) => {
+            AType::Tuple(_) => {
                 // Get a pointer to the tuple field at the computed index.
                 self.builder
                     .build_struct_gep(
-                        convert::tuple_to_struct_type(self.ctx, self.type_store, &tuple_type),
+                        self.type_converter.get_struct_type(var_type_key),
                         ll_ptr,
                         member_name.parse::<u32>().unwrap(),
                         format!("{}_ptr", member_name).as_str(),
@@ -597,9 +600,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // The symbol was not a variable or function. Try look it up as a constant. If the constant
         // exists, we'll just create it inline on the stack and return a pointer to it.
         if let Some(const_) = self.consts.get(name) {
-            let const_type = self.type_store.must_get(const_.value.type_key);
             let ll_const_val = self.compile_expr(&const_.value);
-            return self.create_var(const_.name.as_str(), const_type, ll_const_val);
+            return self.create_var(const_.name.as_str(), const_.value.type_key, ll_const_val);
         }
 
         panic!("failed to resolve variable {}", name);
@@ -610,9 +612,10 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     fn create_entry_alloc(
         &mut self,
         name: &str,
-        typ: &AType,
+        type_key: TypeKey,
         ll_val: BasicValueEnum<'ctx>,
     ) -> PointerValue<'ctx> {
+        let typ = self.type_store.must_get(type_key);
         let entry = self.fn_value.unwrap().get_first_basic_block().unwrap();
 
         // Switch to the beginning of the entry block if we're not already there.
@@ -629,10 +632,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             self.builder
                 .build_alloca(ll_val.get_type(), var_name.as_str())
         } else {
-            self.builder.build_alloca(
-                convert::to_basic_type(self.ctx, self.type_store, typ),
-                var_name.as_str(),
-            )
+            let ll_typ = self.type_converter.get_basic_type(type_key);
+            self.builder.build_alloca(ll_typ, var_name.as_str())
         };
 
         // Make sure we continue from where we left off as our builder position may have changed
@@ -675,8 +676,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 let ll_expr_val = self.compile_expr(&var_decl.val);
 
                 // Create and initialize the variable.
-                let var_type = self.type_store.must_get(var_decl.type_key);
-                self.create_var(var_decl.name.as_str(), var_type, ll_expr_val);
+                self.create_var(var_decl.name.as_str(), var_decl.type_key, ll_expr_val);
             }
             AStatement::StructTypeDeclaration(_) | AStatement::EnumTypeDeclaration(_) => {
                 // Nothing to do here. Types are compiled upon initialization.
@@ -886,9 +886,9 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 let expr_type = self.type_store.must_get(expr.type_key);
                 if expr_type.is_composite() {
                     // Load the return value from the result pointer.
-                    let expr_type = self.type_store.must_get(expr.type_key);
+                    let ll_ret_type = self.type_converter.get_basic_type(expr.type_key);
                     let ret_val = self.builder.build_load(
-                        convert::to_basic_type(self.ctx, self.type_store, expr_type),
+                        ll_ret_type,
                         result.into_pointer_value(),
                         "ret_val",
                     );
@@ -964,7 +964,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
                 self.builder.build_bitcast(
                     global.as_pointer_value(),
-                    convert::to_basic_type(self.ctx, self.type_store, &AType::Str),
+                    self.type_converter.get_basic_type(expr.type_key),
                     "str_lit_as_i32_ptr",
                 )
             }
@@ -992,6 +992,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 self.fpm,
                 self.module,
                 self.type_store,
+                self.type_converter,
                 self.consts,
                 anon_fn,
             )
@@ -1018,7 +1019,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 panic!("unexpected type {}", tuple_init.type_key);
             }
         };
-        let ll_struct_type = convert::tuple_to_struct_type(self.ctx, self.type_store, tuple_type);
+        let ll_struct_type = self.type_converter.get_struct_type(tuple_init.type_key);
 
         // Allocate space for the struct on the stack.
         let ll_struct_ptr = self.builder.build_alloca(ll_struct_type, "tuple_init_ptr");
@@ -1038,10 +1039,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
             // Compile the expression and copy its value to the struct field pointer.
             let ll_field_val = self.compile_expr(field_val);
-            let field_type = self
-                .type_store
-                .must_get(*tuple_type.type_keys.get(i).unwrap());
-            self.copy_value(ll_field_val, ll_field_ptr, field_type);
+            let field_type_key = *tuple_type.type_keys.get(i).unwrap();
+            self.copy_value(ll_field_val, ll_field_ptr, field_type_key);
         }
 
         ll_struct_ptr.as_basic_value_enum()
@@ -1050,11 +1049,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// Compiles enum variant initialization.
     fn compile_enum_variant_init(&mut self, enum_init: &AEnumVariantInit) -> BasicValueEnum<'ctx> {
         // Assemble the LLVM struct type for this enum value.
-        let enum_type = match self.type_store.must_get(enum_init.enum_type_key) {
-            AType::Enum(enum_type) => enum_type,
-            other => panic!("unexpected type {}", other),
-        };
-        let ll_struct_type = convert::enum_to_struct_type(self.ctx, enum_type);
+        let ll_struct_type = self.type_converter.get_struct_type(enum_init.enum_type_key);
 
         // Allocate space for the struct on the stack.
         let ll_struct_ptr = self.builder.build_alloca(ll_struct_type, "enum_init_ptr");
@@ -1083,9 +1078,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 .builder
                 .build_struct_gep(ll_struct_type, ll_struct_ptr, 1u32, "enum.value_ptr")
                 .unwrap();
-            let value_type = self.type_store.must_get(value.type_key);
 
-            self.copy_value(ll_value, ll_value_field_ptr, value_type);
+            self.copy_value(ll_value, ll_value_field_ptr, value.type_key);
         }
 
         ll_struct_ptr.as_basic_value_enum()
@@ -1098,7 +1092,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             .type_store
             .must_get(struct_init.type_key)
             .to_struct_type();
-        let ll_struct_type = convert::to_struct_type(self.ctx, self.type_store, struct_type);
+        let ll_struct_type = self.type_converter.get_struct_type(struct_init.type_key);
 
         // Allocate space for the struct on the stack.
         let ll_struct_ptr = self.builder.build_alloca(
@@ -1122,8 +1116,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
                 // Compile the expression and copy its value to the struct field pointer.
                 let ll_field_val = self.compile_expr(field_val);
-                let field_type = self.type_store.must_get(field.type_key);
-                self.copy_value(ll_field_val, ll_field_ptr, field_type);
+                self.copy_value(ll_field_val, ll_field_ptr, field.type_key);
             }
         }
 
@@ -1137,7 +1130,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             .type_store
             .must_get(call.fn_symbol.get_type_key())
             .to_fn_sig();
-        let ll_fn_type = convert::to_fn_type(self.ctx, self.type_store, fn_sig);
+        let ll_fn_type = self.type_converter.get_fn_type(fn_sig.type_key);
         let mut args: Vec<BasicMetadataValueEnum> = vec![];
 
         // Check if we're short one argument. If so, it means the function signature expects
@@ -1145,11 +1138,10 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // need to add that argument. This should only be the case for functions that return
         // structured types.
         if ll_fn_type.count_param_types() == call.args.len() as u32 + 1 {
-            let ret_type = self.type_store.must_get(call.maybe_ret_type_key.unwrap());
-            let ptr = self.builder.build_alloca(
-                convert::to_basic_type(self.ctx, self.type_store, ret_type),
-                "ret_val_ptr",
-            );
+            let ll_ret_type = self
+                .type_converter
+                .get_basic_type(call.maybe_ret_type_key.unwrap());
+            let ptr = self.builder.build_alloca(ll_ret_type, "ret_val_ptr");
             args.push(ptr.into());
         }
 
@@ -1164,8 +1156,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             // it's a copy).
             let arg_type = self.type_store.must_get(arg.type_key);
             if arg_type.is_composite() {
-                let ll_copy_ptr = self.create_entry_alloc("copy_arg", arg_type, ll_arg_val);
-                self.copy_value(ll_arg_val, ll_copy_ptr, arg_type);
+                let ll_copy_ptr = self.create_entry_alloc("copy_arg", arg.type_key, ll_arg_val);
+                self.copy_value(ll_arg_val, ll_copy_ptr, arg.type_key);
                 args.push(ll_copy_ptr.as_basic_value_enum().into());
             } else {
                 args.push(ll_arg_val.into());
@@ -1298,12 +1290,12 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// Compiles a bitcast of `ll_val` to type `target_type_key`.
     fn compile_type_cast(
-        &self,
+        &mut self,
         mut ll_val: BasicValueEnum<'ctx>,
         target_type_key: TypeKey,
     ) -> BasicValueEnum<'ctx> {
         let target_type = self.type_store.must_get(target_type_key);
-        let ll_target_type = convert::to_basic_type(self.ctx, self.type_store, target_type);
+        let ll_target_type = self.type_converter.get_basic_type(target_type_key);
 
         // TODO: When we support numeric types that are larger or smaller than 64 bits, we need to
         // think about sign extension and zero extension when casting.
@@ -1355,7 +1347,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// Compiles a comparison operation expression.
     fn compile_cmp(
-        &self,
+        &mut self,
         ll_lhs: BasicValueEnum<'ctx>,
         left_type_key: TypeKey,
         op: &Operator,
@@ -1505,12 +1497,12 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
 
     /// Returns the variant number of the given enum.
     fn get_enum_variant_number(
-        &self,
+        &mut self,
         enum_type_key: TypeKey,
         ll_enum_ptr: PointerValue<'ctx>,
     ) -> IntValue<'ctx> {
         let enum_type = self.type_store.must_get(enum_type_key);
-        let ll_enum_type = convert::to_basic_type(self.ctx, self.type_store, enum_type);
+        let ll_enum_type = self.type_converter.get_basic_type(enum_type_key);
         let ll_variant_ptr = self
             .builder
             .build_struct_gep(

@@ -16,7 +16,7 @@ use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::prog_context::ProgramAnalysis;
 use crate::analyzer::type_store::TypeStore;
-use crate::compiler::convert;
+use crate::compiler::convert::TypeConverter;
 use crate::compiler::error::{CompileError, CompileResult, ErrorKind};
 use crate::compiler::func::FnCompiler;
 
@@ -28,7 +28,8 @@ pub struct ProgCompiler<'a, 'ctx> {
     module: &'a Module<'ctx>,
     program: &'a AProgram,
     type_store: &'a TypeStore,
-    consts: &'a mut HashMap<String, AConst>,
+    type_converter: TypeConverter<'ctx>,
+    consts: HashMap<String, AConst>,
 }
 
 impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
@@ -80,7 +81,8 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
             module: &module,
             program: &prog_analysis.prog,
             type_store: &prog_analysis.type_store,
-            consts: &mut HashMap::new(),
+            type_converter: TypeConverter::new(&ctx, &prog_analysis.type_store),
+            consts: HashMap::new(),
         };
         compiler.compile_program()?;
 
@@ -134,7 +136,8 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
                         self.fpm,
                         self.module,
                         self.type_store,
-                        self.consts,
+                        &mut self.type_converter,
+                        &self.consts,
                         func,
                     )?;
                 }
@@ -146,7 +149,8 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
                             self.fpm,
                             self.module,
                             self.type_store,
-                            self.consts,
+                            &mut self.type_converter,
+                            &self.consts,
                             mem_fn,
                         )?;
                     }
@@ -176,9 +180,9 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
     }
 
     /// Defines the given function in the current module based on the function signature.
-    fn compile_fn_sig(&self, sig: &AFnSig) {
+    fn compile_fn_sig(&mut self, sig: &AFnSig) {
         // Define the function in the module using the fully-qualified function name.
-        let fn_type = convert::to_fn_type(self.ctx, self.type_store, sig);
+        let fn_type = self.type_converter.get_fn_type(sig.type_key);
         let fn_val = self
             .module
             .add_function(sig.full_name().as_str(), fn_type, None);
@@ -229,7 +233,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
         for statement in &self.program.statements {
             if let AStatement::ExternFns(fn_sigs) = statement {
                 for fn_sig in fn_sigs {
-                    let ll_fn_type = convert::to_fn_type(self.ctx, self.type_store, &fn_sig);
+                    let ll_fn_type = self.type_converter.get_fn_type(fn_sig.type_key);
                     self.module.add_function(
                         fn_sig.name.as_str(),
                         ll_fn_type,

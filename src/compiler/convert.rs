@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use inkwell::context::Context;
 use inkwell::types::AsTypeRef;
 use inkwell::types::{
@@ -12,14 +14,78 @@ use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::tuple::ATupleType;
-use crate::analyzer::type_store::TypeStore;
+use crate::analyzer::type_store::{TypeKey, TypeStore};
+
+/// Converts types from the Blang analyzer to LLVM types. This struct also caches mappings from
+/// type keys to LLVM types to make type conversion faster.
+pub struct TypeConverter<'ctx> {
+    ctx: &'ctx Context,
+    type_store: &'ctx TypeStore,
+    ll_basic_types: HashMap<TypeKey, BasicTypeEnum<'ctx>>,
+    ll_fn_types: HashMap<TypeKey, FunctionType<'ctx>>,
+}
+
+impl<'ctx> TypeConverter<'ctx> {
+    /// Creates a new type converter.
+    pub fn new(ctx: &'ctx Context, type_store: &'ctx TypeStore) -> TypeConverter<'ctx> {
+        TypeConverter {
+            ctx,
+            type_store,
+            ll_basic_types: Default::default(),
+            ll_fn_types: Default::default(),
+        }
+    }
+
+    /// Returns the LLVM basic type enum for the type associated with the given type key, either
+    /// locating the LLVM type in the cache (if it was already converted), or by converting and
+    /// caching it.
+    pub fn get_basic_type(&mut self, type_key: TypeKey) -> BasicTypeEnum<'ctx> {
+        match self.ll_basic_types.get(&type_key) {
+            Some(ll_type) => *ll_type,
+            None => {
+                let ll_type = to_basic_type(
+                    self.ctx,
+                    self.type_store,
+                    self.type_store.must_get(type_key),
+                );
+                self.ll_basic_types.insert(type_key, ll_type);
+                ll_type
+            }
+        }
+    }
+
+    /// Returns the LLVM function type for the type associated with the given type key, either
+    /// locating the LLVM type in the cache (if it was already converted), or by converting and
+    /// caching it.
+    pub fn get_fn_type(&mut self, type_key: TypeKey) -> FunctionType<'ctx> {
+        match self.ll_fn_types.get(&type_key) {
+            Some(f) => *f,
+            None => {
+                let ll_fn_type = to_fn_type(
+                    self.ctx,
+                    self.type_store,
+                    self.type_store.must_get(type_key).to_fn_sig(),
+                );
+                self.ll_fn_types.insert(type_key, ll_fn_type);
+                ll_fn_type
+            }
+        }
+    }
+
+    /// Returns the LLVM struct type for the type associated with the given type key, either
+    /// locating the LLVM type in the cache (if it was already converted), or by converting and
+    /// caching it.
+    pub fn get_struct_type(&mut self, type_key: TypeKey) -> StructType<'ctx> {
+        self.get_basic_type(type_key).into_struct_type()
+    }
+}
 
 /// Gets the LLVM basic type that corresponds to the given type.
-pub fn to_basic_type<'a>(
-    ctx: &'a Context,
+fn to_basic_type<'ctx>(
+    ctx: &'ctx Context,
     type_store: &TypeStore,
     typ: &AType,
-) -> BasicTypeEnum<'a> {
+) -> BasicTypeEnum<'ctx> {
     match typ {
         AType::Bool => ctx.bool_type().as_basic_type_enum(),
 
@@ -61,11 +127,11 @@ pub fn to_basic_type<'a>(
 }
 
 /// Converts the given tuple type to its corresponding LLVM struct type.
-pub fn tuple_to_struct_type<'a>(
-    ctx: &'a Context,
+fn tuple_to_struct_type<'ctx>(
+    ctx: &'ctx Context,
     type_store: &TypeStore,
     tuple_type: &ATupleType,
-) -> StructType<'a> {
+) -> StructType<'ctx> {
     // Assemble the tuple field types.
     let ll_field_types: Vec<BasicTypeEnum> = tuple_type
         .type_keys
@@ -78,7 +144,11 @@ pub fn tuple_to_struct_type<'a>(
 }
 
 /// Converts the given function signature into an LLVM `FunctionType`.
-pub fn to_fn_type<'a>(ctx: &'a Context, type_store: &TypeStore, sig: &AFnSig) -> FunctionType<'a> {
+fn to_fn_type<'ctx>(
+    ctx: &'ctx Context,
+    type_store: &TypeStore,
+    sig: &AFnSig,
+) -> FunctionType<'ctx> {
     // Get return type.
     let ret_type = match &sig.ret_type_key {
         Some(type_key) => Some(type_store.must_get(*type_key)),
@@ -143,11 +213,11 @@ pub fn to_fn_type<'a>(ctx: &'a Context, type_store: &TypeStore, sig: &AFnSig) ->
 }
 
 /// Returns the LLVM basic types corresponding to the given struct's field types.
-fn get_struct_field_types<'a>(
-    ctx: &'a Context,
+fn get_struct_field_types<'ctx>(
+    ctx: &'ctx Context,
     type_store: &TypeStore,
     struct_type: &AStructType,
-) -> Vec<BasicTypeEnum<'a>> {
+) -> Vec<BasicTypeEnum<'ctx>> {
     struct_type
         .fields
         .iter()
@@ -156,11 +226,11 @@ fn get_struct_field_types<'a>(
 }
 
 /// Converts the given `struct_type` to an LLVM `StructType`.
-pub fn to_struct_type<'a>(
-    ctx: &'a Context,
+fn to_struct_type<'ctx>(
+    ctx: &'ctx Context,
     type_store: &TypeStore,
     struct_type: &AStructType,
-) -> StructType<'a> {
+) -> StructType<'ctx> {
     // If the struct type already exists, just return it.
     if let Some(ll_struct_type) = ctx.get_struct_type(struct_type.name.as_str()) {
         return ll_struct_type;
@@ -188,7 +258,7 @@ pub fn to_struct_type<'a>(
 }
 
 /// Converts the given `enum_type` to an LLVM `StructType`.
-pub fn enum_to_struct_type<'a>(ctx: &'a Context, enum_type: &AEnumType) -> StructType<'a> {
+fn enum_to_struct_type<'ctx>(ctx: &'ctx Context, enum_type: &AEnumType) -> StructType<'ctx> {
     // If the corresponding LLVM struct type already exists, just return it.
     if let Some(ll_struct_type) = ctx.get_struct_type(enum_type.name.as_str()) {
         return ll_struct_type;
@@ -208,11 +278,11 @@ pub fn enum_to_struct_type<'a>(ctx: &'a Context, enum_type: &AEnumType) -> Struc
 }
 
 /// Gets the LLVM "any" type that corresponds to the given type.
-pub fn to_any_type<'a>(
-    ctx: &'a Context,
+fn to_any_type<'ctx>(
+    ctx: &'ctx Context,
     type_store: &TypeStore,
     typ: Option<&AType>,
-) -> AnyTypeEnum<'a> {
+) -> AnyTypeEnum<'ctx> {
     match typ {
         None => ctx.void_type().as_any_type_enum(),
         Some(t) => to_basic_type(ctx, type_store, t).as_any_type_enum(),
@@ -220,11 +290,11 @@ pub fn to_any_type<'a>(
 }
 
 /// Gets the LLVM metadata type that corresponds to the given type.
-pub fn to_metadata_type_enum<'a>(
-    ctx: &'a Context,
+fn to_metadata_type_enum<'ctx>(
+    ctx: &'ctx Context,
     type_store: &TypeStore,
     typ: &AType,
-) -> BasicMetadataTypeEnum<'a> {
+) -> BasicMetadataTypeEnum<'ctx> {
     match typ {
         AType::I64 | AType::U64 => BasicMetadataTypeEnum::from(ctx.i64_type()),
         AType::Ptr => BasicMetadataTypeEnum::from(ctx.i64_type().ptr_type(AddressSpace::default())),

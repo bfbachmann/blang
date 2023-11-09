@@ -1,11 +1,11 @@
 #!/bin/sh
 
+# Requires Nushell (see https://www.nushell.sh/).
 # Loads Nu commands from cast.nu and then executes the given command.
 # Example:
 #     ./cast build src/tests/functions.bl
 #     ./cast help run
 #
 # See cast.nu for useful development/repo management commands.
-# Requires Nushell (see https://www.nushell.sh/).
 command="source cast.nu; $@"
 nu -c "$command"
