@@ -3,11 +3,11 @@ use std::io::prelude::*;
 use std::io::{BufRead, BufReader, Result};
 use std::path::{Path, PathBuf};
 use std::process;
-use std::process::exit;
 use std::time::Instant;
 
 use clap::{arg, ArgAction, Command};
 use colored::*;
+use pluralizer::pluralize;
 
 use compiler::program::ProgCompiler;
 use lexer::token::Token;
@@ -85,9 +85,7 @@ fn main() {
         Some(("check", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(file_path) => {
                 let maybe_dump_path = sub_matches.get_one::<String>("dump");
-                if analyze(file_path, maybe_dump_path).is_none() {
-                    exit(1);
-                }
+                analyze(file_path, maybe_dump_path);
             }
             _ => fatalln!("expected source path"),
         },
@@ -102,8 +100,8 @@ fn open_file(file_path: &str) -> Result<BufReader<File>> {
 }
 
 /// Performs static analysis on the source code at the given path. Returns a successfully analyzed
-/// program and extern functions, or `None`.
-fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> Option<ProgramAnalysis> {
+/// program and extern functions, or logs an error and exits with code 1.
+fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> ProgramAnalysis {
     // Get a reader from the source file.
     let reader = match open_file(input_path) {
         Ok(r) => r,
@@ -187,7 +185,7 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> Option<Program
         let mut dst_file = match File::create(dst.clone()) {
             Err(err) => {
                 fatalln!(
-                    "Error opening file {}: {}",
+                    "error opening file {}: {}",
                     dst.to_str().unwrap_or_default(),
                     err
                 );
@@ -201,7 +199,7 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> Option<Program
             &prog_analysis.prog, &prog_analysis.type_store
         ) {
             fatalln!(
-                "Error writing AST to file {}: {}",
+                "error writing AST to file {}: {}",
                 dst.to_str().unwrap_or_default(),
                 err
             );
@@ -209,11 +207,13 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> Option<Program
     }
 
     // Return the program only if there were no errors.
-    if prog_analysis.errors.is_empty() {
-        return Some(prog_analysis);
+    match prog_analysis.errors.len() {
+        0 => prog_analysis,
+        err_count => fatalln!(
+            "analysis failed due to previous {}",
+            pluralize("error", err_count as isize, err_count > 1)
+        ),
     }
-
-    None
 }
 
 /// Compiles a source file for the given target ISA. If there is no target, infers configuration
@@ -229,10 +229,7 @@ fn compile(
     let start_time = Instant::now();
 
     // Read and analyze the program.
-    let prog_analysis = match analyze(src_path, None) {
-        Some(v) => v,
-        None => exit(1),
-    };
+    let prog_analysis = analyze(src_path, None);
 
     // If no output path was specified, just use the source file name.
     let src = Path::new(src_path);
