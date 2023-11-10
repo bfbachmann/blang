@@ -4,7 +4,7 @@ mod tests {
     use std::path::Path;
 
     use crate::analyzer::analyze::analyze_prog;
-    use crate::compiler::program::ProgCompiler;
+    use crate::codegen::program::ProgramCodeGen;
     use crate::lexer::token::Token;
     use crate::parser::program::Program;
     use crate::parser::stream::Stream;
@@ -13,7 +13,7 @@ mod tests {
         let tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
         let prog = Program::from(&mut Stream::from(tokens)).expect("should not error");
         let analysis = analyze_prog(&prog);
-        ProgCompiler::compile(analysis, None, false, Path::new("/dev/null"), false)
+        ProgramCodeGen::compile(analysis, None, false, Path::new("/dev/null"), false)
             .expect("should not error");
     }
 

@@ -16,12 +16,12 @@ use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::prog_context::ProgramAnalysis;
 use crate::analyzer::type_store::TypeStore;
-use crate::compiler::convert::TypeConverter;
-use crate::compiler::error::{CompileError, CompileResult, ErrorKind};
-use crate::compiler::func::FnCompiler;
+use crate::codegen::convert::TypeConverter;
+use crate::codegen::error::{CompileError, CompileResult, ErrorKind};
+use crate::codegen::func::FnCodeGen;
 
 /// Compiles a type-rich and semantically valid program to LLVM IR and/or bitcode.
-pub struct ProgCompiler<'a, 'ctx> {
+pub struct ProgramCodeGen<'a, 'ctx> {
     ctx: &'ctx Context,
     builder: &'a Builder<'ctx>,
     fpm: &'a PassManager<FunctionValue<'ctx>>,
@@ -32,7 +32,7 @@ pub struct ProgCompiler<'a, 'ctx> {
     consts: HashMap<String, AConst>,
 }
 
-impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
+impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
     /// Compiles the program for the given target. If there is no target, compiles the program for
     /// the host system.
     pub fn compile(
@@ -74,7 +74,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
         fpm.initialize();
 
         // Create the program compiler and compile the program.
-        let mut compiler = ProgCompiler {
+        let mut compiler = ProgramCodeGen {
             ctx: &ctx,
             builder: &builder,
             fpm: &fpm,
@@ -130,7 +130,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
         for statement in &self.program.statements {
             match statement {
                 AStatement::FunctionDeclaration(func) => {
-                    FnCompiler::compile(
+                    FnCodeGen::compile(
                         self.ctx,
                         self.builder,
                         self.fpm,
@@ -143,7 +143,7 @@ impl<'a, 'ctx> ProgCompiler<'a, 'ctx> {
                 }
                 AStatement::Impl(impl_) => {
                     for mem_fn in &impl_.member_fns {
-                        FnCompiler::compile(
+                        FnCodeGen::compile(
                             self.ctx,
                             self.builder,
                             self.fpm,

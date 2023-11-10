@@ -9,7 +9,7 @@ use clap::{arg, ArgAction, Command};
 use colored::*;
 use pluralizer::pluralize;
 
-use compiler::program::ProgCompiler;
+use codegen::program::ProgramCodeGen;
 use lexer::token::Token;
 use parser::program::Program;
 
@@ -20,7 +20,7 @@ use crate::lexer::error::LexError;
 use crate::parser::error::ParseError;
 use crate::parser::stream::Stream;
 
-mod compiler;
+mod codegen;
 #[macro_use]
 mod fmt;
 mod analyzer;
@@ -241,7 +241,7 @@ fn compile(
     };
 
     // Compile the program.
-    if let Err(e) = ProgCompiler::compile(
+    if let Err(e) = ProgramCodeGen::compile(
         prog_analysis,
         target,
         as_bitcode,

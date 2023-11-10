@@ -26,16 +26,16 @@ use crate::analyzer::ast::symbol::{AMemberAccess, ASymbol};
 use crate::analyzer::ast::tuple::ATupleInit;
 use crate::analyzer::ast::var_assign::AVarAssign;
 use crate::analyzer::type_store::{TypeKey, TypeStore};
-use crate::compiler::context::{
+use crate::codegen::context::{
     BranchContext, CompilationContext, FnContext, LoopContext, StatementContext,
 };
-use crate::compiler::convert::TypeConverter;
-use crate::compiler::error::{CompileError, CompileResult, ErrorKind};
+use crate::codegen::convert::TypeConverter;
+use crate::codegen::error::{CompileError, CompileResult, ErrorKind};
 use crate::format_code;
 use crate::parser::op::Operator;
 
 /// Compiles type-rich (i.e. semantically valid) functions.
-pub struct FnCompiler<'a, 'ctx> {
+pub struct FnCodeGen<'a, 'ctx> {
     ctx: &'ctx Context,
     builder: &'a Builder<'ctx>,
     fpm: &'a PassManager<FunctionValue<'ctx>>,
@@ -49,7 +49,7 @@ pub struct FnCompiler<'a, 'ctx> {
     cur_block: Option<BasicBlock<'ctx>>,
 }
 
-impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
+impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles the given function.
     pub fn compile(
         context: &'ctx Context,
@@ -61,7 +61,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         consts: &'a HashMap<String, AConst>,
         func: &AFn,
     ) -> CompileResult<FunctionValue<'ctx>> {
-        let mut fn_compiler = FnCompiler {
+        let mut fn_compiler = FnCodeGen {
             ctx: context,
             builder,
             fpm,
@@ -1079,7 +1079,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
             // TODO: Compiling this function works fine, but trying to actually use it will cause
             // a panic because it has no name. The fix likely involves giving anon functions unique
             // auto-generated names.
-            AExprKind::AnonFunction(anon_fn) => FnCompiler::compile(
+            AExprKind::AnonFunction(anon_fn) => FnCodeGen::compile(
                 self.ctx,
                 self.builder,
                 self.fpm,
