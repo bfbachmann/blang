@@ -21,6 +21,7 @@ pub enum Operator {
     // Comparators
     EqualTo,
     Like,
+    NotLike,
     NotEqualTo,
     GreaterThan,
     LessThan,
@@ -61,6 +62,7 @@ impl Operator {
             TokenKind::RightParen => Some(Operator::RightParen),
             TokenKind::As => Some(Operator::As),
             TokenKind::Like => Some(Operator::Like),
+            TokenKind::NotLike => Some(Operator::NotLike),
             _ => None,
         }
     }
@@ -77,6 +79,7 @@ impl Operator {
             Operator::LogicalNot => TokenKind::LogicalNot.to_string(),
             Operator::EqualTo => TokenKind::EqualTo.to_string(),
             Operator::Like => TokenKind::Like.to_string(),
+            Operator::NotLike => TokenKind::NotLike.to_string(),
             Operator::NotEqualTo => TokenKind::NotEqualTo.to_string(),
             Operator::GreaterThan => TokenKind::GreaterThan.to_string(),
             Operator::LessThan => TokenKind::LessThan.to_string(),
@@ -101,7 +104,7 @@ impl Operator {
             | Operator::LessThan
             | Operator::GreaterThanOrEqual
             | Operator::LessThanOrEqual => 6,
-            Operator::EqualTo | Operator::NotEqualTo | Operator::Like => 7,
+            Operator::EqualTo | Operator::NotEqualTo | Operator::Like | Operator::NotLike => 7,
             Operator::LogicalAnd => 11,
             Operator::LogicalOr => 12,
         }
@@ -142,6 +145,7 @@ impl Operator {
             self,
             Operator::EqualTo
                 | Operator::Like
+                | Operator::NotLike
                 | Operator::NotEqualTo
                 | Operator::GreaterThan
                 | Operator::LessThan

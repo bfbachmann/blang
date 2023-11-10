@@ -26,6 +26,7 @@ pub enum TokenKind {
     // Comparators
     EqualTo,
     Like,
+    NotLike,
     NotEqualTo,
     GreaterThan,
     LessThan,
@@ -148,6 +149,7 @@ impl Clone for TokenKind {
             TokenKind::As => TokenKind::As,
             TokenKind::DollarSign => TokenKind::DollarSign,
             TokenKind::Like => TokenKind::Like,
+            TokenKind::NotLike => TokenKind::NotLike,
             TokenKind::Reference => TokenKind::Reference,
         }
     }
@@ -231,7 +233,8 @@ impl TokenKind {
             TokenKind::With => "with".to_string(),
             TokenKind::As => "as".to_string(),
             TokenKind::DollarSign => "$".to_string(),
-            TokenKind::Like => "like".to_string(),
+            TokenKind::Like => "~==".to_string(),
+            TokenKind::NotLike => "~!=".to_string(),
             TokenKind::Reference => "&".to_string(),
         }
     }
@@ -330,6 +333,7 @@ impl TokenKind {
             (TokenKind::As.to_string(), TokenKind::As),
             (TokenKind::DollarSign.to_string(), TokenKind::DollarSign),
             (TokenKind::Like.to_string(), TokenKind::Like),
+            (TokenKind::NotLike.to_string(), TokenKind::NotLike),
             (TokenKind::Reference.to_string(), TokenKind::Reference),
         ]);
 

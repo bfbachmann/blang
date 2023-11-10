@@ -1448,12 +1448,17 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         signed: bool,
     ) -> IntValue<'ctx> {
         // Handle the special case of enum variant comparisons.
-        if op == &Operator::Like {
+        if matches!(op, Operator::Like | Operator::NotLike) {
             let ll_left_variant = self.get_enum_variant_number(left_type_key, ll_lhs);
             let ll_right_variant = self.get_enum_variant_number(left_type_key, ll_rhs);
+            let predicate = match op {
+                Operator::Like => IntPredicate::EQ,
+                Operator::NotLike => IntPredicate::NE,
+                _ => unreachable!(),
+            };
 
             return self.builder.build_int_compare(
-                IntPredicate::EQ,
+                predicate,
                 ll_left_variant,
                 ll_right_variant,
                 "variants_equal",

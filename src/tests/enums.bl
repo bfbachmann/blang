@@ -44,12 +44,12 @@ fn main() {
     // Check that enum variant initialization, moves, and comparisons work.
     {
         let e_one = E::One
-        assert(e_one like E::One, 1)
-        assert(e_one like E::Two(0) == false, 2)
+        assert(e_one ~== E::One, 1)
+        assert(e_one ~== E::Two(0) == false, 2)
 
         let e_two = E::Two(-42)
-        assert(e_two like E::Two(0), 3)
-        assert(e_two like E::Three(true) == false, 4)
+        assert(e_two ~== E::Two(0), 3)
+        assert(e_two ~!= E::Three(true), 4)
 
         let e_three = E::Three(true)
         let e_four = E::Four(S{
@@ -64,10 +64,10 @@ fn main() {
     // Check that enums work as return values.
     {
         let some = OptionalI64.new_some(10)
-        assert(some like OptionalI64::Some(0), 5)
+        assert(some ~== OptionalI64::Some(0), 5)
 
         let none = OptionalI64.new_none()
-        assert(none like OptionalI64::None, 6)
+        assert(none ~== OptionalI64::None, 6)
     }
 
     // Check that enums work as arguments.
@@ -83,5 +83,5 @@ fn main() {
 }
 
 fn take_enum(e: E) {
-    assert(e like E::Four(S.new()), 7)
+    assert(e ~== E::Four(S.new()), 7)
 }

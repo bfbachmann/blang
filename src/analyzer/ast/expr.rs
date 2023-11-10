@@ -803,8 +803,8 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
             )
         }
 
-        // Both operands of a `like` comparison should be enums.
-        Operator::Like => matches!(operand_type, AType::Enum(_)),
+        // Both operands of "like" and "not like" comparisons should be enums.
+        Operator::Like | Operator::NotLike => matches!(operand_type, AType::Enum(_)),
 
         // Comparators only work on numeric types.
         Operator::GreaterThan
@@ -851,7 +851,9 @@ fn get_result_type(
         Operator::LogicalAnd | Operator::LogicalOr => ctx.bool_type_key(),
 
         // Equality operators result in bools.
-        Operator::EqualTo | Operator::NotEqualTo | Operator::Like => ctx.bool_type_key(),
+        Operator::EqualTo | Operator::NotEqualTo | Operator::Like | Operator::NotLike => {
+            ctx.bool_type_key()
+        }
 
         // Comparators result in bools.
         Operator::GreaterThan
@@ -885,7 +887,7 @@ fn get_expected_operand_type_key(
 
         Operator::LogicalAnd | Operator::LogicalOr => Some(ctx.bool_type_key()),
 
-        Operator::EqualTo | Operator::NotEqualTo | Operator::Like => None,
+        Operator::EqualTo | Operator::NotEqualTo | Operator::Like | Operator::NotLike => None,
 
         Operator::GreaterThan
         | Operator::LessThan

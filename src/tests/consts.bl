@@ -31,7 +31,7 @@ fn main() {
     assert(TUPLE.1 == true, 5)
     assert(PTR == NULL, 6)
     assert(OTHER_INT == INT + 1, 7)
-    assert(ENUM_ERR like Result::Err("failed"), 8)
+    assert(ENUM_ERR ~== Result::Err("failed"), 8)
 
     exit(0)
 }
