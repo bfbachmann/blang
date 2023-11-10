@@ -248,9 +248,16 @@ impl TokenKind {
     /// Finds the first valid TokenKind in the slice and the index in the slice at which the token
     /// ends. If the slice does not begin with a valid token, None will be returned.
     pub fn first_from(segment: &str) -> Option<(TokenKind, usize)> {
+        let segment_chars: Vec<char> = segment.chars().collect();
         let mut result = None;
+
         for token_end in 1..=segment.char_indices().count() {
-            if let Some(kind) = TokenKind::from(&segment[..token_end]) {
+            let token = segment_chars[..token_end]
+                .iter()
+                .cloned()
+                .collect::<String>();
+
+            if let Some(kind) = TokenKind::from(token.as_str()) {
                 // The current subsegment is a valid token.
                 // If the current token is greedy, we should return it immediately.
                 if kind.is_greedy() {
@@ -428,52 +435,56 @@ impl TokenKind {
         lazy_static! {
             static ref RE_STRING_LITERAL: Regex = Regex::new(r#"^"(?:[^"\\]|\\.)*"$"#).unwrap();
         }
-        match RE_STRING_LITERAL.is_match(segment) {
-            true => {
-                // Removing opening and closing quotes.
-                let formatted = &segment[1..segment.len() - 1];
 
-                // Handle whitespace characters and escaped quotes and backslashes.
-                let mut replaced = String::from("");
-                let mut i = 0;
-                while i < formatted.len() {
-                    let cur_char = formatted.chars().nth(i).unwrap();
-                    let next_char = formatted.chars().nth(i + 1);
-
-                    let to_add = match cur_char {
-                        '\\' => match next_char {
-                            Some('\\') => {
-                                i += 1;
-                                '\\'
-                            }
-                            Some('n') => {
-                                i += 1;
-                                '\n'
-                            }
-                            Some('t') => {
-                                i += 1;
-                                '\t'
-                            }
-                            Some('r') => {
-                                i += 1;
-                                '\r'
-                            }
-                            Some('"') => {
-                                i += 1;
-                                '"'
-                            }
-                            _ => '\\',
-                        },
-                        other => other,
-                    };
-
-                    replaced.push(to_add);
-                    i += 1;
-                }
-
-                Some(TokenKind::StrLiteral(String::from(replaced)))
-            }
-            false => None,
+        if !RE_STRING_LITERAL.is_match(segment) {
+            return None;
         }
+
+        // Removing opening and closing quotes.
+        let segment_chars: Vec<char> = segment.chars().collect();
+        let segment_chars = segment_chars[1..segment_chars.len() - 1]
+            .iter()
+            .cloned()
+            .collect::<Vec<char>>();
+
+        // Handle whitespace characters and escaped quotes and backslashes.
+        let mut replaced = String::from("");
+        let mut i = 0;
+        while i < segment_chars.len() {
+            let cur_char = segment_chars.get(i).unwrap();
+            let next_char = segment_chars.get(i + 1);
+
+            let to_add = match cur_char {
+                '\\' => match next_char {
+                    Some('\\') => {
+                        i += 1;
+                        '\\'
+                    }
+                    Some('n') => {
+                        i += 1;
+                        '\n'
+                    }
+                    Some('t') => {
+                        i += 1;
+                        '\t'
+                    }
+                    Some('r') => {
+                        i += 1;
+                        '\r'
+                    }
+                    Some('"') => {
+                        i += 1;
+                        '"'
+                    }
+                    _ => '\\',
+                },
+                other => *other,
+            };
+
+            replaced.push(to_add);
+            i += 1;
+        }
+
+        Some(TokenKind::StrLiteral(String::from(replaced)))
     }
 }

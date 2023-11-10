@@ -1,7 +1,7 @@
-use colored::Colorize;
-
 use std::fmt;
 use std::io::{BufRead, Lines};
+
+use colored::Colorize;
 
 use crate::lexer::error::LexError;
 use crate::lexer::error::LexResult;
@@ -62,11 +62,15 @@ impl Token {
     /// Breaks the given slice into a deque of tokens. If the slice contains any invalid tokens,
     /// an error is returned.
     pub fn tokenize_line(segment: &str, line_num: usize) -> LexResult<Vec<Token>> {
+        let chars: Vec<char> = segment.chars().collect();
         let mut tokens = vec![];
         let mut search_start: usize = 0;
 
-        while search_start < segment.len() {
-            let subseg = &segment[search_start..];
+        while search_start < chars.len() {
+            let subseg_chars = &chars[search_start..];
+            let subseg = subseg_chars.iter().cloned().collect::<String>();
+            let subseg = subseg.as_str();
+
             if let Some((kind, end_col)) = TokenKind::first_from(subseg) {
                 // Ignore everything on the line after a comment.
                 if kind == TokenKind::LineComment {
@@ -77,8 +81,8 @@ impl Token {
                 // record its end index so we can start the next search at the end of the current
                 // token. Note that indexes for line and column numbers start from 1.
                 let token_start = search_start + whitespace_prefix_size(subseg) + 1;
-                let token_end =
-                    search_start + end_col - whitespace_suffix_size(&subseg[..end_col]) + 1;
+                let token = subseg_chars[..end_col].iter().cloned().collect::<String>();
+                let token_end = search_start + end_col - whitespace_suffix_size(token.as_str()) + 1;
 
                 tokens.push(Token::new(kind, line_num, token_start, token_end));
                 search_start += end_col;
