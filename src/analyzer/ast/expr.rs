@@ -109,10 +109,11 @@ impl AExprKind {
             | AExprKind::U64Literal(_, _)
             | AExprKind::StrLiteral(_) => true,
 
-            // Unary and binary operations are constants if they only operate on constants.
-            AExprKind::UnaryOperation(_, expr) => expr.kind.is_const(),
-            AExprKind::BinaryOperation(left_expr, _, right_expr) => {
-                left_expr.kind.is_const() && right_expr.kind.is_const()
+            // Unary and binary operations are constants if they only operate on constants and have
+            // valid constant operators.
+            AExprKind::UnaryOperation(op, expr) => expr.kind.is_const() && op.is_const(),
+            AExprKind::BinaryOperation(left_expr, op, right_expr) => {
+                left_expr.kind.is_const() && right_expr.kind.is_const() && op.is_const()
             }
 
             // Struct initializations are constants if all their fields are constants.
@@ -280,7 +281,7 @@ impl AExpr {
 
             Expression::EnumInit(enum_init) => {
                 let a_init = AEnumVariantInit::from(ctx, &enum_init);
-                let type_key = a_init.enum_type_key;
+                let type_key = a_init.type_key;
                 AExpr {
                     kind: AExprKind::EnumInit(a_init),
                     type_key,
@@ -641,7 +642,7 @@ impl AExpr {
 
             Type::Enum(_) => AExpr {
                 kind: AExprKind::EnumInit(AEnumVariantInit {
-                    enum_type_key: type_key,
+                    type_key: type_key,
                     variant: AEnumTypeVariant {
                         number: 0,
                         name: "<unknown>".to_string(),

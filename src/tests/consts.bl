@@ -9,6 +9,12 @@ const {
     TUPLE = {345, true}
     PTR = NULL
     OTHER_INT = INT + 1
+    ENUM_ERR = Result::Err("failed")
+}
+
+enum Result {
+    Ok
+    Err(str)
 }
 
 fn assert(b: bool, code: u64) {
@@ -25,6 +31,7 @@ fn main() {
     assert(TUPLE.1 == true, 5)
     assert(PTR == NULL, 6)
     assert(OTHER_INT == INT + 1, 7)
+    assert(ENUM_ERR like Result::Err("failed"), 8)
 
     exit(0)
 }

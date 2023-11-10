@@ -335,8 +335,14 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         ll_dst_ptr: PointerValue<'ctx>,
         type_key: TypeKey,
     ) {
-        let typ = self.type_store.must_get(type_key);
+        // If the source value is not a pointer, we don't have to copy data in memory, so we just
+        // do a regular store.
+        if !ll_src_val.is_pointer_value() {
+            self.builder.build_store(ll_dst_ptr, ll_src_val);
+            return;
+        }
 
+        let typ = self.type_store.must_get(type_key);
         match typ {
             AType::Struct(struct_type) => {
                 let ll_src_val_type = self.type_converter.get_basic_type(type_key);
@@ -596,13 +602,6 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         // The symbol was not a variable, so try look it up as a function.
         if let Some(func) = self.module.get_function(name) {
             return func.as_global_value().as_pointer_value();
-        }
-
-        // The symbol was not a variable or function. Try look it up as a constant. If the constant
-        // exists, we'll just create it inline on the stack and return a pointer to it.
-        if let Some(const_) = self.consts.get(name) {
-            let ll_const_val = self.compile_expr(&const_.value);
-            return self.create_var(const_.name.as_str(), const_.value.type_key, ll_const_val);
         }
 
         panic!("failed to resolve variable {}", name);
@@ -888,11 +887,14 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 if expr_type.is_composite() {
                     // Load the return value from the result pointer.
                     let ll_ret_type = self.type_converter.get_basic_type(expr.type_key);
-                    let ret_val = self.builder.build_load(
-                        ll_ret_type,
-                        result.into_pointer_value(),
-                        "ret_val",
-                    );
+                    let ret_val = match result.is_pointer_value() {
+                        true => self.builder.build_load(
+                            ll_ret_type,
+                            result.into_pointer_value(),
+                            "ret_val",
+                        ),
+                        false => result,
+                    };
 
                     // Write the return value into the pointer from the first function argument.
                     let ret_ptr = self.fn_value.unwrap().get_first_param().unwrap();
@@ -913,10 +915,16 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
     }
 
-    /// Compiles an arbitrary expression.
-    fn compile_expr(&mut self, expr: &AExpr) -> BasicValueEnum<'ctx> {
-        let result = match &expr.kind {
-            AExprKind::Symbol(var) => self.get_var_value(var),
+    /// Compiles a constant expression. This is implemented separately from `compile_expr` because
+    /// constant expressions are composed only of constant/immediate values that require no
+    /// runtime initialization logic, whereas non-constant expressions require memory to be
+    /// allocated and written to during initialization.
+    /// This will probably cause a panic if `expr` is not a constant (i.e. cannot be represented
+    /// by LLVM as an immediate/constant value), but the semantic analyzer should guarantee that
+    /// never happens.
+    fn compile_const_expr(&mut self, expr: &AExpr) -> BasicValueEnum<'ctx> {
+        match &expr.kind {
+            AExprKind::Symbol(symbol) => self.const_extract_value(symbol),
 
             AExprKind::BoolLiteral(b) => self
                 .ctx
@@ -943,6 +951,18 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                 .const_null()
                 .as_basic_value_enum(),
 
+            AExprKind::UnaryOperation(op, expr) => {
+                // See note immediately below about automatic LLVM constant folding.
+                self.compile_unary_op(op, expr)
+            }
+
+            AExprKind::BinaryOperation(left, op, right) => {
+                // We can compile constant unary and binary operations as usual because LLVM should
+                // be smart enough to do constant folding on the expressions at compile time so the
+                // result is still constant.
+                self.compile_bin_op(left, op, right)
+            }
+
             AExprKind::StrLiteral(literal) => {
                 let char_type = self.ctx.i32_type();
 
@@ -968,6 +988,78 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
                     self.type_converter.get_basic_type(expr.type_key),
                     "str_lit_as_i32_ptr",
                 )
+            }
+
+            AExprKind::TupleInit(tuple_init) => {
+                let ll_struct_type = self.type_converter.get_struct_type(tuple_init.type_key);
+                let ll_field_values: Vec<BasicValueEnum> = tuple_init
+                    .values
+                    .iter()
+                    .map(|v| self.compile_const_expr(v))
+                    .collect();
+
+                ll_struct_type
+                    .const_named_struct(ll_field_values.as_slice())
+                    .as_basic_value_enum()
+            }
+
+            AExprKind::StructInit(struct_init) => {
+                let struct_type = self
+                    .type_store
+                    .must_get(struct_init.type_key)
+                    .to_struct_type();
+                let ll_struct_type = self.type_converter.get_struct_type(struct_init.type_key);
+                let mut ll_field_values = vec![];
+
+                for field in &struct_type.fields {
+                    ll_field_values.push(self.compile_const_expr(
+                        struct_init.field_values.get(field.name.as_str()).unwrap(),
+                    ))
+                }
+
+                ll_struct_type
+                    .const_named_struct(ll_field_values.as_slice())
+                    .as_basic_value_enum()
+            }
+
+            AExprKind::EnumInit(enum_init) => {
+                let ll_struct_type = self.type_converter.get_struct_type(enum_init.type_key);
+                let ll_variant_num = self
+                    .ctx
+                    .i8_type()
+                    .const_int(enum_init.variant.number as u64, false)
+                    .as_basic_value_enum();
+                let mut ll_field_values = vec![ll_variant_num];
+
+                // Only append the variant value if there is one.
+                if let Some(val) = &enum_init.maybe_value {
+                    ll_field_values.push(self.compile_const_expr(val));
+                }
+
+                ll_struct_type
+                    .const_named_struct(ll_field_values.as_slice())
+                    .as_basic_value_enum()
+            }
+
+            _ => panic!("unexpected const expression {}", expr),
+        }
+    }
+
+    /// Compiles an arbitrary expression.
+    fn compile_expr(&mut self, expr: &AExpr) -> BasicValueEnum<'ctx> {
+        if expr.kind.is_const() {
+            return self.compile_const_expr(expr);
+        }
+
+        let result = match &expr.kind {
+            AExprKind::Symbol(var) => self.get_var_value(var),
+
+            AExprKind::BoolLiteral(_)
+            | AExprKind::I64Literal(_, _)
+            | AExprKind::U64Literal(_, _)
+            | AExprKind::Null
+            | AExprKind::StrLiteral(_) => {
+                panic!("constant expression {} was not marked as constant", expr)
             }
 
             AExprKind::FunctionCall(call) => self.compile_call(call).unwrap(),
@@ -1050,7 +1142,7 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     /// Compiles enum variant initialization.
     fn compile_enum_variant_init(&mut self, enum_init: &AEnumVariantInit) -> BasicValueEnum<'ctx> {
         // Assemble the LLVM struct type for this enum value.
-        let ll_struct_type = self.type_converter.get_struct_type(enum_init.enum_type_key);
+        let ll_struct_type = self.type_converter.get_struct_type(enum_init.type_key);
 
         // Allocate space for the struct on the stack.
         let ll_struct_ptr = self.builder.build_alloca(ll_struct_type, "enum_init_ptr");
@@ -1357,10 +1449,8 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
     ) -> IntValue<'ctx> {
         // Handle the special case of enum variant comparisons.
         if op == &Operator::Like {
-            let ll_left_variant =
-                self.get_enum_variant_number(left_type_key, ll_lhs.into_pointer_value());
-            let ll_right_variant =
-                self.get_enum_variant_number(left_type_key, ll_rhs.into_pointer_value());
+            let ll_left_variant = self.get_enum_variant_number(left_type_key, ll_lhs);
+            let ll_right_variant = self.get_enum_variant_number(left_type_key, ll_rhs);
 
             return self.builder.build_int_compare(
                 IntPredicate::EQ,
@@ -1496,25 +1586,87 @@ impl<'a, 'ctx> FnCompiler<'a, 'ctx> {
         }
     }
 
-    /// Returns the variant number of the given enum.
+    /// Returns the variant number of the given enum. `ll_enum_value` can either be a pointer to
+    /// an LLVM struct representing a Blang enum value or a constant LLVM struct.
     fn get_enum_variant_number(
         &mut self,
         enum_type_key: TypeKey,
-        ll_enum_ptr: PointerValue<'ctx>,
+        ll_enum_value: BasicValueEnum<'ctx>,
     ) -> IntValue<'ctx> {
         let enum_type = self.type_store.must_get(enum_type_key);
         let ll_enum_type = self.type_converter.get_basic_type(enum_type_key);
-        let ll_variant_ptr = self
-            .builder
-            .build_struct_gep(
-                ll_enum_type,
-                ll_enum_ptr,
-                0,
-                format!("{}.variant_ptr", enum_type.name()).as_str(),
-            )
-            .unwrap();
-        self.builder
-            .build_load(self.ctx.i8_type(), ll_variant_ptr, "variant_number")
-            .into_int_value()
+
+        // If the value is a pointer to an enum (i.e. the LLVM struct value representing a Blang
+        // enum), then we need to use a GEP instruction to compute the address of the enum variant
+        // value and then load the value from that address.
+        // Otherwise, the enum value is being passed by value and we can just extract the variant
+        // number from the first field in the LLVM struct.
+        if ll_enum_value.is_pointer_value() {
+            let ll_variant_ptr = self
+                .builder
+                .build_struct_gep(
+                    ll_enum_type,
+                    ll_enum_value.into_pointer_value(),
+                    0,
+                    format!("{}.variant_ptr", enum_type.name()).as_str(),
+                )
+                .unwrap();
+            self.builder
+                .build_load(self.ctx.i8_type(), ll_variant_ptr, "variant_number")
+                .into_int_value()
+        } else {
+            self.builder
+                .build_extract_value(ll_enum_value.into_struct_value(), 0, "variant_number")
+                .unwrap()
+                .into_int_value()
+        }
+    }
+
+    /// Extracts the value of the given symbol that must represent a constant or the accesses of
+    /// some field or subfield on a constant.
+    fn const_extract_value(&mut self, symbol: &ASymbol) -> BasicValueEnum<'ctx> {
+        let const_value = &self.consts.get(symbol.name.as_str()).unwrap().value;
+        let mut ll_const_value = self.compile_const_expr(const_value);
+
+        if symbol.member_access.is_none() {
+            return ll_const_value;
+        }
+
+        let mut member_access = symbol.member_access.as_ref().unwrap();
+        let mut const_type_key = const_value.type_key;
+
+        loop {
+            let member_name = &member_access.member_name;
+            let const_type = self.type_store.must_get(const_type_key);
+            let (ll_field_index, field_type_key) = match const_type {
+                AType::Struct(struct_type) => {
+                    let ll_field_index = struct_type.get_field_index(member_name.as_str()).unwrap();
+                    let field_type_key = struct_type
+                        .get_field_type_key(member_name.as_str())
+                        .unwrap();
+                    (ll_field_index as u32, field_type_key)
+                }
+                AType::Tuple(tuple_type) => {
+                    let ll_field_index = tuple_type.get_field_index(member_name.as_str());
+                    let field_type_key = tuple_type.get_field_type_key(ll_field_index).unwrap();
+                    (ll_field_index as u32, field_type_key)
+                }
+                other => panic!("cannot extract value of non-struct type {}", other),
+            };
+
+            ll_const_value = self
+                .builder
+                .build_extract_value(
+                    ll_const_value.into_struct_value(),
+                    ll_field_index,
+                    member_name.as_str(),
+                )
+                .unwrap();
+            const_type_key = field_type_key;
+            member_access = match &member_access.submember {
+                Some(sm) => sm,
+                None => return ll_const_value,
+            };
+        }
     }
 }

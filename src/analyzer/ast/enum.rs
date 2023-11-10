@@ -208,14 +208,14 @@ impl AEnumType {
 /// Represents a semantically valid enum variant initialization.
 #[derive(Debug)]
 pub struct AEnumVariantInit {
-    pub enum_type_key: TypeKey,
+    pub type_key: TypeKey,
     pub variant: AEnumTypeVariant,
     pub maybe_value: Option<Box<AExpr>>,
 }
 
 impl PartialEq for AEnumVariantInit {
     fn eq(&self, other: &Self) -> bool {
-        self.enum_type_key == other.enum_type_key
+        self.type_key == other.type_key
             && self.variant == other.variant
             && util::opts_eq(&self.maybe_value, &other.maybe_value)
     }
@@ -226,7 +226,7 @@ impl Display for AEnumVariantInit {
         write!(
             f,
             "{}{}{}",
-            self.enum_type_key,
+            self.type_key,
             TokenKind::DoubleColon,
             self.variant.name
         )?;
@@ -242,7 +242,7 @@ impl Display for AEnumVariantInit {
 impl Clone for AEnumVariantInit {
     fn clone(&self) -> Self {
         AEnumVariantInit {
-            enum_type_key: self.enum_type_key,
+            type_key: self.type_key,
             variant: self.variant.clone(),
             maybe_value: self.maybe_value.clone(),
         }
@@ -269,7 +269,7 @@ impl AEnumVariantInit {
                 ));
 
                 return AEnumVariantInit {
-                    enum_type_key,
+                    type_key: enum_type_key,
                     variant: AEnumTypeVariant {
                         number: 0,
                         name: "<unknown>".to_string(),
@@ -293,7 +293,7 @@ impl AEnumVariantInit {
                 ));
 
                 return AEnumVariantInit {
-                    enum_type_key,
+                    type_key: enum_type_key,
                     variant: AEnumTypeVariant {
                         number: 0,
                         name: "<unknown>".to_string(),
@@ -323,7 +323,7 @@ impl AEnumVariantInit {
                     ));
 
                     return AEnumVariantInit {
-                        enum_type_key,
+                        type_key: enum_type_key,
                         variant,
                         maybe_value: None,
                     };
@@ -353,7 +353,7 @@ impl AEnumVariantInit {
                     ));
 
                     return AEnumVariantInit {
-                        enum_type_key,
+                        type_key: enum_type_key,
                         variant,
                         maybe_value: None,
                     };
@@ -364,7 +364,7 @@ impl AEnumVariantInit {
         };
 
         AEnumVariantInit {
-            enum_type_key,
+            type_key: enum_type_key,
             variant,
             maybe_value,
         }
@@ -374,7 +374,7 @@ impl AEnumVariantInit {
     pub fn display(&self, ctx: &ProgramContext) -> String {
         let mut s = format!(
             "{}{}{}",
-            ctx.display_type_for_key(self.enum_type_key),
+            ctx.display_type_for_key(self.type_key),
             TokenKind::DoubleColon,
             self.variant.name
         );

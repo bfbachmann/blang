@@ -150,6 +150,28 @@ impl Operator {
         )
     }
 
+    /// Returns true if this operator can be used in constant expressions.
+    pub fn is_const(&self) -> bool {
+        matches!(
+            self,
+            Operator::Add
+                | Operator::Subtract
+                | Operator::Multiply
+                | Operator::Divide
+                | Operator::Modulo
+                | Operator::LogicalAnd
+                | Operator::LogicalOr
+                | Operator::As
+                | Operator::LogicalNot
+                | Operator::EqualTo
+                | Operator::NotEqualTo
+                | Operator::GreaterThan
+                | Operator::LessThan
+                | Operator::GreaterThanOrEqual
+                | Operator::LessThanOrEqual
+        )
+    }
+
     /// Returns true if the operator is a binary logical operator..
     pub fn is_logical(&self) -> bool {
         matches!(self, Operator::LogicalAnd | Operator::LogicalOr)

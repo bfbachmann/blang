@@ -265,3 +265,36 @@ fn compile(
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use crate::compile;
+
+    #[test]
+    fn compile_all_test_files() {
+        let entries = fs::read_dir("src/tests").expect("should succeed");
+        for entry in entries {
+            let file_path = entry.unwrap().path();
+            match file_path.extension() {
+                Some(ext) if ext == "bl" => {}
+                _ => continue,
+            };
+
+            let output_path = format!(
+                "bin/{}.ll",
+                file_path.file_stem().unwrap().to_str().unwrap()
+            );
+
+            compile(
+                file_path.to_str().unwrap(),
+                Some(&output_path),
+                false,
+                None,
+                true,
+                true,
+            );
+        }
+    }
+}

@@ -327,13 +327,13 @@ impl AMemberAccess {
         // Check if the member access is accessing a field on a struct or tuple type.
         let maybe_field_type_key = match typ {
             AType::Struct(struct_type) => struct_type.get_field_type_key(member_name.as_str()),
-            AType::Tuple(tuple_type) => {
-                let field_index = member_name.parse::<usize>().unwrap();
-                match tuple_type.get_field_type_key(field_index) {
+            AType::Tuple(tuple_type) => match member_name.parse::<usize>() {
+                Ok(field_index) => match tuple_type.get_field_type_key(field_index) {
                     Some(i) => Some(i),
                     None => None,
-                }
-            }
+                },
+                Err(_) => None,
+            },
             _ => None,
         };
 

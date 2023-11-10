@@ -509,8 +509,8 @@ impl<'a> MoveChecker<'a> {
     /// Performs move checks on `var`.
     fn check_var(&mut self, var: &ASymbol) {
         // Skip the move check entirely if the root variable is of some type that doesn't require
-        // moves.
-        if !self.must_get_type(var.parent_type_key).requires_move() {
+        // moves, or if it's a constant.
+        if !self.must_get_type(var.parent_type_key).requires_move() || var.is_const {
             return;
         }
 
