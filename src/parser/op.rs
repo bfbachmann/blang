@@ -44,11 +44,11 @@ impl Operator {
     /// operator.
     pub fn from(kind: &TokenKind) -> Option<Self> {
         match kind {
-            TokenKind::Add => Some(Operator::Add),
-            TokenKind::Subtract => Some(Operator::Subtract),
-            TokenKind::Multiply => Some(Operator::Multiply),
-            TokenKind::Divide => Some(Operator::Divide),
-            TokenKind::Modulo => Some(Operator::Modulo),
+            TokenKind::Plus => Some(Operator::Add),
+            TokenKind::Minus => Some(Operator::Subtract),
+            TokenKind::Asterisk => Some(Operator::Multiply),
+            TokenKind::ForwardSlash => Some(Operator::Divide),
+            TokenKind::Percent => Some(Operator::Modulo),
             TokenKind::LogicalAnd => Some(Operator::LogicalAnd),
             TokenKind::LogicalOr => Some(Operator::LogicalOr),
             TokenKind::LogicalNot => Some(Operator::LogicalNot),
@@ -69,11 +69,11 @@ impl Operator {
 
     pub fn to_string(&self) -> String {
         match self {
-            Operator::Add => TokenKind::Add.to_string(),
-            Operator::Subtract => TokenKind::Subtract.to_string(),
-            Operator::Multiply => TokenKind::Multiply.to_string(),
-            Operator::Divide => TokenKind::Divide.to_string(),
-            Operator::Modulo => TokenKind::Modulo.to_string(),
+            Operator::Add => TokenKind::Plus.to_string(),
+            Operator::Subtract => TokenKind::Minus.to_string(),
+            Operator::Multiply => TokenKind::Asterisk.to_string(),
+            Operator::Divide => TokenKind::ForwardSlash.to_string(),
+            Operator::Modulo => TokenKind::Percent.to_string(),
             Operator::LogicalAnd => TokenKind::LogicalAnd.to_string(),
             Operator::LogicalOr => TokenKind::LogicalOr.to_string(),
             Operator::LogicalNot => TokenKind::LogicalNot.to_string(),

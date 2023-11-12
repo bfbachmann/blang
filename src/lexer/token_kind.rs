@@ -8,17 +8,17 @@ use regex::Regex;
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum TokenKind {
     // Binary operators
-    Add,
-    Subtract,
-    Multiply,
-    Divide,
-    Modulo,
+    Plus,
+    Minus,
+    Asterisk,
+    ForwardSlash,
+    Percent,
     LogicalAnd,
     LogicalOr,
 
     // Unary operators
     LogicalNot,
-    Reference,
+    Ampersand,
 
     // Variable assignment
     Equal,
@@ -87,11 +87,11 @@ pub enum TokenKind {
 impl Clone for TokenKind {
     fn clone(&self) -> Self {
         match self {
-            TokenKind::Add => TokenKind::Add,
-            TokenKind::Subtract => TokenKind::Subtract,
-            TokenKind::Multiply => TokenKind::Multiply,
-            TokenKind::Divide => TokenKind::Divide,
-            TokenKind::Modulo => TokenKind::Modulo,
+            TokenKind::Plus => TokenKind::Plus,
+            TokenKind::Minus => TokenKind::Minus,
+            TokenKind::Asterisk => TokenKind::Asterisk,
+            TokenKind::ForwardSlash => TokenKind::ForwardSlash,
+            TokenKind::Percent => TokenKind::Percent,
             TokenKind::LogicalAnd => TokenKind::LogicalAnd,
             TokenKind::LogicalOr => TokenKind::LogicalOr,
             TokenKind::LogicalNot => TokenKind::LogicalNot,
@@ -144,7 +144,7 @@ impl Clone for TokenKind {
             TokenKind::DollarSign => TokenKind::DollarSign,
             TokenKind::Like => TokenKind::Like,
             TokenKind::NotLike => TokenKind::NotLike,
-            TokenKind::Reference => TokenKind::Reference,
+            TokenKind::Ampersand => TokenKind::Ampersand,
         }
     }
 }
@@ -169,11 +169,11 @@ impl fmt::Display for TokenKind {
 impl TokenKind {
     fn to_string(&self) -> String {
         match self {
-            TokenKind::Add => "+".to_string(),
-            TokenKind::Subtract => "-".to_string(),
-            TokenKind::Multiply => "*".to_string(),
-            TokenKind::Divide => "/".to_string(),
-            TokenKind::Modulo => "%".to_string(),
+            TokenKind::Plus => "+".to_string(),
+            TokenKind::Minus => "-".to_string(),
+            TokenKind::Asterisk => "*".to_string(),
+            TokenKind::ForwardSlash => "/".to_string(),
+            TokenKind::Percent => "%".to_string(),
             TokenKind::LogicalAnd => "and".to_string(),
             TokenKind::LogicalOr => "or".to_string(),
             TokenKind::LogicalNot => "!".to_string(),
@@ -226,7 +226,7 @@ impl TokenKind {
             TokenKind::DollarSign => "$".to_string(),
             TokenKind::Like => "~==".to_string(),
             TokenKind::NotLike => "~!=".to_string(),
-            TokenKind::Reference => "&".to_string(),
+            TokenKind::Ampersand => "&".to_string(),
         }
     }
 
@@ -234,11 +234,11 @@ impl TokenKind {
     /// token.
     pub fn from(segment: &str) -> Option<TokenKind> {
         let basic_kinds = HashMap::from([
-            (TokenKind::Add.to_string(), TokenKind::Add),
-            (TokenKind::Subtract.to_string(), TokenKind::Subtract),
-            (TokenKind::Multiply.to_string(), TokenKind::Multiply),
-            (TokenKind::Divide.to_string(), TokenKind::Divide),
-            (TokenKind::Modulo.to_string(), TokenKind::Modulo),
+            (TokenKind::Plus.to_string(), TokenKind::Plus),
+            (TokenKind::Minus.to_string(), TokenKind::Minus),
+            (TokenKind::Asterisk.to_string(), TokenKind::Asterisk),
+            (TokenKind::ForwardSlash.to_string(), TokenKind::ForwardSlash),
+            (TokenKind::Percent.to_string(), TokenKind::Percent),
             (TokenKind::LogicalAnd.to_string(), TokenKind::LogicalAnd),
             (TokenKind::LogicalOr.to_string(), TokenKind::LogicalOr),
             (TokenKind::LogicalNot.to_string(), TokenKind::LogicalNot),
@@ -292,7 +292,7 @@ impl TokenKind {
             (TokenKind::DollarSign.to_string(), TokenKind::DollarSign),
             (TokenKind::Like.to_string(), TokenKind::Like),
             (TokenKind::NotLike.to_string(), TokenKind::NotLike),
-            (TokenKind::Reference.to_string(), TokenKind::Reference),
+            (TokenKind::Ampersand.to_string(), TokenKind::Ampersand),
         ]);
 
         // Trim syntactically meaningless whitespace.

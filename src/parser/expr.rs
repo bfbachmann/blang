@@ -491,7 +491,7 @@ impl Expression {
                     // by why allow confusing and unnecessary syntax?
                     if let Some(
                         token @ Token {
-                            kind: TokenKind::Subtract,
+                            kind: TokenKind::Minus,
                             ..
                         },
                     ) = last_token.clone()
@@ -511,7 +511,7 @@ impl Expression {
                     out_q.push_back(OutputNode::from_basic_expr(Expression::I64Literal(
                         I64Lit::new_with_default_pos(-1),
                     )));
-                    op_stack.push_back(Token::new(TokenKind::Multiply, 0, 0, 0));
+                    op_stack.push_back(Token::new(TokenKind::Asterisk, 0, 0, 0));
                 } else {
                     return Err(ParseError::new_with_token(
                         ErrorKind::UnexpectedOperator,
@@ -627,7 +627,6 @@ impl Expression {
 #[cfg(test)]
 mod tests {
     use crate::lexer::lex::lex;
-    
 
     use crate::lexer::pos::Position;
     use crate::lexer::stream::Stream;
@@ -1117,7 +1116,7 @@ mod tests {
                 kind: ErrorKind::UseOfDoubleNegative,
                 message: _,
                 token: Some(Token {
-                    kind: TokenKind::Subtract,
+                    kind: TokenKind::Minus,
                     start: Position { line: 1, col: 1 },
                     end: Position { line: 1, col: 2 },
                 }),

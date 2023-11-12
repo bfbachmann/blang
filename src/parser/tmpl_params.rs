@@ -97,7 +97,7 @@ impl TmplParam {
                     tmpl_param.required_specs.push(spec);
 
                     // Stop parsing types/specs if the next token is not a comma.
-                    if Program::parse_optional(tokens, TokenKind::Add).is_none() {
+                    if Program::parse_optional(tokens, TokenKind::Plus).is_none() {
                         break;
                     }
                 }

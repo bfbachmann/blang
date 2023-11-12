@@ -13,7 +13,7 @@ mod tests {
     #[test]
     fn lex_add() {
         let result = TokenKind::from(" + ");
-        assert_eq!(result, Some(TokenKind::Add));
+        assert_eq!(result, Some(TokenKind::Plus));
 
         let result = TokenKind::from(" aos83;2/ ");
         assert_eq!(result, None);
@@ -22,7 +22,7 @@ mod tests {
     #[test]
     fn lex_subtract() {
         let result = TokenKind::from(" - ");
-        assert_eq!(result, Some(TokenKind::Subtract));
+        assert_eq!(result, Some(TokenKind::Minus));
 
         let result = TokenKind::from(" ao9u5424lm/ ");
         assert_eq!(result, None);
