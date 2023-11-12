@@ -333,50 +333,40 @@ impl TokenKind {
     }
 
     fn lex_i64_literal(segment: &str) -> Option<TokenKind> {
-        if segment.starts_with("-") || segment.starts_with("+") {
-            return None;
+        lazy_static! {
+            static ref I64_IDENTIFIER: Regex = Regex::new(r"^[0-9_]+(i64)?$").unwrap();
         }
-
-        // If the segment starts with `_`, it can't be an i64. We're doing this check here because
-        // `_` will be stripped below.
-        if segment.starts_with("_") {
-            return None;
-        }
-
-        // Remove all `_` and the optional trailing `i64` from the segment. If what is left is an
-        // integer, the segment is a valid i64 literal.
-        let segment = segment.replace("_", "");
-        let (stripped, has_suffix) = match segment.strip_suffix("i64") {
-            Some(seg) => (seg.to_string(), true),
-            None => (segment.to_string(), false),
-        };
-        match stripped.parse::<i64>() {
-            Ok(i) => Some(TokenKind::I64Literal(i, has_suffix)),
-            Err(_) => None,
+        match I64_IDENTIFIER.is_match(segment) {
+            true => Some(TokenKind::I64Literal(
+                segment
+                    .replace("i64", "")
+                    .chars()
+                    .filter(|c| c.is_digit(10))
+                    .collect::<String>()
+                    .parse::<i64>()
+                    .unwrap(),
+                segment.ends_with("i64"),
+            )),
+            false => None,
         }
     }
 
     fn lex_u64_literal(segment: &str) -> Option<TokenKind> {
-        if segment.starts_with("+") {
-            return None;
+        lazy_static! {
+            static ref U64_IDENTIFIER: Regex = Regex::new(r"^[0-9_]+(u64)?$").unwrap();
         }
-
-        // If the segment starts with `_`, it can't be a u64. We're doing this check here because
-        // `_` will be stripped below.
-        if segment.starts_with("_") {
-            return None;
-        }
-
-        // Remove all `_` and the optional trailing `u64` from the segment. If what is left is an
-        // integer, the segment is a valid u64 literal.
-        let segment = segment.replace("_", "");
-        let (stripped, has_suffix) = match segment.strip_suffix("u64") {
-            Some(seg) => (seg.to_string(), true),
-            None => (segment.to_string(), false),
-        };
-        match stripped.parse::<u64>() {
-            Ok(i) => Some(TokenKind::U64Literal(i, has_suffix)),
-            Err(_) => None,
+        match U64_IDENTIFIER.is_match(segment) {
+            true => Some(TokenKind::U64Literal(
+                segment
+                    .replace("u64", "")
+                    .chars()
+                    .filter(|c| c.is_digit(10))
+                    .collect::<String>()
+                    .parse::<u64>()
+                    .unwrap(),
+                segment.ends_with("u64"),
+            )),
+            false => None,
         }
     }
 
