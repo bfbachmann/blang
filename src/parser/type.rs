@@ -4,6 +4,7 @@ use std::hash::Hash;
 use colored::Colorize;
 
 use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
@@ -11,7 +12,6 @@ use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::func_sig::FunctionSignature;
 use crate::parser::r#enum::EnumType;
 use crate::parser::r#struct::StructType;
-use crate::parser::stream::Stream;
 use crate::parser::tuple::TupleType;
 use crate::parser::unresolved::UnresolvedType;
 

@@ -1,18 +1,20 @@
 #[cfg(test)]
 mod tests {
-    use std::io::{BufRead, Cursor};
+    
 
     use crate::analyzer::analyze::analyze_prog;
     use crate::analyzer::ast::program::AProgram;
     use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
     use crate::analyzer::prog_context::ProgramAnalysis;
     use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
-    use crate::lexer::token::Token;
+    use crate::lexer::lex::lex;
+    use crate::lexer::stream::Stream;
+    
     use crate::parser::program::Program;
-    use crate::parser::stream::Stream;
 
     fn get_analysis(raw: &str) -> ProgramAnalysis {
-        let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let mut char_stream = Stream::from(raw.chars().collect());
+        let tokens = lex(&mut char_stream).expect("should not error");
         let prog = Program::from(&mut Stream::from(tokens)).expect("should not error");
         analyze_prog(&prog)
     }

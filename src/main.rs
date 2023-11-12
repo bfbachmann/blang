@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::prelude::*;
-use std::io::{BufRead, BufReader, Result};
+use std::io::{BufReader, Result};
 use std::path::{Path, PathBuf};
 use std::process;
 use std::time::Instant;
@@ -10,15 +10,15 @@ use colored::*;
 use pluralizer::pluralize;
 
 use codegen::program::ProgramCodeGen;
-use lexer::token::Token;
 use parser::program::Program;
 
 use crate::analyzer::analyze::analyze_prog;
 use crate::analyzer::prog_context::ProgramAnalysis;
 use crate::fmt::format_file_loc;
 use crate::lexer::error::LexError;
+use crate::lexer::lex::lex;
+use crate::lexer::stream::Stream;
 use crate::parser::error::ParseError;
-use crate::parser::stream::Stream;
 
 mod codegen;
 #[macro_use]
@@ -94,26 +94,31 @@ fn main() {
 }
 
 /// Opens the file at the given path and returns a reader for it.
-fn open_file(file_path: &str) -> Result<BufReader<File>> {
+fn open_file(file_path: &str) -> Result<Stream<char>> {
     let file = File::open(file_path)?;
-    Ok(BufReader::new(file))
+    let mut reader = BufReader::new(file);
+
+    let mut contents = String::new();
+    reader.read_to_string(&mut contents)?;
+
+    Ok(Stream::from(contents.chars().collect()))
 }
 
 /// Performs static analysis on the source code at the given path. Returns a successfully analyzed
 /// program and extern functions, or logs an error and exits with code 1.
 fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> ProgramAnalysis {
-    // Get a reader from the source file.
-    let reader = match open_file(input_path) {
+    // Get a stream of characters from the source file.
+    let mut char_stream = match open_file(input_path) {
         Ok(r) => r,
         Err(err) => fatalln!(r#"error opening file "{}": {}"#, input_path, err),
     };
 
-    // Break the file into tokens.
-    let tokens = match Token::tokenize(reader.lines()) {
+    // Break the char stream into tokens.
+    let tokens = match lex(&mut char_stream) {
         Ok(tokens) => tokens,
         Err(LexError { message, line, col }) => {
             fatalln!(
-                "{}\n  {}\n  This error prevents any further program analysis.",
+                "{}\n  {}\n  This syntax error prevents any further program analysis.",
                 message.bold(),
                 format_file_loc(input_path, Some(line), Some(col)),
             )
@@ -130,7 +135,7 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> ProgramAnalysi
             ..
         }) => {
             fatalln!(
-                "{}\n  {}\n  This error prevents any further program analysis.",
+                "{}\n  {}\n  This syntax error prevents any further program analysis.",
                 message.bold(),
                 format_file_loc(input_path, Some(start_pos.line), Some(start_pos.col)),
             );

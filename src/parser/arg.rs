@@ -1,12 +1,12 @@
 use std::fmt;
 
 use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::error::ParseResult;
 use crate::parser::program::Program;
-use crate::parser::stream::Stream;
 use crate::parser::Type;
 
 /// Represents a function argument declaration.

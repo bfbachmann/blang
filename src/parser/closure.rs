@@ -1,11 +1,11 @@
 use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
 use crate::parser::statement::Statement;
-use crate::parser::stream::Stream;
 use crate::{locatable_impl, util};
 
 /// Represents a closure, which is just a series of statements with their own scope.

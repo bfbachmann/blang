@@ -1,16 +1,18 @@
 #[cfg(test)]
 mod tests {
-    use std::io::{BufRead, Cursor};
+    
     use std::path::Path;
 
     use crate::analyzer::analyze::analyze_prog;
     use crate::codegen::program::ProgramCodeGen;
-    use crate::lexer::token::Token;
+    use crate::lexer::lex::lex;
+    use crate::lexer::stream::Stream;
+    
     use crate::parser::program::Program;
-    use crate::parser::stream::Stream;
 
     fn assert_compiles(code: &str) {
-        let tokens = Token::tokenize(Cursor::new(code).lines()).expect("should not error");
+        let mut char_stream = Stream::from(code.chars().collect());
+        let tokens = lex(&mut char_stream).expect("should not error");
         let prog = Program::from(&mut Stream::from(tokens)).expect("should not error");
         let analysis = analyze_prog(&prog);
         ProgramCodeGen::compile(analysis, None, false, Path::new("/dev/null"), false)

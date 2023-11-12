@@ -54,4 +54,26 @@ impl<T> Stream<T> {
     pub fn has_next(&self) -> bool {
         self.peek_next().is_some()
     }
+
+    /// Advances the cursor in the stream until the next token causes `should_stop` to return true.
+    /// Returns true if `should_stop` returns true, and returns false if we reached the end of the
+    /// stream.
+    pub fn seek<F>(&mut self, mut should_stop: F) -> bool
+    where
+        F: FnMut(&T) -> bool,
+    {
+        loop {
+            match self.peek_next() {
+                Some(c) if should_stop(c) => return true,
+                None => return false,
+                _ => self.cursor += 1,
+            }
+        }
+    }
+
+    /// Returns a slice containing the tokens between the start and end (including the start
+    /// position but excluding the end position).
+    pub fn slice(&self, start: usize, end: usize) -> &[T] {
+        &self.tokens.as_slice()[start..end]
+    }
 }

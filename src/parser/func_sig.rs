@@ -5,12 +5,12 @@ use std::hash::{Hash, Hasher};
 use colored::Colorize;
 
 use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::arg::Argument;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::program::Program;
-use crate::parser::stream::Stream;
 use crate::parser::tmpl_params::TmplParams;
 use crate::parser::Type;
 use crate::{locatable_impl, util};
@@ -380,22 +380,5 @@ impl FunctionSignature {
         }
 
         Ok((args, end_pos))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::io::{BufRead, Cursor};
-
-    use crate::lexer::token::Token;
-    use crate::parser::program::Program;
-    use crate::parser::stream::Stream;
-
-    #[test]
-    fn inline_struct_types_in_fn_sig() {
-        let raw = r#"fn one(a: struct {one: i64, two: bool}, b: i64) ~ struct {thing: str} {}"#;
-        let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        let result = Program::from(&mut Stream::from(tokens));
-        assert!(matches!(result, Ok(_)));
     }
 }

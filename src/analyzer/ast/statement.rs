@@ -213,19 +213,21 @@ impl AStatement {
 
 #[cfg(test)]
 mod tests {
-    use std::io::{BufRead, Cursor};
+    
 
     use crate::analyzer::ast::r#struct::{AField, AStructType};
     use crate::analyzer::ast::statement::AStatement;
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
     use crate::analyzer::prog_context::ProgramContext;
     use crate::analyzer::warn::AnalyzeWarning;
-    use crate::lexer::token::Token;
+    use crate::lexer::lex::lex;
+    use crate::lexer::stream::Stream;
+    
     use crate::parser::statement::Statement;
-    use crate::parser::stream::Stream;
 
     fn analyze_statement(raw: &str, ctx: &mut ProgramContext) -> AStatement {
-        let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
+        let mut char_stream = Stream::from(raw.chars().collect());
+        let tokens = lex(&mut char_stream).expect("should not error");
         let statement = Statement::from(&mut Stream::from(tokens)).expect("should not error");
         AStatement::from(ctx, &statement)
     }

@@ -6,6 +6,7 @@ use std::hash::{Hash, Hasher};
 use colored::Colorize;
 
 use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
@@ -13,7 +14,6 @@ use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
 use crate::parser::r#type::Type;
-use crate::parser::stream::Stream;
 use crate::parser::unresolved::UnresolvedType;
 use crate::{locatable_impl, util};
 

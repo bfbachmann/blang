@@ -1,6 +1,7 @@
 use std::fmt;
 
 use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::parser::arg::Argument;
 use crate::parser::closure::Closure;
@@ -10,7 +11,6 @@ use crate::parser::lambda::LambdaDecl;
 use crate::parser::r#type::Type;
 use crate::parser::ret::Ret;
 use crate::parser::statement::Statement;
-use crate::parser::stream::Stream;
 use crate::parser::tmpl_params::{TmplParam, TmplParams};
 
 /// Represents a function declaration.

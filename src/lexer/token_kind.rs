@@ -75,9 +75,6 @@ pub enum TokenKind {
     Colon,
     DoubleColon,
     Dot,
-    LineComment,
-    BeginBlockComment,
-    EndBlockComment,
     Tilde,
     At,
     With,
@@ -131,9 +128,6 @@ impl Clone for TokenKind {
             TokenKind::Colon => TokenKind::Colon,
             TokenKind::DoubleColon => TokenKind::DoubleColon,
             TokenKind::Dot => TokenKind::Dot,
-            TokenKind::LineComment => TokenKind::LineComment,
-            TokenKind::BeginBlockComment => TokenKind::BeginBlockComment,
-            TokenKind::EndBlockComment => TokenKind::EndBlockComment,
             TokenKind::Identifier(v) => TokenKind::Identifier(v.clone()),
             TokenKind::Continue => TokenKind::Continue,
             TokenKind::SizeOf => TokenKind::SizeOf,
@@ -217,9 +211,6 @@ impl TokenKind {
             TokenKind::Dot => ".".to_string(),
             TokenKind::Break => "break".to_string(),
             TokenKind::Return => "return".to_string(),
-            TokenKind::LineComment => "//".to_string(),
-            TokenKind::BeginBlockComment => "/*".to_string(),
-            TokenKind::EndBlockComment => "*/".to_string(),
             TokenKind::Continue => "continue".to_string(),
             TokenKind::SizeOf => "sizeof".to_string(),
             TokenKind::Extern => "extern".to_string(),
@@ -237,37 +228,6 @@ impl TokenKind {
             TokenKind::NotLike => "~!=".to_string(),
             TokenKind::Reference => "&".to_string(),
         }
-    }
-
-    /// Returns false if the token, when lexed, could possibly be a part of a larger token and true
-    /// otherwise.
-    fn is_greedy(&self) -> bool {
-        matches!(self, TokenKind::Add | TokenKind::Subtract)
-    }
-
-    /// Finds the first valid TokenKind in the slice and the index in the slice at which the token
-    /// ends. If the slice does not begin with a valid token, None will be returned.
-    pub fn first_from(segment: &str) -> Option<(TokenKind, usize)> {
-        let segment_chars: Vec<char> = segment.chars().collect();
-        let mut result = None;
-
-        for token_end in 1..=segment.char_indices().count() {
-            let token = segment_chars[..token_end]
-                .iter()
-                .cloned()
-                .collect::<String>();
-
-            if let Some(kind) = TokenKind::from(token.as_str()) {
-                // The current subsegment is a valid token.
-                // If the current token is greedy, we should return it immediately.
-                if kind.is_greedy() {
-                    return Some((kind, token_end));
-                }
-                result = Some((kind, token_end));
-            }
-        }
-
-        result
     }
 
     /// Attempts to lex the given slice into a TokenKind. Returns None if the slice is not a valid
@@ -317,16 +277,7 @@ impl TokenKind {
             (TokenKind::Loop.to_string(), TokenKind::Loop),
             (TokenKind::Break.to_string(), TokenKind::Break),
             (TokenKind::Return.to_string(), TokenKind::Return),
-            (TokenKind::LineComment.to_string(), TokenKind::LineComment),
             (TokenKind::Continue.to_string(), TokenKind::Continue),
-            (
-                TokenKind::BeginBlockComment.to_string(),
-                TokenKind::BeginBlockComment,
-            ),
-            (
-                TokenKind::EndBlockComment.to_string(),
-                TokenKind::EndBlockComment,
-            ),
             (TokenKind::SizeOf.to_string(), TokenKind::SizeOf),
             (TokenKind::Extern.to_string(), TokenKind::Extern),
             (TokenKind::Tilde.to_string(), TokenKind::Tilde),
@@ -382,6 +333,10 @@ impl TokenKind {
     }
 
     fn lex_i64_literal(segment: &str) -> Option<TokenKind> {
+        if segment.starts_with("-") || segment.starts_with("+") {
+            return None;
+        }
+
         // If the segment starts with `_`, it can't be an i64. We're doing this check here because
         // `_` will be stripped below.
         if segment.starts_with("_") {
@@ -402,6 +357,10 @@ impl TokenKind {
     }
 
     fn lex_u64_literal(segment: &str) -> Option<TokenKind> {
+        if segment.starts_with("+") {
+            return None;
+        }
+
         // If the segment starts with `_`, it can't be a u64. We're doing this check here because
         // `_` will be stripped below.
         if segment.starts_with("_") {

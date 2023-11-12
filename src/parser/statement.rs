@@ -4,6 +4,7 @@ use std::fmt;
 use colored::Colorize;
 
 use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::closure::Closure;
@@ -24,7 +25,6 @@ use crate::parser::r#loop::Loop;
 use crate::parser::r#struct::StructType;
 use crate::parser::ret::Ret;
 use crate::parser::spec::Spec;
-use crate::parser::stream::Stream;
 use crate::parser::symbol::Symbol;
 use crate::parser::var_assign::VariableAssignment;
 use crate::parser::var_dec::VariableDeclaration;
@@ -493,18 +493,5 @@ impl Statement {
                 first_token.clone(),
             )),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::lexer::token::Token;
-    use crate::parser::statement::Statement;
-    use crate::parser::stream::Stream;
-
-    #[test]
-    fn parse_var_assignment() {
-        let tokens = Token::tokenize_line("let thing: i64 = 234", 0).expect("should not error");
-        Statement::from(&mut Stream::from(tokens)).expect("should not error");
     }
 }

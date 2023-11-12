@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
@@ -8,7 +9,6 @@ use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
 use crate::parser::program::Program;
 use crate::parser::r#type::Type;
-use crate::parser::stream::Stream;
 
 /// Represents a lambda function argument declaration. Lambda arguments may or may not have defined
 /// types. Arguments without types will be treated as templated (generic) arguments.

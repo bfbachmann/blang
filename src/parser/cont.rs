@@ -1,10 +1,10 @@
 use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::error::ParseResult;
 use crate::parser::program::Program;
-use crate::parser::stream::Stream;
 
 /// Represents a continue statement.
 #[derive(PartialEq, Debug, Clone)]

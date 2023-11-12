@@ -31,7 +31,6 @@ pub mod sizeof;
 pub mod spec;
 pub mod statement;
 pub mod str_lit;
-pub mod stream;
 pub mod r#struct;
 pub mod symbol;
 mod tests;

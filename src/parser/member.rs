@@ -3,12 +3,12 @@ use std::fmt::{Display, Formatter};
 use colored::Colorize;
 
 use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::program::Program;
-use crate::parser::stream::Stream;
 
 /// Represents access to a member or field on a type or an instance of a type.
 #[derive(Debug, Clone)]

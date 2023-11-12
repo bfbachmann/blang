@@ -3,12 +3,12 @@ use std::collections::HashSet;
 use colored::Colorize;
 
 use crate::lexer::pos::Position;
+use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::statement::Statement;
-use crate::parser::stream::Stream;
 use crate::{fmt, util};
 
 /// Represents a complete and syntactically valid (but not necessarily semantically valid) program.

@@ -1,8 +1,14 @@
 #[cfg(test)]
 mod tests {
-    use crate::lexer::error::LexError;
+    use crate::lexer::error::{LexError, LexResult};
+    use crate::lexer::lex::lex;
+    use crate::lexer::stream::Stream;
     use crate::lexer::token::Token;
     use crate::lexer::token_kind::TokenKind;
+
+    fn tokenize(code: &str) -> LexResult<Vec<Token>> {
+        lex(&mut Stream::from(code.chars().collect()))
+    }
 
     #[test]
     fn lex_add() {
@@ -80,50 +86,8 @@ mod tests {
     }
 
     #[test]
-    fn lex_first() {
-        let result = TokenKind::first_from("letter ");
-        assert_eq!(
-            result,
-            Some((TokenKind::Identifier(String::from("letter")), 7)),
-        );
-
-        let result = TokenKind::first_from("thing 234 ");
-        assert_eq!(
-            result,
-            Some((TokenKind::Identifier(String::from("thing")), 6))
-        );
-
-        let result = TokenKind::first_from("    3784751 --");
-        assert_eq!(result, Some((TokenKind::I64Literal(3784751, false), 12)),);
-
-        let result = TokenKind::first_from("  =letting 435");
-        assert_eq!(result, Some((TokenKind::Equal, 3)),);
-
-        let result = TokenKind::first_from("  =letting ");
-        assert_eq!(result, Some((TokenKind::Equal, 3)),);
-
-        let result = TokenKind::first_from("  +++++ ");
-        assert_eq!(result, Some((TokenKind::Add, 3)),);
-
-        let result = TokenKind::first_from("  -3480 ");
-        assert_eq!(result, Some((TokenKind::Subtract, 3)),);
-
-        let result = TokenKind::first_from(r#"  "some \"BIG\" string" "#);
-        assert_eq!(
-            result,
-            Some((
-                TokenKind::StrLiteral(String::from(r#"some "BIG" string"#)),
-                24,
-            )),
-        );
-
-        let result = TokenKind::first_from(" #$J@#?@ ");
-        assert_eq!(result, None);
-    }
-
-    #[test]
     fn tokenize_line() {
-        let result = Token::tokenize_line(r#"thing = 234 "onetwo" "three"four"" "\\\\\\""#, 1);
+        let result = tokenize(r#"thing = 234 "onetwo" "three"four"" "\\\\\\""#);
         assert_eq!(
             result,
             Ok(vec![
@@ -138,25 +102,25 @@ mod tests {
             ]),
         );
 
-        let result = Token::tokenize_line(r#"if {} elsif {} else {} elser iff"#, 100);
+        let result = tokenize(r#"if {} elsif {} else {} elser iff"#);
         assert_eq!(
             result,
             Ok(vec![
-                Token::new(TokenKind::If, 100, 1, 3),
-                Token::new(TokenKind::LeftBrace, 100, 4, 5),
-                Token::new(TokenKind::RightBrace, 100, 5, 6),
-                Token::new(TokenKind::Elsif, 100, 7, 12),
-                Token::new(TokenKind::LeftBrace, 100, 13, 14),
-                Token::new(TokenKind::RightBrace, 100, 14, 15),
-                Token::new(TokenKind::Else, 100, 16, 20),
-                Token::new(TokenKind::LeftBrace, 100, 21, 22),
-                Token::new(TokenKind::RightBrace, 100, 22, 23),
-                Token::new(TokenKind::Identifier(String::from("elser")), 100, 24, 29),
-                Token::new(TokenKind::Identifier(String::from("iff")), 100, 30, 33),
+                Token::new(TokenKind::If, 1, 1, 3),
+                Token::new(TokenKind::LeftBrace, 1, 4, 5),
+                Token::new(TokenKind::RightBrace, 1, 5, 6),
+                Token::new(TokenKind::Elsif, 1, 7, 12),
+                Token::new(TokenKind::LeftBrace, 1, 13, 14),
+                Token::new(TokenKind::RightBrace, 1, 14, 15),
+                Token::new(TokenKind::Else, 1, 16, 20),
+                Token::new(TokenKind::LeftBrace, 1, 21, 22),
+                Token::new(TokenKind::RightBrace, 1, 22, 23),
+                Token::new(TokenKind::Identifier(String::from("elser")), 1, 24, 29),
+                Token::new(TokenKind::Identifier(String::from("iff")), 1, 30, 33),
             ]),
         );
 
-        let result = Token::tokenize_line(r#"<?>"#, 1);
+        let result = tokenize(r#"<?>"#);
         assert!(matches!(
             result,
             Err(LexError {
@@ -165,5 +129,22 @@ mod tests {
                 col: 2,
             })
         ));
+    }
+
+    #[test]
+    fn block_comments() {
+        let result = tokenize(
+            r#"
+            fn main(){
+                /* this is a block comment */
+                
+                /*
+                    This is
+                        /* a nested block comment */
+                */
+            }
+        "#,
+        );
+        assert!(result.is_ok());
     }
 }

@@ -4,6 +4,7 @@ use std::fmt;
 use colored::Colorize;
 
 use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::bool_lit::BoolLit;
@@ -20,7 +21,6 @@ use crate::parser::r#enum::EnumVariantInit;
 use crate::parser::r#struct::StructInit;
 use crate::parser::sizeof::SizeOf;
 use crate::parser::str_lit::StrLit;
-use crate::parser::stream::Stream;
 use crate::parser::symbol::Symbol;
 use crate::parser::tuple::TupleInit;
 use crate::parser::u64_lit::U64Lit;
@@ -626,30 +626,31 @@ impl Expression {
 
 #[cfg(test)]
 mod tests {
-    use std::io::{BufRead, Cursor};
+    use crate::lexer::lex::lex;
+    
 
     use crate::lexer::pos::Position;
+    use crate::lexer::stream::Stream;
     use crate::lexer::token::Token;
     use crate::lexer::token_kind::TokenKind;
     use crate::parser::bool_lit::BoolLit;
-    use crate::parser::error::{ErrorKind, ParseError};
+    use crate::parser::error::{ErrorKind, ParseError, ParseResult};
     use crate::parser::expr::Expression;
     use crate::parser::func_call::FunctionCall;
     use crate::parser::i64_lit::I64Lit;
     use crate::parser::op::Operator;
     use crate::parser::str_lit::StrLit;
-    use crate::parser::stream::Stream;
     use crate::parser::symbol::Symbol;
 
-    fn parse(raw: &str) -> Expression {
-        let tokens = Token::tokenize(Cursor::new(raw).lines()).expect("should not error");
-        Expression::from(&mut Stream::from(tokens), false).expect("should not error")
+    fn parse(raw: &str) -> ParseResult<Expression> {
+        let tokens = lex(&mut Stream::from(raw.chars().collect())).expect("should succeed");
+        Expression::from(&mut Stream::from(tokens), false)
     }
 
     #[test]
     fn parse_basic_var_value() {
         assert_eq!(
-            parse(r#"my_var"#),
+            parse(r#"my_var"#).unwrap(),
             Expression::Symbol(Symbol {
                 name: "my_var".to_string(),
                 member_access: None,
@@ -662,11 +663,11 @@ mod tests {
     #[test]
     fn parse_basic_bool_literal() {
         assert_eq!(
-            parse("true"),
+            parse("true").unwrap(),
             Expression::BoolLiteral(BoolLit::new(true, Position::new(1, 1), Position::new(1, 5)))
         );
         assert_eq!(
-            parse("false"),
+            parse("false").unwrap(),
             Expression::BoolLiteral(BoolLit::new(
                 false,
                 Position::new(1, 1),
@@ -678,7 +679,7 @@ mod tests {
     #[test]
     fn parse_basic_i64_literal() {
         assert_eq!(
-            parse("123"),
+            parse("123").unwrap(),
             Expression::I64Literal(I64Lit {
                 value: 123,
                 has_type_suffix: false,
@@ -691,7 +692,7 @@ mod tests {
     #[test]
     fn parse_basic_string_literal() {
         assert_eq!(
-            parse(r#""this is my \"String\"""#),
+            parse(r#""this is my \"String\"""#).unwrap(),
             Expression::StrLiteral(StrLit {
                 value: r#"this is my "String""#.to_string(),
                 start_pos: Position::new(1, 1),
@@ -703,7 +704,7 @@ mod tests {
     #[test]
     fn parse_function_call() {
         assert_eq!(
-            parse("call(3 * 2 - 2, other(!thing, 1 > var % 2))"),
+            parse("call(3 * 2 - 2, other(!thing, 1 > var % 2))").unwrap(),
             Expression::FunctionCall(FunctionCall::new(
                 Symbol::new("call", Position::new(1, 1), Position::new(1, 5)),
                 vec![
@@ -781,7 +782,7 @@ mod tests {
     #[test]
     fn parse_i64_arithmetic() {
         assert_eq!(
-            parse("(3 + 6) / 3 - 5 + 298 * 3"),
+            parse("(3 + 6) / 3 - 5 + 298 * 3").unwrap(),
             Expression::BinaryOperation(
                 Box::new(Expression::BinaryOperation(
                     Box::new(Expression::BinaryOperation(
@@ -840,7 +841,7 @@ mod tests {
     fn parse_multiline() {
         let raw = "(var - 3) / 4 * \n(call(true) % 2) + \n5";
         assert_eq!(
-            parse(raw),
+            parse(raw).unwrap(),
             Expression::BinaryOperation(
                 Box::new(Expression::BinaryOperation(
                     Box::new(Expression::BinaryOperation(
@@ -901,9 +902,7 @@ mod tests {
 
     #[test]
     fn parse_unmatched_open_paren() {
-        let tokens =
-            Token::tokenize(Cursor::new("3 - 4 / (2 * 3:").lines()).expect("should not error");
-        let result = Expression::from(&mut Stream::from(tokens), false);
+        let result = parse("3 - 4 / (2 * 3:");
         assert!(matches!(
             result,
             Err(ParseError {
@@ -922,9 +921,7 @@ mod tests {
 
     #[test]
     fn parse_composite_negative_values() {
-        let tokens = Token::tokenize(Cursor::new("-8 - (-100 + 2) * 4 / 2 + 8").lines())
-            .expect("should not error");
-        let result = Expression::from(&mut Stream::from(tokens), false).expect("should not error");
+        let result = parse("-8 - (-100 + 2) * 4 / 2 + 8").unwrap();
         assert_eq!(
             result,
             Expression::BinaryOperation(
@@ -996,8 +993,7 @@ mod tests {
 
     #[test]
     fn parse_basic_negative_values() {
-        let tokens = Token::tokenize(Cursor::new("-8").lines()).expect("should not error");
-        let result = Expression::from(&mut Stream::from(tokens), false).expect("should not error");
+        let result = parse("-8").unwrap();
         assert_eq!(
             result,
             Expression::BinaryOperation(
@@ -1012,8 +1008,7 @@ mod tests {
             )
         );
 
-        let tokens = Token::tokenize(Cursor::new("-x").lines()).expect("should not error");
-        let result = Expression::from(&mut Stream::from(tokens), false).expect("should not error");
+        let result = parse("-x").unwrap();
         assert_eq!(
             result,
             Expression::BinaryOperation(
@@ -1028,8 +1023,7 @@ mod tests {
             )
         );
 
-        let tokens = Token::tokenize(Cursor::new("-f()").lines()).expect("should not error");
-        let result = Expression::from(&mut Stream::from(tokens), false).expect("should not error");
+        let result = parse("-f()").unwrap();
         assert_eq!(
             result,
             Expression::BinaryOperation(
@@ -1057,8 +1051,7 @@ mod tests {
         ];
 
         for input in inputs {
-            let tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
-            let result = Expression::from(&mut Stream::from(tokens), false);
+            let result = parse(input);
             assert!(matches!(
                 result,
                 Err(ParseError {
@@ -1071,8 +1064,7 @@ mod tests {
 
     #[test]
     fn parse_redundant_parens() {
-        let tokens = Token::tokenize(Cursor::new("(((1>0)+1))").lines()).expect("should not error");
-        let result = Expression::from(&mut Stream::from(tokens), false).expect("should not error");
+        let result = parse("(((1>0)+1))").unwrap();
         assert_eq!(
             result,
             Expression::BinaryOperation(
@@ -1105,8 +1097,7 @@ mod tests {
     #[test]
     fn parse_unexpected_end_of_expr() {
         for input in ["2 -", "ok *", "5/", "v -3 + -", "(3 % 3) +"] {
-            let tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
-            let result = Expression::from(&mut Stream::from(tokens), false);
+            let result = parse(input);
             assert!(matches!(
                 result,
                 Err(ParseError {
@@ -1119,9 +1110,7 @@ mod tests {
 
     #[test]
     fn parse_repeated_minus() {
-        let input = "--(-v--a)-2--(-100 -- call(1))";
-        let tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
-        let result = Expression::from(&mut Stream::from(tokens), false);
+        let result = parse("--(-v--a)-2--(-100 -- call(1))");
         assert!(matches!(
             result,
             Err(ParseError {
@@ -1140,9 +1129,7 @@ mod tests {
 
     #[test]
     fn redundant_parenthesized_negatives() {
-        let input = "-(-b-(-100))";
-        let tokens = Token::tokenize(Cursor::new(input).lines()).expect("should not error");
-        let result = Expression::from(&mut Stream::from(tokens), false).expect("should not error");
+        let result = parse("-(-b-(-100))").unwrap();
         assert_eq!(
             result,
             Expression::BinaryOperation(
