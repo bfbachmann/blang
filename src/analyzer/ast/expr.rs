@@ -665,6 +665,19 @@ impl AExpr {
                 todo!()
             }
 
+            AExprKind::UnaryOperation(Operator::Reference, operand) => {
+                if let AType::Pointer(target_ptr_type) = target_type {
+                    let coerced_operand = operand
+                        .clone()
+                        .try_coerce_to(ctx, target_ptr_type.pointee_type_key);
+                    let new_type = AType::Pointer(APointerType::new(coerced_operand.type_key));
+
+                    self.type_key = ctx.insert_type(new_type);
+                    self.kind =
+                        AExprKind::UnaryOperation(Operator::Reference, Box::new(coerced_operand));
+                }
+            }
+
             _ => {}
         };
 

@@ -29,6 +29,7 @@ fn main() {
 
     // Check that typed pointers work.
     {
+        // Check normal reference and dereference operations.
         let val = 91
         let val_ptr = *<val
         assert(*>val_ptr == 91, 2)
@@ -36,6 +37,7 @@ fn main() {
         let true_ptr = *<true
         assert(*>true_ptr == true, 3)
 
+        // Check pointers as arguments.
         take(*<223_u64)
 
         let t = *<T{i: -87, b: false}
@@ -44,6 +46,9 @@ fn main() {
         assert(result.b == false, 6)
 
         assert(take_tuple(*<{9}) == 9, 7)
+
+        // Check pointer type coercion.
+        let u: *u64 = *<1234
     }
     
     exit(0)
