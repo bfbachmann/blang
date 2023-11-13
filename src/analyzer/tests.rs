@@ -1029,4 +1029,16 @@ mod tests {
         );
         check_result(result, None);
     }
+
+    #[test]
+    fn invalid_deref() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let a = *>1234
+            } 
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
 }

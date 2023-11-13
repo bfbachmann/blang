@@ -434,15 +434,19 @@ impl AExpr {
                             },
 
                             other => {
-                                ctx.insert_err(AnalyzeError::new(
-                                    ErrorKind::MismatchedTypes,
-                                    format_code!(
-                                        "cannot dereference value of non-pointer type {}",
-                                        other.display(ctx)
-                                    )
-                                    .as_str(),
-                                    &expr,
-                                ));
+                                // Don't display a redundant error if the operand expression already
+                                // failed analysis.
+                                if !other.is_unknown() {
+                                    ctx.insert_err(AnalyzeError::new(
+                                        ErrorKind::MismatchedTypes,
+                                        format_code!(
+                                            "cannot dereference value of non-pointer type {}",
+                                            other.display(ctx)
+                                        )
+                                        .as_str(),
+                                        &expr,
+                                    ));
+                                }
 
                                 AExpr::new_null_ptr(ctx)
                             }

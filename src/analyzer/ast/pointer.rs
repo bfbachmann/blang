@@ -29,6 +29,6 @@ impl APointerType {
 
     /// Returns the human-readable version of this pointer type.
     pub fn display(&self, ctx: &ProgramContext) -> String {
-        format!("*{}", ctx.must_get_type(self.pointee_type_key)).to_string()
+        format!("*{}", ctx.must_get_type(self.pointee_type_key).display(ctx)).to_string()
     }
 }

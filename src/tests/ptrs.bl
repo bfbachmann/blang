@@ -37,6 +37,13 @@ fn main() {
         assert(*>true_ptr == true, 3)
 
         take(*<223_u64)
+
+        let t = *<T{i: -87, b: false}
+        let result = take_t(t)
+        assert(result.i == -87, 5)
+        assert(result.b == false, 6)
+
+        assert(take_tuple(*<{9}) == 9, 7)
     }
     
     exit(0)
@@ -44,4 +51,13 @@ fn main() {
 
 fn take(ptr: *u64) {
     assert(*>ptr == 223, 4)
+}
+
+fn take_t(t: *T) ~ T {
+    return *>t
+}
+
+fn take_tuple(tup: *{i64}) ~ i64 {
+    let tup = *>tup
+    return tup.0
 }
