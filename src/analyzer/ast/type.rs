@@ -6,6 +6,7 @@ use std::fmt::{Display, Formatter};
 use colored::Colorize;
 
 use crate::analyzer::ast::func::AFnSig;
+use crate::analyzer::ast::pointer::APointerType;
 use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::tuple::ATupleType;
@@ -22,13 +23,15 @@ pub enum AType {
     Str,
     /// These are pointers that are not garbage collected and allow pointer arithmetic.
     /// This type translates directly to `void *` in C.
-    Ptr,
+    RawPtr,
 
     // Composite types.
     Struct(AStructType),
     Enum(AEnumType),
     Tuple(ATupleType),
     Function(Box<AFnSig>),
+    Pointer(APointerType),
+
     /// Represents a type that did not pass semantic analysis and thus was never properly resolved.
     Unknown(String),
 }
@@ -40,11 +43,12 @@ impl Display for AType {
             AType::Str => write!(f, "str"),
             AType::I64 => write!(f, "i64"),
             AType::U64 => write!(f, "u64"),
-            AType::Ptr => write!(f, "ptr"),
+            AType::RawPtr => write!(f, "rawptr"),
             AType::Struct(s) => write!(f, "{}", s),
             AType::Enum(e) => write!(f, "{}", e),
             AType::Tuple(t) => write!(f, "{}", t),
             AType::Function(func) => write!(f, "{}", func),
+            AType::Pointer(typ) => write!(f, "*{}", typ),
             AType::Unknown(name) => write!(f, "{}", name),
         }
     }
@@ -56,12 +60,13 @@ impl PartialEq for AType {
             (AType::Bool, AType::Bool)
             | (AType::I64, AType::I64)
             | (AType::Str, AType::Str)
-            | (AType::Ptr, AType::Ptr)
+            | (AType::RawPtr, AType::RawPtr)
             | (AType::U64, AType::U64) => true,
             (AType::Struct(s1), AType::Struct(s2)) => s1 == s2,
             (AType::Enum(e1), AType::Enum(e2)) => e1 == e2,
             (AType::Tuple(t1), AType::Tuple(t2)) => t1 == t2,
             (AType::Function(f1), AType::Function(f2)) => *f1 == *f2,
+            (AType::Pointer(t1), AType::Pointer(t2)) => t1 == t2,
             (_, _) => false,
         }
     }
@@ -128,6 +133,10 @@ impl AType {
                 let a_tuple_type = ATupleType::from(ctx, tuple_type);
                 return AType::Tuple(a_tuple_type);
             }
+
+            Type::Pointer(ptr_type) => {
+                return AType::Pointer(APointerType::from(ctx, ptr_type));
+            }
         }
     }
 
@@ -138,7 +147,7 @@ impl AType {
             (Type::new_unresolved("i64"), AType::I64),
             (Type::new_unresolved("u64"), AType::U64),
             (Type::new_unresolved("str"), AType::Str),
-            (Type::new_unresolved("ptr"), AType::Ptr),
+            (Type::new_unresolved("rawptr"), AType::RawPtr),
             (
                 Type::new_unresolved("<unknown>"),
                 AType::Unknown("<unknown>".to_string()),
@@ -162,10 +171,10 @@ impl AType {
             AType::I64 => "i64",
             AType::U64 => "u64",
             AType::Str => "str",
-            AType::Ptr => "ptr",
+            AType::RawPtr => "rawptr",
             AType::Struct(t) => t.name.as_str(),
             AType::Enum(t) => t.name.as_str(),
-            AType::Tuple(_) => "",
+            AType::Tuple(_) | AType::Pointer(_) => "",
             AType::Function(t) => t.name.as_str(),
             AType::Unknown(name) => name.as_str(),
         }
@@ -221,10 +230,11 @@ impl AType {
         return match self {
             AType::Bool
             | AType::I64
-            | AType::Ptr
+            | AType::RawPtr
             | AType::U64
             | AType::Str
             | AType::Function(_)
+            | AType::Pointer(_)
             | AType::Unknown(_) => false,
 
             AType::Struct(s) => {
@@ -293,12 +303,13 @@ impl AType {
             AType::I64 => true,
             AType::Bool
             | AType::Str
-            | AType::Ptr
+            | AType::RawPtr
             | AType::U64
             | AType::Struct(_)
             | AType::Enum(_)
             | AType::Tuple(_)
             | AType::Function(_)
+            | AType::Pointer(_)
             | AType::Unknown(_) => false,
         }
     }
@@ -310,7 +321,12 @@ impl AType {
             AType::Bool => 1,
 
             // All of the following types are 64 bits (8 bytes).
-            AType::I64 | AType::Ptr | AType::U64 | AType::Function(_) | AType::Str => 8,
+            AType::I64
+            | AType::RawPtr
+            | AType::Pointer(_)
+            | AType::U64
+            | AType::Function(_)
+            | AType::Str => 8,
 
             // The size of a struct type is the sum of the sizes of all of its fields.
             AType::Struct(struct_type) => {
@@ -403,11 +419,14 @@ impl AType {
     /// Returns a string containing a human-readable version of the type.
     pub fn display(&self, ctx: &ProgramContext) -> String {
         match self {
-            AType::Bool | AType::Str | AType::I64 | AType::U64 | AType::Ptr => format!("{}", self),
+            AType::Bool | AType::Str | AType::I64 | AType::U64 | AType::RawPtr => {
+                format!("{}", self)
+            }
             AType::Struct(s) => format!("{}", s.display(ctx)),
             AType::Enum(e) => format!("{}", e.display(ctx)),
             AType::Tuple(t) => format!("{}", t.display(ctx)),
             AType::Function(func) => format!("{}", func.display(ctx)),
+            AType::Pointer(t) => format!("{}", t.display(ctx)),
             AType::Unknown(name) => format!("{}", name),
         }
     }

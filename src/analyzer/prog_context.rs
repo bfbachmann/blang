@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use colored::Colorize;
 
 use crate::analyzer::ast::func::{AFn, AFnSig};
+use crate::analyzer::ast::pointer::APointerType;
 use crate::analyzer::ast::program::AProgram;
 use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#struct::AStructType;
@@ -93,6 +94,7 @@ pub struct ProgramContext {
     enum_type_keys: HashMap<String, TypeKey>,
     /// Maps tuple type to tuple type key.
     tuple_type_keys: HashMap<ATupleType, TypeKey>,
+    pointer_type_keys: HashMap<APointerType, TypeKey>,
 
     /// Collects warnings emitted by the analyzer during analysis.
     warnings: HashMap<Position, AnalyzeWarning>,
@@ -131,6 +133,7 @@ impl ProgramContext {
             struct_type_keys: Default::default(),
             enum_type_keys: Default::default(),
             tuple_type_keys: Default::default(),
+            pointer_type_keys: Default::default(),
             warnings: Default::default(),
             errors: Default::default(),
         }
@@ -237,7 +240,8 @@ impl ProgramContext {
     /// already exists, `typ` will not be inserted and the type key for the existing type will be
     /// returned.
     pub fn insert_type(&mut self, typ: AType) -> TypeKey {
-        let (maybe_type_name, is_struct, is_enum, maybe_tuple_type) = match &typ {
+        // First, we'll check if this type already exists so we can avoid duplicating it if so.
+        let (maybe_type_name, is_struct, is_enum, maybe_tuple_type, maybe_ptr_type) = match &typ {
             AType::Struct(struct_type) => {
                 let maybe_name = match struct_type.name.is_empty() {
                     true => None,
@@ -250,7 +254,7 @@ impl ProgramContext {
                     }
                 };
 
-                (maybe_name, true, false, None)
+                (maybe_name, true, false, None, None)
             }
 
             AType::Enum(enum_type) => {
@@ -265,23 +269,32 @@ impl ProgramContext {
                     }
                 };
 
-                (maybe_name, false, true, None)
+                (maybe_name, false, true, None, None)
             }
 
             AType::Tuple(tuple_type) => {
-                // Avoid duplicating tuple types.
                 if let Some(existing_tuple_tk) = self.tuple_type_keys.get(tuple_type) {
                     return *existing_tuple_tk;
                 }
 
-                (None, false, false, Some(tuple_type.clone()))
+                (None, false, false, Some(tuple_type.clone()), None)
             }
 
-            _ => (None, false, false, None),
+            AType::Pointer(ptr_type) => {
+                if let Some(existing_ptr_tk) = self.pointer_type_keys.get(ptr_type) {
+                    return *existing_ptr_tk;
+                }
+
+                (None, false, false, None, Some(ptr_type.clone()))
+            }
+
+            _ => (None, false, false, None, None),
         };
 
+        // Store the newly analyzed type.
         let type_key = self.type_store.insert(typ);
 
+        // Create an additional mapping to the new type key to avoid type duplication, if necessary.
         if let Some(name) = maybe_type_name {
             if is_struct {
                 self.struct_type_keys.insert(name, type_key);
@@ -290,6 +303,8 @@ impl ProgramContext {
             }
         } else if let Some(tuple_type) = maybe_tuple_type {
             self.tuple_type_keys.insert(tuple_type, type_key);
+        } else if let Some(ptr_type) = maybe_ptr_type {
+            self.pointer_type_keys.insert(ptr_type, type_key);
         }
 
         type_key
@@ -378,9 +393,9 @@ impl ProgramContext {
         *self.primitive_type_keys.get("str").unwrap()
     }
 
-    /// Returns the type key for the `ptr` type.
-    pub fn ptr_type_key(&self) -> TypeKey {
-        *self.primitive_type_keys.get("ptr").unwrap()
+    /// Returns the type key for the `rawptr` type.
+    pub fn rawptr_type_key(&self) -> TypeKey {
+        *self.primitive_type_keys.get("rawptr").unwrap()
     }
 
     /// Returns the type key for the special `This` type.

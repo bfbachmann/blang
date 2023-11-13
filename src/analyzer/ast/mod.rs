@@ -7,6 +7,7 @@ pub mod expr;
 pub mod fn_call;
 pub mod func;
 pub mod r#impl;
+pub mod pointer;
 pub mod program;
 pub mod ret;
 pub mod spec;

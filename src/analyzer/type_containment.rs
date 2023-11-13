@@ -39,7 +39,7 @@ pub fn check_type_containment(
         }
 
         // These types can't have illegal containment cycles.
-        Type::Function(_) => {}
+        Type::Function(_) | Type::Pointer(_) => {}
     }
 
     Ok(())

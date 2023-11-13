@@ -18,6 +18,8 @@ pub enum TokenKind {
 
     // Unary operators
     LogicalNot,
+    Reference,
+    Dereference,
     Ampersand,
 
     // Variable assignment
@@ -145,6 +147,8 @@ impl Clone for TokenKind {
             TokenKind::Like => TokenKind::Like,
             TokenKind::NotLike => TokenKind::NotLike,
             TokenKind::Ampersand => TokenKind::Ampersand,
+            TokenKind::Reference => TokenKind::Reference,
+            TokenKind::Dereference => TokenKind::Dereference,
         }
     }
 }
@@ -227,6 +231,8 @@ impl TokenKind {
             TokenKind::Like => "~==".to_string(),
             TokenKind::NotLike => "~!=".to_string(),
             TokenKind::Ampersand => "&".to_string(),
+            TokenKind::Reference => "*<".to_string(),
+            TokenKind::Dereference => "*>".to_string(),
         }
     }
 
@@ -293,6 +299,8 @@ impl TokenKind {
             (TokenKind::Like.to_string(), TokenKind::Like),
             (TokenKind::NotLike.to_string(), TokenKind::NotLike),
             (TokenKind::Ampersand.to_string(), TokenKind::Ampersand),
+            (TokenKind::Reference.to_string(), TokenKind::Reference),
+            (TokenKind::Dereference.to_string(), TokenKind::Dereference),
         ]);
 
         // Trim syntactically meaningless whitespace.

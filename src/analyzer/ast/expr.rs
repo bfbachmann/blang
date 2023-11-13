@@ -6,6 +6,7 @@ use colored::Colorize;
 use crate::analyzer::ast::closure::AClosure;
 use crate::analyzer::ast::fn_call::AFnCall;
 use crate::analyzer::ast::func::{AFn, AFnSig};
+use crate::analyzer::ast::pointer::APointerType;
 use crate::analyzer::ast::r#enum::{AEnumTypeVariant, AEnumVariantInit};
 use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::AType;
@@ -256,7 +257,7 @@ impl AExpr {
 
             Expression::Null(_) => AExpr {
                 kind: AExprKind::Null,
-                type_key: ctx.ptr_type_key(),
+                type_key: ctx.rawptr_type_key(),
                 start_pos,
                 end_pos,
             },
@@ -368,34 +369,88 @@ impl AExpr {
             }
 
             Expression::UnaryOperation(ref op, ref right_expr) => {
-                if *op != Operator::LogicalNot {
-                    // If this happens, the parser is badly broken.
-                    panic!("invalid unary operator {}", op)
-                }
+                match op {
+                    Operator::LogicalNot => {
+                        let a_expr =
+                            AExpr::from(ctx, *right_expr.clone(), Some(ctx.bool_type_key()), false);
 
-                let a_expr =
-                    AExpr::from(ctx, *right_expr.clone(), Some(ctx.bool_type_key()), false);
+                        // Make sure the expression has type bool.
+                        if !ctx.must_get_type(a_expr.type_key).is_bool() {
+                            ctx.insert_err(AnalyzeError::new(
+                                ErrorKind::MismatchedTypes,
+                                format_code!(
+                                    "unary operator {} cannot be applied to value of type {}",
+                                    "!",
+                                    a_expr.display(ctx),
+                                )
+                                .as_str(),
+                                &expr,
+                            ));
 
-                // Make sure the expression has type bool.
-                if !ctx.must_get_type(a_expr.type_key).is_bool() {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::MismatchedTypes,
-                        format_code!(
-                            "unary operator {} cannot be applied to value of type {}",
-                            "!",
-                            a_expr.display(ctx),
-                        )
-                        .as_str(),
-                        &expr,
-                    ));
+                            AExpr::new_zero_value(ctx, Type::new_unresolved("bool"))
+                        } else {
+                            AExpr {
+                                type_key: a_expr.type_key,
+                                kind: AExprKind::UnaryOperation(
+                                    Operator::LogicalNot,
+                                    Box::new(a_expr),
+                                ),
+                                start_pos,
+                                end_pos,
+                            }
+                        }
+                    }
 
-                    AExpr::new_zero_value(ctx, Type::new_unresolved("bool"))
-                } else {
-                    AExpr {
-                        type_key: a_expr.type_key,
-                        kind: AExprKind::UnaryOperation(Operator::LogicalNot, Box::new(a_expr)),
-                        start_pos,
-                        end_pos,
+                    Operator::Reference => {
+                        let operand_expr = AExpr::from(ctx, *right_expr.clone(), None, false);
+                        let a_ptr_type = APointerType::new(operand_expr.type_key);
+                        let type_key = ctx.insert_type(AType::Pointer(a_ptr_type));
+
+                        AExpr {
+                            type_key,
+                            kind: AExprKind::UnaryOperation(
+                                Operator::Reference,
+                                Box::new(operand_expr),
+                            ),
+                            start_pos,
+                            end_pos,
+                        }
+                    }
+
+                    Operator::Defererence => {
+                        let operand_expr = AExpr::from(ctx, *right_expr.clone(), None, false);
+                        let operand_expr_type = ctx.must_get_type(operand_expr.type_key);
+
+                        // Make sure the operand expression is of a pointer type.
+                        match operand_expr_type {
+                            AType::Pointer(ptr_type) => AExpr {
+                                type_key: ptr_type.pointee_type_key,
+                                kind: AExprKind::UnaryOperation(
+                                    Operator::Defererence,
+                                    Box::new(operand_expr),
+                                ),
+                                start_pos,
+                                end_pos,
+                            },
+
+                            other => {
+                                ctx.insert_err(AnalyzeError::new(
+                                    ErrorKind::MismatchedTypes,
+                                    format_code!(
+                                        "cannot dereference value of non-pointer type {}",
+                                        other.display(ctx)
+                                    )
+                                    .as_str(),
+                                    &expr,
+                                ));
+
+                                AExpr::new_null_ptr(ctx)
+                            }
+                        }
+                    }
+
+                    _ => {
+                        panic!("unexpected unary operator {}", op)
                     }
                 }
             }
@@ -623,6 +678,16 @@ impl AExpr {
         }
     }
 
+    /// Returns a new expression with value null.
+    pub fn new_null_ptr(ctx: &ProgramContext) -> AExpr {
+        AExpr {
+            kind: AExprKind::Null,
+            type_key: ctx.unknown_type_key(),
+            start_pos: Position::default(),
+            end_pos: Position::default(),
+        }
+    }
+
     /// Creates a new zero-valued expression of the given type.
     pub fn new_zero_value(ctx: &mut ProgramContext, typ: Type) -> Self {
         let type_key = ctx.resolve_type(&typ);
@@ -685,7 +750,7 @@ impl AExpr {
                     "i64" => AExprKind::I64Literal(0, false),
                     "u64" => AExprKind::U64Literal(0, false),
                     "str" => AExprKind::StrLiteral("".to_string()),
-                    "ptr" => AExprKind::Null,
+                    "rawptr" => AExprKind::Null,
                     _ => AExprKind::Unknown,
                 };
 
@@ -696,6 +761,8 @@ impl AExpr {
                     end_pos,
                 }
             }
+
+            Type::Pointer(_) => AExpr::new_null_ptr(ctx),
         }
     }
 }
@@ -790,7 +857,7 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
         | Operator::Subtract
         | Operator::Multiply
         | Operator::Divide
-        | Operator::Modulo => matches!(operand_type, AType::I64 | AType::Ptr | AType::U64),
+        | Operator::Modulo => matches!(operand_type, AType::I64 | AType::RawPtr | AType::U64),
 
         // Logical operators only work on bools.
         Operator::LogicalAnd | Operator::LogicalOr => matches!(operand_type, AType::Bool),
@@ -799,7 +866,7 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
         Operator::EqualTo | Operator::NotEqualTo => {
             matches!(
                 operand_type,
-                AType::Bool | AType::I64 | AType::Ptr | AType::U64
+                AType::Bool | AType::I64 | AType::RawPtr | AType::U64
             )
         }
 
@@ -824,7 +891,7 @@ fn is_valid_type_cast(left_type: &AType, right_type: &AType) -> bool {
     }
 
     match (left_type, right_type) {
-        (AType::Ptr, AType::U64) | (AType::U64, AType::Ptr) => true,
+        (AType::RawPtr, AType::U64) | (AType::U64, AType::RawPtr) => true,
         _ => false,
     }
 }

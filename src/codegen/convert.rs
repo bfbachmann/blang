@@ -94,7 +94,7 @@ fn to_basic_type<'ctx>(
         // TODO: There has to be a better way of representing `void *`... but then again, maybe not.
         // LLVM doesn't actually care about the pointee type, so really all pointers are treated
         // equally.
-        AType::Ptr => ctx
+        AType::RawPtr => ctx
             .i64_type()
             .ptr_type(AddressSpace::default())
             .as_basic_type_enum(),
@@ -119,6 +119,14 @@ fn to_basic_type<'ctx>(
         AType::Function(fn_sig) => to_fn_type(ctx, &type_store, fn_sig)
             .ptr_type(AddressSpace::default())
             .as_basic_type_enum(),
+
+        AType::Pointer(ptr_type) => {
+            let pointee_type = type_store.must_get(ptr_type.pointee_type_key);
+            let ll_pointee_type = to_basic_type(ctx, type_store, pointee_type);
+            ll_pointee_type
+                .ptr_type(AddressSpace::default())
+                .as_basic_type_enum()
+        }
 
         AType::Unknown(name) => {
             panic!("encountered unknown type {}", name)
@@ -297,12 +305,16 @@ fn to_metadata_type_enum<'ctx>(
 ) -> BasicMetadataTypeEnum<'ctx> {
     match typ {
         AType::I64 | AType::U64 => BasicMetadataTypeEnum::from(ctx.i64_type()),
-        AType::Ptr => BasicMetadataTypeEnum::from(ctx.i64_type().ptr_type(AddressSpace::default())),
+        AType::RawPtr => {
+            BasicMetadataTypeEnum::from(ctx.i64_type().ptr_type(AddressSpace::default()))
+        }
         AType::Bool => BasicMetadataTypeEnum::from(ctx.bool_type()),
         AType::Str => BasicMetadataTypeEnum::from(ctx.i32_type().ptr_type(AddressSpace::default())),
-        AType::Struct(_) | AType::Tuple(_) | AType::Enum(_) => BasicMetadataTypeEnum::from(
-            to_basic_type(ctx, type_store, typ).ptr_type(AddressSpace::default()),
-        ),
+        AType::Struct(_) | AType::Tuple(_) | AType::Enum(_) | AType::Pointer(_) => {
+            BasicMetadataTypeEnum::from(
+                to_basic_type(ctx, type_store, typ).ptr_type(AddressSpace::default()),
+            )
+        }
         AType::Function(func) => {
             let fn_type = type_store.must_get(func.type_key);
             BasicMetadataTypeEnum::from(to_basic_type(ctx, type_store, fn_type))

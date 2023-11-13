@@ -10,7 +10,7 @@ use crate::locatable_impl;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 
-/// Represents the null value of the `ptr` type.
+/// Represents the null value of the `rawptr` type.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Null {
     pub start_pos: Position,

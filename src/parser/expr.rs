@@ -55,13 +55,13 @@ pub enum Expression {
     FunctionCall(FunctionCall),
     AnonFunction(Box<Function>),
     Lambda(Box<Function>),
-    UnaryOperation(Operator, Box<Expression>),
     StructInit(StructInit),
     EnumInit(EnumVariantInit),
     TupleInit(TupleInit),
     SizeOf(SizeOf),
 
     // Composite expressions.
+    UnaryOperation(Operator, Box<Expression>),
     BinaryOperation(Box<Expression>, Operator, Box<Expression>),
 }
 
@@ -251,14 +251,27 @@ impl Expression {
             // expression.
             Some(
                 token @ Token {
-                    kind: TokenKind::LogicalNot,
+                    kind: TokenKind::LogicalNot | TokenKind::Reference | TokenKind::Dereference,
                     ..
                 },
             ) => {
                 let op = Operator::from(&token.kind).unwrap();
                 tokens.next();
-                let expr = Expression::from(tokens, is_arg)?;
-                Ok(Some(Expression::UnaryOperation(op, Box::new(expr))))
+
+                let maybe_expr = Expression::from_basic(tokens, is_arg)?;
+                if maybe_expr.is_none() {
+                    // TODO: Improve this error message.
+                    return Err(ParseError::new_with_token(
+                        ErrorKind::ExpectedExpr,
+                        "expected expression",
+                        tokens.prev().unwrap().clone(),
+                    ));
+                }
+
+                Ok(Some(Expression::UnaryOperation(
+                    op,
+                    Box::new(maybe_expr.unwrap()),
+                )))
             }
 
             // Check if it's a bool literal.
@@ -440,7 +453,9 @@ impl Expression {
                 }
             }
             // Check if the token is a unary operator.
-            else if let Some(Operator::LogicalNot) = Operator::from(&op1_token.kind) {
+            else if let Some(Operator::LogicalNot | Operator::Reference | Operator::Defererence) =
+                Operator::from(&op1_token.kind)
+            {
                 // We should not be here if we we're expecting a binary operator or the end of the
                 // expression.
                 if expect_binop_or_end {

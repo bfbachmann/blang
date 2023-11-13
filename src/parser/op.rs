@@ -17,6 +17,8 @@ pub enum Operator {
 
     // Basic unary operators
     LogicalNot,
+    Reference,
+    Defererence,
 
     // Comparators
     EqualTo,
@@ -63,6 +65,8 @@ impl Operator {
             TokenKind::As => Some(Operator::As),
             TokenKind::Like => Some(Operator::Like),
             TokenKind::NotLike => Some(Operator::NotLike),
+            TokenKind::Reference => Some(Operator::Reference),
+            TokenKind::Dereference => Some(Operator::Defererence),
             _ => None,
         }
     }
@@ -88,6 +92,8 @@ impl Operator {
             Operator::LeftParen => TokenKind::LeftParen.to_string(),
             Operator::RightParen => TokenKind::RightParen.to_string(),
             Operator::As => TokenKind::As.to_string(),
+            Operator::Reference => TokenKind::Reference.to_string(),
+            Operator::Defererence => TokenKind::Dereference.to_string(),
         }
     }
 
@@ -97,7 +103,7 @@ impl Operator {
         100 - match self {
             Operator::As => 0,
             Operator::LeftParen | Operator::RightParen => 1,
-            Operator::LogicalNot => 2,
+            Operator::LogicalNot | Operator::Reference | Operator::Defererence => 2,
             Operator::Multiply | Operator::Divide | Operator::Modulo => 3,
             Operator::Add | Operator::Subtract => 4,
             Operator::GreaterThan
@@ -122,7 +128,7 @@ impl Operator {
     /// Returns true if this is a binary operator.
     pub fn is_binary(&self) -> bool {
         match self {
-            Operator::LogicalNot => false,
+            Operator::LogicalNot | Operator::Reference | Operator::Defererence => false,
             _ => true,
         }
     }

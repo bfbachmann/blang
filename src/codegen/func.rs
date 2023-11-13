@@ -951,9 +951,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 .const_null()
                 .as_basic_value_enum(),
 
-            AExprKind::UnaryOperation(op, expr) => {
+            AExprKind::UnaryOperation(op, operand_expr) => {
                 // See note immediately below about automatic LLVM constant folding.
-                self.compile_unary_op(op, expr)
+                self.compile_unary_op(op, operand_expr, expr.type_key)
             }
 
             AExprKind::BinaryOperation(left, op, right) => {
@@ -1064,7 +1064,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             AExprKind::FunctionCall(call) => self.compile_call(call).unwrap(),
 
-            AExprKind::UnaryOperation(op, expr) => self.compile_unary_op(op, expr),
+            AExprKind::UnaryOperation(op, right_expr) => {
+                self.compile_unary_op(op, right_expr, expr.type_key)
+            }
 
             AExprKind::BinaryOperation(left_expr, op, right_expr) => {
                 self.compile_bin_op(left_expr, op, right_expr)
@@ -1100,7 +1102,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // Dereference the result if it's a pointer.
         let expr_type = self.type_store.must_get(expr.type_key);
-        self.deref_if_ptr(result, expr_type)
+        self.maybe_deref(result, expr_type)
     }
 
     /// Compiles tuple initialization.
@@ -1307,30 +1309,65 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles a unary operation expression.
-    fn compile_unary_op(&mut self, op: &Operator, expr: &AExpr) -> BasicValueEnum<'ctx> {
-        // Only the not operator is supported as a unary operator at the moment.
-        if *op != Operator::LogicalNot {
-            panic!("unsupported unary operator {op}");
+    fn compile_unary_op(
+        &mut self,
+        op: &Operator,
+        operand_expr: &AExpr,
+        result_type_key: TypeKey,
+    ) -> BasicValueEnum<'ctx> {
+        match op {
+            Operator::LogicalNot => {
+                // Compile the operand expression.
+                let ll_operand = self.compile_expr(operand_expr);
+
+                // If the value is a pointer (i.e. a variable reference), we need to get the bool
+                // value it points to.
+                let int_operand = self.get_bool(ll_operand);
+
+                // Build the logical not as the result of the int compare == 0.
+                let result = self.builder.build_int_compare(
+                    IntPredicate::EQ,
+                    int_operand,
+                    self.ctx.bool_type().const_int(0, false),
+                    ("not_".to_string() + int_operand.get_name().to_str().unwrap()).as_str(),
+                );
+
+                result
+                    .const_cast(self.ctx.bool_type(), false)
+                    .as_basic_value_enum()
+            }
+
+            Operator::Reference => match &operand_expr.kind {
+                AExprKind::Symbol(symbol) => self.get_var_ptr(symbol).as_basic_value_enum(),
+                _ => {
+                    let ll_operand_val = self.compile_expr(operand_expr);
+                    let ll_ptr = self.create_entry_alloc(
+                        "referenced_val",
+                        operand_expr.type_key,
+                        ll_operand_val,
+                    );
+                    self.copy_value(ll_operand_val, ll_ptr, operand_expr.type_key);
+                    ll_ptr.as_basic_value_enum()
+                }
+            },
+
+            Operator::Defererence => {
+                // Compile the operand expression.
+                let ll_operand = self.compile_expr(operand_expr);
+
+                // Load the pointee value from the operand pointer and return it.
+                let ll_pointee_type = self.type_converter.get_basic_type(result_type_key);
+                self.builder.build_load(
+                    ll_pointee_type,
+                    ll_operand.into_pointer_value(),
+                    "deref_val",
+                )
+            }
+
+            _ => {
+                panic!("unsupported unary operator {}", op)
+            }
         }
-
-        // Compile the operand expression.
-        let expr_val = self.compile_expr(expr);
-
-        // If the value is a pointer (i.e. a variable reference), we need to get the bool
-        // value it points to.
-        let operand = self.get_bool(expr_val);
-
-        // Build the logical not as the result of the int compare == 0.
-        let result = self.builder.build_int_compare(
-            IntPredicate::EQ,
-            operand,
-            self.ctx.bool_type().const_int(0, false),
-            ("not_".to_string() + operand.get_name().to_str().unwrap()).as_str(),
-        );
-
-        result
-            .const_cast(self.ctx.bool_type(), false)
-            .as_basic_value_enum()
     }
 
     /// Compiles a binary operation expression.
@@ -1571,13 +1608,18 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
     }
 
-    /// If the given value is a pointer, it will be dereferenced as the given type. Otherwise
-    /// the value is simply returned.
-    fn deref_if_ptr(&self, ll_val: BasicValueEnum<'ctx>, typ: &AType) -> BasicValueEnum<'ctx> {
+    /// Dereferences `ll_val` to the given type if it is not a type that is typically represented
+    /// by a pointer. Otherwise, just returns `ll_val`.
+    fn maybe_deref(&self, ll_val: BasicValueEnum<'ctx>, typ: &AType) -> BasicValueEnum<'ctx> {
         match typ {
             // Strings, structs, enums, tuples, and pointers should already be represented as
             // pointers.
-            AType::Str | AType::Struct(_) | AType::Enum(_) | AType::Tuple(_) | AType::Ptr => ll_val,
+            AType::Str
+            | AType::Struct(_)
+            | AType::Enum(_)
+            | AType::Tuple(_)
+            | AType::RawPtr
+            | AType::Pointer(_) => ll_val,
 
             AType::I64 | AType::U64 => self.get_int(ll_val).as_basic_value_enum(),
 

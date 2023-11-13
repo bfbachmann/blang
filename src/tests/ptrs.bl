@@ -1,7 +1,7 @@
 extern {
     fn exit(code: u64)
-    fn malloc(size: u64) ~ ptr
-    fn free(ptr: ptr)
+    fn malloc(size: u64) ~ rawptr
+    fn free(ptr: rawptr)
 }
 
 fn assert(b: bool, code: u64) {
@@ -16,13 +16,26 @@ struct T {
 }
 
 fn main() {
-    let t_ptr = malloc(sizeof T)
-    free(t_ptr)
+    // Check that rawptrs work.
+    {
+        let t_ptr = malloc(sizeof T)
+        free(t_ptr)
+    
+        let s_ptr = malloc(sizeof {i64, bool})
+        free(s_ptr)
+    
+        assert(sizeof T == sizeof {bool, i64}, 1)
+    }
 
-    let s_ptr = malloc(sizeof {i64, bool})
-    free(s_ptr)
+    // Check that typed pointers work.
+    {
+        let val = 91
+        let val_ptr = *<val
+        assert(*>val_ptr == 91, 2)
 
-    assert(sizeof T == sizeof {bool, i64}, 1)
+        let true_ptr = *<true
+        assert(*>true_ptr == true, 3)
+    }
     
     exit(0)
 }

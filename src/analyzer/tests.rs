@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests {
-    
 
     use crate::analyzer::analyze::analyze_prog;
     use crate::analyzer::ast::program::AProgram;
@@ -9,7 +8,7 @@ mod tests {
     use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
     use crate::lexer::lex::lex;
     use crate::lexer::stream::Stream;
-    
+
     use crate::parser::program::Program;
 
     fn get_analysis(raw: &str) -> ProgramAnalysis {
@@ -989,7 +988,7 @@ mod tests {
     #[test]
     #[cfg(feature = "generics")]
     fn invalid_tmpl_extern_fn() {
-        let result = analyze(r#"extern fn free(ptr: T) with [T]"#);
+        let result = analyze(r#"extern fn free(rawptr: T) with [T]"#);
         check_result(result, Some(ErrorKind::InvalidExtern));
     }
 
