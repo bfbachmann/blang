@@ -35,7 +35,13 @@ fn main() {
 
         let true_ptr = *<true
         assert(*>true_ptr == true, 3)
+
+        take(*<223_u64)
     }
     
     exit(0)
+}
+
+fn take(ptr: *u64) {
+    assert(*>ptr == 223, 4)
 }
