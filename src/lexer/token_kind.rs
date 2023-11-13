@@ -342,9 +342,9 @@ impl TokenKind {
 
     fn lex_i64_literal(segment: &str) -> Option<TokenKind> {
         lazy_static! {
-            static ref I64_IDENTIFIER: Regex = Regex::new(r"^[0-9_]+(i64)?$").unwrap();
+            static ref RE_I64: Regex = Regex::new(r"^[0-9][0-9_]*(i64)?$").unwrap();
         }
-        match I64_IDENTIFIER.is_match(segment) {
+        match RE_I64.is_match(segment) {
             true => Some(TokenKind::I64Literal(
                 segment
                     .replace("i64", "")
@@ -361,9 +361,9 @@ impl TokenKind {
 
     fn lex_u64_literal(segment: &str) -> Option<TokenKind> {
         lazy_static! {
-            static ref U64_IDENTIFIER: Regex = Regex::new(r"^[0-9_]+(u64)?$").unwrap();
+            static ref RE_U64: Regex = Regex::new(r"^[0-9][0-9_]*(u64)?$").unwrap();
         }
-        match U64_IDENTIFIER.is_match(segment) {
+        match RE_U64.is_match(segment) {
             true => Some(TokenKind::U64Literal(
                 segment
                     .replace("u64", "")
