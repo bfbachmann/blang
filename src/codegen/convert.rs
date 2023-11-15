@@ -102,7 +102,7 @@ fn to_basic_type<'ctx>(
         AType::U64 => ctx.i64_type().as_basic_type_enum(),
 
         AType::Str => ctx
-            .i32_type()
+            .i8_type()
             .ptr_type(AddressSpace::default())
             .as_basic_type_enum(),
 
@@ -309,7 +309,7 @@ fn to_metadata_type_enum<'ctx>(
             BasicMetadataTypeEnum::from(ctx.i64_type().ptr_type(AddressSpace::default()))
         }
         AType::Bool => BasicMetadataTypeEnum::from(ctx.bool_type()),
-        AType::Str => BasicMetadataTypeEnum::from(ctx.i32_type().ptr_type(AddressSpace::default())),
+        AType::Str => BasicMetadataTypeEnum::from(ctx.i8_type().ptr_type(AddressSpace::default())),
         AType::Struct(_) | AType::Tuple(_) | AType::Enum(_) | AType::Pointer(_) => {
             BasicMetadataTypeEnum::from(
                 to_basic_type(ctx, type_store, typ).ptr_type(AddressSpace::default()),

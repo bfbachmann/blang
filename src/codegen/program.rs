@@ -222,12 +222,12 @@ pub fn generate(
     let module = ctx.create_module("main");
 
     // Initialize the target machine and set the target on the LLVM module.
-    match maybe_target_triple {
+    let target_triple = match maybe_target_triple {
         Some(target_triple) => {
             // TODO: We probably don't need to initialize all targets - just the one we're
             // compiling to.
             Target::initialize_all(&InitializationConfig::default());
-            module.set_triple(&TargetTriple::create(target_triple));
+            TargetTriple::create(target_triple)
         }
 
         None => {
@@ -238,9 +238,10 @@ pub fn generate(
                 }
             };
 
-            module.set_triple(&TargetMachine::get_default_triple());
+            TargetMachine::get_default_triple()
         }
     };
+    module.set_triple(&target_triple);
 
     // Set up function pass manager that performs LLVM IR optimization.
     let fpm = PassManager::create(&module);
@@ -283,7 +284,6 @@ pub fn generate(
         }
 
         OutputFormat::Object | OutputFormat::Assembly => {
-            let target_triple = TargetMachine::get_default_triple();
             let target = Target::from_triple(&target_triple).unwrap();
             let target_machine = target
                 .create_target_machine(

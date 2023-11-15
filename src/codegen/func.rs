@@ -964,13 +964,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
 
             AExprKind::StrLiteral(literal) => {
-                let char_type = self.ctx.i32_type();
+                let char_type = self.ctx.i8_type();
 
                 // Check if this string literal already exists as a global. If not, create one.
                 let global = if let Some(global) = self.module.get_global(literal) {
                     global
                 } else {
-                    let chars: Vec<u32> = literal.clone().chars().map(|c| c as u32).collect();
+                    let chars: Vec<u8> = literal.clone().into_bytes();
                     let array_type = char_type.array_type((chars.len()) as u32);
                     let array_vals: Vec<_> = chars
                         .iter()
@@ -986,7 +986,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 self.builder.build_bitcast(
                     global.as_pointer_value(),
                     self.type_converter.get_basic_type(expr.type_key),
-                    "str_lit_as_i32_ptr",
+                    "str_lit_as_i8_ptr",
                 )
             }
 
