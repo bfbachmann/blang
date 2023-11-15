@@ -29,4 +29,4 @@ See [Makefile](Makefile).
 
 ## Development Requirements
 
-Rust, Cargo, and a working installation of LLVM (currently using v15.0.0).
+Rust, Cargo, and a working installation of LLVM (currently using v16.0.0).
