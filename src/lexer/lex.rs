@@ -118,15 +118,14 @@ pub fn lex(chars: &mut Stream<char>) -> LexResult<Vec<Token>> {
 /// Splits the given segment into tokens and returns them. Returns an error if the segment was
 /// not composed exclusively of valid tokens (without any whitespace).
 fn get_tokens(segment: &[char], line: usize, col: usize) -> LexResult<Vec<Token>> {
-    let segment_string = String::from_iter(segment);
-    let str_seg = segment_string.as_str();
     let mut tokens = vec![];
 
-    for end_pos in (1..=str_seg.len()).rev() {
-        if let Some(left_token_kind) = TokenKind::from(&str_seg[..end_pos]) {
+    for end_pos in (1..=segment.len()).rev() {
+        let segment_left = String::from_iter(&segment[..end_pos]);
+        if let Some(left_token_kind) = TokenKind::from(segment_left.as_str()) {
             tokens.push(Token::new(left_token_kind, line, col, col + end_pos));
 
-            if end_pos <= str_seg.len() - 1 {
+            if end_pos <= segment.len() - 1 {
                 match get_tokens(&segment[end_pos..], line, col + end_pos) {
                     Ok(right_tokens) => tokens.extend(right_tokens),
                     Err(err) => {
@@ -140,7 +139,7 @@ fn get_tokens(segment: &[char], line: usize, col: usize) -> LexResult<Vec<Token>
     }
 
     Err(LexError::new(
-        format!("invalid token {}", str_seg).as_str(),
+        format!("invalid token {}", String::from_iter(segment)).as_str(),
         line,
         col,
     ))
