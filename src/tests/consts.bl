@@ -10,6 +10,7 @@ const {
     PTR = NULL
     OTHER_INT = INT + 1
     ENUM_ERR = Result::Err("failed")
+    STR = "Hello world! 你好世界\n"
 }
 
 enum Result {
