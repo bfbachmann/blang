@@ -30,7 +30,7 @@ use crate::codegen::context::{
     BranchContext, CompilationContext, FnContext, LoopContext, StatementContext,
 };
 use crate::codegen::convert::TypeConverter;
-use crate::codegen::error::{CompileError, CompileResult, ErrorKind};
+use crate::codegen::error::{CodeGenError, CompileResult, ErrorKind};
 use crate::format_code;
 use crate::parser::op::Operator;
 
@@ -75,7 +75,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             cur_block: None,
         };
 
-        fn_compiler.compile_fn(func)
+        fn_compiler.gen_fn(func)
     }
 
     /// Creates a new basic block for this function and returns it.
@@ -223,7 +223,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles the given function.
-    fn compile_fn(&mut self, func: &AFn) -> CompileResult<FunctionValue<'ctx>> {
+    fn gen_fn(&mut self, func: &AFn) -> CompileResult<FunctionValue<'ctx>> {
         // Retrieve the function and create a new "entry" block at the start of the function
         // body.
         // TODO: This will panic when accessing nested functions.
@@ -270,7 +270,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // Compile the function body. This will return true if the function already ends in an
         // explicit return statement (or a set of unconditional branches that all return).
-        self.compile_closure(&func.body)?;
+        self.gen_closure(&func.body)?;
 
         // If the function body does not end in an explicit return (or other terminator
         // instruction), we have to insert one.
@@ -293,7 +293,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 fn_val.delete();
             }
 
-            Err(CompileError::new(
+            Err(CodeGenError::new(
                 ErrorKind::FnVerificationFailed,
                 format_code!("failed to verify function {}", func.signature.full_name()).as_str(),
             ))
@@ -318,7 +318,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Assigns the value to the variable with the given name. Panics if no such variable exists.
     fn assign_var(&mut self, assign: &AVarAssign) {
         // Compile the expression value being assigned.
-        let ll_expr_val = self.compile_expr(&assign.val);
+        let ll_expr_val = self.gen_expr(&assign.val);
 
         // Get a pointer to the target variable (or variable member).
         let ll_var_ptr = self.get_var_ptr(&assign.symbol);
@@ -644,13 +644,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles all statements in the closure.
-    fn compile_closure(&mut self, closure: &AClosure) -> CompileResult<()> {
+    fn gen_closure(&mut self, closure: &AClosure) -> CompileResult<()> {
         for (i, statement) in closure.statements.iter().enumerate() {
             // Create a new statement context that can store information about the statement
             // we're about to compile.
             self.push_statement_ctx();
 
-            self.compile_statement(statement)?;
+            self.gen_statement(statement)?;
 
             // Pop the statement context now that we've compiled the statement.
             let ctx = self.pop_ctx().to_statement();
@@ -669,11 +669,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles a statement.
-    fn compile_statement(&mut self, statement: &AStatement) -> CompileResult<()> {
+    fn gen_statement(&mut self, statement: &AStatement) -> CompileResult<()> {
         match statement {
             AStatement::VariableDeclaration(var_decl) => {
                 // Get the value of the expression being assigned to the variable.
-                let ll_expr_val = self.compile_expr(&var_decl.val);
+                let ll_expr_val = self.gen_expr(&var_decl.val);
 
                 // Create and initialize the variable.
                 self.create_var(var_decl.name.as_str(), var_decl.type_key, ll_expr_val);
@@ -685,32 +685,32 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 self.assign_var(assign);
             }
             AStatement::FunctionDeclaration(func) => {
-                self.compile_fn(func)?;
+                self.gen_fn(func)?;
             }
             AStatement::Closure(closure) => {
-                self.compile_closure(closure)?;
+                self.gen_closure(closure)?;
             }
             AStatement::FunctionCall(call) => {
-                self.compile_call(call);
+                self.gen_call(call);
             }
             AStatement::Conditional(cond) => {
-                self.compile_cond(cond)?;
+                self.gen_cond(cond)?;
             }
             AStatement::Loop(closure) => {
-                self.compile_loop(closure)?;
+                self.gen_loop(closure)?;
             }
             AStatement::Break => {
-                self.compile_break();
+                self.gen_break();
             }
             AStatement::Continue => {
-                self.compile_continue();
+                self.gen_continue();
             }
             AStatement::Return(ret) => {
-                self.compile_return(ret);
+                self.gen_return(ret);
             }
             AStatement::ExternFns(_) | AStatement::Consts(_) => {
                 // Nothing to do here. This is already handled in
-                // `ProgramCompiler::compile_program`.
+                // `ProgramCodeGen::gen_program`.
             }
             AStatement::Impl(_) => {
                 // These blocks should not occur inside functions.
@@ -722,21 +722,21 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles a break statement.
-    fn compile_break(&mut self) {
+    fn gen_break(&mut self) {
         self.set_guarantees_terminator(true);
         let loop_end = self.get_or_create_loop_end_block();
         self.builder.build_unconditional_branch(loop_end);
     }
 
     /// Compiles a continue statement.
-    fn compile_continue(&mut self) {
+    fn gen_continue(&mut self) {
         self.set_guarantees_terminator(true);
         let loop_begin = self.get_loop_begin_block();
         self.builder.build_unconditional_branch(loop_begin);
     }
 
     /// Compiles a loop.
-    fn compile_loop(&mut self, loop_body: &AClosure) -> CompileResult<()> {
+    fn gen_loop(&mut self, loop_body: &AClosure) -> CompileResult<()> {
         // Create a loop context to store information about the loop body.
         self.push_loop_ctx();
 
@@ -746,7 +746,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         self.set_current_block(begin_block);
 
         // Compile the loop body.
-        self.compile_closure(loop_body)?;
+        self.gen_closure(loop_body)?;
 
         // Pop the loop context now that we've compiled the loop body.
         let ctx = self.pop_ctx().to_loop();
@@ -781,7 +781,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles a conditional.
-    fn compile_cond(&mut self, cond: &ACond) -> CompileResult<()> {
+    fn gen_cond(&mut self, cond: &ACond) -> CompileResult<()> {
         // Compile each branch, recording whether it returns.
         let mut end_block = None;
         let mut all_branches_return = true;
@@ -809,7 +809,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 };
 
                 // Branch from the current block based on the value of the conditional expression.
-                let ll_expr_val = self.compile_expr(expr);
+                let ll_expr_val = self.gen_expr(expr);
                 let ll_cond_val = self.get_bool(ll_expr_val);
                 self.builder
                     .build_conditional_branch(ll_cond_val, then_block, else_block);
@@ -821,7 +821,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 self.push_branch_ctx();
 
                 // Compile the branch body.
-                self.compile_closure(&branch.body)?;
+                self.gen_closure(&branch.body)?;
 
                 // Pop the branch context now that we're done compiling the branch.
                 let ctx = self.pop_ctx().to_branch();
@@ -844,7 +844,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 // This is an else branch, so we must execute the branch body.
                 else_branch_exists = true;
                 self.push_branch_ctx();
-                self.compile_closure(&branch.body)?;
+                self.gen_closure(&branch.body)?;
                 let ctx = self.pop_ctx().to_branch();
                 all_branches_return = all_branches_return && ctx.guarantees_return;
                 all_branches_terminate = all_branches_terminate && ctx.guarantees_terminator;
@@ -872,14 +872,14 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles a return statement.
-    fn compile_return(&mut self, ret: &ARet) {
+    fn gen_return(&mut self, ret: &ARet) {
         self.set_guarantees_return(true);
         self.set_loop_contains_return(true);
 
         match &ret.val {
             // Compile the return expression.
             Some(expr) => {
-                let result = self.compile_expr(expr);
+                let result = self.gen_expr(expr);
 
                 // If the value being returned is some structured type, we need to copy it to the
                 // memory pointed to by the first argument and return void.
@@ -915,14 +915,14 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
     }
 
-    /// Compiles a constant expression. This is implemented separately from `compile_expr` because
+    /// Compiles a constant expression. This is implemented separately from `gen_expr` because
     /// constant expressions are composed only of constant/immediate values that require no
     /// runtime initialization logic, whereas non-constant expressions require memory to be
     /// allocated and written to during initialization.
     /// This will probably cause a panic if `expr` is not a constant (i.e. cannot be represented
     /// by LLVM as an immediate/constant value), but the semantic analyzer should guarantee that
     /// never happens.
-    fn compile_const_expr(&mut self, expr: &AExpr) -> BasicValueEnum<'ctx> {
+    fn gen_const_expr(&mut self, expr: &AExpr) -> BasicValueEnum<'ctx> {
         match &expr.kind {
             AExprKind::Symbol(symbol) => self.const_extract_value(symbol),
 
@@ -953,14 +953,14 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             AExprKind::UnaryOperation(op, operand_expr) => {
                 // See note immediately below about automatic LLVM constant folding.
-                self.compile_unary_op(op, operand_expr, expr.type_key)
+                self.gen_unary_op(op, operand_expr, expr.type_key)
             }
 
             AExprKind::BinaryOperation(left, op, right) => {
                 // We can compile constant unary and binary operations as usual because LLVM should
                 // be smart enough to do constant folding on the expressions at compile time so the
                 // result is still constant.
-                self.compile_bin_op(left, op, right)
+                self.gen_bin_op(left, op, right)
             }
 
             AExprKind::StrLiteral(literal) => {
@@ -995,7 +995,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let ll_field_values: Vec<BasicValueEnum> = tuple_init
                     .values
                     .iter()
-                    .map(|v| self.compile_const_expr(v))
+                    .map(|v| self.gen_const_expr(v))
                     .collect();
 
                 ll_struct_type
@@ -1012,9 +1012,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let mut ll_field_values = vec![];
 
                 for field in &struct_type.fields {
-                    ll_field_values.push(self.compile_const_expr(
-                        struct_init.field_values.get(field.name.as_str()).unwrap(),
-                    ))
+                    ll_field_values.push(
+                        self.gen_const_expr(
+                            struct_init.field_values.get(field.name.as_str()).unwrap(),
+                        ),
+                    )
                 }
 
                 ll_struct_type
@@ -1033,7 +1035,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
                 // Only append the variant value if there is one.
                 if let Some(val) = &enum_init.maybe_value {
-                    ll_field_values.push(self.compile_const_expr(val));
+                    ll_field_values.push(self.gen_const_expr(val));
                 }
 
                 ll_struct_type
@@ -1046,9 +1048,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles an arbitrary expression.
-    fn compile_expr(&mut self, expr: &AExpr) -> BasicValueEnum<'ctx> {
+    fn gen_expr(&mut self, expr: &AExpr) -> BasicValueEnum<'ctx> {
         if expr.kind.is_const() {
-            return self.compile_const_expr(expr);
+            return self.gen_const_expr(expr);
         }
 
         let result = match &expr.kind {
@@ -1062,21 +1064,21 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 panic!("constant expression {} was not marked as constant", expr)
             }
 
-            AExprKind::FunctionCall(call) => self.compile_call(call).unwrap(),
+            AExprKind::FunctionCall(call) => self.gen_call(call).unwrap(),
 
             AExprKind::UnaryOperation(op, right_expr) => {
-                self.compile_unary_op(op, right_expr, expr.type_key)
+                self.gen_unary_op(op, right_expr, expr.type_key)
             }
 
             AExprKind::BinaryOperation(left_expr, op, right_expr) => {
-                self.compile_bin_op(left_expr, op, right_expr)
+                self.gen_bin_op(left_expr, op, right_expr)
             }
 
-            AExprKind::StructInit(struct_init) => self.compile_struct_init(struct_init),
+            AExprKind::StructInit(struct_init) => self.gen_struct_init(struct_init),
 
-            AExprKind::EnumInit(enum_init) => self.compile_enum_variant_init(enum_init),
+            AExprKind::EnumInit(enum_init) => self.gen_enum_variant_init(enum_init),
 
-            AExprKind::TupleInit(tuple_init) => self.compile_tuple_init(tuple_init),
+            AExprKind::TupleInit(tuple_init) => self.gen_tuple_init(tuple_init),
 
             // TODO: Compiling this function works fine, but trying to actually use it will cause
             // a panic because it has no name. The fix likely involves giving anon functions unique
@@ -1106,7 +1108,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles tuple initialization.
-    fn compile_tuple_init(&mut self, tuple_init: &ATupleInit) -> BasicValueEnum<'ctx> {
+    fn gen_tuple_init(&mut self, tuple_init: &ATupleInit) -> BasicValueEnum<'ctx> {
         // Assemble the LLVM struct type.
         let tuple_type = match self.type_store.must_get(tuple_init.type_key) {
             AType::Tuple(tt) => tt,
@@ -1133,7 +1135,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 .unwrap();
 
             // Compile the expression and copy its value to the struct field pointer.
-            let ll_field_val = self.compile_expr(field_val);
+            let ll_field_val = self.gen_expr(field_val);
             let field_type_key = tuple_type.fields.get(i).unwrap().type_key;
             self.copy_value(ll_field_val, ll_field_ptr, field_type_key);
         }
@@ -1142,7 +1144,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles enum variant initialization.
-    fn compile_enum_variant_init(&mut self, enum_init: &AEnumVariantInit) -> BasicValueEnum<'ctx> {
+    fn gen_enum_variant_init(&mut self, enum_init: &AEnumVariantInit) -> BasicValueEnum<'ctx> {
         // Assemble the LLVM struct type for this enum value.
         let ll_struct_type = self.type_converter.get_struct_type(enum_init.type_key);
 
@@ -1168,7 +1170,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // Set the variant value field, if necessary.
         if let Some(value) = &enum_init.maybe_value {
-            let ll_value = self.compile_expr(value.as_ref());
+            let ll_value = self.gen_expr(value.as_ref());
             let ll_value_field_ptr = self
                 .builder
                 .build_struct_gep(ll_struct_type, ll_struct_ptr, 1u32, "enum.value_ptr")
@@ -1181,7 +1183,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles a struct initialization.
-    fn compile_struct_init(&mut self, struct_init: &AStructInit) -> BasicValueEnum<'ctx> {
+    fn gen_struct_init(&mut self, struct_init: &AStructInit) -> BasicValueEnum<'ctx> {
         // Assemble the LLVM struct type.
         let struct_type = self
             .type_store
@@ -1210,7 +1212,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     .unwrap();
 
                 // Compile the expression and copy its value to the struct field pointer.
-                let ll_field_val = self.compile_expr(field_val);
+                let ll_field_val = self.gen_expr(field_val);
                 self.copy_value(ll_field_val, ll_field_ptr, field.type_key);
             }
         }
@@ -1219,7 +1221,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles a function call, returning the result if one exists.
-    fn compile_call(&mut self, call: &AFnCall) -> Option<BasicValueEnum<'ctx>> {
+    fn gen_call(&mut self, call: &AFnCall) -> Option<BasicValueEnum<'ctx>> {
         // Look up the function signature and convert it to the corresponding LLVM function type.
         let fn_sig = self
             .type_store
@@ -1241,19 +1243,22 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         // Compile call args.
-        for arg in &call.args {
-            // Compile the argument expression.
-            let ll_arg_val = self.compile_expr(arg);
-
-            // If the argument is a structured type, we need to create a copy of it and pass a
-            // pointer to the copied data instead of the original. This way, we're still passing the
-            // struct "by value" (the callee can modify the data being pointed to safely, because
-            // it's a copy).
+        for (i, arg) in call.args.iter().enumerate() {
             let arg_type = self.type_store.must_get(arg.type_key);
-            if arg_type.is_composite() {
-                let ll_copy_ptr = self.create_entry_alloc("copy_arg", arg.type_key, ll_arg_val);
-                self.copy_value(ll_arg_val, ll_copy_ptr, arg.type_key);
-                args.push(ll_copy_ptr.as_basic_value_enum().into());
+            let ll_arg_val = self.gen_expr(arg);
+
+            // Make sure we write constant values that are supposed to be passed as pointers to
+            // the stack and use their pointers as the arguments rather than the constant values
+            // themselves.
+            if arg.kind.is_const() && arg_type.is_composite() {
+                let ll_arg_ptr = self.create_entry_alloc(
+                    format!("arg_{}_literal", i).as_str(),
+                    arg.type_key,
+                    ll_arg_val,
+                );
+
+                self.copy_value(ll_arg_val, ll_arg_ptr, arg.type_key);
+                args.push(ll_arg_ptr.into());
             } else {
                 args.push(ll_arg_val.into());
             }
@@ -1309,7 +1314,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles a unary operation expression.
-    fn compile_unary_op(
+    fn gen_unary_op(
         &mut self,
         op: &Operator,
         operand_expr: &AExpr,
@@ -1318,7 +1323,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         match op {
             Operator::LogicalNot => {
                 // Compile the operand expression.
-                let ll_operand = self.compile_expr(operand_expr);
+                let ll_operand = self.gen_expr(operand_expr);
 
                 // If the value is a pointer (i.e. a variable reference), we need to get the bool
                 // value it points to.
@@ -1340,7 +1345,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             Operator::Reference => match &operand_expr.kind {
                 AExprKind::Symbol(symbol) => self.get_var_ptr(symbol).as_basic_value_enum(),
                 _ => {
-                    let ll_operand_val = self.compile_expr(operand_expr);
+                    let ll_operand_val = self.gen_expr(operand_expr);
                     let ll_ptr = self.create_entry_alloc(
                         "referenced_val",
                         operand_expr.type_key,
@@ -1353,7 +1358,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             Operator::Defererence => {
                 // Compile the operand expression.
-                let ll_operand = self.compile_expr(operand_expr);
+                let ll_operand = self.gen_expr(operand_expr);
 
                 // Load the pointee value from the operand pointer and return it.
                 let ll_pointee_type = self.type_converter.get_basic_type(result_type_key);
@@ -1371,28 +1376,28 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles a binary operation expression.
-    fn compile_bin_op(
+    fn gen_bin_op(
         &mut self,
         left_expr: &AExpr,
         op: &Operator,
         right_expr: &AExpr,
     ) -> BasicValueEnum<'ctx> {
-        let lhs = self.compile_expr(left_expr);
+        let lhs = self.gen_expr(left_expr);
 
         if op == &Operator::As {
             return self
-                .compile_type_cast(lhs, right_expr.type_key)
+                .gen_type_cast(lhs, right_expr.type_key)
                 .as_basic_value_enum();
         }
 
-        let rhs = self.compile_expr(right_expr);
+        let rhs = self.gen_expr(right_expr);
 
         // Determine whether the operation should be signed or unsigned based on the operand types.
         let signed = self.type_store.must_get(left_expr.type_key).is_signed();
 
         if op.is_arithmetic() {
             let result = self
-                .compile_arith_op(lhs, op, rhs, signed)
+                .gen_arith_op(lhs, op, rhs, signed)
                 .as_basic_value_enum();
 
             // If the left operator was a pointer, then we just did pointer arithmetic and need
@@ -1409,17 +1414,17 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 result
             }
         } else if op.is_comparator() {
-            self.compile_cmp(lhs, left_expr.type_key, op, rhs, signed)
+            self.gen_cmp(lhs, left_expr.type_key, op, rhs, signed)
                 .as_basic_value_enum()
         } else if op.is_logical() {
-            self.compile_logical_op(lhs, op, rhs).as_basic_value_enum()
+            self.gen_logical_op(lhs, op, rhs).as_basic_value_enum()
         } else {
             panic!("unsupported operator {op}")
         }
     }
 
     /// Compiles a bitcast of `ll_val` to type `target_type_key`.
-    fn compile_type_cast(
+    fn gen_type_cast(
         &mut self,
         mut ll_val: BasicValueEnum<'ctx>,
         target_type_key: TypeKey,
@@ -1458,7 +1463,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles a logical (boolean) operation expression.
-    fn compile_logical_op(
+    fn gen_logical_op(
         &self,
         ll_lhs: BasicValueEnum<'ctx>,
         op: &Operator,
@@ -1476,7 +1481,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles a comparison operation expression.
-    fn compile_cmp(
+    fn gen_cmp(
         &mut self,
         ll_lhs: BasicValueEnum<'ctx>,
         left_type_key: TypeKey,
@@ -1553,7 +1558,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles a binary arithmetic operation expression.
-    fn compile_arith_op(
+    fn gen_arith_op(
         &self,
         ll_lhs: BasicValueEnum<'ctx>,
         op: &Operator,
@@ -1673,7 +1678,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// some field or subfield on a constant.
     fn const_extract_value(&mut self, symbol: &ASymbol) -> BasicValueEnum<'ctx> {
         let const_value = &self.consts.get(symbol.name.as_str()).unwrap().value;
-        let mut ll_const_value = self.compile_const_expr(const_value);
+        let mut ll_const_value = self.gen_const_expr(const_value);
 
         if symbol.member_access.is_none() {
             return ll_const_value;

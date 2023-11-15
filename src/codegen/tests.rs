@@ -1,13 +1,11 @@
 #[cfg(test)]
 mod tests {
-    
     use std::path::Path;
 
     use crate::analyzer::analyze::analyze_prog;
-    use crate::codegen::program::ProgramCodeGen;
+    use crate::codegen::program::{generate, OutputFormat};
     use crate::lexer::lex::lex;
     use crate::lexer::stream::Stream;
-    
     use crate::parser::program::Program;
 
     fn assert_compiles(code: &str) {
@@ -15,8 +13,14 @@ mod tests {
         let tokens = lex(&mut char_stream).expect("should not error");
         let prog = Program::from(&mut Stream::from(tokens)).expect("should not error");
         let analysis = analyze_prog(&prog);
-        ProgramCodeGen::compile(analysis, None, false, Path::new("/dev/null"), false)
-            .expect("should not error");
+        generate(
+            analysis,
+            None,
+            OutputFormat::Object,
+            Path::new("/dev/null"),
+            true,
+        )
+        .expect("should not error");
     }
 
     #[test]

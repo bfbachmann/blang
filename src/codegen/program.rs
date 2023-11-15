@@ -6,9 +6,12 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::passes::PassManager;
-use inkwell::targets::{TargetMachine, TargetTriple};
+use inkwell::targets::{
+    CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine, TargetTriple,
+};
 use inkwell::types::AnyType;
 use inkwell::values::FunctionValue;
+use inkwell::OptimizationLevel;
 
 use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::program::AProgram;
@@ -17,7 +20,7 @@ use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::prog_context::ProgramAnalysis;
 use crate::analyzer::type_store::TypeStore;
 use crate::codegen::convert::TypeConverter;
-use crate::codegen::error::{CompileError, CompileResult, ErrorKind};
+use crate::codegen::error::{CodeGenError, CompileResult, ErrorKind};
 use crate::codegen::func::FnCodeGen;
 
 /// Compiles a type-rich and semantically valid program to LLVM IR and/or bitcode.
@@ -32,77 +35,17 @@ pub struct ProgramCodeGen<'a, 'ctx> {
     consts: HashMap<String, AConst>,
 }
 
+/// The type of output file to generate.
+pub enum OutputFormat {
+    LLVMBitcode,
+    LLVMIR,
+    Assembly,
+    Object,
+}
+
 impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
-    /// Compiles the program for the given target. If there is no target, compiles the program for
-    /// the host system.
-    pub fn compile(
-        prog_analysis: ProgramAnalysis,
-        target_triple: Option<&String>,
-        as_bitcode: bool,
-        output_path: &Path,
-        simplify_ir: bool,
-    ) -> CompileResult<()> {
-        // Error if the program analysis contains errors (meaning it didn't pass semantic analysis.
-        if !prog_analysis.errors.is_empty() {
-            return Err(CompileError::new(
-                ErrorKind::InvalidProgram,
-                "cannot compile program that failed semantic analysis",
-            ));
-        }
-
-        let ctx = Context::create();
-        let builder = ctx.create_builder();
-        let module = ctx.create_module("main");
-
-        // Set target triple.
-        if let Some(target) = target_triple {
-            module.set_triple(&TargetTriple::create(target));
-        } else {
-            module.set_triple(&TargetMachine::get_default_triple());
-        }
-
-        // Set up function pass manager.
-        let fpm = PassManager::create(&module);
-        if simplify_ir {
-            fpm.add_instruction_combining_pass();
-            fpm.add_reassociate_pass();
-            fpm.add_gvn_pass();
-            fpm.add_cfg_simplification_pass();
-            fpm.add_basic_alias_analysis_pass();
-            fpm.add_promote_memory_to_register_pass();
-        }
-        fpm.initialize();
-
-        // Create the program compiler and compile the program.
-        let mut compiler = ProgramCodeGen {
-            ctx: &ctx,
-            builder: &builder,
-            fpm: &fpm,
-            module: &module,
-            program: &prog_analysis.prog,
-            type_store: &prog_analysis.type_store,
-            type_converter: TypeConverter::new(&ctx, &prog_analysis.type_store),
-            consts: HashMap::new(),
-        };
-        compiler.compile_program()?;
-
-        // Write output to file.
-        if as_bitcode {
-            compiler.module.write_bitcode_to_path(output_path);
-        } else {
-            if let Err(e) = compiler.module.print_to_file(output_path) {
-                return Err(CompileError::new(
-                    ErrorKind::WriteOutFailed,
-                    e.to_string().as_str(),
-                ));
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Compiles the program.
-    fn compile_program(&mut self) -> CompileResult<()> {
+    /// Compiles the program to LLVM IR.
+    fn gen_program(&mut self) -> CompileResult<()> {
         // Define external functions (like syscalls) so we can call the safely from within the
         // module. Their actual implementations should be linked from libc when generating an
         // executable.
@@ -115,11 +58,11 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
         for statement in &self.program.statements {
             match statement {
                 AStatement::FunctionDeclaration(func) => {
-                    self.compile_fn_sig(&func.signature);
+                    self.gen_fn_sig(&func.signature);
                 }
                 AStatement::Impl(impl_) => {
                     for mem_fn in &impl_.member_fns {
-                        self.compile_fn_sig(&mem_fn.signature);
+                        self.gen_fn_sig(&mem_fn.signature);
                     }
                 }
                 _ => {}
@@ -160,11 +103,11 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                 }
                 AStatement::ExternFns(_) => {
                     // Nothing to do here because extern functions are compiled in the call to
-                    // `ProgramCompiler::define_extern_fns` above.
+                    // `ProgramCodeGen::define_extern_fns` above.
                 }
                 AStatement::Consts(_) => {
                     // Nothing to do here because constants are compiled in the call to
-                    // `ProgramCompiler::define_consts` above.
+                    // `ProgramCodeGen::define_consts` above.
                 }
                 other => {
                     panic!("unexpected top-level statement {other}");
@@ -180,7 +123,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
     }
 
     /// Defines the given function in the current module based on the function signature.
-    fn compile_fn_sig(&mut self, sig: &AFnSig) {
+    fn gen_fn_sig(&mut self, sig: &AFnSig) {
         // Define the function in the module using the fully-qualified function name.
         let fn_type = self.type_converter.get_fn_type(sig.type_key);
         let fn_val = self
@@ -255,4 +198,119 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
             }
         }
     }
+}
+
+/// Generates the program code for the given target. If there is no target, compiles the
+/// program for the host system.
+pub fn generate(
+    prog_analysis: ProgramAnalysis,
+    maybe_target_triple: Option<&String>,
+    output_format: OutputFormat,
+    output_path: &Path,
+    optimize: bool,
+) -> CompileResult<()> {
+    // Error if the program analysis contains errors (meaning it didn't pass semantic analysis.
+    if !prog_analysis.errors.is_empty() {
+        return Err(CodeGenError::new(
+            ErrorKind::InvalidProgram,
+            "cannot compile program that failed semantic analysis",
+        ));
+    }
+
+    let ctx = Context::create();
+    let builder = ctx.create_builder();
+    let module = ctx.create_module("main");
+
+    // Initialize the target machine and set the target on the LLVM module.
+    match maybe_target_triple {
+        Some(target_triple) => {
+            // TODO: We probably don't need to initialize all targets - just the one we're
+            // compiling to.
+            Target::initialize_all(&InitializationConfig::default());
+            module.set_triple(&TargetTriple::create(target_triple));
+        }
+
+        None => {
+            match Target::initialize_native(&InitializationConfig::default()) {
+                Ok(_) => {}
+                Err(msg) => {
+                    return Err(CodeGenError::new(ErrorKind::TargetInitFailed, msg.as_str()))
+                }
+            };
+
+            module.set_triple(&TargetMachine::get_default_triple());
+        }
+    };
+
+    // Set up function pass manager that performs LLVM IR optimization.
+    let fpm = PassManager::create(&module);
+    if optimize {
+        fpm.add_instruction_combining_pass();
+        fpm.add_reassociate_pass();
+        fpm.add_gvn_pass();
+        fpm.add_cfg_simplification_pass();
+        fpm.add_basic_alias_analysis_pass();
+        fpm.add_promote_memory_to_register_pass();
+    }
+    fpm.initialize();
+
+    // Create the program code generator and generate the program.
+    let mut codegen = ProgramCodeGen {
+        ctx: &ctx,
+        builder: &builder,
+        fpm: &fpm,
+        module: &module,
+        program: &prog_analysis.prog,
+        type_store: &prog_analysis.type_store,
+        type_converter: TypeConverter::new(&ctx, &prog_analysis.type_store),
+        consts: HashMap::new(),
+    };
+    codegen.gen_program()?;
+
+    // Write output to file.
+    match output_format {
+        OutputFormat::LLVMIR => {
+            if let Err(e) = codegen.module.print_to_file(output_path) {
+                return Err(CodeGenError::new(
+                    ErrorKind::WriteOutFailed,
+                    e.to_string().as_str(),
+                ));
+            }
+        }
+
+        OutputFormat::LLVMBitcode => {
+            codegen.module.write_bitcode_to_path(output_path);
+        }
+
+        OutputFormat::Object | OutputFormat::Assembly => {
+            let target_triple = TargetMachine::get_default_triple();
+            let target = Target::from_triple(&target_triple).unwrap();
+            let target_machine = target
+                .create_target_machine(
+                    &target_triple,
+                    &"",
+                    &"",
+                    OptimizationLevel::Aggressive,
+                    RelocMode::Default,
+                    CodeModel::Default,
+                )
+                .unwrap();
+            let file_type = match output_format {
+                OutputFormat::Assembly => FileType::Assembly,
+                OutputFormat::Object => FileType::Object,
+                _ => unreachable!(),
+            };
+
+            // TODO: Sometimes this call will cause a segfault when the module is not optimized.
+            // I have no idea why, but it's bad!
+            if let Err(msg) = target_machine.write_to_file(&module, file_type, output_path) {
+                return Err(CodeGenError::new(
+                    ErrorKind::WriteOutFailed,
+                    msg.to_str().unwrap(),
+                ));
+            }
+        }
+    };
+
+    Ok(())
 }

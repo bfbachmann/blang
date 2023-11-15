@@ -1,6 +1,6 @@
-# Set the default LLVM IR compiler.
+# Set the default C compiler (we're only using it to compile object files to executables here).
 # Overwrite this in your env.nu file if you'd like to use another compiler.
-$env.IR_COMPILER = "clang"
+$env.CC = "cc"
 
 # Source env.nu if it exists.
 if ("env.nu" | path exists) {
@@ -48,12 +48,12 @@ def check [
     cargo $env.CARGO_FLAGS run -- check --dump bin/dump.txt ($src)
 }
 
-# Compiles Blang source code to LLVM IR.
+# Compiles Blang source code.
 def build [
     src: path = "source.bl"     # The path to the Blang source code to compile.
     --quiet (-q)                # Disable Blang compiler logging.
 ] {
-    let out_path = $"bin/($src | path parse | get stem).ll"
+    let out_path = $"bin/($src | path parse | get stem).o"
 
     if $quiet {
         cargo $env.CARGO_FLAGS run -- build -q -o $out_path $src
@@ -68,17 +68,17 @@ def run [
     --quiet (-q)                        # Disable Blang compiler logging.
     ...cflags: string                   # Additional flags to pass to the LLVM IR compiler (clang).
 ] {
-    # Compile Blang source code to LLVM IR.
+    # Compile Blang source code to and object file.
     if $quiet {
         build -q $src
     } else {
         build $src
     }
 
-    # Compile the LLVM IR to an executable.
-    let src_path = $"bin/($src | path parse | get stem).ll"
+    # Compile the object file to an executable.
+    let src_path = $"bin/($src | path parse | get stem).o"
     let out_path = $"bin/($src | path parse | get stem)"
-    ^$"($env.IR_COMPILER)" $src_path -o $out_path ($env.CFLAGS) ($cflags | str join)
+    ^$"($env.CC)" $src_path -o $out_path ($env.CFLAGS) ($cflags | str join)
 
     # Run the executable.
     ^$"($out_path)"

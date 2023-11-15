@@ -9,11 +9,11 @@ use clap::{arg, ArgAction, Command};
 use colored::*;
 use pluralizer::pluralize;
 
-use codegen::program::ProgramCodeGen;
 use parser::program::Program;
 
 use crate::analyzer::analyze::analyze_prog;
 use crate::analyzer::prog_context::ProgramAnalysis;
+use crate::codegen::program::{generate, OutputFormat};
 use crate::fmt::format_file_loc;
 use crate::lexer::error::LexError;
 use crate::lexer::lex::lex;
@@ -54,9 +54,10 @@ fn main() {
             )
             .arg(arg!(-t --target <TARGET> "Target ISA triple").required(false))
             .arg(
-                arg!(-b --bitcode "Output LLVM bitcode")
+                arg!(-f --format <FORMAT> "The output format to generate")
                     .required(false)
-                    .action(ArgAction::SetTrue),
+                    .default_value("obj")
+                    .value_parser(["ir", "bc", "obj", "asm"]),
             )
             .arg(arg!(-o --out <OUTPUT_PATH> "Output file path").required(false)),
     );
@@ -74,11 +75,18 @@ fn main() {
         Some(("build", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(src_path) => {
                 let target = sub_matches.get_one::<String>("target");
-                let as_bitcode = sub_matches.get_flag("bitcode");
+                let output_format = match sub_matches.get_one::<String>("format").unwrap().as_str()
+                {
+                    "obj" => OutputFormat::Object,
+                    "ir" => OutputFormat::LLVMIR,
+                    "bc" => OutputFormat::LLVMBitcode,
+                    "asm" => OutputFormat::Assembly,
+                    _ => unreachable!(),
+                };
                 let dst_path = sub_matches.get_one::<String>("out");
-                let simplify_ir = !sub_matches.get_flag("unoptimized");
+                let optimize = !sub_matches.get_flag("unoptimized");
                 let quiet = sub_matches.get_flag("quiet");
-                compile(src_path, dst_path, as_bitcode, target, simplify_ir, quiet);
+                compile(src_path, dst_path, output_format, target, optimize, quiet);
             }
             _ => fatalln!("expected source path"),
         },
@@ -226,9 +234,9 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> ProgramAnalysi
 fn compile(
     src_path: &str,
     dst_path: Option<&String>,
-    as_bitcode: bool,
+    output_format: OutputFormat,
     target: Option<&String>,
-    simplify_ir: bool,
+    optimize: bool,
     quiet: bool,
 ) {
     let start_time = Instant::now();
@@ -246,12 +254,12 @@ fn compile(
     };
 
     // Compile the program.
-    if let Err(e) = ProgramCodeGen::compile(
+    if let Err(e) = generate(
         prog_analysis,
         target,
-        as_bitcode,
+        output_format,
         dst.as_path(),
-        simplify_ir,
+        optimize,
     ) {
         fatalln!("{}", e);
     }
@@ -272,6 +280,7 @@ fn compile(
 mod tests {
     use std::fs;
 
+    use crate::codegen::program::OutputFormat;
     use crate::compile;
 
     #[test]
@@ -284,15 +293,12 @@ mod tests {
                 _ => continue,
             };
 
-            let output_path = format!(
-                "bin/{}.ll",
-                file_path.file_stem().unwrap().to_str().unwrap()
-            );
+            let output_path = format!("bin/{}.o", file_path.file_stem().unwrap().to_str().unwrap());
 
             compile(
                 file_path.to_str().unwrap(),
                 Some(&output_path),
-                false,
+                OutputFormat::Object,
                 None,
                 true,
                 true,
