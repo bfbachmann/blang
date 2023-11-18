@@ -1043,6 +1043,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     .as_basic_value_enum()
             }
 
+            AExprKind::TypeCast(left_expr, target_type_key) => {
+                let lhs = self.gen_const_expr(left_expr);
+                self.gen_type_cast(lhs, *target_type_key)
+                    .as_basic_value_enum()
+            }
+
             _ => panic!("unexpected const expression {}", expr),
         }
     }
@@ -1054,6 +1060,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         let result = match &expr.kind {
+            AExprKind::TypeCast(left_expr, target_type_key) => {
+                let lhs = self.gen_expr(left_expr);
+                self.gen_type_cast(lhs, *target_type_key)
+                    .as_basic_value_enum()
+            }
+
             AExprKind::Symbol(var) => self.get_var_value(var),
 
             AExprKind::BoolLiteral(_)
@@ -1383,13 +1395,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         right_expr: &AExpr,
     ) -> BasicValueEnum<'ctx> {
         let lhs = self.gen_expr(left_expr);
-
-        if op == &Operator::As {
-            return self
-                .gen_type_cast(lhs, right_expr.type_key)
-                .as_basic_value_enum();
-        }
-
         let rhs = self.gen_expr(right_expr);
 
         // Determine whether the operation should be signed or unsigned based on the operand types.
@@ -1434,6 +1439,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // TODO: When we support numeric types that are larger or smaller than 64 bits, we need to
         // think about sign extension and zero extension when casting.
+
+        if ll_val.is_pointer_value() && ll_target_type.is_pointer_type() {
+            return ll_val;
+        }
 
         if ll_val.is_pointer_value() {
             ll_val = self

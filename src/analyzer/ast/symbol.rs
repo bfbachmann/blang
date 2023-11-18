@@ -184,40 +184,6 @@ impl ASymbol {
         }
     }
 
-    /// Analyzes `symbol`, where `symbol` must be a type and nothing else.
-    pub fn from_type(ctx: &mut ProgramContext, symbol: &Symbol) -> Self {
-        // Try resolve the type from the symbol name.
-        let maybe_type_key = ctx.get_type_key_by_type_name(symbol.name.as_str());
-
-        // Make sure we could resolve the type.
-        // Since we're expecting a type here, also make sure there is no member access.
-        if maybe_type_key.is_none() || symbol.member_access.is_some() {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::ExpectedType,
-                format_code!("expected type, but found {}", symbol).as_str(),
-                symbol,
-            ));
-
-            return ASymbol::new_with_default_pos(
-                symbol.name.as_str(),
-                ctx.unknown_type_key(),
-                None,
-            );
-        }
-
-        ASymbol {
-            name: symbol.name.clone(),
-            parent_type_key: maybe_type_key.unwrap(),
-            member_access: None,
-            is_type: true,
-            is_const: false,
-            is_var: false,
-            is_method: false,
-            start_pos: symbol.start_pos.clone(),
-            end_pos: symbol.end_pos.clone(),
-        }
-    }
-
     /// Returns the type key of the accessed submember (i.e. the type of the member at the end of
     /// the member access chain), or of the symbol itself if there is no member access.
     pub fn get_type_key(&self) -> TypeKey {

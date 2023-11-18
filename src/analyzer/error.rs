@@ -8,7 +8,6 @@ pub type AnalyzeResult<T> = Result<T, AnalyzeError>;
 pub enum ErrorKind {
     MismatchedTypes,
     ExpectedReturnValue,
-    ExpectedType,
     ExpectedExpr,
     DuplicateFunction,
     DuplicateConst,
@@ -83,7 +82,6 @@ impl fmt::Display for ErrorKind {
             ErrorKind::DuplicateFnArg => write!(f, "duplicate function argument"),
             ErrorKind::UndefSpec => write!(f, "undefined spec"),
             ErrorKind::InvalidTypeCast => write!(f, "invalid type cast"),
-            ErrorKind::ExpectedType => write!(f, "expected type"),
             ErrorKind::ExpectedExpr => write!(f, "expected expression"),
             ErrorKind::InvalidExtern => write!(f, "invalid extern"),
             #[cfg(test)]

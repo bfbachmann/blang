@@ -961,19 +961,6 @@ mod tests {
     }
 
     #[test]
-    fn invalid_type_cast() {
-        let result = analyze(
-            r#"
-            fn main() {
-                let a = 5u64
-                let b = a as 543
-            }
-            "#,
-        );
-        check_result(result, Some(ErrorKind::ExpectedType));
-    }
-
-    #[test]
     fn invalid_expression_is_type() {
         let result = analyze(
             r#"

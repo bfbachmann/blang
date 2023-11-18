@@ -41,6 +41,7 @@ pub enum AExprKind {
     AnonFunction(Box<AFn>),
     UnaryOperation(Operator, Box<AExpr>),
     BinaryOperation(Box<AExpr>, Operator, Box<AExpr>),
+    TypeCast(Box<AExpr>, TypeKey),
     Unknown,
 }
 
@@ -65,6 +66,9 @@ impl fmt::Display for AExprKind {
             AExprKind::UnaryOperation(op, expr) => write!(f, "{} {}", op, expr),
             AExprKind::BinaryOperation(left, op, right) => {
                 write!(f, "{} {} {}", left, op, right)
+            }
+            AExprKind::TypeCast(expr, target_type_key) => {
+                write!(f, "{} as {}", expr, target_type_key)
             }
             AExprKind::Unknown => {
                 write!(f, "<unknown>")
@@ -156,6 +160,10 @@ impl AExprKind {
 
             // Function calls and unknown values are never constants.
             AExprKind::FunctionCall(_) | AExprKind::AnonFunction(_) | AExprKind::Unknown => false,
+
+            // Type cast expressions are constants if the expressions they're type casting are
+            // constants.
+            AExprKind::TypeCast(expr, _) => expr.kind.is_const(),
         }
     }
 
@@ -176,6 +184,13 @@ impl AExprKind {
             AExprKind::UnaryOperation(op, expr) => format!("{} {}", op, expr.display(ctx)),
             AExprKind::BinaryOperation(left, op, right) => {
                 format!("{} {} {}", left.display(ctx), op, right.display(ctx))
+            }
+            AExprKind::TypeCast(left_expr, target_type_key) => {
+                format!(
+                    "{} as {}",
+                    left_expr.display(ctx),
+                    ctx.display_type_for_key(*target_type_key)
+                )
             }
             AExprKind::Unknown => {
                 format!("<unknown>")
@@ -223,6 +238,35 @@ impl AExpr {
         let end_pos = expr.end_pos().clone();
 
         let mut result = match &expr {
+            Expression::TypeCast(expr, target_type) => {
+                let left_expr = AExpr::from(ctx, *expr.clone(), None, false);
+                let target_type_key = ctx.resolve_type(target_type);
+                let left_type = ctx.must_get_type(left_expr.type_key);
+                let a_target_type = ctx.must_get_type(target_type_key);
+
+                if !is_valid_type_cast(left_type, a_target_type) {
+                    ctx.insert_err(AnalyzeError::new(
+                        ErrorKind::InvalidTypeCast,
+                        format_code!(
+                            "cannot cast value of type {} to type {}",
+                            left_type.display(ctx),
+                            a_target_type.display(ctx)
+                        )
+                        .as_str(),
+                        &left_expr,
+                    ));
+
+                    AExpr::new_zero_value(ctx, target_type.clone())
+                } else {
+                    AExpr {
+                        kind: AExprKind::TypeCast(Box::new(left_expr), target_type_key),
+                        type_key: target_type_key,
+                        start_pos,
+                        end_pos,
+                    }
+                }
+            }
+
             Expression::Symbol(ref symbol) => {
                 let a_symbol = ASymbol::from(ctx, symbol, true, None);
                 let type_key = a_symbol.get_type_key().clone();
@@ -466,45 +510,10 @@ impl AExpr {
                 };
 
                 let a_left = AExpr::from(ctx, *left_expr.clone(), maybe_expected_operand_tk, false);
-
-                // Handle the special case where the operator is the type cast operator `as`. In
-                // this case, the right expression should actually be a type.
-                let a_right = if op == &Operator::As {
-                    if let Expression::Symbol(symbol) = right_expr.as_ref() {
-                        let a_symbol = ASymbol::from_type(ctx, symbol);
-                        AExpr::from_symbol(a_symbol)
-                    } else {
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::ExpectedType,
-                            format_code!(
-                                "expected type after operator {}, but found {}",
-                                Operator::As,
-                                right_expr,
-                            )
-                            .as_str(),
-                            right_expr.as_ref(),
-                        ));
-
-                        return AExpr {
-                            kind: AExprKind::BinaryOperation(
-                                Box::new(a_left.clone()),
-                                op.clone(),
-                                Box::new(AExpr::new_zero_value(
-                                    ctx,
-                                    Type::new_unresolved("<unknown>"),
-                                )),
-                            ),
-                            type_key: get_result_type(ctx, op, None),
-                            start_pos,
-                            end_pos,
-                        };
-                    }
-                } else {
-                    // If there is no expected operand type, we should try to coerce the right
-                    // expression to the type of the left expression.
-                    let expected_tk = maybe_expected_operand_tk.unwrap_or(a_left.type_key);
-                    AExpr::from(ctx, *right_expr.clone(), Some(expected_tk), false)
-                };
+                // If there is no expected operand type, we should try to coerce the right
+                // expression to the type of the left expression.
+                let expected_tk = maybe_expected_operand_tk.unwrap_or(a_left.type_key);
+                let a_right = AExpr::from(ctx, *right_expr.clone(), Some(expected_tk), false);
 
                 // If we couldn't resolve both of the operand types, we'll skip any further
                 // type checks by returning early.
@@ -796,22 +805,6 @@ fn check_operand_types(
     let left_type = ctx.must_get_type(left_expr.type_key);
     let right_type = ctx.must_get_type(right_expr.type_key);
 
-    if op == &Operator::As {
-        return match is_valid_type_cast(left_type, right_type) {
-            true => Ok(Some(right_expr.type_key)),
-            false => Err(vec![AnalyzeError::new(
-                ErrorKind::InvalidTypeCast,
-                format_code!(
-                    "cannot cast value of type {} to type {}",
-                    left_type.display(ctx),
-                    right_type.display(ctx)
-                )
-                .as_str(),
-                left_expr,
-            )]),
-        };
-    }
-
     let mut operand_type_key = None;
     let mut errors = vec![];
 
@@ -903,12 +896,18 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
 
 /// Returns true only if it is possible to cast from `left_type` to `right_type`.
 fn is_valid_type_cast(left_type: &AType, right_type: &AType) -> bool {
-    if left_type.is_numeric() && right_type.is_numeric() {
-        return true;
-    }
-
     match (left_type, right_type) {
-        (AType::RawPtr, AType::U64) | (AType::U64, AType::RawPtr) => true,
+        // Casting between rawptr and u64 is allowed.
+        (AType::RawPtr, AType::U64)
+        | (AType::U64, AType::RawPtr)
+
+        // Casting between typed pointers and rawptrs is allowed.
+        | (AType::Pointer(_), AType::RawPtr)
+        | (AType::RawPtr, AType::Pointer(_))
+
+        // Casting between compatible numeric types is allowed.
+        | (AType::I64, AType::U64) | (AType::U64, AType::I64)  => true,
+
         _ => false,
     }
 }

@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::fmt;
+use std::fmt::{Display, Formatter};
 
 use colored::Colorize;
 
@@ -19,6 +20,7 @@ use crate::parser::op::Operator;
 use crate::parser::program::Program;
 use crate::parser::r#enum::EnumVariantInit;
 use crate::parser::r#struct::StructInit;
+use crate::parser::r#type::Type;
 use crate::parser::sizeof::SizeOf;
 use crate::parser::str_lit::StrLit;
 use crate::parser::symbol::Symbol;
@@ -29,15 +31,16 @@ use crate::parser::u64_lit::U64Lit;
 enum OutputNode {
     Operator(Operator),
     BasicExpr(Expression),
+    Type(Type),
 }
 
-impl OutputNode {
-    fn from_op(op: Operator) -> Self {
-        OutputNode::Operator(op)
-    }
-
-    fn from_basic_expr(expr: Expression) -> Self {
-        OutputNode::BasicExpr(expr)
+impl Display for OutputNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            OutputNode::Operator(op) => write!(f, "{}", op),
+            OutputNode::BasicExpr(expr) => write!(f, "{}", expr),
+            OutputNode::Type(typ) => write!(f, "{}", typ),
+        }
     }
 }
 
@@ -63,6 +66,7 @@ pub enum Expression {
     // Composite expressions.
     UnaryOperation(Operator, Box<Expression>),
     BinaryOperation(Box<Expression>, Operator, Box<Expression>),
+    TypeCast(Box<Expression>, Type),
 }
 
 impl fmt::Display for Expression {
@@ -93,6 +97,9 @@ impl fmt::Display for Expression {
             Expression::SizeOf(so) => {
                 write!(f, "{}", so)
             }
+            Expression::TypeCast(expr, target_type) => {
+                write!(f, "{} as {}", expr, target_type)
+            }
         }
     }
 }
@@ -115,6 +122,7 @@ impl Locatable for Expression {
             Expression::TupleInit(tuple_init) => tuple_init.start_pos(),
             Expression::BinaryOperation(left, _, _) => left.start_pos(),
             Expression::SizeOf(so) => so.start_pos(),
+            Expression::TypeCast(expr, _) => expr.start_pos(),
         }
     }
 
@@ -135,6 +143,7 @@ impl Locatable for Expression {
             Expression::TupleInit(tuple_init) => tuple_init.end_pos(),
             Expression::BinaryOperation(left, _, _) => left.end_pos(),
             Expression::SizeOf(so) => so.end_pos(),
+            Expression::TypeCast(_, target_type) => target_type.end_pos(),
         }
     }
 }
@@ -145,16 +154,54 @@ impl Expression {
         match q.pop_back() {
             // If the node is an operator, we need to assemble its children.
             Some(OutputNode::Operator(op)) => {
-                let right_child = Expression::from_rpn(q)?;
-                let left_child = Expression::from_rpn(q)?;
-                Ok(Expression::BinaryOperation(
-                    Box::new(left_child),
-                    op,
-                    Box::new(right_child),
-                ))
+                if op == Operator::As {
+                    let target_type = match q.pop_back() {
+                        Some(OutputNode::Type(target_type)) => target_type,
+                        Some(other) => {
+                            return Err(ParseError::new(
+                                ErrorKind::ExpectedType,
+                                format_code!(
+                                    "expected right operand to cast operator {} to be a type, but found {}",
+                                    Operator::As,
+                                    &other,
+                                )
+                                .as_str(),
+                                None,
+                                Position::default(),
+                                Position::default(),
+                            ));
+                        }
+                        None => {
+                            return Err(ParseError::new(
+                                ErrorKind::UnexpectedEOF,
+                                "unexpected end of expression",
+                                None,
+                                Position::default(),
+                                Position::default(),
+                            ))
+                        }
+                    };
+
+                    let left_child = Expression::from_rpn(q)?;
+                    Ok(Expression::TypeCast(Box::new(left_child), target_type))
+                } else {
+                    let right_child = Expression::from_rpn(q)?;
+                    let left_child = Expression::from_rpn(q)?;
+                    Ok(Expression::BinaryOperation(
+                        Box::new(left_child),
+                        op,
+                        Box::new(right_child),
+                    ))
+                }
             }
+
             // Otherwise, this is a leaf node (i.e. basic expression).
             Some(OutputNode::BasicExpr(expr)) => Ok(expr),
+
+            Some(OutputNode::Type(_)) => {
+                unreachable!()
+            }
+
             // The queue should not be empty. If this happens, it means that the queue passed to
             // this function was not valid RPN.
             None => Err(ParseError::new(
@@ -431,7 +478,7 @@ impl Expression {
                         _ => {
                             // Pop op2 from the operator stack and onto the output queue.
                             let op2 = Operator::from(&op_stack.pop_back().unwrap().kind).unwrap();
-                            out_q.push_back(OutputNode::from_op(op2));
+                            out_q.push_back(OutputNode::Operator(op2));
                         }
                     }
                 }
@@ -474,7 +521,7 @@ impl Expression {
                 // expression.
                 tokens.rewind(1);
                 let expr = Expression::from_basic(tokens, is_arg)?;
-                out_q.push_back(OutputNode::from_basic_expr(expr.unwrap()));
+                out_q.push_back(OutputNode::BasicExpr(expr.unwrap()));
                 expect_binop_or_end = true
             }
             // Check if the token is a binary operator.
@@ -493,10 +540,18 @@ impl Expression {
                         {
                             // Pop op2 from the operator stack and onto the output queue.
                             let op2 = Operator::from(&op_stack.pop_back().unwrap().kind).unwrap();
-                            out_q.push_back(OutputNode::from_op(op2));
+                            out_q.push_back(OutputNode::Operator(op2));
                         } else {
                             break;
                         }
+                    }
+
+                    // Handle the special case of the `as` operator that must be followed by a
+                    // type.
+                    if op1 == Operator::As {
+                        let target_type = Type::from(tokens)?;
+                        out_q.push_back(OutputNode::Type(target_type));
+                        expect_binop_or_end = true;
                     }
 
                     // Push operator 1 onto the operator stack.
@@ -523,7 +578,7 @@ impl Expression {
                     // We have a negative value here, so we're going to represent it as the value
                     // multiplied by -1. Push -1 to the output queue and push * to the operator
                     // stack.
-                    out_q.push_back(OutputNode::from_basic_expr(Expression::I64Literal(
+                    out_q.push_back(OutputNode::BasicExpr(Expression::I64Literal(
                         I64Lit::new_with_default_pos(-1),
                     )));
                     op_stack.push_back(Token::new(TokenKind::Asterisk, 0, 0, 0));
@@ -553,7 +608,7 @@ impl Expression {
                         // This is the beginning of the expression, so we expect a basic expression.
                         tokens.rewind(1);
                         if let Some(expr) = Expression::from_basic(tokens, is_arg)? {
-                            out_q.push_back(OutputNode::from_basic_expr(expr));
+                            out_q.push_back(OutputNode::BasicExpr(expr));
                             expect_binop_or_end = true;
                         } else {
                             return Err(ParseError::new_with_token(
@@ -572,11 +627,18 @@ impl Expression {
                         // binary operator, we expect a basic expression - it can't be composite
                         // because that would have been handled by other branches in the if
                         // statement above.
-                        if let Some(last_op) = Operator::from(&last.kind) {
-                            if last_op.is_binary() {
+                        match Operator::from(&last.kind) {
+                            Some(Operator::As) => {
+                                tokens.rewind(1);
+                                let target_type = Type::from(tokens)?;
+                                out_q.push_back(OutputNode::Type(target_type));
+                                expect_binop_or_end = true;
+                            }
+
+                            Some(op) if op.is_binary() => {
                                 tokens.rewind(1);
                                 if let Some(expr) = Expression::from_basic(tokens, is_arg)? {
-                                    out_q.push_back(OutputNode::from_basic_expr(expr));
+                                    out_q.push_back(OutputNode::BasicExpr(expr));
                                     expect_binop_or_end = true;
                                 } else {
                                     return Err(ParseError::new_with_token(
@@ -589,7 +651,9 @@ impl Expression {
                                         op1_token,
                                     ));
                                 }
-                            } else {
+                            }
+
+                            Some(_) => {
                                 return Err(ParseError::new_with_token(
                                     ErrorKind::ExpectedExpr,
                                     format_code!("expected expression, but found {}", op1_token)
@@ -597,12 +661,14 @@ impl Expression {
                                     op1_token,
                                 ));
                             }
-                        } else {
-                            // At this point we know we the token is not part of the expression, so
-                            // we're done.
-                            tokens.rewind(1);
-                            break;
-                        }
+
+                            None => {
+                                // At this point we know we the token is not part of the expression, so
+                                // we're done.
+                                tokens.rewind(1);
+                                break;
+                            }
+                        };
                     }
                 };
             }
@@ -630,7 +696,7 @@ impl Expression {
 
             // Pop the operator from the operator stack onto the output queue.
             let op = Operator::from(&op.kind).unwrap();
-            out_q.push_back(OutputNode::from_op(op));
+            out_q.push_back(OutputNode::Operator(op));
         }
 
         // At this point we have an output queue representing the tokens in the expression in

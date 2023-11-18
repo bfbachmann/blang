@@ -500,4 +500,23 @@ mod tests {
         let result = Program::from(&mut Stream::from(tokens));
         assert!(matches!(result, Ok(_)));
     }
+
+    #[test]
+    fn invalid_type_cast() {
+        let input = r#"
+            fn main() {
+                let a = 5u64
+                let b = a as 543
+            }
+        "#;
+        let tokens = lex(&mut Stream::from(input.chars().collect())).expect("should succeed");
+        let result = Program::from(&mut Stream::from(tokens));
+        assert!(matches!(
+            result,
+            Err(ParseError {
+                kind: ErrorKind::ExpectedType,
+                ..
+            })
+        ))
+    }
 }

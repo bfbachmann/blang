@@ -50,6 +50,17 @@ fn main() {
         // Check pointer type coercion.
         let u: *u64 = *<1234
     }
+
+    // Check that we can cast between pointer types.
+    {
+        let bool_ptr = malloc(1) as *bool
+        assert(bool_ptr as rawptr != NULL, 8)
+
+        let bool_val: bool = *>bool_ptr
+        assert(bool_val == *>bool_ptr, 9)
+
+        free(bool_ptr as rawptr)
+    }
     
     exit(0)
 }

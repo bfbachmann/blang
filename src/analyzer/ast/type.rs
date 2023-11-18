@@ -406,11 +406,6 @@ impl AType {
         }
     }
 
-    /// Returns true if this is a numeric type.
-    pub fn is_numeric(&self) -> bool {
-        matches!(self, AType::I64 | AType::U64)
-    }
-
     /// Returns true if the type is `bool`.
     pub fn is_bool(&self) -> bool {
         matches!(self, AType::Bool)
