@@ -15,6 +15,10 @@ struct T {
     b: bool,
 }
 
+struct HasPtr {
+    field: *i64
+}
+
 fn main() {
     // Check that rawptrs work.
     {
@@ -49,15 +53,24 @@ fn main() {
 
         // Check pointer type coercion.
         let u: *u64 = *<1234
+
+        // Check that we can reference and dereference fields
+        // that are pointers.
+        let t = HasPtr{field: *<123}
+    
+        assert(*>t.field == 123, 8)
+    
+        let field_ptr = *<t.field
+        assert(*>*>field_ptr == 123, 9)
     }
 
     // Check that we can cast between pointer types.
     {
         let bool_ptr = malloc(1) as *bool
-        assert(bool_ptr as rawptr != NULL, 8)
+        assert(bool_ptr as rawptr != NULL, 10)
 
         let bool_val: bool = *>bool_ptr
-        assert(bool_val == *>bool_ptr, 9)
+        assert(bool_val == *>bool_ptr, 11)
 
         free(bool_ptr as rawptr)
     }
