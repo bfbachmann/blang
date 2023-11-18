@@ -11,6 +11,7 @@ const {
     OTHER_INT = INT + 1
     ENUM_ERR = Result::Err("failed")
     STR = "Hello world! 你好世界\n"
+    SAME_STRS = STR == "Hello world! 你好世界\n"
 }
 
 enum Result {
@@ -33,6 +34,8 @@ fn main() {
     assert(PTR == NULL, 6)
     assert(OTHER_INT == INT + 1, 7)
     assert(ENUM_ERR ~== Result::Err("failed"), 8)
+    assert(SAME_STRS, 9)
+    assert(STR != "not the same", 10)
 
     exit(0)
 }

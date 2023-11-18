@@ -1516,7 +1516,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             );
         }
 
-        // TODO: will it work if we always treat operands as ints?
+        // At this point we know it's safe to represent the types numerically for comparison.
         let lhs = self.get_int(ll_lhs);
         let rhs = self.get_int(ll_rhs);
 

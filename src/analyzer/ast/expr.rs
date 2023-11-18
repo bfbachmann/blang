@@ -872,11 +872,11 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
         // Logical operators only work on bools.
         Operator::LogicalAnd | Operator::LogicalOr => matches!(operand_type, AType::Bool),
 
-        // Equality operators only work on numerics and bools.
+        // Equality operators only work on most primitive types.
         Operator::EqualTo | Operator::NotEqualTo => {
             matches!(
                 operand_type,
-                AType::Bool | AType::I64 | AType::RawPtr | AType::U64
+                AType::Bool | AType::I64 | AType::RawPtr | AType::U64 | AType::Str
             )
         }
 
