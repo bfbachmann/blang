@@ -23,7 +23,6 @@ pub mod r#impl;
 pub mod lambda;
 pub mod r#loop;
 pub mod member;
-pub mod null;
 pub mod op;
 pub mod pointer;
 pub mod program;

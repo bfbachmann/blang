@@ -32,7 +32,6 @@ pub enum AExprKind {
     I64Literal(i64, bool),
     /// The bool here will be true if this literal includes an explicit type suffix.
     U64Literal(u64, bool),
-    Null,
     StrLiteral(String),
     StructInit(AStructInit),
     EnumInit(AEnumVariantInit),
@@ -56,7 +55,6 @@ impl fmt::Display for AExprKind {
             AExprKind::U64Literal(i, has_suffix) => {
                 write!(f, "{}{}", i, if *has_suffix { "u64" } else { "" })
             }
-            AExprKind::Null => write!(f, "null"),
             AExprKind::StrLiteral(s) => write!(f, "{}", s),
             AExprKind::StructInit(s) => write!(f, "{}", s),
             AExprKind::EnumInit(e) => write!(f, "{}", e),
@@ -84,7 +82,6 @@ impl PartialEq for AExprKind {
             (AExprKind::BoolLiteral(b1), AExprKind::BoolLiteral(b2)) => b1 == b2,
             (AExprKind::I64Literal(i1, _), AExprKind::I64Literal(i2, _)) => i1 == i2,
             (AExprKind::U64Literal(i1, _), AExprKind::U64Literal(i2, _)) => i1 == i2,
-            (AExprKind::Null, AExprKind::Null) => true,
             (AExprKind::StrLiteral(s1), AExprKind::StrLiteral(s2)) => s1 == s2,
             (AExprKind::StructInit(s1), AExprKind::StructInit(s2)) => s1 == s2,
             (AExprKind::EnumInit(e1), AExprKind::EnumInit(e2)) => e1 == e2,
@@ -110,7 +107,6 @@ impl AExprKind {
             // Primitive literals are valid constants.
             AExprKind::BoolLiteral(_)
             | AExprKind::I64Literal(_, _)
-            | AExprKind::Null
             | AExprKind::U64Literal(_, _)
             | AExprKind::StrLiteral(_) => true,
 
@@ -174,7 +170,6 @@ impl AExprKind {
             AExprKind::BoolLiteral(b) => format!("{}", b),
             AExprKind::I64Literal(i, _) => format!("{}", i),
             AExprKind::U64Literal(i, _) => format!("{}", i),
-            AExprKind::Null => format!("null"),
             AExprKind::StrLiteral(s) => format!("{}", s),
             AExprKind::StructInit(s) => s.display(ctx),
             AExprKind::EnumInit(e) => e.display(ctx),
@@ -295,13 +290,6 @@ impl AExpr {
             Expression::U64Literal(i) => AExpr {
                 kind: AExprKind::U64Literal(i.value, i.has_type_suffix),
                 type_key: ctx.u64_type_key(),
-                start_pos,
-                end_pos,
-            },
-
-            Expression::Null(_) => AExpr {
-                kind: AExprKind::Null,
-                type_key: ctx.rawptr_type_key(),
                 start_pos,
                 end_pos,
             },
@@ -694,8 +682,7 @@ impl AExpr {
     }
 
     /// Creates a new expression.
-    #[cfg(test)]
-    pub fn new(kind: AExprKind, type_key: TypeKey) -> Self {
+    pub fn new_with_default_pos(kind: AExprKind, type_key: TypeKey) -> Self {
         AExpr {
             kind,
             type_key,
@@ -704,10 +691,17 @@ impl AExpr {
         }
     }
 
-    /// Returns a new expression with value null.
+    /// Returns a new expression with value null. The null value for the rawptr type is just 0u64
+    /// type cast to a rawptr.
     pub fn new_null_ptr(ctx: &ProgramContext) -> AExpr {
         AExpr {
-            kind: AExprKind::Null,
+            kind: AExprKind::TypeCast(
+                Box::new(AExpr::new_with_default_pos(
+                    AExprKind::U64Literal(0, false),
+                    ctx.u64_type_key(),
+                )),
+                ctx.rawptr_type_key(),
+            ),
             type_key: ctx.unknown_type_key(),
             start_pos: Position::default(),
             end_pos: Position::default(),
@@ -776,7 +770,7 @@ impl AExpr {
                     "i64" => AExprKind::I64Literal(0, false),
                     "u64" => AExprKind::U64Literal(0, false),
                     "str" => AExprKind::StrLiteral("".to_string()),
-                    "rawptr" => AExprKind::Null,
+                    "rawptr" => AExpr::new_null_ptr(ctx).kind,
                     _ => AExprKind::Unknown,
                 };
 
@@ -1428,7 +1422,7 @@ mod tests {
 
         assert_eq!(
             result,
-            AExpr::new(
+            AExpr::new_with_default_pos(
                 AExprKind::FunctionCall(AFnCall {
                     fn_symbol: ASymbol::new_with_default_pos(
                         "do_thing",

@@ -944,13 +944,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 .const_int(*u, false)
                 .as_basic_value_enum(),
 
-            AExprKind::Null => self
-                .ctx
-                .i64_type()
-                .ptr_type(AddressSpace::default())
-                .const_null()
-                .as_basic_value_enum(),
-
             AExprKind::UnaryOperation(op, operand_expr) => {
                 // See note immediately below about automatic LLVM constant folding.
                 self.gen_unary_op(op, operand_expr, expr.type_key)
@@ -1071,7 +1064,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AExprKind::BoolLiteral(_)
             | AExprKind::I64Literal(_, _)
             | AExprKind::U64Literal(_, _)
-            | AExprKind::Null
             | AExprKind::StrLiteral(_) => {
                 panic!("constant expression {} was not marked as constant", expr)
             }

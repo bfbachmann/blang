@@ -4,6 +4,8 @@ extern {
     fn free(ptr: rawptr)
 }
 
+const NULL = 0u64 as rawptr
+
 fn assert(b: bool, code: u64) {
     if !b {
         exit(code)

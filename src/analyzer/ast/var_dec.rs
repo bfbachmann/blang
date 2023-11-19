@@ -90,7 +90,7 @@ mod tests {
             AVarDecl {
                 type_key: ctx.str_type_key(),
                 name: "my_var".to_string(),
-                val: AExpr::new(
+                val: AExpr::new_with_default_pos(
                     AExprKind::StrLiteral("bingo".to_string()),
                     ctx.str_type_key()
                 )
@@ -117,7 +117,7 @@ mod tests {
             AVarDecl {
                 type_key: ctx.bool_type_key(),
                 name: "my_var".to_string(),
-                val: AExpr::new(AExprKind::BoolLiteral(true), ctx.bool_type_key())
+                val: AExpr::new_with_default_pos(AExprKind::BoolLiteral(true), ctx.bool_type_key())
             }
         );
         assert_eq!(

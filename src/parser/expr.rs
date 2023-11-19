@@ -15,7 +15,6 @@ use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
 use crate::parser::i64_lit::I64Lit;
 use crate::parser::lambda::LambdaDecl;
-use crate::parser::null::Null;
 use crate::parser::op::Operator;
 use crate::parser::program::Program;
 use crate::parser::r#enum::EnumVariantInit;
@@ -53,7 +52,6 @@ pub enum Expression {
     BoolLiteral(BoolLit),
     I64Literal(I64Lit),
     U64Literal(U64Lit),
-    Null(Null),
     StrLiteral(StrLit),
     FunctionCall(FunctionCall),
     AnonFunction(Box<Function>),
@@ -76,7 +74,6 @@ impl fmt::Display for Expression {
             Expression::BoolLiteral(b) => write!(f, "{}", b),
             Expression::I64Literal(i) => write!(f, "{}", i),
             Expression::U64Literal(i) => write!(f, "{}", i),
-            Expression::Null(null) => write!(f, "{}", null),
             Expression::StrLiteral(s) => write!(f, "{}", s),
             Expression::FunctionCall(chain) => write!(f, "{}", chain),
             Expression::AnonFunction(func) => write!(f, "{}", func),
@@ -111,7 +108,6 @@ impl Locatable for Expression {
             Expression::BoolLiteral(bool_lit) => bool_lit.start_pos(),
             Expression::I64Literal(i64_lit) => i64_lit.start_pos(),
             Expression::U64Literal(u64_lit) => u64_lit.start_pos(),
-            Expression::Null(null) => null.start_pos(),
             Expression::StrLiteral(string_lit) => string_lit.start_pos(),
             Expression::FunctionCall(fn_call) => fn_call.start_pos(),
             Expression::AnonFunction(func) => func.start_pos(),
@@ -132,7 +128,6 @@ impl Locatable for Expression {
             Expression::BoolLiteral(bool_lit) => bool_lit.end_pos(),
             Expression::I64Literal(i64_lit) => i64_lit.end_pos(),
             Expression::U64Literal(u64_lit) => u64_lit.end_pos(),
-            Expression::Null(null) => null.end_pos(),
             Expression::StrLiteral(string_lit) => string_lit.end_pos(),
             Expression::FunctionCall(fn_call) => fn_call.end_pos(),
             Expression::AnonFunction(func) => func.end_pos(),
@@ -355,15 +350,6 @@ impl Expression {
             }) => {
                 let str_lit = StrLit::from(tokens)?;
                 Ok(Some(Expression::StrLiteral(str_lit)))
-            }
-
-            // Check if it's a null value.
-            Some(Token {
-                kind: TokenKind::Null,
-                ..
-            }) => {
-                let null = Null::from(tokens)?;
-                Ok(Some(Expression::Null(null)))
             }
 
             // Check if it's a `sizeof <type>` expression.
