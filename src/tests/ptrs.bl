@@ -80,6 +80,7 @@ fn main() {
     // Check that we can chain references and dereferences.
     {
         assert(*>*<!(!(6-1 > 2)), 12)
+        assert(*>*<NULL == NULL, 13)
     }
     
     exit(0)

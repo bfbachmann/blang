@@ -1347,7 +1347,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
 
             Operator::Reference => match &operand_expr.kind {
-                AExprKind::Symbol(symbol) => self.get_var_ptr(symbol).as_basic_value_enum(),
+                AExprKind::Symbol(symbol) if !symbol.is_const => {
+                    self.get_var_ptr(symbol).as_basic_value_enum()
+                }
                 _ => {
                     let ll_operand_val = self.gen_expr(operand_expr);
                     let ll_ptr = self.create_entry_alloc(
