@@ -120,7 +120,7 @@ impl Operator {
     /// the C standard.
     pub fn is_left_associative(&self) -> bool {
         match self {
-            Operator::LogicalNot => false,
+            Operator::LogicalNot | Operator::Reference | Operator::Defererence => false,
             _ => true,
         }
     }
