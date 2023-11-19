@@ -76,6 +76,11 @@ fn main() {
 
         free(bool_ptr as rawptr)
     }
+
+    // Check that we can chain references and dereferences.
+    {
+        assert(*>*<!(!(6-1 > 2)), 12)
+    }
     
     exit(0)
 }

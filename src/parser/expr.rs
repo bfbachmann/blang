@@ -297,22 +297,37 @@ impl Expression {
                     ..
                 },
             ) => {
+                let token = token.clone();
                 let op = Operator::from(&token.kind).unwrap();
                 tokens.next();
 
-                let maybe_expr = Expression::from_basic(tokens, is_arg)?;
-                if maybe_expr.is_none() {
-                    // TODO: Improve this error message.
-                    return Err(ParseError::new_with_token(
-                        ErrorKind::ExpectedExpr,
-                        "expected expression",
-                        tokens.prev().unwrap().clone(),
-                    ));
-                }
+                let unary_operand = match tokens.peek_next() {
+                    Some(Token {
+                        kind: TokenKind::LeftParen,
+                        ..
+                    }) => {
+                        tokens.next();
+                        let unary_operand = Expression::from(tokens, true)?;
+                        Program::parse_expecting(tokens, TokenKind::RightParen)?;
+                        unary_operand
+                    }
+
+                    _ => match Expression::from_basic(tokens, is_arg)? {
+                        Some(operand_expr) => operand_expr,
+                        None => {
+                            return Err(ParseError::new_with_token(
+                                ErrorKind::ExpectedExpr,
+                                format_code!("expected expression following operator {}", op)
+                                    .as_str(),
+                                token.clone(),
+                            ))
+                        }
+                    },
+                };
 
                 Ok(Some(Expression::UnaryOperation(
                     op,
-                    Box::new(maybe_expr.unwrap()),
+                    Box::new(unary_operand),
                 )))
             }
 
