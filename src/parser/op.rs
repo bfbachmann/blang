@@ -101,18 +101,18 @@ impl Operator {
     /// standard.
     pub fn precedence(&self) -> u32 {
         100 - match self {
-            Operator::As => 0,
             Operator::LeftParen | Operator::RightParen => 1,
             Operator::LogicalNot | Operator::Reference | Operator::Defererence => 2,
-            Operator::Multiply | Operator::Divide | Operator::Modulo => 3,
-            Operator::Add | Operator::Subtract => 4,
+            Operator::As => 3,
+            Operator::Multiply | Operator::Divide | Operator::Modulo => 4,
+            Operator::Add | Operator::Subtract => 5,
             Operator::GreaterThan
             | Operator::LessThan
             | Operator::GreaterThanOrEqual
             | Operator::LessThanOrEqual => 6,
             Operator::EqualTo | Operator::NotEqualTo | Operator::Like | Operator::NotLike => 7,
-            Operator::LogicalAnd => 11,
-            Operator::LogicalOr => 12,
+            Operator::LogicalAnd => 8,
+            Operator::LogicalOr => 9,
         }
     }
 
