@@ -24,6 +24,7 @@ pub enum TokenKind {
 
     // Variable assignment
     Equal,
+    Store,
 
     // Comparators
     EqualTo,
@@ -145,6 +146,7 @@ impl Clone for TokenKind {
             TokenKind::Ampersand => TokenKind::Ampersand,
             TokenKind::Reference => TokenKind::Reference,
             TokenKind::Dereference => TokenKind::Dereference,
+            TokenKind::Store => TokenKind::Store,
         }
     }
 }
@@ -227,6 +229,7 @@ impl TokenKind {
             TokenKind::Ampersand => "&".to_string(),
             TokenKind::Reference => "*<".to_string(),
             TokenKind::Dereference => "*>".to_string(),
+            TokenKind::Store => "<-".to_string(),
         }
     }
 
@@ -293,6 +296,7 @@ impl TokenKind {
             (TokenKind::Ampersand.to_string(), TokenKind::Ampersand),
             (TokenKind::Reference.to_string(), TokenKind::Reference),
             (TokenKind::Dereference.to_string(), TokenKind::Dereference),
+            (TokenKind::Store.to_string(), TokenKind::Store),
         ]);
 
         // Trim syntactically meaningless whitespace.

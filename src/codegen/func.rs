@@ -22,6 +22,7 @@ use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::ret::ARet;
 use crate::analyzer::ast::statement::AStatement;
+use crate::analyzer::ast::store::AStore;
 use crate::analyzer::ast::symbol::{AMemberAccess, ASymbol};
 use crate::analyzer::ast::tuple::ATupleInit;
 use crate::analyzer::ast::var_assign::AVarAssign;
@@ -643,6 +644,17 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         ll_ptr
     }
 
+    /// Generates instructions that store a value into memory.
+    fn gen_store(&mut self, store: &AStore) {
+        let ll_dest_ptr = self.gen_expr(&store.dest_expr);
+        let ll_src_val = self.gen_expr(&store.source_expr);
+        self.copy_value(
+            ll_src_val,
+            ll_dest_ptr.into_pointer_value(),
+            store.source_expr.type_key,
+        );
+    }
+
     /// Compiles all statements in the closure.
     fn gen_closure(&mut self, closure: &AClosure) -> CompileResult<()> {
         for (i, statement) in closure.statements.iter().enumerate() {
@@ -683,6 +695,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
             AStatement::VariableAssignment(assign) => {
                 self.assign_var(assign);
+            }
+            AStatement::Store(store) => {
+                self.gen_store(store);
             }
             AStatement::FunctionDeclaration(func) => {
                 self.gen_fn(func)?;

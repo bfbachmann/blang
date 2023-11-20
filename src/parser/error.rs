@@ -23,7 +23,6 @@ pub enum ErrorKind {
     UnexpectedEndOfExpr,
     UnexpectedToken,
     UnexpectedEOF,
-    InvalidStatement,
     UseOfDoubleNegative,
 }
 
@@ -46,7 +45,6 @@ impl Display for ErrorKind {
             ErrorKind::UnexpectedEndOfExpr => write!(f, "unexpected end of expression"),
             ErrorKind::UnexpectedToken => write!(f, "unexpected token"),
             ErrorKind::UnexpectedEOF => write!(f, "unexpected EOF"),
-            ErrorKind::InvalidStatement => write!(f, "invalid statement"),
             ErrorKind::UseOfDoubleNegative => write!(f, "use of double negative"),
         }
     }

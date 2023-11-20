@@ -30,6 +30,7 @@ pub mod ret;
 pub mod sizeof;
 pub mod spec;
 pub mod statement;
+pub mod store;
 pub mod str_lit;
 pub mod r#struct;
 pub mod symbol;

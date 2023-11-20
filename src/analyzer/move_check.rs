@@ -14,6 +14,7 @@ use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::ret::ARet;
 use crate::analyzer::ast::statement::AStatement;
+use crate::analyzer::ast::store::AStore;
 use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::ast::var_assign::AVarAssign;
 use crate::analyzer::ast::var_dec::AVarDecl;
@@ -319,6 +320,8 @@ impl<'a> MoveChecker<'a> {
 
             AStatement::VariableAssignment(assign) => self.check_var_assign(assign),
 
+            AStatement::Store(store) => self.check_store(store),
+
             AStatement::FunctionCall(call) => self.check_fn_call(call),
 
             AStatement::Return(ret) => self.check_ret(ret),
@@ -383,6 +386,12 @@ impl<'a> MoveChecker<'a> {
     fn check_var_assign(&mut self, assign: &AVarAssign) {
         // Check if the value being assigned is a variable and, if so, track its movement.
         self.check_expr(&assign.val.kind);
+    }
+
+    /// Recursively performs move checks on `store`.
+    fn check_store(&mut self, store: &AStore) {
+        // Check if the value being stored is a variable and, if so, track its movement.
+        self.check_expr(&store.source_expr.kind);
     }
 
     /// Recursively performs move checks on `call`.

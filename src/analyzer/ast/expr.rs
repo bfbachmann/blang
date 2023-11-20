@@ -239,7 +239,8 @@ impl AExpr {
                 let left_type = ctx.must_get_type(left_expr.type_key);
                 let a_target_type = ctx.must_get_type(target_type_key);
 
-                if !is_valid_type_cast(left_type, a_target_type) {
+                // Skip the check if the left expression already failed analysis.
+                if !left_type.is_unknown() && !is_valid_type_cast(left_type, a_target_type) {
                     ctx.insert_err(AnalyzeError::new(
                         ErrorKind::InvalidTypeCast,
                         format_code!(

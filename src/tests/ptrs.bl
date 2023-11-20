@@ -82,6 +82,15 @@ fn main() {
         assert(*>*<!(!(6-1 > 2)), 12)
         assert(*>*<NULL == NULL, 13)
     }
+
+    // Check that we can write to memory using pointers.
+    {
+        let ptr = malloc(sizeof T) as *T
+        ptr <- T{i: -23, b: true}
+        let t = *>ptr
+        assert(t.i == -23, 14)
+        assert(t.b == true, 15)
+    }
     
     exit(0)
 }

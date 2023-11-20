@@ -1,8 +1,6 @@
 use std::collections::HashSet;
 use std::fmt;
 
-use colored::Colorize;
-
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
@@ -25,6 +23,7 @@ use crate::parser::r#loop::Loop;
 use crate::parser::r#struct::StructType;
 use crate::parser::ret::Ret;
 use crate::parser::spec::Spec;
+use crate::parser::store::Store;
 use crate::parser::symbol::Symbol;
 use crate::parser::var_assign::VariableAssignment;
 use crate::parser::var_dec::VariableDeclaration;
@@ -34,6 +33,7 @@ use crate::parser::var_dec::VariableDeclaration;
 pub enum Statement {
     VariableDeclaration(VariableDeclaration),
     VariableAssignment(VariableAssignment),
+    Store(Store),
     FunctionDeclaration(Function),
     Closure(Closure),
     FunctionCall(FunctionCall),
@@ -62,6 +62,9 @@ impl fmt::Display for Statement {
             }
             Statement::VariableAssignment(var_assign) => {
                 write!(f, "{} = ...", var_assign.symbol)
+            }
+            Statement::Store(store) => {
+                write!(f, "{} <- {}", store.dest_expr, store.source_expr)
             }
             Statement::FunctionDeclaration(func) => {
                 write!(f, "{}", func.signature)
@@ -128,6 +131,7 @@ impl Locatable for Statement {
         match self {
             Statement::VariableDeclaration(var_dec) => var_dec.start_pos(),
             Statement::VariableAssignment(var_assign) => var_assign.start_pos(),
+            Statement::Store(store) => store.start_pos(),
             Statement::FunctionDeclaration(func) => func.start_pos(),
             Statement::Closure(closure) => closure.start_pos(),
             Statement::FunctionCall(call) => call.start_pos(),
@@ -149,6 +153,7 @@ impl Locatable for Statement {
         match self {
             Statement::VariableDeclaration(var_dec) => var_dec.end_pos(),
             Statement::VariableAssignment(var_assign) => var_assign.end_pos(),
+            Statement::Store(store) => store.end_pos(),
             Statement::FunctionDeclaration(func) => func.end_pos(),
             Statement::Closure(closure) => closure.end_pos(),
             Statement::FunctionCall(call) => call.end_pos(),
@@ -481,17 +486,15 @@ impl Statement {
                 }
             }
 
-            // If the tokens are anything else, we error because it's an invalid statement.
-            (&ref first_token, &ref second_token) => Err(ParseError::new_with_token(
-                ErrorKind::InvalidStatement,
-                format_code!(
-                    "expected statement or expression, but found tokens {} {}",
-                    first_token,
-                    second_token
-                )
-                .as_str(),
-                first_token.clone(),
-            )),
+            // At this point, the tokens must either represent a store statement or it's an invalid
+            // statement.
+            (_, _) => {
+                // Try parse a store statement.
+                match Store::from(tokens) {
+                    Ok(store) => Ok(Statement::Store(store)),
+                    Err(err) => Err(err),
+                }
+            }
         }
     }
 }
