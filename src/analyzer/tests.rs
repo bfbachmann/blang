@@ -1028,4 +1028,30 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::MismatchedTypes));
     }
+
+    #[test]
+    fn invalid_write_dest_pointee_type() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let x = *<1
+                x <- true
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
+
+    #[test]
+    fn invalid_write_dest_not_ptr() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let x = 1
+                x <- 1
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
 }
