@@ -11,8 +11,8 @@ struct T {
 }
 
 impl T {
-    fn get_value(this) ~ i64 {
-        return this.value
+    fn get_value(self) ~ i64 {
+        return self.value
     }
 
     fn new(value: i64) ~ T {
@@ -21,12 +21,12 @@ impl T {
 }
 
 impl i64 {
-    fn mul(this, v: i64) ~ i64 {
-        return this * v
+    fn mul(self, v: i64) ~ i64 {
+        return self * v
     }
 
-    fn add(this, v: i64) ~ i64 {
-        return this + v
+    fn add(self, v: i64) ~ i64 {
+        return self + v
     }
 }
 

@@ -71,7 +71,7 @@ pub struct ProgramContext {
 
     /// Will contain the type key corresponding to the current `spec` or `impl` block that is being
     /// analyzed, if any.
-    cur_this_type_key: Option<TypeKey>,
+    cur_self_type_key: Option<TypeKey>,
 
     /// Maps un-analyzed struct names to un-analyzed structs.
     unchecked_struct_types: HashMap<String, StructType>,
@@ -122,7 +122,7 @@ impl ProgramContext {
             stack: VecDeque::from([Scope::new(ScopeKind::InlineClosure, vec![], None)]),
             fn_scope_indices: vec![],
             loop_scope_indices: vec![],
-            cur_this_type_key: None,
+            cur_self_type_key: None,
             unchecked_struct_types: Default::default(),
             unchecked_enum_types: Default::default(),
             unchecked_specs: Default::default(),
@@ -315,15 +315,15 @@ impl ProgramContext {
     /// type store and returns the resulting type key.
     pub fn resolve_type(&mut self, typ: &Type) -> TypeKey {
         if let Type::Unresolved(unresolved_type) = typ {
-            if unresolved_type.name == "This" {
-                return match self.get_cur_this_type_key() {
+            if unresolved_type.name == "Self" {
+                return match self.get_cur_self_type_key() {
                     Some(tk) => tk,
                     None => {
                         self.insert_err(AnalyzeError::new(
                             ErrorKind::UndefType,
                             format_code!(
                                 "cannot use type {} outside of {} or {} block",
-                                "This",
+                                "Self",
                                 "spec",
                                 "impl"
                             )
@@ -400,7 +400,7 @@ impl ProgramContext {
 
     /// Returns the type key for the special `This` type.
     pub fn this_type_key(&self) -> TypeKey {
-        *self.primitive_type_keys.get("This").unwrap()
+        *self.primitive_type_keys.get("Self").unwrap()
     }
 
     /// Pushes `scope` onto the stack.
@@ -501,13 +501,13 @@ impl ProgramContext {
 
     /// Sets the type key associated with the current `impl` or `spec` type so it can be retrieved
     /// during analysis of the `impl` or `spec` body.
-    pub fn set_cur_this_type_key(&mut self, maybe_type_key: Option<TypeKey>) {
-        self.cur_this_type_key = maybe_type_key;
+    pub fn set_cur_self_type_key(&mut self, maybe_type_key: Option<TypeKey>) {
+        self.cur_self_type_key = maybe_type_key;
     }
 
     /// Returns the type key associated with the current `impl` or `spec` type being analyzed.
-    pub fn get_cur_this_type_key(&mut self) -> Option<TypeKey> {
-        self.cur_this_type_key
+    pub fn get_cur_self_type_key(&mut self) -> Option<TypeKey> {
+        self.cur_self_type_key
     }
 
     /// Returns the member function with the given name on the type associated with `type_key`.

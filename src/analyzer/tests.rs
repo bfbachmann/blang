@@ -769,8 +769,8 @@ mod tests {
             }
             
             impl T {
-                fn get_value(this) ~ i64 {
-                    return this.value
+                fn get_value(self) ~ i64 {
+                    return self.value
                 }
             }
             

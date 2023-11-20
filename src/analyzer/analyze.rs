@@ -169,7 +169,7 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     // Set the current impl type key on the program context so we can access it when
     // resolving type `This`.
     let impl_type_key = ctx.resolve_type(&impl_.typ);
-    ctx.set_cur_this_type_key(Some(impl_type_key));
+    ctx.set_cur_self_type_key(Some(impl_type_key));
 
     // Analyze each member function signature and record it as a member of this type
     // in the program context.
@@ -196,7 +196,7 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
         }
     }
 
-    ctx.set_cur_this_type_key(None);
+    ctx.set_cur_self_type_key(None);
 }
 
 fn define_spec(ctx: &mut ProgramContext, spec: &Spec) {

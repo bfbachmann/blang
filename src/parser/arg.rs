@@ -65,8 +65,8 @@ impl Argument {
     ///
     ///     <arg_name>: <arg_type>
     ///     mut <arg_name>: <arg_type>
-    ///     this
-    ///     mut this
+    ///     self
+    ///     mut self
     ///
     /// where
     ///  - `arg_type` is the type of the argument
@@ -83,12 +83,12 @@ impl Argument {
         let name = Program::parse_identifier(tokens)?;
         end_pos.col += name.len();
 
-        // If the argument name is `this`, it doesn't need a type. Otherwise, it's a regular
+        // If the argument name is `self`, it doesn't need a type. Otherwise, it's a regular
         // argument with a type.
-        if name == "this" {
+        if name == "self" {
             return Ok(Argument::new(
                 name.as_str(),
-                Type::new_unresolved("This"),
+                Type::new_unresolved("Self"),
                 is_mut,
                 start_pos,
                 end_pos,

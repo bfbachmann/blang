@@ -107,28 +107,28 @@ impl AFnCall {
         let fn_sig = fn_sig.clone();
         let maybe_ret_type_key = fn_sig.ret_type_key.clone();
 
-        // If this function takes the special argument `this` and was not called directly via its
-        // fully-qualified name, add the special `this` argument.
-        let maybe_this = a_fn_symbol.clone().without_last_member();
-        let called_on_this = fn_sig.maybe_impl_type_key.is_some()
-            && maybe_this.get_type_key() == fn_sig.maybe_impl_type_key.unwrap()
+        // If this function takes the special argument `self` and was not called directly via its
+        // fully-qualified name, add the special `self` argument.
+        let maybe_self = a_fn_symbol.clone().without_last_member();
+        let called_on_self = fn_sig.maybe_impl_type_key.is_some()
+            && maybe_self.get_type_key() == fn_sig.maybe_impl_type_key.unwrap()
             && !a_fn_symbol.is_type;
 
-        // If the function call is to an instance method, make sure the method takes `this` as its
+        // If the function call is to an instance method, make sure the method takes `self` as its
         // first argument.
-        if called_on_this && a_fn_symbol.is_method() {
-            if fn_sig.takes_this() {
-                // Add `this` as the first argument since the method is being called on it.
-                passed_args.push_front(AExpr::from_symbol(maybe_this));
+        if called_on_self && a_fn_symbol.is_method() {
+            if fn_sig.takes_self() {
+                // Add `self` as the first argument since the method is being called on it.
+                passed_args.push_front(AExpr::from_symbol(maybe_self));
             } else {
-                // This is a call to a method that does not take `this` as its first argument.
+                // This is a call to a method that does not take `self` as its first argument.
                 ctx.insert_err(
                     AnalyzeError::new(
                         ErrorKind::UndefMember,
                         format_code!(
                             "cannot call function {} on value of type {}",
                             fn_sig.name,
-                            ctx.display_type_for_key(maybe_this.get_type_key()),
+                            ctx.display_type_for_key(maybe_self.get_type_key()),
                         )
                         .as_str(),
                         call,
@@ -138,7 +138,7 @@ impl AFnCall {
                             "Member function {} on type {} does not take {} as its first argument.",
                             fn_sig.display(ctx),
                             fn_sig.maybe_impl_type_key.unwrap(),
-                            "this",
+                            "self",
                         )
                         .as_str(),
                     )

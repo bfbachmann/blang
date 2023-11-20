@@ -41,8 +41,8 @@ struct CalcTask {
 }
 
 impl CalcTask {
-    fn run(this) ~ i64 {
-        return this.f(this.arg)
+    fn run(self) ~ i64 {
+        return self.f(self.arg)
     }
 }
 

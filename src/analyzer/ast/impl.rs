@@ -40,7 +40,7 @@ impl AImpl {
         let type_key = ctx.resolve_type(&impl_.typ);
 
         // Set the impl type key in the program context so we can use it when resolving type `This`.
-        ctx.set_cur_this_type_key(Some(type_key));
+        ctx.set_cur_self_type_key(Some(type_key));
 
         // Analyze member functions.
         let mut member_fns = vec![];
@@ -53,7 +53,7 @@ impl AImpl {
             }
         }
 
-        ctx.set_cur_this_type_key(None);
+        ctx.set_cur_self_type_key(None);
 
         AImpl {
             type_key,

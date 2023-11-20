@@ -30,9 +30,9 @@ impl ASpec {
             };
         }
 
-        // Set the unknown type "This" as the current type of "this" so it can be resolved when
+        // Set the unknown type "Self" as the current type of "self" so it can be resolved when
         // we analyzed methods in this spec.
-        ctx.set_cur_this_type_key(Some(ctx.this_type_key()));
+        ctx.set_cur_self_type_key(Some(ctx.this_type_key()));
 
         // Analyze all the function signatures in the spec.
         let mut fn_sigs = vec![];
@@ -40,8 +40,8 @@ impl ASpec {
             fn_sigs.push(AFnSig::from(ctx, fn_sig));
         }
 
-        // Unset the "This" type now that we're done analyzing the spec.
-        ctx.set_cur_this_type_key(None);
+        // Unset the "Self" type now that we're done analyzing the spec.
+        ctx.set_cur_self_type_key(None);
 
         let a_spec = ASpec {
             name: spec.name.clone(),

@@ -105,7 +105,7 @@ impl AFnSig {
 
         // Check if this function signature is for a member function on a type by getting the
         // impl type key.
-        let impl_type_key = match ctx.get_cur_this_type_key() {
+        let impl_type_key = match ctx.get_cur_self_type_key() {
             Some(type_key) => Some(type_key),
             None => None,
         };
@@ -150,10 +150,10 @@ impl AFnSig {
         full_name
     }
 
-    /// Returns true if the function signature has `this` as its first argument.
-    pub fn takes_this(&self) -> bool {
+    /// Returns true if the function signature has `self` as its first argument.
+    pub fn takes_self(&self) -> bool {
         match self.args.first() {
-            Some(arg) => arg.name == "this",
+            Some(arg) => arg.name == "self",
             None => false,
         }
     }

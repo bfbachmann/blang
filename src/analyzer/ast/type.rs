@@ -157,8 +157,8 @@ impl AType {
                 AType::Unknown("<none>".to_string()),
             ),
             (
-                Type::new_unresolved("This"),
-                AType::Unknown("This".to_string()),
+                Type::new_unresolved("Self"),
+                AType::Unknown("Self".to_string()),
             ),
         ])
     }
