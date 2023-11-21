@@ -341,20 +341,6 @@ mod tests {
     }
 
     #[test]
-    fn missing_main() {
-        let mut analysis = get_analysis("").analyzed_sources.remove(0);
-        assert!(analysis.errors.is_empty());
-        assert_eq!(analysis.warnings.len(), 1);
-        assert!(matches!(
-            analysis.warnings.remove(0),
-            AnalyzeWarning {
-                kind: WarnKind::MissingMain,
-                ..
-            }
-        ));
-    }
-
-    #[test]
     fn type_already_exists() {
         let result = analyze(
             r#"

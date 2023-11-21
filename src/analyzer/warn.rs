@@ -5,14 +5,12 @@ use crate::lexer::pos::{Locatable, Position};
 /// Represents a kind of warning emitted by the semantic analyzer.
 #[derive(Debug, PartialEq, Clone)]
 pub enum WarnKind {
-    MissingMain,
     UnreachableCode,
 }
 
 impl Display for WarnKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            WarnKind::MissingMain => write!(f, "missing main"),
             WarnKind::UnreachableCode => write!(f, "unreachable code"),
         }
     }
@@ -34,16 +32,6 @@ impl Display for AnalyzeWarning {
 }
 
 impl AnalyzeWarning {
-    /// Creates a new warning with default start and end positions.
-    pub fn new_with_default_pos(kind: WarnKind, message: &str) -> Self {
-        AnalyzeWarning {
-            kind,
-            message: message.to_string(),
-            start_pos: Position::default(),
-            end_pos: Position::default(),
-        }
-    }
-
     /// Creates a new warning message with start and end positions cloned from the locatable.
     pub fn new<T: Locatable>(kind: WarnKind, message: &str, loc: &T) -> AnalyzeWarning {
         AnalyzeWarning {

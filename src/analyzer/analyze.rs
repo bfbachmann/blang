@@ -10,7 +10,7 @@ use crate::analyzer::move_check::MoveChecker;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_containment::{check_enum_containment, check_struct_containment};
 use crate::analyzer::type_store::TypeStore;
-use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
+use crate::analyzer::warn::AnalyzeWarning;
 use crate::lexer::pos::Position;
 use crate::parser::ext::Extern;
 use crate::parser::func::Function;
@@ -163,16 +163,10 @@ fn define_types(ctx: &mut ProgramContext, source: &Source) {
 /// in the program context so they can be referenced later. This will not perform any analysis of
 /// function bodies.
 fn define_fns(ctx: &mut ProgramContext, source: &Source) {
-    let mut main_defined = false;
-
     for statement in &source.statements {
         match statement {
             Statement::FunctionDeclaration(func) => {
                 define_fn(ctx, func);
-
-                if func.signature.name == "main" {
-                    main_defined = true;
-                }
             }
 
             Statement::ExternFns(ext) => {
@@ -189,13 +183,6 @@ fn define_fns(ctx: &mut ProgramContext, source: &Source) {
 
             _ => {}
         };
-    }
-
-    if !main_defined {
-        ctx.insert_warn(AnalyzeWarning::new_with_default_pos(
-            WarnKind::MissingMain,
-            "no main function was detected; your code will not execute",
-        ));
     }
 }
 
