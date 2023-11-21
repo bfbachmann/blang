@@ -14,3 +14,4 @@ tests/bin
 bin
 *.dump
 env.nu
+ignore
