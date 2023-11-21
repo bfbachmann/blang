@@ -11,7 +11,7 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::fmt::hierarchy_to_string;
 use crate::lexer::token_kind::TokenKind;
-use crate::parser::r#enum::{EnumType, EnumVariantInit};
+use crate::parser::ast::r#enum::{EnumType, EnumVariantInit};
 use crate::{format_code, util};
 
 /// Represents a semantically valid enum type variant declaration.

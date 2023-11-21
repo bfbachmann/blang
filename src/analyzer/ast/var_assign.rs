@@ -8,7 +8,7 @@ use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::format_code;
-use crate::parser::var_assign::VariableAssignment;
+use crate::parser::ast::var_assign::VariableAssignment;
 
 /// Represents a semantically valid and type-rich variable assignment.
 #[derive(Clone, PartialEq, Debug)]

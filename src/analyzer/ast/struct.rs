@@ -9,8 +9,8 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::parser::r#struct::{StructInit, StructType};
-use crate::parser::r#type::Type;
+use crate::parser::ast::r#struct::{StructInit, StructType};
+use crate::parser::ast::r#type::Type;
 use crate::{format_code, util};
 
 /// Represents a semantically valid and type-rich struct field.

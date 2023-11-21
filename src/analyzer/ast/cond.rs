@@ -7,7 +7,7 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::{Locatable, Position};
-use crate::parser::cond::Conditional;
+use crate::parser::ast::cond::Conditional;
 use crate::{locatable_impl, util};
 
 /// Represents a semantically valid and type-rich branch.

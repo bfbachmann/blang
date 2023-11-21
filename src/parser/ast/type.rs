@@ -7,14 +7,14 @@ use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::parser::ast::func_sig::FunctionSignature;
+use crate::parser::ast::pointer::PointerType;
+use crate::parser::ast::r#enum::EnumType;
+use crate::parser::ast::r#struct::StructType;
+use crate::parser::ast::tuple::TupleType;
+use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
-use crate::parser::func_sig::FunctionSignature;
-use crate::parser::pointer::PointerType;
-use crate::parser::r#enum::EnumType;
-use crate::parser::r#struct::StructType;
-use crate::parser::tuple::TupleType;
-use crate::parser::unresolved::UnresolvedType;
 
 /// Represents a type referenced in a program.
 #[derive(Debug, Clone, Hash, Eq)]

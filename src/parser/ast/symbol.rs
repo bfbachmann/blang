@@ -7,9 +7,9 @@ use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
+use crate::parser::ast::member::MemberAccess;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
-use crate::parser::member::MemberAccess;
 
 /// Represents a a named value. These can be variables, variable member accesses, functions,
 /// constants, or types.

@@ -3,8 +3,8 @@ use crate::lexer::pos::Position;
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::parser::ast::func_sig::FunctionSignature;
 use crate::parser::error::ParseResult;
-use crate::parser::func_sig::FunctionSignature;
 use crate::parser::source::Source;
 use crate::{locatable_impl, util};
 

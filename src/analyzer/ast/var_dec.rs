@@ -5,7 +5,7 @@ use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopedSymbol;
 use crate::analyzer::type_store::TypeKey;
-use crate::parser::var_dec::VariableDeclaration;
+use crate::parser::ast::var_dec::VariableDeclaration;
 
 /// Represents a semantically valid and type-rich variable declaration.
 #[derive(PartialEq, Debug, Clone)]
@@ -66,11 +66,11 @@ mod tests {
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
     use crate::analyzer::prog_context::ProgramContext;
     use crate::lexer::pos::Position;
-    use crate::parser::bool_lit::BoolLit;
-    use crate::parser::expr::Expression;
-    use crate::parser::r#type::Type;
-    use crate::parser::str_lit::StrLit;
-    use crate::parser::var_dec::VariableDeclaration;
+    use crate::parser::ast::bool_lit::BoolLit;
+    use crate::parser::ast::expr::Expression;
+    use crate::parser::ast::r#type::Type;
+    use crate::parser::ast::str_lit::StrLit;
+    use crate::parser::ast::var_dec::VariableDeclaration;
 
     #[test]
     fn var_redeclared() {

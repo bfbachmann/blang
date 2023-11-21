@@ -1,6 +1,6 @@
 use crate::lexer::pos::{Locatable, Position};
 use crate::locatable_impl;
-use crate::parser::expr::Expression;
+use crate::parser::ast::expr::Expression;
 
 /// Represents a return statement.
 #[derive(Debug, PartialEq, Clone)]

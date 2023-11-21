@@ -8,23 +8,23 @@ use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
-use crate::parser::bool_lit::BoolLit;
+use crate::parser::ast::bool_lit::BoolLit;
+use crate::parser::ast::func::Function;
+use crate::parser::ast::func_call::FunctionCall;
+use crate::parser::ast::i64_lit::I64Lit;
+use crate::parser::ast::lambda::LambdaDecl;
+use crate::parser::ast::op::Operator;
+use crate::parser::ast::r#enum::EnumVariantInit;
+use crate::parser::ast::r#struct::StructInit;
+use crate::parser::ast::r#type::Type;
+use crate::parser::ast::sizeof::SizeOf;
+use crate::parser::ast::str_lit::StrLit;
+use crate::parser::ast::symbol::Symbol;
+use crate::parser::ast::tuple::TupleInit;
+use crate::parser::ast::u64_lit::U64Lit;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
-use crate::parser::func::Function;
-use crate::parser::func_call::FunctionCall;
-use crate::parser::i64_lit::I64Lit;
-use crate::parser::lambda::LambdaDecl;
-use crate::parser::op::Operator;
-use crate::parser::r#enum::EnumVariantInit;
-use crate::parser::r#struct::StructInit;
-use crate::parser::r#type::Type;
-use crate::parser::sizeof::SizeOf;
 use crate::parser::source::Source;
-use crate::parser::str_lit::StrLit;
-use crate::parser::symbol::Symbol;
-use crate::parser::tuple::TupleInit;
-use crate::parser::u64_lit::U64Lit;
 
 #[derive(Debug)]
 enum OutputNode {
@@ -714,14 +714,14 @@ mod tests {
     use crate::lexer::stream::Stream;
     use crate::lexer::token::Token;
     use crate::lexer::token_kind::TokenKind;
-    use crate::parser::bool_lit::BoolLit;
+    use crate::parser::ast::bool_lit::BoolLit;
+    use crate::parser::ast::expr::Expression;
+    use crate::parser::ast::func_call::FunctionCall;
+    use crate::parser::ast::i64_lit::I64Lit;
+    use crate::parser::ast::op::Operator;
+    use crate::parser::ast::str_lit::StrLit;
+    use crate::parser::ast::symbol::Symbol;
     use crate::parser::error::{ErrorKind, ParseError, ParseResult};
-    use crate::parser::expr::Expression;
-    use crate::parser::func_call::FunctionCall;
-    use crate::parser::i64_lit::I64Lit;
-    use crate::parser::op::Operator;
-    use crate::parser::str_lit::StrLit;
-    use crate::parser::symbol::Symbol;
 
     fn parse(raw: &str) -> ParseResult<Expression> {
         let tokens = lex(&mut Stream::from(raw.chars().collect())).expect("should succeed");

@@ -12,11 +12,11 @@ use crate::analyzer::scope::{Scope, ScopeKind};
 use crate::analyzer::type_store::TypeKey;
 use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
 use crate::lexer::pos::{Locatable, Position};
-use crate::parser::arg::Argument;
-use crate::parser::closure::Closure;
-use crate::parser::cont::Continue;
-use crate::parser::r#break::Break;
-use crate::parser::r#type::Type;
+use crate::parser::ast::arg::Argument;
+use crate::parser::ast::closure::Closure;
+use crate::parser::ast::cont::Continue;
+use crate::parser::ast::r#break::Break;
+use crate::parser::ast::r#type::Type;
 use crate::{format_code, locatable_impl, util};
 
 /// Represents a semantically valid and fully analyzed closure.

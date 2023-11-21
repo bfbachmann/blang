@@ -7,9 +7,9 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::{Locatable, Position};
-use crate::parser::r#type::Type;
-use crate::parser::tmpl_params::{TmplParam, TmplParams};
-use crate::parser::unresolved::UnresolvedType;
+use crate::parser::ast::r#type::Type;
+use crate::parser::ast::tmpl_params::{TmplParam, TmplParams};
+use crate::parser::ast::unresolved::UnresolvedType;
 use crate::{format_code, locatable_impl, util};
 
 /// Represents a template parameter. A template parameter has a name and has either one associated

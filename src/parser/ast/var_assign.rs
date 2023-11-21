@@ -2,10 +2,10 @@ use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::parser::ast::expr::Expression;
+use crate::parser::ast::symbol::Symbol;
 use crate::parser::error::ParseResult;
-use crate::parser::expr::Expression;
 use crate::parser::source::Source;
-use crate::parser::symbol::Symbol;
 
 /// Represents the assignment of some value (i.e. an expression) to a variable.
 #[derive(Debug, PartialEq, Clone)]

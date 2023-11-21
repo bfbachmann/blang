@@ -3,15 +3,15 @@ use std::fmt;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
-use crate::parser::arg::Argument;
-use crate::parser::closure::Closure;
+use crate::parser::ast::arg::Argument;
+use crate::parser::ast::closure::Closure;
+use crate::parser::ast::func_sig::FunctionSignature;
+use crate::parser::ast::lambda::LambdaDecl;
+use crate::parser::ast::r#type::Type;
+use crate::parser::ast::ret::Ret;
+use crate::parser::ast::statement::Statement;
+use crate::parser::ast::tmpl_params::{TmplParam, TmplParams};
 use crate::parser::error::ParseResult;
-use crate::parser::func_sig::FunctionSignature;
-use crate::parser::lambda::LambdaDecl;
-use crate::parser::r#type::Type;
-use crate::parser::ret::Ret;
-use crate::parser::statement::Statement;
-use crate::parser::tmpl_params::{TmplParam, TmplParams};
 
 /// Represents a function declaration.
 #[derive(Debug, PartialEq, Clone)]

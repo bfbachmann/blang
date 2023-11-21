@@ -3,7 +3,7 @@ use colored::Colorize;
 use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::parser::spec::Spec;
+use crate::parser::ast::spec::Spec;
 
 /// Represents a semantically valid spec declaration.
 #[derive(PartialEq, Clone, Debug)]

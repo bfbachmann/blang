@@ -4,7 +4,7 @@ use crate::analyzer::ast::func::AFn;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::parser::r#impl::Impl;
+use crate::parser::ast::r#impl::Impl;
 use crate::{format_code, util};
 
 /// Represents a semantically valid `impl` block that declares member functions for a type.

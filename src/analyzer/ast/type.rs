@@ -12,7 +12,7 @@ use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::tuple::ATupleType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::parser::r#type::Type;
+use crate::parser::ast::r#type::Type;
 
 #[derive(Debug)]
 pub enum AType {

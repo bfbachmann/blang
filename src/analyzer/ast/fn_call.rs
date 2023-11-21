@@ -10,7 +10,7 @@ use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::parser::func_call::FunctionCall;
+use crate::parser::ast::func_call::FunctionCall;
 use crate::{format_code, util};
 
 /// Represents a fully type-resolved and analyzed function call.

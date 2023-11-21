@@ -2,9 +2,9 @@ use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::locatable_impl;
-use crate::parser::closure::Closure;
+use crate::parser::ast::closure::Closure;
+use crate::parser::ast::expr::Expression;
 use crate::parser::error::ParseResult;
-use crate::parser::expr::Expression;
 use crate::parser::source::Source;
 
 /// Represents a branch in a conditional. `if` and `elsif` branches must have condition

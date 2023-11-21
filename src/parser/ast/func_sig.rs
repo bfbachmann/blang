@@ -8,11 +8,11 @@ use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
-use crate::parser::arg::Argument;
+use crate::parser::ast::arg::Argument;
+use crate::parser::ast::r#type::Type;
+use crate::parser::ast::tmpl_params::TmplParams;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::source::Source;
-use crate::parser::tmpl_params::TmplParams;
-use crate::parser::Type;
 use crate::{locatable_impl, util};
 
 /// Represents the name, arguments, and return type of a function. Anonymous functions have empty

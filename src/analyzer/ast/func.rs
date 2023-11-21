@@ -12,8 +12,8 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
 use crate::analyzer::type_store::TypeKey;
-use crate::parser::func::Function;
-use crate::parser::func_sig::FunctionSignature;
+use crate::parser::ast::func::Function;
+use crate::parser::ast::func_sig::FunctionSignature;
 use crate::util;
 
 /// Represents a semantically valid function signature.

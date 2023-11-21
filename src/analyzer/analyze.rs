@@ -12,12 +12,12 @@ use crate::analyzer::type_containment::{check_enum_containment, check_struct_con
 use crate::analyzer::type_store::TypeStore;
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::lexer::pos::Position;
-use crate::parser::ext::Extern;
-use crate::parser::func::Function;
-use crate::parser::r#impl::Impl;
+use crate::parser::ast::ext::Extern;
+use crate::parser::ast::func::Function;
+use crate::parser::ast::r#impl::Impl;
+use crate::parser::ast::spec::Spec;
+use crate::parser::ast::statement::Statement;
 use crate::parser::source::Source;
-use crate::parser::spec::Spec;
-use crate::parser::statement::Statement;
 
 /// An analyzed source file along with any errors or warnings that occurred during its analysis.
 #[derive(Debug)]

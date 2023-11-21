@@ -33,7 +33,7 @@ use crate::codegen::context::{
 use crate::codegen::convert::TypeConverter;
 use crate::codegen::error::{CodeGenError, CompileResult, ErrorKind};
 use crate::format_code;
-use crate::parser::op::Operator;
+use crate::parser::ast::op::Operator;
 
 /// Compiles type-rich (i.e. semantically valid) functions.
 pub struct FnCodeGen<'a, 'ctx> {

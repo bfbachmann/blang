@@ -1,6 +1,6 @@
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::parser::pointer::PointerType;
+use crate::parser::ast::pointer::PointerType;
 use std::fmt::{Display, Formatter};
 
 /// Represents a pointer to some known type.

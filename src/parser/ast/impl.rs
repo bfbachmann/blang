@@ -2,9 +2,9 @@ use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::parser::ast::func::Function;
+use crate::parser::ast::r#type::Type;
 use crate::parser::error::ParseResult;
-use crate::parser::func::Function;
-use crate::parser::r#type::Type;
 use crate::parser::source::Source;
 use crate::{locatable_impl, util};
 

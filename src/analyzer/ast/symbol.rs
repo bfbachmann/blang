@@ -8,8 +8,8 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopedSymbol;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::{Locatable, Position};
-use crate::parser::member::MemberAccess;
-use crate::parser::symbol::Symbol;
+use crate::parser::ast::member::MemberAccess;
+use crate::parser::ast::symbol::Symbol;
 use crate::{format_code, locatable_impl, util};
 
 /// A symbol that can represent a variable, variable access, function, type, or constant.

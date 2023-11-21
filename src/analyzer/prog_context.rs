@@ -14,10 +14,10 @@ use crate::analyzer::scope::{Scope, ScopeKind, ScopedSymbol};
 use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::lexer::pos::{Locatable, Position};
-use crate::parser::r#enum::EnumType;
-use crate::parser::r#struct::StructType;
-use crate::parser::r#type::Type;
-use crate::parser::spec::Spec;
+use crate::parser::ast::r#enum::EnumType;
+use crate::parser::ast::r#struct::StructType;
+use crate::parser::ast::r#type::Type;
+use crate::parser::ast::spec::Spec;
 
 /// Stores information about the program for reference during semantic analysis.
 pub struct ProgramContext {

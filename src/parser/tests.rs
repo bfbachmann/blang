@@ -5,26 +5,26 @@ mod tests {
     use crate::lexer::stream::Stream;
     use crate::lexer::token::Token;
     use crate::lexer::token_kind::TokenKind;
-    use crate::parser::arg::Argument;
-    use crate::parser::bool_lit::BoolLit;
-    use crate::parser::branch::Branch;
-    use crate::parser::closure::Closure;
-    use crate::parser::cond::Conditional;
+    use crate::parser::ast::arg::Argument;
+    use crate::parser::ast::bool_lit::BoolLit;
+    use crate::parser::ast::branch::Branch;
+    use crate::parser::ast::closure::Closure;
+    use crate::parser::ast::cond::Conditional;
+    use crate::parser::ast::expr::Expression;
+    use crate::parser::ast::func::Function;
+    use crate::parser::ast::func_call::FunctionCall;
+    use crate::parser::ast::func_sig::FunctionSignature;
+    use crate::parser::ast::i64_lit::I64Lit;
+    use crate::parser::ast::op::Operator;
+    use crate::parser::ast::r#type::Type;
+    use crate::parser::ast::ret::Ret;
+    use crate::parser::ast::statement::Statement;
+    use crate::parser::ast::str_lit::StrLit;
+    use crate::parser::ast::symbol::Symbol;
+    use crate::parser::ast::unresolved::UnresolvedType;
+    use crate::parser::ast::var_dec::VariableDeclaration;
     use crate::parser::error::{ErrorKind, ParseError};
-    use crate::parser::expr::Expression;
-    use crate::parser::func::Function;
-    use crate::parser::func_call::FunctionCall;
-    use crate::parser::func_sig::FunctionSignature;
-    use crate::parser::i64_lit::I64Lit;
-    use crate::parser::op::Operator;
-    use crate::parser::r#type::Type;
-    use crate::parser::ret::Ret;
     use crate::parser::source::Source;
-    use crate::parser::statement::Statement;
-    use crate::parser::str_lit::StrLit;
-    use crate::parser::symbol::Symbol;
-    use crate::parser::unresolved::UnresolvedType;
-    use crate::parser::var_dec::VariableDeclaration;
 
     fn tokenize(code: &str) -> Vec<Token> {
         lex(&mut Stream::from(code.chars().collect())).expect("should succeed")

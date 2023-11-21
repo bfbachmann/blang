@@ -16,7 +16,7 @@ use crate::analyzer::ast::var_dec::AVarDecl;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
-use crate::parser::statement::Statement;
+use crate::parser::ast::statement::Statement;
 
 /// Represents a semantically valid and type-rich statement.
 #[derive(PartialEq, Debug, Clone)]
@@ -229,7 +229,7 @@ mod tests {
     use crate::analyzer::warn::AnalyzeWarning;
     use crate::lexer::lex::lex;
     use crate::lexer::stream::Stream;
-    use crate::parser::statement::Statement;
+    use crate::parser::ast::statement::Statement;
 
     fn analyze_statement(raw: &str, ctx: &mut ProgramContext) -> AStatement {
         let mut char_stream = Stream::from(raw.chars().collect());

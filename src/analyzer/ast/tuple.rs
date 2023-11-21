@@ -5,8 +5,8 @@ use crate::analyzer::ast::r#struct::AField;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::parser::r#type::Type;
-use crate::parser::tuple::{TupleInit, TupleType};
+use crate::parser::ast::r#type::Type;
+use crate::parser::ast::tuple::{TupleInit, TupleType};
 use crate::util;
 
 /// Represents an analyzed tuple type. Tuples are essentially the same as structs, only tuple types

@@ -1,8 +1,8 @@
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
+use crate::parser::ast::statement::Statement;
 use crate::parser::source::Source;
-use crate::parser::statement::Statement;
 
 /// Represents a semantically analyzed source file.
 #[derive(Debug)]

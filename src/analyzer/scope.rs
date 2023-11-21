@@ -3,7 +3,7 @@ use std::fmt;
 
 use crate::analyzer::ast::arg::AArg;
 use crate::analyzer::type_store::TypeKey;
-use crate::parser::r#type::Type;
+use crate::parser::ast::r#type::Type;
 
 /// Represents a symbol defined in a specific scope.
 #[derive(Clone)]

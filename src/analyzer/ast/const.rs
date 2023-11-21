@@ -8,8 +8,8 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopedSymbol;
 use crate::analyzer::type_store::TypeKey;
-use crate::parser::r#const::Const;
-use crate::parser::r#type::Type;
+use crate::parser::ast::r#const::Const;
+use crate::parser::ast::r#type::Type;
 use crate::{format_code, util};
 
 /// Represents a semantically valid constant declaration.

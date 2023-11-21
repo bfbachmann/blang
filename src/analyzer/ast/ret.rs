@@ -7,7 +7,7 @@ use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::lexer::pos::{Locatable, Position};
-use crate::parser::ret::Ret;
+use crate::parser::ast::ret::Ret;
 use crate::{format_code, locatable_impl, util};
 
 /// Represents an analyzed return statement.

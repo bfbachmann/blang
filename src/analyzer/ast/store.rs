@@ -6,7 +6,7 @@ use crate::analyzer::ast::pointer::APointerType;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::parser::store::Store;
+use crate::parser::ast::store::Store;
 
 /// Represents a store operation (writing a value to memory addressed by a pointer).
 #[derive(Clone, Debug, PartialEq)]

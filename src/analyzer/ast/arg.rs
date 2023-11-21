@@ -3,7 +3,7 @@ use std::fmt::Formatter;
 
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::parser::arg::Argument;
+use crate::parser::ast::arg::Argument;
 
 /// Represents a semantically valid function argument.
 #[derive(PartialEq, Debug, Clone)]

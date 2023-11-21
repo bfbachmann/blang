@@ -2,10 +2,10 @@ use colored::Colorize;
 
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::parser::r#enum::EnumType;
-use crate::parser::r#struct::StructType;
-use crate::parser::r#type::Type;
-use crate::parser::tuple::TupleType;
+use crate::parser::ast::r#enum::EnumType;
+use crate::parser::ast::r#struct::StructType;
+use crate::parser::ast::r#type::Type;
+use crate::parser::ast::tuple::TupleType;
 
 /// Analyzes type containment and returns an error if there are any illegal type containment cycles
 /// that would result in infinite-sized types.

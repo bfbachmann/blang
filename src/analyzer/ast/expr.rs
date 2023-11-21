@@ -17,10 +17,10 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::{Locatable, Position};
-use crate::parser::expr::Expression;
-use crate::parser::op::Operator;
-use crate::parser::r#type::Type;
-use crate::parser::unresolved::UnresolvedType;
+use crate::parser::ast::expr::Expression;
+use crate::parser::ast::op::Operator;
+use crate::parser::ast::r#type::Type;
+use crate::parser::ast::unresolved::UnresolvedType;
 use crate::{format_code, locatable_impl};
 
 /// Represents a kind of expression.
@@ -992,16 +992,16 @@ mod tests {
     use crate::analyzer::prog_context::ProgramContext;
     use crate::analyzer::scope::ScopedSymbol;
     use crate::lexer::pos::Position;
-    use crate::parser::arg::Argument;
-    use crate::parser::bool_lit::BoolLit;
-    use crate::parser::expr::Expression;
-    use crate::parser::func_call::FunctionCall;
-    use crate::parser::func_sig::FunctionSignature;
-    use crate::parser::i64_lit::I64Lit;
-    use crate::parser::op::Operator;
-    use crate::parser::r#type::Type;
-    use crate::parser::str_lit::StrLit;
-    use crate::parser::symbol::Symbol;
+    use crate::parser::ast::arg::Argument;
+    use crate::parser::ast::bool_lit::BoolLit;
+    use crate::parser::ast::expr::Expression;
+    use crate::parser::ast::func_call::FunctionCall;
+    use crate::parser::ast::func_sig::FunctionSignature;
+    use crate::parser::ast::i64_lit::I64Lit;
+    use crate::parser::ast::op::Operator;
+    use crate::parser::ast::r#type::Type;
+    use crate::parser::ast::str_lit::StrLit;
+    use crate::parser::ast::symbol::Symbol;
 
     #[test]
     fn analyze_i64_literal() {
