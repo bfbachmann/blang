@@ -110,9 +110,10 @@ fn open_file(file_path: &str) -> Result<Stream<char>> {
     Ok(Stream::from(contents.chars().collect()))
 }
 
-/// Parses source code. If `input_path` is a directory, all sourced files within that
-/// directory will be parsed. Otherwise, only the file at `input_path` will be parsed.
-fn parse_source_files(input_path: &str) -> Vec<ParseResult<Source>> {
+/// Parses source code. If `input_path` is a directory, all source files within that
+/// directory will be parsed. Otherwise, only the file at `input_path` will be parsed. Prints
+/// parse errors and exits if there were any parse errors. Otherwise, returns parse sources.
+fn parse_source_files(input_path: &str) -> Vec<Source> {
     let is_dir = match fs::metadata(input_path) {
         Ok(meta) => meta.is_dir(),
 
@@ -143,10 +144,50 @@ fn parse_source_files(input_path: &str) -> Vec<ParseResult<Source>> {
     };
 
     // Parse source files.
-    file_paths
+    let parse_results: Vec<ParseResult<Source>> = file_paths
         .iter()
         .map(|path| parse_source_file(path))
-        .collect()
+        .collect();
+
+    // Display any parse errors that occurred.
+    let mut parse_error_count = 0;
+    let mut sources = vec![];
+    for (i, result) in parse_results.into_iter().enumerate() {
+        match result {
+            Ok(source) => sources.push(source),
+            Err(ParseError {
+                kind: _,
+                message,
+                token: _,
+                start_pos,
+                ..
+            }) => {
+                parse_error_count += 1;
+                errorln!(
+                    "{}\n  {}\n",
+                    message.bold(),
+                    format_file_loc(
+                        file_paths[i].as_str(),
+                        Some(start_pos.line),
+                        Some(start_pos.col)
+                    ),
+                );
+            }
+        };
+    }
+
+    // Abort early if there are parse errors.
+    if parse_error_count > 0 {
+        fatalln!(
+            "analysis skipped due to previous {}",
+            match parse_error_count {
+                1 => "error".to_string(),
+                n => format!("{} errors", n),
+            }
+        )
+    }
+
+    sources
 }
 
 /// Lexes and parses a source file.
@@ -178,41 +219,7 @@ fn parse_source_file(input_path: &str) -> ParseResult<Source> {
 /// error and exits with code 1.
 fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> ProgramAnalysis {
     // Parse all targeted source files.
-    let parse_results = parse_source_files(input_path);
-
-    // Display any parse errors that occurred.
-    let mut parse_error_count = 0;
-    let mut sources = vec![];
-    for result in parse_results {
-        match result {
-            Ok(source) => sources.push(source),
-            Err(ParseError {
-                kind: _,
-                message,
-                token: _,
-                start_pos,
-                ..
-            }) => {
-                parse_error_count += 1;
-                errorln!(
-                    "{}\n  {}\n",
-                    message.bold(),
-                    format_file_loc(input_path, Some(start_pos.line), Some(start_pos.col)),
-                );
-            }
-        };
-    }
-
-    // Abort early if there are parse errors.
-    if parse_error_count > 0 {
-        fatalln!(
-            "\nanalysis skipped due to previous {}",
-            match parse_error_count {
-                1 => "error".to_string(),
-                n => format!("{} errors", n),
-            }
-        )
-    }
+    let sources = parse_source_files(input_path);
 
     // Analyze the program.
     let analysis = analyze_sources(sources);
