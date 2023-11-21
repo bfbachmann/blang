@@ -11,6 +11,7 @@ use crate::locatable_impl;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::source::Source;
 
+/// The path to a module that is imported into a program.
 #[derive(PartialEq, Clone, Debug)]
 pub struct ModulePath {
     pub raw: String,
@@ -21,6 +22,7 @@ pub struct ModulePath {
 locatable_impl!(ModulePath);
 
 impl ModulePath {
+    /// Parses a module path from the given token stream. A module path is just a string literal.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<ModulePath> {
         match tokens.next() {
             Some(
@@ -51,6 +53,7 @@ impl ModulePath {
     }
 }
 
+/// A module that is imported into a program.
 #[derive(PartialEq, Clone, Debug)]
 pub struct UsedModule {
     pub path: ModulePath,
@@ -62,6 +65,7 @@ pub struct UsedModule {
 locatable_impl!(UsedModule);
 
 impl UsedModule {
+    /// Parses a module reference from the given token stream.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<UsedModule> {
         let path = ModulePath::from(tokens)?;
         let start_pos = path.start_pos().clone();
@@ -84,6 +88,7 @@ impl UsedModule {
     }
 }
 
+/// Represents a `use` block that imports foreign modules into a program.
 #[derive(PartialEq, Clone, Debug)]
 pub struct UseBlock {
     pub used_modules: Vec<UsedModule>,
@@ -100,6 +105,7 @@ impl Display for UseBlock {
 }
 
 impl UseBlock {
+    /// Parses a use block from the given token sequence.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<UseBlock> {
         let start_pos = Source::parse_expecting(tokens, TokenKind::Use)?.start;
         let end_pos;
