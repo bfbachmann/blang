@@ -433,6 +433,10 @@ impl TokenKind {
                         i += 1;
                         '"'
                     }
+                    Some('0') => {
+                        i += 1;
+                        '\0'
+                    }
                     _ => '\\',
                 },
                 other => *other,
