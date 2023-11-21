@@ -6,7 +6,7 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::error::ParseResult;
-use crate::parser::program::Program;
+use crate::parser::source::Source;
 use crate::parser::Type;
 
 /// Represents a function argument declaration.
@@ -73,14 +73,14 @@ impl Argument {
     ///  - `arg_name` is an identifier representing the argument name
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Get the argument starting position in the source code.
-        let start_pos = Program::current_position(tokens);
+        let start_pos = Source::current_position(tokens);
 
         // The argument can optionally be declared as mutable, so check for "mut".
-        let is_mut = Program::parse_optional(tokens, TokenKind::Mut).is_some();
+        let is_mut = Source::parse_optional(tokens, TokenKind::Mut).is_some();
 
         // The first token should be the argument name.
-        let mut end_pos = Program::current_position(tokens);
-        let name = Program::parse_identifier(tokens)?;
+        let mut end_pos = Source::current_position(tokens);
+        let name = Source::parse_identifier(tokens)?;
         end_pos.col += name.len();
 
         // If the argument name is `self`, it doesn't need a type. Otherwise, it's a regular
@@ -96,7 +96,7 @@ impl Argument {
         }
 
         // The next token should be a colon.
-        Program::parse_expecting(tokens, TokenKind::Colon)?;
+        Source::parse_expecting(tokens, TokenKind::Colon)?;
 
         // The remaining tokens should form the argument type.
         let arg_type = Type::from(tokens)?;
@@ -122,10 +122,10 @@ impl Argument {
     ///  - `arg_type` is the type of the argument
     pub fn unnamed_from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Get the argument starting position in the source code.
-        let start_pos = Program::current_position(tokens);
+        let start_pos = Source::current_position(tokens);
 
         // Check for the optional "mut" keyword for mutable arguments.
-        let is_mut = Program::parse_optional(tokens, TokenKind::Mut).is_some();
+        let is_mut = Source::parse_optional(tokens, TokenKind::Mut).is_some();
 
         // The next token should be the argument type.
         let arg_type = Type::from(tokens)?;

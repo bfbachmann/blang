@@ -11,27 +11,29 @@ use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::statement::Statement;
 use crate::{fmt, util};
 
-/// Represents a complete and syntactically valid (but not necessarily semantically valid) program.
+/// Represents a parsed source file.
 #[derive(Debug)]
-pub struct Program {
+pub struct Source {
+    pub path: String,
     pub statements: Vec<Statement>,
 }
 
-impl PartialEq for Program {
+impl PartialEq for Source {
     fn eq(&self, other: &Self) -> bool {
         util::vecs_eq(&self.statements, &other.statements)
     }
 }
 
-impl Program {
-    /// Attempts to parse a program from the deque of tokens. Expects token sequences of the form
+impl Source {
+    /// Attempts to parse a list of statements from the deque of tokens. Expects token sequences of
+    /// the form
     ///
     ///     <statement>
     ///     ...
     ///
     /// where
     ///  - `statement` is a valid statement (see `Statement::from`)
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+    pub fn from(path: &str, tokens: &mut Stream<Token>) -> ParseResult<Self> {
         let mut statements = vec![];
         while tokens.has_next() {
             match Statement::from(tokens) {
@@ -40,7 +42,10 @@ impl Program {
             };
         }
 
-        Ok(Program { statements })
+        Ok(Source {
+            path: path.to_string(),
+            statements,
+        })
     }
 
     /// Returns an error if the next token is the given kind, or the token otherwise.

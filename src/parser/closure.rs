@@ -4,7 +4,7 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
-use crate::parser::program::Program;
+use crate::parser::source::Source;
 use crate::parser::statement::Statement;
 use crate::{locatable_impl, util};
 
@@ -52,11 +52,11 @@ impl Closure {
     /// - `statement` is any valid statement (see `Statement::from`)
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Record the closure starting position.
-        let start_pos = Program::current_position(tokens);
+        let start_pos = Source::current_position(tokens);
         let end_pos: Position;
 
         // The first token should be `{`.
-        Program::parse_expecting(tokens, TokenKind::LeftBrace)?;
+        Source::parse_expecting(tokens, TokenKind::LeftBrace)?;
 
         // The following nodes should be statements separated by ";".
         let mut statements = vec![];

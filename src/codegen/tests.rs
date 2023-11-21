@@ -2,19 +2,24 @@
 mod tests {
     use std::path::Path;
 
-    use crate::analyzer::analyze::analyze_prog;
+    use crate::analyzer::analyze::analyze_sources;
     use crate::codegen::program::{generate, OutputFormat};
     use crate::lexer::lex::lex;
     use crate::lexer::stream::Stream;
-    use crate::parser::program::Program;
+    use crate::parser::source::Source;
 
     fn assert_compiles(code: &str) {
         let mut char_stream = Stream::from(code.chars().collect());
         let tokens = lex(&mut char_stream).expect("should not error");
-        let prog = Program::from(&mut Stream::from(tokens)).expect("should not error");
-        let analysis = analyze_prog(&prog);
+        let source = Source::from("", &mut Stream::from(tokens)).expect("should not error");
+        let analysis = analyze_sources(vec![source]);
         generate(
-            analysis,
+            analysis
+                .analyzed_sources
+                .into_iter()
+                .map(|a| a.source)
+                .collect(),
+            analysis.type_store,
             None,
             OutputFormat::Object,
             Path::new("/dev/null"),

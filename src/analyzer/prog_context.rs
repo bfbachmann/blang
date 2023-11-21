@@ -4,7 +4,6 @@ use colored::Colorize;
 
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::pointer::APointerType;
-use crate::analyzer::ast::program::AProgram;
 use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::r#type::AType;
@@ -20,38 +19,10 @@ use crate::parser::r#struct::StructType;
 use crate::parser::r#type::Type;
 use crate::parser::spec::Spec;
 
-/// Represents the result of semantic analysis on a program.
-pub struct ProgramAnalysis {
-    pub prog: AProgram,
-    pub type_store: TypeStore,
-    pub errors: Vec<AnalyzeError>,
-    pub warnings: Vec<AnalyzeWarning>,
-}
-
-impl ProgramAnalysis {
-    /// Creates a new program analysis from the given program and program context.
-    pub fn from(ctx: ProgramContext, prog: AProgram) -> ProgramAnalysis {
-        // Extract and sort errors and warnings by their location in the source file.
-        let mut errors: Vec<(Position, AnalyzeError)> =
-            ctx.errors.into_iter().map(|(p, e)| (p, e)).collect();
-        errors.sort_by(|(pos1, _), (pos2, _)| pos1.cmp(pos2));
-
-        let mut warnings: Vec<(Position, AnalyzeWarning)> =
-            ctx.warnings.into_iter().map(|(p, e)| (p, e)).collect();
-        warnings.sort_by(|(pos1, _), (pos2, _)| pos1.cmp(&pos2));
-
-        ProgramAnalysis {
-            prog,
-            type_store: ctx.type_store,
-            errors: errors.into_iter().map(|(_, e)| e).collect(),
-            warnings: warnings.into_iter().map(|(_, w)| w.clone()).collect(),
-        }
-    }
-}
-
+/// Stores information about the program for reference during semantic analysis.
 pub struct ProgramContext {
     /// Stores all types that are successfully analyzed during semantic analysis.
-    type_store: TypeStore,
+    pub type_store: TypeStore,
     /// Maps primitive type names to their type keys.
     primitive_type_keys: HashMap<String, TypeKey>,
     /// Contains the names of all types that have been marked as "invalid" by the analyzer. At the
@@ -97,9 +68,9 @@ pub struct ProgramContext {
     pointer_type_keys: HashMap<APointerType, TypeKey>,
 
     /// Collects warnings emitted by the analyzer during analysis.
-    warnings: HashMap<Position, AnalyzeWarning>,
+    pub warnings: HashMap<Position, AnalyzeWarning>,
     /// Collects errors emitted by the analyzer during analysis.
-    errors: HashMap<Position, AnalyzeError>,
+    pub errors: HashMap<Position, AnalyzeError>,
 }
 
 impl ProgramContext {

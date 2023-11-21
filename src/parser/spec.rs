@@ -5,7 +5,7 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
 use crate::parser::func_sig::FunctionSignature;
-use crate::parser::program::Program;
+use crate::parser::source::Source;
 use crate::{locatable_impl, util};
 
 /// Represents a spec declaration.
@@ -37,16 +37,16 @@ impl Spec {
     ///  - `fn_sig` is a function signature in the spec (see `FunctionSignature::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Parse `spec` and get this spec declaration starting position.
-        let start_pos = Program::parse_expecting(tokens, TokenKind::Spec)?.start;
+        let start_pos = Source::parse_expecting(tokens, TokenKind::Spec)?.start;
 
         // Parse the spec name and left brace.
-        let name = Program::parse_identifier(tokens)?;
-        Program::parse_expecting(tokens, TokenKind::LeftBrace)?;
+        let name = Source::parse_identifier(tokens)?;
+        Source::parse_expecting(tokens, TokenKind::LeftBrace)?;
 
         // Parse all the function signatures in the spec, followed by the closing brace.
         let mut fn_sigs = vec![];
         let end_pos = loop {
-            if let Some(token) = Program::parse_optional(tokens, TokenKind::RightBrace) {
+            if let Some(token) = Source::parse_optional(tokens, TokenKind::RightBrace) {
                 break token.end;
             }
 

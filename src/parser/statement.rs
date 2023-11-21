@@ -14,14 +14,15 @@ use crate::parser::expr::Expression;
 use crate::parser::ext::Extern;
 use crate::parser::func::Function;
 use crate::parser::func_call::FunctionCall;
-use crate::parser::program::Program;
 use crate::parser::r#break::Break;
 use crate::parser::r#const::ConstBlock;
 use crate::parser::r#enum::EnumType;
 use crate::parser::r#impl::Impl;
 use crate::parser::r#loop::Loop;
 use crate::parser::r#struct::StructType;
+use crate::parser::r#use::UseBlock;
 use crate::parser::ret::Ret;
+use crate::parser::source::Source;
 use crate::parser::spec::Spec;
 use crate::parser::store::Store;
 use crate::parser::symbol::Symbol;
@@ -48,6 +49,7 @@ pub enum Statement {
     Consts(ConstBlock),
     Impl(Impl),
     SpecDeclaration(Spec),
+    Uses(UseBlock),
 }
 
 impl fmt::Display for Statement {
@@ -106,6 +108,9 @@ impl fmt::Display for Statement {
             Statement::Consts(const_block) => {
                 write!(f, "{}", const_block)
             }
+            Statement::Uses(use_block) => {
+                write!(f, "{}", use_block)
+            }
             Statement::Impl(impl_) => {
                 write!(
                     f,
@@ -144,6 +149,7 @@ impl Locatable for Statement {
             Statement::EnumDeclaration(e) => e.start_pos(),
             Statement::ExternFns(e) => e.start_pos(),
             Statement::Consts(c) => c.start_pos(),
+            Statement::Uses(u) => u.start_pos(),
             Statement::Impl(i) => i.start_pos(),
             Statement::SpecDeclaration(t) => t.start_pos(),
         }
@@ -166,6 +172,7 @@ impl Locatable for Statement {
             Statement::EnumDeclaration(e) => e.end_pos(),
             Statement::ExternFns(e) => e.end_pos(),
             Statement::Consts(c) => c.end_pos(),
+            Statement::Uses(u) => u.end_pos(),
             Statement::Impl(i) => i.end_pos(),
             Statement::SpecDeclaration(t) => t.end_pos(),
         }
@@ -437,6 +444,18 @@ impl Statement {
                 Ok(Statement::EnumDeclaration(enum_decl))
             }
 
+            // If the first token is `use`, it's a use (imports) block.
+            (
+                Token {
+                    kind: TokenKind::Use,
+                    ..
+                },
+                _,
+            ) => {
+                let use_block = UseBlock::from(tokens)?;
+                Ok(Statement::Uses(use_block))
+            }
+
             // If the first two tokens are `<identifier>.`, it's a member access that can either be
             // an assignment to the member or or a function call on the member.
             (
@@ -455,7 +474,7 @@ impl Statement {
 
                 // If the next token is `(`, it's a function call. Otherwise, it should be "=" for
                 // member assignment.
-                match Program::parse_expecting_any(
+                match Source::parse_expecting_any(
                     tokens,
                     HashSet::from([TokenKind::Equal, TokenKind::LeftParen]),
                 )? {

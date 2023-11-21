@@ -12,8 +12,8 @@ use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::expr::Expression;
-use crate::parser::program::Program;
 use crate::parser::r#type::Type;
+use crate::parser::source::Source;
 use crate::parser::unresolved::UnresolvedType;
 use crate::{locatable_impl, util};
 
@@ -93,11 +93,11 @@ impl StructType {
     /// The commas after each field declaration are optional.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Record the starting position of the struct type declaration.
-        let start_pos = Program::current_position(tokens);
+        let start_pos = Source::current_position(tokens);
         let end_pos: Position;
 
         // The first token should be `struct`.
-        Program::parse_expecting(tokens, TokenKind::Struct)?;
+        Source::parse_expecting(tokens, TokenKind::Struct)?;
 
         // The next token should might be the struct type name, which is optional.
         let mut name = "".to_string();
@@ -106,11 +106,11 @@ impl StructType {
             ..
         }) = tokens.peek_next()
         {
-            name = Program::parse_identifier(tokens)?;
+            name = Source::parse_identifier(tokens)?;
         }
 
         // The next token should be `{`.
-        Program::parse_expecting(tokens, TokenKind::LeftBrace)?;
+        Source::parse_expecting(tokens, TokenKind::LeftBrace)?;
 
         // Parse struct fields until we reach `}`.
         let mut fields = vec![];
@@ -128,23 +128,23 @@ impl StructType {
             }
 
             // Get the field start position.
-            let field_start_pos = Program::current_position(tokens);
+            let field_start_pos = Source::current_position(tokens);
 
             // The next token should be the field name.
-            let field_name = Program::parse_identifier(tokens)?;
+            let field_name = Source::parse_identifier(tokens)?;
 
             // The next token should be a `:`.
-            Program::parse_expecting(tokens, TokenKind::Colon)?;
+            Source::parse_expecting(tokens, TokenKind::Colon)?;
 
             // The next tokens should represent the field type.
             let field_type = Type::from(tokens)?;
 
             // Get the field end position.
             // TODO: Technically, this is wrong.
-            let field_end_pos = Program::current_position(tokens);
+            let field_end_pos = Source::current_position(tokens);
 
             // Parse the optional comma.
-            Program::parse_optional(tokens, TokenKind::Comma);
+            Source::parse_optional(tokens, TokenKind::Comma);
 
             // Add the field to the map. We'll check for field name collisions in the analyzer.
             fields.push(StructField {
@@ -212,7 +212,7 @@ impl StructInit {
     /// The commas after each field assignment are optional.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Get the start position of the struct initialization in the source file.
-        let start_pos = Program::current_position(tokens);
+        let start_pos = Source::current_position(tokens);
         let end_pos: Position;
 
         // Parse the struct type (either by name or inline declaration).
@@ -260,7 +260,7 @@ impl StructInit {
         };
 
         // Parse `{`.
-        Program::parse_expecting(tokens, TokenKind::LeftBrace)?;
+        Source::parse_expecting(tokens, TokenKind::LeftBrace)?;
 
         // Parse struct field assignments until we hit `}`.
         let mut field_values = HashMap::new();
@@ -271,7 +271,7 @@ impl StructInit {
                     ..
                 }) => {
                     // Set the end position of this struct initialization in the source file.
-                    end_pos = Program::current_position(tokens);
+                    end_pos = Source::current_position(tokens);
                     break;
                 }
 
@@ -281,12 +281,12 @@ impl StructInit {
                 }) => {
                     // Parse `:` followed by the field value and record the field.
                     let field_name = field_name.clone();
-                    Program::parse_expecting(tokens, TokenKind::Colon)?;
+                    Source::parse_expecting(tokens, TokenKind::Colon)?;
                     let value = Expression::from(tokens, false)?;
                     field_values.insert(field_name, value);
 
                     // Parse the optional comma.
-                    Program::parse_optional(tokens, TokenKind::Comma);
+                    Source::parse_optional(tokens, TokenKind::Comma);
                 }
 
                 Some(other) => {

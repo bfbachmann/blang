@@ -8,7 +8,7 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
-use crate::parser::program::Program;
+use crate::parser::source::Source;
 
 /// Represents access to a member or field on a type or an instance of a type.
 #[derive(Debug, Clone)]
@@ -59,10 +59,10 @@ impl MemberAccess {
     ///  - `member` is the name of the member being accessed.
     /// Member accesses can be chained (e.g. `my_struct.child.child.child`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let start_pos = Program::current_position(tokens);
+        let start_pos = Source::current_position(tokens);
 
         // The first token should be `.`.
-        Program::parse_expecting(tokens, TokenKind::Dot)?;
+        Source::parse_expecting(tokens, TokenKind::Dot)?;
 
         // Get the end position of the next token (the member name).
         let mut end_pos = match tokens.peek_next() {
@@ -74,7 +74,7 @@ impl MemberAccess {
         // The second token should be the member name or index. Types like structs will have member
         // names as regular identifiers, but tuples will have numbered fields.
         let cursor = tokens.cursor();
-        let member_name = match Program::parse_identifier(tokens) {
+        let member_name = match Source::parse_identifier(tokens) {
             Ok(name) => name,
             Err(_) => {
                 // The member name is not an identifier, so check if it's a number. Tuple fields

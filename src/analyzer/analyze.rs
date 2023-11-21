@@ -1,49 +1,121 @@
+use std::collections::HashMap;
+
 use colored::Colorize;
 
 use crate::analyzer::ast::func::{analyze_fn_sig, AFnSig};
-use crate::analyzer::ast::program::AProgram;
+use crate::analyzer::ast::source::ASource;
 use crate::analyzer::ast::spec::ASpec;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::move_check::MoveChecker;
-use crate::analyzer::prog_context::{ProgramAnalysis, ProgramContext};
+use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_containment::{check_enum_containment, check_struct_containment};
+use crate::analyzer::type_store::TypeStore;
 use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
+use crate::lexer::pos::Position;
 use crate::parser::ext::Extern;
 use crate::parser::func::Function;
-use crate::parser::program::Program;
 use crate::parser::r#impl::Impl;
+use crate::parser::source::Source;
 use crate::parser::spec::Spec;
 use crate::parser::statement::Statement;
 
-/// Performs semantic analysis on the given program and extern functions.
-pub fn analyze_prog(prog: &Program) -> ProgramAnalysis {
-    let mut ctx = ProgramContext::new();
+/// An analyzed source file along with any errors or warnings that occurred during its analysis.
+#[derive(Debug)]
+pub struct AnalyzedSource {
+    pub source: ASource,
+    pub errors: Vec<AnalyzeError>,
+    pub warnings: Vec<AnalyzeWarning>,
+}
 
-    define_types(&mut ctx, prog);
-    define_fns(&mut ctx, prog);
+impl AnalyzedSource {
+    /// Creates a new analyzed source.
+    pub fn new(
+        source: ASource,
+        errors: HashMap<Position, AnalyzeError>,
+        warns: HashMap<Position, AnalyzeWarning>,
+    ) -> AnalyzedSource {
+        // Extract and sort errors and warnings by their location in the source file.
+        let mut errors: Vec<(Position, AnalyzeError)> =
+            errors.into_iter().map(|(p, e)| (p, e)).collect();
+        errors.sort_by(|(pos1, _), (pos2, _)| pos1.cmp(pos2));
 
-    // Perform semantic analysis on the program.
-    let prog = AProgram::from(&mut ctx, prog);
+        let mut warnings: Vec<(Position, AnalyzeWarning)> =
+            warns.into_iter().map(|(p, e)| (p, e)).collect();
+        warnings.sort_by(|(pos1, _), (pos2, _)| pos1.cmp(&pos2));
 
-    // Perform move checks and add any errors to our list of errors only if semantic analysis
-    // passed.
-    if ctx.errors().is_empty() {
-        let errors = MoveChecker::check_prog(&prog, ctx.type_store());
-        for err in errors {
-            ctx.insert_err(err);
+        AnalyzedSource {
+            source,
+            errors: errors.into_iter().map(|(_, e)| e).collect(),
+            warnings: warnings.into_iter().map(|(_, w)| w.clone()).collect(),
         }
     }
+}
 
-    ProgramAnalysis::from(ctx, prog)
+/// The result of analysis on a set of source files.
+#[derive(Debug)]
+pub struct ProgramAnalysis {
+    pub type_store: TypeStore,
+    pub analyzed_sources: Vec<AnalyzedSource>,
+}
+
+/// Performs semantic analysis on all of the given source files and returns the result of analysis.
+pub fn analyze_sources(sources: Vec<Source>) -> ProgramAnalysis {
+    let mut ctx = ProgramContext::new();
+    let mut source_errors: Vec<HashMap<Position, AnalyzeError>> = vec![];
+    let mut source_warns: Vec<HashMap<Position, AnalyzeWarning>> = vec![];
+
+    // First pass: define types and functions in the program without analyzing them yet.
+    for source in &sources {
+        define_types(&mut ctx, source);
+        define_fns(&mut ctx, source);
+
+        // Take all warnings and errors from the program context, replacing them with empty maps.
+        source_errors.push(std::mem::take(&mut ctx.errors));
+        source_warns.push(std::mem::take(&mut ctx.warnings));
+    }
+
+    // Second pass: fully analyze all program statements.
+    let mut analyzed_sources = vec![];
+    for (i, source) in sources.iter().enumerate() {
+        let analyzed_source = ASource::from(&mut ctx, source);
+
+        // Perform move checks and add any errors to our list of errors only if semantic analysis
+        // passed.
+        if ctx.errors().is_empty() {
+            let errors = MoveChecker::check_prog(&analyzed_source, ctx.type_store());
+            for err in errors {
+                ctx.insert_err(err);
+            }
+        }
+
+        analyzed_sources.push(analyzed_source);
+
+        // Take all warnings and errors from the program context, replacing them with empty maps.
+        source_errors[i].extend(std::mem::take(&mut ctx.errors));
+        source_warns[i].extend(std::mem::take(&mut ctx.warnings));
+    }
+
+    let mut results: Vec<AnalyzedSource> = vec![];
+    for source in analyzed_sources {
+        let errors = source_errors.remove(0);
+        let warns = source_warns.remove(0);
+
+        results.push(AnalyzedSource::new(source, errors, warns));
+    }
+
+    ProgramAnalysis {
+        type_store: ctx.type_store,
+        analyzed_sources: results,
+    }
 }
 
 /// Defines top-level types and specs in the program context without deeply analyzing their fields,
 /// so they can be referenced later. This will simply check for type name collisions and
 /// containment cycles. We do this before fully analyzing types to prevent infinite recursion.
-fn define_types(ctx: &mut ProgramContext, prog: &Program) {
+fn define_types(ctx: &mut ProgramContext, source: &Source) {
     // First pass: Define all types without analyzing their fields. In this pass, we will only
     // check that there are no type name collisions.
-    for statement in &prog.statements {
+    for statement in &source.statements {
         match statement {
             Statement::StructDeclaration(struct_type) => {
                 ctx.try_insert_unchecked_struct_type(struct_type.clone());
@@ -90,10 +162,10 @@ fn define_types(ctx: &mut ProgramContext, prog: &Program) {
 /// Analyzes all top-level function signatures (this includes those inside specs) and defines them
 /// in the program context so they can be referenced later. This will not perform any analysis of
 /// function bodies.
-fn define_fns(ctx: &mut ProgramContext, prog: &Program) {
+fn define_fns(ctx: &mut ProgramContext, source: &Source) {
     let mut main_defined = false;
 
-    for statement in &prog.statements {
+    for statement in &source.statements {
         match statement {
             Statement::FunctionDeclaration(func) => {
                 define_fn(ctx, func);

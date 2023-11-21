@@ -16,11 +16,11 @@ use crate::parser::func_call::FunctionCall;
 use crate::parser::i64_lit::I64Lit;
 use crate::parser::lambda::LambdaDecl;
 use crate::parser::op::Operator;
-use crate::parser::program::Program;
 use crate::parser::r#enum::EnumVariantInit;
 use crate::parser::r#struct::StructInit;
 use crate::parser::r#type::Type;
 use crate::parser::sizeof::SizeOf;
+use crate::parser::source::Source;
 use crate::parser::str_lit::StrLit;
 use crate::parser::symbol::Symbol;
 use crate::parser::tuple::TupleInit;
@@ -308,7 +308,7 @@ impl Expression {
                     }) => {
                         tokens.next();
                         let unary_operand = Expression::from(tokens, true)?;
-                        Program::parse_expecting(tokens, TokenKind::RightParen)?;
+                        Source::parse_expecting(tokens, TokenKind::RightParen)?;
                         unary_operand
                     }
 
@@ -403,7 +403,7 @@ impl Expression {
     /// structure is the same, but modifications have been made to handle negative values and
     /// function calls with arbitrary arguments.
     pub fn from(tokens: &mut Stream<Token>, is_arg: bool) -> ParseResult<Expression> {
-        let start_pos = Program::current_position(tokens);
+        let start_pos = Source::current_position(tokens);
         let mut out_q: VecDeque<OutputNode> = VecDeque::new();
         let mut op_stack: VecDeque<Token> = VecDeque::new();
         let mut last_token: Option<Token> = None;

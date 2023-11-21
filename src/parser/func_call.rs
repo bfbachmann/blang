@@ -7,7 +7,7 @@ use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::expr::Expression;
-use crate::parser::program::Program;
+use crate::parser::source::Source;
 use crate::parser::symbol::Symbol;
 use crate::{locatable_impl, util};
 
@@ -85,7 +85,7 @@ impl FunctionCall {
         let end_pos: Position;
 
         // The next token should be `(`.
-        Program::parse_expecting(tokens, TokenKind::LeftParen)?;
+        Source::parse_expecting(tokens, TokenKind::LeftParen)?;
 
         // The remaining tokens should be expressions representing argument values separated by `,`
         // and ending in `)`.
@@ -144,7 +144,7 @@ impl FunctionCall {
                         "expected argument, but found EOF",
                         None,
                         start_pos,
-                        Program::current_position(tokens),
+                        Source::current_position(tokens),
                     ));
                 }
 

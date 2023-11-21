@@ -4,7 +4,7 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
-use crate::parser::program::Program;
+use crate::parser::source::Source;
 use crate::parser::symbol::Symbol;
 
 /// Represents the assignment of some value (i.e. an expression) to a variable.
@@ -45,13 +45,13 @@ impl VariableAssignment {
     ///  - `expr` is an expression representing the value assigned to the variable
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Get the starting position of the variable assignment.
-        let start_pos = Program::current_position(tokens);
+        let start_pos = Source::current_position(tokens);
 
         // The next token should be an identifier representing the variable name.
         let var = Symbol::from(tokens)?;
 
         // The next token should be an assignment "=".
-        Program::parse_expecting(tokens, TokenKind::Equal)?;
+        Source::parse_expecting(tokens, TokenKind::Equal)?;
 
         // The next tokens should be some expression.
         let expr = Expression::from(tokens, false)?;

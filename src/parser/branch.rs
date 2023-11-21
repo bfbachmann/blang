@@ -5,7 +5,7 @@ use crate::locatable_impl;
 use crate::parser::closure::Closure;
 use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
-use crate::parser::program::Program;
+use crate::parser::source::Source;
 
 /// Represents a branch in a conditional. `if` and `elsif` branches must have condition
 /// expressions, but `else` branches must not.
@@ -47,7 +47,7 @@ impl Branch {
     ///  - `expr` is the branch condition expression (see `Expression::from`)
     pub fn from(tokens: &mut Stream<Token>, with_condition: bool) -> ParseResult<Self> {
         // Record the starting position of the branch.
-        let start_pos = Program::current_position(tokens);
+        let start_pos = Source::current_position(tokens);
 
         let mut cond_expr = None;
         if with_condition {

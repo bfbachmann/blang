@@ -5,7 +5,6 @@ pub type CompileResult<T> = Result<T, CodeGenError>;
 
 #[derive(Debug)]
 pub enum ErrorKind {
-    InvalidProgram,
     FnVerificationFailed,
     WriteOutFailed,
     TargetInitFailed,
@@ -14,7 +13,6 @@ pub enum ErrorKind {
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            ErrorKind::InvalidProgram => write!(f, "invalid program"),
             ErrorKind::FnVerificationFailed => write!(f, "function verification failed"),
             ErrorKind::WriteOutFailed => write!(f, "writing output failed"),
             ErrorKind::TargetInitFailed => write!(f, "failed to initialize target"),

@@ -8,11 +8,11 @@ use crate::analyzer::ast::cond::ACond;
 use crate::analyzer::ast::expr::AExprKind;
 use crate::analyzer::ast::fn_call::AFnCall;
 use crate::analyzer::ast::func::AFn;
-use crate::analyzer::ast::program::AProgram;
 use crate::analyzer::ast::r#impl::AImpl;
 use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::ret::ARet;
+use crate::analyzer::ast::source::ASource;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::ast::store::AStore;
 use crate::analyzer::ast::symbol::ASymbol;
@@ -286,7 +286,7 @@ impl<'a> MoveChecker<'a> {
     }
 
     /// Recursively performs move checks on `prog`.
-    pub fn check_prog(prog: &AProgram, type_store: &TypeStore) -> Vec<AnalyzeError> {
+    pub fn check_prog(prog: &ASource, type_store: &TypeStore) -> Vec<AnalyzeError> {
         let mut move_checker = MoveChecker {
             type_store,
             errors: vec![],

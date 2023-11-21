@@ -6,8 +6,8 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
-use crate::parser::program::Program;
 use crate::parser::r#type::Type;
+use crate::parser::source::Source;
 use crate::{locatable_impl, util};
 
 /// Represents a single module-level constant declaration.
@@ -54,17 +54,17 @@ impl Const {
     ///  - `type` is the optional constant type (see `Type::from`)
     ///  - `value` is an expression representing the constant value (see `Expression::from`).
     fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let start_pos = Program::current_position(tokens);
-        let name = Program::parse_identifier(tokens)?;
+        let start_pos = Source::current_position(tokens);
+        let name = Source::parse_identifier(tokens)?;
 
         // Parse the optional `: <type>`.
-        let typ = match Program::parse_optional(tokens, TokenKind::Colon) {
+        let typ = match Source::parse_optional(tokens, TokenKind::Colon) {
             Some(_) => Some(Type::from(tokens)?),
             None => None,
         };
 
         // The next token should be `=`.
-        Program::parse_expecting(tokens, TokenKind::Equal)?;
+        Source::parse_expecting(tokens, TokenKind::Equal)?;
 
         // Parse the value as an expression and compute the end position of the statement.
         let value = Expression::from(tokens, false)?;
@@ -124,19 +124,19 @@ impl ConstBlock {
     ///  - `value` is an expression representing the constant value (see `Expression::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Get the start position of the statement.
-        let start_pos = Program::current_position(tokens);
+        let start_pos = Source::current_position(tokens);
 
         // The first token should be `const`.
-        Program::parse_expecting(tokens, TokenKind::Const)?;
+        Source::parse_expecting(tokens, TokenKind::Const)?;
 
         // The second token should be an identifier or `{`.
         let mut consts = vec![];
         let end_pos;
-        if Program::parse_optional(tokens, TokenKind::LeftBrace).is_some() {
+        if Source::parse_optional(tokens, TokenKind::LeftBrace).is_some() {
             // This is a constant block. We need to parse all the constant declarations contained
             // within it until we reach the closing `}`.
             loop {
-                if let Some(token) = Program::parse_optional(tokens, TokenKind::RightBrace) {
+                if let Some(token) = Source::parse_optional(tokens, TokenKind::RightBrace) {
                     end_pos = token.end;
                     break;
                 }

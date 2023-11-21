@@ -6,8 +6,8 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::error::ParseResult;
-use crate::parser::program::Program;
 use crate::parser::r#type::Type;
+use crate::parser::source::Source;
 
 /// Represents a `sizeof` statement.
 #[derive(Debug, PartialEq, Clone)]
@@ -35,7 +35,7 @@ impl SizeOf {
     ///  - `type` is any type.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Parse the `sizeof` keyword.
-        let sizeof_token = Program::parse_expecting(tokens, TokenKind::SizeOf)?;
+        let sizeof_token = Source::parse_expecting(tokens, TokenKind::SizeOf)?;
 
         // Parse the type.
         let typ = Type::from(tokens)?;

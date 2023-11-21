@@ -14,10 +14,9 @@ use inkwell::values::FunctionValue;
 use inkwell::OptimizationLevel;
 
 use crate::analyzer::ast::func::AFnSig;
-use crate::analyzer::ast::program::AProgram;
 use crate::analyzer::ast::r#const::AConst;
+use crate::analyzer::ast::source::ASource;
 use crate::analyzer::ast::statement::AStatement;
-use crate::analyzer::prog_context::ProgramAnalysis;
 use crate::analyzer::type_store::TypeStore;
 use crate::codegen::convert::TypeConverter;
 use crate::codegen::error::{CodeGenError, CompileResult, ErrorKind};
@@ -29,7 +28,7 @@ pub struct ProgramCodeGen<'a, 'ctx> {
     builder: &'a Builder<'ctx>,
     fpm: &'a PassManager<FunctionValue<'ctx>>,
     module: &'a Module<'ctx>,
-    program: &'a AProgram,
+    program: &'a ASource,
     type_store: &'a TypeStore,
     type_converter: TypeConverter<'ctx>,
     consts: HashMap<String, AConst>,
@@ -203,20 +202,13 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
 /// Generates the program code for the given target. If there is no target, compiles the
 /// program for the host system.
 pub fn generate(
-    prog_analysis: ProgramAnalysis,
+    analyzed_sources: Vec<ASource>,
+    type_store: TypeStore,
     maybe_target_triple: Option<&String>,
     output_format: OutputFormat,
     output_path: &Path,
     optimize: bool,
 ) -> CompileResult<()> {
-    // Error if the program analysis contains errors (meaning it didn't pass semantic analysis.
-    if !prog_analysis.errors.is_empty() {
-        return Err(CodeGenError::new(
-            ErrorKind::InvalidProgram,
-            "cannot compile program that failed semantic analysis",
-        ));
-    }
-
     let ctx = Context::create();
     let builder = ctx.create_builder();
     let module = ctx.create_module("main");
@@ -255,15 +247,24 @@ pub fn generate(
     }
     fpm.initialize();
 
+    // Combine sources into one big source.
+    let source = ASource {
+        path: "main".to_string(), // TODO
+        statements: analyzed_sources
+            .into_iter()
+            .flat_map(|s| s.statements)
+            .collect(),
+    };
+
     // Create the program code generator and generate the program.
     let mut codegen = ProgramCodeGen {
         ctx: &ctx,
         builder: &builder,
         fpm: &fpm,
         module: &module,
-        program: &prog_analysis.prog,
-        type_store: &prog_analysis.type_store,
-        type_converter: TypeConverter::new(&ctx, &prog_analysis.type_store),
+        program: &source,
+        type_store: &type_store,
+        type_converter: TypeConverter::new(&ctx, &type_store),
         consts: HashMap::new(),
     };
     codegen.gen_program()?;

@@ -7,8 +7,8 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
-use crate::parser::program::Program;
 use crate::parser::r#type::Type;
+use crate::parser::source::Source;
 use crate::{locatable_impl, util};
 
 /// A variant of an enumerated type.
@@ -74,15 +74,15 @@ impl EnumTypeVariant {
     ///  - `name` is the variant name
     ///  - `type` is the optional variant type (see `Type::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let start_pos = Program::current_position(tokens);
-        let name = Program::parse_identifier(tokens)?;
+        let start_pos = Source::current_position(tokens);
+        let name = Source::parse_identifier(tokens)?;
 
         // Parse the optional variant type.
-        let (typ, end_pos) = match Program::parse_optional(tokens, TokenKind::LeftParen) {
+        let (typ, end_pos) = match Source::parse_optional(tokens, TokenKind::LeftParen) {
             Some(_) => {
                 // Parse `<type>)`.
                 let typ = Type::from(tokens)?;
-                let token = Program::parse_expecting(tokens, TokenKind::RightParen)?;
+                let token = Source::parse_expecting(tokens, TokenKind::RightParen)?;
                 (Some(typ), token.end)
             }
             None => {
@@ -167,24 +167,24 @@ impl EnumType {
     ///  - `variant_name` is the name of a variant of the enum type
     ///  - `variant_type` is the optional variant type (see `Type::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let start_pos = Program::current_position(tokens);
+        let start_pos = Source::current_position(tokens);
 
         // Parse `enum <name> {`.
-        Program::parse_expecting(tokens, TokenKind::Enum)?;
-        let name = Program::parse_identifier(tokens)?;
-        Program::parse_expecting(tokens, TokenKind::LeftBrace)?;
+        Source::parse_expecting(tokens, TokenKind::Enum)?;
+        let name = Source::parse_identifier(tokens)?;
+        Source::parse_expecting(tokens, TokenKind::LeftBrace)?;
 
         // Parse the enum variants ending with `}`.
         let mut variants = vec![];
         let end_pos = loop {
-            if let Some(token) = Program::parse_optional(tokens, TokenKind::RightBrace) {
+            if let Some(token) = Source::parse_optional(tokens, TokenKind::RightBrace) {
                 break token.end.clone();
             }
 
             variants.push(EnumTypeVariant::from(tokens)?);
 
             // Parse the optional comma.
-            Program::parse_optional(tokens, TokenKind::Comma);
+            Source::parse_optional(tokens, TokenKind::Comma);
         };
 
         Ok(EnumType {
@@ -244,24 +244,24 @@ impl EnumVariantInit {
     ///  - `value` is an expression representing the optional value associated with the enum
     ///    variant (see `Expression::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let start_pos = Program::current_position(tokens);
+        let start_pos = Source::current_position(tokens);
 
         // Parse `<enum_type>::`.
         let enum_type = Type::from(tokens)?;
-        Program::parse_expecting(tokens, TokenKind::DoubleColon)?;
+        Source::parse_expecting(tokens, TokenKind::DoubleColon)?;
 
         // In case there is no value in this initialization, compute the end position now.
         let mut end_pos = match tokens.peek_next() {
             Some(t) => t.end.clone(),
             None => Position::default(),
         };
-        let variant_name = Program::parse_identifier(tokens)?;
+        let variant_name = Source::parse_identifier(tokens)?;
 
         // Parse the optional `(<value>)`.
-        let maybe_value = match Program::parse_optional(tokens, TokenKind::LeftParen) {
+        let maybe_value = match Source::parse_optional(tokens, TokenKind::LeftParen) {
             Some(_) => {
                 let expr = Expression::from(tokens, true)?;
-                end_pos = Program::parse_expecting(tokens, TokenKind::RightParen)?.end;
+                end_pos = Source::parse_expecting(tokens, TokenKind::RightParen)?.end;
                 Some(Box::new(expr))
             }
             None => None,

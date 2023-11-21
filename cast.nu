@@ -52,8 +52,12 @@ def check [
 def build [
     src: path = "source.bl"     # The path to the Blang source code to compile.
     --quiet (-q)                # Disable Blang compiler logging.
+    --out (-o): path            # The path to which to write the output. Defaults to "bin/<src_stem>.o".
 ] {
-    let out_path = $"bin/($src | path parse | get stem).o"
+    let out_path = match $out {
+        "" => $"bin/($src | path parse | get stem).o",
+        _ => $out,
+    }
 
     if $quiet {
         cargo $env.CARGO_FLAGS run -- build -q -o $out_path $src
@@ -64,24 +68,34 @@ def build [
 
 # Builds and executes Blang source code.
 def run [
-    src: path = "source.bl"             # The path to the Blang source code to run.
+    src: path = "."                     # The path to the Blang source code to run.
     --quiet (-q)                        # Disable Blang compiler logging.
     ...cflags: string                   # Additional flags to pass to the LLVM IR compiler (clang).
 ] {
-    # Compile Blang source code to and object file.
+    # Build the object file output path from the source path.
+    let obj_path  = match $src {
+        "." => "bin/all.o",
+        _ => $"bin/($src | path parse | get stem).o",
+    }
+
+    # Compile Blang source code to an object file.
     if $quiet {
-        build -q $src
+        build -q -o $obj_path $src
     } else {
-        build $src
+        build -o $obj_path $src
+    }
+
+     # Build the executable path from the source path.
+    let exe_path = match $src {
+        "." => "bin/all",
+        _ => $"bin/($src | path parse | get stem)",
     }
 
     # Compile the object file to an executable.
-    let src_path = $"bin/($src | path parse | get stem).o"
-    let out_path = $"bin/($src | path parse | get stem)"
-    ^$"($env.CC)" $src_path -o $out_path ($env.CFLAGS) ($cflags | str join)
+    ^$"($env.CC)" $obj_path -o $exe_path ($env.CFLAGS) ($cflags | str join)
 
     # Run the executable.
-    ^$"($out_path)"
+    ^$"($exe_path)"
 
     return $env.LAST_EXIT_CODE
 }

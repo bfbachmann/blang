@@ -5,7 +5,7 @@ use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::error::ParseResult;
 use crate::parser::expr::Expression;
-use crate::parser::program::Program;
+use crate::parser::source::Source;
 
 /// A store statement that writes a value to memory.
 #[derive(PartialEq, Clone, Debug)]
@@ -31,7 +31,7 @@ impl Store {
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Store> {
         let dest_expr = Expression::from(tokens, false)?;
         let start_pos = dest_expr.start_pos().clone();
-        Program::parse_expecting(tokens, TokenKind::Store)?;
+        Source::parse_expecting(tokens, TokenKind::Store)?;
         let source_expr = Expression::from(tokens, false)?;
         let end_pos = source_expr.end_pos().clone();
 

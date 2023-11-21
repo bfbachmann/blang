@@ -2,7 +2,6 @@ use std::collections::VecDeque;
 use std::fmt;
 
 use colored::Colorize;
-use pluralizer::pluralize;
 
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::func::AFnSig;
@@ -162,8 +161,14 @@ impl AFnCall {
                 format!(
                     "{} expects {}, but {} provided",
                     format_code!(fn_sig.display(ctx)),
-                    pluralize("argument", fn_sig.args.len() as isize, true),
-                    pluralize("was", passed_args.len() as isize, true)
+                    match fn_sig.args.len() {
+                        1 => "1 argument".to_string(),
+                        count => format!("{} arguments", count),
+                    },
+                    match passed_args.len() {
+                        1 => "1 was".to_string(),
+                        count => format!("{} were", count),
+                    },
                 )
                 .as_str(),
                 call,

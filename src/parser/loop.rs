@@ -4,7 +4,7 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::closure::Closure;
 use crate::parser::error::ParseResult;
-use crate::parser::program::Program;
+use crate::parser::source::Source;
 
 /// Represents a closure that is executed repeatedly.
 #[derive(Debug, PartialEq, Clone)]
@@ -34,10 +34,10 @@ impl Loop {
     ///     loop { ... }
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Record the starting position of the loop.
-        let start_pos = Program::current_position(tokens);
+        let start_pos = Source::current_position(tokens);
 
         // The first token should be `loop`.
-        Program::parse_expecting(tokens, TokenKind::Loop)?;
+        Source::parse_expecting(tokens, TokenKind::Loop)?;
 
         // The rest should be the closure representing the loop body.
         let body = Closure::from(tokens)?;

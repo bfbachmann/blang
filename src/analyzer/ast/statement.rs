@@ -198,6 +198,10 @@ impl AStatement {
                 AStatement::Consts(consts)
             }
 
+            Statement::Uses(_) => {
+                todo!()
+            }
+
             Statement::SpecDeclaration(_) => {
                 // This should never happen as specs should be skipped – they're analyzed before
                 // we start analyzing other program statements.
@@ -218,7 +222,6 @@ impl AStatement {
 
 #[cfg(test)]
 mod tests {
-
     use crate::analyzer::ast::r#struct::{AField, AStructType};
     use crate::analyzer::ast::statement::AStatement;
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
@@ -226,7 +229,6 @@ mod tests {
     use crate::analyzer::warn::AnalyzeWarning;
     use crate::lexer::lex::lex;
     use crate::lexer::stream::Stream;
-
     use crate::parser::statement::Statement;
 
     fn analyze_statement(raw: &str, ctx: &mut ProgramContext) -> AStatement {

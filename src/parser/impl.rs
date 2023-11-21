@@ -4,8 +4,8 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::error::ParseResult;
 use crate::parser::func::Function;
-use crate::parser::program::Program;
 use crate::parser::r#type::Type;
+use crate::parser::source::Source;
 use crate::{locatable_impl, util};
 
 /// Represents the implementation of a series of member functions on a type.
@@ -48,21 +48,21 @@ impl Impl {
     ///  - `type` is the type for which member functions are being implemented
     ///  - `member_fn` is one of a series of member functions in the implementation.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let start_pos = Program::current_position(tokens);
+        let start_pos = Source::current_position(tokens);
         let end_pos;
 
         // The first token should be `impl`.
-        Program::parse_expecting(tokens, TokenKind::Impl)?;
+        Source::parse_expecting(tokens, TokenKind::Impl)?;
 
         // The next tokens should form a type.
         let typ = Type::from(tokens)?;
 
         // The remaining tokens should be `{` followed by a set of function signatures and a `}`.
-        Program::parse_expecting(tokens, TokenKind::LeftBrace)?;
+        Source::parse_expecting(tokens, TokenKind::LeftBrace)?;
 
         let mut member_fns = vec![];
         loop {
-            if let Some(token) = Program::parse_optional(tokens, TokenKind::RightBrace) {
+            if let Some(token) = Source::parse_optional(tokens, TokenKind::RightBrace) {
                 end_pos = token.end;
                 break;
             }

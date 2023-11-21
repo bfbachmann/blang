@@ -10,7 +10,7 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::arg::Argument;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
-use crate::parser::program::Program;
+use crate::parser::source::Source;
 use crate::parser::tmpl_params::TmplParams;
 use crate::parser::Type;
 use crate::{locatable_impl, util};
@@ -165,13 +165,13 @@ impl FunctionSignature {
     ///  - `return_type` is the type of the optional return type
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Record the function signature starting position.
-        let start_pos = Program::parse_expecting(tokens, TokenKind::Fn)?.start;
+        let start_pos = Source::parse_expecting(tokens, TokenKind::Fn)?.start;
 
         // Parse the rest of the function signature.
         let mut sig = FunctionSignature::from_name_args_and_return(tokens)?;
 
         // Parse the optional template parameters.
-        let tmpl_params = match Program::parse_optional(tokens, TokenKind::With) {
+        let tmpl_params = match Source::parse_optional(tokens, TokenKind::With) {
             Some(_) => {
                 tokens.rewind(1);
                 Some(TmplParams::from(tokens)?)
@@ -188,8 +188,8 @@ impl FunctionSignature {
     /// Parses the name, arguments, and return type of a function signature. Expects token
     /// sequences of the same forms as `from`, only without the leading `fn` token.
     pub fn from_name_args_and_return(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let start_pos = Program::current_position(tokens);
-        let fn_name = Program::parse_identifier(tokens)?;
+        let start_pos = Source::current_position(tokens);
+        let fn_name = Source::parse_identifier(tokens)?;
 
         // The next tokens should represent function arguments and optional return type.
         let fn_sig = FunctionSignature::from_args_and_return(tokens, true)?;
@@ -219,10 +219,10 @@ impl FunctionSignature {
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return type
     pub fn from_anon(tokens: &mut Stream<Token>, named: bool) -> ParseResult<Self> {
-        let start_pos = Program::current_position(tokens);
+        let start_pos = Source::current_position(tokens);
 
         // The first token should be `fn`.
-        Program::parse_expecting(tokens, TokenKind::Fn)?;
+        Source::parse_expecting(tokens, TokenKind::Fn)?;
 
         // The next tokens should represent function arguments followed by the return type.
         let mut fn_sig = FunctionSignature::from_args_and_return(tokens, named)?;
@@ -289,11 +289,11 @@ impl FunctionSignature {
         named: bool,
     ) -> ParseResult<(Vec<Argument>, Position)> {
         // Record the starting position of the arguments.
-        let start_pos = Program::current_position(tokens);
+        let start_pos = Source::current_position(tokens);
         let end_pos: Position;
 
         // The first token should be the opening parenthesis.
-        Program::parse_expecting(tokens, TokenKind::LeftParen)?;
+        Source::parse_expecting(tokens, TokenKind::LeftParen)?;
 
         // The next token(s) should be arguments or a closing parenthesis.
         let mut args = vec![];
@@ -358,7 +358,7 @@ impl FunctionSignature {
             };
 
             // After the argument, the next token should be `,` or `)`.
-            let token = Program::parse_expecting_any(
+            let token = Source::parse_expecting_any(
                 tokens,
                 HashSet::from([TokenKind::Comma, TokenKind::RightParen]),
             )?;

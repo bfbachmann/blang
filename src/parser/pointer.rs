@@ -4,8 +4,8 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::error::ParseResult;
-use crate::parser::program::Program;
 use crate::parser::r#type::Type;
+use crate::parser::source::Source;
 use std::fmt::{Display, Formatter};
 
 /// Represents a pointer to a value of some known type.
@@ -33,7 +33,7 @@ impl PointerType {
     /// where
     ///  - `type` is any type (see `Type::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<PointerType> {
-        let start_pos = Program::parse_expecting(tokens, TokenKind::Asterisk)?
+        let start_pos = Source::parse_expecting(tokens, TokenKind::Asterisk)?
             .start
             .clone();
         let pointee_type = Type::from(tokens)?;
