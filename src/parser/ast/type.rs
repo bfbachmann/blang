@@ -7,6 +7,7 @@ use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::parser::ast::array::ArrayType;
 use crate::parser::ast::func_sig::FunctionSignature;
 use crate::parser::ast::pointer::PointerType;
 use crate::parser::ast::r#enum::EnumType;
@@ -26,6 +27,7 @@ pub enum Type {
     Tuple(TupleType),
     Function(Box<FunctionSignature>),
     Pointer(Box<PointerType>),
+    Array(Box<ArrayType>),
     /// Represents a named user-defined (i.e. non-primitive) type.
     Unresolved(UnresolvedType),
 }
@@ -65,6 +67,7 @@ impl fmt::Display for Type {
             Type::Enum(s) => write!(f, "{}", s),
             Type::Tuple(t) => write!(f, "{}", t),
             Type::Pointer(t) => write!(f, "{}", t),
+            Type::Array(a) => write!(f, "{}", a),
             Type::Unresolved(u) => write!(f, "{}", u.name),
         }
     }
@@ -78,6 +81,7 @@ impl Locatable for Type {
             Type::Tuple(tuple_type) => tuple_type.start_pos(),
             Type::Function(fn_sig) => fn_sig.start_pos(),
             Type::Pointer(t) => t.start_pos(),
+            Type::Array(a) => a.start_pos(),
             Type::Unresolved(unresolved) => unresolved.start_pos(),
         }
     }
@@ -89,6 +93,7 @@ impl Locatable for Type {
             Type::Tuple(tuple_type) => tuple_type.end_pos(),
             Type::Function(fn_sig) => fn_sig.end_pos(),
             Type::Pointer(t) => t.end_pos(),
+            Type::Array(a) => a.end_pos(),
             Type::Unresolved(unresolved) => unresolved.end_pos(),
         }
     }
@@ -144,6 +149,14 @@ impl Type {
                 token.start,
                 token.end,
             ))),
+
+            Some(Token {
+                kind: TokenKind::LeftBracket,
+                ..
+            }) => {
+                tokens.rewind(1);
+                Ok(Type::Array(Box::new(ArrayType::from(tokens)?)))
+            }
 
             Some(other) => {
                 return Err(ParseError::new(

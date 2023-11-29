@@ -7,10 +7,11 @@ use crate::parser::ast::expr::Expression;
 use crate::parser::ast::r#type::Type;
 use crate::parser::error::ParseResult;
 use crate::parser::source::Source;
+use std::hash::{Hash, Hasher};
 
 /// Represents a variable declaration. Each variable declaration must have a valid type, a name,
 /// and some value as the result of an expression.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct VariableDeclaration {
     pub maybe_type: Option<Type>,
     pub is_mut: bool,
@@ -18,6 +19,15 @@ pub struct VariableDeclaration {
     pub value: Expression,
     pub start_pos: Position,
     pub end_pos: Position,
+}
+
+impl Hash for VariableDeclaration {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.maybe_type.hash(state);
+        self.is_mut.hash(state);
+        self.name.hash(state);
+        self.value.hash(state);
+    }
 }
 
 locatable_impl!(VariableDeclaration);

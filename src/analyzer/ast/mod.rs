@@ -1,4 +1,5 @@
 pub mod arg;
+pub mod array;
 pub mod closure;
 pub mod cond;
 pub mod r#const;

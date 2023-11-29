@@ -285,7 +285,7 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> ProgramAnalysi
     // Dump the AST to a file, if necessary.
     if let Some(dump_path) = maybe_dump_path {
         let dst = Path::new(dump_path.as_str());
-        let mut dst_file = match File::create(dst.clone()) {
+        let mut dst_file = match File::create(dst) {
             Err(err) => {
                 fatalln!(
                     "error opening file {}: {}",

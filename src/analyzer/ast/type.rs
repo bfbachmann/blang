@@ -5,6 +5,7 @@ use std::fmt::{Display, Formatter};
 
 use colored::Colorize;
 
+use crate::analyzer::ast::array::AArrayType;
 use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::pointer::APointerType;
 use crate::analyzer::ast::r#enum::AEnumType;
@@ -29,6 +30,7 @@ pub enum AType {
     Struct(AStructType),
     Enum(AEnumType),
     Tuple(ATupleType),
+    Array(AArrayType),
     Function(Box<AFnSig>),
     Pointer(APointerType),
 
@@ -47,6 +49,7 @@ impl Display for AType {
             AType::Struct(s) => write!(f, "{}", s),
             AType::Enum(e) => write!(f, "{}", e),
             AType::Tuple(t) => write!(f, "{}", t),
+            AType::Array(a) => write!(f, "{}", a),
             AType::Function(func) => write!(f, "{}", func),
             AType::Pointer(typ) => write!(f, "*{}", typ),
             AType::Unknown(name) => write!(f, "{}", name),
@@ -65,6 +68,7 @@ impl PartialEq for AType {
             (AType::Struct(s1), AType::Struct(s2)) => s1 == s2,
             (AType::Enum(e1), AType::Enum(e2)) => e1 == e2,
             (AType::Tuple(t1), AType::Tuple(t2)) => t1 == t2,
+            (AType::Array(t1), AType::Array(t2)) => t1 == t2,
             (AType::Function(f1), AType::Function(f2)) => *f1 == *f2,
             (AType::Pointer(t1), AType::Pointer(t2)) => t1 == t2,
             (_, _) => false,
@@ -134,6 +138,11 @@ impl AType {
                 return AType::Tuple(a_tuple_type);
             }
 
+            Type::Array(array_type) => {
+                let a_array_type = AArrayType::from(ctx, array_type);
+                return AType::Array(a_array_type);
+            }
+
             Type::Pointer(ptr_type) => {
                 return AType::Pointer(APointerType::from(ctx, ptr_type));
             }
@@ -174,7 +183,7 @@ impl AType {
             AType::RawPtr => "rawptr",
             AType::Struct(t) => t.name.as_str(),
             AType::Enum(t) => t.name.as_str(),
-            AType::Tuple(_) | AType::Pointer(_) => "",
+            AType::Tuple(_) | AType::Pointer(_) | AType::Array(_) => "",
             AType::Function(t) => t.name.as_str(),
             AType::Unknown(name) => name.as_str(),
         }
@@ -280,6 +289,20 @@ impl AType {
 
                 false
             }
+
+            AType::Array(a) => match &a.maybe_element_type_key {
+                Some(key) => {
+                    let element_type = ctx.must_get_type(*key);
+                    if element_type == typ {
+                        hierarchy.push(element_type);
+                        return true;
+                    }
+
+                    element_type.get_type_hierarchy(ctx, typ, hierarchy)
+                }
+
+                None => false,
+            },
         };
     }
 
@@ -308,6 +331,7 @@ impl AType {
             | AType::Struct(_)
             | AType::Enum(_)
             | AType::Tuple(_)
+            | AType::Array(_)
             | AType::Function(_)
             | AType::Pointer(_)
             | AType::Unknown(_) => false,
@@ -363,6 +387,15 @@ impl AType {
                 size
             }
 
+            AType::Array(array_type) => match &array_type.maybe_element_type_key {
+                Some(key) => {
+                    let element_type = ctx.must_get_type(*key);
+                    element_type.size_bytes(ctx) * array_type.len as u32
+                }
+
+                None => 0,
+            },
+
             AType::Unknown(_) => 0,
         }
     }
@@ -387,6 +420,15 @@ impl AType {
         match self {
             AType::Enum(enum_type) => enum_type,
             _ => panic!("type {} is not am enum", self),
+        }
+    }
+
+    /// Returns the array type corresponding to this type. Panics if this type is not an
+    /// array type.
+    pub fn to_array_type(&self) -> &AArrayType {
+        match self {
+            AType::Array(array_type) => array_type,
+            _ => panic!("type {} is not am array", self),
         }
     }
 
@@ -420,6 +462,7 @@ impl AType {
             AType::Struct(s) => format!("{}", s.display(ctx)),
             AType::Enum(e) => format!("{}", e.display(ctx)),
             AType::Tuple(t) => format!("{}", t.display(ctx)),
+            AType::Array(a) => format!("{}", a.display(ctx)),
             AType::Function(func) => format!("{}", func.display(ctx)),
             AType::Pointer(t) => format!("{}", t.display(ctx)),
             AType::Unknown(name) => format!("{}", name),

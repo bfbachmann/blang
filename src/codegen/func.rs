@@ -7,10 +7,12 @@ use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::passes::PassManager;
 use inkwell::values::{
-    BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue,
+    ArrayValue, BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, IntValue,
+    PointerValue, StructValue,
 };
 use inkwell::{AddressSpace, IntPredicate};
 
+use crate::analyzer::ast::array::AArrayInit;
 use crate::analyzer::ast::closure::AClosure;
 use crate::analyzer::ast::cond::ACond;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
@@ -35,7 +37,7 @@ use crate::codegen::error::{CodeGenError, CompileResult, ErrorKind};
 use crate::format_code;
 use crate::parser::ast::op::Operator;
 
-/// Compiles type-rich (i.e. semantically valid) functions.
+/// Uses LLVM to generate code for functions.
 pub struct FnCodeGen<'a, 'ctx> {
     ctx: &'ctx Context,
     builder: &'a Builder<'ctx>,
@@ -43,7 +45,10 @@ pub struct FnCodeGen<'a, 'ctx> {
     module: &'a Module<'ctx>,
     type_store: &'a TypeStore,
     type_converter: &'a mut TypeConverter<'ctx>,
-    consts: &'a HashMap<String, AConst>,
+    /// Stores constant values that are declared in the module outside of functions.
+    module_consts: &'a HashMap<String, AConst>,
+    /// Stores constant values that are declared within a function.
+    local_consts: HashMap<String, AConst>,
     vars: HashMap<String, PointerValue<'ctx>>,
     fn_value: Option<FunctionValue<'ctx>>,
     stack: Vec<CompilationContext<'ctx>>,
@@ -51,7 +56,7 @@ pub struct FnCodeGen<'a, 'ctx> {
 }
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
-    /// Compiles the given function.
+    /// Generates code for the given function.
     pub fn compile(
         context: &'ctx Context,
         builder: &'a Builder<'ctx>,
@@ -59,7 +64,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         module: &'a Module<'ctx>,
         type_store: &'a TypeStore,
         type_converter: &'a mut TypeConverter<'ctx>,
-        consts: &'a HashMap<String, AConst>,
+        module_consts: &'a HashMap<String, AConst>,
         func: &AFn,
     ) -> CompileResult<FunctionValue<'ctx>> {
         let mut fn_compiler = FnCodeGen {
@@ -69,7 +74,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             module,
             type_store,
             type_converter,
-            consts,
+            module_consts,
+            local_consts: Default::default(),
             vars: HashMap::new(),
             fn_value: None,
             stack: vec![],
@@ -327,6 +333,16 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Most primitive values can be assigned (i.e. copied) with a store instruction. Composite
         // values like structs need to be copied differently.
         self.copy_value(ll_expr_val, ll_var_ptr, assign.val.type_key);
+    }
+
+    /// Locates and returns the constant with the given name. Panics if there is no constant by
+    /// that name.
+    fn must_get_const(&self, name: &str) -> &AConst {
+        if let Some(const_) = self.local_consts.get(name) {
+            const_
+        } else {
+            self.module_consts.get(name).unwrap()
+        }
     }
 
     /// Copies the value `ll_src_val` of type `typ` to the address pointed to by `ll_dst_ptr`.
@@ -723,7 +739,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AStatement::Return(ret) => {
                 self.gen_return(ret);
             }
-            AStatement::ExternFns(_) | AStatement::Consts(_) => {
+            AStatement::Consts(consts) => {
+                for c in consts {
+                    self.local_consts.insert(c.name.clone(), c.clone());
+                }
+            }
+            AStatement::ExternFns(_) => {
                 // Nothing to do here. This is already handled in
                 // `ProgramCodeGen::gen_program`.
             }
@@ -1011,6 +1032,63 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     .as_basic_value_enum()
             }
 
+            AExprKind::ArrayInit(array_init) => {
+                let ll_element_type = self
+                    .type_converter
+                    .get_basic_type(array_init.maybe_element_type_key.unwrap());
+
+                // Repeat elements in the array by cloning, if necessary.
+                let elements = match &array_init.maybe_repeat_count {
+                    Some(count) => {
+                        vec![array_init.values.first().unwrap().clone(); *count as usize]
+                    }
+                    None => array_init.values.clone(),
+                };
+
+                if ll_element_type.is_pointer_type() {
+                    let ll_elements: Vec<PointerValue> = elements
+                        .iter()
+                        .map(|v| self.gen_const_expr(v).into_pointer_value())
+                        .collect();
+                    ll_element_type
+                        .into_pointer_type()
+                        .const_array(ll_elements.as_slice())
+                        .as_basic_value_enum()
+                } else if ll_element_type.is_int_type() {
+                    let ll_elements: Vec<IntValue> = elements
+                        .iter()
+                        .map(|v| self.gen_const_expr(v).into_int_value())
+                        .collect();
+                    ll_element_type
+                        .into_int_type()
+                        .const_array(ll_elements.as_slice())
+                        .as_basic_value_enum()
+                } else if ll_element_type.is_struct_type() {
+                    let ll_elements: Vec<StructValue> = elements
+                        .iter()
+                        .map(|v| self.gen_const_expr(v).into_struct_value())
+                        .collect();
+                    ll_element_type
+                        .into_struct_type()
+                        .const_array(ll_elements.as_slice())
+                        .as_basic_value_enum()
+                } else if ll_element_type.is_array_type() {
+                    let ll_elements: Vec<ArrayValue> = elements
+                        .iter()
+                        .map(|v| self.gen_const_expr(v).into_array_value())
+                        .collect();
+                    ll_element_type
+                        .into_array_type()
+                        .const_array(ll_elements.as_slice())
+                        .as_basic_value_enum()
+                } else {
+                    panic!(
+                        "unexpected array element type {}",
+                        ll_element_type.to_string()
+                    )
+                }
+            }
+
             AExprKind::StructInit(struct_init) => {
                 let struct_type = self
                     .type_store
@@ -1099,6 +1177,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             AExprKind::TupleInit(tuple_init) => self.gen_tuple_init(tuple_init),
 
+            AExprKind::ArrayInit(array_init) => self.gen_array_init(array_init),
+
             // TODO: Compiling this function works fine, but trying to actually use it will cause
             // a panic because it has no name. The fix likely involves giving anon functions unique
             // auto-generated names.
@@ -1109,7 +1189,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 self.module,
                 self.type_store,
                 self.type_converter,
-                self.consts,
+                self.module_consts,
                 anon_fn,
             )
             .unwrap()
@@ -1160,6 +1240,48 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         ll_struct_ptr.as_basic_value_enum()
+    }
+
+    /// Generates array initialization instructions and returns the resulting LLVM array value.
+    fn gen_array_init(&mut self, array_init: &AArrayInit) -> BasicValueEnum<'ctx> {
+        let array_type = self
+            .type_store
+            .must_get(array_init.type_key)
+            .to_array_type();
+        let ll_array_type = self.type_converter.get_array_type(array_init.type_key);
+
+        // Allocate stack space for the array.
+        let ll_array_ptr = self.builder.build_array_alloca(
+            ll_array_type,
+            self.ctx.i32_type().const_int(array_type.len, false),
+            "array",
+        );
+
+        // Repeat array elements by cloning, if necessary.
+        let elements = match &array_init.maybe_repeat_count {
+            Some(count) => {
+                vec![array_init.values.first().unwrap().clone(); *count as usize]
+            }
+            None => array_init.values.clone(),
+        };
+
+        // Init array elements.
+        unsafe {
+            for (i, value) in elements.iter().enumerate() {
+                let ll_index = self.ctx.i32_type().const_int(i as u64, false);
+                let ll_element_ptr = self.builder.build_in_bounds_gep(
+                    ll_array_type,
+                    ll_array_ptr,
+                    &[ll_index],
+                    "array_gep",
+                );
+
+                let ll_elem = self.gen_expr(value);
+                self.copy_value(ll_elem, ll_element_ptr, value.type_key);
+            }
+        }
+
+        ll_array_ptr.as_basic_value_enum()
     }
 
     /// Compiles enum variant initialization.
@@ -1641,6 +1763,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             | AType::Struct(_)
             | AType::Enum(_)
             | AType::Tuple(_)
+            | AType::Array(_)
             | AType::RawPtr
             | AType::Pointer(_) => ll_val,
 
@@ -1695,13 +1818,16 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Extracts the value of the given symbol that must represent a constant or the accesses of
     /// some field or subfield on a constant.
     fn const_extract_value(&mut self, symbol: &ASymbol) -> BasicValueEnum<'ctx> {
-        let const_value = &self.consts.get(symbol.name.as_str()).unwrap().value;
+        let const_value = &self.must_get_const(symbol.name.as_str()).value.clone();
         let mut ll_const_value = self.gen_const_expr(const_value);
 
+        // If the symbol just refers to some constant by name and has no member access, we can just
+        // return the value associated with that constant.
         if symbol.member_access.is_none() {
             return ll_const_value;
         }
 
+        // At this point we know we need to access some member on the constant.
         let mut member_access = symbol.member_access.as_ref().unwrap();
         let mut const_type_key = const_value.type_key;
 

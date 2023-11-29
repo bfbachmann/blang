@@ -97,6 +97,7 @@ impl ATupleType {
     }
 }
 
+/// Tuple initialization.
 #[derive(Debug, Clone)]
 pub struct ATupleInit {
     pub type_key: TypeKey,
@@ -137,10 +138,20 @@ impl ATupleInit {
     }
 
     /// Performs semantic analysis on a tuple initialization.
-    pub fn from(ctx: &mut ProgramContext, tuple_init: &TupleInit) -> ATupleInit {
+    pub fn from(
+        ctx: &mut ProgramContext,
+        tuple_init: &TupleInit,
+        maybe_expected_field_type_keys: Option<Vec<TypeKey>>,
+    ) -> ATupleInit {
         let mut field_values: Vec<(AField, AExpr)> = vec![];
+
         for (i, expr) in tuple_init.values.iter().enumerate() {
-            let val = AExpr::from(ctx, expr.clone(), None, false);
+            let maybe_expected_field_type = match &maybe_expected_field_type_keys {
+                Some(tks) => tks.get(i).copied(),
+                None => None,
+            };
+
+            let val = AExpr::from(ctx, expr.clone(), maybe_expected_field_type, false);
             field_values.push((
                 AField {
                     name: i.to_string(),

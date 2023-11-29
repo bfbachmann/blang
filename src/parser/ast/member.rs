@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 use colored::Colorize;
 
@@ -11,7 +12,7 @@ use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::source::Source;
 
 /// Represents access to a member or field on a type or an instance of a type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct MemberAccess {
     /// The name of the object member being accessed.
     pub member_name: String,
@@ -34,6 +35,13 @@ impl PartialEq for MemberAccess {
             (None, None) => true,
             _ => false,
         }
+    }
+}
+
+impl Hash for MemberAccess {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.member_name.hash(state);
+        self.submember.hash(state);
     }
 }
 

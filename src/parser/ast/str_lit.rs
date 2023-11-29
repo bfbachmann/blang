@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 use colored::Colorize;
 
@@ -11,11 +12,17 @@ use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 
 /// Represents a string literal.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct StrLit {
     pub value: String,
     pub start_pos: Position,
     pub end_pos: Position,
+}
+
+impl Hash for StrLit {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+    }
 }
 
 impl Display for StrLit {

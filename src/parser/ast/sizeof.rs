@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
@@ -10,7 +11,7 @@ use crate::parser::error::ParseResult;
 use crate::parser::source::Source;
 
 /// Represents a `sizeof` statement.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SizeOf {
     pub typ: Type,
     start_pos: Position,
@@ -20,6 +21,12 @@ pub struct SizeOf {
 impl Display for SizeOf {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} {}", TokenKind::SizeOf, self.typ)
+    }
+}
+
+impl Hash for SizeOf {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.typ.hash(state);
     }
 }
 

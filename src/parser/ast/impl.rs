@@ -1,3 +1,5 @@
+use std::hash::{Hash, Hasher};
+
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
@@ -9,7 +11,7 @@ use crate::parser::source::Source;
 use crate::{locatable_impl, util};
 
 /// Represents the implementation of a series of member functions on a type.
-#[derive(Debug)]
+#[derive(Debug, Eq)]
 pub struct Impl {
     pub typ: Type,
     pub member_fns: Vec<Function>,
@@ -20,6 +22,13 @@ pub struct Impl {
 impl PartialEq for Impl {
     fn eq(&self, other: &Self) -> bool {
         util::vecs_eq(&self.member_fns, &other.member_fns)
+    }
+}
+
+impl Hash for Impl {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.typ.hash(state);
+        self.member_fns.hash(state);
     }
 }
 

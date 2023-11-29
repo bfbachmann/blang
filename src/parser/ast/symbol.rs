@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 use colored::Colorize;
 
@@ -13,7 +14,7 @@ use crate::parser::error::{ErrorKind, ParseError};
 
 /// Represents a a named value. These can be variables, variable member accesses, functions,
 /// constants, or types.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Symbol {
     pub name: String,
     pub member_access: Option<MemberAccess>,
@@ -30,6 +31,13 @@ impl Display for Symbol {
         }
 
         Ok(())
+    }
+}
+
+impl Hash for Symbol {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.member_access.hash(state);
     }
 }
 

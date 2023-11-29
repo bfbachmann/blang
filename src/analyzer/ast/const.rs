@@ -80,11 +80,15 @@ impl AConst {
             return AConst::new_zero_value(ctx, const_decl.name.as_str());
         }
 
-        // Add the constant to the program context so it can be used later.
+        // Add the symbol to the program context so it can be used later.
         ctx.insert_symbol(ScopedSymbol::new_const(
             const_decl.name.as_str(),
             value.type_key,
         ));
+
+        // Store the constant value in the program context so we can use it when we've evaluating
+        // constant expressions at compile time.
+        ctx.insert_const_value(const_decl.name.as_str(), value.clone());
 
         AConst {
             name: const_decl.name.clone(),

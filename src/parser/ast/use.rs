@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 use colored::Colorize;
 
@@ -12,11 +13,17 @@ use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::source::Source;
 
 /// The path to a module that is imported into a program.
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct ModulePath {
     pub raw: String,
     start_pos: Position,
     end_pos: Position,
+}
+
+impl Hash for ModulePath {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.raw.hash(state);
+    }
 }
 
 locatable_impl!(ModulePath);
@@ -54,12 +61,19 @@ impl ModulePath {
 }
 
 /// A module that is imported into a program.
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct UsedModule {
     pub path: ModulePath,
     pub maybe_alias: Option<String>,
     start_pos: Position,
     end_pos: Position,
+}
+
+impl Hash for UsedModule {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.path.hash(state);
+        self.maybe_alias.hash(state);
+    }
 }
 
 locatable_impl!(UsedModule);
@@ -89,11 +103,17 @@ impl UsedModule {
 }
 
 /// Represents a `use` block that imports foreign modules into a program.
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct UseBlock {
     pub used_modules: Vec<UsedModule>,
     start_pos: Position,
     end_pos: Position,
+}
+
+impl Hash for UseBlock {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.used_modules.hash(state);
+    }
 }
 
 locatable_impl!(UseBlock);

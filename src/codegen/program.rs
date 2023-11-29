@@ -31,7 +31,7 @@ pub struct ProgramCodeGen<'a, 'ctx> {
     program: &'a ASource,
     type_store: &'a TypeStore,
     type_converter: TypeConverter<'ctx>,
-    consts: HashMap<String, AConst>,
+    module_consts: HashMap<String, AConst>,
 }
 
 /// The type of output file to generate.
@@ -79,7 +79,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                         self.module,
                         self.type_store,
                         &mut self.type_converter,
-                        &self.consts,
+                        &self.module_consts,
                         func,
                     )?;
                 }
@@ -92,7 +92,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                             self.module,
                             self.type_store,
                             &mut self.type_converter,
-                            &self.consts,
+                            &self.module_consts,
                             mem_fn,
                         )?;
                     }
@@ -191,7 +191,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
         for statement in &self.program.statements {
             if let AStatement::Consts(consts) = statement {
                 for const_decl in consts {
-                    self.consts
+                    self.module_consts
                         .insert(const_decl.name.clone(), const_decl.clone());
                 }
             }
@@ -265,7 +265,7 @@ pub fn generate(
         program: &source,
         type_store: &type_store,
         type_converter: TypeConverter::new(&ctx, &type_store),
-        consts: HashMap::new(),
+        module_consts: HashMap::new(),
     };
     codegen.gen_program()?;
 

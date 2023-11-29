@@ -1,3 +1,5 @@
+use std::hash::{Hash, Hasher};
+
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
@@ -8,12 +10,19 @@ use crate::parser::error::ParseResult;
 use crate::parser::source::Source;
 
 /// A store statement that writes a value to memory.
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Store {
     pub dest_expr: Expression,
     pub source_expr: Expression,
     start_pos: Position,
     end_pos: Position,
+}
+
+impl Hash for Store {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.dest_expr.hash(state);
+        self.source_expr.hash(state);
+    }
 }
 
 locatable_impl!(Store);

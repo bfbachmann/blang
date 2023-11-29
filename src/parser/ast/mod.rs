@@ -1,4 +1,5 @@
 pub mod arg;
+pub mod array;
 pub mod bool_lit;
 pub mod branch;
 pub mod r#break;

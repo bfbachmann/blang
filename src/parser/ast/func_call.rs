@@ -1,4 +1,5 @@
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
@@ -12,7 +13,7 @@ use crate::parser::source::Source;
 use crate::{locatable_impl, util};
 
 /// Represents the calling of a function.
-#[derive(Debug, Clone)]
+#[derive(Debug, Eq, Clone)]
 pub struct FunctionCall {
     /// Should either be the name of the function, a function variable name, or an access of a
     /// variable's function member.
@@ -28,6 +29,13 @@ impl PartialEq for FunctionCall {
             && util::vecs_eq(&self.args, &other.args)
             && self.start_pos == other.start_pos
             && self.end_pos == other.end_pos
+    }
+}
+
+impl Hash for FunctionCall {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.fn_symbol.hash(state);
+        self.args.hash(state);
     }
 }
 

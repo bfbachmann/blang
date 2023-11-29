@@ -30,7 +30,7 @@ use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::source::Source;
 
 /// Represents a statement.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Statement {
     VariableDeclaration(VariableDeclaration),
     VariableAssignment(VariableAssignment),

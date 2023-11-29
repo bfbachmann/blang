@@ -1,3 +1,5 @@
+use std::hash::{Hash, Hasher};
+
 use crate::lexer::pos::Locatable;
 use crate::lexer::pos::Position;
 use crate::lexer::stream::Stream;
@@ -9,12 +11,19 @@ use crate::parser::source::Source;
 use crate::{locatable_impl, util};
 
 /// Represents a spec declaration.
-#[derive(Debug, Clone)]
+#[derive(Debug, Eq, Clone)]
 pub struct Spec {
     pub name: String,
     pub fn_sigs: Vec<FunctionSignature>,
     start_pos: Position,
     end_pos: Position,
+}
+
+impl Hash for Spec {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.fn_sigs.hash(state);
+    }
 }
 
 impl PartialEq for Spec {

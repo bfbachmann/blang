@@ -1,4 +1,5 @@
 use std::fmt;
+use std::hash::Hash;
 
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
@@ -14,7 +15,7 @@ use crate::parser::ast::tmpl_params::{TmplParam, TmplParams};
 use crate::parser::error::ParseResult;
 
 /// Represents a function declaration.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub struct Function {
     pub signature: FunctionSignature,
     pub body: Closure,

@@ -8,6 +8,7 @@ use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::parser::ast::array::ArrayInit;
 use crate::parser::ast::bool_lit::BoolLit;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::func_call::FunctionCall;
@@ -45,7 +46,7 @@ impl Display for OutputNode {
 
 /// Represents basic and composite expressions. For basic expressions, see `Expression::from_basic`,
 /// and for composite expressions, see `Expression::from`.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum Expression {
     // Basic expressions.
     Symbol(Symbol),
@@ -59,6 +60,7 @@ pub enum Expression {
     StructInit(StructInit),
     EnumInit(EnumVariantInit),
     TupleInit(TupleInit),
+    ArrayInit(Box<ArrayInit>),
     SizeOf(SizeOf),
 
     // Composite expressions.
@@ -67,7 +69,7 @@ pub enum Expression {
     TypeCast(Box<Expression>, Type),
 }
 
-impl fmt::Display for Expression {
+impl Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Expression::Symbol(s) => write!(f, "{}", s),
@@ -90,6 +92,9 @@ impl fmt::Display for Expression {
             }
             Expression::TupleInit(tuple_init) => {
                 write!(f, "tuple initialization {}", tuple_init)
+            }
+            Expression::ArrayInit(array_init) => {
+                write!(f, "array initialization {}", array_init)
             }
             Expression::SizeOf(so) => {
                 write!(f, "{}", so)
@@ -116,6 +121,7 @@ impl Locatable for Expression {
             Expression::StructInit(struct_init) => struct_init.start_pos(),
             Expression::EnumInit(enum_init) => enum_init.start_pos(),
             Expression::TupleInit(tuple_init) => tuple_init.start_pos(),
+            Expression::ArrayInit(array_init) => array_init.start_pos(),
             Expression::BinaryOperation(left, _, _) => left.start_pos(),
             Expression::SizeOf(so) => so.start_pos(),
             Expression::TypeCast(expr, _) => expr.start_pos(),
@@ -136,6 +142,7 @@ impl Locatable for Expression {
             Expression::StructInit(struct_init) => struct_init.end_pos(),
             Expression::EnumInit(enum_init) => enum_init.end_pos(),
             Expression::TupleInit(tuple_init) => tuple_init.end_pos(),
+            Expression::ArrayInit(array_init) => array_init.end_pos(),
             Expression::BinaryOperation(left, _, _) => left.end_pos(),
             Expression::SizeOf(so) => so.end_pos(),
             Expression::TypeCast(_, target_type) => target_type.end_pos(),
@@ -259,6 +266,15 @@ impl Expression {
                 Ok(tuple_init) => Ok(Some(Expression::TupleInit(tuple_init))),
                 Err(_) => Ok(None),
             },
+
+            // If the the first token is `[`, it's an array initialization.
+            Some(Token {
+                kind: TokenKind::LeftBracket,
+                ..
+            }) => {
+                let array_init = ArrayInit::from(tokens)?;
+                Ok(Some(Expression::ArrayInit(Box::new(array_init))))
+            }
 
             // If the first token is an identifier, the expression can be a function call,
             // a symbol, or a struct initialization, or enum variant initialization.

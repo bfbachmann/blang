@@ -1,3 +1,5 @@
+use std::hash::{Hash, Hasher};
+
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
@@ -7,10 +9,16 @@ use crate::parser::error::ParseResult;
 use crate::parser::source::Source;
 
 /// Represents a closure that is executed repeatedly.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Loop {
     pub closure: Closure,
     start_pos: Position,
+}
+
+impl Hash for Loop {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.closure.hash(state);
+    }
 }
 
 impl Locatable for Loop {

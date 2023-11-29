@@ -180,15 +180,6 @@ impl AStatement {
             }
 
             Statement::Consts(const_block) => {
-                // Make sure this const is not being declared inside a function.
-                if ctx.is_in_fn() {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::InvalidStatement,
-                        "cannot declare constant inside function",
-                        const_block,
-                    ));
-                }
-
                 // Analyze all the constant declarations.
                 let mut consts = vec![];
                 for const_decl in &const_block.consts {

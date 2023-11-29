@@ -6,9 +6,10 @@ use crate::parser::ast::expr::Expression;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::error::ParseResult;
 use crate::parser::source::Source;
+use std::hash::{Hash, Hasher};
 
 /// Represents the assignment of some value (i.e. an expression) to a variable.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct VariableAssignment {
     pub symbol: Symbol,
     pub value: Expression,
@@ -22,6 +23,13 @@ impl Locatable for VariableAssignment {
 
     fn end_pos(&self) -> &Position {
         &self.value.end_pos()
+    }
+}
+
+impl Hash for VariableAssignment {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.symbol.hash(state);
+        self.value.hash(state);
     }
 }
 

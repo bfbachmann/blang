@@ -66,7 +66,7 @@ impl Source {
                 } else {
                     Err(ParseError::new_with_token(
                         ErrorKind::UnexpectedToken,
-                        format_code!(r#"expected {}, but found {}"#, expected, token,).as_str(),
+                        format_code!(r#"expected {}, but found {}"#, expected, token).as_str(),
                         token.clone(),
                     ))
                 }

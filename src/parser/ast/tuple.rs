@@ -147,7 +147,7 @@ impl TupleType {
 }
 
 /// Represents tuple initialization.
-#[derive(Debug)]
+#[derive(Debug, Eq)]
 pub struct TupleInit {
     pub values: Vec<Expression>,
     start_pos: Position,
@@ -187,6 +187,12 @@ impl Clone for TupleInit {
 impl PartialEq for TupleInit {
     fn eq(&self, other: &Self) -> bool {
         util::vecs_eq(&self.values, &other.values)
+    }
+}
+
+impl Hash for TupleInit {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.values.hash(state);
     }
 }
 

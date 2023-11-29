@@ -1,3 +1,5 @@
+use std::hash::{Hash, Hasher};
+
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
@@ -9,12 +11,19 @@ use crate::parser::source::Source;
 
 /// Represents a branch in a conditional. `if` and `elsif` branches must have condition
 /// expressions, but `else` branches must not.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Branch {
     pub condition: Option<Expression>,
     pub body: Closure,
     pub start_pos: Position,
     pub end_pos: Position,
+}
+
+impl Hash for Branch {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.condition.hash(state);
+        self.body.hash(state);
+    }
 }
 
 locatable_impl!(Branch);

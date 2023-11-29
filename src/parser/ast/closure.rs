@@ -7,9 +7,10 @@ use crate::parser::ast::statement::Statement;
 use crate::parser::error::ParseResult;
 use crate::parser::source::Source;
 use crate::{locatable_impl, util};
+use std::hash::{Hash, Hasher};
 
 /// Represents a closure, which is just a series of statements with their own scope.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct Closure {
     pub statements: Vec<Statement>,
     pub result: Option<Expression>,
@@ -23,6 +24,13 @@ impl PartialEq for Closure {
             && self.result == other.result
             && self.start_pos == other.start_pos
             && self.end_pos == other.end_pos
+    }
+}
+
+impl Hash for Closure {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.statements.hash(state);
+        self.result.hash(state);
     }
 }
 

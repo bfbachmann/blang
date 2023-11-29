@@ -1,0 +1,239 @@
+use std::fmt::{Display, Formatter};
+
+use colored::Colorize;
+
+use crate::analyzer::ast::expr::AExpr;
+use crate::analyzer::ast::r#type::AType;
+use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::type_store::TypeKey;
+use crate::parser::ast::array::{ArrayInit, ArrayType};
+
+/// An array type declaration.
+#[derive(Clone, PartialEq, Hash, Eq, Debug)]
+pub struct AArrayType {
+    pub maybe_element_type_key: Option<TypeKey>,
+    pub len: u64,
+}
+
+impl Display for AArrayType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self.maybe_element_type_key {
+            Some(key) => {
+                write!(f, "[{}; {}]", key, self.len)
+            }
+            None => write!(f, "[]"),
+        }
+    }
+}
+
+impl AArrayType {
+    /// Performs semantic analysis on the given array type.
+    pub fn from(ctx: &mut ProgramContext, array_type: &ArrayType) -> AArrayType {
+        // Analyze the contained type.
+        let maybe_element_type_key = match &array_type.maybe_element_type {
+            Some(element_type) => Some(ctx.resolve_type(element_type)),
+            None => None,
+        };
+
+        // Analyze the array type length expression.
+        let len_expr = AExpr::from(
+            ctx,
+            array_type.length_expr.clone(),
+            Some(ctx.u64_type_key()),
+            false,
+        );
+
+        // Try to evaluate the length expression as a constant u64. We'll skip this step if the
+        // expression is already of the wrong type.
+        let len = if len_expr.type_key != ctx.u64_type_key() {
+            0
+        } else {
+            match len_expr.try_into_const_u64(ctx) {
+                Ok(u) => u,
+                Err(err) => {
+                    ctx.insert_err(err);
+                    0
+                }
+            }
+        };
+
+        AArrayType {
+            maybe_element_type_key,
+            len,
+        }
+    }
+
+    /// Return the human-readable version of the array type.
+    pub fn display(&self, ctx: &ProgramContext) -> String {
+        match &self.maybe_element_type_key {
+            Some(key) => {
+                format!("[{}; {}]", ctx.must_get_type(*key).display(ctx), self.len)
+            }
+
+            None => "[]".to_string(),
+        }
+    }
+}
+
+/// Represents array initialization. Arrays can be initialized as empty, with a list of of values,
+/// or with a single value and a repeat count that tells the compiler how many times the value
+/// should be duplicated in the array.
+#[derive(PartialEq, Debug, Clone)]
+pub struct AArrayInit {
+    pub values: Vec<AExpr>,
+    pub maybe_repeat_count: Option<u64>,
+    pub maybe_element_type_key: Option<TypeKey>,
+    pub type_key: TypeKey,
+}
+
+impl Display for AArrayInit {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+
+        match &self.maybe_repeat_count {
+            Some(count) => {
+                write!(f, "{}; {}]", self.values.first().unwrap(), count)?;
+                return Ok(());
+            }
+
+            None => {
+                for (i, value) in self.values.iter().enumerate() {
+                    match i {
+                        0 => write!(f, "{}", value)?,
+                        _ => write!(f, ", {}", value)?,
+                    };
+                }
+            }
+        }
+
+        write!(f, "]")
+    }
+}
+
+impl AArrayInit {
+    /// Returns a new empty array initialization.
+    pub fn new_empty(ctx: &mut ProgramContext) -> AArrayInit {
+        AArrayInit::from(ctx, &ArrayInit::new_empty(), None)
+    }
+
+    /// Performs semantic analysis on array initialization and returns the analyzed result.
+    pub fn from(
+        ctx: &mut ProgramContext,
+        array_init: &ArrayInit,
+        maybe_expected_element_type_key: Option<TypeKey>,
+    ) -> AArrayInit {
+        // Analyze all the values in the array.
+        let mut contained_values = vec![];
+        for value_expr in &array_init.values {
+            let expr = AExpr::from(
+                ctx,
+                value_expr.clone(),
+                maybe_expected_element_type_key,
+                false,
+            );
+            contained_values.push(expr);
+        }
+
+        // Make sure all the values are of the same type.
+        let maybe_element_type_key = if !contained_values.is_empty() {
+            let expected_type_key = contained_values.first().unwrap().type_key;
+            let expected_type = ctx.must_get_type(expected_type_key);
+
+            for value in &contained_values {
+                if value.type_key == expected_type_key {
+                    continue;
+                }
+
+                let value_type = ctx.must_get_type(value.type_key);
+                if !value_type.is_same_as(ctx, expected_type) {
+                    ctx.insert_err(AnalyzeError::new(
+                        ErrorKind::MismatchedTypes,
+                        format_code!(
+                            "expected value of type {}, but found {}",
+                            expected_type.display(ctx),
+                            value_type.display(ctx)
+                        )
+                        .as_str(),
+                        value,
+                    ));
+
+                    // Just return an empty array since it's invalid.
+                    return AArrayInit {
+                        values: vec![],
+                        maybe_repeat_count: None,
+                        maybe_element_type_key: None,
+                        type_key: ctx.unknown_type_key(),
+                    };
+                }
+            }
+
+            Some(expected_type_key)
+        } else {
+            None
+        };
+
+        // The repeat count will never be Some if there isn't exactly one element in the array.
+        let maybe_repeat_count = match &array_init.maybe_repeat_expr {
+            Some(repeat_expr) => {
+                let expr = AExpr::from(ctx, repeat_expr.clone(), Some(ctx.u64_type_key()), false);
+                if expr.type_key != ctx.u64_type_key() {
+                    // Default to zero length if the repeat parameter is invalid.
+                    Some(0)
+                } else {
+                    match expr.try_into_const_u64(ctx) {
+                        Ok(u) => Some(u),
+                        Err(err) => {
+                            ctx.insert_err(err);
+
+                            // Just return an empty array since it's invalid.
+                            return AArrayInit {
+                                values: vec![],
+                                maybe_repeat_count: None,
+                                maybe_element_type_key: None,
+                                type_key: ctx.unknown_type_key(),
+                            };
+                        }
+                    }
+                }
+            }
+
+            None => None,
+        };
+
+        // Insert the new type into the program context now that we've resolved it.
+        let type_key = ctx.insert_type(AType::Array(AArrayType {
+            len: match &maybe_repeat_count {
+                Some(count) => *count,
+                None => contained_values.len() as u64,
+            },
+            maybe_element_type_key,
+        }));
+
+        AArrayInit {
+            values: contained_values,
+            maybe_repeat_count,
+            maybe_element_type_key,
+            type_key,
+        }
+    }
+
+    /// Returns the human-readable version of this array initialization.
+    pub fn display(&self, ctx: &ProgramContext) -> String {
+        let mut s = "[".to_string();
+
+        return match &self.maybe_repeat_count {
+            Some(count) => s + format!("{}; {}]", self.values.first().unwrap(), count).as_str(),
+            None => {
+                for (i, val) in self.values.iter().enumerate() {
+                    match i {
+                        0 => s += format!("{}", val.display(ctx)).as_str(),
+                        _ => s += format!(", {}", val.display(ctx)).as_str(),
+                    }
+                }
+
+                s + "]"
+            }
+        };
+    }
+}

@@ -2,6 +2,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use colored::Colorize;
 
+use crate::analyzer::ast::array::AArrayType;
+use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::pointer::APointerType;
 use crate::analyzer::ast::r#enum::AEnumType;
@@ -54,6 +56,8 @@ pub struct ProgramContext {
     defined_fn_sigs: HashMap<String, AFnSig>,
     /// Maps function names to analyzed functions.
     funcs: HashMap<String, AFn>,
+    /// Maps constant names to their values.
+    const_values: HashMap<String, AExpr>,
     /// Maps type keys to mappings from their member function names to their member function
     /// signatures.
     type_member_fn_sigs: HashMap<TypeKey, HashMap<String, AFnSig>>,
@@ -65,6 +69,9 @@ pub struct ProgramContext {
     enum_type_keys: HashMap<String, TypeKey>,
     /// Maps tuple type to tuple type key.
     tuple_type_keys: HashMap<ATupleType, TypeKey>,
+    /// Maps array type to array type key.
+    array_type_keys: HashMap<AArrayType, TypeKey>,
+    /// Maps pointer type to pointer type key.
     pointer_type_keys: HashMap<APointerType, TypeKey>,
 
     /// Collects warnings emitted by the analyzer during analysis.
@@ -99,11 +106,13 @@ impl ProgramContext {
             unchecked_specs: Default::default(),
             defined_fn_sigs: Default::default(),
             funcs: Default::default(),
+            const_values: Default::default(),
             type_member_fn_sigs: Default::default(),
             specs: Default::default(),
             struct_type_keys: Default::default(),
             enum_type_keys: Default::default(),
             tuple_type_keys: Default::default(),
+            array_type_keys: Default::default(),
             pointer_type_keys: Default::default(),
             warnings: Default::default(),
             errors: Default::default(),
@@ -212,7 +221,15 @@ impl ProgramContext {
     /// returned.
     pub fn insert_type(&mut self, typ: AType) -> TypeKey {
         // First, we'll check if this type already exists so we can avoid duplicating it if so.
-        let (maybe_type_name, is_struct, is_enum, maybe_tuple_type, maybe_ptr_type) = match &typ {
+        // TODO: refactor.
+        let (
+            maybe_type_name,
+            is_struct,
+            is_enum,
+            maybe_tuple_type,
+            maybe_ptr_type,
+            maybe_array_type,
+        ) = match &typ {
             AType::Struct(struct_type) => {
                 let maybe_name = match struct_type.name.is_empty() {
                     true => None,
@@ -225,7 +242,7 @@ impl ProgramContext {
                     }
                 };
 
-                (maybe_name, true, false, None, None)
+                (maybe_name, true, false, None, None, None)
             }
 
             AType::Enum(enum_type) => {
@@ -240,7 +257,7 @@ impl ProgramContext {
                     }
                 };
 
-                (maybe_name, false, true, None, None)
+                (maybe_name, false, true, None, None, None)
             }
 
             AType::Tuple(tuple_type) => {
@@ -248,7 +265,15 @@ impl ProgramContext {
                     return *existing_tuple_tk;
                 }
 
-                (None, false, false, Some(tuple_type.clone()), None)
+                (None, false, false, Some(tuple_type.clone()), None, None)
+            }
+
+            AType::Array(array_type) => {
+                if let Some(existing_array_tk) = self.array_type_keys.get(array_type) {
+                    return *existing_array_tk;
+                }
+
+                (None, false, false, None, None, Some(array_type.clone()))
             }
 
             AType::Pointer(ptr_type) => {
@@ -256,10 +281,10 @@ impl ProgramContext {
                     return *existing_ptr_tk;
                 }
 
-                (None, false, false, None, Some(ptr_type.clone()))
+                (None, false, false, None, Some(ptr_type.clone()), None)
             }
 
-            _ => (None, false, false, None, None),
+            _ => (None, false, false, None, None, None),
         };
 
         // Store the newly analyzed type.
@@ -276,6 +301,8 @@ impl ProgramContext {
             self.tuple_type_keys.insert(tuple_type, type_key);
         } else if let Some(ptr_type) = maybe_ptr_type {
             self.pointer_type_keys.insert(ptr_type, type_key);
+        } else if let Some(array_type) = maybe_array_type {
+            self.array_type_keys.insert(array_type, type_key);
         }
 
         type_key
@@ -600,5 +627,17 @@ impl ProgramContext {
     /// given type key.
     pub fn display_type_for_key(&self, type_key: TypeKey) -> String {
         self.must_get_type(type_key).display(self)
+    }
+
+    /// Maps `const_name` to `const_value` in the program context so the value can be looked up by
+    /// name.
+    pub fn insert_const_value(&mut self, const_name: &str, const_value: AExpr) {
+        self.const_values
+            .insert(const_name.to_string(), const_value);
+    }
+
+    /// Returns the expression representing the value assigned to the constant with the given name.
+    pub fn get_const_value(&self, name: &str) -> Option<&AExpr> {
+        self.const_values.get(name)
     }
 }

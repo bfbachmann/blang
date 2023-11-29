@@ -31,7 +31,7 @@ impl ScopedSymbol {
     pub fn new_const(name: &str, type_key: TypeKey) -> Self {
         ScopedSymbol {
             name: name.to_string(),
-            type_key: type_key,
+            type_key,
             is_mut: false,
             is_arg: false,
             is_const: true,

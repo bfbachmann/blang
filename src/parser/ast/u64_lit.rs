@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 use colored::Colorize;
 
@@ -11,7 +12,7 @@ use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 
 /// Represents a signed 64 bit integer literal.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct U64Lit {
     pub value: u64,
     /// Will be true if the u64 literal in the source code included the explicit "u64" suffix.
@@ -23,6 +24,13 @@ pub struct U64Lit {
 impl Display for U64Lit {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.value)
+    }
+}
+
+impl Hash for U64Lit {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+        self.has_type_suffix.hash(state);
     }
 }
 

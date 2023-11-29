@@ -2,6 +2,7 @@ use colored::Colorize;
 
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
+use crate::parser::ast::array::ArrayType;
 use crate::parser::ast::r#enum::EnumType;
 use crate::parser::ast::r#struct::StructType;
 use crate::parser::ast::r#type::Type;
@@ -36,6 +37,10 @@ pub fn check_type_containment(
 
         Type::Tuple(field_tuple_type) => {
             check_tuple_containment(ctx, field_tuple_type, hierarchy)?;
+        }
+
+        Type::Array(array_type) => {
+            check_array_containment(ctx, array_type, hierarchy)?;
         }
 
         // These types can't have illegal containment cycles.
@@ -120,4 +125,18 @@ pub fn check_tuple_containment(
     }
 
     Ok(())
+}
+
+/// Analyzes type containment within the given array type and returns an error if there are any
+/// illegal type containment cycles that would result in infinite-size types.
+pub fn check_array_containment(
+    ctx: &ProgramContext,
+    array_type: &ArrayType,
+    hierarchy: &mut Vec<String>,
+) -> AnalyzeResult<()> {
+    if let Some(typ) = &array_type.maybe_element_type {
+        check_type_containment(ctx, typ, hierarchy)
+    } else {
+        Ok(())
+    }
 }

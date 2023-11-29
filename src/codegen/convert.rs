@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use inkwell::context::Context;
-use inkwell::types::AsTypeRef;
 use inkwell::types::{
     AnyType, AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType,
 };
+use inkwell::types::{ArrayType, AsTypeRef};
 use inkwell::AddressSpace;
 use llvm_sys::core::LLVMFunctionType;
 use llvm_sys::prelude::LLVMTypeRef;
@@ -36,7 +36,7 @@ impl<'ctx> TypeConverter<'ctx> {
         }
     }
 
-    /// Returns the LLVM basic type enum for the type associated with the given type key, either
+    /// Returns the LLVM basic type enum for the type associated with the given type key, either by
     /// locating the LLVM type in the cache (if it was already converted), or by converting and
     /// caching it.
     pub fn get_basic_type(&mut self, type_key: TypeKey) -> BasicTypeEnum<'ctx> {
@@ -54,7 +54,7 @@ impl<'ctx> TypeConverter<'ctx> {
         }
     }
 
-    /// Returns the LLVM function type for the type associated with the given type key, either
+    /// Returns the LLVM function type for the type associated with the given type key, either by
     /// locating the LLVM type in the cache (if it was already converted), or by converting and
     /// caching it.
     pub fn get_fn_type(&mut self, type_key: TypeKey) -> FunctionType<'ctx> {
@@ -72,11 +72,18 @@ impl<'ctx> TypeConverter<'ctx> {
         }
     }
 
-    /// Returns the LLVM struct type for the type associated with the given type key, either
+    /// Returns the LLVM struct type for the type associated with the given type key, either by
     /// locating the LLVM type in the cache (if it was already converted), or by converting and
     /// caching it.
     pub fn get_struct_type(&mut self, type_key: TypeKey) -> StructType<'ctx> {
         self.get_basic_type(type_key).into_struct_type()
+    }
+
+    /// Returns the LLVM array type for the type associated with the given type key, either
+    /// locating the LLVM type in the cache (if it was already converted), or by converting and
+    /// caching it.
+    pub fn get_array_type(&mut self, type_key: TypeKey) -> ArrayType<'ctx> {
+        self.get_basic_type(type_key).into_array_type()
     }
 }
 
@@ -115,6 +122,16 @@ fn to_basic_type<'ctx>(
         AType::Tuple(tuple_type) => {
             tuple_to_struct_type(ctx, type_store, tuple_type).as_basic_type_enum()
         }
+
+        AType::Array(array_type) => match &array_type.maybe_element_type_key {
+            Some(tk) => {
+                let ll_element_type = to_basic_type(ctx, type_store, type_store.must_get(*tk));
+                ll_element_type
+                    .array_type(array_type.len as u32)
+                    .as_basic_type_enum()
+            }
+            None => ctx.i8_type().array_type(0).as_basic_type_enum(),
+        },
 
         AType::Function(fn_sig) => to_fn_type(ctx, &type_store, fn_sig)
             .ptr_type(AddressSpace::default())
@@ -304,21 +321,10 @@ fn to_metadata_type_enum<'ctx>(
     typ: &AType,
 ) -> BasicMetadataTypeEnum<'ctx> {
     match typ {
-        AType::I64 | AType::U64 => BasicMetadataTypeEnum::from(ctx.i64_type()),
-        AType::RawPtr => {
-            BasicMetadataTypeEnum::from(ctx.i64_type().ptr_type(AddressSpace::default()))
-        }
-        AType::Bool => BasicMetadataTypeEnum::from(ctx.bool_type()),
-        AType::Str => BasicMetadataTypeEnum::from(ctx.i8_type().ptr_type(AddressSpace::default())),
-        AType::Struct(_) | AType::Tuple(_) | AType::Enum(_) | AType::Pointer(_) => {
-            BasicMetadataTypeEnum::from(
-                to_basic_type(ctx, type_store, typ).ptr_type(AddressSpace::default()),
-            )
-        }
-        AType::Function(func) => {
-            let fn_type = type_store.must_get(func.type_key);
-            BasicMetadataTypeEnum::from(to_basic_type(ctx, type_store, fn_type))
-        }
-        other => panic!("unsupported type {}", other),
+        AType::Struct(_) | AType::Tuple(_) | AType::Enum(_) => BasicMetadataTypeEnum::from(
+            to_basic_type(ctx, type_store, typ).ptr_type(AddressSpace::default()),
+        ),
+
+        other => BasicMetadataTypeEnum::from(to_basic_type(ctx, type_store, other)),
     }
 }

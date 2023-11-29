@@ -197,7 +197,7 @@ impl EnumType {
 }
 
 /// Represents enum variant initialization.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct EnumVariantInit {
     pub enum_type: Type,
     pub variant_name: String,
@@ -229,6 +229,14 @@ impl Display for EnumVariantInit {
         }
 
         Ok(())
+    }
+}
+
+impl Hash for EnumVariantInit {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.enum_type.hash(state);
+        self.variant_name.hash(state);
+        self.maybe_value.hash(state);
     }
 }
 

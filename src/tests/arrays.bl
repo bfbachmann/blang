@@ -1,0 +1,39 @@
+// This program is for testing the compilation and execution of code
+// that makes use of arrays: fixed-size, stack-allocated chunks of 
+// memory that contain continguous values of the same type.
+
+extern fn exit(code: u64)
+
+struct Thing {}
+
+const SOME_BOOL = true
+const SOME_ARRAY_LEN = 100
+
+// Check that arrays can be declared constant at the module level.
+const SOME_ARRAY = [SOME_BOOL; SOME_ARRAY_LEN as u64]
+
+fn main() {
+    // Check that array variables can be declared and initialized.
+    {
+        // Initialization using constant expressions.
+        let a: [u64; 3] = [1, 2, 3]
+        let b = ["one", "two", "three"]
+
+        // Constant array declaration at the function level.
+        const c = [{true}, {false}]
+
+        // Initialization usinig repeat count.
+        let d = [Thing{}; 3]
+    }
+
+    // Check that arrays can be passed to and returned from functions.
+    {
+        let result = take([-8, 12])
+    }
+
+    exit(0)
+}
+
+fn take(a: [i64; 2]) ~ [str; 1] {
+    return ["test"]
+}

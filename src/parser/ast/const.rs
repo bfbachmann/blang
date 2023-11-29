@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
@@ -11,13 +12,21 @@ use crate::parser::source::Source;
 use crate::{locatable_impl, util};
 
 /// Represents a single module-level constant declaration.
-#[derive(Debug, Clone)]
+#[derive(Debug, Eq, Clone)]
 pub struct Const {
     pub name: String,
     pub maybe_type: Option<Type>,
     pub value: Expression,
     start_pos: Position,
     end_pos: Position,
+}
+
+impl Hash for Const {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.maybe_type.hash(state);
+        self.value.hash(state);
+    }
 }
 
 impl PartialEq for Const {
@@ -81,11 +90,17 @@ impl Const {
 }
 
 /// Represents a `const` statement that declares a set of module-level constants.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ConstBlock {
     pub consts: Vec<Const>,
     start_pos: Position,
     end_pos: Position,
+}
+
+impl Hash for ConstBlock {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.consts.hash(state);
+    }
 }
 
 impl Clone for ConstBlock {

@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
@@ -11,11 +12,17 @@ use crate::parser::source::Source;
 use crate::{locatable_impl, util};
 
 /// Represents a set of external function declarations.
-#[derive(Debug)]
+#[derive(Debug, Eq)]
 pub struct Extern {
     pub fn_sigs: Vec<FunctionSignature>,
     start_pos: Position,
     end_pos: Position,
+}
+
+impl Hash for Extern {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.fn_sigs.hash(state);
+    }
 }
 
 impl PartialEq for Extern {

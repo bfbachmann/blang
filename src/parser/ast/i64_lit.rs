@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 use colored::Colorize;
 
@@ -11,13 +12,20 @@ use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 
 /// Represents a signed 64 bit integer literal.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct I64Lit {
     pub value: i64,
     /// Will be true if the i64 literal in the source code included the explicit "i64" suffix.
     pub has_type_suffix: bool,
     pub start_pos: Position,
     pub end_pos: Position,
+}
+
+impl Hash for I64Lit {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+        self.has_type_suffix.hash(state);
+    }
 }
 
 impl Display for I64Lit {

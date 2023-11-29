@@ -1,3 +1,5 @@
+use std::hash::{Hash, Hasher};
+
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
@@ -7,10 +9,16 @@ use crate::parser::error::ParseResult;
 use crate::parser::source::Source;
 
 /// Represents a break statement.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Break {
     pub start_pos: Position,
     pub end_pos: Position,
+}
+
+impl Hash for Break {
+    fn hash<H: Hasher>(&self, _: &mut H) {
+        // Nothing to do here. All breaks should hash to the same value.
+    }
 }
 
 locatable_impl!(Break);

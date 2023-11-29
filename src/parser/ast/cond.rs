@@ -1,5 +1,6 @@
 use std::fmt;
 use std::fmt::Formatter;
+use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
@@ -11,11 +12,17 @@ use crate::parser::source::Source;
 use crate::{locatable_impl, util};
 
 /// Represents a conditional (i.e. branching if/else if/else statements).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct Conditional {
     pub branches: Vec<Branch>,
     pub start_pos: Position,
     pub end_pos: Position,
+}
+
+impl Hash for Conditional {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.branches.hash(state);
+    }
 }
 
 impl fmt::Display for Conditional {

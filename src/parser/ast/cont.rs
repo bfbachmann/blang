@@ -1,3 +1,5 @@
+use std::hash::{Hash, Hasher};
+
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
@@ -7,10 +9,16 @@ use crate::parser::error::ParseResult;
 use crate::parser::source::Source;
 
 /// Represents a continue statement.
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Continue {
     pub start_pos: Position,
     pub end_pos: Position,
+}
+
+impl Hash for Continue {
+    fn hash<H: Hasher>(&self, _: &mut H) {
+        // All continue statements are the same, so there's nothing to do here.
+    }
 }
 
 locatable_impl!(Continue);

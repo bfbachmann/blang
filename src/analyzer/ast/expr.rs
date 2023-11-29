@@ -3,6 +3,7 @@ use std::fmt::Formatter;
 
 use colored::Colorize;
 
+use crate::analyzer::ast::array::AArrayInit;
 use crate::analyzer::ast::closure::AClosure;
 use crate::analyzer::ast::fn_call::AFnCall;
 use crate::analyzer::ast::func::{AFn, AFnSig};
@@ -10,9 +11,9 @@ use crate::analyzer::ast::pointer::APointerType;
 use crate::analyzer::ast::r#enum::{AEnumTypeVariant, AEnumVariantInit};
 use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::ast::symbol::ASymbol;
+use crate::analyzer::ast::symbol::{AMemberAccess, ASymbol};
 use crate::analyzer::ast::tuple::ATupleInit;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
 use crate::analyzer::type_store::TypeKey;
@@ -36,6 +37,7 @@ pub enum AExprKind {
     StructInit(AStructInit),
     EnumInit(AEnumVariantInit),
     TupleInit(ATupleInit),
+    ArrayInit(AArrayInit),
     FunctionCall(AFnCall),
     AnonFunction(Box<AFn>),
     UnaryOperation(Operator, Box<AExpr>),
@@ -59,6 +61,7 @@ impl fmt::Display for AExprKind {
             AExprKind::StructInit(s) => write!(f, "{}", s),
             AExprKind::EnumInit(e) => write!(f, "{}", e),
             AExprKind::TupleInit(t) => write!(f, "{}", t),
+            AExprKind::ArrayInit(a) => write!(f, "{}", a),
             AExprKind::FunctionCall(call) => write!(f, "{}", call),
             AExprKind::AnonFunction(func) => write!(f, "{}", *func),
             AExprKind::UnaryOperation(op, expr) => write!(f, "{} {}", op, expr),
@@ -86,6 +89,7 @@ impl PartialEq for AExprKind {
             (AExprKind::StructInit(s1), AExprKind::StructInit(s2)) => s1 == s2,
             (AExprKind::EnumInit(e1), AExprKind::EnumInit(e2)) => e1 == e2,
             (AExprKind::TupleInit(t1), AExprKind::TupleInit(t2)) => t1 == t2,
+            (AExprKind::ArrayInit(a1), AExprKind::ArrayInit(a2)) => a1 == a2,
             (AExprKind::FunctionCall(f1), AExprKind::FunctionCall(f2)) => f1 == f2,
             (AExprKind::AnonFunction(a1), AExprKind::AnonFunction(a2)) => a1 == a2,
             (AExprKind::UnaryOperation(o1, e1), AExprKind::UnaryOperation(o2, e2)) => {
@@ -151,6 +155,17 @@ impl AExprKind {
                 true
             }
 
+            // Array values are constants if all their fields are constants.
+            AExprKind::ArrayInit(array_init) => {
+                for val in &array_init.values {
+                    if !val.kind.is_const() {
+                        return false;
+                    }
+                }
+
+                true
+            }
+
             // Symbols can be constants.
             AExprKind::Symbol(sym) => sym.is_const,
 
@@ -174,6 +189,7 @@ impl AExprKind {
             AExprKind::StructInit(s) => s.display(ctx),
             AExprKind::EnumInit(e) => e.display(ctx),
             AExprKind::TupleInit(t) => t.display(ctx),
+            AExprKind::ArrayInit(a) => a.display(ctx),
             AExprKind::FunctionCall(call) => call.display(ctx),
             AExprKind::AnonFunction(func) => func.display(ctx),
             AExprKind::UnaryOperation(op, expr) => format!("{} {}", op, expr.display(ctx)),
@@ -325,10 +341,49 @@ impl AExpr {
             }
 
             Expression::TupleInit(tuple_init) => {
-                let a_init = ATupleInit::from(ctx, &tuple_init);
+                let maybe_expected_field_type_keys = match maybe_expected_type_key {
+                    Some(tk) => {
+                        if let AType::Tuple(tuple_type) = ctx.must_get_type(tk) {
+                            let mut field_type_keys = Vec::with_capacity(tuple_type.fields.len());
+                            for i in 0..tuple_type.fields.len() {
+                                field_type_keys
+                                    .insert(i, tuple_type.get_field_type_key(i).unwrap());
+                            }
+
+                            Some(field_type_keys)
+                        } else {
+                            None
+                        }
+                    }
+                    None => None,
+                };
+
+                let a_init = ATupleInit::from(ctx, &tuple_init, maybe_expected_field_type_keys);
                 let type_key = a_init.type_key;
                 AExpr {
                     kind: AExprKind::TupleInit(a_init),
+                    type_key,
+                    start_pos,
+                    end_pos,
+                }
+            }
+
+            Expression::ArrayInit(array_init) => {
+                let maybe_element_type_key = match maybe_expected_type_key {
+                    Some(tk) => {
+                        if let AType::Array(array_type) = ctx.must_get_type(tk) {
+                            array_type.maybe_element_type_key
+                        } else {
+                            None
+                        }
+                    }
+                    None => None,
+                };
+
+                let a_init = AArrayInit::from(ctx, &array_init, maybe_element_type_key);
+                let type_key = a_init.type_key;
+                AExpr {
+                    kind: AExprKind::ArrayInit(a_init),
                     type_key,
                     start_pos,
                     end_pos,
@@ -554,7 +609,7 @@ impl AExpr {
 
         if !allow_templated_result {
             // Make sure the resulting type is not still templated. If it is, coercion/rendering failed.
-            let actual_type = ctx.must_get_type(result.type_key).clone();
+            let actual_type = ctx.must_get_type(result.type_key);
             if actual_type.is_templated() {
                 ctx.insert_err(AnalyzeError::new(
                     ErrorKind::UnresolvedTmplParams,
@@ -748,6 +803,13 @@ impl AExpr {
                 end_pos,
             },
 
+            Type::Array(_) => AExpr {
+                kind: AExprKind::ArrayInit(AArrayInit::new_empty(ctx)),
+                type_key,
+                start_pos,
+                end_pos,
+            },
+
             Type::Function(_) => AExpr {
                 kind: AExprKind::AnonFunction(Box::new(AFn {
                     signature: AFnSig {
@@ -784,6 +846,82 @@ impl AExpr {
             }
 
             Type::Pointer(_) => AExpr::new_null_ptr(ctx),
+        }
+    }
+
+    /// Tries to compute the value of this expression as a u64. Returns an error if this expression
+    /// does not result in a constant u64 value.
+    pub fn try_into_const_u64(&self, ctx: &mut ProgramContext) -> AnalyzeResult<u64> {
+        let expr = self.clone().try_coerce_to(ctx, ctx.u64_type_key());
+
+        let err = Err(AnalyzeError::new(
+            ErrorKind::InvalidArraySize,
+            format_code!(
+                "expected constant expression of type {}, but found {}",
+                "u64",
+                self.display(ctx)
+            )
+            .as_str(),
+            self,
+        ));
+
+        if !expr.kind.is_const()
+            || !ctx
+                .must_get_type(expr.type_key)
+                .is_same_as(ctx, &AType::U64)
+        {
+            return err;
+        }
+
+        let result = match &expr.kind {
+            AExprKind::Symbol(symbol) => {
+                let const_value = ctx.get_const_value(symbol.name.as_str()).unwrap().clone();
+
+                match &symbol.member_access {
+                    Some(access) => {
+                        return try_get_const_member_value_as_u64(ctx, &const_value, access)
+                    }
+                    None => return const_value.try_into_const_u64(ctx),
+                }
+            }
+
+            AExprKind::I64Literal(i, _) => match i {
+                0 => None,
+                _ => Some(*i as u64),
+            },
+
+            AExprKind::U64Literal(u, _) => match u {
+                0 => None,
+                _ => Some(*u),
+            },
+
+            AExprKind::BinaryOperation(left_expr, op, right_expr) => {
+                let left = left_expr.try_into_const_u64(ctx).unwrap();
+                let right = right_expr.try_into_const_u64(ctx).unwrap();
+                match op {
+                    Operator::Add => Some(left + right),
+                    Operator::Subtract => Some(left - right),
+                    Operator::Multiply => Some(left * right),
+                    Operator::Divide => Some(left / right),
+                    Operator::Modulo => Some(left % right),
+                    other => panic!("unexpected operator {}", other),
+                }
+            }
+
+            AExprKind::TypeCast(expr, target_type_key) => {
+                // At this point we already know that the expression can be cast to u64 because
+                // we checked its type above.
+                let mut expr = expr.clone();
+                expr.type_key = *target_type_key;
+                return expr.try_into_const_u64(ctx);
+            }
+
+            other => panic!("cannot evaluate expression {} as constant u64", other),
+        };
+
+        match result {
+            Some(v) => Ok(v),
+            None => err,
         }
     }
 }
@@ -976,6 +1114,32 @@ fn get_expected_operand_type_key(
 
         // If this happens, the something is badly broken.
         other => panic!("unexpected operator {}", other),
+    }
+}
+
+/// Tries to compute the value of a member access as a u64.
+fn try_get_const_member_value_as_u64(
+    ctx: &mut ProgramContext,
+    const_value: &AExpr,
+    member_access: &AMemberAccess,
+) -> AnalyzeResult<u64> {
+    let member_value = match &const_value.kind {
+        AExprKind::StructInit(struct_init) => struct_init
+            .field_values
+            .get(member_access.member_name.as_str())
+            .unwrap(),
+
+        AExprKind::TupleInit(tuple_init) => {
+            let member_index = member_access.member_name.parse::<usize>().unwrap();
+            tuple_init.values.get(member_index).unwrap()
+        }
+
+        other => panic!("unexpected member access: {}", other),
+    };
+
+    match &member_access.submember {
+        Some(sub) => try_get_const_member_value_as_u64(ctx, member_value, sub),
+        None => member_value.try_into_const_u64(ctx),
     }
 }
 

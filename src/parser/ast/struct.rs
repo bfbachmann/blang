@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
@@ -168,13 +167,13 @@ impl StructType {
 }
 
 /// Represents struct initialization.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructInit {
     /// Type should only ever be `Type::Unresolved` (for named struct types) or `Type::Struct` (for
     /// struct types defined inline).
     pub typ: Type,
     /// Maps struct field name to the value assigned to it.
-    pub field_values: HashMap<String, Expression>,
+    pub field_values: Vec<(String, Expression)>,
     pub start_pos: Position,
     pub end_pos: Position,
 }
@@ -185,12 +184,10 @@ impl Display for StructInit {
     }
 }
 
-impl PartialEq for StructInit {
-    fn eq(&self, other: &Self) -> bool {
-        self.typ == other.typ
-            && util::hashmaps_eq(&self.field_values, &other.field_values)
-            && self.start_pos == other.start_pos
-            && self.end_pos == other.end_pos
+impl Hash for StructInit {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.typ.hash(state);
+        self.field_values.hash(state);
     }
 }
 
@@ -263,7 +260,7 @@ impl StructInit {
         Source::parse_expecting(tokens, TokenKind::LeftBrace)?;
 
         // Parse struct field assignments until we hit `}`.
-        let mut field_values = HashMap::new();
+        let mut field_values = vec![];
         loop {
             match tokens.next() {
                 Some(&Token {
@@ -283,7 +280,7 @@ impl StructInit {
                     let field_name = field_name.clone();
                     Source::parse_expecting(tokens, TokenKind::Colon)?;
                     let value = Expression::from(tokens, false)?;
-                    field_values.insert(field_name, value);
+                    field_values.push((field_name, value));
 
                     // Parse the optional comma.
                     Source::parse_optional(tokens, TokenKind::Comma);
