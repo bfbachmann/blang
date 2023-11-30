@@ -6,6 +6,7 @@ const {
         i: 987
         b: false
     }
+    STRUCT_I = STRUCT.i
     TUPLE = {345, true}
     NULL = 0u64 as rawptr
     PTR = NULL
@@ -37,6 +38,11 @@ fn main() {
     assert(ENUM_ERR ~== Result::Err("failed"), 8)
     assert(SAME_STRS, 9)
     assert(STR != "not the same", 10)
+    assert(STRUCT_I == 987, 11)
+
+    // Make sure constant declaration is allows inside functions.
+    const THING: str = "test"
+    assert(THING == "test", 12)
 
     exit(0)
 }

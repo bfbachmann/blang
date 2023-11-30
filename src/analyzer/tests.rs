@@ -1063,4 +1063,16 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::InvalidArraySize));
     }
+
+    #[test]
+    fn array_elem_type_mismatch() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let x: [bool; 2] = [true, "test"]
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
 }
