@@ -1037,4 +1037,30 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::MismatchedTypes));
     }
+
+    #[test]
+    fn non_const_array_len() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let len: u64 = 2 
+                let x = [1; len] 
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::InvalidArraySize));
+    }
+
+    #[test]
+    fn non_const_array_type_len() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let len: u64 = 2
+                let x: [bool; len] = [true, false]
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::InvalidArraySize));
+    }
 }

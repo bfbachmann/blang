@@ -4,6 +4,8 @@
 
 extern fn exit(code: u64)
 
+fn do_nothing() {}
+
 struct Thing {}
 
 const SOME_BOOL = true
@@ -19,6 +21,10 @@ fn main() {
         let a: [u64; 3] = [1, 2, 3]
         let b = ["one", "two", "three"]
 
+        // Make sure empty arrays are allowed.
+        let empty: [] = []
+        let empty: [u64; 0] = [1; 0]
+
         // Constant array declaration at the function level.
         const c = [{true}, {false}]
 
@@ -29,6 +35,11 @@ fn main() {
     // Check that arrays can be passed to and returned from functions.
     {
         let result = take([-8, 12])
+    }
+
+    // Check that array type equality works.
+    {
+        let x: [fn (); 1] = [do_nothing]
     }
 
     exit(0)

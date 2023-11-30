@@ -202,6 +202,8 @@ impl AType {
     pub fn is_same_as(&self, ctx: &ProgramContext, other: &AType) -> bool {
         match (self, other) {
             (AType::Function(f1), AType::Function(f2)) => f1.is_same_as(ctx, f2),
+            (AType::Tuple(t1), AType::Tuple(t2)) => t1.is_same_as(ctx, t2),
+            (AType::Array(a1), AType::Array(a2)) => a1.is_same_as(ctx, a2),
             (a, b) => a == b,
         }
     }

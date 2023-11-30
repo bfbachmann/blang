@@ -7,7 +7,6 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::tuple::{TupleInit, TupleType};
-use crate::util;
 
 /// Represents an analyzed tuple type. Tuples are essentially the same as structs, only tuple types
 /// cannot be named like struct types, and tuple fields are accessed by field index.
@@ -95,10 +94,29 @@ impl ATupleType {
 
         s + format!("}}").as_str()
     }
+
+    /// Returns true if this tuple type is the same as `other`. Tuple types are considered the same
+    /// if they contain types that are considered the same in the same order.
+    pub fn is_same_as(&self, ctx: &ProgramContext, other: &ATupleType) -> bool {
+        if self.fields.len() != other.fields.len() {
+            return false;
+        }
+
+        for (field1, field2) in self.fields.iter().zip(other.fields.iter()) {
+            let type1 = ctx.must_get_type(field1.type_key);
+            let type2 = ctx.must_get_type(field2.type_key);
+
+            if !type1.is_same_as(ctx, type2) {
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
 /// Tuple initialization.
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ATupleInit {
     pub type_key: TypeKey,
     pub values: Vec<AExpr>,
@@ -119,12 +137,6 @@ impl Display for ATupleInit {
         write!(f, "}}")?;
 
         Ok(())
-    }
-}
-
-impl PartialEq for ATupleInit {
-    fn eq(&self, other: &Self) -> bool {
-        self.type_key == other.type_key && util::vecs_eq(&self.values, &other.values)
     }
 }
 

@@ -885,15 +885,15 @@ impl AExpr {
                 }
             }
 
-            AExprKind::I64Literal(i, _) => match i {
-                0 => None,
-                _ => Some(*i as u64),
-            },
+            AExprKind::I64Literal(i, _) => {
+                if *i < 0 {
+                    None
+                } else {
+                    Some(*i as u64)
+                }
+            }
 
-            AExprKind::U64Literal(u, _) => match u {
-                0 => None,
-                _ => Some(*u),
-            },
+            AExprKind::U64Literal(u, _) => Some(*u),
 
             AExprKind::BinaryOperation(left_expr, op, right_expr) => {
                 let left = left_expr.try_into_const_u64(ctx).unwrap();

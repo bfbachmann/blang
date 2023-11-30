@@ -10,10 +10,20 @@ use crate::analyzer::type_store::TypeKey;
 use crate::parser::ast::array::{ArrayInit, ArrayType};
 
 /// An array type declaration.
-#[derive(Clone, PartialEq, Hash, Eq, Debug)]
+#[derive(Clone, Hash, Eq, Debug)]
 pub struct AArrayType {
     pub maybe_element_type_key: Option<TypeKey>,
     pub len: u64,
+}
+
+impl PartialEq for AArrayType {
+    fn eq(&self, other: &Self) -> bool {
+        // Empty array types are always equivalent.
+        let both_empty = self.len == 0 && other.len == 0;
+        both_empty
+            || (self.maybe_element_type_key == other.maybe_element_type_key
+                && self.len == other.len)
+    }
 }
 
 impl Display for AArrayType {
@@ -73,6 +83,26 @@ impl AArrayType {
 
             None => "[]".to_string(),
         }
+    }
+
+    /// Returns true if this array type is the same as `other`. Array types are considered the same
+    /// if they have the same length and have element types that are considered the same.
+    pub fn is_same_as(&self, ctx: &ProgramContext, other: &AArrayType) -> bool {
+        if self.len != other.len {
+            return false;
+        }
+
+        if self.maybe_element_type_key.is_none() != other.maybe_element_type_key.is_none() {
+            return false;
+        }
+
+        if self.maybe_element_type_key.is_none() && other.maybe_element_type_key.is_none() {
+            return true;
+        }
+
+        let elem_type1 = ctx.must_get_type(self.maybe_element_type_key.unwrap());
+        let elem_type2 = ctx.must_get_type(other.maybe_element_type_key.unwrap());
+        elem_type1.is_same_as(ctx, elem_type2)
     }
 }
 

@@ -6,6 +6,8 @@ fn assert(b: bool, code: u64) {
     }
 }
 
+fn do_nothing() {}
+
 fn main() {
     // Check that tuple initialization and assignment works.
     {
@@ -46,6 +48,12 @@ fn main() {
 
         t.1 = {-99}
         assert(t.1.0 == -99, 13)
+    }
+
+    // Check that tuple types that contain the same types are considered
+    // matching.
+    {
+        let t: {fn ()} = {do_nothing}
     }
 
     exit(0)

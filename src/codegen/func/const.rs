@@ -91,6 +91,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
 
             AExprKind::ArrayInit(array_init) => {
+                // Just return an empty array if there is no element type (this can only happen
+                // if the array is actually empty).
+                if array_init.maybe_element_type_key.is_none() {
+                    return self.ctx.i8_type().const_array(&[]).as_basic_value_enum();
+                }
+
                 let ll_element_type = self
                     .type_converter
                     .get_basic_type(array_init.maybe_element_type_key.unwrap());
