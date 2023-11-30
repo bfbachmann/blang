@@ -2,9 +2,11 @@
 
 _A simple, statically typed, ahead-of-time compiled programming language written in Rust._
 
-## Examples
+## Documentation
 
-See [src/tests](src/tests).
+See [docs](docs/README.md) for high-level language documentation.
+
+See [src/tests](src/tests) for runnable examples.
 
 ## Development Requirements
 
