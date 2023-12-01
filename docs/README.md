@@ -1,7 +1,7 @@
 # The Blang Programming Language
 
-Blang is a statically-typed, ahead-of-time (AOT) compiled programming language that is heavily inspired by Rust. It is 
-still under active development.
+Blang is a statically-typed, ahead-of-time (AOT) compiled toy programming language that is heavily inspired by Rust. It is 
+still under active development and is not intended to be a legitimate production-ready language.
 
 ## Goals
 
