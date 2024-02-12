@@ -1060,4 +1060,60 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::MismatchedTypes));
     }
+
+    #[test]
+    fn call_chain() {
+        let result = analyze(
+            r#"
+            impl i64 {
+                fn add(self, v: i64) ~ i64 { return self + v }
+            }
+            
+            struct Thing {
+                i: i64
+            }
+            
+            impl Thing {
+                fn new(i: i64) ~ Thing {
+                    return Thing{
+                        i: i
+                    }
+                }
+            }
+            
+            fn main() {
+                let t = Thing.new(74).i.add(2)
+            }
+            "#,
+        );
+        check_result(result, None);
+    }
+
+    #[test]
+    fn invalid_call_chain() {
+        let result = analyze(
+            r#"
+            impl i64 {
+                fn add(self, v: i64) ~ i64 { return self + v }
+            }
+            
+            struct Thing {
+                i: u64
+            }
+            
+            impl Thing {
+                fn new(i: u64) ~ Thing {
+                    return Thing{
+                        i: i
+                    }
+                }
+            }
+            
+            fn main() {
+                let t = Thing.new(74).i.add(2)
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::UndefMember));
+    }
 }

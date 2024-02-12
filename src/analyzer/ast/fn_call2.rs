@@ -43,7 +43,7 @@ impl AFnCall2 {
         let placeholder = AFnCall2 {
             fn_expr: fn_expr.clone(),
             args: vec![],
-            maybe_ret_type_key: None,
+            maybe_ret_type_key: Some(ctx.unknown_type_key()),
         };
 
         // Return a placeholder value if the expression already failed analysis or has the wrong

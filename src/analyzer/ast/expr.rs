@@ -457,29 +457,42 @@ impl AExpr {
             Expression::FunctionCall2(fn_call) => {
                 // Analyze the function call and ensure it has a return type.
                 let a_call = AFnCall2::from(ctx, fn_call);
-                if let Some(type_key) = a_call.maybe_ret_type_key.clone() {
-                    return AExpr {
+                match a_call.maybe_ret_type_key.clone() {
+                    Some(type_key) if type_key == ctx.unknown_type_key() => {
+                        // The function call already failed analysis, so we can just return a placeholder value.
+                        AExpr::new_zero_value(
+                            ctx,
+                            Type::Unresolved(UnresolvedType::unresolved_none()),
+                        )
+                    }
+
+                    Some(type_key) => AExpr {
                         kind: AExprKind::FunctionCall2(Box::new(a_call)),
                         type_key,
                         start_pos,
                         end_pos,
-                    };
+                    },
+
+                    _ => {
+                        // The function does not have a return value. Record the error and return some
+                        // zero-value instead.
+                        ctx.insert_err(AnalyzeError::new(
+                            ErrorKind::ExpectedReturnValue,
+                            format_code!(
+                                "{} has no return value, but is called in an expression \
+                                where a return value is expected",
+                                a_call.display(ctx),
+                            )
+                            .as_str(),
+                            fn_call.as_ref(),
+                        ));
+
+                        AExpr::new_zero_value(
+                            ctx,
+                            Type::Unresolved(UnresolvedType::unresolved_none()),
+                        )
+                    }
                 }
-
-                // The function does not have a return value. Record the error and return some
-                // zero-value instead.
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::ExpectedReturnValue,
-                    format_code!(
-                        "{} has no return value, but is called in an expression \
-                        where a return value is expected",
-                        a_call.display(ctx),
-                    )
-                    .as_str(),
-                    fn_call.as_ref(),
-                ));
-
-                AExpr::new_zero_value(ctx, Type::Unresolved(UnresolvedType::unresolved_none()))
             }
 
             Expression::Index(_) => {
