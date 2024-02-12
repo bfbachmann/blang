@@ -587,11 +587,11 @@ impl ProgramContext {
         self.search_stack_ref(|scope| scope.get_symbol(name))
     }
 
-    /// Adds the given function to the program context so it can be looked up by full name in the
+    /// Adds the given function to the program context, so it can be looked up by full name in the
     /// future. This function should only be used for adding non-templated (non-generic) functions.
     pub fn insert_fn(&mut self, func: AFn) {
         assert!(!func.signature.is_templated());
-        self.funcs.insert(func.signature.full_name(), func);
+        self.funcs.insert(func.signature.mangled_name.clone(), func);
     }
 
     /// Tries to locate and return the function with the given full name.

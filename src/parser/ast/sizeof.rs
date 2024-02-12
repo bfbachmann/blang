@@ -10,7 +10,9 @@ use crate::parser::ast::r#type::Type;
 use crate::parser::error::ParseResult;
 use crate::parser::source::Source;
 
-/// Represents a `sizeof` statement.
+/// Represents a `sizeof` statement. Note that `sizeof` expressions are not
+/// considered unary operations (i.e. `sizeof` is not an operator) because
+/// the would-be operand is a type rather than an expression.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SizeOf {
     pub typ: Type,

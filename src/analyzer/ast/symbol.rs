@@ -16,8 +16,8 @@ use crate::{format_code, locatable_impl, util};
 #[derive(Debug, Clone)]
 pub struct ASymbol {
     pub name: String,
-    /// The type key of the parent symbol (i.e. not the member(s) being accessed).
-    pub parent_type_key: TypeKey,
+    /// The type key of the base symbol (i.e. not the member(s) being accessed).
+    pub base_type_key: TypeKey,
     pub member_access: Option<AMemberAccess>,
     /// This will be set to true if the name of this symbol matches a type name and no variable
     /// names. If this is the case, the `var_type_key` field will hold the ID of the matching type.
@@ -52,7 +52,7 @@ impl Display for ASymbol {
 impl PartialEq for ASymbol {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
-            && self.parent_type_key == other.parent_type_key
+            && self.base_type_key == other.base_type_key
             && util::opts_eq(&self.member_access, &other.member_access)
     }
 }
@@ -66,7 +66,7 @@ impl ASymbol {
     ) -> Self {
         ASymbol {
             name: name.to_string(),
-            parent_type_key: type_key,
+            base_type_key: type_key,
             member_access,
             is_type: false,
             is_const: false,
@@ -80,10 +80,13 @@ impl ASymbol {
     /// Attempts to analyze the symbol (including member accesses). If `include_fns` is
     /// `true`, functions and extern functions will also be searched for the symbol name.
     /// Otherwise, only variables, types, and constants will be searched.
+    /// If `allow_type` is true, the symbol can refer to a type. Otherwise, an error
+    /// will be raised if the symbol refers to a type rather than a value.
     pub fn from(
         ctx: &mut ProgramContext,
         symbol: &Symbol,
         include_fns: bool,
+        allow_type: bool,
         maybe_impl_type_key: Option<TypeKey>,
     ) -> Self {
         let var_name = symbol.name.as_str();
@@ -147,7 +150,7 @@ impl ASymbol {
 
         // If there is no member access, we need to make sure the symbol is not just a type. This
         // prevents types from being valid expressions.
-        if var_is_type && member_access.is_none() {
+        if !allow_type && var_is_type && member_access.is_none() {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::ExpectedExpr,
                 format_code!(
@@ -173,7 +176,7 @@ impl ASymbol {
 
         ASymbol {
             name: var_name.to_string(),
-            parent_type_key: var_type_key,
+            base_type_key: var_type_key,
             member_access,
             is_type: var_is_type,
             is_const,
@@ -189,7 +192,7 @@ impl ASymbol {
     pub fn get_type_key(&self) -> TypeKey {
         match &self.member_access {
             Some(ma) => ma.get_type_key(),
-            None => self.parent_type_key,
+            None => self.base_type_key,
         }
     }
 

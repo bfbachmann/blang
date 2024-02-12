@@ -13,18 +13,14 @@ pub enum ErrorKind {
     ExpectedExprOrCloseParen,
     ExpectedBasicExpr,
     ExpectedBeginExpr,
-    ExpectedBinOpOrEndOfExpr,
     ExpectedIdent,
     ExpectedArgOrEndOfArgs,
     ExpectedType,
     ExpectedModPath,
-    UnexpectedOperator,
-    UnmatchedCloseParen,
-    UnmatchedOpenParen,
+    ExpectedStatement,
     UnexpectedEndOfExpr,
     UnexpectedToken,
     UnexpectedEOF,
-    UseOfDoubleNegative,
 }
 
 impl Display for ErrorKind {
@@ -34,20 +30,14 @@ impl Display for ErrorKind {
             ErrorKind::ExpectedExprOrCloseParen => write!(f, "expected expression or )"),
             ErrorKind::ExpectedBasicExpr => write!(f, "expected basic expression"),
             ErrorKind::ExpectedBeginExpr => write!(f, "expected beginning of expression"),
-            ErrorKind::ExpectedBinOpOrEndOfExpr => {
-                write!(f, "expected binary operator or end of expression")
-            }
             ErrorKind::ExpectedIdent => write!(f, "expected identifier"),
             ErrorKind::ExpectedArgOrEndOfArgs => write!(f, "expected argument or )"),
             ErrorKind::ExpectedType => write!(f, "expected type"),
             ErrorKind::ExpectedModPath => write!(f, "expected module path"),
-            ErrorKind::UnexpectedOperator => write!(f, "expected operator"),
-            ErrorKind::UnmatchedCloseParen => write!(f, "unexpected )"),
-            ErrorKind::UnmatchedOpenParen => write!(f, "unexpected ("),
+            ErrorKind::ExpectedStatement => write!(f, "expected statement"),
             ErrorKind::UnexpectedEndOfExpr => write!(f, "unexpected end of expression"),
             ErrorKind::UnexpectedToken => write!(f, "unexpected token"),
             ErrorKind::UnexpectedEOF => write!(f, "unexpected EOF"),
-            ErrorKind::UseOfDoubleNegative => write!(f, "use of double negative"),
         }
     }
 }

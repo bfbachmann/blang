@@ -334,6 +334,7 @@ impl AEnumVariantInit {
                     value.as_ref().clone(),
                     variant.maybe_type_key,
                     false,
+                    false,
                 )))
             }
             None => {

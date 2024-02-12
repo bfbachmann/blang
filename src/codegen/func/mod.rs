@@ -226,7 +226,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // TODO: This will panic when accessing nested functions.
         let fn_val = self
             .module
-            .get_function(func.signature.full_name().as_str())
+            .get_function(func.signature.mangled_name.as_str())
             .unwrap();
         self.fn_value = Some(fn_val);
 
@@ -292,7 +292,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             Err(CodeGenError::new(
                 ErrorKind::FnVerificationFailed,
-                format_code!("failed to verify function {}", func.signature.full_name()).as_str(),
+                format_code!("failed to verify function {}", func.signature.mangled_name).as_str(),
             ))
         }
     }

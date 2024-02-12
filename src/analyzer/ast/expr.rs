@@ -6,7 +6,9 @@ use colored::Colorize;
 use crate::analyzer::ast::array::AArrayInit;
 use crate::analyzer::ast::closure::AClosure;
 use crate::analyzer::ast::fn_call::AFnCall;
+use crate::analyzer::ast::fn_call2::AFnCall2;
 use crate::analyzer::ast::func::{AFn, AFnSig};
+use crate::analyzer::ast::member::AMemberAccess2;
 use crate::analyzer::ast::pointer::APointerType;
 use crate::analyzer::ast::r#enum::{AEnumTypeVariant, AEnumVariantInit};
 use crate::analyzer::ast::r#struct::AStructInit;
@@ -28,6 +30,7 @@ use crate::{format_code, locatable_impl};
 #[derive(Debug, Clone)]
 pub enum AExprKind {
     Symbol(ASymbol),
+    MemberAccess(Box<AMemberAccess2>),
     BoolLiteral(bool),
     /// The bool here will be true if this literal includes an explicit type suffix.
     I64Literal(i64, bool),
@@ -39,6 +42,7 @@ pub enum AExprKind {
     TupleInit(ATupleInit),
     ArrayInit(AArrayInit),
     FunctionCall(AFnCall),
+    FunctionCall2(Box<AFnCall2>),
     AnonFunction(Box<AFn>),
     UnaryOperation(Operator, Box<AExpr>),
     BinaryOperation(Box<AExpr>, Operator, Box<AExpr>),
@@ -50,6 +54,7 @@ impl fmt::Display for AExprKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             AExprKind::Symbol(sym) => write!(f, "{}", sym),
+            AExprKind::MemberAccess(m) => write!(f, "{}", m),
             AExprKind::BoolLiteral(b) => write!(f, "{}", b),
             AExprKind::I64Literal(i, has_suffix) => {
                 write!(f, "{}{}", i, if *has_suffix { "i64" } else { "" })
@@ -63,6 +68,7 @@ impl fmt::Display for AExprKind {
             AExprKind::TupleInit(t) => write!(f, "{}", t),
             AExprKind::ArrayInit(a) => write!(f, "{}", a),
             AExprKind::FunctionCall(call) => write!(f, "{}", call),
+            AExprKind::FunctionCall2(call) => write!(f, "{}", call),
             AExprKind::AnonFunction(func) => write!(f, "{}", *func),
             AExprKind::UnaryOperation(op, expr) => write!(f, "{} {}", op, expr),
             AExprKind::BinaryOperation(left, op, right) => {
@@ -170,11 +176,17 @@ impl AExprKind {
             AExprKind::Symbol(sym) => sym.is_const,
 
             // Function calls and unknown values are never constants.
-            AExprKind::FunctionCall(_) | AExprKind::AnonFunction(_) | AExprKind::Unknown => false,
+            AExprKind::FunctionCall(_)
+            | AExprKind::FunctionCall2(_)
+            | AExprKind::AnonFunction(_)
+            | AExprKind::Unknown => false,
 
             // Type cast expressions are constants if the expressions they're type casting are
             // constants.
             AExprKind::TypeCast(expr, _) => expr.kind.is_const(),
+
+            // Member access expressions are constants if their parent values are constants.
+            AExprKind::MemberAccess(access) => access.base_expr.kind.is_const(),
         }
     }
 
@@ -191,6 +203,7 @@ impl AExprKind {
             AExprKind::TupleInit(t) => t.display(ctx),
             AExprKind::ArrayInit(a) => a.display(ctx),
             AExprKind::FunctionCall(call) => call.display(ctx),
+            AExprKind::FunctionCall2(call) => call.display(ctx),
             AExprKind::AnonFunction(func) => func.display(ctx),
             AExprKind::UnaryOperation(op, expr) => format!("{} {}", op, expr.display(ctx)),
             AExprKind::BinaryOperation(left, op, right) => {
@@ -203,15 +216,22 @@ impl AExprKind {
                     ctx.display_type_for_key(*target_type_key)
                 )
             }
+            AExprKind::MemberAccess(access) => {
+                format!("{}.{}", access.base_expr.display(ctx), access.member_name)
+            }
             AExprKind::Unknown => {
                 format!("<unknown>")
             }
         }
     }
 
-    /// Returns true if this expression kind is a symbol.
-    pub fn is_symbol(&self) -> bool {
-        matches!(self, AExprKind::Symbol(_))
+    /// Returns true if this expression represents a variable or a simple member access on that variable.
+    pub fn is_variable(&self) -> bool {
+        match &self {
+            AExprKind::Symbol(_) => true,
+            AExprKind::MemberAccess(access) => access.base_expr.kind.is_variable(),
+            _ => false,
+        }
     }
 }
 
@@ -239,18 +259,22 @@ impl AExpr {
     /// If `allow_templated_result` is false, this function will check that the resulting expression
     /// type is not templated and record an error if it is. Otherwise, templated result types will
     /// be allowed.
+    /// If `allow_type` is true and the expression is a symbol, the symbol may refer to a type instead
+    /// of a value. Otherwise, if the expression is a symbol that refers to a type, an error will be
+    /// raised.
     pub fn from(
         ctx: &mut ProgramContext,
         expr: Expression,
         maybe_expected_type_key: Option<TypeKey>,
         allow_templated_result: bool,
+        allow_type: bool,
     ) -> AExpr {
         let start_pos = expr.start_pos().clone();
         let end_pos = expr.end_pos().clone();
 
         let mut result = match &expr {
             Expression::TypeCast(expr, target_type) => {
-                let left_expr = AExpr::from(ctx, *expr.clone(), None, false);
+                let left_expr = AExpr::from(ctx, *expr.clone(), None, false, false);
                 let target_type_key = ctx.resolve_type(target_type);
                 let left_type = ctx.must_get_type(left_expr.type_key);
                 let a_target_type = ctx.must_get_type(target_type_key);
@@ -280,7 +304,7 @@ impl AExpr {
             }
 
             Expression::Symbol(ref symbol) => {
-                let a_symbol = ASymbol::from(ctx, symbol, true, None);
+                let a_symbol = ASymbol::from(ctx, symbol, true, allow_type, None);
                 let type_key = a_symbol.get_type_key().clone();
                 AExpr {
                     kind: AExprKind::Symbol(a_symbol),
@@ -415,7 +439,7 @@ impl AExpr {
                 }
 
                 // The function does not have a return value. Record the error and return some
-                // some zero-value instead.
+                // zero-value instead.
                 ctx.insert_err(AnalyzeError::new(
                     ErrorKind::ExpectedReturnValue,
                     format_code!(
@@ -428,6 +452,50 @@ impl AExpr {
                 ));
 
                 AExpr::new_zero_value(ctx, Type::Unresolved(UnresolvedType::unresolved_none()))
+            }
+
+            Expression::FunctionCall2(fn_call) => {
+                // Analyze the function call and ensure it has a return type.
+                let a_call = AFnCall2::from(ctx, fn_call);
+                if let Some(type_key) = a_call.maybe_ret_type_key.clone() {
+                    return AExpr {
+                        kind: AExprKind::FunctionCall2(Box::new(a_call)),
+                        type_key,
+                        start_pos,
+                        end_pos,
+                    };
+                }
+
+                // The function does not have a return value. Record the error and return some
+                // zero-value instead.
+                ctx.insert_err(AnalyzeError::new(
+                    ErrorKind::ExpectedReturnValue,
+                    format_code!(
+                        "{} has no return value, but is called in an expression \
+                        where a return value is expected",
+                        a_call.display(ctx),
+                    )
+                    .as_str(),
+                    fn_call.as_ref(),
+                ));
+
+                AExpr::new_zero_value(ctx, Type::Unresolved(UnresolvedType::unresolved_none()))
+            }
+
+            Expression::Index(_) => {
+                todo!()
+            }
+
+            Expression::MemberAccess(member_access) => {
+                let access = AMemberAccess2::from(ctx, member_access);
+                let type_key = access.member_type_key;
+
+                AExpr {
+                    kind: AExprKind::MemberAccess(Box::new(access)),
+                    type_key,
+                    start_pos,
+                    end_pos,
+                }
             }
 
             Expression::AnonFunction(anon_fn) => {
@@ -459,8 +527,13 @@ impl AExpr {
             Expression::UnaryOperation(ref op, ref right_expr) => {
                 match op {
                     Operator::LogicalNot => {
-                        let a_expr =
-                            AExpr::from(ctx, *right_expr.clone(), Some(ctx.bool_type_key()), false);
+                        let a_expr = AExpr::from(
+                            ctx,
+                            *right_expr.clone(),
+                            Some(ctx.bool_type_key()),
+                            false,
+                            false,
+                        );
 
                         // Make sure the expression has type bool.
                         if !ctx.must_get_type(a_expr.type_key).is_bool() {
@@ -490,7 +563,8 @@ impl AExpr {
                     }
 
                     Operator::Reference => {
-                        let operand_expr = AExpr::from(ctx, *right_expr.clone(), None, false);
+                        let operand_expr =
+                            AExpr::from(ctx, *right_expr.clone(), None, false, false);
                         let a_ptr_type = APointerType::new(operand_expr.type_key);
                         let type_key = ctx.insert_type(AType::Pointer(a_ptr_type));
 
@@ -506,7 +580,8 @@ impl AExpr {
                     }
 
                     Operator::Defererence => {
-                        let operand_expr = AExpr::from(ctx, *right_expr.clone(), None, false);
+                        let operand_expr =
+                            AExpr::from(ctx, *right_expr.clone(), None, false, false);
                         let operand_expr_type = ctx.must_get_type(operand_expr.type_key);
 
                         // Make sure the operand expression is of a pointer type.
@@ -541,6 +616,39 @@ impl AExpr {
                         }
                     }
 
+                    Operator::Subtract => {
+                        let operand_expr =
+                            AExpr::from(ctx, *right_expr.clone(), None, false, false);
+                        let operand_expr_type = ctx.must_get_type(operand_expr.type_key);
+
+                        // Make sure the operand expression is of a numeric type since we'll have to flip its sign.
+                        match operand_expr_type {
+                            AType::I64 => AExpr {
+                                type_key: operand_expr.type_key,
+                                kind: AExprKind::UnaryOperation(
+                                    Operator::Subtract,
+                                    Box::new(operand_expr),
+                                ),
+                                start_pos,
+                                end_pos,
+                            },
+
+                            _ => {
+                                ctx.insert_err(AnalyzeError::new(
+                                    ErrorKind::MismatchedTypes,
+                                    format_code!(
+                                        "cannot negate value of type {}",
+                                        operand_expr_type.display(ctx),
+                                    )
+                                    .as_str(),
+                                    &expr,
+                                ));
+
+                                AExpr::new_zero_value(ctx, Type::new_unresolved("<unknown>"))
+                            }
+                        }
+                    }
+
                     _ => {
                         panic!("unexpected unary operator {}", op)
                     }
@@ -553,11 +661,18 @@ impl AExpr {
                     None => None,
                 };
 
-                let a_left = AExpr::from(ctx, *left_expr.clone(), maybe_expected_operand_tk, false);
+                let a_left = AExpr::from(
+                    ctx,
+                    *left_expr.clone(),
+                    maybe_expected_operand_tk,
+                    false,
+                    false,
+                );
                 // If there is no expected operand type, we should try to coerce the right
                 // expression to the type of the left expression.
                 let expected_tk = maybe_expected_operand_tk.unwrap_or(a_left.type_key);
-                let a_right = AExpr::from(ctx, *right_expr.clone(), Some(expected_tk), false);
+                let a_right =
+                    AExpr::from(ctx, *right_expr.clone(), Some(expected_tk), false, false);
 
                 // If we couldn't resolve both of the operand types, we'll skip any further
                 // type checks by returning early.
@@ -814,8 +929,9 @@ impl AExpr {
                 kind: AExprKind::AnonFunction(Box::new(AFn {
                     signature: AFnSig {
                         name: "".to_string(),
+                        mangled_name: "".to_string(),
                         args: vec![],
-                        ret_type_key: None,
+                        maybe_ret_type_key: None,
                         type_key,
                         maybe_impl_type_key: None,
                         tmpl_params: None,
@@ -1171,7 +1287,7 @@ mod tests {
     fn analyze_i64_literal() {
         let mut ctx = ProgramContext::new();
         let expr = Expression::I64Literal(I64Lit::new_with_default_pos(1));
-        let result = AExpr::from(&mut ctx, expr, None, false);
+        let result = AExpr::from(&mut ctx, expr, None, false, false);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
@@ -1188,7 +1304,7 @@ mod tests {
     fn analyze_bool_literal() {
         let mut ctx = ProgramContext::new();
         let expr = Expression::BoolLiteral(BoolLit::new_with_default_pos(false));
-        let result = AExpr::from(&mut ctx, expr, None, false);
+        let result = AExpr::from(&mut ctx, expr, None, false, false);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
@@ -1205,7 +1321,7 @@ mod tests {
     fn analyze_string_literal() {
         let mut ctx = ProgramContext::new();
         let expr = Expression::StrLiteral(StrLit::new_with_default_pos("test"));
-        let result = AExpr::from(&mut ctx, expr, None, false);
+        let result = AExpr::from(&mut ctx, expr, None, false, false);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
@@ -1226,6 +1342,7 @@ mod tests {
             &mut ctx,
             Expression::Symbol(Symbol::new_with_default_pos("myvar")),
             None,
+            false,
             false,
         );
         assert!(ctx.errors().is_empty());
@@ -1251,6 +1368,7 @@ mod tests {
             &mut ctx,
             Expression::Symbol(Symbol::new_with_default_pos("myvar")),
             None,
+            false,
             false,
         );
         assert_eq!(
@@ -1295,12 +1413,13 @@ mod tests {
         let a_fn = AFn {
             signature: AFnSig {
                 name: "do_thing".to_string(),
+                mangled_name: "do_thing".to_string(),
                 args: vec![AArg {
                     name: "first".to_string(),
                     type_key: ctx.bool_type_key(),
                     is_mut: false,
                 }],
-                ret_type_key: Some(ctx.str_type_key()),
+                maybe_ret_type_key: Some(ctx.str_type_key()),
                 type_key: fn_type_key,
                 maybe_impl_type_key: None,
                 tmpl_params: None,
@@ -1319,7 +1438,7 @@ mod tests {
             vec![Expression::BoolLiteral(BoolLit::new_with_default_pos(true))],
         );
         let call_expr = Expression::FunctionCall(fn_call.clone());
-        let result = AExpr::from(&mut ctx, call_expr, None, false);
+        let result = AExpr::from(&mut ctx, call_expr, None, false, false);
 
         // Check that analysis succeeded.
         assert!(ctx.errors().is_empty());
@@ -1363,8 +1482,9 @@ mod tests {
         let a_fn = AFn {
             signature: AFnSig {
                 name: "do_thing".to_string(),
+                mangled_name: "do_thing".to_string(),
                 args: vec![],
-                ret_type_key: None,
+                maybe_ret_type_key: None,
                 type_key: fn_type_key,
                 maybe_impl_type_key: None,
                 tmpl_params: None,
@@ -1388,6 +1508,7 @@ mod tests {
                 )),
             ),
             None,
+            false,
             false,
         );
 
@@ -1448,6 +1569,7 @@ mod tests {
         let a_fn = AFn {
             signature: AFnSig {
                 name: "do_thing".to_string(),
+                mangled_name: "do_thing".to_string(),
                 args: vec![
                     AArg {
                         name: "arg1".to_string(),
@@ -1460,7 +1582,7 @@ mod tests {
                         is_mut: false,
                     },
                 ],
-                ret_type_key: Some(ctx.bool_type_key()),
+                maybe_ret_type_key: Some(ctx.bool_type_key()),
                 type_key: fn_type_key,
                 maybe_impl_type_key: None,
                 tmpl_params: None,
@@ -1481,6 +1603,7 @@ mod tests {
                 vec![Expression::BoolLiteral(BoolLit::new_with_default_pos(true))],
             )),
             None,
+            false,
             false,
         );
 
@@ -1556,12 +1679,13 @@ mod tests {
         let a_fn = AFn {
             signature: AFnSig {
                 name: "do_thing".to_string(),
+                mangled_name: "do_thing".to_string(),
                 args: vec![AArg {
                     name: "arg".to_string(),
                     type_key: ctx.bool_type_key(),
                     is_mut: false,
                 }],
-                ret_type_key: Some(ctx.bool_type_key()),
+                maybe_ret_type_key: Some(ctx.bool_type_key()),
                 type_key: ctx.resolve_type(&Type::Function(Box::new(fn_sig))),
                 maybe_impl_type_key: None,
                 tmpl_params: None,
@@ -1582,6 +1706,7 @@ mod tests {
                 vec![Expression::I64Literal(I64Lit::new_with_default_pos(1))],
             )),
             None,
+            false,
             false,
         );
 
@@ -1631,6 +1756,7 @@ mod tests {
             ),
             None,
             false,
+            false,
         );
 
         assert_eq!(
@@ -1678,6 +1804,7 @@ mod tests {
                 Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
             ),
             None,
+            false,
             false,
         );
 
@@ -1729,6 +1856,7 @@ mod tests {
             ),
             None,
             false,
+            false,
         );
 
         assert_eq!(
@@ -1764,6 +1892,7 @@ mod tests {
                 Box::new(Expression::StrLiteral(StrLit::new_with_default_pos("s"))),
             ),
             None,
+            false,
             false,
         );
 

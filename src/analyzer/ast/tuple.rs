@@ -163,7 +163,7 @@ impl ATupleInit {
                 None => None,
             };
 
-            let val = AExpr::from(ctx, expr.clone(), maybe_expected_field_type, false);
+            let val = AExpr::from(ctx, expr.clone(), maybe_expected_field_type, false, false);
             field_values.push((
                 AField {
                     name: i.to_string(),

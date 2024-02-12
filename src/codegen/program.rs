@@ -127,7 +127,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
         let fn_type = self.type_converter.get_fn_type(sig.type_key);
         let fn_val = self
             .module
-            .add_function(sig.full_name().as_str(), fn_type, None);
+            .add_function(sig.mangled_name.as_str(), fn_type, None);
 
         // Set arg names and mark arguments as pass-by-value where necessary.
         if fn_val.count_params() == sig.args.len() as u32 {

@@ -5,9 +5,10 @@ use colored::Colorize;
 
 use crate::analyzer::ast::closure::AClosure;
 use crate::analyzer::ast::cond::ACond;
-use crate::analyzer::ast::expr::AExprKind;
+use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::fn_call::AFnCall;
 use crate::analyzer::ast::func::AFn;
+use crate::analyzer::ast::member::AMemberAccess2;
 use crate::analyzer::ast::r#impl::AImpl;
 use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::AType;
@@ -25,7 +26,7 @@ use crate::lexer::pos::{Locatable, Position};
 use crate::{format_code, locatable_impl};
 
 /// Represents the change in ownership of a variable or value.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Move {
     path: Vec<String>,
     start_pos: Position,
@@ -47,6 +48,36 @@ impl Move {
             path: var.to_string().split(".").map(|s| s.to_string()).collect(),
             start_pos: var.start_pos().clone(),
             end_pos: var.end_pos().clone(),
+        }
+    }
+
+    /// Tries to construct a `Move` from the given member access. Some move will only be returned if the member access
+    /// chain is only accessing successive members on a variable (symbol).
+    fn try_from_member_access(access: &AMemberAccess2) -> Option<Move> {
+        match &access.base_expr.kind {
+            AExprKind::Symbol(symbol) => {
+                // This is the base of the member access expression. At this point we know this member access chain is
+                // just accessing some member(s) on a composite type (like a struct or tuple), so we can assemble a
+                // move from the accessed path.
+                Some(Move {
+                    path: vec![symbol.name.clone(), access.member_name.clone()],
+                    start_pos: access.start_pos().clone(),
+                    end_pos: access.end_pos().clone(),
+                })
+            }
+
+            AExprKind::MemberAccess(inner_access) => {
+                match Move::try_from_member_access(inner_access) {
+                    Some(mut mv) => {
+                        mv.end_pos = access.end_pos().clone();
+                        mv.path.push(access.member_name.clone());
+                        Some(mv)
+                    }
+                    None => None,
+                }
+            }
+
+            _ => None,
         }
     }
 
@@ -417,14 +448,17 @@ impl<'a> MoveChecker<'a> {
             AExprKind::Symbol(var) => {
                 self.check_var(var);
             }
+            AExprKind::MemberAccess(access) => {
+                self.check_member_access(access);
+            }
             AExprKind::FunctionCall(call) => {
                 self.check_fn_call(call);
             }
             AExprKind::BinaryOperation(left, op, right) => {
                 // Comparisons should not cause moves of their immediate operands since they don't
                 // require copying data.
-                let skip_left_check = op.is_comparator() && left.kind.is_symbol();
-                let skip_right_check = op.is_comparator() && right.kind.is_symbol();
+                let skip_left_check = op.is_comparator() && left.kind.is_variable();
+                let skip_right_check = op.is_comparator() && right.kind.is_variable();
 
                 if !skip_left_check {
                     self.check_expr(&left.kind)
@@ -515,11 +549,120 @@ impl<'a> MoveChecker<'a> {
         }
     }
 
+    /// Performs move checks on a member access chain.
+    fn check_member_access(&mut self, access: &AMemberAccess2) {
+        // If the base expression is not a symbol that requires move checking or is a constant,
+        // there is no move checking to do here.
+        let base_var = match access.base_expr() {
+            AExpr {
+                kind: AExprKind::Symbol(symbol),
+                ..
+            } if self.must_get_type(symbol.base_type_key).requires_move() && !symbol.is_const => {
+                symbol
+            }
+            _ => return,
+        };
+
+        // Create a new move from the member access path.
+        let mv = Move::try_from_member_access(access).expect("should not be None");
+
+        // Search every scope in the stack for moves of this variable.
+        let mut errors = vec![];
+        for scope in self.stack.iter_mut().rev() {
+            // Check if the move conflicts with an existing move for this variable inside this
+            // scope.
+            for conflicting_move in scope.get_conflicting_moves(&mv) {
+                errors.push(
+                    AnalyzeError::new(
+                        ErrorKind::UseOfMovedValue,
+                        format_code!(
+                            "cannot use {} because {} was already moved",
+                            access,
+                            conflicting_move
+                        )
+                            .as_str(),
+                        &mv,
+                    )
+                        .with_detail(
+                            format!(
+                                "The conflicting move occurs at {}:{} because {} is not copied \
+                                automatically.",
+                                conflicting_move.start_pos.line,
+                                conflicting_move.start_pos.col,
+                                format_code!(conflicting_move),
+                            )
+                                .as_str(),
+                        )
+                        .with_help(format!(
+                            "Consider either copying {} on line {} instead of moving it, or refactoring \
+                            your code to avoid the move conflict.",
+                            format_code!(conflicting_move), conflicting_move.start_pos.line
+                        ).as_mut()),
+                );
+            }
+
+            // Break as soon as we've checked up to the scope in which the variable was declared.
+            if scope.declared_vars.contains(base_var.name.as_str()) {
+                break;
+            }
+        }
+
+        // If errors occurred, record them and return early. We're doing this here to avoid
+        // borrowing issues above.
+        if !errors.is_empty() {
+            for err in errors {
+                self.add_err(err);
+            }
+
+            return;
+        }
+
+        // If we're inside a loop and the current closure in which the move occurs is not
+        // guaranteed to exit the loop (i.e. is not guaranteed to execute at most once), then the
+        // move is illegal as it could execute more than once.
+        if !self.var_declared_in_cur_scope(base_var) && !self.cur_scope_executes_at_most_once() {
+            self.add_err(
+                AnalyzeError::new(
+                    ErrorKind::UseOfMovedValue,
+                    format_code!("move of {} may occur multiple times inside a loop", access)
+                        .as_str(),
+                    &mv,
+                )
+                .with_detail(
+                    format_code!(
+                        "Duplicate moves of {} may occur because it is used \
+                        inside a part of a loop that that may execute more than once.",
+                        access,
+                    )
+                    .as_str(),
+                )
+                .with_help(
+                    format_code!(
+                        "Consider performing this move outside the loop, or in a part of \
+                        the loop that is guaranteed to execute at most once (i.e. a part that will \
+                        either {} or {}).",
+                        "break",
+                        "return",
+                    )
+                    .as_str(),
+                ),
+            );
+            return;
+        }
+
+        // Only record a move if the type of the value being used requires a move. Some
+        // basic types like bools and numerics are always copied instead of being moved.
+        if self.must_get_type(access.member_type_key).requires_move() {
+            self.add_move(mv);
+        }
+    }
+
     /// Performs move checks on `var`.
+    // TODO: Remove this as it's already covered in `check_member_access`.
     fn check_var(&mut self, var: &ASymbol) {
         // Skip the move check entirely if the root variable is of some type that doesn't require
         // moves, or if it's a constant.
-        if !self.must_get_type(var.parent_type_key).requires_move() || var.is_const {
+        if !self.must_get_type(var.base_type_key).requires_move() || var.is_const {
             return;
         }
 

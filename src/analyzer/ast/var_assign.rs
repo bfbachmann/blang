@@ -28,7 +28,7 @@ impl AVarAssign {
     /// of it.
     pub fn from(ctx: &mut ProgramContext, assign: &VariableAssignment) -> Self {
         // Make sure the variable being assigned to exists and is mutable.
-        let symbol = ASymbol::from(ctx, &assign.symbol, false, None);
+        let symbol = ASymbol::from(ctx, &assign.symbol, false, false, None);
         let var_name = assign.symbol.name.clone();
         match ctx.get_symbol(var_name.as_str()) {
             Some(var) => {
@@ -72,14 +72,14 @@ impl AVarAssign {
 
                 return AVarAssign {
                     symbol,
-                    val: AExpr::from(ctx, assign.value.clone(), None, false),
+                    val: AExpr::from(ctx, assign.value.clone(), None, false, false),
                 };
             }
         };
 
         // Analyze the expression representing the value assigned to the variable.
         let symbol_tk = symbol.get_type_key();
-        let a_expr = AExpr::from(ctx, assign.value.clone(), Some(symbol_tk), false);
+        let a_expr = AExpr::from(ctx, assign.value.clone(), Some(symbol_tk), false, false);
 
         AVarAssign {
             symbol,

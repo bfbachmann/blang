@@ -66,8 +66,13 @@ impl ACond {
             // Check that the branch expression evaluates to a bool, if one exists.
             let rich_expr = match &branch.condition {
                 Some(branch_cond) => {
-                    let rich_expr =
-                        AExpr::from(ctx, branch_cond.clone(), Some(ctx.bool_type_key()), false);
+                    let rich_expr = AExpr::from(
+                        ctx,
+                        branch_cond.clone(),
+                        Some(ctx.bool_type_key()),
+                        false,
+                        false,
+                    );
                     Some(rich_expr)
                 }
                 None => None,

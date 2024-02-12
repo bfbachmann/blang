@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 use std::fmt;
 
+use colored::Colorize;
+
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
@@ -209,11 +211,11 @@ impl Statement {
             }
             (None, Some(&ref token)) | (Some(&ref token), None) => {
                 return Err(ParseError::new(
-                    ErrorKind::UnexpectedEOF,
-                    "expected statement, but found EOF",
+                    ErrorKind::ExpectedStatement,
+                    format_code!("expected statement, but found {}", token).as_str(),
                     Some(token.clone()),
-                    Position::default(),
-                    Position::default(),
+                    token.start.clone(),
+                    token.end.clone(),
                 ))
             }
             _ => {}
@@ -412,7 +414,7 @@ impl Statement {
                     )));
                 }
 
-                let expr = Expression::from(tokens, false)?;
+                let expr = Expression::from(tokens)?;
                 Ok(Statement::Return(Ret::new(
                     Some(expr.clone()),
                     ret_token_start,
@@ -457,7 +459,7 @@ impl Statement {
             }
 
             // If the first two tokens are `<identifier>.`, it's a member access that can either be
-            // an assignment to the member or or a function call on the member.
+            // an assignment to the member or a function call on the member.
             (
                 Token {
                     kind: TokenKind::Identifier(_),
@@ -468,7 +470,7 @@ impl Statement {
                     ..
                 },
             ) => {
-                // Parse the member access.
+                // Parse the expression.
                 let cursor = tokens.cursor();
                 let var = Symbol::from(tokens)?;
 
@@ -494,7 +496,7 @@ impl Statement {
                     } => {
                         // Parse the expression being assigned to the member and return the variable
                         // assignment.
-                        let value = Expression::from(tokens, false)?;
+                        let value = Expression::from(tokens)?;
                         let start_pos = var.start_pos.clone();
                         Ok(Statement::VariableAssignment(VariableAssignment::new(
                             var, value, start_pos,

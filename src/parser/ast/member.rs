@@ -8,6 +8,7 @@ use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
+use crate::parser::ast::expr::Expression;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::source::Source;
 
@@ -146,5 +147,47 @@ impl MemberAccess {
             start_pos,
             end_pos,
         })
+    }
+}
+
+/// Represents the access of a member on come value. This could be a call or reference to
+/// a method on a value or type, or a struct or tuple field access.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct MemberAccess2 {
+    pub expr: Expression,
+    pub member_name: String,
+    start_pos: Position,
+    end_pos: Position,
+}
+
+locatable_impl!(MemberAccess2);
+
+impl Hash for MemberAccess2 {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.expr.hash(state);
+        self.member_name.hash(state);
+    }
+}
+
+impl Display for MemberAccess2 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}", self.expr, self.member_name)
+    }
+}
+
+impl MemberAccess2 {
+    /// Creates a new member access expression.
+    pub fn new(
+        expr: Expression,
+        member_name: String,
+        start_pos: Position,
+        end_pos: Position,
+    ) -> MemberAccess2 {
+        MemberAccess2 {
+            expr,
+            member_name,
+            start_pos,
+            end_pos,
+        }
     }
 }

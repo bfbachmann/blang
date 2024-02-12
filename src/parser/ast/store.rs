@@ -38,10 +38,10 @@ impl Store {
     ///   be written to (see `Expression::from`)
     /// - `source_expr` is an expression representing the value being written to memory.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Store> {
-        let dest_expr = Expression::from(tokens, false)?;
+        let dest_expr = Expression::from(tokens)?;
         let start_pos = dest_expr.start_pos().clone();
         Source::parse_expecting(tokens, TokenKind::Store)?;
-        let source_expr = Expression::from(tokens, false)?;
+        let source_expr = Expression::from(tokens)?;
         let end_pos = source_expr.end_pos().clone();
 
         Ok(Store {

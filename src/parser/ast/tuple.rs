@@ -240,7 +240,7 @@ impl TupleInit {
 
                 _ => {
                     // The token is not a comma or `}`, so we're expecting it to be an expression.
-                    let val = Expression::from(tokens, false)?;
+                    let val = Expression::from(tokens)?;
                     values.push(val);
 
                     // The next token should be a comma or `}`.

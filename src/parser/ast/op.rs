@@ -29,10 +29,6 @@ pub enum Operator {
     LessThan,
     GreaterThanOrEqual,
     LessThanOrEqual,
-
-    // Other
-    LeftParen,
-    RightParen,
 }
 
 impl fmt::Display for Operator {
@@ -60,8 +56,6 @@ impl Operator {
             TokenKind::LessThan => Some(Operator::LessThan),
             TokenKind::GreaterThanOrEqual => Some(Operator::GreaterThanOrEqual),
             TokenKind::LessThanOrEqual => Some(Operator::LessThanOrEqual),
-            TokenKind::LeftParen => Some(Operator::LeftParen),
-            TokenKind::RightParen => Some(Operator::RightParen),
             TokenKind::As => Some(Operator::As),
             TokenKind::Like => Some(Operator::Like),
             TokenKind::NotLike => Some(Operator::NotLike),
@@ -89,8 +83,6 @@ impl Operator {
             Operator::LessThan => TokenKind::LessThan.to_string(),
             Operator::GreaterThanOrEqual => TokenKind::GreaterThanOrEqual.to_string(),
             Operator::LessThanOrEqual => TokenKind::LessThanOrEqual.to_string(),
-            Operator::LeftParen => TokenKind::LeftParen.to_string(),
-            Operator::RightParen => TokenKind::RightParen.to_string(),
             Operator::As => TokenKind::As.to_string(),
             Operator::Reference => TokenKind::Reference.to_string(),
             Operator::Defererence => TokenKind::Dereference.to_string(),
@@ -101,7 +93,6 @@ impl Operator {
     /// standard.
     pub fn precedence(&self) -> u32 {
         100 - match self {
-            Operator::LeftParen | Operator::RightParen => 1,
             Operator::LogicalNot | Operator::Reference | Operator::Defererence => 2,
             Operator::As => 3,
             Operator::Multiply | Operator::Divide | Operator::Modulo => 4,
@@ -131,6 +122,12 @@ impl Operator {
             Operator::LogicalNot | Operator::Reference | Operator::Defererence => false,
             _ => true,
         }
+    }
+
+    /// Returns true if this is a unary operator. Note that some operators like subtract
+    /// can be both binary and unary.
+    pub fn is_unary(&self) -> bool {
+        !self.is_binary() || self == &Operator::Subtract
     }
 
     /// Returns true if the operator is an arithmetic binary operator.

@@ -309,15 +309,15 @@ mod tests {
         assert!(matches!(
             result,
             Err(ParseError {
-                kind: ErrorKind::ExpectedBinOpOrEndOfExpr,
+                kind: ErrorKind::ExpectedExpr,
                 message: _,
                 token: Some(Token {
-                    kind: TokenKind::LeftParen,
-                    start: Position { line: 1, col: 13 },
-                    end: Position { line: 1, col: 14 },
+                    kind: TokenKind::Comma,
+                    start: Position { line: 1, col: 14 },
+                    end: Position { line: 1, col: 15 },
                 }),
-                start_pos: Position { line: 1, col: 13 },
-                end_pos: Position { line: 1, col: 14 },
+                start_pos: Position { line: 1, col: 14 },
+                end_pos: Position { line: 1, col: 15 },
             })
         ));
     }
@@ -331,7 +331,7 @@ mod tests {
         assert!(matches!(
             result,
             Err(ParseError {
-                kind: ErrorKind::UnmatchedCloseParen,
+                kind: ErrorKind::ExpectedStatement,
                 message: _,
                 token: Some(Token {
                     kind: TokenKind::RightParen,
@@ -371,7 +371,7 @@ mod tests {
         assert!(matches!(
             result,
             Err(ParseError {
-                kind: ErrorKind::UnexpectedOperator,
+                kind: ErrorKind::ExpectedBeginExpr,
                 message: _,
                 token: Some(Token {
                     kind: TokenKind::LogicalAnd,

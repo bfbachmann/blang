@@ -268,7 +268,7 @@ impl EnumVariantInit {
         // Parse the optional `(<value>)`.
         let maybe_value = match Source::parse_optional(tokens, TokenKind::LeftParen) {
             Some(_) => {
-                let expr = Expression::from(tokens, true)?;
+                let expr = Expression::from(tokens)?;
                 end_pos = Source::parse_expecting(tokens, TokenKind::RightParen)?.end;
                 Some(Box::new(expr))
             }

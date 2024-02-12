@@ -279,7 +279,7 @@ impl StructInit {
                     // Parse `:` followed by the field value and record the field.
                     let field_name = field_name.clone();
                     Source::parse_expecting(tokens, TokenKind::Colon)?;
-                    let value = Expression::from(tokens, false)?;
+                    let value = Expression::from(tokens)?;
                     field_values.push((field_name, value));
 
                     // Parse the optional comma.

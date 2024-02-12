@@ -79,7 +79,7 @@ impl LambdaDecl {
         }
 
         // Parse lambda expression.
-        let expr = Expression::from(tokens, false)?;
+        let expr = Expression::from(tokens)?;
         let end_pos = expr.end_pos().clone();
 
         Ok(LambdaDecl {

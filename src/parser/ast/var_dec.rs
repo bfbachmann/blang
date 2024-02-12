@@ -81,7 +81,7 @@ impl VariableDeclaration {
 
         // The remaining tokens should be "=" followed by the variable value.
         Source::parse_expecting(tokens, TokenKind::Equal)?;
-        let value = Expression::from(tokens, false)?;
+        let value = Expression::from(tokens)?;
         let end_pos = value.end_pos().clone();
 
         Ok(VariableDeclaration::new(

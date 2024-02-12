@@ -20,8 +20,13 @@ use crate::util;
 #[derive(Debug, Clone)]
 pub struct AFnSig {
     pub name: String,
+    /// The mangled name is the full name of the function that may include information about
+    /// it's impl and argument types to disambiguate it from other methods with the same name.
+    /// If it's a regular function, this will just be the function name. If it's a member
+    /// function, it will be `<type>.<fn_name>`.
+    pub mangled_name: String,
     pub args: Vec<AArg>,
-    pub ret_type_key: Option<TypeKey>,
+    pub maybe_ret_type_key: Option<TypeKey>,
     /// Represents this function signature as a type.
     pub type_key: TypeKey,
     /// The type key of the parent type if this is a member function.
@@ -34,7 +39,7 @@ impl PartialEq for AFnSig {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && util::vecs_eq(&self.args, &other.args)
-            && util::opts_eq(&self.ret_type_key, &other.ret_type_key)
+            && util::opts_eq(&self.maybe_ret_type_key, &other.maybe_ret_type_key)
             && util::opts_eq(&self.tmpl_params, &other.tmpl_params)
     }
 }
@@ -51,7 +56,7 @@ impl fmt::Display for AFnSig {
             }
         }
 
-        if let Some(typ) = &self.ret_type_key {
+        if let Some(typ) = &self.maybe_ret_type_key {
             write!(f, ") ~ {}", typ)
         } else {
             write!(f, ")")
@@ -103,19 +108,14 @@ impl AFnSig {
             None => None,
         };
 
-        // Check if this function signature is for a member function on a type by getting the
-        // impl type key.
-        let impl_type_key = match ctx.get_cur_self_type_key() {
-            Some(type_key) => Some(type_key),
-            None => None,
-        };
-
+        let maybe_impl_type_key = ctx.get_cur_self_type_key();
         let mut a_fn_sig = AFnSig {
             name: sig.name.to_string(),
+            mangled_name: Self::get_mangled_name(ctx, maybe_impl_type_key, sig.name.as_str()),
             args,
-            ret_type_key: return_type,
+            maybe_ret_type_key: return_type,
             type_key: 0, // This will be replaced below after we insert it into the program context.
-            maybe_impl_type_key: impl_type_key,
+            maybe_impl_type_key,
             tmpl_params,
         };
 
@@ -131,23 +131,18 @@ impl AFnSig {
     /// just be the function name. If it's a member function, it will be `<type>.<fn_name>`.
     /// If it's a templated function, argument types and the return type will be appended to the
     /// function name.
-    pub fn full_name(&self) -> String {
-        let mut full_name = match &self.maybe_impl_type_key {
-            Some(type_key) => format!("{}.{}", type_key.to_string(), self.name),
-            None => self.name.to_string(),
-        };
-
-        if self.is_templated() {
-            for arg in &self.args {
-                full_name = format!("{},{}", full_name, arg.type_key.to_string().as_str());
+    fn get_mangled_name(
+        ctx: &ProgramContext,
+        maybe_impl_type_key: Option<TypeKey>,
+        fn_name: &str,
+    ) -> String {
+        match maybe_impl_type_key {
+            Some(type_key) => {
+                let impl_type = ctx.must_get_type(type_key);
+                format!("{}.{}", impl_type.name(), fn_name)
             }
-
-            if let Some(id) = &self.ret_type_key {
-                full_name = format!("{}~{}", full_name, id);
-            }
+            None => fn_name.to_string(),
         }
-
-        full_name
     }
 
     /// Returns true if the function signature has `self` as its first argument.
@@ -184,16 +179,16 @@ impl AFnSig {
         }
 
         // Skip the more complex return type check if the return type keys already match.
-        if util::opts_eq(&self.ret_type_key, &other.ret_type_key) {
+        if util::opts_eq(&self.maybe_ret_type_key, &other.maybe_ret_type_key) {
             return true;
         }
 
-        let this_ret_type = match &self.ret_type_key {
+        let this_ret_type = match &self.maybe_ret_type_key {
             Some(tk) => Some(ctx.must_get_type(*tk)),
             None => None,
         };
 
-        let other_ret_type = match &other.ret_type_key {
+        let other_ret_type = match &other.maybe_ret_type_key {
             Some(tk) => Some(ctx.must_get_type(*tk)),
             None => None,
         };
@@ -213,7 +208,7 @@ impl AFnSig {
             }
         }
 
-        if let Some(typ) = &self.ret_type_key {
+        if let Some(typ) = &self.maybe_ret_type_key {
             s + format!(") ~ {}", typ).as_str()
         } else {
             s + format!(")").as_str()

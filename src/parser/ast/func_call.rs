@@ -161,7 +161,7 @@ impl FunctionCall {
                 _ => {}
             }
 
-            let expr = Expression::from(tokens, true)?;
+            let expr = Expression::from(tokens)?;
             args.push(expr);
         }
 
@@ -261,11 +261,5 @@ impl FunctionCall {
         }
 
         Ok(maybe_last_call.unwrap())
-    }
-
-    /// Returns true if the function call is directly to a function (i.e. doesn't happen via member
-    /// access) and the called function has the given name.
-    pub fn has_fn_name(&self, name: &str) -> bool {
-        self.fn_symbol.name == name && self.fn_symbol.member_access.is_none()
     }
 }

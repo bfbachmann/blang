@@ -32,21 +32,6 @@ mod tests {
     }
 
     #[test]
-    fn call_to_main() {
-        let raw = r#"
-        fn main() {
-            thing()
-        }
-        
-        fn thing() {
-            main()
-        }
-        "#;
-        let result = analyze(raw);
-        check_result(result, Some(ErrorKind::CallToMain));
-    }
-
-    #[test]
     fn variable_assignment() {
         let raw = r#"
         fn main() {

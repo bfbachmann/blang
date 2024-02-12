@@ -4,6 +4,8 @@ use inkwell::{AddressSpace, IntPredicate};
 use crate::analyzer::ast::array::AArrayInit;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::fn_call::AFnCall;
+use crate::analyzer::ast::fn_call2::AFnCall2;
+use crate::analyzer::ast::member::AMemberAccess2;
 use crate::analyzer::ast::r#enum::AEnumVariantInit;
 use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::AType;
@@ -38,6 +40,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             AExprKind::FunctionCall(call) => self.gen_call(call).unwrap(),
 
+            AExprKind::FunctionCall2(call) => self.gen_call2(call).unwrap(),
+
             AExprKind::UnaryOperation(op, right_expr) => {
                 self.gen_unary_op(op, right_expr, expr.type_key)
             }
@@ -71,6 +75,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             .as_global_value()
             .as_basic_value_enum(),
 
+            AExprKind::MemberAccess(access) => self.gen_member_access(access),
+
             AExprKind::Unknown => {
                 panic!("encountered unknown expression");
             }
@@ -79,6 +85,21 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Dereference the result if it's a pointer.
         let expr_type = self.type_store.must_get(expr.type_key);
         self.maybe_deref(result, expr_type)
+    }
+
+    /// Compiles member access expressions.
+    pub(crate) fn gen_member_access(&mut self, access: &AMemberAccess2) -> BasicValueEnum<'ctx> {
+        // This member access should never be a method by this point. Methods are detected
+        // separately in `gen_call`.
+        assert!(!access.is_method);
+
+        let ll_base_val = self.gen_expr(&access.base_expr);
+        self.get_member_value(
+            ll_base_val,
+            access.base_expr.type_key,
+            access.member_type_key,
+            access.member_name.as_str(),
+        )
     }
 
     /// Compiles tuple initialization.
@@ -237,6 +258,132 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles a function call, returning the result if one exists.
+    pub(crate) fn gen_call2(&mut self, call: &AFnCall2) -> Option<BasicValueEnum<'ctx>> {
+        // Look up the function signature and convert it to the corresponding LLVM function type.
+        let fn_sig = self.type_store.must_get(call.fn_expr.type_key).to_fn_sig();
+        let ll_fn_type = self.type_converter.get_fn_type(fn_sig.type_key);
+        let mut args: Vec<BasicMetadataValueEnum> = vec![];
+
+        // Check if we're short one argument. If so, it means the function signature expects
+        // the return value to be written to the address pointed to by the first argument, so we
+        // need to add that argument. This should only be the case for functions that return
+        // structured types.
+        if ll_fn_type.count_param_types() == call.args.len() as u32 + 1 {
+            let ll_ret_type = self
+                .type_converter
+                .get_basic_type(call.maybe_ret_type_key.unwrap());
+            let ptr = self.builder.build_alloca(ll_ret_type, "ret_val_ptr");
+            args.push(ptr.into());
+        }
+
+        // Compile call args.
+        for (i, arg) in call.args.iter().enumerate() {
+            let arg_type = self.type_store.must_get(arg.type_key);
+            let ll_arg_val = self.gen_expr(arg);
+
+            // Make sure we write constant values that are supposed to be passed as pointers to
+            // the stack and use their pointers as the arguments rather than the constant values
+            // themselves.
+            if arg.kind.is_const() && arg_type.is_composite() {
+                let ll_arg_ptr = self.create_entry_alloc(
+                    format!("arg_{}_literal", i).as_str(),
+                    arg.type_key,
+                    ll_arg_val,
+                );
+
+                self.copy_value(ll_arg_val, ll_arg_ptr, arg.type_key);
+                args.push(ll_arg_ptr.into());
+            } else {
+                args.push(ll_arg_val.into());
+            }
+        }
+
+        // Compile the function call and return the result.
+        let result = match &call.fn_expr.kind {
+            AExprKind::Symbol(symbol) => {
+                if self.is_var_module_fn(&symbol) || symbol.is_method() {
+                    // The function is being called directly, so we can just look it up by name in
+                    // the module and compile this as a direct call.
+                    let ll_fn = self
+                        .module
+                        .get_function(fn_sig.mangled_name.as_str())
+                        .expect(
+                            format!(
+                                "failed to locate function {} in module",
+                                fn_sig.mangled_name
+                            )
+                            .as_str(),
+                        );
+                    self.builder
+                        .build_call(
+                            ll_fn,
+                            args.as_slice(),
+                            symbol.get_last_member_name().as_str(),
+                        )
+                        .try_as_basic_value()
+                } else {
+                    // The function is actually a variable, so we need to load the function pointer
+                    // from the variable value and call it indirectly.
+                    let ll_fn_ptr = self.get_var_value(&symbol).into_pointer_value();
+                    self.builder
+                        .build_indirect_call(
+                            ll_fn_type,
+                            ll_fn_ptr,
+                            args.as_slice(),
+                            fn_sig.mangled_name.as_str(),
+                        )
+                        .try_as_basic_value()
+                }
+            }
+
+            AExprKind::MemberAccess(access) if access.is_method => {
+                let ll_fn = self
+                    .module
+                    .get_function(fn_sig.mangled_name.as_str())
+                    .expect(
+                        format!(
+                            "failed to locate function {} in module",
+                            fn_sig.mangled_name
+                        )
+                        .as_str(),
+                    );
+                self.builder
+                    .build_call(ll_fn, args.as_slice(), access.member_name.as_str())
+                    .try_as_basic_value()
+            }
+
+            _ => {
+                let ll_fn_ptr = self.gen_expr(&call.fn_expr).into_pointer_value();
+                self.builder
+                    .build_indirect_call(
+                        ll_fn_type,
+                        ll_fn_ptr,
+                        args.as_slice(),
+                        fn_sig.mangled_name.as_str(),
+                    )
+                    .try_as_basic_value()
+            }
+        };
+
+        // If there is a return value, return it. Otherwise, check if this function has a defined
+        // return type. If the function has a return type and the call had no return value, it means
+        // the return value was written to the address pointed to by the first function argument.
+        // This will only be the case for functions that return structured values.
+        if result.left().is_some() {
+            result.left()
+        } else if call.maybe_ret_type_key.is_some() {
+            Some(
+                args.first()
+                    .unwrap()
+                    .into_pointer_value()
+                    .as_basic_value_enum(),
+            )
+        } else {
+            None
+        }
+    }
+
+    /// Compiles a function call, returning the result if one exists.
     pub(crate) fn gen_call(&mut self, call: &AFnCall) -> Option<BasicValueEnum<'ctx>> {
         // Look up the function signature and convert it to the corresponding LLVM function type.
         let fn_sig = self
@@ -286,9 +433,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             // module and compile this as a direct call.
             let ll_fn = self
                 .module
-                .get_function(fn_sig.full_name().as_str())
+                .get_function(fn_sig.mangled_name.as_str())
                 .expect(
-                    format!("failed to locate function {} in module", fn_sig.full_name()).as_str(),
+                    format!(
+                        "failed to locate function {} in module",
+                        fn_sig.mangled_name
+                    )
+                    .as_str(),
                 );
             self.builder
                 .build_call(
@@ -306,7 +457,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     ll_fn_type,
                     ll_fn_ptr,
                     args.as_slice(),
-                    fn_sig.full_name().as_str(),
+                    fn_sig.mangled_name.as_str(),
                 )
                 .try_as_basic_value()
         };
@@ -385,6 +536,16 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     ll_operand.into_pointer_value(),
                     "deref_val",
                 )
+            }
+
+            Operator::Subtract => {
+                // Compile operand expression.
+                let ll_operand = self.gen_expr(operand_expr);
+
+                // Negate the operand.
+                self.builder
+                    .build_int_neg(ll_operand.into_int_value(), "neg")
+                    .as_basic_value_enum()
             }
 
             _ => {

@@ -66,7 +66,7 @@ impl AConst {
         };
 
         // Make sure the constant value is a valid constant.
-        let value = AExpr::from(ctx, const_decl.value.clone(), declared_tk, false);
+        let value = AExpr::from(ctx, const_decl.value.clone(), declared_tk, false, false);
         if !value.kind.is_const() {
             ctx.insert_err(
                 AnalyzeError::new(

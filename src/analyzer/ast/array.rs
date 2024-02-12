@@ -52,6 +52,7 @@ impl AArrayType {
             array_type.length_expr.clone(),
             Some(ctx.u64_type_key()),
             false,
+            false,
         );
 
         // Try to evaluate the length expression as a constant u64. We'll skip this step if the
@@ -161,6 +162,7 @@ impl AArrayInit {
                 value_expr.clone(),
                 maybe_expected_element_type_key,
                 false,
+                false,
             );
             contained_values.push(expr);
         }
@@ -206,7 +208,13 @@ impl AArrayInit {
         // The repeat count will never be Some if there isn't exactly one element in the array.
         let maybe_repeat_count = match &array_init.maybe_repeat_expr {
             Some(repeat_expr) => {
-                let expr = AExpr::from(ctx, repeat_expr.clone(), Some(ctx.u64_type_key()), false);
+                let expr = AExpr::from(
+                    ctx,
+                    repeat_expr.clone(),
+                    Some(ctx.u64_type_key()),
+                    false,
+                    false,
+                );
                 if expr.type_key != ctx.u64_type_key() {
                     // Default to zero length if the repeat parameter is invalid.
                     Some(0)

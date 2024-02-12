@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
@@ -12,8 +12,11 @@ use crate::parser::ast::array::ArrayInit;
 use crate::parser::ast::bool_lit::BoolLit;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::func_call::FunctionCall;
+use crate::parser::ast::func_call2::FuncCall;
 use crate::parser::ast::i64_lit::I64Lit;
+use crate::parser::ast::index::Index;
 use crate::parser::ast::lambda::LambdaDecl;
+use crate::parser::ast::member::MemberAccess2;
 use crate::parser::ast::op::Operator;
 use crate::parser::ast::r#enum::EnumVariantInit;
 use crate::parser::ast::r#struct::StructInit;
@@ -27,34 +30,18 @@ use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::source::Source;
 
-#[derive(Debug)]
-enum OutputNode {
-    Operator(Operator),
-    BasicExpr(Expression),
-    Type(Type),
-}
-
-impl Display for OutputNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            OutputNode::Operator(op) => write!(f, "{}", op),
-            OutputNode::BasicExpr(expr) => write!(f, "{}", expr),
-            OutputNode::Type(typ) => write!(f, "{}", typ),
-        }
-    }
-}
-
 /// Represents basic and composite expressions. For basic expressions, see `Expression::from_basic`,
 /// and for composite expressions, see `Expression::from`.
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum Expression {
     // Basic expressions.
-    Symbol(Symbol),
+    Symbol(Symbol), // TODO: Remove member access from this.
     BoolLiteral(BoolLit),
     I64Literal(I64Lit),
     U64Literal(U64Lit),
     StrLiteral(StrLit),
-    FunctionCall(FunctionCall),
+    FunctionCall(FunctionCall), // TODO: Remove.
+    FunctionCall2(Box<FuncCall>),
     AnonFunction(Box<Function>),
     Lambda(Box<Function>),
     StructInit(StructInit),
@@ -62,6 +49,8 @@ pub enum Expression {
     TupleInit(TupleInit),
     ArrayInit(Box<ArrayInit>),
     SizeOf(SizeOf),
+    Index(Box<Index>),
+    MemberAccess(Box<MemberAccess2>),
 
     // Composite expressions.
     UnaryOperation(Operator, Box<Expression>),
@@ -70,7 +59,7 @@ pub enum Expression {
 }
 
 impl Display for Expression {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Expression::Symbol(s) => write!(f, "{}", s),
             Expression::BoolLiteral(b) => write!(f, "{}", b),
@@ -78,6 +67,7 @@ impl Display for Expression {
             Expression::U64Literal(i) => write!(f, "{}", i),
             Expression::StrLiteral(s) => write!(f, "{}", s),
             Expression::FunctionCall(chain) => write!(f, "{}", chain),
+            Expression::FunctionCall2(call) => write!(f, "{}", call),
             Expression::AnonFunction(func) => write!(f, "{}", func),
             Expression::Lambda(func) => write!(f, "{}", func),
             Expression::UnaryOperation(op, expr) => write!(f, "{}{}", op, expr),
@@ -87,18 +77,12 @@ impl Display for Expression {
             Expression::StructInit(struct_init) => {
                 write!(f, "struct initialization {}", struct_init)
             }
-            Expression::EnumInit(enum_init) => {
-                write!(f, "enum initialization {}", enum_init)
-            }
-            Expression::TupleInit(tuple_init) => {
-                write!(f, "tuple initialization {}", tuple_init)
-            }
-            Expression::ArrayInit(array_init) => {
-                write!(f, "array initialization {}", array_init)
-            }
-            Expression::SizeOf(so) => {
-                write!(f, "{}", so)
-            }
+            Expression::EnumInit(enum_init) => write!(f, "enum initialization {}", enum_init),
+            Expression::TupleInit(tuple_init) => write!(f, "tuple initialization {}", tuple_init),
+            Expression::ArrayInit(array_init) => write!(f, "array initialization {}", array_init),
+            Expression::SizeOf(so) => write!(f, "{}", so),
+            Expression::Index(idx) => write!(f, "{}", idx),
+            Expression::MemberAccess(m) => write!(f, "{}", m),
             Expression::TypeCast(expr, target_type) => {
                 write!(f, "{} as {}", expr, target_type)
             }
@@ -115,6 +99,7 @@ impl Locatable for Expression {
             Expression::U64Literal(u64_lit) => u64_lit.start_pos(),
             Expression::StrLiteral(string_lit) => string_lit.start_pos(),
             Expression::FunctionCall(fn_call) => fn_call.start_pos(),
+            Expression::FunctionCall2(fn_call) => fn_call.start_pos(),
             Expression::AnonFunction(func) => func.start_pos(),
             Expression::Lambda(func) => func.start_pos(),
             Expression::UnaryOperation(_, expr) => expr.start_pos(),
@@ -124,6 +109,8 @@ impl Locatable for Expression {
             Expression::ArrayInit(array_init) => array_init.start_pos(),
             Expression::BinaryOperation(left, _, _) => left.start_pos(),
             Expression::SizeOf(so) => so.start_pos(),
+            Expression::Index(idx) => idx.start_pos(),
+            Expression::MemberAccess(m) => m.start_pos(),
             Expression::TypeCast(expr, _) => expr.start_pos(),
         }
     }
@@ -136,6 +123,7 @@ impl Locatable for Expression {
             Expression::U64Literal(u64_lit) => u64_lit.end_pos(),
             Expression::StrLiteral(string_lit) => string_lit.end_pos(),
             Expression::FunctionCall(fn_call) => fn_call.end_pos(),
+            Expression::FunctionCall2(fn_call) => fn_call.end_pos(),
             Expression::AnonFunction(func) => func.end_pos(),
             Expression::Lambda(func) => func.end_pos(),
             Expression::UnaryOperation(_, expr) => expr.end_pos(),
@@ -145,260 +133,14 @@ impl Locatable for Expression {
             Expression::ArrayInit(array_init) => array_init.end_pos(),
             Expression::BinaryOperation(left, _, _) => left.end_pos(),
             Expression::SizeOf(so) => so.end_pos(),
+            Expression::Index(idx) => idx.end_pos(),
+            Expression::MemberAccess(m) => m.end_pos(),
             Expression::TypeCast(_, target_type) => target_type.end_pos(),
         }
     }
 }
 
 impl Expression {
-    /// Parses an expression tree from reverse Polish notation.
-    fn from_rpn(q: &mut VecDeque<OutputNode>) -> ParseResult<Self> {
-        match q.pop_back() {
-            // If the node is an operator, we need to assemble its children.
-            Some(OutputNode::Operator(op)) => {
-                if op == Operator::As {
-                    let target_type = match q.pop_back() {
-                        Some(OutputNode::Type(target_type)) => target_type,
-                        Some(other) => {
-                            return Err(ParseError::new(
-                                ErrorKind::ExpectedType,
-                                format_code!(
-                                    "expected right operand to cast operator {} to be a type, but found {}",
-                                    Operator::As,
-                                    &other,
-                                )
-                                .as_str(),
-                                None,
-                                Position::default(),
-                                Position::default(),
-                            ));
-                        }
-                        None => {
-                            return Err(ParseError::new(
-                                ErrorKind::UnexpectedEOF,
-                                "unexpected end of expression",
-                                None,
-                                Position::default(),
-                                Position::default(),
-                            ))
-                        }
-                    };
-
-                    let left_child = Expression::from_rpn(q)?;
-                    Ok(Expression::TypeCast(Box::new(left_child), target_type))
-                } else {
-                    let right_child = Expression::from_rpn(q)?;
-                    let left_child = Expression::from_rpn(q)?;
-                    Ok(Expression::BinaryOperation(
-                        Box::new(left_child),
-                        op,
-                        Box::new(right_child),
-                    ))
-                }
-            }
-
-            // Otherwise, this is a leaf node (i.e. basic expression).
-            Some(OutputNode::BasicExpr(expr)) => Ok(expr),
-
-            Some(OutputNode::Type(_)) => {
-                unreachable!()
-            }
-
-            // The queue should not be empty. If this happens, it means that the queue passed to
-            // this function was not valid RPN.
-            None => Err(ParseError::new(
-                ErrorKind::UnexpectedEOF,
-                "unexpected end of expression",
-                None,
-                Position::default(),
-                Position::default(),
-            )),
-        }
-    }
-
-    /// Parses a basic expression. A basic expression can be any of the following:
-    ///  - a symbol (see `Symbol::from`)
-    ///  - a literal value (includes anonymous functions)
-    ///  - a function call
-    ///  - a unary operator followed by a composite expression (`<unary_op> <comp_expr>`)
-    ///  - struct initialization (see `StructInit::from`)
-    ///  - enum initialization (see `EnumInit::from`)
-    ///  - tuple initialization (see `TupleInit::from`)
-    ///  - a `sizeof` expression (see `SizeOf::from`)
-    fn from_basic(tokens: &mut Stream<Token>, is_arg: bool) -> ParseResult<Option<Expression>> {
-        match tokens.peek_next() {
-            // If the first token is `fn`, we'll assume the expression is an anonymous function.
-            Some(Token {
-                kind: TokenKind::Fn,
-                ..
-            }) => {
-                // Parse the anonymous function and return it.
-                let func = Function::from_anon(tokens)?;
-                Ok(Some(Expression::AnonFunction(Box::new(func))))
-            }
-
-            // If the first token is `$`, we'll assume the expression is a lambda function
-            // declaration.
-            Some(Token {
-                kind: TokenKind::DollarSign,
-                ..
-            }) => {
-                let lambda = LambdaDecl::from(tokens)?;
-                let func = Function::from_lambda(lambda);
-                Ok(Some(Expression::Lambda(Box::new(func))))
-            }
-
-            // If the first token is `struct`, it's an inline struct initialization.
-            Some(Token {
-                kind: TokenKind::Struct,
-                ..
-            }) => {
-                let struct_init = StructInit::from(tokens)?;
-                Ok(Some(Expression::StructInit(struct_init)))
-            }
-
-            // If the first token is `{`, it might be tuple initialization. Try parse the tokens
-            // as tuple initialization and assume there is no tuple initialization here if it fails.
-            Some(Token {
-                kind: TokenKind::LeftBrace,
-                ..
-            }) => match TupleInit::from(tokens) {
-                Ok(tuple_init) => Ok(Some(Expression::TupleInit(tuple_init))),
-                Err(_) => Ok(None),
-            },
-
-            // If the the first token is `[`, it's an array initialization.
-            Some(Token {
-                kind: TokenKind::LeftBracket,
-                ..
-            }) => {
-                let array_init = ArrayInit::from(tokens)?;
-                Ok(Some(Expression::ArrayInit(Box::new(array_init))))
-            }
-
-            // If the first token is an identifier, the expression can be a function call,
-            // a symbol, or a struct initialization, or enum variant initialization.
-            Some(Token {
-                kind: TokenKind::Identifier(_),
-                ..
-            }) => {
-                // Try parse the token sequence as a function call first.
-                let cursor = tokens.cursor();
-                if let Ok(call) = FunctionCall::from(tokens) {
-                    return Ok(Some(Expression::FunctionCall(call)));
-                }
-
-                // Try parse it as struct initialization.
-                tokens.set_cursor(cursor);
-                if let Ok(struct_init) = StructInit::from(tokens) {
-                    return Ok(Some(Expression::StructInit(struct_init)));
-                }
-
-                // Try parse it as enum variant initialization.
-                tokens.set_cursor(cursor);
-                if let Ok(enum_init) = EnumVariantInit::from(tokens) {
-                    return Ok(Some(Expression::EnumInit(enum_init)));
-                }
-
-                // At this point it can only possibly be a symbol. Otherwise, it's invalid code.
-                tokens.set_cursor(cursor);
-                Ok(Some(Expression::Symbol(Symbol::from(tokens)?)))
-            }
-
-            // If the first token is a unary operator, we know the rest should be a composite
-            // expression.
-            Some(
-                token @ Token {
-                    kind: TokenKind::LogicalNot | TokenKind::Reference | TokenKind::Dereference,
-                    ..
-                },
-            ) => {
-                let token = token.clone();
-                let op = Operator::from(&token.kind).unwrap();
-                tokens.next();
-
-                let unary_operand = match tokens.peek_next() {
-                    Some(Token {
-                        kind: TokenKind::LeftParen,
-                        ..
-                    }) => {
-                        tokens.next();
-                        let unary_operand = Expression::from(tokens, true)?;
-                        Source::parse_expecting(tokens, TokenKind::RightParen)?;
-                        unary_operand
-                    }
-
-                    _ => match Expression::from_basic(tokens, is_arg)? {
-                        Some(operand_expr) => operand_expr,
-                        None => {
-                            return Err(ParseError::new_with_token(
-                                ErrorKind::ExpectedExpr,
-                                format_code!("expected expression following operator {}", op)
-                                    .as_str(),
-                                token.clone(),
-                            ))
-                        }
-                    },
-                };
-
-                Ok(Some(Expression::UnaryOperation(
-                    op,
-                    Box::new(unary_operand),
-                )))
-            }
-
-            // Check if it's a bool literal.
-            Some(Token {
-                kind: TokenKind::BoolLiteral(_),
-                ..
-            }) => {
-                let bool_lit = BoolLit::from(tokens)?;
-                Ok(Some(Expression::BoolLiteral(bool_lit)))
-            }
-
-            // Check if it's an integer literal.
-            Some(Token {
-                kind: TokenKind::I64Literal(_, _),
-                ..
-            }) => {
-                let i64_lit = I64Lit::from(tokens)?;
-                Ok(Some(Expression::I64Literal(i64_lit)))
-            }
-
-            // Check if it's an unsigned integer literal.
-            Some(Token {
-                kind: TokenKind::U64Literal(_, _),
-                ..
-            }) => {
-                let u64_lit = U64Lit::from(tokens)?;
-                Ok(Some(Expression::U64Literal(u64_lit)))
-            }
-
-            // Check if it's a str literal.
-            Some(Token {
-                kind: TokenKind::StrLiteral(_),
-                ..
-            }) => {
-                let str_lit = StrLit::from(tokens)?;
-                Ok(Some(Expression::StrLiteral(str_lit)))
-            }
-
-            // Check if it's a `sizeof <type>` expression.
-            Some(Token {
-                kind: TokenKind::SizeOf,
-                ..
-            }) => {
-                let sizeof = SizeOf::from(tokens)?;
-                Ok(Some(Expression::SizeOf(sizeof)))
-            }
-
-            // If the token is anything else, we assume there is no basic expression here.
-            Some(_) => Ok(None),
-
-            None => Ok(None),
-        }
-    }
-
     /// Parses a basic or composite expression from the given tokens. A basic expression can be any
     /// of the following:
     ///  - a symbol (see `Symbol::from`)
@@ -418,321 +160,398 @@ impl Expression {
     /// This function implements a modified version of the shunting yard algorithm. The general
     /// structure is the same, but modifications have been made to handle negative values and
     /// function calls with arbitrary arguments.
-    pub fn from(tokens: &mut Stream<Token>, is_arg: bool) -> ParseResult<Expression> {
-        let start_pos = Source::current_position(tokens);
-        let mut out_q: VecDeque<OutputNode> = VecDeque::new();
-        let mut op_stack: VecDeque<Token> = VecDeque::new();
-        let mut last_token: Option<Token> = None;
-        let mut expect_binop_or_end = false;
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
+        parse_expr(tokens)
+    }
+}
 
-        // While there are still tokens to be read, pop and process them one by one in order to
-        // form an output queue of expressions in reverse Polish notation.
-        'outer: while let Some(op1_token) = tokens.next() {
-            let op1_token = op1_token.clone();
+#[derive(Debug)]
+enum OutNode {
+    Expr(Expression),
+    BinOp(Operator),
+}
 
-            // If the token is `,`, we can stop trying to parse the expression and assume we've
-            // reached the end because commas aren't valid in expressions.
-            if let Token {
-                kind: TokenKind::Comma,
-                ..
-            } = op1_token
-            {
-                // Add the `,` back to the token sequence because it's expected during
-                // function argument parsing.
-                tokens.rewind(1);
-                break;
-            }
-            // Check if the token is `(`.
-            else if let Some(Operator::LeftParen) = Operator::from(&op1_token.kind) {
-                // We should not be here if we we're expecting a binary operator or the end of the
-                // expression.
-                if expect_binop_or_end {
-                    return Err(ParseError::new_with_token(
-                        ErrorKind::ExpectedBinOpOrEndOfExpr,
-                        format_code!(
-                            "expected binary operator or end of expression, but found {}",
-                            op1_token
-                        )
-                        .as_str(),
-                        op1_token,
-                    ));
-                }
-
-                op_stack.push_back(op1_token.clone());
-            }
-            // Check if the token is `)`.
-            else if let Some(Operator::RightParen) = Operator::from(&op1_token.kind) {
-                // Look for the `(` that matches this `)` on the operator stack.
-                loop {
-                    match op_stack.back() {
-                        // If the operator at the top of the operator stack is `(`, we're done.
-                        Some(&Token {
-                            kind: TokenKind::LeftParen,
-                            ..
-                        }) => {
-                            break;
-                        }
-                        // If there is no operator at the top of the stack, then this is an
-                        // unmatched closing parenthesis. We'll allow this because it will happen
-                        // in the case where the current expression is the last argument in a
-                        // function call.
-                        None => {
-                            if is_arg {
-                                // Add the `)` back to the token sequence because it's expected during
-                                // function argument parsing.
-                                tokens.rewind(1);
-                                break 'outer;
-                            }
-
-                            return Err(ParseError::new_with_token(
-                                ErrorKind::UnmatchedCloseParen,
-                                "unmatched closing parenthesis in expression",
-                                op1_token,
-                            ));
-                        }
-                        // Otherwise, we just pop the operator from the stack and add it to the
-                        // output queue.
-                        _ => {
-                            // Pop op2 from the operator stack and onto the output queue.
-                            let op2 = Operator::from(&op_stack.pop_back().unwrap().kind).unwrap();
-                            out_q.push_back(OutputNode::Operator(op2));
-                        }
-                    }
-                }
-
-                // Assert there is a `(` at the top of the operator stack.
-                if let Some(&Token {
-                    kind: TokenKind::LeftParen,
-                    ..
-                }) = op_stack.back()
-                {
-                    // Pop the `(` from the operator stack and discard it
-                    op_stack.pop_back();
-                } else {
-                    return Err(ParseError::new_with_token(
-                        ErrorKind::UnmatchedCloseParen,
-                        "unmatched closing parenthesis in expression",
-                        op1_token,
-                    ));
-                }
-            }
-            // Check if the token is a unary operator.
-            else if let Some(Operator::LogicalNot | Operator::Reference | Operator::Defererence) =
-                Operator::from(&op1_token.kind)
-            {
-                // We should not be here if we we're expecting a binary operator or the end of the
-                // expression.
-                if expect_binop_or_end {
-                    return Err(ParseError::new_with_token(
-                        ErrorKind::ExpectedBinOpOrEndOfExpr,
-                        format_code!(
-                            "expected binary operator or end of expression, but found {}",
-                            op1_token
-                        )
-                        .as_str(),
-                        op1_token,
-                    ));
-                }
-
-                // Add the operator back to the token deque so it can be parsed as part of the basic
-                // expression.
-                tokens.rewind(1);
-                let expr = Expression::from_basic(tokens, is_arg)?;
-                out_q.push_back(OutputNode::BasicExpr(expr.unwrap()));
-                expect_binop_or_end = true
-            }
-            // Check if the token is a binary operator.
-            else if let Some(op1) = Operator::from(&op1_token.kind) {
-                // At this point, we know we have a binary operator. We should error here if we're
-                // not expecting a binary operator unless it's a negative.
-                if expect_binop_or_end {
-                    expect_binop_or_end = false;
-
-                    while let Some(&ref op2_token) = op_stack.back() {
-                        let op2 = Operator::from(&op2_token.kind).unwrap();
-                        if op2 != Operator::LeftParen
-                            && (op2.precedence() > op1.precedence()
-                                || (op2.precedence() == op1.precedence()
-                                    && op1.is_left_associative()))
-                        {
-                            // Pop op2 from the operator stack and onto the output queue.
-                            let op2 = Operator::from(&op_stack.pop_back().unwrap().kind).unwrap();
-                            out_q.push_back(OutputNode::Operator(op2));
-                        } else {
-                            break;
-                        }
-                    }
-
-                    // Handle the special case of the `as` operator that must be followed by a
-                    // type.
-                    if op1 == Operator::As {
-                        let target_type = Type::from(tokens)?;
-                        out_q.push_back(OutputNode::Type(target_type));
-                        expect_binop_or_end = true;
-                    }
-
-                    // Push operator 1 onto the operator stack.
-                    op_stack.push_back(op1_token.clone());
-                } else if op1 == Operator::Subtract {
-                    // Error if this is a double negative. We could actually handle this cleanly,
-                    // by why allow confusing and unnecessary syntax?
-                    if let Some(
-                        token @ Token {
-                            kind: TokenKind::Minus,
-                            ..
-                        },
-                    ) = last_token.clone()
-                    {
-                        return Err(ParseError::new(
-                            ErrorKind::UseOfDoubleNegative,
-                            "use of double negative in expression",
-                            Some(token),
-                            start_pos,
-                            op1_token.end.clone(),
-                        ));
-                    }
-
-                    // We have a negative value here, so we're going to represent it as the value
-                    // multiplied by -1. Push -1 to the output queue and push * to the operator
-                    // stack.
-                    out_q.push_back(OutputNode::BasicExpr(Expression::I64Literal(
-                        I64Lit::new_with_default_pos(-1),
-                    )));
-                    op_stack.push_back(Token::new(TokenKind::Asterisk, 0, 0, 0));
-                } else {
-                    return Err(ParseError::new_with_token(
-                        ErrorKind::UnexpectedOperator,
-                        format_code!("unexpected operator {}", op1_token).as_str(),
-                        op1_token,
-                    ));
-                }
-            }
-            // At this point we know that the token is not an operator or a parenthesis.
-            else {
-                // If we're expecting a binary operator or the end of the expression and we've
-                // reached this point, we'll assume that means we've reached the end of the
-                // expression.
-                if expect_binop_or_end {
-                    tokens.rewind(1);
-                    break;
-                }
-
-                // If the last token was a binary operator or this is the beginning of the
-                // expression, then we can expect what follows to be a basic expression. Otherwise,
-                // we should error.
-                match last_token {
-                    None => {
-                        // This is the beginning of the expression, so we expect a basic expression.
-                        tokens.rewind(1);
-                        if let Some(expr) = Expression::from_basic(tokens, is_arg)? {
-                            out_q.push_back(OutputNode::BasicExpr(expr));
-                            expect_binop_or_end = true;
-                        } else {
-                            return Err(ParseError::new_with_token(
-                                ErrorKind::ExpectedBeginExpr,
-                                format_code!(
-                                    "expected beginning of expression, but found {}",
-                                    op1_token,
-                                )
-                                .as_str(),
-                                op1_token,
-                            ));
-                        }
-                    }
-                    Some(last) => {
-                        // This is the continuation of the expression, so if the last token was a
-                        // binary operator, we expect a basic expression - it can't be composite
-                        // because that would have been handled by other branches in the if
-                        // statement above.
-                        match Operator::from(&last.kind) {
-                            Some(Operator::As) => {
-                                tokens.rewind(1);
-                                let target_type = Type::from(tokens)?;
-                                out_q.push_back(OutputNode::Type(target_type));
-                                expect_binop_or_end = true;
-                            }
-
-                            Some(op) if op.is_binary() => {
-                                tokens.rewind(1);
-                                if let Some(expr) = Expression::from_basic(tokens, is_arg)? {
-                                    out_q.push_back(OutputNode::BasicExpr(expr));
-                                    expect_binop_or_end = true;
-                                } else {
-                                    return Err(ParseError::new_with_token(
-                                        ErrorKind::ExpectedBasicExpr,
-                                        format_code!(
-                                            "expected basic expression, but found {}",
-                                            op1_token,
-                                        )
-                                        .as_str(),
-                                        op1_token,
-                                    ));
-                                }
-                            }
-
-                            Some(_) => {
-                                return Err(ParseError::new_with_token(
-                                    ErrorKind::ExpectedExpr,
-                                    format_code!("expected expression, but found {}", op1_token)
-                                        .as_str(),
-                                    op1_token,
-                                ));
-                            }
-
-                            None => {
-                                // At this point we know we the token is not part of the expression, so
-                                // we're done.
-                                tokens.rewind(1);
-                                break;
-                            }
-                        };
-                    }
-                };
-            }
-
-            last_token = Some(op1_token.clone());
+impl Display for OutNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            OutNode::Expr(e) => write!(f, "{}", e),
+            OutNode::BinOp(o) => write!(f, "{}", o),
         }
+    }
+}
 
-        // Pop the remaining items from the operator stack into the output queue.
-        while let Some(op) = op_stack.pop_back() {
-            // Assert the operator on top of the stack is not `(`.
-            if let token @ Token {
-                kind: TokenKind::LeftParen,
-                start: _,
-                end,
-            } = op
-            {
-                return Err(ParseError::new(
-                    ErrorKind::UnmatchedOpenParen,
-                    "unmatched opening parenthesis in expression",
-                    Some(token),
-                    start_pos,
-                    end,
+/// Parses expressions of the forms
+///
+///     <basic> [<binop> <comp>]*
+///     <unop> <basic> [<binop> <comp>]*
+///     sizeof type [<binop> <comp>]*
+///     <basic> as <type> [<binop> <comp>]*
+///
+/// where
+/// - `basic` is a basic expression (see `parse_basic`)
+/// - `binop` is a binary operator
+/// - `unop` is a unary operator
+/// - `comp` is a composite expression (an expression containing binary operators)
+/// - `type` is a type.
+pub fn parse_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
+    let mut op_stack: VecDeque<Token> = VecDeque::new();
+    let mut out_q: VecDeque<OutNode> = VecDeque::new();
+
+    // Collect nodes into the output queue in RPN order.
+    while tokens.has_next() {
+        // The expression must begin with either a basic expression (i.e. not a binary operator)
+        // or a unary operator.
+        let token = tokens.peek_next().unwrap();
+
+        // Check if the expression is a unary operation, a `sizeof` (which is not considered
+        // an operator because its operand is a type and not an expression), or just a basic
+        // expression without operators.
+        let expr = if let Some(op) = Operator::from(&token.kind) {
+            // The operator should not be binary since it is at the beginning of the expression.
+            if !op.is_unary() {
+                return Err(ParseError::new_with_token(
+                    ErrorKind::ExpectedBeginExpr,
+                    format_code!(
+                        "expected beginning of expression, but found binary operator {}",
+                        op
+                    )
+                    .as_str(),
+                    token.clone(),
                 ));
             }
 
-            // Pop the operator from the operator stack onto the output queue.
-            let op = Operator::from(&op.kind).unwrap();
-            out_q.push_back(OutputNode::Operator(op));
+            // Parse all leading unary operators.
+            let mut unary_ops = parse_unary_operators(tokens);
+
+            // Form new expression from chained unary operators.
+            let mut expr = parse_basic_expr(tokens)?;
+            while let Some(op) = unary_ops.pop() {
+                expr = Expression::UnaryOperation(op, Box::new(expr))
+            }
+
+            expr
+        } else if token.kind == TokenKind::SizeOf {
+            Expression::SizeOf(SizeOf::from(tokens)?)
+        } else {
+            parse_basic_expr(tokens)?
+        };
+
+        // Check if a type cast follows the expression.
+        if let Some(Token {
+            kind: TokenKind::As,
+            ..
+        }) = tokens.peek_next()
+        {
+            tokens.next();
+            let typ = Type::from(tokens)?;
+            out_q.push_back(OutNode::Expr(Expression::TypeCast(Box::new(expr), typ)));
+        } else {
+            out_q.push_back(OutNode::Expr(expr));
         }
 
-        // At this point we have an output queue representing the tokens in the expression in
-        // reverse Polish notation (RPN). We just have to convert the RPN into an expression tree.
-        Ok(Expression::from_rpn(&mut out_q)?)
+        // Check if the expression is followed by a binary operator.
+        match tokens.peek_next() {
+            // There are more tokens in the sequence that might be part of this expression.
+            // Check for optional binary operator or `as` type cast operator.
+            Some(t) => match Operator::from(&t.kind) {
+                Some(op) if op.is_binary() => {
+                    let token = t.clone();
+                    tokens.next();
+
+                    // Do the part of the Shunting Yard algorithm where we push operations
+                    // on the operator stack with lower precedence to the output queue.
+                    while let Some(stack_op_token) = op_stack.back() {
+                        let stack_op = Operator::from(&stack_op_token.kind).unwrap();
+                        if stack_op.precedence() > op.precedence()
+                            || (stack_op.precedence() == op.precedence()
+                                && op.is_left_associative())
+                        {
+                            op_stack.pop_back();
+                            out_q.push_back(OutNode::BinOp(stack_op));
+                        } else {
+                            break;
+                        }
+                    }
+
+                    op_stack.push_back(token)
+                }
+
+                _ => break,
+            },
+
+            // There are no more tokens, so this must be the end of the expression.
+            None => break,
+        };
     }
+
+    // Pop the remaining operators from the operator stack and onto the output queue.
+    while let Some(token) = op_stack.pop_back() {
+        out_q.push_back(OutNode::BinOp(Operator::from(&token.kind).unwrap()));
+    }
+
+    // Create expression tree from output queue in RPN order.
+    Ok(parse_from_rpn(&mut out_q)?)
+}
+
+/// Parses and returns all sequential unary operators at the current position in the token stream.
+fn parse_unary_operators(tokens: &mut Stream<Token>) -> Vec<Operator> {
+    let mut unary_ops = vec![];
+    while let Some(token) = tokens.peek_next() {
+        match Operator::from(&token.kind) {
+            Some(op) if op.is_unary() => {
+                unary_ops.push(op);
+                tokens.next();
+            }
+            _ => break,
+        }
+    }
+
+    unary_ops
+}
+
+/// Returns an expression parsed from the vec of output notes in RPN form.
+fn parse_from_rpn(rpn_queue: &mut VecDeque<OutNode>) -> ParseResult<Expression> {
+    match rpn_queue.pop_back() {
+        Some(OutNode::Expr(expr)) => Ok(expr),
+
+        Some(OutNode::BinOp(op)) => {
+            let right = parse_from_rpn(rpn_queue)?;
+            let left = parse_from_rpn(rpn_queue)?;
+            Ok(Expression::BinaryOperation(
+                Box::new(left),
+                op,
+                Box::new(right),
+            ))
+        }
+
+        None => {
+            return Err(ParseError::new(
+                ErrorKind::UnexpectedEOF,
+                "unexpected end of expression",
+                None,
+                Position::default(),
+                Position::default(),
+            ))
+        }
+    }
+}
+
+/// Parses a basic expression. Expects token sequences of the following forms
+///
+///     <unit>
+///     <unit>\[comp\]*
+///     <unit>(comp,*)
+///     <unit>.*
+///
+/// where
+/// - `unit` is a unitary expression (see `parse_unit`)
+/// - `comp` is a composite expression (see `parse_expr`).
+fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
+    let mut expr = parse_unit_expr(tokens)?;
+
+    loop {
+        let token = match tokens.peek_next() {
+            Some(t) => t,
+            None => {
+                return Ok(expr);
+            }
+        };
+
+        match &token.kind {
+            // TODO: move call parsing into its own fn
+            TokenKind::LeftParen => {
+                tokens.next();
+
+                // Collect call arguments.
+                let mut args = vec![];
+                loop {
+                    if let Some(Token { end, .. }) =
+                        Source::parse_optional(tokens, TokenKind::RightParen)
+                    {
+                        expr = Expression::FunctionCall2(Box::new(FuncCall::new(
+                            expr,
+                            args,
+                            end.clone(),
+                        )));
+                        break;
+                    }
+
+                    let arg = parse_expr(tokens)?;
+                    args.push(arg);
+
+                    if let Token {
+                        kind: TokenKind::RightParen,
+                        end,
+                        ..
+                    } = Source::parse_expecting_any(
+                        tokens,
+                        HashSet::from([TokenKind::Comma, TokenKind::RightParen]),
+                    )? {
+                        expr = Expression::FunctionCall2(Box::new(FuncCall::new(
+                            expr,
+                            args,
+                            end.clone(),
+                        )));
+                        break;
+                    };
+                }
+            }
+
+            // TODO: move index parsing into its own fn
+            TokenKind::LeftBracket => {
+                tokens.next();
+
+                expr = Expression::Index(Box::new(Index::new(expr, parse_expr(tokens)?)));
+                Source::parse_expecting(tokens, TokenKind::RightBracket)?;
+            }
+
+            TokenKind::Dot => {
+                tokens.next();
+
+                let (member_name, start_pos, end_pos) = match tokens.next() {
+                    Some(Token {
+                        kind: TokenKind::Identifier(name),
+                        start,
+                        end,
+                    }) => (name.clone(), start.clone(), end.clone()),
+
+                    Some(Token {
+                        kind: TokenKind::I64Literal(index, false),
+                        start,
+                        end,
+                    }) => (index.to_string(), start.clone(), end.clone()),
+
+                    Some(other) => {
+                        return Err(ParseError::new_with_token(
+                            ErrorKind::ExpectedIdent,
+                            format_code!("expected identifier, but found {}", other).as_str(),
+                            other.clone(),
+                        ))
+                    }
+
+                    None => {
+                        return Err(ParseError::new(
+                            ErrorKind::UnexpectedEOF,
+                            "expected identifier, but found EOF",
+                            None,
+                            Position::default(),
+                            Position::default(),
+                        ))
+                    }
+                };
+
+                expr = Expression::MemberAccess(Box::new(MemberAccess2::new(
+                    expr,
+                    member_name,
+                    start_pos,
+                    end_pos,
+                )));
+            }
+
+            _ => return Ok(expr),
+        }
+    }
+}
+
+/// Parses a unitary expression. Expects token sequences of the forms
+///
+///     (<comp>)
+///     <array_init>
+///     <tuple_init>
+///     <struct_init>
+///     <enum_init>
+///     <literal>
+///     <symbol>
+///
+/// where
+/// `comp` is a composite expression (see `parse_expr`).
+fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
+    let token = match tokens.peek_next() {
+        Some(t) => t,
+        None => {
+            return Err(ParseError::new(
+                ErrorKind::UnexpectedEOF,
+                "expected expression, but found EOF",
+                None,
+                Position::default(),
+                Position::default(),
+            ))
+        }
+    };
+
+    let expr = match &token.kind {
+        // Basic literals.
+        TokenKind::BoolLiteral(_) => Expression::BoolLiteral(BoolLit::from(tokens)?),
+        TokenKind::I64Literal(_, _) => Expression::I64Literal(I64Lit::from(tokens)?),
+        TokenKind::U64Literal(_, _) => Expression::U64Literal(U64Lit::from(tokens)?),
+        TokenKind::StrLiteral(_) => Expression::StrLiteral(StrLit::from(tokens)?),
+
+        // Composite value initialization.
+        TokenKind::LeftBracket => Expression::ArrayInit(Box::new(ArrayInit::from(tokens)?)),
+        TokenKind::LeftBrace => Expression::TupleInit(TupleInit::from(tokens)?),
+        TokenKind::Struct => Expression::StructInit(StructInit::from(tokens)?),
+
+        // Inline function declarations.
+        TokenKind::Fn => Expression::AnonFunction(Box::new(Function::from_anon(tokens)?)),
+        TokenKind::DollarSign => {
+            Expression::Lambda(Box::new(Function::from_lambda(LambdaDecl::from(tokens)?)))
+        }
+
+        // Parenthesized expressions.
+        TokenKind::LeftParen => {
+            tokens.next();
+            let expr = parse_expr(tokens)?;
+            Source::parse_expecting(tokens, TokenKind::RightParen)?;
+            expr
+        }
+
+        // Any expression that begins with an identifier.
+        TokenKind::Identifier(_) => match tokens.peek_ahead(1) {
+            Some(Token {
+                kind: TokenKind::DoubleColon,
+                ..
+            }) => Expression::EnumInit(EnumVariantInit::from(tokens)?),
+
+            Some(Token {
+                kind: TokenKind::LeftBrace,
+                ..
+            }) => {
+                // This might be struct initialization, or just part of a conditional that is
+                // followed by the conditional closure.
+                let cursor = tokens.cursor();
+                if let Ok(struct_init) = StructInit::from(tokens) {
+                    return Ok(Expression::StructInit(struct_init));
+                }
+
+                tokens.set_cursor(cursor);
+                Expression::Symbol(Symbol::from_identifier(tokens)?)
+            }
+
+            _ => Expression::Symbol(Symbol::from_identifier(tokens)?),
+        },
+
+        other => {
+            return Err(ParseError::new_with_token(
+                ErrorKind::ExpectedExpr,
+                format_code!("expected expression, but found {}", other).as_str(),
+                token.clone(),
+            ))
+        }
+    };
+
+    Ok(expr)
 }
 
 #[cfg(test)]
 mod tests {
     use crate::lexer::lex::lex;
-
     use crate::lexer::pos::Position;
     use crate::lexer::stream::Stream;
     use crate::lexer::token::Token;
     use crate::lexer::token_kind::TokenKind;
     use crate::parser::ast::bool_lit::BoolLit;
     use crate::parser::ast::expr::Expression;
-    use crate::parser::ast::func_call::FunctionCall;
+    use crate::parser::ast::func_call2::FuncCall;
     use crate::parser::ast::i64_lit::I64Lit;
     use crate::parser::ast::op::Operator;
     use crate::parser::ast::str_lit::StrLit;
@@ -741,7 +560,7 @@ mod tests {
 
     fn parse(raw: &str) -> ParseResult<Expression> {
         let tokens = lex(&mut Stream::from(raw.chars().collect())).expect("should succeed");
-        Expression::from(&mut Stream::from(tokens), false)
+        Expression::from(&mut Stream::from(tokens))
     }
 
     #[test]
@@ -802,8 +621,12 @@ mod tests {
     fn parse_function_call() {
         assert_eq!(
             parse("call(3 * 2 - 2, other(!thing, 1 > var % 2))").unwrap(),
-            Expression::FunctionCall(FunctionCall::new(
-                Symbol::new("call", Position::new(1, 1), Position::new(1, 5)),
+            Expression::FunctionCall2(Box::new(FuncCall::new(
+                Expression::Symbol(Symbol::new(
+                    "call",
+                    Position::new(1, 1),
+                    Position::new(1, 5)
+                )),
                 vec![
                     Expression::BinaryOperation(
                         Box::new(Expression::BinaryOperation(
@@ -829,8 +652,12 @@ mod tests {
                             end_pos: Position::new(1, 15),
                         }))
                     ),
-                    Expression::FunctionCall(FunctionCall::new(
-                        Symbol::new("other", Position::new(1, 17), Position::new(1, 22)),
+                    Expression::FunctionCall2(Box::new(FuncCall::new(
+                        Expression::Symbol(Symbol::new(
+                            "other",
+                            Position::new(1, 17),
+                            Position::new(1, 22)
+                        )),
                         vec![
                             Expression::UnaryOperation(
                                 Operator::LogicalNot,
@@ -866,13 +693,11 @@ mod tests {
                                 ))
                             )
                         ],
-                        Position::new(1, 17),
                         Position::new(1, 43)
-                    ))
+                    )))
                 ],
-                Position::new(1, 1),
-                Position::new(1, 44),
-            ))
+                Position::new(1, 44)
+            )))
         );
     }
 
@@ -967,16 +792,19 @@ mod tests {
                     )),
                     Operator::Multiply,
                     Box::new(Expression::BinaryOperation(
-                        Box::new(Expression::FunctionCall(FunctionCall::new(
-                            Symbol::new("call", Position::new(2, 2), Position::new(2, 6)),
+                        Box::new(Expression::FunctionCall2(Box::new(FuncCall::new(
+                            Expression::Symbol(Symbol::new(
+                                "call",
+                                Position::new(2, 2),
+                                Position::new(2, 6)
+                            )),
                             vec![Expression::BoolLiteral(BoolLit {
                                 value: true,
                                 start_pos: Position::new(2, 7),
                                 end_pos: Position::new(2, 11)
                             })],
-                            Position::new(2, 2),
                             Position::new(2, 12)
-                        ))),
+                        )))),
                         Operator::Modulo,
                         Box::new(Expression::I64Literal(I64Lit {
                             value: 2,
@@ -1003,15 +831,15 @@ mod tests {
         assert!(matches!(
             result,
             Err(ParseError {
-                kind: ErrorKind::UnmatchedOpenParen,
+                kind: ErrorKind::UnexpectedToken,
                 message: _,
                 token: Some(Token {
-                    kind: TokenKind::LeftParen,
-                    start: Position { line: 1, col: 9 },
-                    end: Position { line: 1, col: 10 },
+                    kind: TokenKind::Colon,
+                    start: Position { line: 1, col: 15 },
+                    end: Position { line: 1, col: 16 },
                 }),
-                start_pos: Position { line: 1, col: 1 },
-                end_pos: Position { line: 1, col: 10 },
+                start_pos: Position { line: 1, col: 15 },
+                end_pos: Position { line: 1, col: 16 },
             })
         ));
     }
@@ -1023,9 +851,8 @@ mod tests {
             result,
             Expression::BinaryOperation(
                 Box::new(Expression::BinaryOperation(
-                    Box::new(Expression::BinaryOperation(
-                        Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
-                        Operator::Multiply,
+                    Box::new(Expression::UnaryOperation(
+                        Operator::Subtract,
                         Box::new(Expression::I64Literal(I64Lit {
                             value: 8,
                             has_type_suffix: false,
@@ -1037,14 +864,8 @@ mod tests {
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::BinaryOperation(
                             Box::new(Expression::BinaryOperation(
-                                Box::new(Expression::BinaryOperation(
-                                    Box::new(Expression::I64Literal(I64Lit {
-                                        value: -1,
-                                        has_type_suffix: false,
-                                        start_pos: Position::default(),
-                                        end_pos: Position::default(),
-                                    })),
-                                    Operator::Multiply,
+                                Box::new(Expression::UnaryOperation(
+                                    Operator::Subtract,
                                     Box::new(Expression::I64Literal(I64Lit {
                                         value: 100,
                                         has_type_suffix: false,
@@ -1093,9 +914,8 @@ mod tests {
         let result = parse("-8").unwrap();
         assert_eq!(
             result,
-            Expression::BinaryOperation(
-                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
-                Operator::Multiply,
+            Expression::UnaryOperation(
+                Operator::Subtract,
                 Box::new(Expression::I64Literal(I64Lit {
                     value: 8,
                     has_type_suffix: false,
@@ -1108,9 +928,8 @@ mod tests {
         let result = parse("-x").unwrap();
         assert_eq!(
             result,
-            Expression::BinaryOperation(
-                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
-                Operator::Multiply,
+            Expression::UnaryOperation(
+                Operator::Subtract,
                 Box::new(Expression::Symbol(Symbol {
                     name: "x".to_string(),
                     member_access: None,
@@ -1123,15 +942,13 @@ mod tests {
         let result = parse("-f()").unwrap();
         assert_eq!(
             result,
-            Expression::BinaryOperation(
-                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
-                Operator::Multiply,
-                Box::new(Expression::FunctionCall(FunctionCall::new(
-                    Symbol::new("f", Position::new(1, 2), Position::new(1, 3)),
+            Expression::UnaryOperation(
+                Operator::Subtract,
+                Box::new(Expression::FunctionCall2(Box::new(FuncCall::new(
+                    Expression::Symbol(Symbol::new("f", Position::new(1, 2), Position::new(1, 3))),
                     vec![],
-                    Position::new(1, 2),
-                    Position::new(1, 5)
-                ))),
+                    Position::new(1, 5),
+                ))))
             )
         );
     }
@@ -1152,7 +969,7 @@ mod tests {
             assert!(matches!(
                 result,
                 Err(ParseError {
-                    kind: ErrorKind::UnexpectedOperator,
+                    kind: ErrorKind::ExpectedBeginExpr,
                     ..
                 })
             ))
@@ -1207,21 +1024,83 @@ mod tests {
 
     #[test]
     fn parse_repeated_minus() {
-        let result = parse("--(-v--a)-2--(-100 -- call(1))");
-        assert!(matches!(
+        let result = parse("--(-v--a)-2--(-100 -- call(1))").expect("should succeed");
+        assert_eq!(
             result,
-            Err(ParseError {
-                kind: ErrorKind::UseOfDoubleNegative,
-                message: _,
-                token: Some(Token {
-                    kind: TokenKind::Minus,
-                    start: Position { line: 1, col: 1 },
-                    end: Position { line: 1, col: 2 },
-                }),
-                start_pos: Position { line: 1, col: 1 },
-                end_pos: Position { line: 1, col: 3 },
-            })
-        ))
+            Expression::BinaryOperation(
+                Box::new(Expression::BinaryOperation(
+                    Box::new(Expression::UnaryOperation(
+                        Operator::Subtract,
+                        Box::new(Expression::UnaryOperation(
+                            Operator::Subtract,
+                            Box::new(Expression::BinaryOperation(
+                                Box::new(Expression::UnaryOperation(
+                                    Operator::Subtract,
+                                    Box::new(Expression::Symbol(Symbol {
+                                        name: "v".to_string(),
+                                        member_access: None,
+                                        start_pos: Position { line: 1, col: 5 },
+                                        end_pos: Position { line: 1, col: 6 },
+                                    }))
+                                )),
+                                Operator::Subtract,
+                                Box::new(Expression::UnaryOperation(
+                                    Operator::Subtract,
+                                    Box::new(Expression::Symbol(Symbol {
+                                        name: "a".to_string(),
+                                        member_access: None,
+                                        start_pos: Position { line: 1, col: 8 },
+                                        end_pos: Position { line: 1, col: 9 },
+                                    }))
+                                )),
+                            )),
+                        )),
+                    )),
+                    Operator::Subtract,
+                    Box::new(Expression::I64Literal(I64Lit {
+                        value: 2,
+                        has_type_suffix: false,
+                        start_pos: Position { line: 1, col: 11 },
+                        end_pos: Position { line: 1, col: 12 },
+                    })),
+                )),
+                Operator::Subtract,
+                Box::new(Expression::UnaryOperation(
+                    Operator::Subtract,
+                    Box::new(Expression::BinaryOperation(
+                        Box::new(Expression::UnaryOperation(
+                            Operator::Subtract,
+                            Box::new(Expression::I64Literal(I64Lit {
+                                value: 100,
+                                has_type_suffix: false,
+                                start_pos: Position { line: 1, col: 16 },
+                                end_pos: Position { line: 1, col: 19 },
+                            })),
+                        )),
+                        Operator::Subtract,
+                        Box::new(Expression::UnaryOperation(
+                            Operator::Subtract,
+                            Box::new(Expression::FunctionCall2(Box::new(FuncCall {
+                                fn_expr: Expression::Symbol(Symbol {
+                                    name: "call".to_string(),
+                                    member_access: None,
+                                    start_pos: Position { line: 1, col: 23 },
+                                    end_pos: Position { line: 1, col: 27 },
+                                },),
+                                args: vec![Expression::I64Literal(I64Lit {
+                                    value: 1,
+                                    has_type_suffix: false,
+                                    start_pos: Position { line: 1, col: 28 },
+                                    end_pos: Position { line: 1, col: 29 },
+                                })],
+                                start_pos: Position { line: 1, col: 23 },
+                                end_pos: Position { line: 1, col: 30 },
+                            }))),
+                        )),
+                    ))
+                ))
+            )
+        );
     }
 
     #[test]
@@ -1229,13 +1108,11 @@ mod tests {
         let result = parse("-(-b-(-100))").unwrap();
         assert_eq!(
             result,
-            Expression::BinaryOperation(
-                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
-                Operator::Multiply,
+            Expression::UnaryOperation(
+                Operator::Subtract,
                 Box::new(Expression::BinaryOperation(
-                    Box::new(Expression::BinaryOperation(
-                        Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
-                        Operator::Multiply,
+                    Box::new(Expression::UnaryOperation(
+                        Operator::Subtract,
                         Box::new(Expression::Symbol(Symbol {
                             name: "b".to_string(),
                             member_access: None,
@@ -1244,9 +1121,8 @@ mod tests {
                         })),
                     )),
                     Operator::Subtract,
-                    Box::new(Expression::BinaryOperation(
-                        Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(-1))),
-                        Operator::Multiply,
+                    Box::new(Expression::UnaryOperation(
+                        Operator::Subtract,
                         Box::new(Expression::I64Literal(I64Lit {
                             value: 100,
                             has_type_suffix: false,

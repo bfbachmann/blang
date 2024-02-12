@@ -76,7 +76,7 @@ impl Const {
         Source::parse_expecting(tokens, TokenKind::Equal)?;
 
         // Parse the value as an expression and compute the end position of the statement.
-        let value = Expression::from(tokens, false)?;
+        let value = Expression::from(tokens)?;
         let end_pos = value.end_pos().clone();
 
         Ok(Const {

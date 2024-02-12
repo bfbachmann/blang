@@ -25,7 +25,7 @@ impl AStore {
     /// Performs semantic analysis on the given store statement.
     pub fn from(ctx: &mut ProgramContext, store: &Store) -> AStore {
         // Analyze the destination expression.
-        let dest_expr = AExpr::from(ctx, store.dest_expr.clone(), None, false);
+        let dest_expr = AExpr::from(ctx, store.dest_expr.clone(), None, false, false);
 
         // Make sure the destination expression has a pointer type.
         let maybe_dest_pointee_tk = match ctx.must_get_type(dest_expr.type_key) {
@@ -47,7 +47,13 @@ impl AStore {
         };
 
         // Analyze the source expression.
-        let source_expr = AExpr::from(ctx, store.source_expr.clone(), maybe_dest_pointee_tk, false);
+        let source_expr = AExpr::from(
+            ctx,
+            store.source_expr.clone(),
+            maybe_dest_pointee_tk,
+            false,
+            false,
+        );
 
         AStore {
             source_expr,

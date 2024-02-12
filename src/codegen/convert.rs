@@ -175,7 +175,7 @@ fn to_fn_type<'ctx>(
     sig: &AFnSig,
 ) -> FunctionType<'ctx> {
     // Get return type.
-    let ret_type = match &sig.ret_type_key {
+    let ret_type = match &sig.maybe_ret_type_key {
         Some(type_key) => Some(type_store.must_get(*type_key)),
         None => None,
     };
@@ -194,7 +194,7 @@ fn to_fn_type<'ctx>(
     //      fn new_person(person: *Person)
     //
     // and the `person` pointer will be written to when assigning the return value.
-    let ret_type = match sig.ret_type_key {
+    let ret_type = match sig.maybe_ret_type_key {
         Some(type_key) => Some(type_store.must_get(type_key)),
         None => None,
     };

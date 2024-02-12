@@ -48,20 +48,11 @@ impl PartialEq for AFnCall {
 impl AFnCall {
     /// Analyzes the given function call and returns a type-rich version of it.
     pub fn from(ctx: &mut ProgramContext, call: &FunctionCall) -> Self {
-        // Calls to "main" should not be allowed.
-        if call.has_fn_name("main") {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::CallToMain,
-                "cannot call entrypoint main",
-                call,
-            ));
-        }
-
         // Extract type information from args.
         let mut passed_args: VecDeque<AExpr> = call
             .args
             .iter()
-            .map(|arg| AExpr::from(ctx, arg.clone(), None, true))
+            .map(|arg| AExpr::from(ctx, arg.clone(), None, true, false))
             .collect();
 
         // Get the type key of the first argument so we can pass it as a hint to the variable
@@ -74,7 +65,7 @@ impl AFnCall {
 
         // Make sure the function exists, either as a fully analyzed function, an external function
         // signature, or a variable.
-        let a_fn_symbol = ASymbol::from(ctx, &call.fn_symbol, true, maybe_impl_type_key);
+        let a_fn_symbol = ASymbol::from(ctx, &call.fn_symbol, true, false, maybe_impl_type_key);
         let var_type = ctx.must_get_type(a_fn_symbol.get_type_key());
 
         // If the function symbol failed analysis, we can return early.
@@ -87,8 +78,8 @@ impl AFnCall {
         }
 
         // Try to locate the function signature for this function call. If it's a call to a type
-        // member function, we'll look up the function using the type key. Otherwise, we just extract
-        // the function signature from the variable type, as it should be a function type.
+        // member function, we'll look up the function using the type key. Otherwise, we just
+        // extract the function signature from the variable type, as it should be a function type.
         let fn_sig = match AFnCall::get_fn_sig(ctx, &a_fn_symbol, &call) {
             Ok(sig) => sig,
             Err(err) => {
@@ -104,7 +95,7 @@ impl AFnCall {
 
         // Clone here to avoid borrow issues.
         let fn_sig = fn_sig.clone();
-        let maybe_ret_type_key = fn_sig.ret_type_key.clone();
+        let maybe_ret_type_key = fn_sig.maybe_ret_type_key.clone();
 
         // If this function takes the special argument `self` and was not called directly via its
         // fully-qualified name, add the special `self` argument.
@@ -142,7 +133,7 @@ impl AFnCall {
                         .as_str(),
                     )
                     .with_help(
-                        format_code!("Did you mean to call {}?", fn_sig.full_name()).as_str(),
+                        format_code!("Did you mean to call {}?", fn_sig.mangled_name).as_str(),
                     ),
                 );
 
@@ -231,7 +222,7 @@ impl AFnCall {
     ) -> AnalyzeResult<&'a AFnSig> {
         if a_fn_symbol.is_type {
             let method_name = a_fn_symbol.get_last_member_name();
-            match ctx.get_member_fn(a_fn_symbol.parent_type_key, method_name.as_str()) {
+            match ctx.get_member_fn(a_fn_symbol.base_type_key, method_name.as_str()) {
                 Some(fn_sig) => Ok(fn_sig),
                 None => Err(AnalyzeError::new(
                     ErrorKind::UndefMember,

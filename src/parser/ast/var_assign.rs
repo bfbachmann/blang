@@ -9,6 +9,8 @@ use crate::parser::source::Source;
 use std::hash::{Hash, Hasher};
 
 /// Represents the assignment of some value (i.e. an expression) to a variable.
+// TODO: Model variable assignment with two expressions where one is the source
+// and the other is the target.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct VariableAssignment {
     pub symbol: Symbol,
@@ -62,7 +64,7 @@ impl VariableAssignment {
         Source::parse_expecting(tokens, TokenKind::Equal)?;
 
         // The next tokens should be some expression.
-        let expr = Expression::from(tokens, false)?;
+        let expr = Expression::from(tokens)?;
 
         Ok(VariableAssignment::new(var, expr, start_pos))
     }

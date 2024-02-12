@@ -61,7 +61,7 @@ impl Branch {
         let mut cond_expr = None;
         if with_condition {
             // The following tokens should be an expression that represents the branch condition.
-            let expr = Expression::from(tokens, false)?;
+            let expr = Expression::from(tokens)?;
             cond_expr = Some(expr);
         }
 

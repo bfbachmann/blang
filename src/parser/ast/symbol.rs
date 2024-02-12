@@ -11,6 +11,7 @@ use crate::locatable_impl;
 use crate::parser::ast::member::MemberAccess;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
+use crate::parser::source::Source;
 
 /// Represents a a named value. These can be variables, variable member accesses, functions,
 /// constants, or types.
@@ -65,9 +66,21 @@ impl Symbol {
         }
     }
 
+    /// Attempts to parse a symbol composed only of a single identifier from the given token sequence.
+    pub fn from_identifier(tokens: &mut Stream<Token>) -> ParseResult<Symbol> {
+        let start_pos = Source::current_position(tokens);
+        let name = Source::parse_identifier(tokens)?;
+        Ok(Symbol {
+            name,
+            member_access: None,
+            start_pos,
+            end_pos: Source::prev_position(tokens),
+        })
+    }
+
     /// Attempts to parse a symbol from the given token sequence. A symbol can be an identifier
     /// representing a variable, constant, type, or function, or a type member access.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Symbol> {
         match tokens.next() {
             Some(&Token {
                 kind: TokenKind::Identifier(ref name),

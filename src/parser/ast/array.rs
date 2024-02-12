@@ -60,7 +60,7 @@ impl ArrayType {
 
         let element_type = Type::from(tokens)?;
         Source::parse_expecting(tokens, TokenKind::SemiColon)?;
-        let length_expr = Expression::from(tokens, false)?;
+        let length_expr = Expression::from(tokens)?;
         let end_pos = Source::parse_expecting(tokens, TokenKind::RightBracket)?.end;
 
         Ok(ArrayType {
@@ -137,7 +137,7 @@ impl ArrayInit {
         }
 
         // Parse the first value in the array (there must be at least one at this point).
-        let mut values = vec![Expression::from(tokens, false)?];
+        let mut values = vec![Expression::from(tokens)?];
         let mut maybe_repeat_expr = None;
 
         // Parse the rest of the values in the array, or the `; <repeat_count>`, or `]`.
@@ -154,7 +154,7 @@ impl ArrayInit {
                 ..
             }) => loop {
                 // Parse the expression for the next value in the array.
-                values.push(Expression::from(tokens, false)?);
+                values.push(Expression::from(tokens)?);
 
                 // The next token should either be `,` or `]`.
                 match Source::parse_expecting_any(
@@ -181,7 +181,7 @@ impl ArrayInit {
             }
 
             Ok(_) => {
-                maybe_repeat_expr = Some(Expression::from(tokens, false)?);
+                maybe_repeat_expr = Some(Expression::from(tokens)?);
                 Source::parse_expecting(tokens, TokenKind::RightBracket)?
                     .end
                     .clone()

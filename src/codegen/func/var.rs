@@ -40,7 +40,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     pub(crate) fn get_var_ptr(&mut self, var: &ASymbol) -> PointerValue<'ctx> {
         let ll_var_ptr = self.get_var_ptr_by_name(var.name.as_str());
         if let Some(access) = &var.member_access {
-            self.get_var_member_ptr(ll_var_ptr, var.parent_type_key, access)
+            self.get_var_member_ptr(ll_var_ptr, var.base_type_key, access)
         } else {
             ll_var_ptr
         }
@@ -62,7 +62,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Get a pointer to the variable or member.
         let ll_var_ptr = self.get_var_ptr(var);
 
-        // Load the value from the pointer (unless its a composite value that is passed with
+        // Load the value from the pointer (unless it's a composite value that is passed with
         // pointers, or a pointer to a module-level function).
         let var_type_key = var.get_type_key();
         let var_type = self.type_store.must_get(var_type_key);
@@ -138,5 +138,80 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         panic!("failed to resolve variable {}", name);
+    }
+
+    /// Returns the value of the member with name `member_name` on `ll_base_val`.
+    pub(crate) fn get_member_value(
+        &mut self,
+        ll_base_val: BasicValueEnum<'ctx>,
+        base_expr_type_key: TypeKey,
+        member_type_key: TypeKey,
+        member_name: &str,
+    ) -> BasicValueEnum<'ctx> {
+        let base_expr_type = self.type_store.must_get(base_expr_type_key);
+        let ll_base_expr_type = self.type_converter.get_basic_type(base_expr_type_key);
+
+        if ll_base_val.is_pointer_value() {
+            // Handle the case where the value we're accessing is a pointer.
+            let ll_member_ptr = match base_expr_type {
+                AType::Struct(struct_type) => {
+                    // Get a pointer to the struct field at the computed index.
+                    self.builder
+                        .build_struct_gep(
+                            ll_base_expr_type,
+                            ll_base_val.into_pointer_value(),
+                            struct_type.get_field_index(member_name).unwrap() as u32,
+                            format!("{}_ptr", member_name).as_str(),
+                        )
+                        .unwrap()
+                }
+
+                AType::Tuple(tuple_type) => {
+                    // Get a pointer to the tuple field at the computed index.
+                    self.builder
+                        .build_struct_gep(
+                            ll_base_expr_type,
+                            ll_base_val.into_pointer_value(),
+                            tuple_type.get_field_index(member_name) as u32,
+                            format!("{}_ptr", member_name).as_str(),
+                        )
+                        .unwrap()
+                }
+
+                other => panic!("invalid member access on type {}", other),
+            };
+
+            let ll_member_type = self.type_converter.get_basic_type(member_type_key);
+            self.builder
+                .build_load(ll_member_type, ll_member_ptr, member_name)
+        } else {
+            // Handle the case where the value we're accessing is not a pointer
+            // (it's a constant).
+            match base_expr_type {
+                AType::Struct(struct_type) => {
+                    // Get the value of the struct field at the computed index.
+                    self.builder
+                        .build_extract_value(
+                            ll_base_val.into_struct_value(),
+                            struct_type.get_field_index(member_name).unwrap() as u32,
+                            format!("{}_ptr", member_name).as_str(),
+                        )
+                        .unwrap()
+                }
+
+                AType::Tuple(tuple_type) => {
+                    // Get the value of the tuple field at the computed index.
+                    self.builder
+                        .build_extract_value(
+                            ll_base_val.into_struct_value(),
+                            tuple_type.get_field_index(member_name) as u32,
+                            format!("{}_ptr", member_name).as_str(),
+                        )
+                        .unwrap()
+                }
+
+                other => panic!("invalid member access on type {}", other),
+            }
+        }
     }
 }
