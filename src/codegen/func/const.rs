@@ -1,5 +1,5 @@
 use inkwell::values::{
-    ArrayValue, BasicValue, BasicValueEnum, IntValue, PointerValue, StructValue,
+    AggregateValue, ArrayValue, BasicValue, BasicValueEnum, IntValue, PointerValue, StructValue,
 };
 
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
@@ -206,6 +206,23 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     access.member_type_key,
                     access.member_name.as_str(),
                 )
+            }
+
+            AExprKind::Index(index) => {
+                let ll_collection_val = self.gen_const_expr(&index.collection_expr);
+                let ll_index_val = self.gen_const_expr(&index.index_expr);
+                self.builder
+                    .build_extract_value(
+                        ll_collection_val
+                            .into_array_value()
+                            .as_aggregate_value_enum(),
+                        ll_index_val
+                            .into_int_value()
+                            .get_zero_extended_constant()
+                            .unwrap() as u32,
+                        "elem",
+                    )
+                    .unwrap()
             }
 
             _ => panic!("unexpected const expression {}", expr),

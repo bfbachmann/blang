@@ -166,8 +166,21 @@ impl ArrayInit {
                         end,
                         ..
                     }) => break end.clone(),
-                    Ok(_) => {}
+
+                    Ok(Token {
+                        kind: TokenKind::Comma,
+                        end,
+                        ..
+                    }) => {
+                        // Handle the trailing comma.
+                        if Source::parse_optional(tokens, TokenKind::RightBracket).is_some() {
+                            break end.clone();
+                        }
+                    }
+
                     Err(err) => return Err(err),
+
+                    _ => unreachable!(),
                 }
             },
 

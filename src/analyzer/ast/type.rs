@@ -401,7 +401,10 @@ impl AType {
 
     /// Returns true if this is a composite type (i.e. a type that can contain other types).
     pub fn is_composite(&self) -> bool {
-        matches!(self, AType::Struct(_) | AType::Enum(_) | AType::Tuple(_))
+        matches!(
+            self,
+            AType::Struct(_) | AType::Enum(_) | AType::Tuple(_) | AType::Array(_)
+        )
     }
 
     /// Returns the struct type corresponding to this type. Panics if this type is not a

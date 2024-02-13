@@ -4,6 +4,7 @@ use inkwell::{AddressSpace, IntPredicate};
 use crate::analyzer::ast::array::AArrayInit;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::fn_call::AFnCall;
+use crate::analyzer::ast::index::AIndex;
 use crate::analyzer::ast::member::AMemberAccess;
 use crate::analyzer::ast::r#enum::AEnumVariantInit;
 use crate::analyzer::ast::r#struct::AStructInit;
@@ -54,6 +55,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AExprKind::TupleInit(tuple_init) => self.gen_tuple_init(tuple_init),
 
             AExprKind::ArrayInit(array_init) => self.gen_array_init(array_init),
+
+            AExprKind::Index(index) => self.gen_index(index),
 
             // TODO: Compiling this function works fine, but trying to actually use it will cause
             // a panic because it has no name. The fix likely involves giving anon functions unique
@@ -135,6 +138,49 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         ll_struct_ptr.as_basic_value_enum()
     }
 
+    /// Generates collection indexing expressions.
+    fn gen_index(&mut self, index: &AIndex) -> BasicValueEnum<'ctx> {
+        // Generate code that gives us the collection.
+        let ll_collection_val = self.gen_expr(&index.collection_expr);
+        let ll_array_type = self
+            .type_converter
+            .get_array_type(index.collection_expr.type_key);
+
+        // Generate code that gives us the index value.
+        let ll_index_val = self.gen_expr(&index.index_expr);
+
+        // Copy the collection to the stack, so we have a pointer to it that we can use for
+        // the GEP below if it is not already a pointer.
+        let ll_collection_ptr = if ll_collection_val.is_pointer_value() {
+            ll_collection_val.into_pointer_value()
+        } else {
+            let ll_ptr = self.create_entry_alloc(
+                "collection",
+                index.collection_expr.type_key,
+                ll_collection_val,
+            );
+            self.copy_value(ll_collection_val, ll_ptr, index.collection_expr.type_key);
+            ll_ptr
+        };
+
+        // Compute the pointer to the value at the given index in the collection.
+        let ll_elem_ptr = unsafe {
+            self.builder.build_in_bounds_gep(
+                ll_array_type,
+                ll_collection_ptr,
+                &[
+                    self.ctx.i32_type().const_int(0, false),
+                    ll_index_val.into_int_value(),
+                ],
+                "elem_ptr",
+            )
+        };
+
+        // Load the value from the pointer.
+        let ll_elem_type = self.type_converter.get_basic_type(index.result_type_key);
+        self.builder.build_load(ll_elem_type, ll_elem_ptr, "elem")
+    }
+
     /// Generates array initialization instructions and returns the resulting LLVM array value.
     fn gen_array_init(&mut self, array_init: &AArrayInit) -> BasicValueEnum<'ctx> {
         let array_type = self
@@ -159,19 +205,19 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         };
 
         // Init array elements.
-        unsafe {
-            for (i, value) in elements.iter().enumerate() {
-                let ll_index = self.ctx.i32_type().const_int(i as u64, false);
-                let ll_element_ptr = self.builder.build_in_bounds_gep(
+        for (i, value) in elements.iter().enumerate() {
+            let ll_index = self.ctx.i32_type().const_int(i as u64, false);
+            let ll_element_ptr = unsafe {
+                self.builder.build_in_bounds_gep(
                     ll_array_type,
                     ll_array_ptr,
                     &[ll_index],
                     "array_gep",
-                );
+                )
+            };
 
-                let ll_elem = self.gen_expr(value);
-                self.copy_value(ll_elem, ll_element_ptr, value.type_key);
-            }
+            let ll_elem = self.gen_expr(value);
+            self.copy_value(ll_elem, ll_element_ptr, value.type_key);
         }
 
         ll_array_ptr.as_basic_value_enum()

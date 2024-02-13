@@ -42,6 +42,7 @@ pub enum ErrorKind {
     InvalidTypeCast,
     InvalidExtern,
     InvalidArraySize,
+    IndexOutOfBounds,
     #[cfg(test)]
     #[cfg(feature = "generics")]
     SpecNotSatisfied,
@@ -86,6 +87,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::ExpectedExpr => write!(f, "expected expression"),
             ErrorKind::InvalidExtern => write!(f, "invalid extern"),
             ErrorKind::InvalidArraySize => write!(f, "invalid array size"),
+            ErrorKind::IndexOutOfBounds => write!(f, "index out of bounds"),
             #[cfg(test)]
             #[cfg(feature = "generics")]
             ErrorKind::SpecNotSatisfied => write!(f, "unsatisfied spec"),

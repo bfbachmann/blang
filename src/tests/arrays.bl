@@ -4,9 +4,17 @@
 
 extern fn exit(code: u64)
 
+fn assert(b: bool, exit_code: u64) {
+    if !b {
+        exit(exit_code)
+    }
+}
+
 fn do_nothing() {}
 
-struct Thing {}
+struct Thing {
+    value: i64
+}
 
 const SOME_BOOL = true
 const SOME_ARRAY_LEN = 100
@@ -15,11 +23,18 @@ const SOME_ARRAY_LEN = 100
 const SOME_ARRAY = [SOME_BOOL; SOME_ARRAY_LEN as u64]
 
 fn main() {
-    // Check that array variables can be declared and initialized.
+    // Check that array variables can be declared, initialized, and accessed.
     {
         // Initialization using constant expressions.
         let a: [u64; 3] = [1, 2, 3]
+        assert(a[0] == 1, 1)
+        assert(a[1] == 2, 2)
+        assert(a[2] == 3, 3)
+
         let b = ["one", "two", "three"]
+        assert(b[0] == "one", 4)
+        assert(b[1] == "two", 5)
+        assert(b[2] == "three", 6)
 
         // Make sure empty arrays are allowed.
         let empty: [] = []
@@ -27,14 +42,19 @@ fn main() {
 
         // Constant array declaration at the function level.
         const c = [{true}, {false}]
+        assert(c[0].0 == true, 7)
+        assert(c[1].0 == false, 8)
 
         // Initialization usinig repeat count.
-        let d = [Thing{}; 3]
+        let d = [Thing{value: -8}; 2]
+        assert(d[0].value == -8, 9)
+        assert(d[1].value == -8, 10)
     }
 
     // Check that arrays can be passed to and returned from functions.
     {
         let result = take([-8, 12])
+        assert(result[0] == "test", 13)
     }
 
     // Check that array type equality works.
@@ -46,5 +66,7 @@ fn main() {
 }
 
 fn take(a: [i64; 2]) ~ [str; 1] {
+    assert(a[0] == -8, 11)
+    assert(a[1] == 12, 12)
     return ["test"]
 }

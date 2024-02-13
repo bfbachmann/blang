@@ -7,6 +7,7 @@ use crate::analyzer::ast::array::AArrayInit;
 use crate::analyzer::ast::closure::AClosure;
 use crate::analyzer::ast::fn_call::AFnCall;
 use crate::analyzer::ast::func::{AFn, AFnSig};
+use crate::analyzer::ast::index::AIndex;
 use crate::analyzer::ast::member::AMemberAccess;
 use crate::analyzer::ast::pointer::APointerType;
 use crate::analyzer::ast::r#enum::{AEnumTypeVariant, AEnumVariantInit};
@@ -40,6 +41,7 @@ pub enum AExprKind {
     EnumInit(AEnumVariantInit),
     TupleInit(ATupleInit),
     ArrayInit(AArrayInit),
+    Index(Box<AIndex>),
     FunctionCall(Box<AFnCall>),
     AnonFunction(Box<AFn>),
     UnaryOperation(Operator, Box<AExpr>),
@@ -65,6 +67,7 @@ impl fmt::Display for AExprKind {
             AExprKind::EnumInit(e) => write!(f, "{}", e),
             AExprKind::TupleInit(t) => write!(f, "{}", t),
             AExprKind::ArrayInit(a) => write!(f, "{}", a),
+            AExprKind::Index(i) => write!(f, "{}", i),
             AExprKind::FunctionCall(call) => write!(f, "{}", call),
             AExprKind::AnonFunction(func) => write!(f, "{}", *func),
             AExprKind::UnaryOperation(op, expr) => write!(f, "{} {}", op, expr),
@@ -169,6 +172,12 @@ impl AExprKind {
                 true
             }
 
+            // An index expression is constant if the collection being indexed and the index
+            // itself are both constant.
+            AExprKind::Index(index) => {
+                index.collection_expr.kind.is_const() && index.index_expr.kind.is_const()
+            }
+
             // Symbols can be constants.
             AExprKind::Symbol(sym) => sym.is_const,
 
@@ -196,6 +205,7 @@ impl AExprKind {
             AExprKind::EnumInit(e) => e.display(ctx),
             AExprKind::TupleInit(t) => t.display(ctx),
             AExprKind::ArrayInit(a) => a.display(ctx),
+            AExprKind::Index(i) => i.display(ctx),
             AExprKind::FunctionCall(call) => call.display(ctx),
             AExprKind::AnonFunction(func) => func.display(ctx),
             AExprKind::UnaryOperation(op, expr) => format!("{} {}", op, expr.display(ctx)),
@@ -451,17 +461,21 @@ impl AExpr {
                 }
             }
 
-            Expression::Index(_) => {
-                todo!()
+            Expression::Index(index) => {
+                let a_index = AIndex::from(ctx, index);
+                AExpr {
+                    type_key: a_index.result_type_key,
+                    kind: AExprKind::Index(Box::new(a_index)),
+                    start_pos,
+                    end_pos,
+                }
             }
 
             Expression::MemberAccess(member_access) => {
                 let access = AMemberAccess::from(ctx, member_access);
-                let type_key = access.member_type_key;
-
                 AExpr {
+                    type_key: access.member_type_key,
                     kind: AExprKind::MemberAccess(Box::new(access)),
-                    type_key,
                     start_pos,
                     end_pos,
                 }

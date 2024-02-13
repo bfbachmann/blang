@@ -475,6 +475,19 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 }
             }
 
+            AType::Array(_) => {
+                // Load the array from the source pointer.
+                let ll_array_type = self.type_converter.get_basic_type(type_key);
+                let ll_array_val = self.builder.build_load(
+                    ll_array_type,
+                    ll_src_val.into_pointer_value(),
+                    "src_array",
+                );
+
+                // Store the array at the destination pointer.
+                self.builder.build_store(ll_dst_ptr, ll_array_val);
+            }
+
             _ => {
                 // Store the expression value to the pointer address.
                 self.builder.build_store(ll_dst_ptr, ll_src_val);

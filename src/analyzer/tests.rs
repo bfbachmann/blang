@@ -1116,4 +1116,16 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::UndefMember));
     }
+
+    #[test]
+    fn array_index_out_of_bounds() {
+        let result = analyze(r#"const oob = [1, 2, 3][5]"#);
+        check_result(result, Some(ErrorKind::IndexOutOfBounds));
+    }
+
+    #[test]
+    fn array_index_wrong_type() {
+        let result = analyze(r#"const wrong_type = [1, 2, 3][true]"#);
+        check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
 }

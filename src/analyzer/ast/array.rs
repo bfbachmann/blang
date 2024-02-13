@@ -62,7 +62,8 @@ impl AArrayType {
         } else {
             match len_expr.try_into_const_u64(ctx) {
                 Ok(u) => u,
-                Err(err) => {
+                Err(mut err) => {
+                    err.detail = Some("Array lengths must be constant.".to_string());
                     ctx.insert_err(err);
                     0
                 }
@@ -221,7 +222,8 @@ impl AArrayInit {
                 } else {
                     match expr.try_into_const_u64(ctx) {
                         Ok(u) => Some(u),
-                        Err(err) => {
+                        Err(mut err) => {
+                            err.detail = Some("Array lengths must be constant.".to_string());
                             ctx.insert_err(err);
 
                             // Just return an empty array since it's invalid.

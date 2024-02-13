@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::analyzer::ast::array::AArrayType;
 use inkwell::context::Context;
 use inkwell::types::{
     AnyType, AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType,
@@ -123,15 +124,7 @@ fn to_basic_type<'ctx>(
             tuple_to_struct_type(ctx, type_store, tuple_type).as_basic_type_enum()
         }
 
-        AType::Array(array_type) => match &array_type.maybe_element_type_key {
-            Some(tk) => {
-                let ll_element_type = to_basic_type(ctx, type_store, type_store.must_get(*tk));
-                ll_element_type
-                    .array_type(array_type.len as u32)
-                    .as_basic_type_enum()
-            }
-            None => ctx.i8_type().array_type(0).as_basic_type_enum(),
-        },
+        AType::Array(array_type) => to_array_type(ctx, type_store, array_type).as_basic_type_enum(),
 
         AType::Function(fn_sig) => to_fn_type(ctx, &type_store, fn_sig)
             .ptr_type(AddressSpace::default())
@@ -208,6 +201,9 @@ fn to_fn_type<'ctx>(
         Some(AType::Tuple(tuple_type)) => Some(
             tuple_to_struct_type(ctx, type_store, tuple_type).ptr_type(AddressSpace::default()),
         ),
+        Some(AType::Array(array_type)) => {
+            Some(to_array_type(ctx, type_store, array_type).ptr_type(AddressSpace::default()))
+        }
         _ => None,
     };
 
@@ -282,6 +278,21 @@ fn to_struct_type<'ctx>(
     }
 }
 
+/// Converts the given `array_type` to an LLVM `ArrayType`.
+fn to_array_type<'ctx>(
+    ctx: &'ctx Context,
+    type_store: &TypeStore,
+    array_type: &AArrayType,
+) -> ArrayType<'ctx> {
+    match &array_type.maybe_element_type_key {
+        Some(tk) => {
+            let ll_element_type = to_basic_type(ctx, type_store, type_store.must_get(*tk));
+            ll_element_type.array_type(array_type.len as u32)
+        }
+        None => ctx.i8_type().array_type(0),
+    }
+}
+
 /// Converts the given `enum_type` to an LLVM `StructType`.
 fn enum_to_struct_type<'ctx>(ctx: &'ctx Context, enum_type: &AEnumType) -> StructType<'ctx> {
     // If the corresponding LLVM struct type already exists, just return it.
@@ -320,11 +331,11 @@ fn to_metadata_type_enum<'ctx>(
     type_store: &TypeStore,
     typ: &AType,
 ) -> BasicMetadataTypeEnum<'ctx> {
-    match typ {
-        AType::Struct(_) | AType::Tuple(_) | AType::Enum(_) => BasicMetadataTypeEnum::from(
+    if typ.is_composite() {
+        BasicMetadataTypeEnum::from(
             to_basic_type(ctx, type_store, typ).ptr_type(AddressSpace::default()),
-        ),
-
-        other => BasicMetadataTypeEnum::from(to_basic_type(ctx, type_store, other)),
+        )
+    } else {
+        BasicMetadataTypeEnum::from(to_basic_type(ctx, type_store, typ))
     }
 }
