@@ -11,12 +11,11 @@ use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::array::ArrayInit;
 use crate::parser::ast::bool_lit::BoolLit;
 use crate::parser::ast::func::Function;
-use crate::parser::ast::func_call::FunctionCall;
-use crate::parser::ast::func_call2::FuncCall;
+use crate::parser::ast::func_call::FuncCall;
 use crate::parser::ast::i64_lit::I64Lit;
 use crate::parser::ast::index::Index;
 use crate::parser::ast::lambda::LambdaDecl;
-use crate::parser::ast::member::MemberAccess2;
+use crate::parser::ast::member::MemberAccess;
 use crate::parser::ast::op::Operator;
 use crate::parser::ast::r#enum::EnumVariantInit;
 use crate::parser::ast::r#struct::StructInit;
@@ -40,8 +39,7 @@ pub enum Expression {
     I64Literal(I64Lit),
     U64Literal(U64Lit),
     StrLiteral(StrLit),
-    FunctionCall(FunctionCall), // TODO: Remove.
-    FunctionCall2(Box<FuncCall>),
+    FunctionCall(Box<FuncCall>),
     AnonFunction(Box<Function>),
     Lambda(Box<Function>),
     StructInit(StructInit),
@@ -50,7 +48,7 @@ pub enum Expression {
     ArrayInit(Box<ArrayInit>),
     SizeOf(SizeOf),
     Index(Box<Index>),
-    MemberAccess(Box<MemberAccess2>),
+    MemberAccess(Box<MemberAccess>),
 
     // Composite expressions.
     UnaryOperation(Operator, Box<Expression>),
@@ -66,8 +64,7 @@ impl Display for Expression {
             Expression::I64Literal(i) => write!(f, "{}", i),
             Expression::U64Literal(i) => write!(f, "{}", i),
             Expression::StrLiteral(s) => write!(f, "{}", s),
-            Expression::FunctionCall(chain) => write!(f, "{}", chain),
-            Expression::FunctionCall2(call) => write!(f, "{}", call),
+            Expression::FunctionCall(call) => write!(f, "{}", call),
             Expression::AnonFunction(func) => write!(f, "{}", func),
             Expression::Lambda(func) => write!(f, "{}", func),
             Expression::UnaryOperation(op, expr) => write!(f, "{}{}", op, expr),
@@ -99,7 +96,6 @@ impl Locatable for Expression {
             Expression::U64Literal(u64_lit) => u64_lit.start_pos(),
             Expression::StrLiteral(string_lit) => string_lit.start_pos(),
             Expression::FunctionCall(fn_call) => fn_call.start_pos(),
-            Expression::FunctionCall2(fn_call) => fn_call.start_pos(),
             Expression::AnonFunction(func) => func.start_pos(),
             Expression::Lambda(func) => func.start_pos(),
             Expression::UnaryOperation(_, expr) => expr.start_pos(),
@@ -123,7 +119,6 @@ impl Locatable for Expression {
             Expression::U64Literal(u64_lit) => u64_lit.end_pos(),
             Expression::StrLiteral(string_lit) => string_lit.end_pos(),
             Expression::FunctionCall(fn_call) => fn_call.end_pos(),
-            Expression::FunctionCall2(fn_call) => fn_call.end_pos(),
             Expression::AnonFunction(func) => func.end_pos(),
             Expression::Lambda(func) => func.end_pos(),
             Expression::UnaryOperation(_, expr) => expr.end_pos(),
@@ -368,7 +363,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                     if let Some(Token { end, .. }) =
                         Source::parse_optional(tokens, TokenKind::RightParen)
                     {
-                        expr = Expression::FunctionCall2(Box::new(FuncCall::new(
+                        expr = Expression::FunctionCall(Box::new(FuncCall::new(
                             expr,
                             args,
                             end.clone(),
@@ -387,7 +382,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                         tokens,
                         HashSet::from([TokenKind::Comma, TokenKind::RightParen]),
                     )? {
-                        expr = Expression::FunctionCall2(Box::new(FuncCall::new(
+                        expr = Expression::FunctionCall(Box::new(FuncCall::new(
                             expr,
                             args,
                             end.clone(),
@@ -440,7 +435,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                     }
                 };
 
-                expr = Expression::MemberAccess(Box::new(MemberAccess2::new(
+                expr = Expression::MemberAccess(Box::new(MemberAccess::new(
                     expr,
                     member_name,
                     start_pos,
@@ -551,7 +546,7 @@ mod tests {
     use crate::lexer::token_kind::TokenKind;
     use crate::parser::ast::bool_lit::BoolLit;
     use crate::parser::ast::expr::Expression;
-    use crate::parser::ast::func_call2::FuncCall;
+    use crate::parser::ast::func_call::FuncCall;
     use crate::parser::ast::i64_lit::I64Lit;
     use crate::parser::ast::op::Operator;
     use crate::parser::ast::str_lit::StrLit;
@@ -569,7 +564,6 @@ mod tests {
             parse(r#"my_var"#).unwrap(),
             Expression::Symbol(Symbol {
                 name: "my_var".to_string(),
-                member_access: None,
                 start_pos: Position::new(1, 1),
                 end_pos: Position::new(1, 7),
             })
@@ -621,7 +615,7 @@ mod tests {
     fn parse_function_call() {
         assert_eq!(
             parse("call(3 * 2 - 2, other(!thing, 1 > var % 2))").unwrap(),
-            Expression::FunctionCall2(Box::new(FuncCall::new(
+            Expression::FunctionCall(Box::new(FuncCall::new(
                 Expression::Symbol(Symbol::new(
                     "call",
                     Position::new(1, 1),
@@ -652,7 +646,7 @@ mod tests {
                             end_pos: Position::new(1, 15),
                         }))
                     ),
-                    Expression::FunctionCall2(Box::new(FuncCall::new(
+                    Expression::FunctionCall(Box::new(FuncCall::new(
                         Expression::Symbol(Symbol::new(
                             "other",
                             Position::new(1, 17),
@@ -663,7 +657,6 @@ mod tests {
                                 Operator::LogicalNot,
                                 Box::new(Expression::Symbol(Symbol {
                                     name: "thing".to_string(),
-                                    member_access: None,
                                     start_pos: Position::new(1, 24),
                                     end_pos: Position::new(1, 29),
                                 }))
@@ -679,7 +672,6 @@ mod tests {
                                 Box::new(Expression::BinaryOperation(
                                     Box::new(Expression::Symbol(Symbol {
                                         name: "var".to_string(),
-                                        member_access: None,
                                         start_pos: Position::new(1, 35),
                                         end_pos: Position::new(1, 38),
                                     })),
@@ -770,7 +762,6 @@ mod tests {
                         Box::new(Expression::BinaryOperation(
                             Box::new(Expression::Symbol(Symbol {
                                 name: "var".to_string(),
-                                member_access: None,
                                 start_pos: Position::new(1, 2),
                                 end_pos: Position::new(1, 5),
                             })),
@@ -792,7 +783,7 @@ mod tests {
                     )),
                     Operator::Multiply,
                     Box::new(Expression::BinaryOperation(
-                        Box::new(Expression::FunctionCall2(Box::new(FuncCall::new(
+                        Box::new(Expression::FunctionCall(Box::new(FuncCall::new(
                             Expression::Symbol(Symbol::new(
                                 "call",
                                 Position::new(2, 2),
@@ -932,7 +923,6 @@ mod tests {
                 Operator::Subtract,
                 Box::new(Expression::Symbol(Symbol {
                     name: "x".to_string(),
-                    member_access: None,
                     start_pos: Position::new(1, 2),
                     end_pos: Position::new(1, 3),
                 })),
@@ -944,7 +934,7 @@ mod tests {
             result,
             Expression::UnaryOperation(
                 Operator::Subtract,
-                Box::new(Expression::FunctionCall2(Box::new(FuncCall::new(
+                Box::new(Expression::FunctionCall(Box::new(FuncCall::new(
                     Expression::Symbol(Symbol::new("f", Position::new(1, 2), Position::new(1, 3))),
                     vec![],
                     Position::new(1, 5),
@@ -1038,7 +1028,6 @@ mod tests {
                                     Operator::Subtract,
                                     Box::new(Expression::Symbol(Symbol {
                                         name: "v".to_string(),
-                                        member_access: None,
                                         start_pos: Position { line: 1, col: 5 },
                                         end_pos: Position { line: 1, col: 6 },
                                     }))
@@ -1048,7 +1037,6 @@ mod tests {
                                     Operator::Subtract,
                                     Box::new(Expression::Symbol(Symbol {
                                         name: "a".to_string(),
-                                        member_access: None,
                                         start_pos: Position { line: 1, col: 8 },
                                         end_pos: Position { line: 1, col: 9 },
                                     }))
@@ -1080,10 +1068,9 @@ mod tests {
                         Operator::Subtract,
                         Box::new(Expression::UnaryOperation(
                             Operator::Subtract,
-                            Box::new(Expression::FunctionCall2(Box::new(FuncCall {
+                            Box::new(Expression::FunctionCall(Box::new(FuncCall {
                                 fn_expr: Expression::Symbol(Symbol {
                                     name: "call".to_string(),
-                                    member_access: None,
                                     start_pos: Position { line: 1, col: 23 },
                                     end_pos: Position { line: 1, col: 27 },
                                 },),
@@ -1115,7 +1102,6 @@ mod tests {
                         Operator::Subtract,
                         Box::new(Expression::Symbol(Symbol {
                             name: "b".to_string(),
-                            member_access: None,
                             start_pos: Position::new(1, 4),
                             end_pos: Position::new(1, 5),
                         })),

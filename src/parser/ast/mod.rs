@@ -12,7 +12,6 @@ pub mod expr;
 pub mod ext;
 pub mod func;
 pub mod func_call;
-pub mod func_call2;
 pub mod func_sig;
 pub mod i64_lit;
 pub mod r#impl;

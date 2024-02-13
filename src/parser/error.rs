@@ -10,7 +10,6 @@ pub type ParseResult<T> = Result<T, ParseError>;
 #[derive(Debug)]
 pub enum ErrorKind {
     ExpectedExpr,
-    ExpectedExprOrCloseParen,
     ExpectedBasicExpr,
     ExpectedBeginExpr,
     ExpectedIdent,
@@ -27,7 +26,6 @@ impl Display for ErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             ErrorKind::ExpectedExpr => write!(f, "expected expression"),
-            ErrorKind::ExpectedExprOrCloseParen => write!(f, "expected expression or )"),
             ErrorKind::ExpectedBasicExpr => write!(f, "expected basic expression"),
             ErrorKind::ExpectedBeginExpr => write!(f, "expected beginning of expression"),
             ErrorKind::ExpectedIdent => write!(f, "expected identifier"),

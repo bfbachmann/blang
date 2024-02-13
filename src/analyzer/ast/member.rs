@@ -9,11 +9,11 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::{Locatable, Position};
 use crate::locatable_impl;
-use crate::parser::ast::member::MemberAccess2;
+use crate::parser::ast::member::MemberAccess;
 
 /// Represents access to a member or field on a type or an instance of a type.
 #[derive(Debug, Clone)]
-pub struct AMemberAccess2 {
+pub struct AMemberAccess {
     pub base_expr: AExpr,
     pub member_name: String,
     pub member_type_key: TypeKey,
@@ -22,24 +22,24 @@ pub struct AMemberAccess2 {
     end_pos: Position,
 }
 
-locatable_impl!(AMemberAccess2);
+locatable_impl!(AMemberAccess);
 
-impl Display for AMemberAccess2 {
+impl Display for AMemberAccess {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}.{}", self.base_expr, self.member_name)
     }
 }
 
-impl AMemberAccess2 {
+impl AMemberAccess {
     /// Performs semantic analysis on the given member access expression.
-    pub fn from(ctx: &mut ProgramContext, access: &MemberAccess2) -> AMemberAccess2 {
+    pub fn from(ctx: &mut ProgramContext, access: &MemberAccess) -> AMemberAccess {
         // Analyze the expression whose member is being accessed.
         let base_expr = AExpr::from(ctx, access.expr.clone(), None, false, true);
 
         // Abort early if the expression failed analysis.
         let base_type = ctx.must_get_type(base_expr.type_key);
         if base_type.is_unknown() {
-            return AMemberAccess2 {
+            return AMemberAccess {
                 base_expr,
                 member_name: access.member_name.clone(),
                 member_type_key: ctx.unknown_type_key(),
@@ -98,7 +98,7 @@ impl AMemberAccess2 {
             }
         };
 
-        AMemberAccess2 {
+        AMemberAccess {
             base_expr,
             member_name: access.member_name.clone(),
             member_type_key,
@@ -109,10 +109,10 @@ impl AMemberAccess2 {
     }
 
     /// Returns the expression at the base of the member access chain. Note that this is not necessarily the same as
-    /// `self.parent_expr`, as the parent expression may itself be a member access.
-    pub fn base_expr(&self) -> &AExpr {
+    /// `self.base_expr`, as the parent expression may itself be a member access.
+    pub fn get_base_expr(&self) -> &AExpr {
         match &self.base_expr.kind {
-            AExprKind::MemberAccess(access) => access.base_expr(),
+            AExprKind::MemberAccess(access) => access.get_base_expr(),
             _ => &self.base_expr,
         }
     }

@@ -3,7 +3,6 @@ use inkwell::values::{
 };
 
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
-use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::symbol::ASymbol;
 
 use super::FnCodeGen;
@@ -217,50 +216,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// some field or subfield on a constant.
     fn const_extract_value(&mut self, symbol: &ASymbol) -> BasicValueEnum<'ctx> {
         let const_value = &self.must_get_const(symbol.name.as_str()).value.clone();
-        let mut ll_const_value = self.gen_const_expr(const_value);
-
-        // If the symbol just refers to some constant by name and has no member access, we can just
-        // return the value associated with that constant.
-        if symbol.member_access.is_none() {
-            return ll_const_value;
-        }
-
-        // At this point we know we need to access some member on the constant.
-        let mut member_access = symbol.member_access.as_ref().unwrap();
-        let mut const_type_key = const_value.type_key;
-
-        loop {
-            let member_name = &member_access.member_name;
-            let const_type = self.type_store.must_get(const_type_key);
-            let (ll_field_index, field_type_key) = match const_type {
-                AType::Struct(struct_type) => {
-                    let ll_field_index = struct_type.get_field_index(member_name.as_str()).unwrap();
-                    let field_type_key = struct_type
-                        .get_field_type_key(member_name.as_str())
-                        .unwrap();
-                    (ll_field_index as u32, field_type_key)
-                }
-                AType::Tuple(tuple_type) => {
-                    let ll_field_index = tuple_type.get_field_index(member_name.as_str());
-                    let field_type_key = tuple_type.get_field_type_key(ll_field_index).unwrap();
-                    (ll_field_index as u32, field_type_key)
-                }
-                other => panic!("cannot extract value of non-struct type {}", other),
-            };
-
-            ll_const_value = self
-                .builder
-                .build_extract_value(
-                    ll_const_value.into_struct_value(),
-                    ll_field_index,
-                    member_name.as_str(),
-                )
-                .unwrap();
-            const_type_key = field_type_key;
-            member_access = match &member_access.submember {
-                Some(sm) => sm,
-                None => return ll_const_value,
-            };
-        }
+        self.gen_const_expr(const_value)
     }
 }

@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::fmt;
 
 use colored::Colorize;
@@ -13,7 +12,7 @@ use crate::parser::ast::cont::Continue;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::ext::Extern;
 use crate::parser::ast::func::Function;
-use crate::parser::ast::func_call::FunctionCall;
+use crate::parser::ast::func_call::FuncCall;
 use crate::parser::ast::r#break::Break;
 use crate::parser::ast::r#const::ConstBlock;
 use crate::parser::ast::r#enum::EnumType;
@@ -24,7 +23,6 @@ use crate::parser::ast::r#use::UseBlock;
 use crate::parser::ast::ret::Ret;
 use crate::parser::ast::spec::Spec;
 use crate::parser::ast::store::Store;
-use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::var_assign::VariableAssignment;
 use crate::parser::ast::var_dec::VariableDeclaration;
 use crate::parser::error::ParseResult;
@@ -39,7 +37,7 @@ pub enum Statement {
     Store(Store),
     FunctionDeclaration(Function),
     Closure(Closure),
-    FunctionCall(FunctionCall),
+    FunctionCall(FuncCall),
     Conditional(Conditional),
     Loop(Loop),
     Break(Break),
@@ -65,7 +63,7 @@ impl fmt::Display for Statement {
                 }
             }
             Statement::VariableAssignment(var_assign) => {
-                write!(f, "{} = ...", var_assign.symbol)
+                write!(f, "{} = ...", var_assign.target)
             }
             Statement::Store(store) => {
                 write!(f, "{} <- {}", store.dest_expr, store.source_expr)
@@ -77,7 +75,7 @@ impl fmt::Display for Statement {
                 write!(f, "{{ ... }}")
             }
             Statement::FunctionCall(call) => {
-                write!(f, "{}(...)", call.fn_symbol)
+                write!(f, "{}(...)", call.fn_expr)
             }
             Statement::Conditional(_) => {
                 write!(f, "if ...")
@@ -301,21 +299,6 @@ impl Statement {
                 Ok(Statement::Closure(closure))
             }
 
-            // If the first two tokens are "<identifier>(", it must be a function call.
-            (
-                Token {
-                    kind: TokenKind::Identifier(_),
-                    ..
-                },
-                Token {
-                    kind: TokenKind::LeftParen,
-                    ..
-                },
-            ) => {
-                let call = FunctionCall::from(tokens)?;
-                Ok(Statement::FunctionCall(call))
-            }
-
             // If the first token is `if`, it must be a conditional.
             (
                 Token {
@@ -458,62 +441,39 @@ impl Statement {
                 Ok(Statement::Uses(use_block))
             }
 
-            // If the first two tokens are `<identifier>.`, it's a member access that can either be
-            // an assignment to the member or a function call on the member.
-            (
-                Token {
-                    kind: TokenKind::Identifier(_),
-                    ..
-                },
-                Token {
-                    kind: TokenKind::Dot,
-                    ..
-                },
-            ) => {
-                // Parse the expression.
-                let cursor = tokens.cursor();
-                let var = Symbol::from(tokens)?;
-
-                // If the next token is `(`, it's a function call. Otherwise, it should be "=" for
-                // member assignment.
-                match Source::parse_expecting_any(
-                    tokens,
-                    HashSet::from([TokenKind::Equal, TokenKind::LeftParen]),
-                )? {
-                    Token {
-                        kind: TokenKind::LeftParen,
-                        ..
-                    } => {
-                        // Parse the function arguments and return the function call.
-                        tokens.set_cursor(cursor);
-                        let fn_call = FunctionCall::from(tokens)?;
-                        Ok(Statement::FunctionCall(fn_call))
-                    }
-
-                    Token {
-                        kind: TokenKind::Equal,
-                        ..
-                    } => {
-                        // Parse the expression being assigned to the member and return the variable
-                        // assignment.
-                        let value = Expression::from(tokens)?;
-                        let start_pos = var.start_pos.clone();
-                        Ok(Statement::VariableAssignment(VariableAssignment::new(
-                            var, value, start_pos,
-                        )))
-                    }
-
-                    _ => unreachable!(),
-                }
-            }
-
-            // At this point, the tokens must either represent a store statement or it's an invalid
-            // statement.
+            // At this point the statement should be an assignment, a store operation, or a function call.
             (_, _) => {
-                // Try parse a store statement.
-                match Store::from(tokens) {
-                    Ok(store) => Ok(Statement::Store(store)),
-                    Err(err) => Err(err),
+                // Parse the expression.
+                let start_pos = Source::current_position(tokens);
+                let expr = Expression::from(tokens)?;
+
+                // If the next token is `=`, then this is an assignment.
+                if Source::parse_optional(tokens, TokenKind::Equal).is_some() {
+                    // Parse the expression being assigned to the member and return the variable
+                    // assignment.
+                    let value = Expression::from(tokens)?;
+                    let start_pos = expr.start_pos().clone();
+                    return Ok(Statement::VariableAssignment(VariableAssignment::new(
+                        expr, value, start_pos,
+                    )));
+                }
+
+                // If the next token is `<-`, then this is a store statement.
+                if Source::parse_optional(tokens, TokenKind::Store).is_some() {
+                    let source_expr = Expression::from(tokens)?;
+                    return Ok(Statement::Store(Store::new(expr, source_expr)));
+                }
+
+                // It's not an assignment or a store, so it should be a function call.
+                match expr {
+                    Expression::FunctionCall(call) => Ok(Statement::FunctionCall(*call)),
+                    _ => Err(ParseError::new(
+                        ErrorKind::ExpectedStatement,
+                        "expected statement, but found expression",
+                        None,
+                        start_pos,
+                        Source::prev_position(tokens),
+                    )),
                 }
             }
         }

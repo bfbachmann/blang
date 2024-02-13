@@ -10,9 +10,9 @@ mod tests {
     use crate::parser::ast::branch::Branch;
     use crate::parser::ast::closure::Closure;
     use crate::parser::ast::cond::Conditional;
-    use crate::parser::ast::expr::Expression;
+    use crate::parser::ast::expr::{parse_expr, Expression};
     use crate::parser::ast::func::Function;
-    use crate::parser::ast::func_call::FunctionCall;
+    use crate::parser::ast::func_call::FuncCall;
     use crate::parser::ast::func_sig::FunctionSignature;
     use crate::parser::ast::i64_lit::I64Lit;
     use crate::parser::ast::op::Operator;
@@ -271,12 +271,15 @@ mod tests {
     #[test]
     fn parse_function_call() {
         let tokens = tokenize(r#"do_thing("one", "two", true)"#);
-        let result =
-            FunctionCall::from_single(&mut Stream::from(tokens)).expect("should not error");
+        let result = parse_expr(&mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
-            FunctionCall::new(
-                Symbol::new("do_thing", Position::new(1, 1), Position::new(1, 9)),
+            Expression::FunctionCall(Box::new(FuncCall::new(
+                Expression::Symbol(Symbol::new(
+                    "do_thing",
+                    Position::new(1, 1),
+                    Position::new(1, 9)
+                )),
                 vec![
                     Expression::StrLiteral(StrLit {
                         value: "one".to_string(),
@@ -294,9 +297,8 @@ mod tests {
                         end_pos: Position::new(1, 28),
                     }),
                 ],
-                Position::new(1, 1),
                 Position::new(1, 29),
-            )
+            )))
         );
     }
 
@@ -356,7 +358,6 @@ mod tests {
                 kind: ErrorKind::UnexpectedEOF,
                 message: _,
                 token: None,
-                start_pos: Position { line: 1, col: 1 },
                 ..
             })
         ));
@@ -424,7 +425,6 @@ mod tests {
                                 Some(Expression::BinaryOperation(
                                     Box::new(Expression::Symbol(Symbol {
                                         name: "s".to_string(),
-                                        member_access: None,
                                         start_pos: Position::new(2, 16),
                                         end_pos: Position::new(2, 17),
                                     })),
@@ -448,14 +448,17 @@ mod tests {
                                 Position::new(2, 16),
                                 Position::new(4, 14),
                             )])),
-                            Statement::FunctionCall(FunctionCall::new(
-                                Symbol::new("print", Position::new(6, 13), Position::new(6, 18)),
+                            Statement::FunctionCall(FuncCall::new(
+                                Expression::Symbol(Symbol::new(
+                                    "print",
+                                    Position::new(6, 13),
+                                    Position::new(6, 18)
+                                )),
                                 vec![Expression::StrLiteral(StrLit {
                                     value: "not dog".to_string(),
                                     start_pos: Position::new(6, 19),
                                     end_pos: Position::new(6, 28),
                                 })],
-                                Position::new(6, 13),
                                 Position::new(6, 29),
                             ))
                         ],

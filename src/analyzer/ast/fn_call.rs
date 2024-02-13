@@ -1,272 +1,154 @@
-use std::collections::VecDeque;
-use std::fmt;
+use std::fmt::{Display, Formatter};
 
 use colored::Colorize;
 
-use crate::analyzer::ast::expr::AExpr;
-use crate::analyzer::ast::func::AFnSig;
+use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::ast::symbol::ASymbol;
-use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
+use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::parser::ast::func_call::FunctionCall;
-use crate::{format_code, util};
+use crate::parser::ast::func_call::FuncCall;
 
-/// Represents a fully type-resolved and analyzed function call.
-#[derive(Clone, Debug)]
+/// Function call (can be either direct or indirect).
+#[derive(Clone, Debug, PartialEq)]
 pub struct AFnCall {
-    pub fn_symbol: ASymbol,
+    pub fn_expr: AExpr,
     pub args: Vec<AExpr>,
     pub maybe_ret_type_key: Option<TypeKey>,
 }
 
-impl fmt::Display for AFnCall {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}(", self.fn_symbol)?;
+impl Display for AFnCall {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}(", self.fn_expr)?;
 
         for (i, arg) in self.args.iter().enumerate() {
-            write!(f, "{}", arg)?;
-
-            if i < self.args.len() - 1 {
-                write!(f, ", ")?;
-            }
+            match i {
+                0 => write!(f, "{}", arg)?,
+                _ => write!(f, ", {}", arg)?,
+            };
         }
 
         write!(f, ")")
     }
 }
 
-impl PartialEq for AFnCall {
-    fn eq(&self, other: &Self) -> bool {
-        self.fn_symbol == other.fn_symbol
-            && util::vecs_eq(&self.args, &other.args)
-            && util::opts_eq(&self.maybe_ret_type_key, &other.maybe_ret_type_key)
-    }
-}
-
 impl AFnCall {
-    /// Analyzes the given function call and returns a type-rich version of it.
-    pub fn from(ctx: &mut ProgramContext, call: &FunctionCall) -> Self {
-        // Extract type information from args.
-        let mut passed_args: VecDeque<AExpr> = call
-            .args
-            .iter()
-            .map(|arg| AExpr::from(ctx, arg.clone(), None, true, false))
-            .collect();
+    /// Performs semantic analysis on a function call and returns the analyzed version of it.
+    pub fn from(ctx: &mut ProgramContext, call: &FuncCall) -> AFnCall {
+        // Analyze the expression that should represent a function.
+        let fn_expr = AExpr::from(ctx, call.fn_expr.clone(), None, false, false);
 
-        // Get the type key of the first argument so we can pass it as a hint to the variable
-        // resolver. The variable resolver can use it as a means of locating member functions
-        // for types. This is necessary for chained method calls.
-        let maybe_impl_type_key = match passed_args.front() {
-            Some(arg) => Some(arg.type_key),
+        // This value will serve as a placeholder for cases where analysis fails on the function
+        // call, and we need to abort early.
+        let placeholder = AFnCall {
+            fn_expr: AExpr::new_with_default_pos(AExprKind::Unknown, ctx.unknown_type_key()),
+            args: vec![],
+            maybe_ret_type_key: Some(ctx.unknown_type_key()),
+        };
+
+        // Return a placeholder value if the expression already failed analysis or has the wrong
+        // type.
+        let fn_type = match ctx.must_get_type(fn_expr.type_key) {
+            AType::Function(fn_sig) => fn_sig,
+
+            // If the function expression has an unknown type, it means expression analysis already
+            // failed, so we should not proceed.
+            AType::Unknown(_) => {
+                return placeholder;
+            }
+
+            other => {
+                ctx.insert_err(AnalyzeError::new(
+                    ErrorKind::MismatchedTypes,
+                    format_code!("type {} is not callable", other.display(ctx)).as_str(),
+                    &call.fn_expr,
+                ));
+                return placeholder;
+            }
+        };
+
+        // Check if `self` is being passed implicitly (i.e. check if the call takes the form
+        // `<expr>.this_method(...)`).
+        let maybe_self = match &fn_type.maybe_impl_type_key {
+            Some(_) => match &fn_expr.kind {
+                AExprKind::MemberAccess(access) => match &access.base_expr.kind {
+                    AExprKind::Symbol(symbol) if symbol.is_type => None,
+                    _ => Some(access.base_expr.clone()),
+                },
+                _ => None,
+            },
             None => None,
         };
 
-        // Make sure the function exists, either as a fully analyzed function, an external function
-        // signature, or a variable.
-        let a_fn_symbol = ASymbol::from(ctx, &call.fn_symbol, true, false, maybe_impl_type_key);
-        let var_type = ctx.must_get_type(a_fn_symbol.get_type_key());
+        // Make sure the call has the right number of arguments (making sure to add 1 to the actual
+        // argument count if there is an implicit `self` argument.
+        let expected_args = fn_type.args.len();
+        let actual_args = match &maybe_self {
+            Some(_) => call.args.len() + 1,
+            None => call.args.len(),
+        };
 
-        // If the function symbol failed analysis, we can return early.
-        if var_type.is_unknown() {
+        if actual_args != expected_args {
+            ctx.insert_err(AnalyzeError::new(
+                ErrorKind::WrongNumberOfArgs,
+                format_code!(
+                    "expected {} arguments, found {}",
+                    expected_args,
+                    actual_args
+                )
+                .as_str(),
+                call,
+            ));
             return AFnCall {
-                fn_symbol: a_fn_symbol,
+                fn_expr,
                 args: vec![],
                 maybe_ret_type_key: Some(ctx.unknown_type_key()),
             };
         }
 
-        // Try to locate the function signature for this function call. If it's a call to a type
-        // member function, we'll look up the function using the type key. Otherwise, we just
-        // extract the function signature from the variable type, as it should be a function type.
-        let fn_sig = match AFnCall::get_fn_sig(ctx, &a_fn_symbol, &call) {
-            Ok(sig) => sig,
-            Err(err) => {
-                ctx.insert_err(err);
-
-                return AFnCall {
-                    fn_symbol: a_fn_symbol,
-                    args: vec![],
-                    maybe_ret_type_key: Some(ctx.unknown_type_key()),
-                };
+        // Analyze each argument expression.
+        let maybe_ret_type_key = fn_type.maybe_ret_type_key;
+        let fn_type_args = fn_type.args.clone();
+        let mut fn_type_args_iter = fn_type_args.iter();
+        let mut args: Vec<AExpr> = match maybe_self {
+            Some(self_arg) => {
+                // Advance the iterator through the arguments on the function type to skip the implicit
+                // `self` arg.
+                fn_type_args_iter.next();
+                vec![self_arg]
             }
+            None => vec![],
         };
 
-        // Clone here to avoid borrow issues.
-        let fn_sig = fn_sig.clone();
-        let maybe_ret_type_key = fn_sig.maybe_ret_type_key.clone();
-
-        // If this function takes the special argument `self` and was not called directly via its
-        // fully-qualified name, add the special `self` argument.
-        let maybe_self = a_fn_symbol.clone().without_last_member();
-        let called_on_self = fn_sig.maybe_impl_type_key.is_some()
-            && maybe_self.get_type_key() == fn_sig.maybe_impl_type_key.unwrap()
-            && !a_fn_symbol.is_type;
-
-        // If the function call is to an instance method, make sure the method takes `self` as its
-        // first argument.
-        if called_on_self && a_fn_symbol.is_method() {
-            if fn_sig.takes_self() {
-                // Add `self` as the first argument since the method is being called on it.
-                passed_args.push_front(AExpr::from_symbol(maybe_self));
-            } else {
-                // This is a call to a method that does not take `self` as its first argument.
-                ctx.insert_err(
-                    AnalyzeError::new(
-                        ErrorKind::UndefMember,
-                        format_code!(
-                            "cannot call function {} on value of type {}",
-                            fn_sig.name,
-                            ctx.display_type_for_key(maybe_self.get_type_key()),
-                        )
-                        .as_str(),
-                        call,
-                    )
-                    .with_detail(
-                        format_code!(
-                            "Member function {} on type {} does not take {} as its first argument.",
-                            fn_sig.display(ctx),
-                            fn_sig.maybe_impl_type_key.unwrap(),
-                            "self",
-                        )
-                        .as_str(),
-                    )
-                    .with_help(
-                        format_code!("Did you mean to call {}?", fn_sig.mangled_name).as_str(),
-                    ),
-                );
-
-                return AFnCall {
-                    fn_symbol: a_fn_symbol,
-                    args: vec![],
-                    maybe_ret_type_key,
-                };
-            }
-        }
-
-        // Make sure the right number of arguments were passed.
-        if passed_args.len() != fn_sig.args.len() {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::WrongNumberOfArgs,
-                format!(
-                    "{} expects {}, but {} provided",
-                    format_code!(fn_sig.display(ctx)),
-                    match fn_sig.args.len() {
-                        1 => "1 argument".to_string(),
-                        count => format!("{} arguments", count),
-                    },
-                    match passed_args.len() {
-                        1 => "1 was".to_string(),
-                        count => format!("{} were", count),
-                    },
-                )
-                .as_str(),
-                call,
-            ));
-
-            return AFnCall {
-                fn_symbol: a_fn_symbol,
-                args: passed_args.into(),
-                maybe_ret_type_key,
-            };
-        }
-
-        // If the function is templated, try render it. The rendered function will be placed
-        // inside the program context.
-        if fn_sig.is_templated() {
-            todo!();
-        } else {
-            // Make sure the arguments are of the right types.
-            for (passed_arg, defined_arg) in passed_args.iter().zip(fn_sig.args.iter()) {
-                // Try coerce the passed expression to the right type before performing the type
-                // check.
-                let passed_arg = passed_arg.clone().try_coerce_to(ctx, defined_arg.type_key);
-
-                // Skip the check if the argument type is unknown. This will happen if the argument
-                // already failed semantic analysis.
-                let passed_type = ctx.must_get_type(passed_arg.type_key);
-                if passed_type.is_unknown() {
-                    continue;
-                }
-
-                let defined_type = ctx.must_get_type(defined_arg.type_key);
-                if !passed_type.is_same_as(ctx, &defined_type) {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::MismatchedTypes,
-                        format_code!(
-                            "cannot use value of type {} as argument {} to {}",
-                            passed_type.display(ctx),
-                            defined_arg.display(ctx),
-                            fn_sig.display(ctx),
-                        )
-                        .as_str(),
-                        call,
-                    ));
-                }
-            }
+        for (expected_arg, actual_arg) in fn_type_args_iter.zip(call.args.iter()) {
+            let actual_arg = AExpr::from(
+                ctx,
+                actual_arg.clone(),
+                Some(expected_arg.type_key),
+                false,
+                false,
+            );
+            args.push(actual_arg);
         }
 
         AFnCall {
-            fn_symbol: a_fn_symbol,
-            args: passed_args.into(),
+            fn_expr,
+            args,
             maybe_ret_type_key,
         }
     }
 
-    /// Resolves the function signature for the given call.
-    fn get_fn_sig<'a>(
-        ctx: &'a mut ProgramContext,
-        a_fn_symbol: &'a ASymbol,
-        call: &FunctionCall,
-    ) -> AnalyzeResult<&'a AFnSig> {
-        if a_fn_symbol.is_type {
-            let method_name = a_fn_symbol.get_last_member_name();
-            match ctx.get_member_fn(a_fn_symbol.base_type_key, method_name.as_str()) {
-                Some(fn_sig) => Ok(fn_sig),
-                None => Err(AnalyzeError::new(
-                    ErrorKind::UndefMember,
-                    format_code!(
-                        "type {} has no member function {}",
-                        a_fn_symbol.name,
-                        method_name
-                    )
-                    .as_str(),
-                    call,
-                )),
-            }
-        } else {
-            match ctx.must_get_type(a_fn_symbol.get_type_key()) {
-                AType::Function(fn_sig) => Ok(fn_sig),
-                other => {
-                    // The value being used here is not a function.
-                    Err(AnalyzeError::new(
-                        ErrorKind::MismatchedTypes,
-                        format_code!("type {} is not callable", other.display(ctx)).as_str(),
-                        call,
-                    ))
-                }
-            }
-        }
-    }
-
-    /// Returns true if this is a method call (either on a type or an instance).
-    pub fn is_method_call(&self) -> bool {
-        self.fn_symbol.is_method()
-    }
-
-    /// Returns the human-readable version of this function call.
+    /// Returns this function call in human-readable form.
     pub fn display(&self, ctx: &ProgramContext) -> String {
-        let mut s = format!("{}(", self.fn_symbol);
+        let s = format!("{}(", self.fn_expr.display(ctx));
 
         for (i, arg) in self.args.iter().enumerate() {
-            s += format!("{}", arg.display(ctx)).as_str();
-
-            if i < self.args.len() - 1 {
-                s += format!(", ").as_str();
-            }
+            match i {
+                0 => format!("{}", arg.display(ctx)),
+                _ => format!(", {}", arg.display(ctx)),
+            };
         }
 
-        s + format!(")").as_str()
+        s + ")"
     }
 }

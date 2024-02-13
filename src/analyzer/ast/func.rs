@@ -145,14 +145,6 @@ impl AFnSig {
         }
     }
 
-    /// Returns true if the function signature has `self` as its first argument.
-    pub fn takes_self(&self) -> bool {
-        match self.args.first() {
-            Some(arg) => arg.name == "self",
-            None => false,
-        }
-    }
-
     /// Returns true if this function signature has template parameters.
     pub fn is_templated(&self) -> bool {
         self.tmpl_params.is_some()

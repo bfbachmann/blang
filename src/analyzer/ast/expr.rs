@@ -6,14 +6,13 @@ use colored::Colorize;
 use crate::analyzer::ast::array::AArrayInit;
 use crate::analyzer::ast::closure::AClosure;
 use crate::analyzer::ast::fn_call::AFnCall;
-use crate::analyzer::ast::fn_call2::AFnCall2;
 use crate::analyzer::ast::func::{AFn, AFnSig};
-use crate::analyzer::ast::member::AMemberAccess2;
+use crate::analyzer::ast::member::AMemberAccess;
 use crate::analyzer::ast::pointer::APointerType;
 use crate::analyzer::ast::r#enum::{AEnumTypeVariant, AEnumVariantInit};
 use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::ast::symbol::{AMemberAccess, ASymbol};
+use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::ast::tuple::ATupleInit;
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
@@ -30,7 +29,7 @@ use crate::{format_code, locatable_impl};
 #[derive(Debug, Clone)]
 pub enum AExprKind {
     Symbol(ASymbol),
-    MemberAccess(Box<AMemberAccess2>),
+    MemberAccess(Box<AMemberAccess>),
     BoolLiteral(bool),
     /// The bool here will be true if this literal includes an explicit type suffix.
     I64Literal(i64, bool),
@@ -41,8 +40,7 @@ pub enum AExprKind {
     EnumInit(AEnumVariantInit),
     TupleInit(ATupleInit),
     ArrayInit(AArrayInit),
-    FunctionCall(AFnCall),
-    FunctionCall2(Box<AFnCall2>),
+    FunctionCall(Box<AFnCall>),
     AnonFunction(Box<AFn>),
     UnaryOperation(Operator, Box<AExpr>),
     BinaryOperation(Box<AExpr>, Operator, Box<AExpr>),
@@ -68,7 +66,6 @@ impl fmt::Display for AExprKind {
             AExprKind::TupleInit(t) => write!(f, "{}", t),
             AExprKind::ArrayInit(a) => write!(f, "{}", a),
             AExprKind::FunctionCall(call) => write!(f, "{}", call),
-            AExprKind::FunctionCall2(call) => write!(f, "{}", call),
             AExprKind::AnonFunction(func) => write!(f, "{}", *func),
             AExprKind::UnaryOperation(op, expr) => write!(f, "{} {}", op, expr),
             AExprKind::BinaryOperation(left, op, right) => {
@@ -176,10 +173,7 @@ impl AExprKind {
             AExprKind::Symbol(sym) => sym.is_const,
 
             // Function calls and unknown values are never constants.
-            AExprKind::FunctionCall(_)
-            | AExprKind::FunctionCall2(_)
-            | AExprKind::AnonFunction(_)
-            | AExprKind::Unknown => false,
+            AExprKind::FunctionCall(_) | AExprKind::AnonFunction(_) | AExprKind::Unknown => false,
 
             // Type cast expressions are constants if the expressions they're type casting are
             // constants.
@@ -203,7 +197,6 @@ impl AExprKind {
             AExprKind::TupleInit(t) => t.display(ctx),
             AExprKind::ArrayInit(a) => a.display(ctx),
             AExprKind::FunctionCall(call) => call.display(ctx),
-            AExprKind::FunctionCall2(call) => call.display(ctx),
             AExprKind::AnonFunction(func) => func.display(ctx),
             AExprKind::UnaryOperation(op, expr) => format!("{} {}", op, expr.display(ctx)),
             AExprKind::BinaryOperation(left, op, right) => {
@@ -305,10 +298,9 @@ impl AExpr {
 
             Expression::Symbol(ref symbol) => {
                 let a_symbol = ASymbol::from(ctx, symbol, true, allow_type, None);
-                let type_key = a_symbol.get_type_key().clone();
                 AExpr {
+                    type_key: a_symbol.type_key,
                     kind: AExprKind::Symbol(a_symbol),
-                    type_key,
                     start_pos,
                     end_pos,
                 }
@@ -429,45 +421,9 @@ impl AExpr {
             Expression::FunctionCall(fn_call) => {
                 // Analyze the function call and ensure it has a return type.
                 let a_call = AFnCall::from(ctx, fn_call);
-                if let Some(type_key) = a_call.maybe_ret_type_key.clone() {
-                    return AExpr {
-                        kind: AExprKind::FunctionCall(a_call),
-                        type_key,
-                        start_pos,
-                        end_pos,
-                    };
-                }
-
-                // The function does not have a return value. Record the error and return some
-                // zero-value instead.
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::ExpectedReturnValue,
-                    format_code!(
-                        "function {} has no return value, but is called in an expression \
-                        where a return value is expected",
-                        &fn_call.fn_symbol,
-                    )
-                    .as_str(),
-                    fn_call,
-                ));
-
-                AExpr::new_zero_value(ctx, Type::Unresolved(UnresolvedType::unresolved_none()))
-            }
-
-            Expression::FunctionCall2(fn_call) => {
-                // Analyze the function call and ensure it has a return type.
-                let a_call = AFnCall2::from(ctx, fn_call);
                 match a_call.maybe_ret_type_key.clone() {
-                    Some(type_key) if type_key == ctx.unknown_type_key() => {
-                        // The function call already failed analysis, so we can just return a placeholder value.
-                        AExpr::new_zero_value(
-                            ctx,
-                            Type::Unresolved(UnresolvedType::unresolved_none()),
-                        )
-                    }
-
                     Some(type_key) => AExpr {
-                        kind: AExprKind::FunctionCall2(Box::new(a_call)),
+                        kind: AExprKind::FunctionCall(Box::new(a_call)),
                         type_key,
                         start_pos,
                         end_pos,
@@ -500,7 +456,7 @@ impl AExpr {
             }
 
             Expression::MemberAccess(member_access) => {
-                let access = AMemberAccess2::from(ctx, member_access);
+                let access = AMemberAccess::from(ctx, member_access);
                 let type_key = access.member_type_key;
 
                 AExpr {
@@ -755,16 +711,6 @@ impl AExpr {
         self.kind.display(ctx)
     }
 
-    /// Creates a new expression with the value of the given symbol.
-    pub fn from_symbol(symbol: ASymbol) -> Self {
-        AExpr {
-            start_pos: symbol.start_pos().clone(),
-            end_pos: symbol.end_pos().clone(),
-            type_key: symbol.get_type_key(),
-            kind: AExprKind::Symbol(symbol),
-        }
-    }
-
     /// Checks if type coercion to the expected type is necessary and, if so, attempts it before
     /// performing type checks. Adds an error to the program context if type checks fail. No
     /// type checks are performed if `maybe_expected_type_key` is None.
@@ -836,8 +782,7 @@ impl AExpr {
             },
 
             AExprKind::Symbol(symbol) => {
-                let tk = symbol.get_type_key();
-                match ctx.must_get_type(tk) {
+                match ctx.must_get_type(symbol.type_key) {
                     // Only continue if the symbol refers to a templated function.
                     AType::Function(sig) if sig.is_templated() => {}
                     _ => return self,
@@ -1005,13 +950,7 @@ impl AExpr {
         let result = match &expr.kind {
             AExprKind::Symbol(symbol) => {
                 let const_value = ctx.get_const_value(symbol.name.as_str()).unwrap().clone();
-
-                match &symbol.member_access {
-                    Some(access) => {
-                        return try_get_const_member_value_as_u64(ctx, &const_value, access)
-                    }
-                    None => return const_value.try_into_const_u64(ctx),
-                }
+                return const_value.try_into_const_u64(ctx);
             }
 
             AExprKind::I64Literal(i, _) => {
@@ -1051,6 +990,16 @@ impl AExpr {
         match result {
             Some(v) => Ok(v),
             None => err,
+        }
+    }
+
+    /// Locates and returns the symbol at the base of this expression. This will return `None` for all expressions
+    /// other than symbols and member accesses that have symbols at their base.
+    pub fn get_base_symbol(&self) -> Option<&ASymbol> {
+        match &self.kind {
+            AExprKind::Symbol(s) => Some(s),
+            AExprKind::MemberAccess(access) => access.get_base_expr().get_base_symbol(),
+            _ => None,
         }
     }
 }
@@ -1246,32 +1195,6 @@ fn get_expected_operand_type_key(
     }
 }
 
-/// Tries to compute the value of a member access as a u64.
-fn try_get_const_member_value_as_u64(
-    ctx: &mut ProgramContext,
-    const_value: &AExpr,
-    member_access: &AMemberAccess,
-) -> AnalyzeResult<u64> {
-    let member_value = match &const_value.kind {
-        AExprKind::StructInit(struct_init) => struct_init
-            .field_values
-            .get(member_access.member_name.as_str())
-            .unwrap(),
-
-        AExprKind::TupleInit(tuple_init) => {
-            let member_index = member_access.member_name.parse::<usize>().unwrap();
-            tuple_init.values.get(member_index).unwrap()
-        }
-
-        other => panic!("unexpected member access: {}", other),
-    };
-
-    match &member_access.submember {
-        Some(sub) => try_get_const_member_value_as_u64(ctx, member_value, sub),
-        None => member_value.try_into_const_u64(ctx),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::analyzer::ast::arg::AArg;
@@ -1288,7 +1211,7 @@ mod tests {
     use crate::parser::ast::arg::Argument;
     use crate::parser::ast::bool_lit::BoolLit;
     use crate::parser::ast::expr::Expression;
-    use crate::parser::ast::func_call::FunctionCall;
+    use crate::parser::ast::func_call::FuncCall;
     use crate::parser::ast::func_sig::FunctionSignature;
     use crate::parser::ast::i64_lit::I64Lit;
     use crate::parser::ast::op::Operator;
@@ -1362,11 +1285,9 @@ mod tests {
         assert_eq!(
             result,
             AExpr {
-                kind: AExprKind::Symbol(ASymbol::new_with_default_pos(
-                    "myvar",
-                    ctx.str_type_key(),
-                    None
-                )),
+                kind: AExprKind::Symbol(
+                    ASymbol::new_with_default_pos("myvar", ctx.str_type_key(),)
+                ),
                 type_key: ctx.str_type_key(),
                 start_pos: Position::default(),
                 end_pos: Position::default(),
@@ -1390,7 +1311,6 @@ mod tests {
                 kind: AExprKind::Symbol(ASymbol::new_with_default_pos(
                     "myvar",
                     ctx.unknown_type_key(),
-                    None,
                 )),
                 type_key: ctx.unknown_type_key(),
                 start_pos: Position::default(),
@@ -1446,11 +1366,11 @@ mod tests {
         ctx.insert_type(AType::from_fn_sig(a_fn.signature.clone()));
 
         // Analyze the function call expression.
-        let fn_call = FunctionCall::new_with_default_pos(
-            "do_thing",
+        let fn_call = FuncCall::new_with_default_pos(
+            Expression::Symbol(Symbol::new_with_default_pos("do_thing")),
             vec![Expression::BoolLiteral(BoolLit::new_with_default_pos(true))],
         );
-        let call_expr = Expression::FunctionCall(fn_call.clone());
+        let call_expr = Expression::FunctionCall(Box::new(fn_call.clone()));
         let result = AExpr::from(&mut ctx, call_expr, None, false, false);
 
         // Check that analysis succeeded.
@@ -1458,11 +1378,13 @@ mod tests {
         assert_eq!(
             result,
             AExpr {
-                kind: AExprKind::FunctionCall(AFnCall {
-                    fn_symbol: ASymbol::new_with_default_pos(
-                        "do_thing",
+                kind: AExprKind::FunctionCall(Box::new(AFnCall {
+                    fn_expr: AExpr::new_with_default_pos(
+                        AExprKind::Symbol(ASymbol::new_with_default_pos(
+                            "do_thing",
+                            a_fn.signature.type_key,
+                        )),
                         a_fn.signature.type_key,
-                        None,
                     ),
                     args: vec![AExpr {
                         kind: AExprKind::BoolLiteral(true),
@@ -1471,7 +1393,7 @@ mod tests {
                         end_pos: Position::default(),
                     }],
                     maybe_ret_type_key: Some(ctx.str_type_key()),
-                }),
+                })),
                 type_key: ctx.str_type_key(),
                 start_pos: Position::default(),
                 end_pos: Position::default(),
@@ -1482,15 +1404,7 @@ mod tests {
     #[test]
     fn fn_call_no_return() {
         let mut ctx = ProgramContext::new();
-        let fn_sig = FunctionSignature::new_with_default_pos(
-            "do_thing",
-            vec![Argument::new_with_default_pos(
-                "first",
-                Type::new_unresolved("bool"),
-                false,
-            )],
-            None,
-        );
+        let fn_sig = FunctionSignature::new_with_default_pos("do_thing", vec![], None);
         let fn_type_key = ctx.resolve_type(&Type::Function(Box::new(fn_sig.clone())));
         let a_fn = AFn {
             signature: AFnSig {
@@ -1505,7 +1419,7 @@ mod tests {
             body: AClosure::new_empty(),
         };
 
-        // Add the function and its type to the context so they can be retrieved when analyzing
+        // Add the function and its type to the context, so they can be retrieved when analyzing
         // the expression that calls the function.
         ctx.insert_fn(a_fn.clone());
         ctx.insert_type(AType::from_fn_sig(a_fn.signature.clone()));
@@ -1516,9 +1430,12 @@ mod tests {
             Expression::BinaryOperation(
                 Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
                 Operator::Add,
-                Box::new(Expression::FunctionCall(
-                    FunctionCall::new_with_default_pos("do_thing", vec![]),
-                )),
+                Box::new(Expression::FunctionCall(Box::new(
+                    FuncCall::new_with_default_pos(
+                        Expression::Symbol(Symbol::new_with_default_pos("do_thing")),
+                        vec![],
+                    ),
+                ))),
             ),
             None,
             false,
@@ -1603,7 +1520,7 @@ mod tests {
             body: AClosure::new_empty(),
         };
 
-        // Add the function and its type to the context so they can be retrieved when analyzing
+        // Add the function and its type to the context, so they can be retrieved when analyzing
         // the expression that calls the function.
         ctx.insert_fn(a_fn.clone());
         ctx.insert_type(AType::from_fn_sig(a_fn.signature.clone()));
@@ -1611,10 +1528,10 @@ mod tests {
         // Analyze the function call expression.
         let result = AExpr::from(
             &mut ctx,
-            Expression::FunctionCall(FunctionCall::new_with_default_pos(
-                "do_thing",
+            Expression::FunctionCall(Box::new(FuncCall::new_with_default_pos(
+                Expression::Symbol(Symbol::new_with_default_pos("do_thing")),
                 vec![Expression::BoolLiteral(BoolLit::new_with_default_pos(true))],
-            )),
+            ))),
             None,
             false,
             false,
@@ -1623,21 +1540,18 @@ mod tests {
         assert_eq!(
             result,
             AExpr {
-                kind: AExprKind::FunctionCall(AFnCall {
-                    fn_symbol: ASymbol::new_with_default_pos(
-                        "do_thing",
-                        a_fn.signature.type_key,
-                        None,
+                kind: AExprKind::FunctionCall(Box::new(AFnCall {
+                    fn_expr: AExpr::new_with_default_pos(
+                        AExprKind::Symbol(ASymbol::new_with_default_pos(
+                            "do_thing",
+                            a_fn.signature.type_key,
+                        )),
+                        fn_type_key
                     ),
-                    args: vec![AExpr {
-                        kind: AExprKind::BoolLiteral(true),
-                        type_key: ctx.bool_type_key(),
-                        start_pos: Position::default(),
-                        end_pos: Position::default(),
-                    }],
-                    maybe_ret_type_key: Some(ctx.bool_type_key()),
-                }),
-                type_key: ctx.bool_type_key(),
+                    args: vec![],
+                    maybe_ret_type_key: Some(ctx.unknown_type_key()),
+                })),
+                type_key: ctx.unknown_type_key(),
                 start_pos: Position::default(),
                 end_pos: Position::default(),
             }
@@ -1646,20 +1560,18 @@ mod tests {
         match result.kind {
             AExprKind::FunctionCall(call) => {
                 assert_eq!(
-                    call.fn_symbol,
-                    ASymbol::new_with_default_pos("do_thing", a_fn.signature.type_key, None,)
+                    call.fn_expr,
+                    AExpr::new_with_default_pos(
+                        AExprKind::Symbol(ASymbol::new_with_default_pos(
+                            "do_thing",
+                            a_fn.signature.type_key,
+                        )),
+                        a_fn.signature.type_key,
+                    )
                 );
-                assert_eq!(call.maybe_ret_type_key, Some(ctx.bool_type_key()));
-                assert_eq!(call.args.len(), 1);
-                assert_eq!(
-                    call.args.get(0),
-                    Some(&AExpr {
-                        kind: AExprKind::BoolLiteral(true),
-                        type_key: ctx.bool_type_key(),
-                        start_pos: Position::default(),
-                        end_pos: Position::default(),
-                    })
-                );
+
+                assert_eq!(call.maybe_ret_type_key, Some(ctx.unknown_type_key()));
+                assert_eq!(call.args.len(), 0);
             }
             _ => unreachable!(),
         };
@@ -1714,10 +1626,10 @@ mod tests {
         // Analyze the function call expression.
         let result = AExpr::from(
             &mut ctx,
-            Expression::FunctionCall(FunctionCall::new_with_default_pos(
-                "do_thing",
+            Expression::FunctionCall(Box::new(FuncCall::new_with_default_pos(
+                Expression::Symbol(Symbol::new_with_default_pos("do_thing")),
                 vec![Expression::I64Literal(I64Lit::new_with_default_pos(1))],
-            )),
+            ))),
             None,
             false,
             false,
@@ -1726,11 +1638,13 @@ mod tests {
         assert_eq!(
             result,
             AExpr::new_with_default_pos(
-                AExprKind::FunctionCall(AFnCall {
-                    fn_symbol: ASymbol::new_with_default_pos(
-                        "do_thing",
+                AExprKind::FunctionCall(Box::new(AFnCall {
+                    fn_expr: AExpr::new_with_default_pos(
+                        AExprKind::Symbol(ASymbol::new_with_default_pos(
+                            "do_thing",
+                            a_fn.signature.type_key,
+                        )),
                         a_fn.signature.type_key,
-                        None,
                     ),
                     args: vec![AExpr {
                         kind: AExprKind::I64Literal(1, false),
@@ -1739,7 +1653,7 @@ mod tests {
                         end_pos: Position::default(),
                     }],
                     maybe_ret_type_key: Some(ctx.bool_type_key()),
-                }),
+                })),
                 ctx.bool_type_key(),
             )
         );

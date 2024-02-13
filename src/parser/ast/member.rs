@@ -1,189 +1,44 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use colored::Colorize;
-
 use crate::lexer::pos::{Locatable, Position};
-use crate::lexer::stream::Stream;
-use crate::lexer::token::Token;
-use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
-use crate::parser::error::{ErrorKind, ParseError, ParseResult};
-use crate::parser::source::Source;
-
-/// Represents access to a member or field on a type or an instance of a type.
-#[derive(Debug, Clone, Eq)]
-pub struct MemberAccess {
-    /// The name of the object member being accessed.
-    pub member_name: String,
-    /// Any sub-member accesses are chained here.
-    pub submember: Option<Box<MemberAccess>>,
-    start_pos: Position,
-    end_pos: Position,
-}
-
-locatable_impl!(MemberAccess);
-
-impl PartialEq for MemberAccess {
-    fn eq(&self, other: &Self) -> bool {
-        if self.member_name != other.member_name {
-            return false;
-        }
-
-        match (&self.submember, &other.submember) {
-            (Some(a), Some(b)) => *a == *b,
-            (None, None) => true,
-            _ => false,
-        }
-    }
-}
-
-impl Hash for MemberAccess {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.member_name.hash(state);
-        self.submember.hash(state);
-    }
-}
-
-impl Display for MemberAccess {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.member_name)?;
-
-        if let Some(member) = &self.submember {
-            write!(f, ".{}", *member)?;
-        }
-
-        Ok(())
-    }
-}
-
-impl MemberAccess {
-    /// Attempts to parse an object member access from the token token sequence. Expects token
-    /// sequences of the form:
-    ///
-    ///         .<member>...
-    ///
-    /// where
-    ///  - `member` is the name of the member being accessed.
-    /// Member accesses can be chained (e.g. `my_struct.child.child.child`).
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let start_pos = Source::current_position(tokens);
-
-        // The first token should be `.`.
-        Source::parse_expecting(tokens, TokenKind::Dot)?;
-
-        // Get the end position of the next token (the member name).
-        let mut end_pos = match tokens.peek_next() {
-            Some(&Token { end, .. }) => end.clone(),
-            // If this happens, we'll error on the next line while parsing the identifier anyway.
-            _ => Position::default(),
-        };
-
-        // The second token should be the member name or index. Types like structs will have member
-        // names as regular identifiers, but tuples will have numbered fields.
-        let cursor = tokens.cursor();
-        let member_name = match Source::parse_identifier(tokens) {
-            Ok(name) => name,
-            Err(_) => {
-                // The member name is not an identifier, so check if it's a number. Tuple fields
-                // are accessed by number since they don't have field names like structs.
-                tokens.set_cursor(cursor);
-                match tokens.next() {
-                    Some(
-                        token @ Token {
-                            kind: TokenKind::I64Literal(field_index, _),
-                            ..
-                        },
-                    ) => {
-                        // Make sure the index is positive.
-                        if *field_index < 0 {
-                            return Err(ParseError::new_with_token(
-                                ErrorKind::UnexpectedToken,
-                                format_code!("expected field identifier, but found {}", token)
-                                    .as_str(),
-                                token.clone(),
-                            ));
-                        }
-                        field_index.to_string()
-                    }
-                    Some(other) => {
-                        return Err(ParseError::new_with_token(
-                            ErrorKind::UnexpectedToken,
-                            format_code!("expected field identifier, but found {}", other).as_str(),
-                            other.clone(),
-                        ))
-                    }
-                    None => {
-                        return Err(ParseError::new(
-                            ErrorKind::UnexpectedEOF,
-                            "expected field identifier, but found EOF",
-                            None,
-                            Position::default(),
-                            Position::default(),
-                        ))
-                    }
-                }
-            }
-        };
-
-        // Recursively parse the sub-members, if necessary.
-        let mut submember = None;
-        match tokens.peek_next() {
-            Some(&Token {
-                kind: TokenKind::Dot,
-                end,
-                ..
-            }) => {
-                submember = Some(Box::new(MemberAccess::from(tokens)?));
-                end_pos = end.clone();
-            }
-            _ => {}
-        }
-
-        Ok(MemberAccess {
-            member_name,
-            submember,
-            start_pos,
-            end_pos,
-        })
-    }
-}
 
 /// Represents the access of a member on come value. This could be a call or reference to
 /// a method on a value or type, or a struct or tuple field access.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct MemberAccess2 {
+pub struct MemberAccess {
     pub expr: Expression,
     pub member_name: String,
     start_pos: Position,
     end_pos: Position,
 }
 
-locatable_impl!(MemberAccess2);
+locatable_impl!(MemberAccess);
 
-impl Hash for MemberAccess2 {
+impl Hash for MemberAccess {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.expr.hash(state);
         self.member_name.hash(state);
     }
 }
 
-impl Display for MemberAccess2 {
+impl Display for MemberAccess {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}.{}", self.expr, self.member_name)
     }
 }
 
-impl MemberAccess2 {
+impl MemberAccess {
     /// Creates a new member access expression.
     pub fn new(
         expr: Expression,
         member_name: String,
         start_pos: Position,
         end_pos: Position,
-    ) -> MemberAccess2 {
-        MemberAccess2 {
+    ) -> MemberAccess {
+        MemberAccess {
             expr,
             member_name,
             start_pos,

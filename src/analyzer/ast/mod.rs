@@ -6,7 +6,6 @@ pub mod r#const;
 pub mod r#enum;
 pub mod expr;
 pub mod fn_call;
-pub mod fn_call2;
 pub mod func;
 pub mod r#impl;
 pub mod member;

@@ -8,7 +8,7 @@ use crate::analyzer::ast::cond::ACond;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::fn_call::AFnCall;
 use crate::analyzer::ast::func::AFn;
-use crate::analyzer::ast::member::AMemberAccess2;
+use crate::analyzer::ast::member::AMemberAccess;
 use crate::analyzer::ast::r#impl::AImpl;
 use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::AType;
@@ -53,7 +53,7 @@ impl Move {
 
     /// Tries to construct a `Move` from the given member access. Some move will only be returned if the member access
     /// chain is only accessing successive members on a variable (symbol).
-    fn try_from_member_access(access: &AMemberAccess2) -> Option<Move> {
+    fn try_from_member_access(access: &AMemberAccess) -> Option<Move> {
         match &access.base_expr.kind {
             AExprKind::Symbol(symbol) => {
                 // This is the base of the member access expression. At this point we know this member access chain is
@@ -550,16 +550,14 @@ impl<'a> MoveChecker<'a> {
     }
 
     /// Performs move checks on a member access chain.
-    fn check_member_access(&mut self, access: &AMemberAccess2) {
+    fn check_member_access(&mut self, access: &AMemberAccess) {
         // If the base expression is not a symbol that requires move checking or is a constant,
         // there is no move checking to do here.
-        let base_var = match access.base_expr() {
+        let base_var = match access.get_base_expr() {
             AExpr {
                 kind: AExprKind::Symbol(symbol),
                 ..
-            } if self.must_get_type(symbol.base_type_key).requires_move() && !symbol.is_const => {
-                symbol
-            }
+            } if self.must_get_type(symbol.type_key).requires_move() && !symbol.is_const => symbol,
             _ => return,
         };
 
@@ -662,7 +660,7 @@ impl<'a> MoveChecker<'a> {
     fn check_var(&mut self, var: &ASymbol) {
         // Skip the move check entirely if the root variable is of some type that doesn't require
         // moves, or if it's a constant.
-        if !self.must_get_type(var.base_type_key).requires_move() || var.is_const {
+        if !self.must_get_type(var.type_key).requires_move() || var.is_const {
             return;
         }
 
@@ -752,7 +750,7 @@ impl<'a> MoveChecker<'a> {
 
         // Only record a move if the type of the value being used requires a move. Some
         // basic types like bools and numerics are always copied instead of being moved.
-        if self.must_get_type(var.get_type_key()).requires_move() {
+        if self.must_get_type(var.type_key).requires_move() {
             self.add_move(mv);
         }
     }

@@ -1,19 +1,17 @@
+use std::hash::{Hash, Hasher};
+
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::expr::Expression;
-use crate::parser::ast::symbol::Symbol;
 use crate::parser::error::ParseResult;
 use crate::parser::source::Source;
-use std::hash::{Hash, Hasher};
 
 /// Represents the assignment of some value (i.e. an expression) to a variable.
-// TODO: Model variable assignment with two expressions where one is the source
-// and the other is the target.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct VariableAssignment {
-    pub symbol: Symbol,
+    pub target: Expression,
     pub value: Expression,
     start_pos: Position,
 }
@@ -30,16 +28,16 @@ impl Locatable for VariableAssignment {
 
 impl Hash for VariableAssignment {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.symbol.hash(state);
+        self.target.hash(state);
         self.value.hash(state);
     }
 }
 
 impl VariableAssignment {
     /// Creates a new variable assignment.
-    pub fn new(symbol: Symbol, value: Expression, start_pos: Position) -> Self {
+    pub fn new(target: Expression, value: Expression, start_pos: Position) -> Self {
         VariableAssignment {
-            symbol,
+            target,
             value,
             start_pos,
         }
@@ -57,15 +55,15 @@ impl VariableAssignment {
         // Get the starting position of the variable assignment.
         let start_pos = Source::current_position(tokens);
 
-        // The next token should be an identifier representing the variable name.
-        let var = Symbol::from(tokens)?;
+        // The next token should be an expression representing the target to which a value is being assigned.
+        let target = Expression::from(tokens)?;
 
         // The next token should be an assignment "=".
         Source::parse_expecting(tokens, TokenKind::Equal)?;
 
         // The next tokens should be some expression.
-        let expr = Expression::from(tokens)?;
+        let value = Expression::from(tokens)?;
 
-        Ok(VariableAssignment::new(var, expr, start_pos))
+        Ok(VariableAssignment::new(target, value, start_pos))
     }
 }
