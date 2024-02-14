@@ -1229,4 +1229,16 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::UseOfMovedValue));
     }
+
+    #[test]
+    fn illegal_assign_to_array_literal() {
+        let result = analyze(
+            r#"
+            fn main() {
+                [1, 2][0] = 0
+            }
+        "#,
+        );
+        check_result(result, Some(ErrorKind::InvalidAssignmentTarget));
+    }
 }

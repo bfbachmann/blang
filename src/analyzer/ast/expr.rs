@@ -1013,6 +1013,7 @@ impl AExpr {
         match &self.kind {
             AExprKind::Symbol(s) => Some(s),
             AExprKind::MemberAccess(access) => access.get_base_expr().get_base_symbol(),
+            AExprKind::Index(index) => index.collection_expr.get_base_symbol(),
             _ => None,
         }
     }

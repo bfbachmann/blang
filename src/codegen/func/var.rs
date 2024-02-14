@@ -41,6 +41,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     pub(crate) fn get_ptr_to(&mut self, value: &AExpr) -> PointerValue<'ctx> {
         match &value.kind {
             AExprKind::Symbol(symbol) => self.get_var_ptr_by_name(symbol.name.as_str()),
+
             AExprKind::MemberAccess(access) => {
                 let ll_base_ptr = self.get_ptr_to(&access.base_expr);
                 self.get_member_ptr(
@@ -49,6 +50,26 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     access.member_name.as_str(),
                 )
             }
+
+            AExprKind::Index(index) => {
+                let ll_collection_ptr = self.get_ptr_to(&index.collection_expr);
+                let ll_index_val = self.gen_expr(&index.index_expr);
+                let ll_array_type = self
+                    .type_converter
+                    .get_array_type(index.collection_expr.type_key);
+                unsafe {
+                    self.builder.build_in_bounds_gep(
+                        ll_array_type,
+                        ll_collection_ptr,
+                        &[
+                            self.ctx.i32_type().const_int(0, false),
+                            ll_index_val.into_int_value(),
+                        ],
+                        "elem_ptr",
+                    )
+                }
+            }
+
             other => panic!("cannot get pointer to expression {}", other),
         }
     }

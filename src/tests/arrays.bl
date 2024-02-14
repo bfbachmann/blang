@@ -49,12 +49,17 @@ fn main() {
         let d = [Thing{value: -8}; 2]
         assert(d[0].value == -8, 9)
         assert(d[1].value == -8, 10)
+
+        // Assigning array elements.
+        let mut e = [3; 5]
+        e[4] = -10
+        assert(e[4] == -10, 11)
     }
 
     // Check that arrays can be passed to and returned from functions.
     {
         let result = take([-8, 12])
-        assert(result[0] == "test", 13)
+        assert(result[0] == "test", 14)
     }
 
     // Check that array type equality works.
@@ -66,7 +71,7 @@ fn main() {
 }
 
 fn take(a: [i64; 2]) ~ [str; 1] {
-    assert(a[0] == -8, 11)
-    assert(a[1] == 12, 12)
+    assert(a[0] == -8, 12)
+    assert(a[1] == 12, 13)
     return ["test"]
 }

@@ -489,8 +489,8 @@ impl<'a> MoveChecker<'a> {
 
             AExprKind::TypeCast(expr, _) => self.check_expr(&expr.kind, track_move),
 
-            AExprKind::AnonFunction(_) => {
-                // TODO: implement this once anon functions work.
+            AExprKind::AnonFunction(func) => {
+                self.check_fn_decl(func);
             }
 
             // No moves can occur here.
