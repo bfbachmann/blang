@@ -1128,4 +1128,31 @@ mod tests {
         let result = analyze(r#"const wrong_type = [1, 2, 3][true]"#);
         check_result(result, Some(ErrorKind::MismatchedTypes));
     }
+
+    #[test]
+    fn use_of_moved_array() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let array = [true]
+                let moved = array
+                let illegal = array[0]
+            }
+        "#,
+        );
+        check_result(result, Some(ErrorKind::UseOfMovedValue));
+    }
+
+    #[test]
+    fn illegal_move_out_of_array() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let array = [[true]]
+                let illegal = array[0]
+            }
+        "#,
+        );
+        check_result(result, Some(ErrorKind::IllegalMove));
+    }
 }

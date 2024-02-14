@@ -6,6 +6,8 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
+use crate::lexer::pos::{Locatable, Position};
+use crate::locatable_impl;
 use crate::parser::ast::index::Index;
 use crate::parser::ast::r#type::Type;
 
@@ -15,7 +17,11 @@ pub struct AIndex {
     pub collection_expr: AExpr,
     pub index_expr: AExpr,
     pub result_type_key: TypeKey,
+    start_pos: Position,
+    end_pos: Position,
 }
+
+locatable_impl!(AIndex);
 
 impl Display for AIndex {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -34,6 +40,8 @@ impl AIndex {
             collection_expr: collection_expr.clone(),
             index_expr: AExpr::new_zero_value(ctx, Type::new_unresolved("u64")),
             result_type_key: ctx.unknown_type_key(),
+            start_pos: index.start_pos().clone(),
+            end_pos: index.end_pos().clone(),
         };
 
         // For now, we'll require that the expression if of some array type.
@@ -98,6 +106,8 @@ impl AIndex {
                 collection_expr,
                 index_expr,
                 result_type_key,
+                start_pos: index.start_pos().clone(),
+                end_pos: index.end_pos().clone(),
             },
         }
     }

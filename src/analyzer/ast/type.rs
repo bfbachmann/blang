@@ -310,7 +310,7 @@ impl AType {
 
     /// Returns true only if this type is moved on assignment or when passed as an argument.
     pub fn requires_move(&self) -> bool {
-        matches!(self, AType::Enum(_) | AType::Struct(_) | AType::Tuple(_))
+        self.is_composite()
     }
 
     /// Returns true if this type is unknown.

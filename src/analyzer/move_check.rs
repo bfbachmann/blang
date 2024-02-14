@@ -8,6 +8,7 @@ use crate::analyzer::ast::cond::ACond;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::fn_call::AFnCall;
 use crate::analyzer::ast::func::AFn;
+use crate::analyzer::ast::index::AIndex;
 use crate::analyzer::ast::member::AMemberAccess;
 use crate::analyzer::ast::r#impl::AImpl;
 use crate::analyzer::ast::r#struct::AStructInit;
@@ -42,8 +43,8 @@ impl Display for Move {
 }
 
 impl Move {
-    /// Creates a new move from `var`.
-    fn from(var: &ASymbol) -> Self {
+    /// Creates a new move from the given symbol.
+    fn from_symbol(var: &ASymbol) -> Move {
         Move {
             path: var.to_string().split(".").map(|s| s.to_string()).collect(),
             start_pos: var.start_pos().clone(),
@@ -407,7 +408,7 @@ impl<'a> MoveChecker<'a> {
     /// Recursively performs move checks on `var_decl`.
     fn check_var_decl(&mut self, var_decl: &AVarDecl) {
         // Check the expression being assigned to the variable.
-        self.check_expr(&var_decl.val.kind);
+        self.check_expr(&var_decl.val.kind, true);
 
         // Track the declaration in the current scope.
         self.add_declared_var(var_decl.name.as_str());
@@ -416,20 +417,20 @@ impl<'a> MoveChecker<'a> {
     /// Recursively performs move checks on `assign`.
     fn check_var_assign(&mut self, assign: &AVarAssign) {
         // Check if the value being assigned is a variable and, if so, track its movement.
-        self.check_expr(&assign.val.kind);
+        self.check_expr(&assign.val.kind, true);
     }
 
     /// Recursively performs move checks on `store`.
     fn check_store(&mut self, store: &AStore) {
         // Check if the value being stored is a variable and, if so, track its movement.
-        self.check_expr(&store.source_expr.kind);
+        self.check_expr(&store.source_expr.kind, true);
     }
 
     /// Recursively performs move checks on `call`.
     fn check_fn_call(&mut self, call: &AFnCall) {
         // Check if any of the function arguments are being moved.
         for arg in &call.args {
-            self.check_expr(&arg.kind);
+            self.check_expr(&arg.kind, true);
         }
     }
 
@@ -437,19 +438,22 @@ impl<'a> MoveChecker<'a> {
     fn check_ret(&mut self, ret: &ARet) {
         // Check if we're moving the return value.
         match &ret.val {
-            Some(val) => self.check_expr(&val.kind),
+            Some(val) => self.check_expr(&val.kind, true),
             None => {}
         }
     }
 
     /// Recursively performs move checks on `expr`.
-    fn check_expr(&mut self, kind: &AExprKind) {
+    /// If `track_move` is true, any moves that occur inside the expression will
+    /// be tracked as such. Otherwise, they will be move-checked but not tracked
+    /// at moves themselves.
+    fn check_expr(&mut self, kind: &AExprKind, track_move: bool) {
         match kind {
             AExprKind::Symbol(var) => {
-                self.check_var(var);
+                self.check_var(var, track_move);
             }
             AExprKind::MemberAccess(access) => {
-                self.check_member_access(access);
+                self.check_member_access(access, track_move);
             }
             AExprKind::FunctionCall(call) => {
                 self.check_fn_call(call);
@@ -461,18 +465,21 @@ impl<'a> MoveChecker<'a> {
                 let skip_right_check = op.is_comparator() && right.kind.is_variable();
 
                 if !skip_left_check {
-                    self.check_expr(&left.kind)
+                    self.check_expr(&left.kind, true)
                 };
 
                 if !skip_right_check {
-                    self.check_expr(&right.kind)
+                    self.check_expr(&right.kind, true)
                 };
             }
             AExprKind::UnaryOperation(_, expr) => {
-                self.check_expr(&expr.kind);
+                self.check_expr(&expr.kind, true);
             }
             AExprKind::StructInit(struct_init) => {
                 self.check_struct_init(struct_init);
+            }
+            AExprKind::Index(index) => {
+                self.check_index(index);
             }
             _ => {}
         }
@@ -481,7 +488,7 @@ impl<'a> MoveChecker<'a> {
     /// Recursively performs move checks on `struct_init`.
     fn check_struct_init(&mut self, struct_init: &AStructInit) {
         for (_, expr) in &struct_init.field_values {
-            self.check_expr(&expr.kind);
+            self.check_expr(&expr.kind, true);
         }
     }
 
@@ -549,8 +556,38 @@ impl<'a> MoveChecker<'a> {
         }
     }
 
+    /// Performs move checks on a collection index expression.
+    fn check_index(&mut self, index: &AIndex) {
+        // Check the index expression.
+        self.check_expr(&index.index_expr.kind, true);
+
+        // Check the collection expression.
+        self.check_expr(&index.collection_expr.kind, false);
+
+        // If the type contained in the array requires moves, then the index expression
+        // is an illegal move because one cannot move out of an array, as it would leave
+        // the array in an invalid state (some values moved, some not). This is especially
+        // important because we can't always know the index being access at compile time.
+        if self.must_get_type(index.result_type_key).requires_move() {
+            self.add_err(
+                AnalyzeError::new(
+                    ErrorKind::IllegalMove,
+                    "cannot move out of non-copy array",
+                    index,
+                )
+                .with_detail(
+                    "The move occurs because the array contains values \
+                    that are not copied automatically.",
+                ),
+            );
+        }
+    }
+
     /// Performs move checks on a member access chain.
-    fn check_member_access(&mut self, access: &AMemberAccess) {
+    /// If `track_move` is true, any moves that occur inside the expression will
+    /// be tracked as such. Otherwise, they will be move-checked but not tracked
+    /// at moves themselves.
+    fn check_member_access(&mut self, access: &AMemberAccess, track_move: bool) {
         // If the base expression is not a symbol that requires move checking or is a constant,
         // there is no move checking to do here.
         let base_var = match access.get_base_expr() {
@@ -563,7 +600,35 @@ impl<'a> MoveChecker<'a> {
 
         // Create a new move from the member access path.
         let mv = Move::try_from_member_access(access).expect("should not be None");
+        self.check_move(mv, access, base_var, access.member_type_key, track_move);
+    }
 
+    /// Performs move checks on `var`.
+    /// If and only if `track_move` is true, the move of the given variable will
+    /// be tracked.
+    // TODO: Remove this as it's already covered in `check_member_access`.
+    fn check_var(&mut self, var: &ASymbol, track_move: bool) {
+        // Skip the move check entirely if the root variable is of some type that doesn't require
+        // moves, or if it's a constant.
+        if !self.must_get_type(var.type_key).requires_move() || var.is_const {
+            return;
+        }
+
+        // Search every scope in the stack for moves of this variable.
+        let mv = Move::from_symbol(var);
+        self.check_move(mv, var, var, var.type_key, track_move);
+    }
+
+    /// Checks the given move to see if it conflicts with any other moves or is otherwise
+    /// illegal. If and only if `track_move` is true, the move will be tracked.
+    fn check_move<T: Display>(
+        &mut self,
+        mv: Move,
+        moved_value: T,
+        base_var: &ASymbol,
+        value_type_key: TypeKey,
+        track_move: bool,
+    ) {
         // Search every scope in the stack for moves of this variable.
         let mut errors = vec![];
         for scope in self.stack.iter_mut().rev() {
@@ -575,7 +640,7 @@ impl<'a> MoveChecker<'a> {
                         ErrorKind::UseOfMovedValue,
                         format_code!(
                             "cannot use {} because {} was already moved",
-                            access,
+                            moved_value,
                             conflicting_move
                         )
                             .as_str(),
@@ -622,15 +687,18 @@ impl<'a> MoveChecker<'a> {
             self.add_err(
                 AnalyzeError::new(
                     ErrorKind::UseOfMovedValue,
-                    format_code!("move of {} may occur multiple times inside a loop", access)
-                        .as_str(),
+                    format_code!(
+                        "move of {} may occur multiple times inside a loop",
+                        moved_value
+                    )
+                    .as_str(),
                     &mv,
                 )
                 .with_detail(
                     format_code!(
                         "Duplicate moves of {} may occur because it is used \
                         inside a part of a loop that that may execute more than once.",
-                        access,
+                        moved_value,
                     )
                     .as_str(),
                 )
@@ -650,107 +718,7 @@ impl<'a> MoveChecker<'a> {
 
         // Only record a move if the type of the value being used requires a move. Some
         // basic types like bools and numerics are always copied instead of being moved.
-        if self.must_get_type(access.member_type_key).requires_move() {
-            self.add_move(mv);
-        }
-    }
-
-    /// Performs move checks on `var`.
-    // TODO: Remove this as it's already covered in `check_member_access`.
-    fn check_var(&mut self, var: &ASymbol) {
-        // Skip the move check entirely if the root variable is of some type that doesn't require
-        // moves, or if it's a constant.
-        if !self.must_get_type(var.type_key).requires_move() || var.is_const {
-            return;
-        }
-
-        // Search every scope in the stack for moves of this variable.
-        let mv = Move::from(var);
-        let mut errors = vec![];
-        for scope in self.stack.iter_mut().rev() {
-            // Check if the move conflicts with an existing move for this variable inside this
-            // scope.
-            for conflicting_move in scope.get_conflicting_moves(&mv) {
-                errors.push(
-                    AnalyzeError::new(
-                        ErrorKind::UseOfMovedValue,
-                        format_code!(
-                            "cannot use {} because {} was already moved",
-                            var,
-                            conflicting_move
-                        )
-                            .as_str(),
-                        &mv,
-                    )
-                        .with_detail(
-                            format!(
-                                "The conflicting move occurs at {}:{} because {} is not copied \
-                                automatically.",
-                                conflicting_move.start_pos.line,
-                                conflicting_move.start_pos.col,
-                                format_code!(conflicting_move),
-                            )
-                                .as_str(),
-                        )
-                        .with_help(format!(
-                            "Consider either copying {} on line {} instead of moving it, or refactoring \
-                            your code to avoid the move conflict.",
-                            format_code!(conflicting_move), conflicting_move.start_pos.line
-                        ).as_mut()),
-                );
-            }
-
-            // Break as soon as we've checked up to the scope in which the variable was declared.
-            if scope.declared_vars.contains(var.name.as_str()) {
-                break;
-            }
-        }
-
-        // If errors occurred, record them and return early. We're doing this here to avoid
-        // borrowing issues above.
-        if !errors.is_empty() {
-            for err in errors {
-                self.add_err(err);
-            }
-
-            return;
-        }
-
-        // If we're inside a loop and the current closure in which the move occurs is not
-        // guaranteed to exit the loop (i.e. is not guaranteed to execute at most once), then the
-        // move is illegal as it could execute more than once.
-        if !self.var_declared_in_cur_scope(var) && !self.cur_scope_executes_at_most_once() {
-            self.add_err(
-                AnalyzeError::new(
-                    ErrorKind::UseOfMovedValue,
-                    format_code!("move of {} may occur multiple times inside a loop", var).as_str(),
-                    &mv,
-                )
-                .with_detail(
-                    format_code!(
-                        "Duplicate moves of {} may occur because it is used \
-                        inside a part of a loop that that may execute more than once.",
-                        var,
-                    )
-                    .as_str(),
-                )
-                .with_help(
-                    format_code!(
-                        "Consider performing this move outside the loop, or in a part of \
-                        the loop that is guaranteed to execute at most once (i.e. a part that will \
-                        either {} or {}).",
-                        "break",
-                        "return",
-                    )
-                    .as_str(),
-                ),
-            );
-            return;
-        }
-
-        // Only record a move if the type of the value being used requires a move. Some
-        // basic types like bools and numerics are always copied instead of being moved.
-        if self.must_get_type(var.type_key).requires_move() {
+        if track_move && self.must_get_type(value_type_key).requires_move() {
             self.add_move(mv);
         }
     }
