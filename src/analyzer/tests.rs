@@ -1155,4 +1155,78 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::IllegalMove));
     }
+
+    #[test]
+    fn illegal_move_in_array_index() {
+        let result = analyze(
+            r#"
+            fn take(array: [i64; 2]) ~ i64 {
+                return 1
+            }
+            
+            fn main() {
+                let array = [1, 2]
+                let illegal = array[take(array) as u64]
+            }
+        "#,
+        );
+        check_result(result, Some(ErrorKind::UseOfMovedValue));
+    }
+
+    #[test]
+    fn illegal_move_in_enum_init() {
+        let result = analyze(
+            r#"
+            struct Thing {}
+
+            enum Test {
+                One(Thing)
+                Two
+            }
+            
+            fn main() {
+                let thing = Thing{}
+                let moved = thing
+                let test = Test::One(thing)
+            }
+        "#,
+        );
+        check_result(result, Some(ErrorKind::UseOfMovedValue));
+    }
+
+    #[test]
+    fn illegal_move_in_struct_init() {
+        let result = analyze(
+            r#"
+            struct Thing {}
+            
+            struct Test {
+                thing: Thing
+            }
+            
+            fn main() {
+                let thing = Thing{}
+                let moved = thing
+                let test = Test{thing: thing}
+            }
+        "#,
+        );
+        check_result(result, Some(ErrorKind::UseOfMovedValue));
+    }
+
+    #[test]
+    fn illegal_move_in_tuple_init() {
+        let result = analyze(
+            r#"
+            struct Thing {}
+            
+            fn main() {
+                let thing = Thing{}
+                let moved = thing
+                let test = {thing}
+            }
+        "#,
+        );
+        check_result(result, Some(ErrorKind::UseOfMovedValue));
+    }
 }

@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter};
 
 use colored::Colorize;
 
+use crate::analyzer::ast::array::AArrayInit;
 use crate::analyzer::ast::closure::AClosure;
 use crate::analyzer::ast::cond::ACond;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
@@ -10,6 +11,7 @@ use crate::analyzer::ast::fn_call::AFnCall;
 use crate::analyzer::ast::func::AFn;
 use crate::analyzer::ast::index::AIndex;
 use crate::analyzer::ast::member::AMemberAccess;
+use crate::analyzer::ast::r#enum::AEnumVariantInit;
 use crate::analyzer::ast::r#impl::AImpl;
 use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::AType;
@@ -18,12 +20,14 @@ use crate::analyzer::ast::source::ASource;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::ast::store::AStore;
 use crate::analyzer::ast::symbol::ASymbol;
+use crate::analyzer::ast::tuple::ATupleInit;
 use crate::analyzer::ast::var_assign::AVarAssign;
 use crate::analyzer::ast::var_dec::AVarDecl;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::scope::ScopeKind;
 use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::lexer::pos::{Locatable, Position};
+use crate::parser::ast::op::Operator;
 use crate::{format_code, locatable_impl};
 
 /// Represents the change in ownership of a variable or value.
@@ -452,43 +456,93 @@ impl<'a> MoveChecker<'a> {
             AExprKind::Symbol(var) => {
                 self.check_var(var, track_move);
             }
+
             AExprKind::MemberAccess(access) => {
                 self.check_member_access(access, track_move);
             }
+
             AExprKind::FunctionCall(call) => {
                 self.check_fn_call(call);
             }
+
             AExprKind::BinaryOperation(left, op, right) => {
-                // Comparisons should not cause moves of their immediate operands since they don't
-                // require copying data.
-                let skip_left_check = op.is_comparator() && left.kind.is_variable();
-                let skip_right_check = op.is_comparator() && right.kind.is_variable();
-
-                if !skip_left_check {
-                    self.check_expr(&left.kind, true)
-                };
-
-                if !skip_right_check {
-                    self.check_expr(&right.kind, true)
-                };
+                self.check_binary_op(left, op, right);
             }
+
             AExprKind::UnaryOperation(_, expr) => {
                 self.check_expr(&expr.kind, true);
             }
+
             AExprKind::StructInit(struct_init) => {
                 self.check_struct_init(struct_init);
             }
+
+            AExprKind::ArrayInit(array_init) => self.check_array_init(array_init),
+
+            AExprKind::EnumInit(enum_init) => self.check_enum_init(enum_init),
+
+            AExprKind::TupleInit(tuple_init) => self.check_tuple_init(tuple_init),
+
             AExprKind::Index(index) => {
                 self.check_index(index);
             }
-            _ => {}
+
+            AExprKind::TypeCast(expr, _) => self.check_expr(&expr.kind, track_move),
+
+            AExprKind::AnonFunction(_) => {
+                // TODO: implement this once anon functions work.
+            }
+
+            // No moves can occur here.
+            AExprKind::BoolLiteral(_)
+            | AExprKind::U64Literal(_, _)
+            | AExprKind::I64Literal(_, _)
+            | AExprKind::StrLiteral(_)
+            | AExprKind::Unknown => {}
         }
+    }
+
+    /// Performs move checks on the operands of a binary operation.
+    fn check_binary_op(&mut self, left: &AExpr, op: &Operator, right: &AExpr) {
+        // Comparisons should not cause moves of their immediate operands since they don't
+        // require copying data.
+        let skip_left_check = op.is_comparator() && left.kind.is_variable();
+        let skip_right_check = op.is_comparator() && right.kind.is_variable();
+
+        if !skip_left_check {
+            self.check_expr(&left.kind, true)
+        };
+
+        if !skip_right_check {
+            self.check_expr(&right.kind, true)
+        };
     }
 
     /// Recursively performs move checks on `struct_init`.
     fn check_struct_init(&mut self, struct_init: &AStructInit) {
         for (_, expr) in &struct_init.field_values {
             self.check_expr(&expr.kind, true);
+        }
+    }
+
+    /// Performs move checks on values used in array initialization.
+    fn check_array_init(&mut self, array_init: &AArrayInit) {
+        for value in &array_init.values {
+            self.check_expr(&value.kind, true);
+        }
+    }
+
+    /// Performs move checks on values used in enum variant initialization
+    fn check_enum_init(&mut self, enum_init: &AEnumVariantInit) {
+        if let Some(value) = &enum_init.maybe_value {
+            self.check_expr(&value.kind, true);
+        }
+    }
+
+    /// Performs move checks on values used in tuple initialization
+    fn check_tuple_init(&mut self, tuple_init: &ATupleInit) {
+        for value in &tuple_init.values {
+            self.check_expr(&value.kind, true);
         }
     }
 
@@ -600,13 +654,14 @@ impl<'a> MoveChecker<'a> {
 
         // Create a new move from the member access path.
         let mv = Move::try_from_member_access(access).expect("should not be None");
+
+        // Check if the move conflicts with any prior moves.
         self.check_move(mv, access, base_var, access.member_type_key, track_move);
     }
 
     /// Performs move checks on `var`.
     /// If and only if `track_move` is true, the move of the given variable will
     /// be tracked.
-    // TODO: Remove this as it's already covered in `check_member_access`.
     fn check_var(&mut self, var: &ASymbol, track_move: bool) {
         // Skip the move check entirely if the root variable is of some type that doesn't require
         // moves, or if it's a constant.
@@ -616,6 +671,8 @@ impl<'a> MoveChecker<'a> {
 
         // Search every scope in the stack for moves of this variable.
         let mv = Move::from_symbol(var);
+
+        // Check if the move conflicts with any prior moves.
         self.check_move(mv, var, var, var.type_key, track_move);
     }
 
