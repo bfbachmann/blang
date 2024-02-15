@@ -488,6 +488,10 @@ impl<'a> MoveChecker<'a> {
 
             // No moves can occur here.
             AExprKind::BoolLiteral(_)
+            | AExprKind::U8Literal(_)
+            | AExprKind::I8Literal(_)
+            | AExprKind::U32Literal(_)
+            | AExprKind::I32Literal(_)
             | AExprKind::U64Literal(_, _)
             | AExprKind::I64Literal(_, _)
             | AExprKind::StrLiteral(_)

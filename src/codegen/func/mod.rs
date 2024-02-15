@@ -573,7 +573,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             | AType::RawPtr
             | AType::Pointer(_) => ll_val,
 
-            AType::I64 | AType::U64 => self.get_int(ll_val).as_basic_value_enum(),
+            AType::I8 | AType::U8 | AType::I32 | AType::U32 | AType::I64 | AType::U64 => {
+                self.get_int(ll_val).as_basic_value_enum()
+            }
 
             AType::Bool => self.get_bool(ll_val).as_basic_value_enum(),
 

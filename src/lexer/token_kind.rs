@@ -38,6 +38,10 @@ pub enum TokenKind {
 
     // Built-in/primitive types and values
     BoolLiteral(bool),
+    U8Literal(u8),
+    I8Literal(i8),
+    U32Literal(u32),
+    I32Literal(i32),
     // The bool here will be true if the "i64" suffix was included in the literal.
     I64Literal(i64, bool),
     // The bool here will be true if the "u64" suffix was included in the literal.
@@ -105,6 +109,10 @@ impl Clone for TokenKind {
             TokenKind::GreaterThanOrEqual => TokenKind::GreaterThanOrEqual,
             TokenKind::LessThanOrEqual => TokenKind::LessThanOrEqual,
             TokenKind::BoolLiteral(v) => TokenKind::BoolLiteral(*v),
+            TokenKind::I8Literal(v) => TokenKind::I8Literal(*v),
+            TokenKind::U8Literal(v) => TokenKind::U8Literal(*v),
+            TokenKind::I32Literal(v) => TokenKind::I32Literal(*v),
+            TokenKind::U32Literal(v) => TokenKind::U32Literal(*v),
             TokenKind::I64Literal(v, has_suffix) => TokenKind::I64Literal(*v, *has_suffix),
             TokenKind::U64Literal(v, has_suffix) => TokenKind::U64Literal(*v, *has_suffix),
             TokenKind::StrLiteral(v) => TokenKind::StrLiteral(v.clone()),
@@ -189,6 +197,10 @@ impl TokenKind {
             TokenKind::GreaterThanOrEqual => ">=".to_string(),
             TokenKind::LessThanOrEqual => "<=".to_string(),
             TokenKind::BoolLiteral(v) => v.to_string(),
+            TokenKind::I8Literal(v) => v.to_string(),
+            TokenKind::U8Literal(v) => v.to_string(),
+            TokenKind::I32Literal(v) => v.to_string(),
+            TokenKind::U32Literal(v) => v.to_string(),
             TokenKind::I64Literal(v, _) => v.to_string(),
             TokenKind::U64Literal(v, _) => v.to_string(),
             TokenKind::StrLiteral(v) => v.to_string(),
@@ -238,7 +250,7 @@ impl TokenKind {
 
     /// Attempts to lex the given slice into a TokenKind. Returns None if the slice is not a valid
     /// token.
-    pub fn from(segment: &str) -> Option<TokenKind> {
+    pub fn from(segment: &str) -> Result<Option<TokenKind>, String> {
         let basic_kinds = HashMap::from([
             (TokenKind::Plus.to_string(), TokenKind::Plus),
             (TokenKind::Minus.to_string(), TokenKind::Minus),
@@ -307,30 +319,58 @@ impl TokenKind {
         let segment = segment.trim();
 
         if let Some(v) = basic_kinds.get(segment) {
-            return Some(v.clone());
+            return Ok(Some(v.clone()));
         }
 
         if let Some(v) = TokenKind::lex_bool_literal(segment) {
-            return Some(v);
+            return Ok(Some(v));
         }
 
-        if let Some(v) = TokenKind::lex_i64_literal(segment) {
-            return Some(v);
-        }
+        match TokenKind::lex_i8_literal(segment) {
+            Ok(Some(v)) => return Ok(Some(v)),
+            Err(e) => return Err(e),
+            _ => {}
+        };
 
-        if let Some(v) = TokenKind::lex_u64_literal(segment) {
-            return Some(v);
-        }
+        match TokenKind::lex_u8_literal(segment) {
+            Ok(Some(v)) => return Ok(Some(v)),
+            Err(e) => return Err(e),
+            _ => {}
+        };
+
+        match TokenKind::lex_i32_literal(segment) {
+            Ok(Some(v)) => return Ok(Some(v)),
+            Err(e) => return Err(e),
+            _ => {}
+        };
+
+        match TokenKind::lex_u32_literal(segment) {
+            Ok(Some(v)) => return Ok(Some(v)),
+            Err(e) => return Err(e),
+            _ => {}
+        };
+
+        match TokenKind::lex_i64_literal(segment) {
+            Ok(Some(v)) => return Ok(Some(v)),
+            Err(e) => return Err(e),
+            _ => {}
+        };
+
+        match TokenKind::lex_u64_literal(segment) {
+            Ok(Some(v)) => return Ok(Some(v)),
+            Err(e) => return Err(e),
+            _ => {}
+        };
 
         if let Some(v) = TokenKind::lex_string_literal(segment) {
-            return Some(v);
+            return Ok(Some(v));
         }
 
         if let Some(v) = TokenKind::lex_identifier(segment) {
-            return Some(v);
+            return Ok(Some(v));
         }
 
-        None
+        Ok(None)
     }
 
     fn lex_bool_literal(segment: &str) -> Option<TokenKind> {
@@ -340,41 +380,129 @@ impl TokenKind {
         }
     }
 
-    fn lex_i64_literal(segment: &str) -> Option<TokenKind> {
+    fn lex_i8_literal(segment: &str) -> Result<Option<TokenKind>, String> {
+        lazy_static! {
+            static ref RE_I8: Regex = Regex::new(r"^[0-9][0-9_]*i8$").unwrap();
+        }
+        match RE_I8.is_match(segment) {
+            true => {
+                match segment
+                    .replace("i8", "")
+                    .chars()
+                    .filter(|c| c.is_digit(10))
+                    .collect::<String>()
+                    .parse::<i8>()
+                {
+                    Ok(i) => Ok(Some(TokenKind::I8Literal(i))),
+                    Err(e) => Err(e.to_string()),
+                }
+            }
+            false => Ok(None),
+        }
+    }
+
+    fn lex_u8_literal(segment: &str) -> Result<Option<TokenKind>, String> {
+        lazy_static! {
+            static ref RE_U8: Regex = Regex::new(r"^[0-9][0-9_]*u8$").unwrap();
+        }
+        match RE_U8.is_match(segment) {
+            true => {
+                match segment
+                    .replace("u8", "")
+                    .chars()
+                    .filter(|c| c.is_digit(10))
+                    .collect::<String>()
+                    .parse::<u8>()
+                {
+                    Ok(i) => Ok(Some(TokenKind::U8Literal(i))),
+                    Err(e) => Err(e.to_string()),
+                }
+            }
+            false => Ok(None),
+        }
+    }
+
+    fn lex_i32_literal(segment: &str) -> Result<Option<TokenKind>, String> {
+        lazy_static! {
+            static ref RE_I32: Regex = Regex::new(r"^[0-9][0-9_]*i32$").unwrap();
+        }
+        match RE_I32.is_match(segment) {
+            true => {
+                match segment
+                    .replace("i32", "")
+                    .chars()
+                    .filter(|c| c.is_digit(10))
+                    .collect::<String>()
+                    .parse::<i32>()
+                {
+                    Ok(i) => Ok(Some(TokenKind::I32Literal(i))),
+                    Err(e) => Err(e.to_string()),
+                }
+            }
+            false => Ok(None),
+        }
+    }
+
+    fn lex_u32_literal(segment: &str) -> Result<Option<TokenKind>, String> {
+        lazy_static! {
+            static ref RE_U32: Regex = Regex::new(r"^[0-9][0-9_]*u32$").unwrap();
+        }
+        match RE_U32.is_match(segment) {
+            true => {
+                match segment
+                    .replace("u32", "")
+                    .chars()
+                    .filter(|c| c.is_digit(10))
+                    .collect::<String>()
+                    .parse::<u32>()
+                {
+                    Ok(i) => Ok(Some(TokenKind::U32Literal(i))),
+                    Err(e) => Err(e.to_string()),
+                }
+            }
+            false => Ok(None),
+        }
+    }
+
+    fn lex_i64_literal(segment: &str) -> Result<Option<TokenKind>, String> {
         lazy_static! {
             static ref RE_I64: Regex = Regex::new(r"^[0-9][0-9_]*(i64)?$").unwrap();
         }
         match RE_I64.is_match(segment) {
-            true => Some(TokenKind::I64Literal(
-                segment
+            true => {
+                match segment
                     .replace("i64", "")
                     .chars()
                     .filter(|c| c.is_digit(10))
                     .collect::<String>()
                     .parse::<i64>()
-                    .unwrap(),
-                segment.ends_with("i64"),
-            )),
-            false => None,
+                {
+                    Ok(i) => Ok(Some(TokenKind::I64Literal(i, segment.ends_with("i64")))),
+                    Err(e) => Err(e.to_string()),
+                }
+            }
+            false => Ok(None),
         }
     }
 
-    fn lex_u64_literal(segment: &str) -> Option<TokenKind> {
+    fn lex_u64_literal(segment: &str) -> Result<Option<TokenKind>, String> {
         lazy_static! {
             static ref RE_U64: Regex = Regex::new(r"^[0-9][0-9_]*(u64)?$").unwrap();
         }
         match RE_U64.is_match(segment) {
-            true => Some(TokenKind::U64Literal(
-                segment
+            true => {
+                match segment
                     .replace("u64", "")
                     .chars()
                     .filter(|c| c.is_digit(10))
                     .collect::<String>()
                     .parse::<u64>()
-                    .unwrap(),
-                segment.ends_with("u64"),
-            )),
-            false => None,
+                {
+                    Ok(i) => Ok(Some(TokenKind::U64Literal(i, segment.ends_with("u64")))),
+                    Err(e) => Err(e.to_string()),
+                }
+            }
+            false => Ok(None),
         }
     }
 

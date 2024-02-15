@@ -54,7 +54,7 @@ fn main() {
         assert(take_tuple(*<{9}) == 9, 7)
 
         // Check pointer type coercion.
-        let u: *u64 = *<1234
+        let u: *u64 = *<mut 1234u64
 
         // Check that we can reference and dereference fields
         // that are pointers.

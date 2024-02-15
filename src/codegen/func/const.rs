@@ -25,6 +25,30 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 .const_int(*b as u64, false)
                 .as_basic_value_enum(),
 
+            AExprKind::I8Literal(i) => self
+                .ctx
+                .i8_type()
+                .const_int(*i as u64, *i < 0)
+                .as_basic_value_enum(),
+
+            AExprKind::U8Literal(u) => self
+                .ctx
+                .i8_type()
+                .const_int(*u as u64, false)
+                .as_basic_value_enum(),
+
+            AExprKind::I32Literal(i) => self
+                .ctx
+                .i32_type()
+                .const_int(*i as u64, *i < 0)
+                .as_basic_value_enum(),
+
+            AExprKind::U32Literal(u) => self
+                .ctx
+                .i32_type()
+                .const_int(*u as u64, false)
+                .as_basic_value_enum(),
+
             AExprKind::I64Literal(i, _) => self
                 .ctx
                 .i64_type()

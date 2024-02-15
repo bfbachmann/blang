@@ -12,7 +12,9 @@ use crate::parser::ast::array::ArrayInit;
 use crate::parser::ast::bool_lit::BoolLit;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::func_call::FuncCall;
+use crate::parser::ast::i32_lit::I32Lit;
 use crate::parser::ast::i64_lit::I64Lit;
+use crate::parser::ast::i8_lit::I8Lit;
 use crate::parser::ast::index::Index;
 use crate::parser::ast::lambda::LambdaDecl;
 use crate::parser::ast::member::MemberAccess;
@@ -24,7 +26,9 @@ use crate::parser::ast::sizeof::SizeOf;
 use crate::parser::ast::str_lit::StrLit;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::tuple::TupleInit;
+use crate::parser::ast::u32_lit::U32Lit;
 use crate::parser::ast::u64_lit::U64Lit;
+use crate::parser::ast::u8_lit::U8Lit;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::source::Source;
@@ -34,8 +38,12 @@ use crate::parser::source::Source;
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum Expression {
     // Basic expressions.
-    Symbol(Symbol), // TODO: Remove member access from this.
+    Symbol(Symbol),
     BoolLiteral(BoolLit),
+    I8Literal(I8Lit),
+    U8Literal(U8Lit),
+    I32Literal(I32Lit),
+    U32Literal(U32Lit),
     I64Literal(I64Lit),
     U64Literal(U64Lit),
     StrLiteral(StrLit),
@@ -61,6 +69,10 @@ impl Display for Expression {
         match self {
             Expression::Symbol(s) => write!(f, "{}", s),
             Expression::BoolLiteral(b) => write!(f, "{}", b),
+            Expression::I8Literal(i) => write!(f, "{}", i),
+            Expression::U8Literal(i) => write!(f, "{}", i),
+            Expression::I32Literal(i) => write!(f, "{}", i),
+            Expression::U32Literal(i) => write!(f, "{}", i),
             Expression::I64Literal(i) => write!(f, "{}", i),
             Expression::U64Literal(i) => write!(f, "{}", i),
             Expression::StrLiteral(s) => write!(f, "{}", s),
@@ -92,8 +104,12 @@ impl Locatable for Expression {
         match self {
             Expression::Symbol(sym) => sym.start_pos(),
             Expression::BoolLiteral(bool_lit) => bool_lit.start_pos(),
-            Expression::I64Literal(i64_lit) => i64_lit.start_pos(),
-            Expression::U64Literal(u64_lit) => u64_lit.start_pos(),
+            Expression::I8Literal(i) => i.start_pos(),
+            Expression::U8Literal(i) => i.start_pos(),
+            Expression::I32Literal(i) => i.start_pos(),
+            Expression::U32Literal(i) => i.start_pos(),
+            Expression::I64Literal(i) => i.start_pos(),
+            Expression::U64Literal(i) => i.start_pos(),
             Expression::StrLiteral(string_lit) => string_lit.start_pos(),
             Expression::FunctionCall(fn_call) => fn_call.start_pos(),
             Expression::AnonFunction(func) => func.start_pos(),
@@ -115,8 +131,12 @@ impl Locatable for Expression {
         match self {
             Expression::Symbol(sym) => sym.end_pos(),
             Expression::BoolLiteral(bool_lit) => bool_lit.end_pos(),
-            Expression::I64Literal(i64_lit) => i64_lit.end_pos(),
-            Expression::U64Literal(u64_lit) => u64_lit.end_pos(),
+            Expression::I8Literal(i) => i.end_pos(),
+            Expression::U8Literal(i) => i.end_pos(),
+            Expression::I32Literal(i) => i.end_pos(),
+            Expression::U32Literal(i) => i.end_pos(),
+            Expression::I64Literal(i) => i.end_pos(),
+            Expression::U64Literal(i) => i.end_pos(),
             Expression::StrLiteral(string_lit) => string_lit.end_pos(),
             Expression::FunctionCall(fn_call) => fn_call.end_pos(),
             Expression::AnonFunction(func) => func.end_pos(),
@@ -477,6 +497,10 @@ fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
     let expr = match &token.kind {
         // Basic literals.
         TokenKind::BoolLiteral(_) => Expression::BoolLiteral(BoolLit::from(tokens)?),
+        TokenKind::I8Literal(_) => Expression::I8Literal(I8Lit::from(tokens)?),
+        TokenKind::U8Literal(_) => Expression::U8Literal(U8Lit::from(tokens)?),
+        TokenKind::I32Literal(_) => Expression::I32Literal(I32Lit::from(tokens)?),
+        TokenKind::U32Literal(_) => Expression::U32Literal(U32Lit::from(tokens)?),
         TokenKind::I64Literal(_, _) => Expression::I64Literal(I64Lit::from(tokens)?),
         TokenKind::U64Literal(_, _) => Expression::U64Literal(U64Lit::from(tokens)?),
         TokenKind::StrLiteral(_) => Expression::StrLiteral(StrLit::from(tokens)?),

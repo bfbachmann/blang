@@ -32,6 +32,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AExprKind::Symbol(var) => self.get_var_value(var),
 
             AExprKind::BoolLiteral(_)
+            | AExprKind::I8Literal(_)
+            | AExprKind::U8Literal(_)
+            | AExprKind::I32Literal(_)
+            | AExprKind::U32Literal(_)
             | AExprKind::I64Literal(_, _)
             | AExprKind::U64Literal(_, _)
             | AExprKind::StrLiteral(_) => {
@@ -546,9 +550,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let target_type = self.type_store.must_get(target_type_key);
         let ll_target_type = self.type_converter.get_basic_type(target_type_key);
 
-        // TODO: When we support numeric types that are larger or smaller than 64 bits, we need to
-        // think about sign extension and zero extension when casting.
-
         if ll_val.is_pointer_value() && ll_target_type.is_pointer_type() {
             return ll_val;
         }
@@ -573,11 +574,21 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 .as_basic_value_enum();
         }
 
-        self.builder.build_bitcast(
-            ll_val,
-            ll_target_type,
-            format!("as_{}", target_type.name()).as_str(),
-        )
+        if ll_val.is_int_value() {
+            self.builder
+                .build_int_z_extend_or_bit_cast(
+                    ll_val.into_int_value(),
+                    ll_target_type.into_int_type(),
+                    format!("as_{}", target_type.name()).as_str(),
+                )
+                .as_basic_value_enum()
+        } else {
+            self.builder.build_bitcast(
+                ll_val,
+                ll_target_type,
+                format!("as_{}", target_type.name()).as_str(),
+            )
+        }
     }
 
     /// Compiles a logical (boolean) operation expression.

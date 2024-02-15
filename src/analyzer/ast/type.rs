@@ -19,6 +19,10 @@ use crate::parser::ast::r#type::Type;
 pub enum AType {
     // Primitive types.
     Bool,
+    U8,
+    I8,
+    U32,
+    I32,
     I64,
     U64,
     Str,
@@ -43,6 +47,10 @@ impl Display for AType {
         match self {
             AType::Bool => write!(f, "bool"),
             AType::Str => write!(f, "str"),
+            AType::U8 => write!(f, "u8"),
+            AType::I8 => write!(f, "i8"),
+            AType::U32 => write!(f, "u32"),
+            AType::I32 => write!(f, "i32"),
             AType::I64 => write!(f, "i64"),
             AType::U64 => write!(f, "u64"),
             AType::RawPtr => write!(f, "rawptr"),
@@ -61,6 +69,10 @@ impl PartialEq for AType {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (AType::Bool, AType::Bool)
+            | (AType::U8, AType::U8)
+            | (AType::I8, AType::I8)
+            | (AType::U32, AType::U32)
+            | (AType::I32, AType::I32)
             | (AType::I64, AType::I64)
             | (AType::Str, AType::Str)
             | (AType::RawPtr, AType::RawPtr)
@@ -153,6 +165,10 @@ impl AType {
     pub fn primitives() -> HashMap<Type, AType> {
         HashMap::from([
             (Type::new_unresolved("bool"), AType::Bool),
+            (Type::new_unresolved("u8"), AType::U8),
+            (Type::new_unresolved("i8"), AType::I8),
+            (Type::new_unresolved("u32"), AType::U32),
+            (Type::new_unresolved("i32"), AType::I32),
             (Type::new_unresolved("i64"), AType::I64),
             (Type::new_unresolved("u64"), AType::U64),
             (Type::new_unresolved("str"), AType::Str),
@@ -177,6 +193,10 @@ impl AType {
     pub fn name(&self) -> &str {
         match self {
             AType::Bool => "bool",
+            AType::U8 => "u8",
+            AType::I8 => "i8",
+            AType::U32 => "u32",
+            AType::I32 => "i32",
             AType::I64 => "i64",
             AType::U64 => "u64",
             AType::Str => "str",
@@ -240,6 +260,10 @@ impl AType {
 
         return match self {
             AType::Bool
+            | AType::U8
+            | AType::I8
+            | AType::U32
+            | AType::I32
             | AType::I64
             | AType::RawPtr
             | AType::U64
@@ -318,14 +342,24 @@ impl AType {
         matches!(self, AType::Unknown(_))
     }
 
+    /// Returns true if this is a numeric type.
+    pub fn is_numeric(&self) -> bool {
+        matches!(
+            self,
+            AType::U8 | AType::I8 | AType::U32 | AType::I32 | AType::U64 | AType::I64
+        )
+    }
+
     /// Returns true if arithmetic operations on this type should be signed. Otherwise, this type
     /// either doesn't support arithmetic operations, or requires unsigned operations.
     pub fn is_signed(&self) -> bool {
         match self {
-            AType::I64 => true,
+            AType::I8 | AType::I32 | AType::I64 => true,
             AType::Bool
             | AType::Str
             | AType::RawPtr
+            | AType::U8
+            | AType::U32
             | AType::U64
             | AType::Struct(_)
             | AType::Enum(_)
@@ -341,9 +375,12 @@ impl AType {
     pub fn size_bytes(&self, ctx: &ProgramContext) -> u32 {
         match self {
             // Bools are 1 byte.
-            AType::Bool => 1,
+            AType::Bool | AType::U8 | AType::I8 => 1,
 
-            // All of the following types are 64 bits (8 bytes).
+            // All the following types are 32 bits (4 bytes).
+            AType::U32 | AType::I32 => 4,
+
+            // All the following types are 64 bits (8 bytes).
             AType::I64
             | AType::RawPtr
             | AType::Pointer(_)
@@ -458,7 +495,15 @@ impl AType {
     /// Returns a string containing a human-readable version of the type.
     pub fn display(&self, ctx: &ProgramContext) -> String {
         match self {
-            AType::Bool | AType::Str | AType::I64 | AType::U64 | AType::RawPtr => {
+            AType::Bool
+            | AType::Str
+            | AType::I8
+            | AType::U8
+            | AType::U32
+            | AType::I32
+            | AType::I64
+            | AType::U64
+            | AType::RawPtr => {
                 format!("{}", self)
             }
             AType::Struct(s) => format!("{}", s.display(ctx)),

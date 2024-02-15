@@ -32,6 +32,10 @@ pub enum AExprKind {
     Symbol(ASymbol),
     MemberAccess(Box<AMemberAccess>),
     BoolLiteral(bool),
+    I8Literal(i8),
+    U8Literal(u8),
+    I32Literal(i32),
+    U32Literal(u32),
     /// The bool here will be true if this literal includes an explicit type suffix.
     I64Literal(i64, bool),
     /// The bool here will be true if this literal includes an explicit type suffix.
@@ -56,6 +60,10 @@ impl fmt::Display for AExprKind {
             AExprKind::Symbol(sym) => write!(f, "{}", sym),
             AExprKind::MemberAccess(m) => write!(f, "{}", m),
             AExprKind::BoolLiteral(b) => write!(f, "{}", b),
+            AExprKind::I8Literal(i) => write!(f, "{}", i),
+            AExprKind::U8Literal(i) => write!(f, "{}", i),
+            AExprKind::I32Literal(i) => write!(f, "{}", i),
+            AExprKind::U32Literal(i) => write!(f, "{}", i),
             AExprKind::I64Literal(i, has_suffix) => {
                 write!(f, "{}{}", i, if *has_suffix { "i64" } else { "" })
             }
@@ -116,6 +124,10 @@ impl AExprKind {
         match self {
             // Primitive literals are valid constants.
             AExprKind::BoolLiteral(_)
+            | AExprKind::I8Literal(_)
+            | AExprKind::U8Literal(_)
+            | AExprKind::I32Literal(_)
+            | AExprKind::U32Literal(_)
             | AExprKind::I64Literal(_, _)
             | AExprKind::U64Literal(_, _)
             | AExprKind::StrLiteral(_) => true,
@@ -198,6 +210,10 @@ impl AExprKind {
         match self {
             AExprKind::Symbol(sym) => format!("{}", sym),
             AExprKind::BoolLiteral(b) => format!("{}", b),
+            AExprKind::I8Literal(i) => format!("{}", i),
+            AExprKind::U8Literal(i) => format!("{}", i),
+            AExprKind::I32Literal(i) => format!("{}", i),
+            AExprKind::U32Literal(i) => format!("{}", i),
             AExprKind::I64Literal(i, _) => format!("{}", i),
             AExprKind::U64Literal(i, _) => format!("{}", i),
             AExprKind::StrLiteral(s) => format!("{}", s),
@@ -319,6 +335,34 @@ impl AExpr {
             Expression::BoolLiteral(b) => AExpr {
                 kind: AExprKind::BoolLiteral(b.value),
                 type_key: ctx.bool_type_key(),
+                start_pos,
+                end_pos,
+            },
+
+            Expression::I8Literal(i) => AExpr {
+                kind: AExprKind::I8Literal(i.value),
+                type_key: ctx.i8_type_key(),
+                start_pos,
+                end_pos,
+            },
+
+            Expression::U8Literal(i) => AExpr {
+                kind: AExprKind::U8Literal(i.value),
+                type_key: ctx.u8_type_key(),
+                start_pos,
+                end_pos,
+            },
+
+            Expression::I32Literal(i) => AExpr {
+                kind: AExprKind::I32Literal(i.value),
+                type_key: ctx.i32_type_key(),
+                start_pos,
+                end_pos,
+            },
+
+            Expression::U32Literal(i) => AExpr {
+                kind: AExprKind::U32Literal(i.value),
+                type_key: ctx.u32_type_key(),
                 start_pos,
                 end_pos,
             },
@@ -834,6 +878,20 @@ impl AExpr {
             return self;
         }
 
+        // If both types are pointers, make sure their pointee types are the same
+        // and immutability is not violated. If so, we can allow coercion.
+        if let (AType::Pointer(self_ptr_type), AType::Pointer(other_ptr_type)) =
+            (ctx.must_get_type(self.type_key), target_type)
+        {
+            let pointee_type_match =
+                self_ptr_type.pointee_type_key == other_ptr_type.pointee_type_key;
+            let immutability_intact = self_ptr_type.is_mut || !other_ptr_type.is_mut;
+            if pointee_type_match && immutability_intact {
+                self.type_key = target_type_key;
+                return self;
+            }
+        }
+
         match &self.kind {
             // Only coerce i64 literals with they don't have explicit type suffixes.
             AExprKind::I64Literal(i, has_type_suffix) if !has_type_suffix && *i >= 0 => {
@@ -863,42 +921,6 @@ impl AExpr {
                 };
 
                 todo!()
-            }
-
-            AExprKind::UnaryOperation(Operator::Reference, operand) => {
-                if let AType::Pointer(target_ptr_type) = target_type {
-                    // Disallow coercing pointer to immutable value to pointer to mutable value.
-                    if !target_ptr_type.is_mut {
-                        let coerced_operand = operand
-                            .clone()
-                            .try_coerce_to(ctx, target_ptr_type.pointee_type_key);
-                        let new_type =
-                            AType::Pointer(APointerType::new(coerced_operand.type_key, false));
-
-                        self.type_key = ctx.insert_type(new_type);
-                        self.kind = AExprKind::UnaryOperation(
-                            Operator::Reference,
-                            Box::new(coerced_operand),
-                        );
-                    }
-                }
-            }
-
-            AExprKind::UnaryOperation(Operator::MutReference, operand) => {
-                if let AType::Pointer(target_ptr_type) = target_type {
-                    let target_type_is_mut = target_ptr_type.is_mut;
-                    let coerced_operand = operand
-                        .clone()
-                        .try_coerce_to(ctx, target_ptr_type.pointee_type_key);
-                    let new_type = AType::Pointer(APointerType::new(
-                        coerced_operand.type_key,
-                        target_type_is_mut,
-                    ));
-
-                    self.type_key = ctx.insert_type(new_type);
-                    self.kind =
-                        AExprKind::UnaryOperation(Operator::Reference, Box::new(coerced_operand));
-                }
             }
 
             _ => {}
@@ -1214,10 +1236,10 @@ fn is_valid_type_cast(left_type: &AType, right_type: &AType) -> bool {
         // Casting between typed pointers and `rawptr`s is allowed, but `rawptrs`
         // can't be cast to `*mut _`, only `*_`.
         | (AType::Pointer(_), AType::RawPtr)
-        | (AType::RawPtr, AType::Pointer(APointerType{is_mut: false, ..}))
+        | (AType::RawPtr, AType::Pointer(APointerType{is_mut: false, ..})) => true,
 
-        // Casting between compatible numeric types is allowed.
-        | (AType::I64, AType::U64) | (AType::U64, AType::I64)  => true,
+        // Casting between numeric types is allowed.
+        (a, b) if a.is_numeric() && b.is_numeric() => true,
 
         // Casting between pointer types is allowed as long as immutability isn't broken.
         | (AType::Pointer(p1), AType::Pointer(p2)) => p1.is_mut || !p2.is_mut,

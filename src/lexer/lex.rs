@@ -1,3 +1,5 @@
+use colored::Colorize;
+
 use crate::lexer::error::{LexError, LexResult};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
@@ -122,19 +124,36 @@ fn get_tokens(segment: &[char], line: usize, col: usize) -> LexResult<Vec<Token>
 
     for end_pos in (1..=segment.len()).rev() {
         let segment_left = String::from_iter(&segment[..end_pos]);
-        if let Some(left_token_kind) = TokenKind::from(segment_left.as_str()) {
-            tokens.push(Token::new(left_token_kind, line, col, col + end_pos));
+        match TokenKind::from(segment_left.as_str()) {
+            Ok(Some(left_token_kind)) => {
+                tokens.push(Token::new(left_token_kind, line, col, col + end_pos));
 
-            if end_pos <= segment.len() - 1 {
-                match get_tokens(&segment[end_pos..], line, col + end_pos) {
-                    Ok(right_tokens) => tokens.extend(right_tokens),
-                    Err(err) => {
-                        return Err(err);
+                if end_pos <= segment.len() - 1 {
+                    match get_tokens(&segment[end_pos..], line, col + end_pos) {
+                        Ok(right_tokens) => tokens.extend(right_tokens),
+                        Err(err) => {
+                            return Err(err);
+                        }
                     }
                 }
+
+                return Ok(tokens);
             }
 
-            return Ok(tokens);
+            Ok(None) => {}
+
+            Err(msg) => {
+                return Err(LexError::new(
+                    format!(
+                        "{}: {}",
+                        format_code!("invalid token {}", String::from_iter(segment)),
+                        msg
+                    )
+                    .as_str(),
+                    line,
+                    col,
+                ))
+            }
         }
     }
 

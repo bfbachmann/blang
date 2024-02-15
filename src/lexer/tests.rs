@@ -13,40 +13,40 @@ mod tests {
     #[test]
     fn lex_add() {
         let result = TokenKind::from(" + ");
-        assert_eq!(result, Some(TokenKind::Plus));
+        assert_eq!(result, Ok(Some(TokenKind::Plus)));
 
         let result = TokenKind::from(" aos83;2/ ");
-        assert_eq!(result, None);
+        assert_eq!(result, Ok(None));
     }
 
     #[test]
     fn lex_subtract() {
         let result = TokenKind::from(" - ");
-        assert_eq!(result, Some(TokenKind::Minus));
+        assert_eq!(result, Ok(Some(TokenKind::Minus)));
 
         let result = TokenKind::from(" ao9u5424lm/ ");
-        assert_eq!(result, None);
+        assert_eq!(result, Ok(None));
     }
 
     #[test]
     fn lex_equal() {
         let result = TokenKind::from(" = ");
-        assert_eq!(result, Some(TokenKind::Equal));
+        assert_eq!(result, Ok(Some(TokenKind::Equal)));
 
         let result = TokenKind::from(" ?#li4kU#@(U* ");
-        assert_eq!(result, None);
+        assert_eq!(result, Ok(None));
     }
 
     #[test]
     fn lex_i64_literal() {
         let result = TokenKind::from(" 123 ");
-        assert_eq!(result, Some(TokenKind::I64Literal(123, false)));
+        assert_eq!(result, Ok(Some(TokenKind::I64Literal(123, false))));
 
         let result = TokenKind::from(" 9923423 ");
-        assert_eq!(result, Some(TokenKind::I64Literal(9923423, false)));
+        assert_eq!(result, Ok(Some(TokenKind::I64Literal(9923423, false))));
 
         let result = TokenKind::from(" ..23423;lj1 ");
-        assert_eq!(result, None);
+        assert_eq!(result, Ok(None));
     }
 
     #[test]
@@ -54,35 +54,48 @@ mod tests {
         let result = TokenKind::from(" _a_2_32sdfkeFDSwre980 ");
         assert_eq!(
             result,
-            Some(TokenKind::Identifier(String::from("_a_2_32sdfkeFDSwre980")))
+            Ok(Some(TokenKind::Identifier(String::from(
+                "_a_2_32sdfkeFDSwre980"
+            ))))
         );
 
         let result = TokenKind::from(" asr32/23 ");
-        assert_eq!(result, None);
+        assert_eq!(result, Ok(None));
     }
 
     #[test]
     fn lex_str_literal() {
         let result = TokenKind::from(" \"asdf\" ");
-        assert_eq!(result, Some(TokenKind::StrLiteral(String::from("asdf"))));
+        assert_eq!(
+            result,
+            Ok(Some(TokenKind::StrLiteral(String::from("asdf"))))
+        );
 
         let result = TokenKind::from(r#" "say \"something\"!!" "#);
         assert_eq!(
             result,
-            Some(TokenKind::StrLiteral(String::from(r#"say "something"!!"#)))
+            Ok(Some(TokenKind::StrLiteral(String::from(
+                r#"say "something"!!"#
+            ))))
         );
 
         let result = TokenKind::from(r#" "" "#);
-        assert_eq!(result, Some(TokenKind::StrLiteral(String::from(""))));
+        assert_eq!(result, Ok(Some(TokenKind::StrLiteral(String::from("")))));
 
         let result = TokenKind::from(r#" "\\\\" "#);
-        assert_eq!(result, Some(TokenKind::StrLiteral(String::from(r#"\\"#))));
+        assert_eq!(
+            result,
+            Ok(Some(TokenKind::StrLiteral(String::from(r#"\\"#))))
+        );
 
         let result = TokenKind::from(r#""\n\t\r""#);
-        assert_eq!(result, Some(TokenKind::StrLiteral("\n\t\r".to_string())));
+        assert_eq!(
+            result,
+            Ok(Some(TokenKind::StrLiteral("\n\t\r".to_string())))
+        );
 
         let result = TokenKind::from(r#" "23424?? "#);
-        assert_eq!(result, None);
+        assert_eq!(result, Ok(None));
     }
 
     #[test]
@@ -146,5 +159,19 @@ mod tests {
         "#,
         );
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn int_too_large() {
+        for code in [
+            "432u8",
+            "987i8",
+            "4_294_967_296u32",
+            "4_294_967_296i32",
+            "18_446_744_073_709_551_619u64",
+            "18_446_744_073_709_551_619i64",
+        ] {
+            assert!(tokenize(code).is_err())
+        }
     }
 }

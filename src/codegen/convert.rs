@@ -97,7 +97,11 @@ fn to_basic_type<'ctx>(
     match typ {
         AType::Bool => ctx.bool_type().as_basic_type_enum(),
 
-        AType::I64 => ctx.i64_type().as_basic_type_enum(),
+        AType::I8 | AType::U8 => ctx.i8_type().as_basic_type_enum(),
+
+        AType::I32 | AType::U32 => ctx.i32_type().as_basic_type_enum(),
+
+        AType::I64 | AType::U64 => ctx.i64_type().as_basic_type_enum(),
 
         // TODO: There has to be a better way of representing `void *`... but then again, maybe not.
         // LLVM doesn't actually care about the pointee type, so really all pointers are treated
@@ -106,8 +110,6 @@ fn to_basic_type<'ctx>(
             .i64_type()
             .ptr_type(AddressSpace::default())
             .as_basic_type_enum(),
-
-        AType::U64 => ctx.i64_type().as_basic_type_enum(),
 
         AType::Str => ctx
             .i8_type()

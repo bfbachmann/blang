@@ -376,6 +376,26 @@ impl ProgramContext {
         *self.primitive_type_keys.get("bool").unwrap()
     }
 
+    /// Returns the type key for the `i8` type.
+    pub fn i8_type_key(&self) -> TypeKey {
+        *self.primitive_type_keys.get("i8").unwrap()
+    }
+
+    /// Returns the type key for the `u8` type.
+    pub fn u8_type_key(&self) -> TypeKey {
+        *self.primitive_type_keys.get("u8").unwrap()
+    }
+
+    /// Returns the type key for the `i32` type.
+    pub fn i32_type_key(&self) -> TypeKey {
+        *self.primitive_type_keys.get("i32").unwrap()
+    }
+
+    /// Returns the type key for the `u32` type.
+    pub fn u32_type_key(&self) -> TypeKey {
+        *self.primitive_type_keys.get("u32").unwrap()
+    }
+
     /// Returns the type key for the `i64` type.
     pub fn i64_type_key(&self) -> TypeKey {
         *self.primitive_type_keys.get("i64").unwrap()
