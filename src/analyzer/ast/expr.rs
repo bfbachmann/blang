@@ -709,8 +709,8 @@ impl AExpr {
                         let operand_expr_type = ctx.must_get_type(operand_expr.type_key);
 
                         // Make sure the operand expression is of a numeric type since we'll have to flip its sign.
-                        match operand_expr_type {
-                            AType::I64 => AExpr {
+                        if operand_expr_type.is_numeric() {
+                            AExpr {
                                 type_key: operand_expr.type_key,
                                 kind: AExprKind::UnaryOperation(
                                     Operator::Subtract,
@@ -718,21 +718,19 @@ impl AExpr {
                                 ),
                                 start_pos,
                                 end_pos,
-                            },
-
-                            _ => {
-                                ctx.insert_err(AnalyzeError::new(
-                                    ErrorKind::MismatchedTypes,
-                                    format_code!(
-                                        "cannot negate value of type {}",
-                                        operand_expr_type.display(ctx),
-                                    )
-                                    .as_str(),
-                                    &expr,
-                                ));
-
-                                AExpr::new_zero_value(ctx, Type::new_unresolved("<unknown>"))
                             }
+                        } else {
+                            ctx.insert_err(AnalyzeError::new(
+                                ErrorKind::MismatchedTypes,
+                                format_code!(
+                                    "cannot negate value of type {}",
+                                    operand_expr_type.display(ctx),
+                                )
+                                .as_str(),
+                                &expr,
+                            ));
+
+                            AExpr::new_zero_value(ctx, Type::new_unresolved("<unknown>"))
                         }
                     }
 
@@ -1199,17 +1197,15 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
         | Operator::Subtract
         | Operator::Multiply
         | Operator::Divide
-        | Operator::Modulo => matches!(operand_type, AType::I64 | AType::RawPtr | AType::U64),
+        | Operator::Modulo => operand_type.is_numeric() || operand_type == &AType::RawPtr,
 
         // Logical operators only work on bools.
-        Operator::LogicalAnd | Operator::LogicalOr => matches!(operand_type, AType::Bool),
+        Operator::LogicalAnd | Operator::LogicalOr => operand_type == &AType::Bool,
 
         // Equality operators only work on most primitive types.
         Operator::EqualTo | Operator::NotEqualTo => {
-            matches!(
-                operand_type,
-                AType::Bool | AType::I64 | AType::RawPtr | AType::U64 | AType::Str
-            )
+            operand_type.is_numeric()
+                || matches!(operand_type, AType::Bool | AType::RawPtr | AType::Str)
         }
 
         // Both operands of "like" and "not like" comparisons should be enums.

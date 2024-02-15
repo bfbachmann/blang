@@ -216,11 +216,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     .as_basic_value_enum()
             }
 
-            AExprKind::TypeCast(left_expr, target_type_key) => {
-                let lhs = self.gen_const_expr(left_expr);
-                self.gen_type_cast(lhs, *target_type_key)
-                    .as_basic_value_enum()
-            }
+            AExprKind::TypeCast(left_expr, target_type_key) => self
+                .gen_type_cast2(left_expr, *target_type_key)
+                .as_basic_value_enum(),
 
             AExprKind::MemberAccess(access) => {
                 let ll_base_val = self.gen_const_expr(&access.base_expr);

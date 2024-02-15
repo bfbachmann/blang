@@ -23,11 +23,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         let result = match &expr.kind {
-            AExprKind::TypeCast(left_expr, target_type_key) => {
-                let lhs = self.gen_expr(left_expr);
-                self.gen_type_cast(lhs, *target_type_key)
-                    .as_basic_value_enum()
-            }
+            AExprKind::TypeCast(left_expr, target_type_key) => self
+                .gen_type_cast2(left_expr, *target_type_key)
+                .as_basic_value_enum(),
 
             AExprKind::Symbol(var) => self.get_var_value(var),
 
@@ -541,53 +539,84 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
     }
 
-    /// Compiles a bitcast of `ll_val` to type `target_type_key`.
-    pub(crate) fn gen_type_cast(
+    /// Generates instructions that compile and bitcast `src_expr` to the given destination type.
+    pub(crate) fn gen_type_cast2(
         &mut self,
-        mut ll_val: BasicValueEnum<'ctx>,
-        target_type_key: TypeKey,
+        src_expr: &AExpr,
+        dst_type_key: TypeKey,
     ) -> BasicValueEnum<'ctx> {
-        let target_type = self.type_store.must_get(target_type_key);
-        let ll_target_type = self.type_converter.get_basic_type(target_type_key);
+        let mut ll_src_val = self.gen_expr(src_expr);
+        let src_type = self.type_store.must_get(src_expr.type_key);
+        let dst_type = self.type_store.must_get(dst_type_key);
+        let ll_dst_type = self.type_converter.get_basic_type(dst_type_key);
 
-        if ll_val.is_pointer_value() && ll_target_type.is_pointer_type() {
-            return ll_val;
-        }
+        match (src_type, dst_type) {
+            // Nothing to do here since all pointers are represented the same way in LLVM.
+            (AType::Pointer(_) | AType::RawPtr, AType::Pointer(_) | AType::RawPtr) => ll_src_val,
 
-        if ll_val.is_pointer_value() {
-            ll_val = self
+            // Zero-extended upcasts.
+            (AType::U32, AType::I32 | AType::U64 | AType::I64)
+            | (AType::U8, AType::I8 | AType::U32 | AType::I32 | AType::U64 | AType::I64) => self
                 .builder
-                .build_ptr_to_int(
-                    ll_val.into_pointer_value(),
-                    ll_target_type.into_int_type(),
-                    "ptr_as_int",
-                )
-                .as_basic_value_enum();
-        } else if ll_target_type.is_pointer_type() {
-            ll_val = self
-                .builder
-                .build_int_to_ptr(
-                    ll_val.into_int_value(),
-                    ll_target_type.into_pointer_type(),
-                    "int_as_ptr",
-                )
-                .as_basic_value_enum();
-        }
-
-        if ll_val.is_int_value() {
-            self.builder
                 .build_int_z_extend_or_bit_cast(
-                    ll_val.into_int_value(),
-                    ll_target_type.into_int_type(),
-                    format!("as_{}", target_type.name()).as_str(),
+                    ll_src_val.into_int_value(),
+                    ll_dst_type.into_int_type(),
+                    format!("as_{}", dst_type.name()).as_str(),
                 )
-                .as_basic_value_enum()
-        } else {
-            self.builder.build_bitcast(
-                ll_val,
-                ll_target_type,
-                format!("as_{}", target_type.name()).as_str(),
-            )
+                .as_basic_value_enum(),
+
+            // Sign-extended upcasts.
+            (AType::I32, AType::U32 | AType::U64 | AType::I64)
+            | (AType::I8, AType::U8 | AType::U32 | AType::I32 | AType::U64 | AType::I64) => self
+                .builder
+                .build_int_s_extend_or_bit_cast(
+                    ll_src_val.into_int_value(),
+                    ll_dst_type.into_int_type(),
+                    format!("as_{}", dst_type.name()).as_str(),
+                )
+                .as_basic_value_enum(),
+
+            // Truncating downcasts.
+            (AType::U64 | AType::I64, AType::I32 | AType::U32 | AType::I8 | AType::U8)
+            | (AType::U32 | AType::I32, AType::I8 | AType::U8) => self
+                .builder
+                .build_int_truncate_or_bit_cast(
+                    ll_src_val.into_int_value(),
+                    ll_dst_type.into_int_type(),
+                    format!("as_{}", dst_type.name()).as_str(),
+                )
+                .as_basic_value_enum(),
+
+            // Regular bitcasts.
+            (_, _) => {
+                // Check if we need to convert between integer and pointer types before
+                // the bitcast.
+                if ll_src_val.is_pointer_value() {
+                    ll_src_val = self
+                        .builder
+                        .build_ptr_to_int(
+                            ll_src_val.into_pointer_value(),
+                            ll_dst_type.into_int_type(),
+                            "ptr_as_int",
+                        )
+                        .as_basic_value_enum();
+                } else if ll_dst_type.is_pointer_type() {
+                    ll_src_val = self
+                        .builder
+                        .build_int_to_ptr(
+                            ll_src_val.into_int_value(),
+                            ll_dst_type.into_pointer_type(),
+                            "int_as_ptr",
+                        )
+                        .as_basic_value_enum();
+                }
+
+                self.builder.build_bitcast(
+                    ll_src_val,
+                    ll_dst_type,
+                    format!("as_{}", dst_type.name()).as_str(),
+                )
+            }
         }
     }
 

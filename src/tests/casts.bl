@@ -1,0 +1,61 @@
+extern fn exit(code: u64)
+
+fn assert(b: bool, exit_code: u64) {
+    if !b {
+        exit(exit_code)
+    }
+}
+
+fn main() {
+    // Zero-extended upcast from u8.
+    assert(13u8 as i8 == 13i8, 1)
+    assert(255u8 as i32 == 255i32, 2)
+    assert(12u8 as u32 == 12u32, 3)
+    assert(43u8 as i64 == 43i64, 4)
+    assert(3u8 as u64 == 3u64, 5)
+
+    // Sign-extended upcast from i8.
+    assert(-89i8 as u8 == 167u8, 6)
+    assert(-32i8 as i32 == -32i32, 7)
+    assert(12i8 as u32 == 12u32, 8)
+    assert(-43i8 as i64 == -43i64, 9)
+    assert(3i8 as u64 == 3u64, 10)
+
+    // Zero-extended upcast from u32.
+    assert(4_294_967_295u32 as i32 == -1i32, 11)
+    assert(43u32 as i64 == 43i64, 12)
+    assert(3u32 as u64 == 3u64, 13)
+
+    // Truncated downcast from u32.
+    assert(4_294_967_295u32 as u8 == 255u8, 14)
+    assert(43u32 as i8 == 43i8, 15)
+
+    // Sign-extended upcast from i32.
+    assert(-43i32 as u32 == 4_294_967_253u32, 16)
+    assert(-43i32 as i64 == -43i64, 17)
+    assert(3i32 as u64 == 3u64, 18)
+
+    // Truncated downcast from i32.
+    assert(-99i32 as u8 == 157u8, 19)
+    assert(-43i32 as i8 == -43i8, 20)
+
+    // Zero-extended upcast from u64.
+    assert(18_446_744_073_709_551_615u64 as i64 == -1i64, 21)
+
+    // Truncated downcast from u64.
+    assert(999u64 as u8 == 231u8, 22)
+    assert(843u64 as i8 == 75i8, 23)
+    assert(3000u64 as u32 == 3000u32, 24)
+    assert(43_983_378_748u64 as i32 == 1_033_705_788i32, 25)
+
+    // Sign-extended upcast from i64.
+    assert(-43i64 as u64 == 18_446_744_073_709_551_573u64, 26)
+
+    // Truncated downcast from i64.
+    assert(-999i64 as u8 == 25u8, 27)
+    assert(-843i64 as i8 == -75i8, 28)
+    assert(3000i64 as u32 == 3000u32, 29)
+    assert(9_223_372_036_854_775_807i64 as i32 == -1i32, 30)
+
+    exit(0)
+}
