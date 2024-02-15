@@ -548,13 +548,73 @@ impl AExpr {
                     Operator::Reference => {
                         let operand_expr =
                             AExpr::from(ctx, *right_expr.clone(), None, false, false);
-                        let a_ptr_type = APointerType::new(operand_expr.type_key);
+                        let a_ptr_type = APointerType::new(operand_expr.type_key, false);
                         let type_key = ctx.insert_type(AType::Pointer(a_ptr_type));
 
                         AExpr {
                             type_key,
                             kind: AExprKind::UnaryOperation(
                                 Operator::Reference,
+                                Box::new(operand_expr),
+                            ),
+                            start_pos,
+                            end_pos,
+                        }
+                    }
+
+                    Operator::MutReference => {
+                        let operand_expr =
+                            AExpr::from(ctx, *right_expr.clone(), None, false, false);
+
+                        // Make sure the operand is mutable if it comes from a variable. If it generates
+                        // some brand-new value, then it can trivially be considered mutable.
+                        if let Some(symbol) = &operand_expr.get_base_symbol() {
+                            let scoped_symbol = ctx.get_symbol(symbol.name.as_str()).unwrap();
+                            if scoped_symbol.is_const {
+                                ctx.insert_err(
+                                    AnalyzeError::new(
+                                        ErrorKind::InvalidMutRef,
+                                        format_code!(
+                                            "cannot get mutable pointer to constant value {}",
+                                            symbol,
+                                        )
+                                        .as_str(),
+                                        &expr,
+                                    )
+                                    .with_help(
+                                        format_code!(
+                                            "Consider declaring {} as a mutable local variable.",
+                                            symbol
+                                        )
+                                        .as_str(),
+                                    ),
+                                );
+                            } else if !scoped_symbol.is_mut {
+                                ctx.insert_err(
+                                    AnalyzeError::new(
+                                        ErrorKind::InvalidMutRef,
+                                        format_code!(
+                                            "cannot get mutable pointer to immutable value {}",
+                                            symbol,
+                                        )
+                                        .as_str(),
+                                        &expr,
+                                    )
+                                    .with_help(
+                                        format_code!("Consider declaring {} as mutable.", symbol)
+                                            .as_str(),
+                                    ),
+                                );
+                            }
+                        }
+
+                        let a_ptr_type = APointerType::new(operand_expr.type_key, true);
+                        let type_key = ctx.insert_type(AType::Pointer(a_ptr_type));
+
+                        AExpr {
+                            type_key,
+                            kind: AExprKind::UnaryOperation(
+                                Operator::MutReference,
                                 Box::new(operand_expr),
                             ),
                             start_pos,
@@ -586,7 +646,7 @@ impl AExpr {
                                     ctx.insert_err(AnalyzeError::new(
                                         ErrorKind::MismatchedTypes,
                                         format_code!(
-                                            "cannot dereference value of non-pointer type {}",
+                                            "cannot dereference value of type {}",
                                             other.display(ctx)
                                         )
                                         .as_str(),
@@ -739,7 +799,7 @@ impl AExpr {
             None => return self,
         };
 
-        // Try coerce this expression to the expected type before doing the type check.
+        // Try to coerce this expression to the expected type before doing the type check.
         self = self.try_coerce_to(ctx, expected_tk);
 
         // Skip the type check if either type is unknown, as this implies that semantic analysis
@@ -807,10 +867,33 @@ impl AExpr {
 
             AExprKind::UnaryOperation(Operator::Reference, operand) => {
                 if let AType::Pointer(target_ptr_type) = target_type {
+                    // Disallow coercing pointer to immutable value to pointer to mutable value.
+                    if !target_ptr_type.is_mut {
+                        let coerced_operand = operand
+                            .clone()
+                            .try_coerce_to(ctx, target_ptr_type.pointee_type_key);
+                        let new_type =
+                            AType::Pointer(APointerType::new(coerced_operand.type_key, false));
+
+                        self.type_key = ctx.insert_type(new_type);
+                        self.kind = AExprKind::UnaryOperation(
+                            Operator::Reference,
+                            Box::new(coerced_operand),
+                        );
+                    }
+                }
+            }
+
+            AExprKind::UnaryOperation(Operator::MutReference, operand) => {
+                if let AType::Pointer(target_ptr_type) = target_type {
+                    let target_type_is_mut = target_ptr_type.is_mut;
                     let coerced_operand = operand
                         .clone()
                         .try_coerce_to(ctx, target_ptr_type.pointee_type_key);
-                    let new_type = AType::Pointer(APointerType::new(coerced_operand.type_key));
+                    let new_type = AType::Pointer(APointerType::new(
+                        coerced_operand.type_key,
+                        target_type_is_mut,
+                    ));
 
                     self.type_key = ctx.insert_type(new_type);
                     self.kind =
@@ -1014,6 +1097,7 @@ impl AExpr {
             AExprKind::Symbol(s) => Some(s),
             AExprKind::MemberAccess(access) => access.get_base_expr().get_base_symbol(),
             AExprKind::Index(index) => index.collection_expr.get_base_symbol(),
+            AExprKind::UnaryOperation(Operator::Defererence, operand) => operand.get_base_symbol(),
             _ => None,
         }
     }
@@ -1123,13 +1207,14 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
 /// Returns true only if it is possible to cast from `left_type` to `right_type`.
 fn is_valid_type_cast(left_type: &AType, right_type: &AType) -> bool {
     match (left_type, right_type) {
-        // Casting between rawptr and u64 is allowed.
+        // Casting between `rawptr` and `u64` is allowed.
         (AType::RawPtr, AType::U64)
         | (AType::U64, AType::RawPtr)
 
-        // Casting between typed pointers and rawptrs is allowed.
+        // Casting between typed pointers and `rawptr`s is allowed, but `rawptrs`
+        // can't be cast to `*mut _`, only `*_`.
         | (AType::Pointer(_), AType::RawPtr)
-        | (AType::RawPtr, AType::Pointer(_))
+        | (AType::RawPtr, AType::Pointer(APointerType{is_mut: false, ..}))
 
         // Casting between compatible numeric types is allowed.
         | (AType::I64, AType::U64) | (AType::U64, AType::I64)  => true,

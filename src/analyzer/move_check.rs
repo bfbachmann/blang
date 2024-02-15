@@ -18,7 +18,6 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::ret::ARet;
 use crate::analyzer::ast::source::ASource;
 use crate::analyzer::ast::statement::AStatement;
-use crate::analyzer::ast::store::AStore;
 use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::ast::tuple::ATupleInit;
 use crate::analyzer::ast::var_assign::AVarAssign;
@@ -356,8 +355,6 @@ impl<'a> MoveChecker<'a> {
 
             AStatement::VariableAssignment(assign) => self.check_var_assign(assign),
 
-            AStatement::Store(store) => self.check_store(store),
-
             AStatement::FunctionCall(call) => self.check_fn_call(call),
 
             AStatement::Return(ret) => self.check_ret(ret),
@@ -424,12 +421,6 @@ impl<'a> MoveChecker<'a> {
         self.check_expr(&assign.val.kind, true);
     }
 
-    /// Recursively performs move checks on `store`.
-    fn check_store(&mut self, store: &AStore) {
-        // Check if the value being stored is a variable and, if so, track its movement.
-        self.check_expr(&store.source_expr.kind, true);
-    }
-
     /// Recursively performs move checks on `call`.
     fn check_fn_call(&mut self, call: &AFnCall) {
         // Check if any of the function arguments are being moved.
@@ -469,8 +460,10 @@ impl<'a> MoveChecker<'a> {
                 self.check_binary_op(left, op, right);
             }
 
-            AExprKind::UnaryOperation(_, expr) => {
-                self.check_expr(&expr.kind, true);
+            AExprKind::UnaryOperation(op, expr) => {
+                // Only track the move if the operand is not a reference. Reference operations
+                // don't move anything.
+                self.check_expr(&expr.kind, op != &Operator::Reference);
             }
 
             AExprKind::StructInit(struct_init) => {

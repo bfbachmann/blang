@@ -15,7 +15,6 @@ pub mod ret;
 pub mod source;
 pub mod spec;
 pub mod statement;
-pub mod store;
 pub mod r#struct;
 pub mod symbol;
 pub mod tmpl_params;

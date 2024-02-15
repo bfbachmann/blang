@@ -5,6 +5,7 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::ast::var_assign::AVarAssign;
 use crate::analyzer::type_store::TypeKey;
+use crate::parser::ast::op::Operator;
 
 use super::FnCodeGen;
 
@@ -68,6 +69,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                         "elem_ptr",
                     )
                 }
+            }
+
+            AExprKind::UnaryOperation(Operator::Defererence, expr) => {
+                self.gen_expr(expr).into_pointer_value()
             }
 
             other => panic!("cannot get pointer to expression {}", other),

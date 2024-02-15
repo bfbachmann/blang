@@ -85,8 +85,9 @@ fn main() {
 
     // Check that we can write to memory using pointers.
     {
-        let ptr = malloc(sizeof T) as *T
-        ptr <- T{i: -23, b: true}
+        let mut t = T{i: 0, b: false}
+        let ptr = *<mut t
+        *>ptr = T{i: -23, b: true}
         let t = *>ptr
         assert(t.i == -23, 14)
         assert(t.b == true, 15)

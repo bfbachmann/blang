@@ -998,32 +998,6 @@ mod tests {
     }
 
     #[test]
-    fn invalid_write_dest_pointee_type() {
-        let result = analyze(
-            r#"
-            fn main() {
-                let x = *<1
-                x <- true
-            }
-            "#,
-        );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
-    }
-
-    #[test]
-    fn invalid_write_dest_not_ptr() {
-        let result = analyze(
-            r#"
-            fn main() {
-                let x = 1
-                x <- 1
-            }
-            "#,
-        );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
-    }
-
-    #[test]
     fn non_const_array_len() {
         let result = analyze(
             r#"
@@ -1240,5 +1214,56 @@ mod tests {
         "#,
         );
         check_result(result, Some(ErrorKind::InvalidAssignmentTarget));
+    }
+
+    #[test]
+    fn invalid_mut_ref() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let a = true
+                let b = *<mut a
+            }
+        "#,
+        );
+        check_result(result, Some(ErrorKind::InvalidMutRef));
+    }
+
+    #[test]
+    fn invalid_assign_to_ref() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let a = *<true
+                *>a = false
+            }
+        "#,
+        );
+        check_result(result, Some(ErrorKind::ImmutableAssignment));
+    }
+
+    #[test]
+    fn mut_ref_type_mismatch() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let a: *mut i64 = *<0 
+            }
+        "#,
+        );
+        check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
+
+    #[test]
+    fn immutable_ref_type_coercion() {
+        let result = analyze(
+            r#"
+            fn main() {
+                // This is valid becuase `*mut _` coerces to `*_`.
+                let a: *i64 = *<mut 0 
+            }
+        "#,
+        );
+        check_result(result, None);
     }
 }

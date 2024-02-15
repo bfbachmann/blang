@@ -1,6 +1,5 @@
 use crate::analyzer::ast::ret::ARet;
 use crate::analyzer::ast::statement::AStatement;
-use crate::analyzer::ast::store::AStore;
 use crate::codegen::error::CompileResult;
 
 use super::FnCodeGen;
@@ -21,9 +20,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
             AStatement::VariableAssignment(assign) => {
                 self.assign_var(assign);
-            }
-            AStatement::Store(store) => {
-                self.gen_store(store);
             }
             AStatement::FunctionDeclaration(func) => {
                 self.gen_fn(func)?;
@@ -109,16 +105,5 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 self.builder.build_return(None);
             }
         }
-    }
-
-    /// Generates instructions that store a value into memory.
-    fn gen_store(&mut self, store: &AStore) {
-        let ll_dest_ptr = self.gen_expr(&store.dest_expr);
-        let ll_src_val = self.gen_expr(&store.source_expr);
-        self.copy_value(
-            ll_src_val,
-            ll_dest_ptr.into_pointer_value(),
-            store.source_expr.type_key,
-        );
     }
 }

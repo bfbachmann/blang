@@ -10,7 +10,6 @@ use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#impl::AImpl;
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::ret::ARet;
-use crate::analyzer::ast::store::AStore;
 use crate::analyzer::ast::var_assign::AVarAssign;
 use crate::analyzer::ast::var_dec::AVarDecl;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
@@ -23,7 +22,6 @@ use crate::parser::ast::statement::Statement;
 pub enum AStatement {
     VariableDeclaration(AVarDecl),
     VariableAssignment(AVarAssign),
-    Store(AStore),
     FunctionDeclaration(AFn),
     Closure(AClosure),
     FunctionCall(AFnCall),
@@ -45,7 +43,6 @@ impl fmt::Display for AStatement {
         match self {
             AStatement::VariableDeclaration(v) => write!(f, "{}", v),
             AStatement::VariableAssignment(v) => write!(f, "{}", v),
-            AStatement::Store(s) => write!(f, "{}", s),
             AStatement::FunctionDeclaration(v) => write!(f, "{}", v),
             AStatement::Closure(v) => write!(f, "{}", v),
             AStatement::FunctionCall(v) => write!(f, "{}", v),
@@ -93,8 +90,6 @@ impl AStatement {
             Statement::VariableAssignment(var_assign) => {
                 AStatement::VariableAssignment(AVarAssign::from(ctx, var_assign))
             }
-
-            Statement::Store(store) => AStatement::Store(AStore::from(ctx, store)),
 
             Statement::FunctionDeclaration(fn_decl) => {
                 // Make sure we are not already inside a function. For now, functions cannot be defined

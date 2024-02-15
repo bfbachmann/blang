@@ -22,7 +22,6 @@ use crate::parser::ast::r#struct::StructType;
 use crate::parser::ast::r#use::UseBlock;
 use crate::parser::ast::ret::Ret;
 use crate::parser::ast::spec::Spec;
-use crate::parser::ast::store::Store;
 use crate::parser::ast::var_assign::VariableAssignment;
 use crate::parser::ast::var_dec::VariableDeclaration;
 use crate::parser::error::ParseResult;
@@ -34,7 +33,6 @@ use crate::parser::source::Source;
 pub enum Statement {
     VariableDeclaration(VariableDeclaration),
     VariableAssignment(VariableAssignment),
-    Store(Store),
     FunctionDeclaration(Function),
     Closure(Closure),
     FunctionCall(FuncCall),
@@ -64,9 +62,6 @@ impl fmt::Display for Statement {
             }
             Statement::VariableAssignment(var_assign) => {
                 write!(f, "{} = ...", var_assign.target)
-            }
-            Statement::Store(store) => {
-                write!(f, "{} <- {}", store.dest_expr, store.source_expr)
             }
             Statement::FunctionDeclaration(func) => {
                 write!(f, "{}", func.signature)
@@ -136,7 +131,6 @@ impl Locatable for Statement {
         match self {
             Statement::VariableDeclaration(var_dec) => var_dec.start_pos(),
             Statement::VariableAssignment(var_assign) => var_assign.start_pos(),
-            Statement::Store(store) => store.start_pos(),
             Statement::FunctionDeclaration(func) => func.start_pos(),
             Statement::Closure(closure) => closure.start_pos(),
             Statement::FunctionCall(call) => call.start_pos(),
@@ -159,7 +153,6 @@ impl Locatable for Statement {
         match self {
             Statement::VariableDeclaration(var_dec) => var_dec.end_pos(),
             Statement::VariableAssignment(var_assign) => var_assign.end_pos(),
-            Statement::Store(store) => store.end_pos(),
             Statement::FunctionDeclaration(func) => func.end_pos(),
             Statement::Closure(closure) => closure.end_pos(),
             Statement::FunctionCall(call) => call.end_pos(),
@@ -441,7 +434,7 @@ impl Statement {
                 Ok(Statement::Uses(use_block))
             }
 
-            // At this point the statement should be an assignment, a store operation, or a function call.
+            // At this point the statement should be an assignment or a function call.
             (_, _) => {
                 // Parse the expression.
                 let start_pos = Source::current_position(tokens);
@@ -458,13 +451,7 @@ impl Statement {
                     )));
                 }
 
-                // If the next token is `<-`, then this is a store statement.
-                if Source::parse_optional(tokens, TokenKind::Store).is_some() {
-                    let source_expr = Expression::from(tokens)?;
-                    return Ok(Statement::Store(Store::new(expr, source_expr)));
-                }
-
-                // It's not an assignment or a store, so it should be a function call.
+                // It's not an assignment, so it should be a function call.
                 match expr {
                     Expression::FunctionCall(call) => Ok(Statement::FunctionCall(*call)),
                     _ => Err(ParseError::new(

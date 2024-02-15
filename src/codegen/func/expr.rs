@@ -451,7 +451,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     .as_basic_value_enum()
             }
 
-            Operator::Reference => match &operand_expr.kind {
+            Operator::Reference | Operator::MutReference => match &operand_expr.kind {
                 AExprKind::Symbol(symbol) if !symbol.is_const => {
                     self.get_var_ptr(symbol).as_basic_value_enum()
                 }

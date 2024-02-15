@@ -19,12 +19,12 @@ pub enum TokenKind {
     // Unary operators
     LogicalNot,
     Reference,
+    MutReference,
     Dereference,
     Ampersand,
 
     // Variable assignment
     Equal,
-    Store,
 
     // Comparators
     EqualTo,
@@ -146,8 +146,8 @@ impl Clone for TokenKind {
             TokenKind::NotLike => TokenKind::NotLike,
             TokenKind::Ampersand => TokenKind::Ampersand,
             TokenKind::Reference => TokenKind::Reference,
+            TokenKind::MutReference => TokenKind::MutReference,
             TokenKind::Dereference => TokenKind::Dereference,
-            TokenKind::Store => TokenKind::Store,
             TokenKind::Use => TokenKind::Use,
         }
     }
@@ -230,8 +230,8 @@ impl TokenKind {
             TokenKind::NotLike => "~!=".to_string(),
             TokenKind::Ampersand => "&".to_string(),
             TokenKind::Reference => "*<".to_string(),
+            TokenKind::MutReference => "*<mut".to_string(),
             TokenKind::Dereference => "*>".to_string(),
-            TokenKind::Store => "<-".to_string(),
             TokenKind::Use => "use".to_string(),
         }
     }
@@ -298,8 +298,8 @@ impl TokenKind {
             (TokenKind::NotLike.to_string(), TokenKind::NotLike),
             (TokenKind::Ampersand.to_string(), TokenKind::Ampersand),
             (TokenKind::Reference.to_string(), TokenKind::Reference),
+            (TokenKind::MutReference.to_string(), TokenKind::MutReference),
             (TokenKind::Dereference.to_string(), TokenKind::Dereference),
-            (TokenKind::Store.to_string(), TokenKind::Store),
             (TokenKind::Use.to_string(), TokenKind::Use),
         ]);
 

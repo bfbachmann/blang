@@ -18,6 +18,7 @@ pub enum Operator {
     // Basic unary operators
     LogicalNot,
     Reference,
+    MutReference,
     Defererence,
 
     // Comparators
@@ -60,6 +61,7 @@ impl Operator {
             TokenKind::Like => Some(Operator::Like),
             TokenKind::NotLike => Some(Operator::NotLike),
             TokenKind::Reference => Some(Operator::Reference),
+            TokenKind::MutReference => Some(Operator::MutReference),
             TokenKind::Dereference => Some(Operator::Defererence),
             _ => None,
         }
@@ -85,6 +87,7 @@ impl Operator {
             Operator::LessThanOrEqual => TokenKind::LessThanOrEqual.to_string(),
             Operator::As => TokenKind::As.to_string(),
             Operator::Reference => TokenKind::Reference.to_string(),
+            Operator::MutReference => TokenKind::MutReference.to_string(),
             Operator::Defererence => TokenKind::Dereference.to_string(),
         }
     }
@@ -93,16 +96,26 @@ impl Operator {
     /// standard.
     pub fn precedence(&self) -> u32 {
         100 - match self {
-            Operator::LogicalNot | Operator::Reference | Operator::Defererence => 2,
+            Operator::LogicalNot
+            | Operator::Reference
+            | Operator::MutReference
+            | Operator::Defererence => 2,
+
             Operator::As => 3,
+
             Operator::Multiply | Operator::Divide | Operator::Modulo => 4,
+
             Operator::Add | Operator::Subtract => 5,
+
             Operator::GreaterThan
             | Operator::LessThan
             | Operator::GreaterThanOrEqual
             | Operator::LessThanOrEqual => 6,
+
             Operator::EqualTo | Operator::NotEqualTo | Operator::Like | Operator::NotLike => 7,
+
             Operator::LogicalAnd => 8,
+
             Operator::LogicalOr => 9,
         }
     }
@@ -111,7 +124,10 @@ impl Operator {
     /// the C standard.
     pub fn is_left_associative(&self) -> bool {
         match self {
-            Operator::LogicalNot | Operator::Reference | Operator::Defererence => false,
+            Operator::LogicalNot
+            | Operator::Reference
+            | Operator::MutReference
+            | Operator::Defererence => false,
             _ => true,
         }
     }
@@ -119,7 +135,10 @@ impl Operator {
     /// Returns true if this is a binary operator.
     pub fn is_binary(&self) -> bool {
         match self {
-            Operator::LogicalNot | Operator::Reference | Operator::Defererence => false,
+            Operator::LogicalNot
+            | Operator::Reference
+            | Operator::MutReference
+            | Operator::Defererence => false,
             _ => true,
         }
     }
@@ -179,7 +198,7 @@ impl Operator {
         )
     }
 
-    /// Returns true if the operator is a binary logical operator..
+    /// Returns true if the operator is a binary logical operator.
     pub fn is_logical(&self) -> bool {
         matches!(self, Operator::LogicalAnd | Operator::LogicalOr)
     }

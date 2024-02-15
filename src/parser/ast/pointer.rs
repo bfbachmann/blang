@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter};
+
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
@@ -6,13 +8,14 @@ use crate::locatable_impl;
 use crate::parser::ast::r#type::Type;
 use crate::parser::error::ParseResult;
 use crate::parser::source::Source;
-use std::fmt::{Display, Formatter};
 
 /// Represents a pointer to a value of some known type.
 #[derive(PartialEq, Clone, Eq, Hash, Debug)]
 pub struct PointerType {
     /// The type of the value being pointed to.
     pub pointee_type: Type,
+    /// Indicates whether the value being pointed to can be mutated via the pointer.
+    pub is_mut: bool,
     start_pos: Position,
     end_pos: Position,
 }
@@ -28,7 +31,8 @@ locatable_impl!(PointerType);
 impl PointerType {
     /// Parses a pointer type from the token stream. Expects token sequences of the form
     ///
-    ///     `*<type>`
+    ///     *<type>
+    ///     *mut <type>
     ///
     /// where
     ///  - `type` is any type (see `Type::from`).
@@ -36,11 +40,13 @@ impl PointerType {
         let start_pos = Source::parse_expecting(tokens, TokenKind::Asterisk)?
             .start
             .clone();
+        let is_mut = Source::parse_optional(tokens, TokenKind::Mut).is_some();
         let pointee_type = Type::from(tokens)?;
         Ok(PointerType {
             start_pos,
             end_pos: pointee_type.end_pos().clone(),
             pointee_type,
+            is_mut,
         })
     }
 }
