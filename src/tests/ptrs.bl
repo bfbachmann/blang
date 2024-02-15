@@ -92,6 +92,13 @@ fn main() {
         assert(t.i == -23, 14)
         assert(t.b == true, 15)
     }
+
+    // Check that we can cast pointer types.
+    {
+        let mut v = true
+        let v_ptr: *mut bool = *<mut v
+        let other_ptr = v_ptr as *mut i64
+    }
     
     exit(0)
 }

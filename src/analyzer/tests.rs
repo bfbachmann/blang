@@ -1259,11 +1259,24 @@ mod tests {
         let result = analyze(
             r#"
             fn main() {
-                // This is valid becuase `*mut _` coerces to `*_`.
+                // This is valid because `*mut _` coerces to `*_`.
                 let a: *i64 = *<mut 0 
             }
         "#,
         );
         check_result(result, None);
+    }
+
+    #[test]
+    fn invalid_pointer_cast() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let a = true
+                let a_ptr = *<a as *mut i64 
+            }
+        "#,
+        );
+        check_result(result, Some(ErrorKind::InvalidTypeCast));
     }
 }
