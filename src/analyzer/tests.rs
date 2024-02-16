@@ -1279,4 +1279,16 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::InvalidTypeCast));
     }
+
+    #[test]
+    fn invalid_negation() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let a = -true
+            }
+        "#,
+        );
+        check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
 }

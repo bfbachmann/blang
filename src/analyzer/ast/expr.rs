@@ -708,8 +708,9 @@ impl AExpr {
                             AExpr::from(ctx, *right_expr.clone(), None, false, false);
                         let operand_expr_type = ctx.must_get_type(operand_expr.type_key);
 
-                        // Make sure the operand expression is of a numeric type since we'll have to flip its sign.
-                        if operand_expr_type.is_numeric() {
+                        // Make sure the operand expression is of a signed numeric type since we'll
+                        // have to flip its sign.
+                        if operand_expr_type.is_numeric() && operand_expr_type.is_signed() {
                             AExpr {
                                 type_key: operand_expr.type_key,
                                 kind: AExprKind::UnaryOperation(
@@ -722,9 +723,13 @@ impl AExpr {
                         } else {
                             ctx.insert_err(AnalyzeError::new(
                                 ErrorKind::MismatchedTypes,
-                                format_code!(
-                                    "cannot negate value of type {}",
-                                    operand_expr_type.display(ctx),
+                                format!(
+                                    "cannot negate value of {} type {}",
+                                    match operand_expr_type.is_numeric() {
+                                        true => "unsigned",
+                                        false => "non-numeric",
+                                    },
+                                    format_code!(operand_expr_type)
                                 )
                                 .as_str(),
                                 &expr,
