@@ -88,9 +88,8 @@ fn main() {
         let mut t = T{i: 0, b: false}
         let ptr = *<mut t
         *>ptr = T{i: -23, b: true}
-        let t = *>ptr
-        assert(t.i == -23, 14)
-        assert(t.b == true, 15)
+        assert((*>ptr).i == -23, 14)
+        assert((*>ptr).b == true, 15)
     }
 
     // Check that we can cast pointer types.
@@ -108,10 +107,12 @@ fn take(ptr: *u64) {
 }
 
 fn take_t(t: *T) ~ T {
-    return *>t
+    return T{
+        i: (*>t).i
+        b: (*>t).b
+    }
 }
 
 fn take_tuple(tup: *{i64}) ~ i64 {
-    let tup = *>tup
-    return tup.0
+    return (*>tup).0
 }

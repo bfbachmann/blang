@@ -529,11 +529,11 @@ impl<'a> MoveChecker<'a> {
         let skip_right_check = op.is_comparator() && right.kind.is_variable();
 
         if !skip_left_check {
-            self.check_expr(left, true)
+            self.check_expr(left, false)
         };
 
         if !skip_right_check {
-            self.check_expr(right, true)
+            self.check_expr(right, false)
         };
     }
 
@@ -675,7 +675,17 @@ impl<'a> MoveChecker<'a> {
         let mv = Move::try_from_member_access(access).expect("should not be None");
 
         // Check if the move conflicts with any prior moves.
-        self.check_move(mv, access, base_var, access.member_type_key, track_move);
+        let base_is_deref = matches!(
+            &access.base_expr.kind,
+            &AExprKind::UnaryOperation(Operator::Defererence, _)
+        );
+        self.check_move(
+            mv,
+            access,
+            base_var,
+            access.member_type_key,
+            track_move && !base_is_deref,
+        );
     }
 
     /// Performs move checks on `var`.

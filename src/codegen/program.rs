@@ -129,6 +129,15 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
             .module
             .add_function(sig.mangled_name.as_str(), fn_type, None);
 
+        // For now, all functions get the `frame-pointer=non-leaf` attribute. This tells
+        // LLVM that the frame pointer should be kept if the function calls other functions.
+        // This is important for stack unwinding.
+        fn_val.add_attribute(
+            AttributeLoc::Function,
+            self.ctx
+                .create_string_attribute("frame-pointer", "non-leaf"),
+        );
+
         // Set arg names and mark arguments as pass-by-value where necessary.
         if fn_val.count_params() == sig.args.len() as u32 {
             // The compiled function arguments match those of the original function signature, so

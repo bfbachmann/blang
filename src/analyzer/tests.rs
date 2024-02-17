@@ -1305,4 +1305,19 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::IllegalMove));
     }
+
+    #[test]
+    fn legal_ptr_deref_with_member_access() {
+        let result = analyze(
+            r#"
+            struct State {i: i64}
+            
+            fn main() {
+                let state_ptr = *<State{i: 0}
+                let i = (*>state_ptr).i
+            }
+        "#,
+        );
+        check_result(result, None);
+    }
 }
