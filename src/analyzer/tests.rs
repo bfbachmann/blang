@@ -1299,7 +1299,7 @@ mod tests {
             struct State {}
             
             fn main() {
-                let new = *>(*<State{} as *State)
+                let new = *>*<State{}
             }
         "#,
         );
