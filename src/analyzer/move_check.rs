@@ -409,7 +409,7 @@ impl<'a> MoveChecker<'a> {
     /// Recursively performs move checks on `var_decl`.
     fn check_var_decl(&mut self, var_decl: &AVarDecl) {
         // Check the expression being assigned to the variable.
-        self.check_expr(&var_decl.val.kind, true);
+        self.check_expr(&var_decl.val, true);
 
         // Track the declaration in the current scope.
         self.add_declared_var(var_decl.name.as_str());
@@ -418,14 +418,14 @@ impl<'a> MoveChecker<'a> {
     /// Recursively performs move checks on `assign`.
     fn check_var_assign(&mut self, assign: &AVarAssign) {
         // Check if the value being assigned is a variable and, if so, track its movement.
-        self.check_expr(&assign.val.kind, true);
+        self.check_expr(&assign.val, true);
     }
 
     /// Recursively performs move checks on `call`.
     fn check_fn_call(&mut self, call: &AFnCall) {
         // Check if any of the function arguments are being moved.
         for arg in &call.args {
-            self.check_expr(&arg.kind, true);
+            self.check_expr(arg, true);
         }
     }
 
@@ -433,7 +433,7 @@ impl<'a> MoveChecker<'a> {
     fn check_ret(&mut self, ret: &ARet) {
         // Check if we're moving the return value.
         match &ret.val {
-            Some(val) => self.check_expr(&val.kind, true),
+            Some(val) => self.check_expr(val, true),
             None => {}
         }
     }
@@ -442,8 +442,8 @@ impl<'a> MoveChecker<'a> {
     /// If `track_move` is true, any moves that occur inside the expression will
     /// be tracked as such. Otherwise, they will be move-checked but not tracked
     /// at moves themselves.
-    fn check_expr(&mut self, kind: &AExprKind, track_move: bool) {
-        match kind {
+    fn check_expr(&mut self, expr: &AExpr, track_move: bool) {
+        match &expr.kind {
             AExprKind::Symbol(var) => {
                 self.check_var(var, track_move);
             }
@@ -460,10 +460,8 @@ impl<'a> MoveChecker<'a> {
                 self.check_binary_op(left, op, right);
             }
 
-            AExprKind::UnaryOperation(op, expr) => {
-                // Only track the move if the operand is not a reference. Reference operations
-                // don't move anything.
-                self.check_expr(&expr.kind, op != &Operator::Reference);
+            AExprKind::UnaryOperation(_, _) => {
+                self.check_unary_op(expr, track_move);
             }
 
             AExprKind::StructInit(struct_init) => {
@@ -480,7 +478,7 @@ impl<'a> MoveChecker<'a> {
                 self.check_index(index);
             }
 
-            AExprKind::TypeCast(expr, _) => self.check_expr(&expr.kind, track_move),
+            AExprKind::TypeCast(expr, _) => self.check_expr(expr, track_move),
 
             AExprKind::AnonFunction(func) => {
                 self.check_fn_decl(func);
@@ -499,6 +497,30 @@ impl<'a> MoveChecker<'a> {
         }
     }
 
+    /// Performs move checks on the given unary operation expression.
+    fn check_unary_op(&mut self, unary_op_expr: &AExpr, track_move: bool) {
+        let (op, operand) = match &unary_op_expr.kind {
+            AExprKind::UnaryOperation(op, operand) => (op, operand),
+            _ => unreachable!(),
+        };
+
+        if op == &Operator::Defererence {
+            // Check if we're dereferencing some value that requires moves. If so, this is
+            // a move by dereference, which is illegal because it would bypass ownership rules.
+            let operand_ptr_type = self.must_get_type(operand.type_key).to_ptr_type();
+            let operand_pointee_type = self.must_get_type(operand_ptr_type.pointee_type_key);
+            if track_move && operand_pointee_type.requires_move() {
+                self.add_err(AnalyzeError::new(
+                    ErrorKind::IllegalMove,
+                    "cannot move out of raw pointer",
+                    unary_op_expr,
+                ));
+            }
+        }
+
+        self.check_expr(&operand, track_move);
+    }
+
     /// Performs move checks on the operands of a binary operation.
     fn check_binary_op(&mut self, left: &AExpr, op: &Operator, right: &AExpr) {
         // Comparisons should not cause moves of their immediate operands since they don't
@@ -507,39 +529,39 @@ impl<'a> MoveChecker<'a> {
         let skip_right_check = op.is_comparator() && right.kind.is_variable();
 
         if !skip_left_check {
-            self.check_expr(&left.kind, true)
+            self.check_expr(left, true)
         };
 
         if !skip_right_check {
-            self.check_expr(&right.kind, true)
+            self.check_expr(right, true)
         };
     }
 
     /// Recursively performs move checks on `struct_init`.
     fn check_struct_init(&mut self, struct_init: &AStructInit) {
         for (_, expr) in &struct_init.field_values {
-            self.check_expr(&expr.kind, true);
+            self.check_expr(expr, true);
         }
     }
 
     /// Performs move checks on values used in array initialization.
     fn check_array_init(&mut self, array_init: &AArrayInit) {
         for value in &array_init.values {
-            self.check_expr(&value.kind, true);
+            self.check_expr(value, true);
         }
     }
 
     /// Performs move checks on values used in enum variant initialization
     fn check_enum_init(&mut self, enum_init: &AEnumVariantInit) {
         if let Some(value) = &enum_init.maybe_value {
-            self.check_expr(&value.kind, true);
+            self.check_expr(value, true);
         }
     }
 
     /// Performs move checks on values used in tuple initialization
     fn check_tuple_init(&mut self, tuple_init: &ATupleInit) {
         for value in &tuple_init.values {
-            self.check_expr(&value.kind, true);
+            self.check_expr(value, true);
         }
     }
 
@@ -610,10 +632,10 @@ impl<'a> MoveChecker<'a> {
     /// Performs move checks on a collection index expression.
     fn check_index(&mut self, index: &AIndex) {
         // Check the index expression.
-        self.check_expr(&index.index_expr.kind, true);
+        self.check_expr(&index.index_expr, true);
 
         // Check the collection expression.
-        self.check_expr(&index.collection_expr.kind, false);
+        self.check_expr(&index.collection_expr, false);
 
         // If the type contained in the array requires moves, then the index expression
         // is an illegal move because one cannot move out of an array, as it would leave

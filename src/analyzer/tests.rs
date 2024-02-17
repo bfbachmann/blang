@@ -1291,4 +1291,18 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::MismatchedTypes));
     }
+
+    #[test]
+    fn illegal_move_by_deref() {
+        let result = analyze(
+            r#"
+            struct State {}
+            
+            fn main() {
+                let new = *>(*<State{} as *State)
+            }
+        "#,
+        );
+        check_result(result, Some(ErrorKind::IllegalMove));
+    }
 }

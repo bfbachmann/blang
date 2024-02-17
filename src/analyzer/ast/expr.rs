@@ -78,7 +78,15 @@ impl fmt::Display for AExprKind {
             AExprKind::Index(i) => write!(f, "{}", i),
             AExprKind::FunctionCall(call) => write!(f, "{}", call),
             AExprKind::AnonFunction(func) => write!(f, "{}", *func),
-            AExprKind::UnaryOperation(op, expr) => write!(f, "{} {}", op, expr),
+            AExprKind::UnaryOperation(op, expr) => write!(
+                f,
+                "{}{}",
+                match op {
+                    Operator::MutReference => format!("{} ", op),
+                    _ => op.to_string(),
+                },
+                expr
+            ),
             AExprKind::BinaryOperation(left, op, right) => {
                 write!(f, "{} {} {}", left, op, right)
             }

@@ -453,6 +453,15 @@ impl AType {
         }
     }
 
+    /// Returns the pointer type corresponding to this type. Panics if this type is not
+    /// a pointer type.
+    pub fn to_ptr_type(&self) -> &APointerType {
+        match self {
+            AType::Pointer(ptr_type) => ptr_type,
+            _ => panic!("type {} is not a pointer", self),
+        }
+    }
+
     /// Returns the enum type corresponding to this type. Panics if this type is not an
     /// enum type.
     pub fn to_enum_type(&self) -> &AEnumType {
