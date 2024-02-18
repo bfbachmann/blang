@@ -200,8 +200,8 @@ impl AFnSig {
             }
         }
 
-        if let Some(typ) = &self.maybe_ret_type_key {
-            s + format!(") ~ {}", typ).as_str()
+        if let Some(tk) = &self.maybe_ret_type_key {
+            s + format!(") ~ {}", ctx.must_get_type(*tk).display(ctx)).as_str()
         } else {
             s + format!(")").as_str()
         }

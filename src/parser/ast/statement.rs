@@ -376,13 +376,20 @@ impl Statement {
                 let ret_token_start = ret_token.start.clone();
                 let ret_token_end = ret_token.end.clone();
 
-                // If the next token is `}`, it's an empty return. Otherwise, we expect an
-                // expression.
-                if let Some(Token {
-                    kind: TokenKind::RightBrace,
-                    ..
-                }) = tokens.peek_next()
-                {
+                // If the next token is `}` or is on the following line, it's an empty return.
+                // Otherwise, we expect an expression.
+                let no_ret_val = match tokens.peek_next() {
+                    Some(Token {
+                        kind: TokenKind::RightBrace,
+                        ..
+                    }) => true,
+
+                    Some(Token { end, .. }) if end.line > ret_token_end.line => true,
+
+                    _ => false,
+                };
+
+                if no_ret_val {
                     return Ok(Statement::Return(Ret::new(
                         None,
                         ret_token_start,

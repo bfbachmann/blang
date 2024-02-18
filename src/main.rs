@@ -12,9 +12,10 @@ use parser::source::Source;
 
 use crate::analyzer::analyze::{analyze_sources, ProgramAnalysis};
 use crate::codegen::program::{generate, OutputFormat};
-use crate::fmt::format_file_loc;
+use crate::fmt::{format_file_loc, print_source};
 use crate::lexer::error::LexError;
 use crate::lexer::lex::lex;
+
 use crate::lexer::stream::Stream;
 use crate::parser::error::{ParseError, ParseResult};
 
@@ -160,18 +161,12 @@ fn parse_source_files(input_path: &str) -> Vec<Source> {
                 message,
                 token: _,
                 start_pos,
-                ..
+                end_pos,
             }) => {
                 parse_error_count += 1;
-                errorln!(
-                    "{}\n  {}\n",
-                    message.bold(),
-                    format_file_loc(
-                        file_paths[i].as_str(),
-                        Some(start_pos.line),
-                        Some(start_pos.col)
-                    ),
-                );
+                errorln!("{}", message.bold());
+                print_source(file_paths[i].as_str(), &start_pos, &end_pos);
+                println!();
             }
         };
     }
@@ -231,16 +226,8 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> ProgramAnalysi
 
         // Print warnings.
         for warn in &result.warnings {
-            warnln!(
-                "{}\n  {}\n",
-                format!("{}", warn).bold(),
-                format_file_loc(
-                    path.as_str(),
-                    Some(warn.start_pos.line),
-                    Some(warn.start_pos.col)
-                ),
-            );
-
+            warnln!("{}", format!("{}", warn).bold(),);
+            print_source(path.as_str(), &warn.start_pos, &warn.end_pos);
             println!();
         }
 
@@ -249,15 +236,8 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> ProgramAnalysi
             let path = result.source.path.clone();
             err_count += 1;
 
-            errorln!(
-                "{}\n  {}",
-                format!("{}", err).bold(),
-                format_file_loc(
-                    path.as_str(),
-                    Some(err.start_pos.line),
-                    Some(err.start_pos.col)
-                ),
-            );
+            errorln!("{}", format!("{}", err).bold(),);
+            print_source(path.as_str(), &err.start_pos, &err.end_pos);
 
             if let Some(detail) = &err.detail {
                 println!("  {}", detail);
