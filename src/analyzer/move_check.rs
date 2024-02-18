@@ -475,7 +475,7 @@ impl<'a> MoveChecker<'a> {
             AExprKind::TupleInit(tuple_init) => self.check_tuple_init(tuple_init),
 
             AExprKind::Index(index) => {
-                self.check_index(index);
+                self.check_index(index, track_move);
             }
 
             AExprKind::TypeCast(expr, _) => self.check_expr(expr, track_move),
@@ -630,7 +630,7 @@ impl<'a> MoveChecker<'a> {
     }
 
     /// Performs move checks on a collection index expression.
-    fn check_index(&mut self, index: &AIndex) {
+    fn check_index(&mut self, index: &AIndex, track_move: bool) {
         // Check the index expression.
         self.check_expr(&index.index_expr, true);
 
@@ -641,17 +641,13 @@ impl<'a> MoveChecker<'a> {
         // is an illegal move because one cannot move out of an array, as it would leave
         // the array in an invalid state (some values moved, some not). This is especially
         // important because we can't always know the index being access at compile time.
-        if self.must_get_type(index.result_type_key).requires_move() {
+        if track_move && self.must_get_type(index.result_type_key).requires_move() {
             self.add_err(
-                AnalyzeError::new(
-                    ErrorKind::IllegalMove,
-                    "cannot move out of non-copy array",
-                    index,
-                )
-                .with_detail(
-                    "The move occurs because the array contains values \
+                AnalyzeError::new(ErrorKind::IllegalMove, "cannot move out of array", index)
+                    .with_detail(
+                        "The move occurs because the array contains values \
                     that are not copied automatically.",
-                ),
+                    ),
             );
         }
     }
@@ -661,31 +657,32 @@ impl<'a> MoveChecker<'a> {
     /// be tracked as such. Otherwise, they will be move-checked but not tracked
     /// at moves themselves.
     fn check_member_access(&mut self, access: &AMemberAccess, track_move: bool) {
+        let member_requires_move = self
+            .type_store
+            .must_get(access.member_type_key)
+            .requires_move();
+
         // If the base expression is not a symbol that requires move checking or is a constant,
         // there is no move checking to do here.
-        let base_var = match access.get_base_expr() {
-            AExpr {
-                kind: AExprKind::Symbol(symbol),
-                ..
-            } if self.must_get_type(symbol.type_key).requires_move() && !symbol.is_const => symbol,
-            _ => return,
+        match &access.get_base_expr().kind {
+            AExprKind::Symbol(symbol)
+                if self.must_get_type(symbol.type_key).requires_move() && !symbol.is_const =>
+            {
+                // Create a new move from the member access path.
+                let mv = Move::try_from_member_access(access).expect("should not be None");
+
+                // Check if the move conflicts with any prior moves.
+                self.check_move(
+                    mv,
+                    access,
+                    symbol,
+                    access.member_type_key,
+                    track_move || member_requires_move,
+                );
+            }
+
+            _ => self.check_expr(&access.base_expr, track_move && member_requires_move),
         };
-
-        // Create a new move from the member access path.
-        let mv = Move::try_from_member_access(access).expect("should not be None");
-
-        // Check if the move conflicts with any prior moves.
-        let base_is_deref = matches!(
-            &access.base_expr.kind,
-            &AExprKind::UnaryOperation(Operator::Defererence, _)
-        );
-        self.check_move(
-            mv,
-            access,
-            base_var,
-            access.member_type_key,
-            track_move && !base_is_deref,
-        );
     }
 
     /// Performs move checks on `var`.
