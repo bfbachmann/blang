@@ -35,27 +35,45 @@ pub fn lex(chars: &mut Stream<char>) -> LexResult<Vec<Token>> {
 
         // Find the next whitespace region while also handling comments and string literals.
         let mut skip_comment = false;
+        let mut block_comment_len = 0;
         let mut is_string_lit = false;
         let mut is_line_comment = false;
         let mut block_comment_depth = 0;
+        let mut at_block_comment_end = false;
         let mut last_char = ' ';
         chars.seek(|c| {
+            // Increment the block comment length counter if we're inside a block comment.
+            if block_comment_depth > 0 {
+                block_comment_len += 1;
+            }
+
+            // Return true to terminate the seek if we've found the end of the block comment.
+            if at_block_comment_end {
+                return true;
+            }
+
             match c {
-                // If we see an unescaped quote and we're not in a comment, toggle the flag that
+                // If we see an unescaped quote, and we're not in a comment, toggle the flag that
                 // tells us whether we're in a string literal.
                 '"' if last_char != '\\' && !is_line_comment && block_comment_depth == 0 => {
                     is_string_lit = !is_string_lit;
                 }
 
-                // If we see the start of a new block comment and we're not in a string literal,
+                // If we see the start of a new block comment, and we're not in a string literal,
                 // increment the block comment counter. Block comments can be nested like this:
                 // `/* outer /* inner */ other */`.
                 '*' if last_char == '/' && !is_string_lit && !is_line_comment => {
-                    skip_comment = true;
                     block_comment_depth += 1;
+
+                    // Start the block comment length counter at 2 if this is the beginning
+                    // of the first block comment. This is because the token that marks
+                    // the beginning of block comments (`/*`) is 2 chars long.
+                    if block_comment_depth == 1 {
+                        block_comment_len = 2;
+                    }
                 }
 
-                // If we see the end of a block comment and we're not in a string literal, decrement
+                // If we see the end of a block comment, and we're not in a string literal, decrement
                 // the block comment counter.
                 '/' if last_char == '*'
                     && !is_string_lit
@@ -63,9 +81,13 @@ pub fn lex(chars: &mut Stream<char>) -> LexResult<Vec<Token>> {
                     && block_comment_depth > 0 =>
                 {
                     block_comment_depth -= 1;
+
+                    // Terminate on the next iteration if we've reached the end out the outermost
+                    // block comment.
+                    at_block_comment_end = block_comment_depth == 0;
                 }
 
-                // If we see the start of a line comment and we're not in a comment or string
+                // If we see the start of a line comment, and we're not in a comment or string
                 // literal, toggle the flag that indicates we're in a line comment.
                 '/' if last_char == '/' && !is_string_lit && block_comment_depth == 0 => {
                     skip_comment = true;
@@ -84,7 +106,7 @@ pub fn lex(chars: &mut Stream<char>) -> LexResult<Vec<Token>> {
                 }
 
                 _ => {
-                    // Stop searching only if we're not in a string literal or comment and we
+                    // Stop searching only if we're not in a string literal or comment, and we
                     // encounter whitespace.
                     if c.is_whitespace()
                         && block_comment_depth == 0
@@ -107,11 +129,13 @@ pub fn lex(chars: &mut Stream<char>) -> LexResult<Vec<Token>> {
 
         // Get a slice of the characters between the token start and the current cursor
         // position.
-        let segment = chars.slice(token_start, chars.cursor());
-        match get_tokens(segment, line, col - segment.len()) {
-            Ok(segment_tokens) => tokens.extend(segment_tokens),
-            Err(err) => return Err(err),
-        };
+        let segment = chars.slice(token_start, chars.cursor() - block_comment_len);
+        if !segment.is_empty() {
+            match get_tokens(segment, line, col - segment.len()) {
+                Ok(segment_tokens) => tokens.extend(segment_tokens),
+                Err(err) => return Err(err),
+            };
+        }
     }
 
     Ok(tokens)

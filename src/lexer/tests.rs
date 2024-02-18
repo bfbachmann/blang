@@ -148,17 +148,31 @@ mod tests {
     fn block_comments() {
         let result = tokenize(
             r#"
-            fn main(){
-                /* this is a block comment */
-                
-                /*
-                    This is
-                        /* a nested block comment */
-                */
+            /* 
+                nested 
+                /* block comment */
+             */
+            fn /**/ main(/* test */thing: i64) /* hey! */ {
+                /* another one */
             }
         "#,
         );
-        assert!(result.is_ok());
+
+        let token_kinds: Vec<TokenKind> = result.unwrap().into_iter().map(|t| t.kind).collect();
+        assert_eq!(
+            token_kinds,
+            vec![
+                TokenKind::Fn,
+                TokenKind::Identifier("main".to_string()),
+                TokenKind::LeftParen,
+                TokenKind::Identifier("thing".to_string()),
+                TokenKind::Colon,
+                TokenKind::Identifier("i64".to_string()),
+                TokenKind::RightParen,
+                TokenKind::LeftBrace,
+                TokenKind::RightBrace,
+            ]
+        )
     }
 
     #[test]

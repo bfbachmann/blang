@@ -370,6 +370,7 @@ mod tests {
 
     #[test]
     fn compile_all_test_files() {
+        // Check that all the `.bl` files in src/tests compile.
         let entries = fs::read_dir("src/tests").expect("should succeed");
         for entry in entries {
             let file_path = entry.unwrap().path();
