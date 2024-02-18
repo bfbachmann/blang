@@ -374,7 +374,16 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
 
         match &token.kind {
             // TODO: move call parsing into its own fn
-            TokenKind::LeftParen => {
+            // The `(` token will only be considered part of this expression if
+            // it is on the same line as the end of the expression. In other words,
+            // if the `(` is on a new line, it won't be considered part of this
+            // expression. This solves the problem of finding the end of an
+            // expression the is followed by a statement that starts with `(` like
+            //
+            //      let mut a = my_variable
+            //      (a) = 10
+            //
+            TokenKind::LeftParen if token.start.line == expr.end_pos().line => {
                 tokens.next();
 
                 // Collect call arguments.

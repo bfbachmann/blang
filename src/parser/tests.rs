@@ -22,6 +22,7 @@ mod tests {
     use crate::parser::ast::str_lit::StrLit;
     use crate::parser::ast::symbol::Symbol;
     use crate::parser::ast::unresolved::UnresolvedType;
+    use crate::parser::ast::var_assign::VariableAssignment;
     use crate::parser::ast::var_dec::VariableDeclaration;
     use crate::parser::error::{ErrorKind, ParseError};
     use crate::parser::source::Source;
@@ -522,5 +523,46 @@ mod tests {
                 ..
             })
         ))
+    }
+
+    #[test]
+    fn parenthesized_assign_after_expr() {
+        let input = r#"
+            let a = thing
+            (thing) = 2
+        "#;
+        let tokens = lex(&mut Stream::from(input.chars().collect())).expect("should succeed");
+        let result = Source::from("", &mut Stream::from(tokens));
+        assert_eq!(
+            result.unwrap().statements,
+            vec![
+                Statement::VariableDeclaration(VariableDeclaration {
+                    maybe_type: None,
+                    is_mut: false,
+                    name: "a".to_string(),
+                    value: Expression::Symbol(Symbol {
+                        name: "thing".to_string(),
+                        start_pos: Position::new(2, 21),
+                        end_pos: Position::new(2, 26),
+                    }),
+                    start_pos: Position::new(2, 13),
+                    end_pos: Position::new(2, 26),
+                }),
+                Statement::VariableAssignment(VariableAssignment::new(
+                    Expression::Symbol(Symbol {
+                        name: "thing".to_string(),
+                        start_pos: Position::new(3, 14),
+                        end_pos: Position::new(3, 19),
+                    }),
+                    Expression::I64Literal(I64Lit {
+                        value: 2,
+                        has_type_suffix: false,
+                        start_pos: Position::new(3, 23),
+                        end_pos: Position::new(3, 24),
+                    }),
+                    Position::new(3, 14),
+                ))
+            ]
+        )
     }
 }

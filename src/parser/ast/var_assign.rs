@@ -45,11 +45,10 @@ impl VariableAssignment {
 
     /// Parses variable assignments. Expects token sequences of the form
     ///
-    ///     <var> = <expr>
+    ///     <target> = <expr>
     ///
     /// where
-    ///  - `var` is the variable name or a field access (e.g. `var.field.subfield`, see
-    ///    `Symbol::from`)
+    ///  - `target` is the target that is being assigned to (see `Expression::from`)
     ///  - `expr` is an expression representing the value assigned to the variable
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Get the starting position of the variable assignment.
