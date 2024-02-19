@@ -187,8 +187,8 @@ impl Statement {
     ///  - struct declaration (see `Struct::from`)
     ///  - extern function declaration (see `FunctionSignature::from_extern`)
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        // Try use the first two tokens to figure out what type of statement will follow. This works
-        // because no valid statement can contain fewer than two tokens.
+        // Try to use the first two tokens to figure out what type of statement will follow.
+        // This works because no valid statement can contain fewer than two tokens.
         let (first, second) = (tokens.peek_next(), tokens.peek_ahead(1));
         match (&first, &second) {
             (None, None) => {
@@ -212,166 +212,82 @@ impl Statement {
             _ => {}
         }
 
-        match (first.unwrap(), second.unwrap()) {
+        match (&first.unwrap().kind, &second.unwrap().kind) {
             // If the first two tokens are "let <name>" or "let mut", it must be a variable
             // declaration.
-            (
-                Token {
-                    kind: TokenKind::Let,
-                    ..
-                },
-                Token {
-                    kind: TokenKind::Identifier(_) | TokenKind::Mut,
-                    ..
-                },
-            ) => {
+            (TokenKind::Let, TokenKind::Identifier(_) | TokenKind::Mut) => {
                 let var_decl = VariableDeclaration::from(tokens)?;
                 Ok(Statement::VariableDeclaration(var_decl))
             }
 
             // If the first two tokens are "<identifier> =", it must be a variable assignment.
-            (
-                Token {
-                    kind: TokenKind::Identifier(_),
-                    ..
-                },
-                Token {
-                    kind: TokenKind::Equal,
-                    ..
-                },
-            ) => {
+            (TokenKind::Identifier(_), TokenKind::Equal) => {
                 let assign = VariableAssignment::from(tokens)?;
                 Ok(Statement::VariableAssignment(assign))
             }
 
             // If the first token is `extern`, it's a set of external function declarations.
-            (
-                Token {
-                    kind: TokenKind::Extern,
-                    ..
-                },
-                _,
-            ) => {
+            (TokenKind::Extern, _) => {
                 let ext = Extern::from(tokens)?;
                 Ok(Statement::ExternFns(ext))
             }
 
             // If the first token is `const`, it's a set of constant declarations.
-            (
-                Token {
-                    kind: TokenKind::Const,
-                    ..
-                },
-                _,
-            ) => {
+            (TokenKind::Const, _) => {
                 let const_block = ConstBlock::from(tokens)?;
                 Ok(Statement::Consts(const_block))
             }
 
             // If the first token is `fn`, it must be a function declaration.
-            (
-                Token {
-                    kind: TokenKind::Fn,
-                    ..
-                },
-                _,
-            ) => {
+            (TokenKind::Fn, _) => {
                 let fn_decl = Function::from(tokens)?;
                 Ok(Statement::FunctionDeclaration(fn_decl))
             }
 
             // If the first token is `{`, it must be a closure.
-            (
-                Token {
-                    kind: TokenKind::LeftBrace,
-                    ..
-                },
-                _,
-            ) => {
+            (TokenKind::LeftBrace, _) => {
                 let closure = Closure::from(tokens)?;
                 Ok(Statement::Closure(closure))
             }
 
             // If the first token is `if`, it must be a conditional.
-            (
-                Token {
-                    kind: TokenKind::If,
-                    ..
-                },
-                _,
-            ) => {
+            (TokenKind::If, _) => {
                 let cond = Conditional::from(tokens)?;
                 Ok(Statement::Conditional(cond))
             }
 
             // If the first token is `loop`, it must be a loop.
-            (
-                Token {
-                    kind: TokenKind::Loop,
-                    ..
-                },
-                _,
-            ) => {
+            (TokenKind::Loop, _) => {
                 let cond = Loop::from(tokens)?;
                 Ok(Statement::Loop(cond))
             }
 
             // If the first token is `break`, it must be a break statement.
-            (
-                Token {
-                    kind: TokenKind::Break,
-                    ..
-                },
-                _,
-            ) => {
+            (TokenKind::Break, _) => {
                 let br = Break::from(tokens)?;
                 Ok(Statement::Break(br))
             }
 
             // If the first token is `continue`, it must be a loop continue.
-            (
-                Token {
-                    kind: TokenKind::Continue,
-                    ..
-                },
-                _,
-            ) => {
+            (TokenKind::Continue, _) => {
                 let cont = Continue::from(tokens)?;
                 Ok(Statement::Continue(cont))
             }
 
             // If the first token is `impl`, it's the implementation of member functions for a type.
-            (
-                Token {
-                    kind: TokenKind::Impl,
-                    ..
-                },
-                _,
-            ) => {
+            (TokenKind::Impl, _) => {
                 let impl_ = Impl::from(tokens)?;
                 Ok(Statement::Impl(impl_))
             }
 
             // If the first token is `spec`, it's a spec declaration.
-            (
-                Token {
-                    kind: TokenKind::Spec,
-                    ..
-                },
-                _,
-            ) => {
+            (TokenKind::Spec, _) => {
                 let spec_ = Spec::from(tokens)?;
                 Ok(Statement::SpecDeclaration(spec_))
             }
 
             // If the first token is `return`, it must be a return statement.
-            (
-                Token {
-                    kind: TokenKind::Return,
-                    ..
-                },
-                _,
-            ) => {
+            (TokenKind::Return, _) => {
                 let ret_token = tokens.next().unwrap();
                 let ret_token_start = ret_token.start.clone();
                 let ret_token_end = ret_token.end.clone();
@@ -406,37 +322,19 @@ impl Statement {
             }
 
             // If the first token is `struct`, it must be a struct declaration.
-            (
-                Token {
-                    kind: TokenKind::Struct,
-                    ..
-                },
-                _,
-            ) => {
+            (TokenKind::Struct, _) => {
                 let struct_decl = StructType::from(tokens)?;
                 Ok(Statement::StructDeclaration(struct_decl))
             }
 
             // If the first token is `enum`, it must be a struct declaration.
-            (
-                Token {
-                    kind: TokenKind::Enum,
-                    ..
-                },
-                _,
-            ) => {
+            (TokenKind::Enum, _) => {
                 let enum_decl = EnumType::from(tokens)?;
                 Ok(Statement::EnumDeclaration(enum_decl))
             }
 
             // If the first token is `use`, it's a use (imports) block.
-            (
-                Token {
-                    kind: TokenKind::Use,
-                    ..
-                },
-                _,
-            ) => {
+            (TokenKind::Use, _) => {
                 let use_block = UseBlock::from(tokens)?;
                 Ok(Statement::Uses(use_block))
             }
