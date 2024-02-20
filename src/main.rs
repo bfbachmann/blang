@@ -17,6 +17,7 @@ use crate::codegen::program::{generate, OutputFormat};
 use crate::fmt::{display_msg, format_file_loc};
 use crate::lexer::error::LexError;
 use crate::lexer::lex::lex;
+use crate::lexer::pos::Locatable;
 use crate::lexer::stream::Stream;
 use crate::parser::ast::statement::Statement;
 use crate::parser::error::{ParseError, ParseResult};
@@ -143,26 +144,31 @@ fn parse_source_files(input_path: &str) -> Vec<Source> {
     let parsed_files: HashSet<String> = HashSet::from([main_path.clone()]);
     let mut all_parse_results = vec![(input_path.to_string(), parse_result)];
     if let Ok(source) = &all_parse_results[0].1 {
-        let imported_paths: Vec<String> = source
-            .statements
-            .iter()
-            .flat_map(|stmt| match stmt {
-                Statement::Use(use_block) => use_block
-                    .used_modules
-                    .iter()
-                    .map(|used_mod| {
-                        Path::new(source.path.as_str())
-                            .parent()
-                            .unwrap()
-                            .join(used_mod.path.raw.as_str())
-                            .to_str()
-                            .unwrap()
-                            .to_string()
-                    })
-                    .collect(),
-                _ => vec![],
-            })
-            .collect();
+        let mut imported_paths = vec![];
+        for statement in &source.statements {
+            if let Statement::Use(use_block) = statement {
+                for used_mod in &use_block.used_modules {
+                    let mod_path = Path::new(source.path.as_str())
+                        .parent()
+                        .unwrap()
+                        .join(used_mod.path.raw.as_str());
+                    if !mod_path.exists() {
+                        display_msg(
+                            format_code!(r#"import {} not found"#, used_mod.path.raw).as_str(),
+                            None,
+                            None,
+                            source.path.as_str(),
+                            used_mod.start_pos(),
+                            used_mod.end_pos(),
+                            false,
+                        );
+                        continue;
+                    }
+
+                    imported_paths.push(mod_path.to_str().unwrap().to_string());
+                }
+            }
+        }
 
         let unique_import_paths = HashSet::from_iter(imported_paths.into_iter()).sub(&parsed_files);
         for path in unique_import_paths {

@@ -138,7 +138,7 @@ pub fn print_source(file_path: &str, start_pos: &Position, end_pos: &Position) {
     println!(
         "{}{}",
         " ".repeat(width),
-        format_file_loc(file_path, Some(start_pos.line), Some(end_pos.line))
+        format_file_loc(file_path, Some(start_pos.line), Some(start_pos.col))
     );
 
     for (i, line) in reader.lines().enumerate() {
