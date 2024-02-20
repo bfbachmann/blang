@@ -47,7 +47,7 @@ pub enum Statement {
     Consts(ConstBlock),
     Impl(Impl),
     SpecDeclaration(Spec),
-    Uses(UseBlock),
+    Use(UseBlock),
 }
 
 impl fmt::Display for Statement {
@@ -103,7 +103,7 @@ impl fmt::Display for Statement {
             Statement::Consts(const_block) => {
                 write!(f, "{}", const_block)
             }
-            Statement::Uses(use_block) => {
+            Statement::Use(use_block) => {
                 write!(f, "{}", use_block)
             }
             Statement::Impl(impl_) => {
@@ -143,7 +143,7 @@ impl Locatable for Statement {
             Statement::EnumDeclaration(e) => e.start_pos(),
             Statement::ExternFns(e) => e.start_pos(),
             Statement::Consts(c) => c.start_pos(),
-            Statement::Uses(u) => u.start_pos(),
+            Statement::Use(u) => u.start_pos(),
             Statement::Impl(i) => i.start_pos(),
             Statement::SpecDeclaration(t) => t.start_pos(),
         }
@@ -165,7 +165,7 @@ impl Locatable for Statement {
             Statement::EnumDeclaration(e) => e.end_pos(),
             Statement::ExternFns(e) => e.end_pos(),
             Statement::Consts(c) => c.end_pos(),
-            Statement::Uses(u) => u.end_pos(),
+            Statement::Use(u) => u.end_pos(),
             Statement::Impl(i) => i.end_pos(),
             Statement::SpecDeclaration(t) => t.end_pos(),
         }
@@ -336,7 +336,7 @@ impl Statement {
             // If the first token is `use`, it's a use (imports) block.
             (TokenKind::Use, _) => {
                 let use_block = UseBlock::from(tokens)?;
-                Ok(Statement::Uses(use_block))
+                Ok(Statement::Use(use_block))
             }
 
             // At this point the statement should be an assignment or a function call.

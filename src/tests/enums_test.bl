@@ -1,10 +1,4 @@
-extern fn exit(code: u64)
-
-fn assert(b: bool, code: u64) {
-    if !b {
-        exit(code)
-    }
-}
+use "test_utils.bl"
 
 struct S {
     i: i64

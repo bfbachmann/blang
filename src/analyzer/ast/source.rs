@@ -22,7 +22,6 @@ impl ASource {
                 Statement::FunctionDeclaration(_)
                 | Statement::ExternFns(_)
                 | Statement::Consts(_)
-                | Statement::Uses(_)
                 | Statement::StructDeclaration(_)
                 | Statement::EnumDeclaration(_)
                 | Statement::Impl(_) => {
@@ -36,6 +35,10 @@ impl ASource {
                 Statement::SpecDeclaration(_) => {
                     // We can safely skip specs here because they'll be full analyzed in
                     // `define_fns`.
+                }
+
+                Statement::Use(_) => {
+                    // We can skip `use` statements since they're handled by the parser.
                 }
 
                 other => {

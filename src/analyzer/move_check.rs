@@ -731,10 +731,9 @@ impl<'a> MoveChecker<'a> {
                     )
                         .with_detail(
                             format!(
-                                "The conflicting move occurs at {}:{} because {} is not copied \
+                                "The conflicting move occurs at {} because {} is not copied \
                                 automatically.",
-                                conflicting_move.start_pos.line,
-                                conflicting_move.start_pos.col,
+                                conflicting_move.start_pos,
                                 format_code!(conflicting_move),
                             )
                                 .as_str(),

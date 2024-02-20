@@ -1335,4 +1335,17 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::IllegalMove));
     }
+
+    #[test]
+    fn out_of_order_const_decls() {
+        let result = analyze(
+            r#"
+            const X = Y + 2
+            const Y = Z * W
+            const W = Z - 1
+            const Z = 4
+        "#,
+        );
+        check_result(result, None);
+    }
 }

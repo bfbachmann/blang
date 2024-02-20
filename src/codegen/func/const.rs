@@ -217,7 +217,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
 
             AExprKind::TypeCast(left_expr, target_type_key) => self
-                .gen_type_cast2(left_expr, *target_type_key)
+                .gen_type_cast(left_expr, *target_type_key)
                 .as_basic_value_enum(),
 
             AExprKind::MemberAccess(access) => {

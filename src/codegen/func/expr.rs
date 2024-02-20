@@ -24,7 +24,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         let result = match &expr.kind {
             AExprKind::TypeCast(left_expr, target_type_key) => self
-                .gen_type_cast2(left_expr, *target_type_key)
+                .gen_type_cast(left_expr, *target_type_key)
                 .as_basic_value_enum(),
 
             AExprKind::Symbol(var) => self.get_var_value(var),
@@ -540,7 +540,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Generates instructions that compile and bitcast `src_expr` to the given destination type.
-    pub(crate) fn gen_type_cast2(
+    pub(crate) fn gen_type_cast(
         &mut self,
         src_expr: &AExpr,
         dst_type_key: TypeKey,

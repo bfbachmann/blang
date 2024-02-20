@@ -1,10 +1,4 @@
-extern fn exit(code: u64)
-
-fn assert(b: bool, err_code: u64) {
-    if !b {
-        exit(err_code)
-    }
-}
+use "test_utils.bl"
 
 struct Nested {
     int_val: i64,

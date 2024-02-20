@@ -20,7 +20,7 @@ def "test unit" [] {
 
 # Runs end-to-end tests.
 def "test e2e" [] {
-    ls src/tests | find .bl | get name | ansi strip | par-each {|src_file|
+    ls src/tests | find "_test.bl" | get name | ansi strip | par-each {|src_file|
         let exit_code = run -q $src_file
         if $exit_code == 0 {
             print $"(ansi green)PASS(ansi reset) ($src_file)"

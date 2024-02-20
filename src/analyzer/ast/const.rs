@@ -44,21 +44,6 @@ impl AConst {
     /// Analyzes a const declaration and returns a semantically valid, type-rich constant
     /// declaration.
     pub fn from(ctx: &mut ProgramContext, const_decl: &Const) -> Self {
-        // Make sure this const name doesn't collide with any other const names.
-        if ctx.get_symbol(const_decl.name.as_str()).is_some() {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::DuplicateConst,
-                format_code!(
-                    "constant {} is already defined in this scope",
-                    const_decl.name
-                )
-                .as_str(),
-                const_decl,
-            ));
-
-            return AConst::new_zero_value(ctx, const_decl.name.as_str());
-        }
-
         // Analyze the optional constant type.
         let declared_tk = match &const_decl.maybe_type {
             Some(typ) => Some(ctx.resolve_type(typ)),
@@ -67,12 +52,19 @@ impl AConst {
 
         // Make sure the constant value is a valid constant.
         let value = AExpr::from(ctx, const_decl.value.clone(), declared_tk, false, false);
+
+        // Just return a dummy value if the expression already failed analysis.
+        if ctx.must_get_type(value.type_key).is_unknown() {
+            return AConst::new_zero_value(ctx, const_decl.name.as_str());
+        }
+
+        // Error if the value assigned to the constant is not constant.
         if !value.kind.is_const() {
             ctx.insert_err(
                 AnalyzeError::new(
                     ErrorKind::InvalidConst,
                     format_code!("{} is not a constant expression", value.display(ctx)).as_str(),
-                    const_decl,
+                    &const_decl.value,
                 )
                 .with_detail("Constant expressions cannot contain variables or function calls."),
             );

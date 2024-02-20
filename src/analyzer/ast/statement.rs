@@ -184,8 +184,9 @@ impl AStatement {
                 AStatement::Consts(consts)
             }
 
-            Statement::Uses(_) => {
-                todo!()
+            Statement::Use(_) => {
+                // This should never happen because `use` statements are handled by the parser.
+                unreachable!()
             }
 
             Statement::SpecDeclaration(_) => {

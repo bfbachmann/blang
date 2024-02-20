@@ -2,6 +2,7 @@ use std::fmt::{Display, Formatter};
 
 use colored::Colorize;
 
+use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopedSymbol;
@@ -53,8 +54,8 @@ impl ASymbol {
             name: name.to_string(),
             type_key,
             is_type: false,
-            is_const: false,
-            is_var: true,
+            is_const: true,
+            is_var: false,
             is_method: false,
             start_pos: Position::default(),
             end_pos: Position::default(),
@@ -114,7 +115,7 @@ impl ASymbol {
                 // a placeholder value.
                 ctx.insert_err(AnalyzeError::new(
                     ErrorKind::UndefSymbol,
-                    format_code!("symbol {} is not defined in this scope", var_name).as_str(),
+                    format_code!("{} is not defined in this scope", var_name).as_str(),
                     symbol,
                 ));
 
@@ -158,12 +159,19 @@ impl ASymbol {
     /// Attempts to find the type key of a symbol with the given name. Additionally, if `name`
     /// can be resolved to an actual variable, the variable will be returned.
     fn get_type_key_by_symbol_name(
-        ctx: &ProgramContext,
+        ctx: &mut ProgramContext,
         name: &str,
         include_fns: bool,
     ) -> (Option<TypeKey>, Option<ScopedSymbol>) {
         // Search for a variable with the given name. Variables take precedence over functions.
         if let Some(symbol) = ctx.get_symbol(name) {
+            return (Some(symbol.type_key), Some(symbol.clone()));
+        }
+
+        // Check if the symbol refers to a constant that has not yet been analyzed.
+        if let Some(const_) = ctx.get_unchecked_const(name) {
+            let a_const = AConst::from(ctx, &const_.clone());
+            let symbol = ctx.get_symbol(a_const.name.as_str()).unwrap();
             return (Some(symbol.type_key), Some(symbol.clone()));
         }
 

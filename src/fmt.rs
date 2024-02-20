@@ -3,7 +3,8 @@ use std::fmt::Display;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-use colored::{Colorize};
+use colored::Colorize;
+use colored::CustomColor;
 
 use crate::lexer::pos::Position;
 
@@ -71,6 +72,44 @@ where
     return s;
 }
 
+pub fn display_msg(
+    msg: &str,
+    detail: Option<&String>,
+    help: Option<&String>,
+    path: &str,
+    start: &Position,
+    end: &Position,
+    is_warning: bool,
+) {
+    if is_warning {
+        warnln!("{}", msg.bold());
+    } else {
+        errorln!("{}", msg.bold());
+    }
+
+    print_source(path, start, end);
+
+    let width = end.line.to_string().len();
+    if let Some(detail_msg) = detail {
+        println!("{}{}", " ".repeat(width), "|".blue().bold());
+        println!("{}{} {}", " ".repeat(width), "=".blue().bold(), detail_msg);
+    }
+
+    if let Some(help_msg) = help {
+        if detail.is_none() {
+            println!("{}{}", " ".repeat(width), "|".blue().bold());
+        }
+        println!(
+            "{}{} {}",
+            " ".repeat(width),
+            "Help:".green().bold(),
+            help_msg
+        );
+    }
+
+    println!();
+}
+
 /// Formats the file location as a colored string.
 pub fn format_file_loc(path: &str, line: Option<usize>, col: Option<usize>) -> String {
     match (line, col) {
@@ -89,7 +128,8 @@ pub fn print_source(file_path: &str, start_pos: &Position, end_pos: &Position) {
     let width = end_pos.line.to_string().len();
 
     println!(
-        "  {}",
+        "{}{}",
+        " ".repeat(width),
         format_file_loc(file_path, Some(start_pos.line), Some(end_pos.line))
     );
 

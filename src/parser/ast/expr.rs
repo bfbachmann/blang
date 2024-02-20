@@ -146,7 +146,7 @@ impl Locatable for Expression {
             Expression::EnumInit(enum_init) => enum_init.end_pos(),
             Expression::TupleInit(tuple_init) => tuple_init.end_pos(),
             Expression::ArrayInit(array_init) => array_init.end_pos(),
-            Expression::BinaryOperation(left, _, _) => left.end_pos(),
+            Expression::BinaryOperation(_, _, right) => right.end_pos(),
             Expression::SizeOf(so) => so.end_pos(),
             Expression::Index(idx) => idx.end_pos(),
             Expression::MemberAccess(m) => m.end_pos(),

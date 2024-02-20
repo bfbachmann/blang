@@ -16,6 +16,7 @@ use crate::analyzer::scope::{Scope, ScopeKind, ScopedSymbol};
 use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::lexer::pos::{Locatable, Position};
+use crate::parser::ast::r#const::Const;
 use crate::parser::ast::r#enum::EnumType;
 use crate::parser::ast::r#struct::StructType;
 use crate::parser::ast::r#type::Type;
@@ -52,6 +53,8 @@ pub struct ProgramContext {
     unchecked_enum_types: HashMap<String, EnumType>,
     /// Maps un-analyzed specs names to un-analyzed specs.
     unchecked_specs: HashMap<String, Spec>,
+    /// Maps constant names to un-analyzed constant values.
+    unchecked_consts: HashMap<String, Const>,
     /// Maps function names to analyzed function signatures.
     defined_fn_sigs: HashMap<String, AFnSig>,
     /// Maps function names to analyzed functions.
@@ -104,6 +107,7 @@ impl ProgramContext {
             unchecked_struct_types: Default::default(),
             unchecked_enum_types: Default::default(),
             unchecked_specs: Default::default(),
+            unchecked_consts: Default::default(),
             defined_fn_sigs: Default::default(),
             funcs: Default::default(),
             const_values: Default::default(),
@@ -485,6 +489,30 @@ impl ProgramContext {
         }
     }
 
+    /// Tries to insert the un-analyzed constant into the program context. Does nothing
+    /// if the constant is already defined.
+    pub fn try_insert_unchecked_const(&mut self, const_decl: Const) {
+        if self
+            .unchecked_consts
+            .get(const_decl.name.as_str())
+            .is_some()
+        {
+            self.insert_err(AnalyzeError::new(
+                ErrorKind::DuplicateConst,
+                format_code!(
+                    "constant {} is already defined in this scope",
+                    const_decl.name
+                )
+                .as_str(),
+                &const_decl,
+            ));
+            return;
+        }
+
+        self.unchecked_consts
+            .insert(const_decl.name.clone(), const_decl);
+    }
+
     /// Removes the un-analyzed struct type with the given name from the program context.
     pub fn remove_unchecked_struct_type(&mut self, name: &str) {
         self.unchecked_struct_types.remove(name);
@@ -564,6 +592,11 @@ impl ProgramContext {
     /// Tries to locate and return the spec with the given name.
     pub fn get_unchecked_spec(&self, name: &str) -> Option<&Spec> {
         self.unchecked_specs.get(name)
+    }
+
+    /// Tries to locate and return the un-analyzed constant with the given name.
+    pub fn get_unchecked_const(&self, name: &str) -> Option<&Const> {
+        self.unchecked_consts.get(name)
     }
 
     /// Inserts `spec` into the program context.

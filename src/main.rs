@@ -1,6 +1,8 @@
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::{BufReader, Result};
+use std::ops::Sub;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use std::{fs, process};
@@ -12,11 +14,12 @@ use parser::source::Source;
 
 use crate::analyzer::analyze::{analyze_sources, ProgramAnalysis};
 use crate::codegen::program::{generate, OutputFormat};
-use crate::fmt::{format_file_loc, print_source};
+use crate::fmt::{display_msg, format_file_loc};
 use crate::lexer::error::LexError;
 use crate::lexer::lex::lex;
 
 use crate::lexer::stream::Stream;
+use crate::parser::ast::statement::Statement;
 use crate::parser::error::{ParseError, ParseResult};
 
 mod codegen;
@@ -111,49 +114,67 @@ fn open_file(file_path: &str) -> Result<Stream<char>> {
     Ok(Stream::from(contents.chars().collect()))
 }
 
-/// Parses source code. If `input_path` is a directory, all source files within that
-/// directory will be parsed. Otherwise, only the file at `input_path` will be parsed. Prints
-/// parse errors and exits if there were any parse errors. Otherwise, returns parse sources.
+/// Parses source code. If `input_path` is a directory, we'll try to locate and parse
+/// the `main.bl` file inside it along with any imported paths. Otherwise, the file
+/// at `input_path` and all its imports will be parsed.
+/// Prints parse errors and exits if there were any parse errors. Otherwise,
+/// returns parse sources.
 fn parse_source_files(input_path: &str) -> Vec<Source> {
     let is_dir = match fs::metadata(input_path) {
         Ok(meta) => meta.is_dir(),
-
         Err(err) => fatalln!(r#"error reading "{}": {}"#, input_path, err),
     };
 
     // Collect up paths to source files.
-    let file_paths: Vec<String> = if is_dir {
-        let read_dir = match fs::read_dir(input_path) {
-            Ok(read_dir) => read_dir,
-            Err(err) => fatalln!(r#"error reading directory "{}": {}"#, input_path, err),
-        };
-
-        read_dir
-            .into_iter()
-            .map(|entry_result| {
-                let entry = match entry_result {
-                    Ok(e) => e,
-                    Err(err) => fatalln!(r#"error reading directory entry: "{}""#, err),
-                };
-
-                entry.path().to_str().unwrap().to_string()
-            })
-            .filter(|path| path.ends_with(".bl"))
-            .collect()
+    let main_path: String = if is_dir {
+        let main_path = Path::new(input_path).join("main.bl");
+        match main_path.exists() {
+            true => main_path.to_str().unwrap().to_string(),
+            false => fatalln!(r#"missing "{}""#, main_path.display()),
+        }
     } else {
-        vec![input_path.to_string()]
+        input_path.to_string()
     };
 
-    // Parse source files.
-    let parse_results: Vec<ParseResult<Source>> = file_paths
-        .iter()
-        .map(|path| parse_source_file(path))
-        .collect();
+    // Parse main source file.
+    let parse_result = parse_source_file(main_path.as_str());
+
+    // Parse any source files that were included via imports.
+    let parsed_files: HashSet<String> = HashSet::from([main_path.clone()]);
+    let mut all_parse_results = vec![(input_path.to_string(), parse_result)];
+    if let Ok(source) = &all_parse_results[0].1 {
+        let imported_paths: Vec<String> = source
+            .statements
+            .iter()
+            .flat_map(|stmt| match stmt {
+                Statement::Use(use_block) => use_block
+                    .used_modules
+                    .iter()
+                    .map(|used_mod| {
+                        Path::new(source.path.as_str())
+                            .parent()
+                            .unwrap()
+                            .join(used_mod.path.raw.as_str())
+                            .to_str()
+                            .unwrap()
+                            .to_string()
+                    })
+                    .collect(),
+                _ => vec![],
+            })
+            .collect();
+
+        let unique_import_paths = HashSet::from_iter(imported_paths.into_iter()).sub(&parsed_files);
+        for path in unique_import_paths {
+            let parse_result = parse_source_file(path.as_str());
+            all_parse_results.push((path, parse_result));
+        }
+    }
 
     // Display any parse errors that occurred.
     let mut parse_error_count = 0;
     let mut sources = vec![];
-    for (i, result) in parse_results.into_iter().enumerate() {
+    for (path, result) in all_parse_results.into_iter() {
         match result {
             Ok(source) => sources.push(source),
             Err(ParseError {
@@ -164,9 +185,15 @@ fn parse_source_files(input_path: &str) -> Vec<Source> {
                 end_pos,
             }) => {
                 parse_error_count += 1;
-                errorln!("{}", message.bold());
-                print_source(file_paths[i].as_str(), &start_pos, &end_pos);
-                println!();
+                display_msg(
+                    message.as_str(),
+                    None,
+                    None,
+                    path.as_str(),
+                    &start_pos,
+                    &end_pos,
+                    false,
+                );
             }
         };
     }
@@ -226,9 +253,15 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> ProgramAnalysi
 
         // Print warnings.
         for warn in &result.warnings {
-            warnln!("{}", format!("{}", warn).bold(),);
-            print_source(path.as_str(), &warn.start_pos, &warn.end_pos);
-            println!();
+            display_msg(
+                warn.message.as_str(),
+                None,
+                None,
+                path.as_str(),
+                &warn.start_pos,
+                &warn.end_pos,
+                true,
+            );
         }
 
         // Print errors.
@@ -236,18 +269,15 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> ProgramAnalysi
             let path = result.source.path.clone();
             err_count += 1;
 
-            errorln!("{}", format!("{}", err).bold(),);
-            print_source(path.as_str(), &err.start_pos, &err.end_pos);
-
-            if let Some(detail) = &err.detail {
-                println!("  {}", detail);
-            }
-
-            if let Some(help) = &err.help {
-                println!("  {} {}", "help:".green(), help);
-            }
-
-            println!();
+            display_msg(
+                err.message.as_str(),
+                err.detail.as_ref(),
+                err.help.as_ref(),
+                path.as_str(),
+                &err.start_pos,
+                &err.end_pos,
+                false,
+            );
         }
     }
 
@@ -350,14 +380,13 @@ mod tests {
 
     #[test]
     fn compile_all_test_files() {
-        // Check that all the `.bl` files in src/tests compile.
+        // Check that all the `_test.bl` files in src/tests compile.
         let entries = fs::read_dir("src/tests").expect("should succeed");
         for entry in entries {
             let file_path = entry.unwrap().path();
-            match file_path.extension() {
-                Some(ext) if ext == "bl" => {}
-                _ => continue,
-            };
+            if !file_path.ends_with("_test.bl") {
+                continue;
+            }
 
             let output_path = format!("bin/{}.o", file_path.file_stem().unwrap().to_str().unwrap());
 

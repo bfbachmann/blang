@@ -8,10 +8,12 @@ use crate::analyzer::ast::spec::ASpec;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::move_check::MoveChecker;
 use crate::analyzer::prog_context::ProgramContext;
+
 use crate::analyzer::type_containment::{check_enum_containment, check_struct_containment};
 use crate::analyzer::type_store::TypeStore;
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::lexer::pos::Position;
+
 use crate::parser::ast::ext::Extern;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::r#impl::Impl;
@@ -58,7 +60,7 @@ pub struct ProgramAnalysis {
     pub analyzed_sources: Vec<AnalyzedSource>,
 }
 
-/// Performs semantic analysis on all of the given source files and returns the result of analysis.
+/// Performs semantic analysis on all the given source files and returns the result of analysis.
 pub fn analyze_sources(sources: Vec<Source>) -> ProgramAnalysis {
     let mut ctx = ProgramContext::new();
     let mut source_errors: Vec<HashMap<Position, AnalyzeError>> = vec![];
@@ -68,6 +70,7 @@ pub fn analyze_sources(sources: Vec<Source>) -> ProgramAnalysis {
     for source in &sources {
         define_types(&mut ctx, source);
         define_fns(&mut ctx, source);
+        define_consts(&mut ctx, source);
 
         // Take all warnings and errors from the program context, replacing them with empty maps.
         source_errors.push(std::mem::take(&mut ctx.errors));
@@ -155,6 +158,18 @@ fn define_types(ctx: &mut ProgramContext, source: &Source) {
             ctx.remove_unchecked_struct_type(type_name.as_str());
             ctx.remove_unchecked_enum_type(type_name.as_str());
             ctx.insert_invalid_type_name(type_name.as_str());
+        }
+    }
+}
+
+/// Stores un-analyzed constant declarations in the program context
+/// so they can be fetched and analyzed later when they're used.
+fn define_consts(ctx: &mut ProgramContext, source: &Source) {
+    for statement in &source.statements {
+        if let Statement::Consts(const_block) = statement {
+            for const_decl in &const_block.consts {
+                ctx.try_insert_unchecked_const(const_decl.clone());
+            }
         }
     }
 }

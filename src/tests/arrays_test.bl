@@ -2,13 +2,7 @@
 // that makes use of arrays: fixed-size, stack-allocated chunks of 
 // memory that contain continguous values of the same type.
 
-extern fn exit(code: u64)
-
-fn assert(b: bool, exit_code: u64) {
-    if !b {
-        exit(exit_code)
-    }
-}
+use "test_utils.bl"
 
 fn do_nothing() {}
 
