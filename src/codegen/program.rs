@@ -1,5 +1,7 @@
 use std::collections::HashMap;
+use std::fs::remove_file;
 use std::path::Path;
+use std::process::Command;
 
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::builder::Builder;
@@ -35,11 +37,13 @@ pub struct ProgramCodeGen<'a, 'ctx> {
 }
 
 /// The type of output file to generate.
+#[derive(PartialEq)]
 pub enum OutputFormat {
     LLVMBitcode,
     LLVMIR,
     Assembly,
     Object,
+    Executable,
 }
 
 impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
@@ -293,7 +297,7 @@ pub fn generate(
             codegen.module.write_bitcode_to_path(output_path);
         }
 
-        OutputFormat::Object | OutputFormat::Assembly => {
+        OutputFormat::Object | OutputFormat::Assembly | OutputFormat::Executable => {
             let target = Target::from_triple(&target_triple).unwrap();
             let target_machine = target
                 .create_target_machine(
@@ -307,9 +311,34 @@ pub fn generate(
                 .unwrap();
             let file_type = match output_format {
                 OutputFormat::Assembly => FileType::Assembly,
-                OutputFormat::Object => FileType::Object,
+                OutputFormat::Object | OutputFormat::Executable => FileType::Object,
                 _ => unreachable!(),
             };
+
+            if output_format == OutputFormat::Executable {
+                // Write temporary object file.
+                let obj_file_path = output_path.with_extension("o");
+                if let Err(msg) =
+                    target_machine.write_to_file(&module, file_type, obj_file_path.as_path())
+                {
+                    return Err(CodeGenError::new(
+                        ErrorKind::WriteOutFailed,
+                        msg.to_str().unwrap(),
+                    ));
+                }
+
+                // To generate an executable, we need to invoke the system linker to link object
+                // files.
+                let result = link(
+                    module.get_triple(),
+                    vec![obj_file_path.as_path()],
+                    output_path,
+                );
+
+                // Try to clean up object files before returning.
+                _ = remove_file(obj_file_path);
+                return result;
+            }
 
             // TODO: Sometimes this call will cause a segfault when the module is not optimized.
             // I have no idea why, but it's bad!
@@ -323,4 +352,41 @@ pub fn generate(
     };
 
     Ok(())
+}
+
+/// Invokes the system linker to link the given object files into an executable that is created
+/// at the given output path.
+fn link(
+    target_triple: TargetTriple,
+    obj_file_paths: Vec<&Path>,
+    output_path: &Path,
+) -> Result<(), CodeGenError> {
+    // Try to determine the system linker based on the target platform.
+    let linker = if target_triple.to_string().contains("windows") {
+        "link.exe"
+    } else {
+        "cc"
+    };
+
+    // Assemble and execute the link command to link object files into an executable.
+    let mut link_cmd = Command::new(linker);
+    link_cmd
+        .args(["-o", output_path.to_str().unwrap()])
+        .args(obj_file_paths);
+    match link_cmd.output() {
+        Ok(output) => match output.status.success() {
+            true => Ok(()),
+            false => Err(CodeGenError::new(
+                ErrorKind::LinkingFailed,
+                String::from_utf8(output.stderr)
+                    .unwrap_or("".to_string())
+                    .as_str(),
+            )),
+        },
+
+        Err(err) => Err(CodeGenError::new(
+            ErrorKind::LinkingFailed,
+            format!(r#"failed to invoke system linker "{}"\n{}"#, linker, err).as_str(),
+        )),
+    }
 }

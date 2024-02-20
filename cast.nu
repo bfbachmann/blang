@@ -52,10 +52,10 @@ def check [
 def build [
     src: path = "source.bl"     # The path to the Blang source code to compile.
     --quiet (-q)                # Disable Blang compiler logging.
-    --out (-o): path            # The path to which to write the output. Defaults to "bin/<src_stem>.o".
+    --out (-o): path            # The path to which to write the output. Defaults to "bin/<src_stem>".
 ] {
     let out_path = match $out {
-        "" => $"bin/($src | path parse | get stem).o",
+        "" => $"bin/($src | path parse | get stem)",
         _ => $out,
     }
 
@@ -70,32 +70,19 @@ def build [
 def run [
     src: path = "."                     # The path to the Blang source code to run.
     --quiet (-q)                        # Disable Blang compiler logging.
-    ...cflags: string                   # Additional flags to pass to the LLVM IR compiler (clang).
 ] {
-    # Build the object file output path from the source path.
-    let obj_path  = match $src {
-        "." => "bin/all.o",
-        _ => $"bin/($src | path parse | get stem).o",
-    }
+    # Build the output file path from the source path.
+    let output_path = $"bin/($src | path parse | get stem)"
 
     # Compile Blang source code to an object file.
     if $quiet {
-        build -q -o $obj_path $src
+        build -q -o $output_path $src
     } else {
-        build -o $obj_path $src
+        build -o $output_path $src
     }
-
-     # Build the executable path from the source path.
-    let exe_path = match $src {
-        "." => "bin/all",
-        _ => $"bin/($src | path parse | get stem)",
-    }
-
-    # Compile the object file to an executable.
-    ^$"($env.CC)" $obj_path -o $exe_path ($env.CFLAGS) ($cflags | str join)
 
     # Run the executable.
-    ^$"($exe_path)"
+    ^$"($output_path)"
 
     return $env.LAST_EXIT_CODE
 }

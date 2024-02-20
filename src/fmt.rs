@@ -72,6 +72,7 @@ where
     return s;
 }
 
+/// Displays the given error/warning message in a user-friendly form.
 pub fn display_msg(
     msg: &str,
     detail: Option<&String>,

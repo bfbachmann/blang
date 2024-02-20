@@ -17,7 +17,6 @@ use crate::codegen::program::{generate, OutputFormat};
 use crate::fmt::{display_msg, format_file_loc};
 use crate::lexer::error::LexError;
 use crate::lexer::lex::lex;
-
 use crate::lexer::stream::Stream;
 use crate::parser::ast::statement::Statement;
 use crate::parser::error::{ParseError, ParseResult};
@@ -58,8 +57,8 @@ fn main() {
             .arg(
                 arg!(-f --format <FORMAT> "The output format to generate")
                     .required(false)
-                    .default_value("obj")
-                    .value_parser(["ir", "bc", "obj", "asm"]),
+                    .default_value("exe")
+                    .value_parser(["exe", "ir", "bc", "obj", "asm"]),
             )
             .arg(arg!(-o --out <OUTPUT_PATH> "Output file path").required(false)),
     );
@@ -83,6 +82,7 @@ fn main() {
                     "ir" => OutputFormat::LLVMIR,
                     "bc" => OutputFormat::LLVMBitcode,
                     "asm" => OutputFormat::Assembly,
+                    "exe" => OutputFormat::Executable,
                     _ => unreachable!(),
                 };
                 let dst_path = sub_matches.get_one::<String>("out");

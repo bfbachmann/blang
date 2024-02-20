@@ -8,6 +8,7 @@ pub enum ErrorKind {
     FnVerificationFailed,
     WriteOutFailed,
     TargetInitFailed,
+    LinkingFailed,
 }
 
 impl fmt::Display for ErrorKind {
@@ -16,6 +17,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::FnVerificationFailed => write!(f, "function verification failed"),
             ErrorKind::WriteOutFailed => write!(f, "writing output failed"),
             ErrorKind::TargetInitFailed => write!(f, "failed to initialize target"),
+            ErrorKind::LinkingFailed => write!(f, "linking failed"),
         }
     }
 }
