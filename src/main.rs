@@ -384,7 +384,7 @@ mod tests {
         let entries = fs::read_dir("src/tests").expect("should succeed");
         for entry in entries {
             let file_path = entry.unwrap().path();
-            if !file_path.ends_with("_test.bl") {
+            if !file_path.to_str().unwrap().ends_with("_test.bl") {
                 continue;
             }
 
