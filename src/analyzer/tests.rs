@@ -1348,4 +1348,19 @@ mod tests {
         );
         check_result(result, None);
     }
+
+    #[test]
+    fn array_indexing_in_loop() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let array = [0; 10]
+                loop {
+                    let x = array[0]
+                }
+            }
+        "#,
+        );
+        check_result(result, None);
+    }
 }

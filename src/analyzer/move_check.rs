@@ -518,7 +518,7 @@ impl<'a> MoveChecker<'a> {
             }
         }
 
-        self.check_expr(&operand, track_move);
+        self.check_expr(&operand, false);
     }
 
     /// Performs move checks on the operands of a binary operation.
@@ -646,7 +646,7 @@ impl<'a> MoveChecker<'a> {
                 AnalyzeError::new(ErrorKind::IllegalMove, "cannot move out of array", index)
                     .with_detail(
                         "The move occurs because the array contains values \
-                    that are not copied automatically.",
+                        that are not copied automatically.",
                     ),
             );
         }
@@ -765,7 +765,10 @@ impl<'a> MoveChecker<'a> {
         // If we're inside a loop and the current closure in which the move occurs is not
         // guaranteed to exit the loop (i.e. is not guaranteed to execute at most once), then the
         // move is illegal as it could execute more than once.
-        if !self.var_declared_in_cur_scope(base_var) && !self.cur_scope_executes_at_most_once() {
+        if track_move
+            && !self.var_declared_in_cur_scope(base_var)
+            && !self.cur_scope_executes_at_most_once()
+        {
             self.add_err(
                 AnalyzeError::new(
                     ErrorKind::UseOfMovedValue,
