@@ -346,7 +346,13 @@ fn compile(
         PathBuf::from(path)
     } else {
         let file_stem = src.file_stem().unwrap_or_default();
-        src.with_file_name(file_stem).with_extension("ll")
+        PathBuf::from(file_stem).with_extension(match output_format {
+            OutputFormat::LLVMBitcode => "bc",
+            OutputFormat::LLVMIR => "ll",
+            OutputFormat::Assembly => "s",
+            OutputFormat::Object => "o",
+            OutputFormat::Executable => "",
+        })
     };
 
     // Compile the program.
