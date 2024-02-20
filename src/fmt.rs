@@ -92,7 +92,13 @@ pub fn display_msg(
     let width = end.line.to_string().len();
     if let Some(detail_msg) = detail {
         println!("{}{}", " ".repeat(width), "|".blue().bold());
-        println!("{}{} {}", " ".repeat(width), "=".blue().bold(), detail_msg);
+        println!(
+            "{}{} {} {}",
+            " ".repeat(width),
+            "=".blue().bold(),
+            "note:".bold(),
+            detail_msg
+        );
     }
 
     if let Some(help_msg) = help {
@@ -100,9 +106,10 @@ pub fn display_msg(
             println!("{}{}", " ".repeat(width), "|".blue().bold());
         }
         println!(
-            "{}{} {}",
+            "{}{} {} {}",
             " ".repeat(width),
-            "Help:".green().bold(),
+            "=".blue().bold(),
+            "help:".green().bold(),
             help_msg
         );
     }
