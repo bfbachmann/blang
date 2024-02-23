@@ -8,6 +8,7 @@ use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#impl::AImpl;
+use crate::analyzer::ast::r#loop::ALoop;
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::ret::ARet;
 use crate::analyzer::ast::var_assign::AVarAssign;
@@ -26,7 +27,7 @@ pub enum AStatement {
     Closure(AClosure),
     FunctionCall(AFnCall),
     Conditional(ACond),
-    Loop(AClosure),
+    Loop(Box<ALoop>),
     Break,
     Continue,
     Return(ARet),
@@ -121,13 +122,7 @@ impl AStatement {
 
             Statement::Conditional(cond) => AStatement::Conditional(ACond::from(ctx, cond)),
 
-            Statement::Loop(loop_) => AStatement::Loop(AClosure::from(
-                ctx,
-                &loop_.closure,
-                ScopeKind::LoopBody,
-                vec![],
-                None,
-            )),
+            Statement::Loop(loop_) => AStatement::Loop(Box::new(ALoop::from(ctx, &loop_))),
 
             Statement::Break(br) => {
                 analyze_break(ctx, &br);

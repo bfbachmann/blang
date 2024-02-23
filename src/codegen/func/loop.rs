@@ -1,4 +1,4 @@
-use crate::analyzer::ast::closure::AClosure;
+use crate::analyzer::ast::r#loop::ALoop;
 use crate::codegen::error::CompileResult;
 
 use super::FnCodeGen;
@@ -19,29 +19,80 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles a loop.
-    pub(crate) fn gen_loop(&mut self, loop_body: &AClosure) -> CompileResult<()> {
-        // Create a loop context to store information about the loop body.
+    pub(crate) fn gen_loop(&mut self, loop_: &ALoop) -> CompileResult<()> {
+        // Create a loop context to store information about the loop.
         self.push_loop_ctx();
 
-        // Create a new block for the loop body, and branch to it.
-        let begin_block = self.get_loop_ctx().begin_block;
-        self.builder.build_unconditional_branch(begin_block);
-        self.set_current_block(begin_block);
+        let cond_block = self.get_loop_ctx().cond_block;
+        let body_block = self.get_loop_ctx().body_block;
 
-        // Compile the loop body.
-        self.gen_closure(loop_body)?;
+        // Generate code for the loop initialization statement, if one exists.
+        if let Some(init_statement) = &loop_.maybe_init {
+            let init_block = self.append_block("loop_init");
+            self.builder.build_unconditional_branch(init_block);
+            self.set_current_block(init_block);
+            self.gen_statement(init_statement)?;
 
-        // Pop the loop context now that we've compiled the loop body.
-        let ctx = self.pop_ctx().to_loop();
-
-        // If the loop doesn't already end in a terminator instruction, we need to branch back
-        // to the beginning of the loop.
-        if !ctx.guarantees_terminator {
-            self.builder.build_unconditional_branch(begin_block);
+            // If the statement already jumps to some other location, there is no
+            // need to continue generating code for this loop.
+            if self.current_block_has_terminator() {
+                return Ok(());
+            }
         }
 
-        // Update the parent context with return information.
-        self.set_guarantees_return(ctx.guarantees_return);
+        // Jump to the conditional block for the loop. We'll use this block to generate
+        // code for the loop condition that runs before each iteration.
+        {
+            self.builder.build_unconditional_branch(cond_block);
+            self.set_current_block(cond_block);
+
+            // If there is a loop condition, compile it and use the result to jump to the loop body block.
+            // Otherwise, we'll just unconditionally jump to that block.
+            match &loop_.maybe_cond {
+                Some(cond_expr) => {
+                    let ll_cond_val = self.gen_expr(cond_expr);
+                    self.builder.build_conditional_branch(
+                        ll_cond_val.into_int_value(),
+                        body_block,
+                        self.get_or_create_loop_end_block(),
+                    );
+                }
+                None => {
+                    self.builder.build_unconditional_branch(body_block);
+                }
+            };
+        }
+
+        // Generate the loop update block if necessary, so we have somewhere to jump to
+        // if we encounter `continue` statements in the loop body.
+        if loop_.maybe_update.is_some() {
+            self.get_or_create_loop_update_block();
+        }
+
+        // Generate code for the loop body.
+        {
+            self.set_current_block(body_block);
+            self.gen_closure(&loop_.body)?;
+        }
+
+        // Generate code for the loop update block, if one exists and the body doesn't already
+        // end in a terminator instruction.
+        if !self.current_block_has_terminator() {
+            let update_block = self.get_or_create_loop_update_block();
+            self.builder.build_unconditional_branch(update_block);
+            self.set_current_block(update_block);
+            if let Some(update_statement) = &loop_.maybe_update {
+                self.gen_statement(update_statement)?;
+            }
+
+            // Branch back to the beginning of the loop if this block doesn't already terminate.
+            if !self.current_block_has_terminator() {
+                self.builder.build_unconditional_branch(cond_block);
+            }
+        }
+
+        // Pop the loop context now that we've compiled the loop.
+        let ctx = self.pop_ctx().to_loop();
 
         // If there is a loop end block, it means the loop has a break and we need to continue
         // compilation on the loop end block. In this case, we also inform the parent context

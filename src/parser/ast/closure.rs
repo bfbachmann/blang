@@ -52,9 +52,10 @@ impl Closure {
         }
     }
 
-    /// Parses closures. Expects token sequences of the form
+    /// Parses closures. Expects token sequences of the forms
     ///
-    ///      { <statement>; ... }
+    ///     <statement>
+    ///     { <statement>; ... }
     ///
     /// where
     /// - `statement` is any valid statement (see `Statement::from`)
@@ -63,8 +64,13 @@ impl Closure {
         let start_pos = Source::current_position(tokens);
         let end_pos: Position;
 
-        // The first token should be `{`.
-        Source::parse_expecting(tokens, TokenKind::LeftBrace)?;
+        // The first token should be `{` if it's a closure. Otherwise, it's just
+        // a statement.
+        if Source::parse_optional(tokens, TokenKind::LeftBrace).is_none() {
+            let statement = Statement::from(tokens)?;
+            end_pos = statement.end_pos().clone();
+            return Ok(Closure::new(vec![statement], None, start_pos, end_pos));
+        }
 
         // The following nodes should be statements separated by ";".
         let mut statements = vec![];

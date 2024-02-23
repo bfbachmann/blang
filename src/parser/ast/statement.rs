@@ -37,7 +37,7 @@ pub enum Statement {
     Closure(Closure),
     FunctionCall(FuncCall),
     Conditional(Conditional),
-    Loop(Loop),
+    Loop(Box<Loop>),
     Break(Break),
     Continue(Continue),
     Return(Ret),
@@ -256,10 +256,10 @@ impl Statement {
                 Ok(Statement::Conditional(cond))
             }
 
-            // If the first token is `loop`, it must be a loop.
-            (TokenKind::Loop, _) => {
+            // If the first token is `for`, `while` or `loop`, it must be a loop.
+            (TokenKind::For | TokenKind::While | TokenKind::Loop, _) => {
                 let cond = Loop::from(tokens)?;
-                Ok(Statement::Loop(cond))
+                Ok(Statement::Loop(Box::new(cond)))
             }
 
             // If the first token is `break`, it must be a break statement.

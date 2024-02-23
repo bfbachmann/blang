@@ -2,7 +2,9 @@ use inkwell::basic_block::BasicBlock;
 
 /// Stores information about a loop that is being compiled.
 pub struct LoopContext<'ctx> {
-    pub begin_block: BasicBlock<'ctx>,
+    pub cond_block: BasicBlock<'ctx>,
+    pub body_block: BasicBlock<'ctx>,
+    pub update_block: Option<BasicBlock<'ctx>>,
     pub end_block: Option<BasicBlock<'ctx>>,
     pub guarantees_return: bool,
     pub guarantees_terminator: bool,
@@ -10,9 +12,11 @@ pub struct LoopContext<'ctx> {
 }
 
 impl<'ctx> LoopContext<'ctx> {
-    pub fn new(begin_block: BasicBlock<'ctx>) -> Self {
+    pub fn new(cond_block: BasicBlock<'ctx>, body_block: BasicBlock<'ctx>) -> Self {
         LoopContext {
-            begin_block,
+            cond_block,
+            body_block,
+            update_block: None,
             end_block: None,
             guarantees_return: false,
             guarantees_terminator: false,

@@ -89,6 +89,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         prev
     }
 
+    /// Returns whether the current block already has a terminator instruction.
+    fn current_block_has_terminator(&self) -> bool {
+        self.cur_block.unwrap().get_terminator().is_some()
+    }
+
     /// Creates a new statement context and pushes it onto the stack.
     fn push_statement_ctx(&mut self) {
         self.stack
@@ -103,8 +108,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Creates a new loop context and pushes it onto the stack.
     fn push_loop_ctx(&mut self) {
-        let begin_block = self.append_block("loop_begin");
-        let loop_ctx = LoopContext::new(begin_block);
+        let cond_block = self.append_block("loop_condition");
+        let body_block = self.append_block("loop_body");
+        let loop_ctx = LoopContext::new(cond_block, body_block);
         self.stack.push(CompilationContext::Loop(loop_ctx));
     }
 
@@ -197,6 +203,18 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         ctx.end_block.unwrap()
     }
 
+    fn get_or_create_loop_update_block(&mut self) -> BasicBlock<'ctx> {
+        if let Some(end_block) = self.get_loop_ctx().update_block {
+            return end_block;
+        }
+
+        let update_block = self.append_block("loop_update");
+
+        let ctx = self.get_loop_ctx();
+        ctx.update_block = Some(update_block);
+        ctx.update_block.unwrap()
+    }
+
     /// Fetches the loop end block from the current loop context. Panics if there is no loop
     /// context (i.e. if not called from within a loop).
     fn get_loop_end_block(&mut self) -> Option<BasicBlock<'ctx>> {
@@ -208,7 +226,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// not called from within a loop).
     fn get_loop_begin_block(&mut self) -> BasicBlock<'ctx> {
         let loop_ctx = self.get_loop_ctx();
-        loop_ctx.begin_block
+        if let Some(update_block) = loop_ctx.update_block {
+            update_block
+        } else {
+            self.get_loop_ctx().cond_block
+        }
     }
 
     /// If inside a loop, sets the loop's `contains_return` flag.

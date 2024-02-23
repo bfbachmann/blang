@@ -63,18 +63,15 @@ impl Conditional {
 
     /// Parses conditionals. Expects token sequences of the form
     ///
-    ///     if <if_cond> {
-    ///         ...
-    ///     } elsif <elsif_cond> {
-    ///         ...
-    ///     } else {
-    ///         ...
-    ///     }
+    ///     if <if_cond> <body>
+    ///     elsif <elsif_cond> <body>
+    ///     else <body>
     ///
     /// where
     ///  - the `elsif` and `else` branches are optional, and the `elsif` branch is repeatable
     ///  - `if_cond` is an expression that represents the `if` branch condition
     ///  - `elsif_cond` is an expression that represents the `else if` branch condition
+    ///  - `body` is a statement that represents the branch body.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // The first token should be `if`.
         Source::parse_expecting(tokens, TokenKind::If)?;

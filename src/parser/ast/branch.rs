@@ -46,14 +46,15 @@ impl Branch {
 
     /// Parses a branch. If `with_condition` is true, expects token sequences of the form
     ///
-    ///     <expr> { ... }
+    ///     <expr> <body>
     ///
     /// Otherwise, expects token sequences of the form
     ///
-    ///     { ... }
+    ///     <body>
     ///
     /// where
     ///  - `expr` is the branch condition expression (see `Expression::from`)
+    ///  - `body` is the branch body statement (see `Statement::from`)
     pub fn from(tokens: &mut Stream<Token>, with_condition: bool) -> ParseResult<Self> {
         // Record the starting position of the branch.
         let start_pos = Source::current_position(tokens);

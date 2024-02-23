@@ -9,6 +9,7 @@ pub mod fn_call;
 pub mod func;
 pub mod r#impl;
 pub mod index;
+pub mod r#loop;
 pub mod member;
 pub mod pointer;
 pub mod ret;

@@ -13,6 +13,7 @@ use crate::analyzer::ast::index::AIndex;
 use crate::analyzer::ast::member::AMemberAccess;
 use crate::analyzer::ast::r#enum::AEnumVariantInit;
 use crate::analyzer::ast::r#impl::AImpl;
+use crate::analyzer::ast::r#loop::ALoop;
 use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::ret::ARet;
@@ -347,7 +348,7 @@ impl<'a> MoveChecker<'a> {
                 // Nothing to do here since moves cannot occur in these types of statements.
             }
 
-            AStatement::Loop(loop_body) => self.check_loop(loop_body),
+            AStatement::Loop(loop_) => self.check_loop(loop_),
 
             AStatement::FunctionDeclaration(fn_decl) => self.check_fn_decl(fn_decl),
 
@@ -374,24 +375,39 @@ impl<'a> MoveChecker<'a> {
         }
     }
 
-    /// Recursively performs move checks on `loop_body`.
-    fn check_loop(&mut self, loop_body: &AClosure) {
+    /// Recursively performs move checks on `loop_`.
+    fn check_loop(&mut self, loop_: &ALoop) {
+        // Check the initialization statement, if one exists.
+        if let Some(init_statement) = &loop_.maybe_init {
+            self.check_statement(init_statement);
+        }
+
+        // Check the loop condition expression, if one exists.
+        if let Some(cond_expr) = &loop_.maybe_cond {
+            self.check_expr(cond_expr, true);
+        }
+
+        // Check the loop update statement, if one exists.
+        if let Some(update_statement) = &loop_.maybe_update {
+            self.check_statement(update_statement);
+        }
+
         // Push a new scope for the loop body.
         self.push_scope(Scope::new(
             ScopeKind::LoopBody,
-            loop_body.has_return,
-            loop_body.has_break,
+            loop_.body.has_return,
+            loop_.body.has_break,
         ));
 
         // Check the loop body.
-        self.check_statements(&loop_body.statements);
+        self.check_statements(&loop_.body.statements);
 
         // Pop the scope now that we're done checking the loop body.
         let scope = self.pop_scope();
 
         // If this loop is guaranteed to return, only merge its deferred moves. Otherwise, merge
         // all its moves.
-        self.merge_moves_from(scope, false, loop_body.has_return);
+        self.merge_moves_from(scope, false, loop_.body.has_return);
     }
 
     /// Recursively performs move checks on `fn_decl`.

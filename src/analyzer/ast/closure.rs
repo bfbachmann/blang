@@ -189,10 +189,10 @@ pub fn check_closure_returns(
                 }
 
                 // If it's a loop, recurse on the loop body.
-                Some(AStatement::Loop(closure)) => {
+                Some(AStatement::Loop(loop_)) => {
                     check_closure_returns(
                         ctx,
-                        &closure,
+                        &loop_.body,
                         expected_ret_type_key,
                         &ScopeKind::LoopBody,
                     );
@@ -245,8 +245,8 @@ pub fn check_closure_returns(
                             contains_return = true;
                         }
                     }
-                    AStatement::Loop(closure) => {
-                        if closure_has_any_return(closure) {
+                    AStatement::Loop(loop_) => {
+                        if closure_has_any_return(&loop_.body) {
                             contains_return = true;
                         }
                     }
@@ -287,8 +287,8 @@ fn closure_has_any_return(closure: &AClosure) -> bool {
                     return true;
                 }
             }
-            AStatement::Loop(closure) => {
-                if closure_has_any_return(closure) {
+            AStatement::Loop(loop_) => {
+                if closure_has_any_return(&loop_.body) {
                     return true;
                 }
             }
