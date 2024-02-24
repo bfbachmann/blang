@@ -221,6 +221,8 @@ pub fn generate(
     output_format: OutputFormat,
     output_path: &Path,
     optimize: bool,
+    linker: Option<&String>,
+    linker_args: Vec<&String>,
 ) -> CompileResult<()> {
     let ctx = Context::create();
     let builder = ctx.create_builder();
@@ -330,9 +332,11 @@ pub fn generate(
                 // To generate an executable, we need to invoke the system linker to link object
                 // files.
                 let result = link(
+                    linker,
                     module.get_triple(),
                     vec![obj_file_path.as_path()],
                     output_path,
+                    linker_args,
                 );
 
                 // Try to clean up object files before returning.
@@ -357,20 +361,25 @@ pub fn generate(
 /// Invokes the system linker to link the given object files into an executable that is created
 /// at the given output path.
 fn link(
+    linker: Option<&String>,
     target_triple: TargetTriple,
     obj_file_paths: Vec<&Path>,
     output_path: &Path,
+    linker_args: Vec<&String>,
 ) -> Result<(), CodeGenError> {
     // Try to determine the system linker based on the target platform.
-    let linker = if target_triple.to_string().contains("windows") {
+    let linker_cmd = if let Some(linker) = linker {
+        linker
+    } else if target_triple.to_string().contains("windows") {
         "link.exe"
     } else {
         "cc"
     };
 
     // Assemble and execute the link command to link object files into an executable.
-    let mut link_cmd = Command::new(linker);
+    let mut link_cmd = Command::new(linker_cmd);
     link_cmd
+        .args(linker_args)
         .args(["-o", output_path.to_str().unwrap()])
         .args(obj_file_paths);
     match link_cmd.output() {
@@ -386,7 +395,11 @@ fn link(
 
         Err(err) => Err(CodeGenError::new(
             ErrorKind::LinkingFailed,
-            format!(r#"failed to invoke system linker "{}"\n{}"#, linker, err).as_str(),
+            format!(
+                r#"failed to invoke system linker "{}"\n{}"#,
+                linker_cmd, err
+            )
+            .as_str(),
         )),
     }
 }

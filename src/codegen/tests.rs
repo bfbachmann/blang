@@ -24,6 +24,8 @@ mod tests {
             OutputFormat::Object,
             Path::new("/dev/null"),
             true,
+            None,
+            vec![],
         )
         .expect("should not error");
     }

@@ -41,7 +41,7 @@ impl AArrayType {
     /// Performs semantic analysis on the given array type.
     pub fn from(ctx: &mut ProgramContext, array_type: &ArrayType) -> AArrayType {
         // Analyze the contained type.
-        let maybe_element_type_key = match &array_type.maybe_element_type {
+        let mut maybe_element_type_key = match &array_type.maybe_element_type {
             Some(element_type) => Some(ctx.resolve_type(element_type)),
             None => None,
         };
@@ -61,7 +61,14 @@ impl AArrayType {
             0
         } else {
             match len_expr.try_into_const_u64(ctx) {
-                Ok(u) => u,
+                Ok(u) => {
+                    // If the array is empty, we'll also make sure it has no assigned type key
+                    // for consistency.
+                    if u == 0 {
+                        maybe_element_type_key = None;
+                    }
+                    u
+                }
                 Err(mut err) => {
                     err.detail = Some("Array lengths must be constant.".to_string());
                     ctx.insert_err(err);
@@ -90,18 +97,18 @@ impl AArrayType {
     /// Returns true if this array type is the same as `other`. Array types are considered the same
     /// if they have the same length and have element types that are considered the same.
     pub fn is_same_as(&self, ctx: &ProgramContext, other: &AArrayType) -> bool {
+        // Check array lengths match.
         if self.len != other.len {
             return false;
         }
 
-        if self.maybe_element_type_key.is_none() != other.maybe_element_type_key.is_none() {
-            return false;
-        }
-
-        if self.maybe_element_type_key.is_none() && other.maybe_element_type_key.is_none() {
+        // They're the same if they both have length 0.
+        if self.len == 0 {
             return true;
         }
 
+        // At this point we know both arrays are non-empty and have some element type key, so
+        // make sure the type keys match.
         let elem_type1 = ctx.must_get_type(self.maybe_element_type_key.unwrap());
         let elem_type2 = ctx.must_get_type(other.maybe_element_type_key.unwrap());
         elem_type1.is_same_as(ctx, elem_type2)

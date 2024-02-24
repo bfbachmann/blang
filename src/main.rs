@@ -61,7 +61,14 @@ fn main() {
                     .default_value("exe")
                     .value_parser(["exe", "ir", "bc", "obj", "asm"]),
             )
-            .arg(arg!(-o --out <OUTPUT_PATH> "Output file path").required(false)),
+            .arg(arg!(-o --out <OUTPUT_PATH> "Output file path").required(false))
+            .arg(arg!(-l --linker <LINKER> "Linker to use").required(false))
+            .arg(
+                arg!(-L --"linker-flags" <LINKER_FLAGS> "Linker flags")
+                    .required(false)
+                    .num_args(1..)
+                    .allow_hyphen_values(true),
+            ),
     );
 
     // Add the "check" subcommand for performing static analysis.
@@ -89,7 +96,21 @@ fn main() {
                 let dst_path = sub_matches.get_one::<String>("out");
                 let optimize = !sub_matches.get_flag("unoptimized");
                 let quiet = sub_matches.get_flag("quiet");
-                compile(src_path, dst_path, output_format, target, optimize, quiet);
+                let linker = sub_matches.get_one::<String>("linker");
+                let linker_flags = sub_matches
+                    .get_many::<String>("linker-flags")
+                    .unwrap_or_default()
+                    .collect();
+                compile(
+                    src_path,
+                    dst_path,
+                    output_format,
+                    target,
+                    optimize,
+                    quiet,
+                    linker,
+                    linker_flags,
+                );
             }
             _ => fatalln!("expected source path"),
         },
@@ -334,6 +355,8 @@ fn compile(
     target: Option<&String>,
     optimize: bool,
     quiet: bool,
+    linker: Option<&String>,
+    linker_flags: Vec<&String>,
 ) {
     let start_time = Instant::now();
 
@@ -367,6 +390,8 @@ fn compile(
         output_format,
         dst.as_path(),
         optimize,
+        linker,
+        linker_flags,
     ) {
         fatalln!("{}", e);
     }
@@ -409,6 +434,8 @@ mod tests {
                 None,
                 true,
                 true,
+                None,
+                vec![],
             );
         }
     }
