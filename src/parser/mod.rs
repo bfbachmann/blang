@@ -3,5 +3,5 @@
 
 pub mod ast;
 pub mod error;
-pub mod source;
+pub mod module;
 mod tests;

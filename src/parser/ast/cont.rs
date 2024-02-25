@@ -6,7 +6,7 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::error::ParseResult;
-use crate::parser::source::Source;
+use crate::parser::module::Module;
 
 /// Represents a continue statement.
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -26,7 +26,7 @@ locatable_impl!(Continue);
 impl Continue {
     /// Parses a continue statement from the given token sequence.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let token = Source::parse_expecting(tokens, TokenKind::Continue)?;
+        let token = Module::parse_expecting(tokens, TokenKind::Continue)?;
         Ok(Continue {
             start_pos: token.start,
             end_pos: token.end,

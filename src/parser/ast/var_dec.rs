@@ -6,7 +6,7 @@ use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::r#type::Type;
 use crate::parser::error::ParseResult;
-use crate::parser::source::Source;
+use crate::parser::module::Module;
 use std::hash::{Hash, Hasher};
 
 /// Represents a variable declaration. Each variable declaration must have a valid type, a name,
@@ -64,23 +64,23 @@ impl VariableDeclaration {
     ///  - `expr` is an expression representing the value assigned to the variable
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // The first token should be "let".
-        let start_token = Source::parse_expecting(tokens, TokenKind::Let)?;
+        let start_token = Module::parse_expecting(tokens, TokenKind::Let)?;
 
         // Parse the optional "mut".
-        let is_mut = Source::parse_optional(tokens, TokenKind::Mut).is_some();
+        let is_mut = Module::parse_optional(tokens, TokenKind::Mut).is_some();
 
         // The second token should be the variable name.
-        let name = Source::parse_identifier(tokens)?;
+        let name = Module::parse_identifier(tokens)?;
 
         // The colon and variable type are optional.
         let mut typ = None;
-        if Source::parse_optional(tokens, TokenKind::Colon).is_some() {
+        if Module::parse_optional(tokens, TokenKind::Colon).is_some() {
             // There was a colon, so there should be a type name.
             typ = Some(Type::from(tokens)?);
         }
 
         // The remaining tokens should be "=" followed by the variable value.
-        Source::parse_expecting(tokens, TokenKind::Equal)?;
+        Module::parse_expecting(tokens, TokenKind::Equal)?;
         let value = Expression::from(tokens)?;
         let end_pos = value.end_pos().clone();
 

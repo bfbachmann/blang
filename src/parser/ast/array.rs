@@ -12,7 +12,7 @@ use crate::parser::ast::expr::Expression;
 use crate::parser::ast::i64_lit::I64Lit;
 use crate::parser::ast::r#type::Type;
 use crate::parser::error::ParseResult;
-use crate::parser::source::Source;
+use crate::parser::module::Module;
 
 /// A fixed-sized sequence of values of the same type.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -46,10 +46,10 @@ impl ArrayType {
     /// - `length` is a constant expression yielding the length of the array (see
     ///   `Expression::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<ArrayType> {
-        let start_pos = Source::parse_expecting(tokens, TokenKind::LeftBracket)?.start;
+        let start_pos = Module::parse_expecting(tokens, TokenKind::LeftBracket)?.start;
 
         // The array type may be empty.
-        if let Some(token) = Source::parse_optional(tokens, TokenKind::RightBracket) {
+        if let Some(token) = Module::parse_optional(tokens, TokenKind::RightBracket) {
             return Ok(ArrayType {
                 maybe_element_type: None,
                 length_expr: Expression::I64Literal(I64Lit::new_with_default_pos(0)),
@@ -59,9 +59,9 @@ impl ArrayType {
         }
 
         let element_type = Type::from(tokens)?;
-        Source::parse_expecting(tokens, TokenKind::SemiColon)?;
+        Module::parse_expecting(tokens, TokenKind::SemiColon)?;
         let length_expr = Expression::from(tokens)?;
-        let end_pos = Source::parse_expecting(tokens, TokenKind::RightBracket)?.end;
+        let end_pos = Module::parse_expecting(tokens, TokenKind::RightBracket)?.end;
 
         Ok(ArrayType {
             maybe_element_type: Some(element_type),
@@ -124,10 +124,10 @@ impl ArrayInit {
     /// - `repeat_count` is a constant expression representing the number of times to repeat the
     ///   expression prior in the array.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<ArrayInit> {
-        let start_pos = Source::parse_expecting(tokens, TokenKind::LeftBracket)?.start;
+        let start_pos = Module::parse_expecting(tokens, TokenKind::LeftBracket)?.start;
 
         // Handle the case of an empty array.
-        if let Some(Token { end, .. }) = Source::parse_optional(tokens, TokenKind::RightBracket) {
+        if let Some(Token { end, .. }) = Module::parse_optional(tokens, TokenKind::RightBracket) {
             return Ok(ArrayInit {
                 values: vec![],
                 maybe_repeat_expr: None,
@@ -141,7 +141,7 @@ impl ArrayInit {
         let mut maybe_repeat_expr = None;
 
         // Parse the rest of the values in the array, or the `; <repeat_count>`, or `]`.
-        let end_pos = match Source::parse_expecting_any(
+        let end_pos = match Module::parse_expecting_any(
             tokens,
             HashSet::from([
                 TokenKind::Comma,
@@ -157,7 +157,7 @@ impl ArrayInit {
                 values.push(Expression::from(tokens)?);
 
                 // The next token should either be `,` or `]`.
-                match Source::parse_expecting_any(
+                match Module::parse_expecting_any(
                     tokens,
                     HashSet::from([TokenKind::Comma, TokenKind::RightBracket]),
                 ) {
@@ -173,7 +173,7 @@ impl ArrayInit {
                         ..
                     }) => {
                         // Handle the trailing comma.
-                        if Source::parse_optional(tokens, TokenKind::RightBracket).is_some() {
+                        if Module::parse_optional(tokens, TokenKind::RightBracket).is_some() {
                             break end.clone();
                         }
                     }
@@ -195,7 +195,7 @@ impl ArrayInit {
 
             Ok(_) => {
                 maybe_repeat_expr = Some(Expression::from(tokens)?);
-                Source::parse_expecting(tokens, TokenKind::RightBracket)?
+                Module::parse_expecting(tokens, TokenKind::RightBracket)?
                     .end
                     .clone()
             }

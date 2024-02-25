@@ -13,18 +13,18 @@ use crate::{fmt, util};
 
 /// Represents a parsed source file.
 #[derive(Debug)]
-pub struct Source {
+pub struct Module {
     pub path: String,
     pub statements: Vec<Statement>,
 }
 
-impl PartialEq for Source {
+impl PartialEq for Module {
     fn eq(&self, other: &Self) -> bool {
         util::vecs_eq(&self.statements, &other.statements)
     }
 }
 
-impl Source {
+impl Module {
     /// Attempts to parse a list of statements from the deque of tokens. Expects token sequences of
     /// the form
     ///
@@ -42,7 +42,7 @@ impl Source {
             };
         }
 
-        Ok(Source {
+        Ok(Module {
             path: path.to_string(),
             statements,
         })

@@ -6,7 +6,7 @@ use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::locatable_impl;
 use crate::parser::error::ParseResult;
-use crate::parser::source::Source;
+use crate::parser::module::Module;
 
 /// Represents a a named value. These can be variables, variable member accesses, functions,
 /// constants, or types.
@@ -54,12 +54,12 @@ impl Symbol {
 
     /// Attempts to parse a symbol composed only of a single identifier from the given token sequence.
     pub fn from_identifier(tokens: &mut Stream<Token>) -> ParseResult<Symbol> {
-        let start_pos = Source::current_position(tokens);
-        let name = Source::parse_identifier(tokens)?;
+        let start_pos = Module::current_position(tokens);
+        let name = Module::parse_identifier(tokens)?;
         Ok(Symbol {
             name,
             start_pos,
-            end_pos: Source::prev_position(tokens),
+            end_pos: Module::prev_position(tokens),
         })
     }
 }

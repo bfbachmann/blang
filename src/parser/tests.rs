@@ -25,7 +25,7 @@ mod tests {
     use crate::parser::ast::var_assign::VariableAssignment;
     use crate::parser::ast::var_dec::VariableDeclaration;
     use crate::parser::error::{ErrorKind, ParseError};
-    use crate::parser::source::Source;
+    use crate::parser::module::Module;
 
     fn tokenize(code: &str) -> Vec<Token> {
         lex(&mut Stream::from(code.chars().collect())).expect("should succeed")
@@ -34,7 +34,7 @@ mod tests {
     #[test]
     fn parse_identifier() {
         let tokens = tokenize("something");
-        let result = Source::parse_identifier(&mut Stream::from(tokens)).expect("should not error");
+        let result = Module::parse_identifier(&mut Stream::from(tokens)).expect("should not error");
         assert_eq!(result, "something");
     }
 
@@ -80,13 +80,13 @@ mod tests {
         }
         "#;
         let tokens = tokenize(raw_code);
-        Source::from("", &mut Stream::from(tokens)).expect("should not error");
+        Module::from("", &mut Stream::from(tokens)).expect("should not error");
 
         let tokens = tokenize("let i: i64 = 123 let j = 1231");
-        let result = Source::from("", &mut Stream::from(tokens)).expect("should not error");
+        let result = Module::from("", &mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
-            Source {
+            Module {
                 path: "".to_string(),
                 statements: vec![
                     Statement::VariableDeclaration(VariableDeclaration::new(
@@ -308,7 +308,7 @@ mod tests {
         let raw = r#"let i = call(,,)"#;
         let mut char_stream = Stream::from(raw.chars().collect());
         let tokens = lex(&mut char_stream).expect("should not error");
-        let result = Source::from("", &mut Stream::from(tokens));
+        let result = Module::from("", &mut Stream::from(tokens));
         assert!(matches!(
             result,
             Err(ParseError {
@@ -330,7 +330,7 @@ mod tests {
         let raw = r#"let i = call())"#;
         let mut char_stream = Stream::from(raw.chars().collect());
         let tokens = lex(&mut char_stream).expect("should not error");
-        let result = Source::from("", &mut Stream::from(tokens));
+        let result = Module::from("", &mut Stream::from(tokens));
         assert!(matches!(
             result,
             Err(ParseError {
@@ -352,7 +352,7 @@ mod tests {
         let raw = r#"do(((x+3) > 2) or other"#;
         let mut char_stream = Stream::from(raw.chars().collect());
         let tokens = lex(&mut char_stream).expect("should not error");
-        let result = Source::from("", &mut Stream::from(tokens));
+        let result = Module::from("", &mut Stream::from(tokens));
         assert!(matches!(
             result,
             Err(ParseError {
@@ -369,7 +369,7 @@ mod tests {
         let raw = r#"do(and true)"#;
         let mut char_stream = Stream::from(raw.chars().collect());
         let tokens = lex(&mut char_stream).expect("should not error");
-        let result = Source::from("", &mut Stream::from(tokens));
+        let result = Module::from("", &mut Stream::from(tokens));
         assert!(matches!(
             result,
             Err(ParseError {
@@ -397,10 +397,10 @@ mod tests {
         }";
         let mut char_stream = Stream::from(raw.chars().collect());
         let tokens = lex(&mut char_stream).expect("should not error");
-        let result = Source::from("", &mut Stream::from(tokens)).expect("should not error");
+        let result = Module::from("", &mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
-            Source {
+            Module {
                 path: "".to_string(),
                 statements: vec![Statement::FunctionDeclaration(Function::new(
                     FunctionSignature::new(
@@ -479,7 +479,7 @@ mod tests {
         "#;
         let mut char_stream = Stream::from(raw.chars().collect());
         let tokens = lex(&mut char_stream).expect("should not error");
-        let result = Source::from("", &mut Stream::from(tokens));
+        let result = Module::from("", &mut Stream::from(tokens));
         assert!(matches!(
             result,
             Err(ParseError {
@@ -502,7 +502,7 @@ mod tests {
     fn inline_struct_types_in_fn_sig() {
         let input = r#"fn one(a: struct {one: i64, two: bool}, b: i64) ~ struct {thing: str} {}"#;
         let tokens = lex(&mut Stream::from(input.chars().collect())).expect("should succeed");
-        let result = Source::from("", &mut Stream::from(tokens));
+        let result = Module::from("", &mut Stream::from(tokens));
         assert!(matches!(result, Ok(_)));
     }
 
@@ -515,7 +515,7 @@ mod tests {
             }
         "#;
         let tokens = lex(&mut Stream::from(input.chars().collect())).expect("should succeed");
-        let result = Source::from("", &mut Stream::from(tokens));
+        let result = Module::from("", &mut Stream::from(tokens));
         assert!(matches!(
             result,
             Err(ParseError {
@@ -532,7 +532,7 @@ mod tests {
             (thing) = 2
         "#;
         let tokens = lex(&mut Stream::from(input.chars().collect())).expect("should succeed");
-        let result = Source::from("", &mut Stream::from(tokens));
+        let result = Module::from("", &mut Stream::from(tokens));
         assert_eq!(
             result.unwrap().statements,
             vec![

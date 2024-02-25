@@ -7,7 +7,7 @@ use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::r#type::Type;
 use crate::parser::error::ParseResult;
-use crate::parser::source::Source;
+use crate::parser::module::Module;
 
 /// Represents a pointer to a value of some known type.
 #[derive(PartialEq, Clone, Eq, Hash, Debug)]
@@ -37,10 +37,10 @@ impl PointerType {
     /// where
     ///  - `type` is any type (see `Type::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<PointerType> {
-        let start_pos = Source::parse_expecting(tokens, TokenKind::Asterisk)?
+        let start_pos = Module::parse_expecting(tokens, TokenKind::Asterisk)?
             .start
             .clone();
-        let is_mut = Source::parse_optional(tokens, TokenKind::Mut).is_some();
+        let is_mut = Module::parse_optional(tokens, TokenKind::Mut).is_some();
         let pointee_type = Type::from(tokens)?;
         Ok(PointerType {
             start_pos,

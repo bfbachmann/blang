@@ -8,7 +8,7 @@ use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::r#type::Type;
 use crate::parser::error::ParseResult;
-use crate::parser::source::Source;
+use crate::parser::module::Module;
 
 /// Represents a `sizeof` statement. Note that `sizeof` expressions are not
 /// considered unary operations (i.e. `sizeof` is not an operator) because
@@ -44,7 +44,7 @@ impl SizeOf {
     ///  - `type` is any type.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Parse the `sizeof` keyword.
-        let sizeof_token = Source::parse_expecting(tokens, TokenKind::SizeOf)?;
+        let sizeof_token = Module::parse_expecting(tokens, TokenKind::SizeOf)?;
 
         // Parse the type.
         let typ = Type::from(tokens)?;

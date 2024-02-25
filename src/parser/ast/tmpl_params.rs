@@ -8,7 +8,7 @@ use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::r#type::Type;
 use crate::parser::error::ParseResult;
-use crate::parser::source::Source;
+use crate::parser::module::Module;
 
 /// Represents a template parameter. A template parameter has a name and has either one associated
 /// type, a set of associated specs, or no associated type or specs (i.e. is a wildcard parameter).
@@ -66,7 +66,7 @@ impl TmplParam {
 
         // Parse the template param name.
         let mut tmpl_param = TmplParam {
-            name: Source::parse_identifier(tokens)?,
+            name: Module::parse_identifier(tokens)?,
             required_specs: vec![],
             aliased_type: None,
             start_pos,
@@ -97,7 +97,7 @@ impl TmplParam {
                     tmpl_param.required_specs.push(spec);
 
                     // Stop parsing types/specs if the next token is not a comma.
-                    if Source::parse_optional(tokens, TokenKind::Plus).is_none() {
+                    if Module::parse_optional(tokens, TokenKind::Plus).is_none() {
                         break;
                     }
                 }
@@ -154,8 +154,8 @@ impl TmplParams {
     ///  - `tmpl_param` is a template parameter (see `TmplParam::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Parse `with [`.
-        let start_pos = Source::parse_expecting(tokens, TokenKind::With)?.start;
-        Source::parse_expecting(tokens, TokenKind::LeftBracket)?;
+        let start_pos = Module::parse_expecting(tokens, TokenKind::With)?.start;
+        Module::parse_expecting(tokens, TokenKind::LeftBracket)?;
 
         // Parse all template params and the closing bracket.
         let mut tmpl_params = vec![];
@@ -164,7 +164,7 @@ impl TmplParams {
             tmpl_params.push(TmplParam::from(tokens)?);
 
             // The next token should either be a comma or the closing bracket.
-            match Source::parse_expecting_any(
+            match Module::parse_expecting_any(
                 tokens,
                 HashSet::from([TokenKind::Comma, TokenKind::RightBracket]),
             )? {
@@ -178,7 +178,7 @@ impl TmplParams {
 
                 _ => {
                     // Allow trailing commas.
-                    if let Some(token) = Source::parse_optional(tokens, TokenKind::RightBracket) {
+                    if let Some(token) = Module::parse_optional(tokens, TokenKind::RightBracket) {
                         break token.end.clone();
                     }
                 }

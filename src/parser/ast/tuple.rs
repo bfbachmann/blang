@@ -11,7 +11,7 @@ use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::r#type::Type;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
-use crate::parser::source::Source;
+use crate::parser::module::Module;
 use crate::{locatable_impl, util};
 
 /// Represents tuple type declaration.
@@ -86,10 +86,10 @@ impl TupleType {
     /// Tuples can also be empty.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Record the starting position of this statement.
-        let start_pos = Source::current_position(tokens);
+        let start_pos = Module::current_position(tokens);
 
         // The first token should be `{`.
-        Source::parse_expecting(tokens, TokenKind::LeftBrace)?;
+        Module::parse_expecting(tokens, TokenKind::LeftBrace)?;
 
         // The next tokens should be types followed by commas ending in `}`.
         let mut types = vec![];
@@ -126,7 +126,7 @@ impl TupleType {
                     if let token @ Token {
                         kind: TokenKind::RightBrace,
                         ..
-                    } = Source::parse_expecting_any(
+                    } = Module::parse_expecting_any(
                         tokens,
                         HashSet::from([TokenKind::Comma, TokenKind::RightBrace]),
                     )? {
@@ -207,10 +207,10 @@ impl TupleInit {
     /// Tuples can also be empty.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Record the starting position of this statement.
-        let start_pos = Source::current_position(tokens);
+        let start_pos = Module::current_position(tokens);
 
         // The first token should be `{`.
-        Source::parse_expecting(tokens, TokenKind::LeftBrace)?;
+        Module::parse_expecting(tokens, TokenKind::LeftBrace)?;
 
         // The next tokens should be expressions followed by commas ending in `}`.
         let mut values = vec![];
@@ -247,7 +247,7 @@ impl TupleInit {
                     if let token @ Token {
                         kind: TokenKind::RightBrace,
                         ..
-                    } = Source::parse_expecting_any(
+                    } = Module::parse_expecting_any(
                         tokens,
                         HashSet::from([TokenKind::Comma, TokenKind::RightBrace]),
                     )? {

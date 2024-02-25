@@ -11,13 +11,13 @@ use crate::analyzer::ast::fn_call::AFnCall;
 use crate::analyzer::ast::func::AFn;
 use crate::analyzer::ast::index::AIndex;
 use crate::analyzer::ast::member::AMemberAccess;
+use crate::analyzer::ast::module::AModule;
 use crate::analyzer::ast::r#enum::AEnumVariantInit;
 use crate::analyzer::ast::r#impl::AImpl;
 use crate::analyzer::ast::r#loop::ALoop;
 use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::ret::ARet;
-use crate::analyzer::ast::source::ASource;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::ast::tuple::ATupleInit;
@@ -322,7 +322,7 @@ impl<'a> MoveChecker<'a> {
     }
 
     /// Recursively performs move checks on `prog`.
-    pub fn check_prog(prog: &ASource, type_store: &TypeStore) -> Vec<AnalyzeError> {
+    pub fn check_prog(prog: &AModule, type_store: &TypeStore) -> Vec<AnalyzeError> {
         let mut move_checker = MoveChecker {
             type_store,
             errors: vec![],

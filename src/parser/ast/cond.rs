@@ -8,7 +8,7 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::branch::Branch;
 use crate::parser::error::ParseResult;
-use crate::parser::source::Source;
+use crate::parser::module::Module;
 use crate::{locatable_impl, util};
 
 /// Represents a conditional (i.e. branching if/else if/else statements).
@@ -74,7 +74,7 @@ impl Conditional {
     ///  - `body` is a statement that represents the branch body.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // The first token should be `if`.
-        Source::parse_expecting(tokens, TokenKind::If)?;
+        Module::parse_expecting(tokens, TokenKind::If)?;
 
         // Parse the rest of the branch (the expression and the closure).
         let branch = Branch::from(tokens, true)?;

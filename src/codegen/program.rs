@@ -16,8 +16,8 @@ use inkwell::values::FunctionValue;
 use inkwell::OptimizationLevel;
 
 use crate::analyzer::ast::func::AFnSig;
+use crate::analyzer::ast::module::AModule;
 use crate::analyzer::ast::r#const::AConst;
-use crate::analyzer::ast::source::ASource;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::type_store::TypeStore;
 use crate::codegen::convert::TypeConverter;
@@ -30,7 +30,7 @@ pub struct ProgramCodeGen<'a, 'ctx> {
     builder: &'a Builder<'ctx>,
     fpm: &'a PassManager<FunctionValue<'ctx>>,
     module: &'a Module<'ctx>,
-    program: &'a ASource,
+    program: &'a AModule,
     type_store: &'a TypeStore,
     type_converter: TypeConverter<'ctx>,
     module_consts: HashMap<String, AConst>,
@@ -215,7 +215,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
 /// Generates the program code for the given target. If there is no target, compiles the
 /// program for the host system.
 pub fn generate(
-    analyzed_sources: Vec<ASource>,
+    analyzed_modules: Vec<AModule>,
     type_store: TypeStore,
     maybe_target_triple: Option<&String>,
     output_format: OutputFormat,
@@ -263,9 +263,9 @@ pub fn generate(
     fpm.initialize();
 
     // Combine sources into one big source.
-    let source = ASource {
+    let a_module = AModule {
         path: "main".to_string(), // TODO
-        statements: analyzed_sources
+        statements: analyzed_modules
             .into_iter()
             .flat_map(|s| s.statements)
             .collect(),
@@ -277,7 +277,7 @@ pub fn generate(
         builder: &builder,
         fpm: &fpm,
         module: &module,
-        program: &source,
+        program: &a_module,
         type_store: &type_store,
         type_converter: TypeConverter::new(&ctx, &type_store),
         module_consts: HashMap::new(),

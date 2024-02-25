@@ -6,7 +6,7 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::expr::Expression;
 use crate::parser::error::ParseResult;
-use crate::parser::source::Source;
+use crate::parser::module::Module;
 
 /// Represents the assignment of some value (i.e. an expression) to a variable.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -52,13 +52,13 @@ impl VariableAssignment {
     ///  - `expr` is an expression representing the value assigned to the variable
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Get the starting position of the variable assignment.
-        let start_pos = Source::current_position(tokens);
+        let start_pos = Module::current_position(tokens);
 
         // The next token should be an expression representing the target to which a value is being assigned.
         let target = Expression::from(tokens)?;
 
         // The next token should be an assignment "=".
-        Source::parse_expecting(tokens, TokenKind::Equal)?;
+        Module::parse_expecting(tokens, TokenKind::Equal)?;
 
         // The next tokens should be some expression.
         let value = Expression::from(tokens)?;

@@ -8,7 +8,7 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::func_sig::FunctionSignature;
 use crate::parser::error::ParseResult;
-use crate::parser::source::Source;
+use crate::parser::module::Module;
 use crate::{locatable_impl, util};
 
 /// Represents a set of external function declarations.
@@ -70,13 +70,13 @@ impl Extern {
     /// where
     ///  - `fn_sig` is a function signature (see `FunctionSignature::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let start_pos = Source::current_position(tokens);
+        let start_pos = Module::current_position(tokens);
 
         // Parse the `extern` token.
-        Source::parse_expecting(tokens, TokenKind::Extern)?;
+        Module::parse_expecting(tokens, TokenKind::Extern)?;
 
         // The next token should either be `{` or `fn`.
-        match Source::parse_expecting_any(
+        match Module::parse_expecting_any(
             tokens,
             HashSet::from([TokenKind::LeftBrace, TokenKind::Fn]),
         )? {
@@ -90,7 +90,7 @@ impl Extern {
                 let end_pos = loop {
                     fn_sigs.push(FunctionSignature::from(tokens)?);
 
-                    if let Some(token) = Source::parse_optional(tokens, TokenKind::RightBrace) {
+                    if let Some(token) = Module::parse_optional(tokens, TokenKind::RightBrace) {
                         break token.end.clone();
                     }
                 };

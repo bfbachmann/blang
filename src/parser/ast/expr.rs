@@ -31,7 +31,7 @@ use crate::parser::ast::u64_lit::U64Lit;
 use crate::parser::ast::u8_lit::U8Lit;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
-use crate::parser::source::Source;
+use crate::parser::module::Module;
 
 /// Represents basic and composite expressions. For basic expressions, see `Expression::from_basic`,
 /// and for composite expressions, see `Expression::from`.
@@ -390,7 +390,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                 let mut args = vec![];
                 loop {
                     if let Some(Token { end, .. }) =
-                        Source::parse_optional(tokens, TokenKind::RightParen)
+                        Module::parse_optional(tokens, TokenKind::RightParen)
                     {
                         expr = Expression::FunctionCall(Box::new(FuncCall::new(
                             expr,
@@ -407,7 +407,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                         kind: TokenKind::RightParen,
                         end,
                         ..
-                    } = Source::parse_expecting_any(
+                    } = Module::parse_expecting_any(
                         tokens,
                         HashSet::from([TokenKind::Comma, TokenKind::RightParen]),
                     )? {
@@ -426,7 +426,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                 tokens.next();
 
                 expr = Expression::Index(Box::new(Index::new(expr, parse_expr(tokens)?)));
-                Source::parse_expecting(tokens, TokenKind::RightBracket)?;
+                Module::parse_expecting(tokens, TokenKind::RightBracket)?;
             }
 
             TokenKind::Dot => {
@@ -529,7 +529,7 @@ fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
         TokenKind::LeftParen => {
             tokens.next();
             let expr = parse_expr(tokens)?;
-            Source::parse_expecting(tokens, TokenKind::RightParen)?;
+            Module::parse_expecting(tokens, TokenKind::RightParen)?;
             expr
         }
 

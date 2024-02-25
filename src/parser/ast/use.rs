@@ -10,7 +10,7 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
-use crate::parser::source::Source;
+use crate::parser::module::Module;
 
 /// The path to a module that is imported into a program.
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -126,29 +126,29 @@ impl UsedModule {
     /// - `ident` is any identifier to import from the given path
     /// - `alias` is any identifier that will serve as an alias for the module.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<UsedModule> {
-        let start_pos = Source::parse_expecting(tokens, TokenKind::Use)?.start;
+        let start_pos = Module::parse_expecting(tokens, TokenKind::Use)?.start;
         let end_pos;
 
-        match Source::parse_optional(tokens, TokenKind::LeftBrace) {
+        match Module::parse_optional(tokens, TokenKind::LeftBrace) {
             // If the next token is `{`, we'll assume we're parsing a `use` statement of
             // the form `use {<ident>, ...} from "<path>"`.
             Some(_) => {
                 // Parse all the identifiers being imported.
                 let mut identifiers = vec![];
-                while !Source::next_token_is(tokens, &TokenKind::RightBrace) {
+                while !Module::next_token_is(tokens, &TokenKind::RightBrace) {
                     // Parse the next identifier.
-                    identifiers.push(Source::parse_identifier(tokens)?);
+                    identifiers.push(Module::parse_identifier(tokens)?);
 
                     // If there is no comma following the identifier, then we've reached the
                     // end of the identifiers list.
-                    if Source::parse_optional(tokens, TokenKind::Comma).is_none() {
+                    if Module::parse_optional(tokens, TokenKind::Comma).is_none() {
                         break;
                     };
                 }
 
                 // Parse the remaining `} from "<path>"`.
-                Source::parse_expecting(tokens, TokenKind::RightBrace)?.end;
-                Source::parse_expecting(tokens, TokenKind::From)?;
+                Module::parse_expecting(tokens, TokenKind::RightBrace)?.end;
+                Module::parse_expecting(tokens, TokenKind::From)?;
                 let path = ModulePath::from(tokens)?;
                 end_pos = path.end_pos().clone();
 
@@ -168,8 +168,8 @@ impl UsedModule {
             //      use "<path>" as <alias>
             None => {
                 // Handle the special case of the wildcard `*` import.
-                if Source::parse_optional(tokens, TokenKind::Asterisk).is_some() {
-                    Source::parse_expecting(tokens, TokenKind::From)?;
+                if Module::parse_optional(tokens, TokenKind::Asterisk).is_some() {
+                    Module::parse_expecting(tokens, TokenKind::From)?;
 
                     let path = ModulePath::from(tokens)?;
                     end_pos = path.end_pos().clone();
@@ -182,11 +182,11 @@ impl UsedModule {
                     })
                 } else {
                     let path = ModulePath::from(tokens)?;
-                    let (maybe_alias, end_pos) = match Source::parse_optional(tokens, TokenKind::As)
+                    let (maybe_alias, end_pos) = match Module::parse_optional(tokens, TokenKind::As)
                     {
                         Some(_) => {
-                            let alias = Source::parse_identifier(tokens)?;
-                            (Some(alias), Source::prev_position(tokens))
+                            let alias = Module::parse_identifier(tokens)?;
+                            (Some(alias), Module::prev_position(tokens))
                         }
                         None => (None, path.end_pos().clone()),
                     };

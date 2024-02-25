@@ -5,7 +5,7 @@ use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::statement::Statement;
 use crate::parser::error::ParseResult;
-use crate::parser::source::Source;
+use crate::parser::module::Module;
 use crate::{locatable_impl, util};
 use std::hash::{Hash, Hasher};
 
@@ -61,12 +61,12 @@ impl Closure {
     /// - `statement` is any valid statement (see `Statement::from`)
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Record the closure starting position.
-        let start_pos = Source::current_position(tokens);
+        let start_pos = Module::current_position(tokens);
         let end_pos: Position;
 
         // The first token should be `{` if it's a closure. Otherwise, it's just
         // a statement.
-        if Source::parse_optional(tokens, TokenKind::LeftBrace).is_none() {
+        if Module::parse_optional(tokens, TokenKind::LeftBrace).is_none() {
             let statement = Statement::from(tokens)?;
             end_pos = statement.end_pos().clone();
             return Ok(Closure::new(vec![statement], None, start_pos, end_pos));

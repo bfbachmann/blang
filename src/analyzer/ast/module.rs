@@ -2,22 +2,22 @@ use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::parser::ast::statement::Statement;
-use crate::parser::source::Source;
+use crate::parser::module::Module;
 
 /// Represents a semantically analyzed source file.
 #[derive(Debug)]
-pub struct ASource {
+pub struct AModule {
     pub path: String,
     pub statements: Vec<AStatement>,
 }
 
-impl ASource {
-    /// Performs semantic analysis on the given source and returns a type-rich version of it.
-    pub fn from(ctx: &mut ProgramContext, source: &Source) -> Self {
+impl AModule {
+    /// Performs semantic analysis on the given module and returns a type-rich version of it.
+    pub fn from(ctx: &mut ProgramContext, module: &Module) -> Self {
         let mut analyzed_statements = vec![];
 
         // Analyze each statement in the source file.
-        for statement in &source.statements {
+        for statement in &module.statements {
             match statement {
                 Statement::FunctionDeclaration(_)
                 | Statement::ExternFns(_)
@@ -51,8 +51,8 @@ impl ASource {
             }
         }
 
-        ASource {
-            path: source.path.clone(),
+        AModule {
+            path: module.path.clone(),
             statements: analyzed_statements,
         }
     }

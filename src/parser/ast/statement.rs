@@ -26,7 +26,7 @@ use crate::parser::ast::var_assign::VariableAssignment;
 use crate::parser::ast::var_dec::VariableDeclaration;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
-use crate::parser::source::Source;
+use crate::parser::module::Module;
 
 /// Represents a statement.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -342,11 +342,11 @@ impl Statement {
             // At this point the statement should be an assignment or a function call.
             (_, _) => {
                 // Parse the expression.
-                let start_pos = Source::current_position(tokens);
+                let start_pos = Module::current_position(tokens);
                 let expr = Expression::from(tokens)?;
 
                 // If the next token is `=`, then this is an assignment.
-                if Source::parse_optional(tokens, TokenKind::Equal).is_some() {
+                if Module::parse_optional(tokens, TokenKind::Equal).is_some() {
                     // Parse the expression being assigned to the member and return the variable
                     // assignment.
                     let value = Expression::from(tokens)?;
@@ -364,7 +364,7 @@ impl Statement {
                         "expected statement, but found expression",
                         None,
                         start_pos,
-                        Source::prev_position(tokens),
+                        Module::prev_position(tokens),
                     )),
                 }
             }

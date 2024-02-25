@@ -8,7 +8,7 @@ use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::r#type::Type;
 use crate::parser::error::ParseResult;
-use crate::parser::source::Source;
+use crate::parser::module::Module;
 
 /// Represents a lambda function argument declaration. Lambda arguments may or may not have defined
 /// types. Arguments without types will be treated as templated (generic) arguments.
@@ -45,16 +45,16 @@ impl LambdaDecl {
     /// - `arg_type` is the optional argument type (see `Type::from`)
     /// - `expr` is the expression returned by the lambda function (see `Expression::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let start_pos = Source::parse_expecting(tokens, TokenKind::DollarSign)?.start;
-        Source::parse_expecting(tokens, TokenKind::LeftParen)?;
+        let start_pos = Module::parse_expecting(tokens, TokenKind::DollarSign)?.start;
+        Module::parse_expecting(tokens, TokenKind::LeftParen)?;
 
         // Parse lambda arguments.
         let mut args: Vec<LambdaArg> = vec![];
-        while !Source::next_token_is(tokens, &TokenKind::RightParen) {
-            let start_pos = Source::current_position(tokens);
-            let is_mut = Source::parse_optional(tokens, TokenKind::Mut).is_some();
-            let name = Source::parse_identifier(tokens)?;
-            let maybe_type = match Source::parse_optional(tokens, TokenKind::Colon) {
+        while !Module::next_token_is(tokens, &TokenKind::RightParen) {
+            let start_pos = Module::current_position(tokens);
+            let is_mut = Module::parse_optional(tokens, TokenKind::Mut).is_some();
+            let name = Module::parse_identifier(tokens)?;
+            let maybe_type = match Module::parse_optional(tokens, TokenKind::Colon) {
                 Some(_) => Some(Type::from(tokens)?),
                 None => None,
             };
@@ -64,11 +64,11 @@ impl LambdaDecl {
                 maybe_type,
                 is_mut,
                 start_pos,
-                end_pos: Source::prev_position(tokens),
+                end_pos: Module::prev_position(tokens),
             });
 
             // The next token should either be `,` or `)`.
-            let next_token = Source::parse_expecting_any(
+            let next_token = Module::parse_expecting_any(
                 tokens,
                 HashSet::from([TokenKind::Comma, TokenKind::RightParen]),
             )?;

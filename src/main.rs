@@ -10,9 +10,9 @@ use std::{fs, process};
 use clap::{arg, ArgAction, Command};
 use colored::*;
 
-use parser::source::Source;
+use parser::module::Module;
 
-use crate::analyzer::analyze::{analyze_sources, ProgramAnalysis};
+use crate::analyzer::analyze::{analyze_modules, ProgramAnalysis};
 use crate::codegen::program::{generate, OutputFormat};
 use crate::fmt::{display_msg, format_file_loc};
 use crate::lexer::error::LexError;
@@ -141,7 +141,7 @@ fn open_file(file_path: &str) -> Result<Stream<char>> {
 /// at `input_path` and all its imports will be parsed.
 /// Prints parse errors and exits if there were any parse errors. Otherwise,
 /// returns parse sources.
-fn parse_source_files(input_path: &str) -> Vec<Source> {
+fn parse_source_files(input_path: &str) -> Vec<Module> {
     let is_dir = match fs::metadata(input_path) {
         Ok(meta) => meta.is_dir(),
         Err(err) => fatalln!(r#"error reading "{}": {}"#, input_path, err),
@@ -164,11 +164,11 @@ fn parse_source_files(input_path: &str) -> Vec<Source> {
     // Parse any source files that were included via imports.
     let parsed_files: HashSet<String> = HashSet::from([main_path.clone()]);
     let mut all_parse_results = vec![(input_path.to_string(), parse_result)];
-    if let Ok(source) = &all_parse_results[0].1 {
+    if let Ok(module) = &all_parse_results[0].1 {
         let mut imported_paths = vec![];
-        for statement in &source.statements {
+        for statement in &module.statements {
             if let Statement::Use(use_block) = statement {
-                let mod_path = Path::new(source.path.as_str())
+                let mod_path = Path::new(module.path.as_str())
                     .parent()
                     .unwrap()
                     .join(use_block.path.raw.as_str());
@@ -177,7 +177,7 @@ fn parse_source_files(input_path: &str) -> Vec<Source> {
                         format_code!(r#"import {} not found"#, use_block.path.raw).as_str(),
                         None,
                         None,
-                        source.path.as_str(),
+                        module.path.as_str(),
                         use_block.start_pos(),
                         use_block.end_pos(),
                         false,
@@ -198,10 +198,10 @@ fn parse_source_files(input_path: &str) -> Vec<Source> {
 
     // Display any parse errors that occurred.
     let mut parse_error_count = 0;
-    let mut sources = vec![];
+    let mut modules = vec![];
     for (path, result) in all_parse_results.into_iter() {
         match result {
-            Ok(source) => sources.push(source),
+            Ok(module) => modules.push(module),
             Err(ParseError {
                 kind: _,
                 message,
@@ -234,11 +234,11 @@ fn parse_source_files(input_path: &str) -> Vec<Source> {
         )
     }
 
-    sources
+    modules
 }
 
 /// Lexes and parses a source file.
-fn parse_source_file(input_path: &str) -> ParseResult<Source> {
+fn parse_source_file(input_path: &str) -> ParseResult<Module> {
     // Get a stream of characters from the source file.
     let mut char_stream = match open_file(input_path) {
         Ok(r) => r,
@@ -258,7 +258,7 @@ fn parse_source_file(input_path: &str) -> ParseResult<Source> {
     };
 
     // Parse the program.
-    Source::from(input_path, &mut Stream::from(tokens))
+    Module::from(input_path, &mut Stream::from(tokens))
 }
 
 /// Performs static analysis on the source code at the given path. If `input_path` is a directory,
@@ -266,15 +266,15 @@ fn parse_source_file(input_path: &str) -> ParseResult<Source> {
 /// error and exits with code 1.
 fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> ProgramAnalysis {
     // Parse all targeted source files.
-    let sources = parse_source_files(input_path);
+    let modules = parse_source_files(input_path);
 
     // Analyze the program.
-    let analysis = analyze_sources(sources);
+    let analysis = analyze_modules(modules);
 
     // Display warnings and errors that occurred.
     let mut err_count = 0;
-    for result in &analysis.analyzed_sources {
-        let path = result.source.path.clone();
+    for result in &analysis.analyzed_modules {
+        let path = result.module.path.clone();
 
         // Print warnings.
         for warn in &result.warnings {
@@ -291,7 +291,7 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> ProgramAnalysi
 
         // Print errors.
         for err in &result.errors {
-            let path = result.source.path.clone();
+            let path = result.module.path.clone();
             err_count += 1;
 
             display_msg(
@@ -379,9 +379,9 @@ fn compile(
     // Compile the program.
     if let Err(e) = generate(
         prog_analysis
-            .analyzed_sources
+            .analyzed_modules
             .into_iter()
-            .map(|s| s.source)
+            .map(|s| s.module)
             .collect(),
         prog_analysis.type_store,
         target,

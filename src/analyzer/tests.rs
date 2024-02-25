@@ -1,30 +1,30 @@
 #[cfg(test)]
 mod tests {
-    use crate::analyzer::analyze::{analyze_sources, ProgramAnalysis};
-    use crate::analyzer::ast::source::ASource;
+    use crate::analyzer::analyze::{analyze_modules, ProgramAnalysis};
+    use crate::analyzer::ast::module::AModule;
     use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
     use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
     use crate::lexer::lex::lex;
     use crate::lexer::stream::Stream;
-    use crate::parser::source::Source;
+    use crate::parser::module::Module;
 
     fn get_analysis(raw: &str) -> ProgramAnalysis {
         let mut char_stream = Stream::from(raw.chars().collect());
         let tokens = lex(&mut char_stream).expect("should not error");
-        let source = Source::from("", &mut Stream::from(tokens)).expect("should not error");
-        analyze_sources(vec![source])
+        let module = Module::from("", &mut Stream::from(tokens)).expect("should not error");
+        analyze_modules(vec![module])
     }
 
-    fn analyze(raw: &str) -> AnalyzeResult<ASource> {
-        let mut analysis = get_analysis(raw).analyzed_sources.remove(0);
+    fn analyze(raw: &str) -> AnalyzeResult<AModule> {
+        let mut analysis = get_analysis(raw).analyzed_modules.remove(0);
         if analysis.errors.is_empty() {
-            Ok(analysis.source)
+            Ok(analysis.module)
         } else {
             Err(analysis.errors.remove(0))
         }
     }
 
-    fn check_result(result: AnalyzeResult<ASource>, expected_err_kind: Option<ErrorKind>) {
+    fn check_result(result: AnalyzeResult<AModule>, expected_err_kind: Option<ErrorKind>) {
         match expected_err_kind {
             Some(kind) => assert_eq!(result.unwrap_err().kind, kind),
             None => assert!(result.is_ok()),
@@ -313,7 +313,7 @@ mod tests {
                 let a = 1
             }
         "#;
-        let mut analysis = get_analysis(raw).analyzed_sources.remove(0);
+        let mut analysis = get_analysis(raw).analyzed_modules.remove(0);
         assert!(analysis.errors.is_empty());
         assert_eq!(analysis.warnings.len(), 1);
         assert!(matches!(
