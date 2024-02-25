@@ -70,6 +70,7 @@ pub enum TokenKind {
     Spec,
     As,
     Use,
+    From,
 
     // Delimiters
     LeftBrace,
@@ -161,6 +162,7 @@ impl Clone for TokenKind {
             TokenKind::MutReference => TokenKind::MutReference,
             TokenKind::Dereference => TokenKind::Dereference,
             TokenKind::Use => TokenKind::Use,
+            TokenKind::From => TokenKind::From,
         }
     }
 }
@@ -251,6 +253,7 @@ impl TokenKind {
             TokenKind::MutReference => "*<mut".to_string(),
             TokenKind::Dereference => "*>".to_string(),
             TokenKind::Use => "use".to_string(),
+            TokenKind::From => "from".to_string(),
         }
     }
 
@@ -321,6 +324,7 @@ impl TokenKind {
             (TokenKind::MutReference.to_string(), TokenKind::MutReference),
             (TokenKind::Dereference.to_string(), TokenKind::Dereference),
             (TokenKind::Use.to_string(), TokenKind::Use),
+            (TokenKind::From.to_string(), TokenKind::From),
         ]);
 
         // Trim syntactically meaningless whitespace.

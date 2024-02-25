@@ -19,7 +19,7 @@ use crate::parser::ast::r#enum::EnumType;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#loop::Loop;
 use crate::parser::ast::r#struct::StructType;
-use crate::parser::ast::r#use::UseBlock;
+use crate::parser::ast::r#use::UsedModule;
 use crate::parser::ast::ret::Ret;
 use crate::parser::ast::spec::Spec;
 use crate::parser::ast::var_assign::VariableAssignment;
@@ -47,7 +47,7 @@ pub enum Statement {
     Consts(ConstBlock),
     Impl(Impl),
     SpecDeclaration(Spec),
-    Use(UseBlock),
+    Use(UsedModule),
 }
 
 impl fmt::Display for Statement {
@@ -103,8 +103,8 @@ impl fmt::Display for Statement {
             Statement::Consts(const_block) => {
                 write!(f, "{}", const_block)
             }
-            Statement::Use(use_block) => {
-                write!(f, "{}", use_block)
+            Statement::Use(used_mod) => {
+                write!(f, "{}", used_mod)
             }
             Statement::Impl(impl_) => {
                 write!(
@@ -333,10 +333,10 @@ impl Statement {
                 Ok(Statement::EnumDeclaration(enum_decl))
             }
 
-            // If the first token is `use`, it's a use (imports) block.
+            // If the first token is `use`, it's a use (import).
             (TokenKind::Use, _) => {
-                let use_block = UseBlock::from(tokens)?;
-                Ok(Statement::Use(use_block))
+                let use_mod = UsedModule::from(tokens)?;
+                Ok(Statement::Use(use_mod))
             }
 
             // At this point the statement should be an assignment or a function call.

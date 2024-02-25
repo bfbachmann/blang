@@ -28,6 +28,12 @@ impl Hash for ModulePath {
 
 locatable_impl!(ModulePath);
 
+impl Display for ModulePath {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, r#""{}""#, self.raw)
+    }
+}
+
 impl ModulePath {
     /// Parses a module path from the given token stream. A module path is just a string literal.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<ModulePath> {
@@ -65,6 +71,7 @@ impl ModulePath {
 pub struct UsedModule {
     pub path: ModulePath,
     pub maybe_alias: Option<String>,
+    pub identifiers: Vec<String>,
     start_pos: Position,
     end_pos: Position,
 }
@@ -73,83 +80,126 @@ impl Hash for UsedModule {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.path.hash(state);
         self.maybe_alias.hash(state);
+        self.identifiers.hash(state);
     }
 }
 
 locatable_impl!(UsedModule);
 
-impl UsedModule {
-    /// Parses a module reference from the given token stream.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<UsedModule> {
-        let path = ModulePath::from(tokens)?;
-        let start_pos = path.start_pos().clone();
-        let mut end_pos = path.end_pos.clone();
-        let maybe_alias = match Source::parse_optional(tokens, TokenKind::As) {
-            Some(_) => {
-                let name = Source::parse_identifier(tokens)?;
-                end_pos = Source::prev_position(tokens);
-                Some(name)
-            }
-            None => None,
-        };
-
-        Ok(UsedModule {
-            path,
-            maybe_alias,
-            start_pos,
-            end_pos,
-        })
-    }
-}
-
-/// Represents a `use` block that imports foreign modules into a program.
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct UseBlock {
-    pub used_modules: Vec<UsedModule>,
-    start_pos: Position,
-    end_pos: Position,
-}
-
-impl Hash for UseBlock {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.used_modules.hash(state);
-    }
-}
-
-locatable_impl!(UseBlock);
-
-impl Display for UseBlock {
+impl Display for UsedModule {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "use {{ <{} used modules> }}", self.used_modules.len())
+        write!(f, "use ")?;
+
+        if self.identifiers.len() > 0 {
+            write!(f, "{{")?;
+
+            for (i, ident) in self.identifiers.iter().enumerate() {
+                match i {
+                    0 => write!(f, "{}", ident)?,
+                    _ => write!(f, ", {}", ident)?,
+                }
+            }
+
+            write!(f, "}} from ")?;
+        }
+
+        write!(f, "{}", self.path)?;
+
+        if let Some(alias) = &self.maybe_alias {
+            write!(f, "as {}", alias)?;
+        }
+
+        Ok(())
     }
 }
 
-impl UseBlock {
-    /// Parses a use block from the given token sequence.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<UseBlock> {
+impl UsedModule {
+    /// Parses a `use` statement from the given token sequence. Expects token sequences of
+    /// the forms
+    ///
+    ///     use "path/to/file.bl"
+    ///     use "path/to/file.bl" as <alias>
+    ///     use {<ident>, ...} from "path/to/file.bl"
+    ///     use * from "path/to/file.bl"
+    ///
+    /// where
+    /// - `ident` is any identifier to import from the given path
+    /// - `alias` is any identifier that will serve as an alias for the module.
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<UsedModule> {
         let start_pos = Source::parse_expecting(tokens, TokenKind::Use)?.start;
         let end_pos;
 
-        let mut used_modules = vec![];
         match Source::parse_optional(tokens, TokenKind::LeftBrace) {
+            // If the next token is `{`, we'll assume we're parsing a `use` statement of
+            // the form `use {<ident>, ...} from "<path>"`.
             Some(_) => {
+                // Parse all the identifiers being imported.
+                let mut identifiers = vec![];
                 while !Source::next_token_is(tokens, &TokenKind::RightBrace) {
-                    used_modules.push(UsedModule::from(tokens)?);
+                    // Parse the next identifier.
+                    identifiers.push(Source::parse_identifier(tokens)?);
+
+                    // If there is no comma following the identifier, then we've reached the
+                    // end of the identifiers list.
+                    if Source::parse_optional(tokens, TokenKind::Comma).is_none() {
+                        break;
+                    };
                 }
 
-                end_pos = Source::parse_expecting(tokens, TokenKind::RightBrace)?.end;
-            }
-            None => {
-                let used_mod = UsedModule::from(tokens)?;
-                end_pos = used_mod.end_pos().clone();
-                used_modules.push(used_mod);
-            }
-        };
+                // Parse the remaining `} from "<path>"`.
+                Source::parse_expecting(tokens, TokenKind::RightBrace)?.end;
+                Source::parse_expecting(tokens, TokenKind::From)?;
+                let path = ModulePath::from(tokens)?;
+                end_pos = path.end_pos().clone();
 
-        Ok(UseBlock {
-            used_modules,
-            start_pos,
-            end_pos,
-        })
+                Ok(UsedModule {
+                    path,
+                    maybe_alias: None,
+                    identifiers,
+                    start_pos,
+                    end_pos,
+                })
+            }
+
+            // In this case, we'll assume we're just parsing a `use` statement of the forms
+            //
+            //      use * from "<path>"
+            //      use "<path>"
+            //      use "<path>" as <alias>
+            None => {
+                // Handle the special case of the wildcard `*` import.
+                if Source::parse_optional(tokens, TokenKind::Asterisk).is_some() {
+                    Source::parse_expecting(tokens, TokenKind::From)?;
+
+                    let path = ModulePath::from(tokens)?;
+                    end_pos = path.end_pos().clone();
+                    Ok(UsedModule {
+                        path,
+                        maybe_alias: None,
+                        identifiers: vec!["*".into()],
+                        start_pos,
+                        end_pos,
+                    })
+                } else {
+                    let path = ModulePath::from(tokens)?;
+                    let (maybe_alias, end_pos) = match Source::parse_optional(tokens, TokenKind::As)
+                    {
+                        Some(_) => {
+                            let alias = Source::parse_identifier(tokens)?;
+                            (Some(alias), Source::prev_position(tokens))
+                        }
+                        None => (None, path.end_pos().clone()),
+                    };
+
+                    Ok(UsedModule {
+                        path,
+                        maybe_alias,
+                        identifiers: vec![],
+                        start_pos,
+                        end_pos,
+                    })
+                }
+            }
+        }
     }
 }

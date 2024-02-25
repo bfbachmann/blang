@@ -168,26 +168,24 @@ fn parse_source_files(input_path: &str) -> Vec<Source> {
         let mut imported_paths = vec![];
         for statement in &source.statements {
             if let Statement::Use(use_block) = statement {
-                for used_mod in &use_block.used_modules {
-                    let mod_path = Path::new(source.path.as_str())
-                        .parent()
-                        .unwrap()
-                        .join(used_mod.path.raw.as_str());
-                    if !mod_path.exists() {
-                        display_msg(
-                            format_code!(r#"import {} not found"#, used_mod.path.raw).as_str(),
-                            None,
-                            None,
-                            source.path.as_str(),
-                            used_mod.start_pos(),
-                            used_mod.end_pos(),
-                            false,
-                        );
-                        continue;
-                    }
-
-                    imported_paths.push(mod_path.to_str().unwrap().to_string());
+                let mod_path = Path::new(source.path.as_str())
+                    .parent()
+                    .unwrap()
+                    .join(use_block.path.raw.as_str());
+                if !mod_path.exists() {
+                    display_msg(
+                        format_code!(r#"import {} not found"#, use_block.path.raw).as_str(),
+                        None,
+                        None,
+                        source.path.as_str(),
+                        use_block.start_pos(),
+                        use_block.end_pos(),
+                        false,
+                    );
+                    continue;
                 }
+
+                imported_paths.push(mod_path.to_str().unwrap().to_string());
             }
         }
 
