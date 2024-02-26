@@ -15,12 +15,7 @@ should not offer programmers many ways to do the same things.
 The documentation below aims to provide a quick glance at what Blang code looks like, and what it does.
 The language and compiler are still very young, so they still lack some critical functionality.
 
-### Statements
-
-Statements in Blang are pieces of code that do not necessarily yield any value (as opposed to expressions, which always
-yield some value). Listed below are the kinds of statements the Blang compiler understands.
-
-#### Function Declarations & Calls
+### Function Declarations & Calls
 
 A regular function can be defined as follows.
 
@@ -35,7 +30,7 @@ fn fibonacci(n: u64) ~ u64 {
 }
 ```
 
-#### Variable Declarations
+### Variable Declarations: `let`
 
 Variables can only be declared using the `let` keyword inside functions (i.e. there is currently no support for global or 
 module-level variables).
@@ -72,7 +67,7 @@ fn calculate(n: u64, double: bool, max: u64) ~ u64 {
 }
 ```
 
-#### Constant Declarations
+### Constant Declarations: `const`
 
 Constants can be declared at the module level or inside functions using the `const` keyword. 
 
@@ -118,7 +113,7 @@ Any expression composed exclusively of constant values can be declared as a cons
 const MY_TUPLE = {"this", "is my tuple", 123 / 23 - 1}
 ```
 
-#### Type Declarations
+### Type Declarations: `struct`, `enum`
 
 Types can be declared at the module level and within functions.
 
@@ -134,7 +129,7 @@ enum Result {
 }
 ```
 
-#### Implementations, Methods, and Method Calls
+### Implementations, Methods, and Method Calls: `impl`, `fn`
 
 Blang is not object-oriented in the classical sense, but it does support the declaration of methods for existing types
 using the `impl` keyword.
@@ -178,14 +173,113 @@ fn apply_discounts(user: User) {
 Arbitrarily many `impl` blocks can be declared for the same type. This way, logic associated with a type can easily
 be split up over multiple files.
 
-#### Control Flow
+### Conditionals: `if`, `elsif`, `else`
 
-TODO
+```rust
+enum Cmp {
+    Equal,
+    GreaterThan,
+    LessThan,
+}
 
-#### Externs
+fn compare(a: i64, b: i64) ~ Cmp {
+    if a > b {
+        return Cmp::GreaterThan
+    } elsif a < b {
+        return Cmp::LessThan
+    } else {
+        return Cmp::Equal
+    }
+}
+```
 
-TODO
+### Loops: `for`, `while`, `loop`
 
-#### Pointers and Memory Access
+#### `for` Loops
+
+```rust
+fn main() {
+    let mut a = [1, 2, 3]
+    
+    // Double all elements in the array.
+    for let mut i: u64 = 0; i < 3; i = i + 1; {
+        a[i] = a[i] * 2
+    }
+}
+```
+
+#### `while` Loops
+
+```rust
+fn main() {
+    let mut x = 1
+    
+    // Curly braces around conditional or loop bodies are optional if the body
+    // is just one statement.
+    while x < 100; x = x * 2
+}
+```
+
+#### `loop` Loops
+
+```rust
+fn main() {
+    let mut x = 1
+    
+    loop {
+        x = x * 2
+        if x >= 100 return
+    }
+}
+```
+
+### Pointers and Memory Access: `*_`, `*mut _`, `*<`, `*<mut`, `*>`
+
+Raw pointers work the same way they do in C, except that they come with immutability guarantees.
+
+The reference operator `*<` can be used to get a read-only pointer (`*_`) so some value in memory. If the value being
+referenced is not already stack-allocated - for instance, if it's a constant - it will be stack allocated and
+the reference operation will return the new stack address. Raw pointers of type `*_` that result from reference 
+operations can be read from but not written to.
+
+The reference-mutably operator `*<mut` can be used to get a read-write pointer (`*mut _`) to a value in memory.
+This works like the reference operator, only the resulting pointer can be used to write to memory as well. Only mutable
+values can be referenced mutably.
+
+The dereference operator `*>` can be used to retrieve a value from memory referenced by a pointer.
+Dereferencing a pointer that points to an invalid or un-allocated region of memory can cause undefined behaviour.
+
+```rust
+fn main() {
+    let mut x = 123
+    
+    // Get a pointer to `x`.
+    let x_ptr = *<x
+    
+    // Dereference the pointer to `x` to get its value.
+    let x_copy = *>x
+    
+    // Change the value of `x` via a pointer (must use `*mut`). We're only allowed
+    // to get a `*mut` to `x` here because `x` itself is `mut`.
+    let x_mut_ptr = *<mut x
+    (*>x) = 321
+}
+```
+
+### Externs: `extern`
+
+External functions can be declared in Blang the same way they can in languages like C.
+
+```rust
+// Declare the `exit` system call so the linker can link it from libc.
+extern fn exit(code: u64)
+
+fn main() {
+    // Exit with code 0.
+    exit(0)
+}
+```
+
+### Imports: `use`
 
 TODO
