@@ -3,19 +3,38 @@
 Blang is a statically-typed, ahead-of-time (AOT) compiled toy programming language that is heavily inspired by Rust. It is 
 still under active development and is not intended to be a legitimate production-ready language.
 
-## Goals
+**Goals**
 
 - Safety: Unsafe code should always be explicitly opt-in.
 - Simplicity: Any experienced programmer should be able to learn the core of the language within the few hours. The language
-should not offer programmers many ways to do the same things.
+  should not offer programmers many ways to do the same things.
 - Flexibility: Blang should be powerful and expressive without forcing any particular programming paradigms upon its users.
-
-## Language Features At a Glance
 
 The documentation below aims to provide a quick glance at what Blang code looks like, and what it does.
 The language and compiler are still very young, so they still lack some critical functionality.
 
-### Function Declarations & Calls
+<!-- TOC -->
+* [The Blang Programming Language](#the-blang-programming-language)
+    * [Function Declarations & Calls: `fn`](#function-declarations--calls-fn)
+    * [Variable Declarations: `let`](#variable-declarations-let)
+    * [Constant Declarations: `const`](#constant-declarations-const)
+    * [Structures: `struct`](#structures-struct)
+    * [Enumerations: `enum`](#enumerations-enum)
+    * [Tuples: `{...}`](#tuples-)
+    * [Arrays: `[...]`](#arrays-)
+    * [Implementations, Methods, and Method Calls: `impl`, `fn`](#implementations-methods-and-method-calls-impl-fn)
+    * [Conditionals: `if`, `elsif`, `else`](#conditionals-if-elsif-else)
+    * [Loops: `for`, `while`, `loop`](#loops-for-while-loop)
+      * [`for` loops](#for-loops)
+      * [`while` loops](#while-loops)
+      * [`loop` loops](#loop-loops)
+    * [Pointers and Memory Access: `*_`, `*mut _`, `*<`, `*<mut`, `*>`](#pointers-and-memory-access-_-mut-_--mut-)
+    * [Externs: `extern`](#externs-extern)
+    * [Imports: `use`](#imports-use)
+    * [Type Casts: `as`](#type-casts-as)
+<!-- TOC -->
+
+### Function Declarations & Calls: `fn`
 
 A regular function can be defined as follows.
 
@@ -113,19 +132,86 @@ Any expression composed exclusively of constant values can be declared as a cons
 const MY_TUPLE = {"this", "is my tuple", 123 / 23 - 1}
 ```
 
-### Type Declarations: `struct`, `enum`
+### Structures: `struct`
 
-Types can be declared at the module level and within functions.
+Structure types contain values of other types that are accessible via named fields.
 
 ```rust
+// Struct types can be declared both inside and outside functions.
 struct User {
     username: str
     age: u64
 }
 
+fn main() {
+    // All struct fields must be initialized explicitly.
+    let user = User{
+        username: "bohr"
+        age: 36
+    }
+    
+    // Struct values are not copied automatically, so this is a move.
+    let new_user = user
+    
+    // This line would cause a use-after-move compile error. 
+    let username = user.username  // error: cannot use `user.username` because `user` was already moved
+}
+```
+
+### Enumerations: `enum`
+
+An enum type represents one of a defined set of values.
+
+```rust
+// Enum types can be declared both inside and outside functions.
 enum Result {
-    Ok
-    Err(str) // Enums variants can contain other types.
+    Ok,
+    Err(/* contained error message */ str)
+}
+
+fn main() {
+    let result = Result::Err("failed!")
+    
+    // Enum values are not copied automatically, so this is a move.
+    let new_result = result
+
+    // This line would cause a use-after-move compile error. 
+    let other_result = result  // error: cannot use `result` because `result` was already moved
+}
+```
+
+### Tuples: `{...}`
+
+Tuples are like structs, except their fields are identified by index rather than by name.
+
+```rust
+fn main() {
+    let values: {str, i64, bool} = {"thing", 1, true}
+    
+    // Tuple values are not copied automatically, so this is a move.
+    let new_values = values
+
+    // This line would cause a use-after-move compile error. 
+    let msg = values.0  // error: cannot use `values.0` because `values` was already moved
+}
+```
+
+### Arrays: `[...]`
+
+Arrays are stack-allocated, fixed-sized sequences of values of the same type.
+
+```rust
+fn main() {
+    let byte_array: [i64; 5] = [1, 2, 3, 4, 5]
+    
+    // Arrays can be declared by repeating an expression.
+    let ten_zeros = [0; 10]
+    
+    // Arrays can be indexed.
+    let five = byte_array[4]
+    
+    // Array access is bounds-checked at compile time if possible.
+    let undef = byte_array[200]  // error: index (200) is outside of array bounds ([0:4])
 }
 ```
 
@@ -195,7 +281,7 @@ fn compare(a: i64, b: i64) ~ Cmp {
 
 ### Loops: `for`, `while`, `loop`
 
-#### `for` Loops
+#### `for` loops
 
 ```rust
 fn main() {
@@ -208,7 +294,7 @@ fn main() {
 }
 ```
 
-#### `while` Loops
+#### `while` loops
 
 ```rust
 fn main() {
@@ -220,7 +306,7 @@ fn main() {
 }
 ```
 
-#### `loop` Loops
+#### `loop` loops
 
 ```rust
 fn main() {
@@ -283,3 +369,21 @@ fn main() {
 ### Imports: `use`
 
 TODO
+
+### Type Casts: `as`
+
+Values can be explicitly cast to other compatible types with the typecast operator `as`.
+
+```rust
+fn main() {
+    // Casting between numeric types.
+    let a: u32 = 10i64 as u32
+    
+    // Casting between pointers and numeric types.
+    let a: i64 = *<10 as *i64
+    let ptr: *i64 = 100 as *i64
+    
+    // Casting between pointer types.
+    let x_u8_ptr = ptr as *u8  
+}
+```
