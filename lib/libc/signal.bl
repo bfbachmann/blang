@@ -1,0 +1,7 @@
+extern {
+    fn signal(signal: u64, handler: fn (u64))
+}
+
+const {
+    SIGSEGV: u64 = 11
+}

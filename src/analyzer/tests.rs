@@ -1363,4 +1363,16 @@ mod tests {
         );
         check_result(result, None);
     }
+
+    #[test]
+    fn cast_int_to_ptr() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let a = ((*<2) as u64) as *str
+            }
+        "#,
+        );
+        check_result(result, None);
+    }
 }

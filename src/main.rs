@@ -148,25 +148,48 @@ fn parse_source_files(input_path: &str) -> Vec<Module> {
     };
 
     // Get the project root directory and main file paths.
-    let (root_path, main_path) = if is_dir {
-        let root_path = Path::new(input_path);
+    let (root_path, main_paths) = if is_dir {
+        let root_path = fs::canonicalize(input_path).unwrap();
         let main_path = root_path.join("main.bl");
 
         if !main_path.exists() {
-            fatalln!(r#"missing "{}""#, main_path.display());
-        }
+            let mut paths = vec![];
+            match fs::read_dir(root_path.to_str().unwrap()) {
+                Ok(entries) => {
+                    // Collect all source files in the directory.
+                    for result in entries {
+                        match result {
+                            Ok(entry) => {
+                                let is_bl = entry.file_name().to_str().unwrap().ends_with(".bl");
+                                let is_file = entry.file_type().is_ok_and(|ft| ft.is_file());
+                                if is_file && is_bl {
+                                    paths.push(entry.path());
+                                }
+                            }
+                            _ => continue,
+                        };
+                    }
+                }
 
-        (root_path.to_path_buf(), main_path.to_path_buf())
+                Err(err) => {
+                    fatalln!(r#"error reading "{}": {}"#, input_path, err)
+                }
+            };
+
+            (root_path.to_path_buf(), paths)
+        } else {
+            (root_path.to_path_buf(), vec![main_path.to_path_buf()])
+        }
     } else {
         let main_path = Path::new(input_path);
         (
             main_path.parent().unwrap().to_path_buf(),
-            main_path.to_path_buf(),
+            vec![main_path.to_path_buf()],
         )
     };
 
     // Parse all source files by following imports.
-    let mut files_to_parse = VecDeque::from([main_path.to_path_buf()]);
+    let mut files_to_parse = VecDeque::from(main_paths);
     let mut parsed_mod_paths: HashSet<PathBuf> = HashSet::new();
     let mut parsed_mods = vec![];
     let mut parse_error_count = 0;
@@ -406,6 +429,27 @@ mod tests {
 
             compile(
                 file_path.to_str().unwrap(),
+                Some(&output_path),
+                OutputFormat::Object,
+                None,
+                true,
+                true,
+                None,
+                vec![],
+            );
+        }
+    }
+
+    #[test]
+    fn compile_all_libs() {
+        // Check that we can compile the standard library.
+        let entries = fs::read_dir("lib").expect("should succeed");
+        for entry in entries {
+            let lib_path = entry.unwrap().path();
+            let output_path = format!("bin/{}.o", lib_path.file_stem().unwrap().to_str().unwrap());
+
+            compile(
+                lib_path.to_str().unwrap(),
                 Some(&output_path),
                 OutputFormat::Object,
                 None,

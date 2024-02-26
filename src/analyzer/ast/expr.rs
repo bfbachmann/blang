@@ -1253,6 +1253,11 @@ fn is_valid_type_cast(left_type: &AType, right_type: &AType) -> bool {
         // Casting between pointer types is allowed as long as immutability isn't broken.
         | (AType::Pointer(p1), AType::Pointer(p2)) => p1.is_mut || !p2.is_mut,
 
+        // Casting between numeric types and pointers is allowed so long as
+        // immutability is not violated.
+        (AType::Pointer(_), target) => target.is_numeric(),
+        (source, AType::Pointer(APointerType{is_mut: false, ..})) => source.is_numeric(),
+
         _ => false,
     }
 }
