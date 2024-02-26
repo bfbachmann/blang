@@ -441,9 +441,9 @@ mod tests {
     }
 
     #[test]
-    fn compile_all_libs() {
+    fn compile_std_lib() {
         // Check that we can compile the standard library.
-        let entries = fs::read_dir("lib").expect("should succeed");
+        let entries = fs::read_dir("std").expect("should succeed");
         for entry in entries {
             let lib_path = entry.unwrap().path();
             let output_path = format!("bin/{}.o", lib_path.file_stem().unwrap().to_str().unwrap());
