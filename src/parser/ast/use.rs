@@ -43,7 +43,7 @@ impl ModulePath {
                     kind: TokenKind::StrLiteral(path),
                     ..
                 },
-            ) => Ok(ModulePath {
+            ) if !path.contains("..") => Ok(ModulePath {
                 raw: path.clone(),
                 start_pos: token.start.clone(),
                 end_pos: token.end.clone(),
