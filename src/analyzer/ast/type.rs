@@ -1,5 +1,5 @@
 use std::cmp::max;
-use std::collections::HashMap;
+
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
@@ -162,30 +162,21 @@ impl AType {
     }
 
     /// Returns the mapping from parsed type to analyzed type for all primitives types.
-    pub fn primitives() -> HashMap<Type, AType> {
-        HashMap::from([
-            (Type::new_unresolved("bool"), AType::Bool),
-            (Type::new_unresolved("u8"), AType::U8),
-            (Type::new_unresolved("i8"), AType::I8),
-            (Type::new_unresolved("u32"), AType::U32),
-            (Type::new_unresolved("i32"), AType::I32),
-            (Type::new_unresolved("i64"), AType::I64),
-            (Type::new_unresolved("u64"), AType::U64),
-            (Type::new_unresolved("str"), AType::Str),
-            (Type::new_unresolved("rawptr"), AType::RawPtr),
-            (
-                Type::new_unresolved("<unknown>"),
-                AType::Unknown("<unknown>".to_string()),
-            ),
-            (
-                Type::new_unresolved("<none>"),
-                AType::Unknown("<none>".to_string()),
-            ),
-            (
-                Type::new_unresolved("Self"),
-                AType::Unknown("Self".to_string()),
-            ),
-        ])
+    pub fn primitives() -> Vec<AType> {
+        vec![
+            AType::Bool,
+            AType::U8,
+            AType::I8,
+            AType::U32,
+            AType::I32,
+            AType::I64,
+            AType::U64,
+            AType::Str,
+            AType::RawPtr,
+            AType::Unknown("<unknown>".to_string()),
+            AType::Unknown("<none>".to_string()),
+            AType::Unknown("Self".to_string()),
+        ]
     }
 
     /// Returns the name assigned to this type. Note that some types (like tuples or struct types

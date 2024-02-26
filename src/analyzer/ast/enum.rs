@@ -175,7 +175,9 @@ impl AEnumType {
                 .with_detail(
                     format!(
                         "The offending type hierarchy is {}.",
-                        hierarchy_to_string(type_hierarchy.iter().map(|t| t.to_string()).collect())
+                        hierarchy_to_string(
+                            &type_hierarchy.iter().map(|t| t.to_string()).collect()
+                        )
                     )
                     .as_str(),
                 )

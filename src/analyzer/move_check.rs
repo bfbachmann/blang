@@ -212,7 +212,7 @@ impl Scope {
     }
 }
 
-/// Checks a program to ensure that all moves of variables are legal and don't conflict.
+/// Checks a module to ensure that all moves of variables are legal and don't conflict.
 pub struct MoveChecker<'a> {
     type_store: &'a TypeStore,
     errors: Vec<AnalyzeError>,
@@ -321,15 +321,15 @@ impl<'a> MoveChecker<'a> {
             .contains(var.name.as_str())
     }
 
-    /// Recursively performs move checks on `prog`.
-    pub fn check_prog(prog: &AModule, type_store: &TypeStore) -> Vec<AnalyzeError> {
+    /// Recursively performs move checks on `module`.
+    pub fn check_module(module: &AModule, type_store: &TypeStore) -> Vec<AnalyzeError> {
         let mut move_checker = MoveChecker {
             type_store,
             errors: vec![],
             stack: vec![],
         };
 
-        for statement in &prog.statements {
+        for statement in &module.statements {
             move_checker.check_statement(statement);
         }
 

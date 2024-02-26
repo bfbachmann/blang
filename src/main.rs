@@ -1,8 +1,7 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::{BufReader, Result};
-use std::ops::Sub;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use std::{fs, process};
@@ -14,13 +13,13 @@ use parser::module::Module;
 
 use crate::analyzer::analyze::{analyze_modules, ProgramAnalysis};
 use crate::codegen::program::{generate, OutputFormat};
-use crate::fmt::{display_msg, format_file_loc};
+use crate::fmt::{display_err, format_file_loc};
 use crate::lexer::error::LexError;
 use crate::lexer::lex::lex;
 use crate::lexer::pos::Locatable;
 use crate::lexer::stream::Stream;
 use crate::parser::ast::statement::Statement;
-use crate::parser::error::{ParseError, ParseResult};
+use crate::parser::error::ParseResult;
 
 mod codegen;
 #[macro_use]
@@ -141,84 +140,64 @@ fn open_file(file_path: &str) -> Result<Stream<char>> {
 /// at `input_path` and all its imports will be parsed.
 /// Prints parse errors and exits if there were any parse errors. Otherwise,
 /// returns parse sources.
+// TODO: Allow compilation of bare modules (without `main`).
 fn parse_source_files(input_path: &str) -> Vec<Module> {
     let is_dir = match fs::metadata(input_path) {
         Ok(meta) => meta.is_dir(),
         Err(err) => fatalln!(r#"error reading "{}": {}"#, input_path, err),
     };
 
-    // Collect up paths to source files.
-    let main_path: String = if is_dir {
-        let main_path = Path::new(input_path).join("main.bl");
-        match main_path.exists() {
-            true => main_path.to_str().unwrap().to_string(),
-            false => fatalln!(r#"missing "{}""#, main_path.display()),
+    // Get the project root directory and main file paths.
+    let (root_path, main_path) = if is_dir {
+        let root_path = Path::new(input_path);
+        let main_path = root_path.join("main.bl");
+
+        if !main_path.exists() {
+            fatalln!(r#"missing "{}""#, main_path.display());
         }
+
+        (root_path.to_path_buf(), main_path.to_path_buf())
     } else {
-        input_path.to_string()
+        let main_path = Path::new(input_path);
+        (
+            main_path.parent().unwrap().to_path_buf(),
+            main_path.to_path_buf(),
+        )
     };
 
-    // Parse main source file.
-    let parse_result = parse_source_file(main_path.as_str());
-
-    // Parse any source files that were included via imports.
-    let parsed_files: HashSet<String> = HashSet::from([main_path.clone()]);
-    let mut all_parse_results = vec![(input_path.to_string(), parse_result)];
-    if let Ok(module) = &all_parse_results[0].1 {
-        let mut imported_paths = vec![];
-        for statement in &module.statements {
-            if let Statement::Use(use_block) = statement {
-                let mod_path = Path::new(module.path.as_str())
-                    .parent()
-                    .unwrap()
-                    .join(use_block.path.raw.as_str());
-                if !mod_path.exists() {
-                    display_msg(
-                        format_code!(r#"import {} not found"#, use_block.path.raw).as_str(),
-                        None,
-                        None,
-                        module.path.as_str(),
-                        use_block.start_pos(),
-                        use_block.end_pos(),
-                        false,
-                    );
-                    continue;
+    // Parse all source files by following imports.
+    let mut files_to_parse = VecDeque::from([main_path.to_path_buf()]);
+    let mut parsed_mod_paths: HashSet<PathBuf> = HashSet::new();
+    let mut parsed_mods = vec![];
+    let mut parse_error_count = 0;
+    while let Some(path) = files_to_parse.pop_front() {
+        match parse_source_file(path.to_str().unwrap()) {
+            Ok(module) => {
+                for statement in &module.statements {
+                    if let Statement::Use(used_mod) = statement {
+                        let used_mod_path = PathBuf::from(used_mod.path.raw.as_str());
+                        let full_used_mod_path = root_path.join(used_mod_path);
+                        if !parsed_mod_paths.contains(&full_used_mod_path) {
+                            files_to_parse.push_back(full_used_mod_path)
+                        }
+                    }
                 }
 
-                imported_paths.push(mod_path.to_str().unwrap().to_string());
+                parsed_mod_paths.insert(Path::new(module.path.as_str()).to_path_buf());
+                parsed_mods.push(module);
             }
-        }
 
-        let unique_import_paths = HashSet::from_iter(imported_paths.into_iter()).sub(&parsed_files);
-        for path in unique_import_paths {
-            let parse_result = parse_source_file(path.as_str());
-            all_parse_results.push((path, parse_result));
-        }
-    }
-
-    // Display any parse errors that occurred.
-    let mut parse_error_count = 0;
-    let mut modules = vec![];
-    for (path, result) in all_parse_results.into_iter() {
-        match result {
-            Ok(module) => modules.push(module),
-            Err(ParseError {
-                kind: _,
-                message,
-                token: _,
-                start_pos,
-                end_pos,
-            }) => {
+            Err(err) => {
                 parse_error_count += 1;
-                display_msg(
-                    message.as_str(),
+                display_err(
+                    err.message.as_str(),
                     None,
                     None,
-                    path.as_str(),
-                    &start_pos,
-                    &end_pos,
+                    path.to_str().unwrap(),
+                    err.start_pos(),
+                    err.end_pos(),
                     false,
-                );
+                )
             }
         };
     }
@@ -234,7 +213,7 @@ fn parse_source_files(input_path: &str) -> Vec<Module> {
         )
     }
 
-    modules
+    parsed_mods
 }
 
 /// Lexes and parses a source file.
@@ -278,7 +257,7 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> ProgramAnalysi
 
         // Print warnings.
         for warn in &result.warnings {
-            display_msg(
+            display_err(
                 warn.message.as_str(),
                 None,
                 None,
@@ -294,7 +273,7 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> ProgramAnalysi
             let path = result.module.path.clone();
             err_count += 1;
 
-            display_msg(
+            display_err(
                 err.message.as_str(),
                 err.detail.as_ref(),
                 err.help.as_ref(),

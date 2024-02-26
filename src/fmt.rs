@@ -73,7 +73,7 @@ where
 }
 
 /// Displays the given error/warning message in a user-friendly form.
-pub fn display_msg(
+pub fn display_err(
     msg: &str,
     detail: Option<&String>,
     help: Option<&String>,
@@ -207,7 +207,7 @@ pub fn print_source(file_path: &str, start_pos: &Position, end_pos: &Position) {
 /// Formats the given type hierarchy like this
 ///
 ///     A -> B -> C
-pub fn hierarchy_to_string(hierarchy: Vec<String>) -> String {
+pub fn hierarchy_to_string(hierarchy: &Vec<String>) -> String {
     let mut s = String::from("");
     for (i, type_name) in hierarchy.iter().enumerate() {
         if i == 0 {

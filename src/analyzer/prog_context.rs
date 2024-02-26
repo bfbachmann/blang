@@ -90,9 +90,9 @@ impl ProgramContext {
         let mut type_store = TypeStore::new();
         let mut primitive_type_keys = HashMap::new();
 
-        for (_, at) in AType::primitives() {
-            let name = at.name().to_string();
-            let key = type_store.insert(at);
+        for typ in AType::primitives() {
+            let name = typ.name().to_string();
+            let key = type_store.insert(typ);
             primitive_type_keys.insert(name, key);
         }
 
