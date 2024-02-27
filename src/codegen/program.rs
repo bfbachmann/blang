@@ -395,11 +395,7 @@ fn link(
 
         Err(err) => Err(CodeGenError::new(
             ErrorKind::LinkingFailed,
-            format!(
-                r#"failed to invoke system linker "{}"\n{}"#,
-                linker_cmd, err
-            )
-            .as_str(),
+            format!(r#"failed to invoke linker "{}"\n{}"#, linker_cmd, err).as_str(),
         )),
     }
 }

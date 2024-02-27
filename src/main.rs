@@ -41,10 +41,10 @@ fn main() {
     // Add the "build" subcommand for compiling.
     let cmd = cmd.subcommand(
         Command::new("build")
-            .about("Compile Blang source code to LLVM IR")
+            .about("Compile Blang source code")
             .arg(arg!([SRC_PATH] "Path to the source code to compile").required(true))
             .arg(
-                arg!(-u --unoptimized ... "Prevent simplification of generated LLVM IR")
+                arg!(-u --unoptimized ... "Prevent optimization")
                     .required(false)
                     .action(ArgAction::SetTrue),
             )
@@ -55,7 +55,7 @@ fn main() {
             )
             .arg(arg!(-t --target <TARGET> "Target ISA triple").required(false))
             .arg(
-                arg!(-f --format <FORMAT> "The output format to generate")
+                arg!(-f --format <FORMAT> "Output file format")
                     .required(false)
                     .default_value("exe")
                     .value_parser(["exe", "ir", "bc", "obj", "asm"]),
@@ -63,7 +63,7 @@ fn main() {
             .arg(arg!(-o --out <OUTPUT_PATH> "Output file path").required(false))
             .arg(arg!(-l --linker <LINKER> "Linker to use").required(false))
             .arg(
-                arg!(-L --"linker-flags" <LINKER_FLAGS> "Linker flags")
+                arg!(-L --"linker-flag" <LINKER_FLAG> "Linker flag")
                     .required(false)
                     .num_args(1..)
                     .allow_hyphen_values(true),
@@ -97,7 +97,7 @@ fn main() {
                 let quiet = sub_matches.get_flag("quiet");
                 let linker = sub_matches.get_one::<String>("linker");
                 let linker_flags = sub_matches
-                    .get_many::<String>("linker-flags")
+                    .get_many::<String>("linker-flag")
                     .unwrap_or_default()
                     .collect();
                 compile(
