@@ -92,7 +92,7 @@ impl AIndex {
                 ctx.insert_err(AnalyzeError::new(
                     ErrorKind::IndexOutOfBounds,
                     format!(
-                        "index ({}) is outside of array bounds ([0:{}])",
+                        "index {} is outside of array bounds [0:{}]",
                         i,
                         array_len - 1
                     )
