@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use std::fs;
 use std::hash::{Hash, Hasher};
 
 use colored::Colorize;
@@ -43,11 +44,33 @@ impl ModulePath {
                     kind: TokenKind::StrLiteral(path),
                     ..
                 },
-            ) if !path.contains("..") => Ok(ModulePath {
-                raw: path.clone(),
-                start_pos: token.start.clone(),
-                end_pos: token.end.clone(),
-            }),
+            ) if !path.contains("..") => {
+                let path = match fs::canonicalize(path) {
+                    Ok(p) => p,
+                    Err(_) => {
+                        return Err(ParseError::new_with_token(
+                            ErrorKind::ModNotFound,
+                            format_code!("invalid module path {}", path).as_str(),
+                            token.clone(),
+                        ));
+                    }
+                };
+
+                // Make sure the path is valid.
+                match fs::metadata(path.clone()) {
+                    Ok(_) => Ok(ModulePath {
+                        raw: path.to_str().unwrap().to_string(),
+                        start_pos: token.start.clone(),
+                        end_pos: token.end.clone(),
+                    }),
+
+                    Err(_) => Err(ParseError::new_with_token(
+                        ErrorKind::ModNotFound,
+                        format_code!("module {} was not found", path.display()).as_str(),
+                        token.clone(),
+                    )),
+                }
+            }
 
             Some(other) => Err(ParseError::new_with_token(
                 ErrorKind::ExpectedModPath,

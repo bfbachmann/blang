@@ -1,4 +1,4 @@
-use "test_utils.bl"
+use "src/tests/test_utils.bl"
 
 fn main() {
     // Zero-extended upcast from u8.

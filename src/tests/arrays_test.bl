@@ -2,7 +2,7 @@
 // that makes use of arrays: fixed-size, stack-allocated chunks of 
 // memory that contain continguous values of the same type.
 
-use "test_utils.bl"
+use "src/tests/test_utils.bl"
 
 fn do_nothing() {}
 

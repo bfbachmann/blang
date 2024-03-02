@@ -20,7 +20,8 @@ use crate::lexer::lex::lex;
 use crate::lexer::pos::Locatable;
 use crate::lexer::stream::Stream;
 use crate::parser::ast::statement::Statement;
-use crate::parser::error::ParseResult;
+
+use crate::parser::error::{ParseResult};
 
 mod codegen;
 #[macro_use]

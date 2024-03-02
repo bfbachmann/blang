@@ -20,6 +20,7 @@ pub enum ErrorKind {
     UnexpectedEndOfExpr,
     UnexpectedToken,
     UnexpectedEOF,
+    ModNotFound,
 }
 
 impl Display for ErrorKind {
@@ -36,6 +37,7 @@ impl Display for ErrorKind {
             ErrorKind::UnexpectedEndOfExpr => write!(f, "unexpected end of expression"),
             ErrorKind::UnexpectedToken => write!(f, "unexpected token"),
             ErrorKind::UnexpectedEOF => write!(f, "unexpected EOF"),
+            ErrorKind::ModNotFound => write!(f, "module not found"),
         }
     }
 }
