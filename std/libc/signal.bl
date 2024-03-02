@@ -1,7 +1,7 @@
 extern {
-    fn signal(signal: u64, handler: fn (u64))
+    fn signal(signal: u32, handler: fn (u32))
 }
 
 const {
-    SIGSEGV: u64 = 11
+    SIGSEGV: u32 = 11
 }

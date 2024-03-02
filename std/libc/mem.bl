@@ -1,5 +1,5 @@
 extern {
-    fn memcpy(dest: *u8, src: *u8, n_bytes: u64) ~ *mut u8
-    fn malloc(nbytes: u64) ~ *mut u8
+    fn memcpy(dest: *u8, src: *u8, n_bytes: u32) ~ *mut u8
+    fn malloc(nbytes: u32) ~ *mut u8
     fn free(ptr: *u8)
 }
