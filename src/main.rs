@@ -2,6 +2,7 @@ use std::collections::{HashSet, VecDeque};
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::{BufReader, Result};
+use std::os::unix::prelude::CommandExt;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use std::{fs, process};
@@ -78,6 +79,13 @@ fn main() {
             .arg(arg!(-d --dump <DUMP_PATH> "Dump the analyzed AST to a file").required(false)),
     );
 
+    // Add the "run" subcommand for building and running a binary.
+    let cmd = cmd.subcommand(
+        Command::new("run")
+            .about("Run Blang source code")
+            .arg(arg!([SRC_PATH] "Path to the source code to run").required(true)),
+    );
+
     // Handle the command.
     match cmd.get_matches().subcommand() {
         Some(("build", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
@@ -113,6 +121,7 @@ fn main() {
             }
             _ => fatalln!("expected source path"),
         },
+
         Some(("check", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(file_path) => {
                 let maybe_dump_path = sub_matches.get_one::<String>("dump");
@@ -120,6 +129,14 @@ fn main() {
             }
             _ => fatalln!("expected source path"),
         },
+
+        Some(("run", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
+            Some(file_path) => {
+                run(file_path);
+            }
+            _ => fatalln!("expected source path"),
+        },
+
         _ => unreachable!("no subcommand"),
     };
 }
@@ -406,6 +423,38 @@ fn compile(
             compile_time.subsec_millis()
         )
     }
+}
+
+/// Compiles and runs Blang source code at the given path.
+fn run(src_path: &str) {
+    // Read and analyze the program.
+    let prog_analysis = analyze(src_path, None);
+
+    // Set output executable path to the source path without the extension.
+    let src = Path::new(src_path);
+    let dst = PathBuf::from(src.file_stem().unwrap_or_default());
+
+    // Compile the program.
+    if let Err(e) = generate(
+        prog_analysis
+            .analyzed_modules
+            .into_iter()
+            .map(|s| s.module)
+            .collect(),
+        prog_analysis.type_store,
+        None,
+        OutputFormat::Executable,
+        dst.as_path(),
+        true,
+        None,
+        vec![],
+    ) {
+        fatalln!("{}", e);
+    }
+
+    // Run the program.
+    let io_err = process::Command::new(PathBuf::from(".").join(dst)).exec();
+    fatalln!("{}", io_err);
 }
 
 #[cfg(test)]
