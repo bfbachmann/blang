@@ -1375,4 +1375,14 @@ mod tests {
         );
         check_result(result, None);
     }
+
+    #[test]
+    fn int_coercion() {
+        let result = analyze(
+            r#"
+            const x: i8 = 123
+        "#,
+        );
+        check_result(result, None);
+    }
 }

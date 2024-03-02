@@ -911,6 +911,22 @@ impl AExpr {
                         self.kind = AExprKind::U64Literal(*i as u64, false);
                         self.type_key = ctx.u64_type_key();
                     }
+                    AType::U32 => {
+                        self.kind = AExprKind::U32Literal(*i as u32);
+                        self.type_key = ctx.u32_type_key();
+                    }
+                    AType::U8 => {
+                        self.kind = AExprKind::U8Literal(*i as u8);
+                        self.type_key = ctx.u8_type_key();
+                    }
+                    AType::I32 => {
+                        self.kind = AExprKind::I32Literal(*i as i32);
+                        self.type_key = ctx.i32_type_key();
+                    }
+                    AType::I8 => {
+                        self.kind = AExprKind::I8Literal(*i as i8);
+                        self.type_key = ctx.i8_type_key();
+                    }
                     _ => {}
                 }
             }
