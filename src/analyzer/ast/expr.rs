@@ -621,43 +621,39 @@ impl AExpr {
                         // Make sure the operand is mutable if it comes from a variable. If it generates
                         // some brand-new value, then it can trivially be considered mutable.
                         if let Some(symbol) = &operand_expr.get_base_symbol() {
-                            let scoped_symbol = ctx.get_symbol(symbol.name.as_str()).unwrap();
-                            if scoped_symbol.is_const {
-                                ctx.insert_err(
-                                    AnalyzeError::new(
-                                        ErrorKind::InvalidMutRef,
-                                        format_code!(
-                                            "cannot get mutable pointer to constant value {}",
-                                            symbol,
-                                        )
-                                        .as_str(),
-                                        &expr,
-                                    )
-                                    .with_help(
-                                        format_code!(
-                                            "Consider declaring {} as a mutable local variable.",
-                                            symbol
-                                        )
-                                        .as_str(),
-                                    ),
-                                );
-                            } else if !scoped_symbol.is_mut {
-                                ctx.insert_err(
-                                    AnalyzeError::new(
-                                        ErrorKind::InvalidMutRef,
-                                        format_code!(
-                                            "cannot get mutable pointer to immutable value {}",
-                                            symbol,
-                                        )
-                                        .as_str(),
-                                        &expr,
-                                    )
-                                    .with_help(
-                                        format_code!("Consider declaring {} as mutable.", symbol)
-                                            .as_str(),
-                                    ),
-                                );
-                            }
+                            match ctx.get_symbol(symbol.name.as_str()) {
+                                Some(scoped_symbol) => {
+                                    if scoped_symbol.is_const {
+                                        ctx.insert_err(
+                                            AnalyzeError::new(
+                                                ErrorKind::InvalidMutRef,
+                                                format_code!("cannot get mutable pointer to constant value {}", symbol)
+                                                .as_str(),
+                                                &expr,
+                                            )
+                                            .with_help(
+                                                format_code!("Consider declaring {} as a mutable local variable.", symbol)
+                                                .as_str(),
+                                            ),
+                                        );
+                                    } else if !scoped_symbol.is_mut {
+                                        ctx.insert_err(
+                                            AnalyzeError::new(
+                                                ErrorKind::InvalidMutRef,
+                                                format_code!("cannot get mutable pointer to immutable value {}", symbol)
+                                                .as_str(),
+                                                &expr,
+                                            )
+                                            .with_help(
+                                                format_code!("Consider declaring {} as mutable.", symbol)
+                                                .as_str(),
+                                            ),
+                                        );
+                                    }
+                                }
+
+                                _ => {}
+                            };
                         }
 
                         let a_ptr_type = APointerType::new(operand_expr.type_key, true);

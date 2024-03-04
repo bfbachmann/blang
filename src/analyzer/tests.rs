@@ -1385,4 +1385,16 @@ mod tests {
         );
         check_result(result, None);
     }
+
+    #[test]
+    fn mut_ref_undefined_symbol() {
+        let result = analyze(
+            r#"
+                fn main() {
+                    let x = *<mut f
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::UndefSymbol));
+    }
 }
