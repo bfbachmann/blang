@@ -19,6 +19,7 @@ fn main() {
     assert((true or true) == true, 16)
     assert((true or false) == true, 17)
     assert((false or false) == false, 18)
+    assert(2_u32 > 0, 19)
 
     exit(0)
 }

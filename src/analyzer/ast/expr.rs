@@ -1244,7 +1244,7 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
         Operator::GreaterThan
         | Operator::LessThan
         | Operator::GreaterThanOrEqual
-        | Operator::LessThanOrEqual => matches!(operand_type, AType::I64 | AType::U64),
+        | Operator::LessThanOrEqual => operand_type.is_numeric(),
 
         // If this happens, something is badly broken.
         other => panic!("unexpected operator {}", other),
