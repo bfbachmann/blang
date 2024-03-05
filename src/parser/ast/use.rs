@@ -44,12 +44,20 @@ impl ModulePath {
                     kind: TokenKind::StrLiteral(path),
                     ..
                 },
-            ) if !path.contains("..") => {
+            ) => {
+                if path.contains("..") || path.starts_with("/") || path.starts_with(".") {
+                    return Err(ParseError::new_with_token(
+                        ErrorKind::InvalidModPath,
+                        format_code!("invalid module path {}", path).as_str(),
+                        token.clone(),
+                    ));
+                }
+
                 let path = match fs::canonicalize(path) {
                     Ok(p) => p,
                     Err(_) => {
                         return Err(ParseError::new_with_token(
-                            ErrorKind::ModNotFound,
+                            ErrorKind::InvalidModPath,
                             format_code!("invalid module path {}", path).as_str(),
                             token.clone(),
                         ));
@@ -73,13 +81,13 @@ impl ModulePath {
             }
 
             Some(other) => Err(ParseError::new_with_token(
-                ErrorKind::ExpectedModPath,
+                ErrorKind::InvalidModPath,
                 format_code!("expected module path, but found {}", other).as_str(),
                 other.clone(),
             )),
 
             None => Err(ParseError::new(
-                ErrorKind::ExpectedModPath,
+                ErrorKind::InvalidModPath,
                 "expected module path, but found EOF",
                 None,
                 Position::default(),

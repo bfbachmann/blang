@@ -565,4 +565,20 @@ mod tests {
             ]
         )
     }
+
+    #[test]
+    fn invalid_mod_paths() {
+        for path in ["./thing.bl", "../thing.bl", "path/../other.bl"] {
+            let input = format!(r#"use "{path}""#);
+            let tokens = lex(&mut Stream::from(input.chars().collect())).expect("should succeed");
+            let result = Module::from("", &mut Stream::from(tokens));
+            assert!(matches!(
+                result,
+                Err(ParseError {
+                    kind: ErrorKind::InvalidModPath,
+                    ..
+                })
+            ));
+        }
+    }
 }
