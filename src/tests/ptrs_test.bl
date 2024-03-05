@@ -86,6 +86,13 @@ fn main() {
         let v_ptr: *mut bool = *<mut v
         let other_ptr = v_ptr as *mut i64
     }
+
+    // Check that pointers can be compared regardles of mutability.
+    {
+        let x: *mut i64 = *<mut 1
+        let y: *i64 = *<2
+        assert(x != y, 16)
+    }
     
     exit(0)
 }

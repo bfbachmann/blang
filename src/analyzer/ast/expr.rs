@@ -289,19 +289,22 @@ impl AExpr {
     /// If `allow_type` is true and the expression is a symbol, the symbol may refer to a type instead
     /// of a value. Otherwise, if the expression is a symbol that refers to a type, an error will be
     /// raised.
+    /// If `ignore_mutability` is true, the mutability of pointer types will not be taken into
+    /// account when checking and coercing types.
     pub fn from(
         ctx: &mut ProgramContext,
         expr: Expression,
         maybe_expected_type_key: Option<TypeKey>,
         allow_templated_result: bool,
         allow_type: bool,
+        ignore_mutability: bool,
     ) -> AExpr {
         let start_pos = expr.start_pos().clone();
         let end_pos = expr.end_pos().clone();
 
         let mut result = match &expr {
             Expression::TypeCast(expr, target_type) => {
-                let left_expr = AExpr::from(ctx, *expr.clone(), None, false, false);
+                let left_expr = AExpr::from(ctx, *expr.clone(), None, false, false, false);
                 let target_type_key = ctx.resolve_type(target_type);
                 let left_type = ctx.must_get_type(left_expr.type_key);
                 let a_target_type = ctx.must_get_type(target_type_key);
@@ -568,6 +571,7 @@ impl AExpr {
                             Some(ctx.bool_type_key()),
                             false,
                             false,
+                            false,
                         );
 
                         // Make sure the expression has type bool.
@@ -599,7 +603,7 @@ impl AExpr {
 
                     Operator::Reference => {
                         let operand_expr =
-                            AExpr::from(ctx, *right_expr.clone(), None, false, false);
+                            AExpr::from(ctx, *right_expr.clone(), None, false, false, false);
                         let a_ptr_type = APointerType::new(operand_expr.type_key, false);
                         let type_key = ctx.insert_type(AType::Pointer(a_ptr_type));
 
@@ -616,7 +620,7 @@ impl AExpr {
 
                     Operator::MutReference => {
                         let operand_expr =
-                            AExpr::from(ctx, *right_expr.clone(), None, false, false);
+                            AExpr::from(ctx, *right_expr.clone(), None, false, false, false);
 
                         // Make sure the operand is mutable if it comes from a variable. If it generates
                         // some brand-new value, then it can trivially be considered mutable.
@@ -672,7 +676,7 @@ impl AExpr {
 
                     Operator::Defererence => {
                         let operand_expr =
-                            AExpr::from(ctx, *right_expr.clone(), None, false, false);
+                            AExpr::from(ctx, *right_expr.clone(), None, false, false, false);
                         let operand_expr_type = ctx.must_get_type(operand_expr.type_key);
 
                         // Make sure the operand expression is of a pointer type.
@@ -709,7 +713,7 @@ impl AExpr {
 
                     Operator::Subtract => {
                         let operand_expr =
-                            AExpr::from(ctx, *right_expr.clone(), None, false, false);
+                            AExpr::from(ctx, *right_expr.clone(), None, false, false, false);
                         let operand_expr_type = ctx.must_get_type(operand_expr.type_key);
 
                         // Make sure the operand expression is of a signed numeric type since we'll
@@ -761,12 +765,20 @@ impl AExpr {
                     maybe_expected_operand_tk,
                     false,
                     false,
+                    false,
                 );
+
                 // If there is no expected operand type, we should try to coerce the right
                 // expression to the type of the left expression.
                 let expected_tk = maybe_expected_operand_tk.unwrap_or(a_left.type_key);
-                let a_right =
-                    AExpr::from(ctx, *right_expr.clone(), Some(expected_tk), false, false);
+                let a_right = AExpr::from(
+                    ctx,
+                    *right_expr.clone(),
+                    Some(expected_tk),
+                    false,
+                    false,
+                    true,
+                );
 
                 // If we couldn't resolve both of the operand types, we'll skip any further
                 // type checks by returning early.
@@ -814,7 +826,8 @@ impl AExpr {
 
         // Try to (safely) coerce the expression to the right type (this may involve template
         // rendering).
-        result = result.coerce_and_check_types(ctx, maybe_expected_type_key, &expr);
+        result =
+            result.coerce_and_check_types(ctx, maybe_expected_type_key, &expr, ignore_mutability);
 
         if !allow_templated_result {
             // Make sure the resulting type is not still templated. If it is, coercion/rendering failed.
@@ -839,11 +852,14 @@ impl AExpr {
     /// Checks if type coercion to the expected type is necessary and, if so, attempts it before
     /// performing type checks. Adds an error to the program context if type checks fail. No
     /// type checks are performed if `maybe_expected_type_key` is None.
+    /// If `ignore_mutability` is true, the mutability of pointer types will not be taken into
+    /// account when checking and coercing types.
     fn coerce_and_check_types(
         mut self,
         ctx: &mut ProgramContext,
         maybe_expected_type_key: Option<TypeKey>,
         expr: &Expression,
+        ignore_mutability: bool,
     ) -> Self {
         let expected_tk = match maybe_expected_type_key {
             Some(tk) => tk,
@@ -861,7 +877,7 @@ impl AExpr {
             return self;
         }
 
-        if !actual_type.is_same_as(ctx, &expected_type) {
+        if !actual_type.is_same_as(ctx, &expected_type, ignore_mutability) {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::MismatchedTypes,
                 format_code!(
@@ -1084,7 +1100,7 @@ impl AExpr {
         if !expr.kind.is_const()
             || !ctx
                 .must_get_type(expr.type_key)
-                .is_same_as(ctx, &AType::U64)
+                .is_same_as(ctx, &AType::U64, true)
         {
             return err;
         }
@@ -1193,7 +1209,7 @@ fn check_operand_types(
         operand_type_key = Some(right_expr.type_key);
     }
 
-    if !right_type.is_same_as(ctx, left_type) {
+    if !right_type.is_same_as(ctx, left_type, true) {
         errors.push(AnalyzeError::new(
             ErrorKind::MismatchedTypes,
             format_code!(
@@ -1227,20 +1243,21 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
         // Logical operators only work on bools.
         Operator::LogicalAnd | Operator::LogicalOr => operand_type == &AType::Bool,
 
-        // Equality operators only work on most primitive types.
+        // Equality operators work on most primitive types.
         Operator::EqualTo | Operator::NotEqualTo => {
             operand_type.is_numeric()
-                || matches!(operand_type, AType::Bool | AType::RawPtr | AType::Str)
+                || operand_type.is_pointer()
+                || matches!(operand_type, AType::Bool | AType::Str)
         }
 
         // Both operands of "like" and "not like" comparisons should be enums.
         Operator::Like | Operator::NotLike => matches!(operand_type, AType::Enum(_)),
 
-        // Comparators only work on numeric types.
+        // Comparators work on numeric and pointer types.
         Operator::GreaterThan
         | Operator::LessThan
         | Operator::GreaterThanOrEqual
-        | Operator::LessThanOrEqual => operand_type.is_numeric(),
+        | Operator::LessThanOrEqual => operand_type.is_numeric() || operand_type.is_pointer(),
 
         // If this happens, something is badly broken.
         other => panic!("unexpected operator {}", other),
@@ -1374,7 +1391,7 @@ mod tests {
     fn analyze_i64_literal() {
         let mut ctx = ProgramContext::new();
         let expr = Expression::I64Literal(I64Lit::new_with_default_pos(1));
-        let result = AExpr::from(&mut ctx, expr, None, false, false);
+        let result = AExpr::from(&mut ctx, expr, None, false, false, false);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
@@ -1391,7 +1408,7 @@ mod tests {
     fn analyze_bool_literal() {
         let mut ctx = ProgramContext::new();
         let expr = Expression::BoolLiteral(BoolLit::new_with_default_pos(false));
-        let result = AExpr::from(&mut ctx, expr, None, false, false);
+        let result = AExpr::from(&mut ctx, expr, None, false, false, false);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
@@ -1408,7 +1425,7 @@ mod tests {
     fn analyze_string_literal() {
         let mut ctx = ProgramContext::new();
         let expr = Expression::StrLiteral(StrLit::new_with_default_pos("test"));
-        let result = AExpr::from(&mut ctx, expr, None, false, false);
+        let result = AExpr::from(&mut ctx, expr, None, false, false, false);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
@@ -1429,6 +1446,7 @@ mod tests {
             &mut ctx,
             Expression::Symbol(Symbol::new_with_default_pos("myvar")),
             None,
+            false,
             false,
             false,
         );
@@ -1453,6 +1471,7 @@ mod tests {
             &mut ctx,
             Expression::Symbol(Symbol::new_with_default_pos("myvar")),
             None,
+            false,
             false,
             false,
         );
@@ -1522,7 +1541,7 @@ mod tests {
             vec![Expression::BoolLiteral(BoolLit::new_with_default_pos(true))],
         );
         let call_expr = Expression::FunctionCall(Box::new(fn_call.clone()));
-        let result = AExpr::from(&mut ctx, call_expr, None, false, false);
+        let result = AExpr::from(&mut ctx, call_expr, None, false, false, false);
 
         // Check that analysis succeeded.
         assert!(ctx.errors().is_empty());
@@ -1589,6 +1608,7 @@ mod tests {
                 ))),
             ),
             None,
+            false,
             false,
             false,
         );
@@ -1684,6 +1704,7 @@ mod tests {
                 vec![Expression::BoolLiteral(BoolLit::new_with_default_pos(true))],
             ))),
             None,
+            false,
             false,
             false,
         );
@@ -1784,6 +1805,7 @@ mod tests {
             None,
             false,
             false,
+            false,
         );
 
         assert_eq!(
@@ -1835,6 +1857,7 @@ mod tests {
             None,
             false,
             false,
+            false,
         );
 
         assert_eq!(
@@ -1882,6 +1905,7 @@ mod tests {
                 Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
             ),
             None,
+            false,
             false,
             false,
         );
@@ -1935,6 +1959,7 @@ mod tests {
             None,
             false,
             false,
+            false,
         );
 
         assert_eq!(
@@ -1970,6 +1995,7 @@ mod tests {
                 Box::new(Expression::StrLiteral(StrLit::new_with_default_pos("s"))),
             ),
             None,
+            false,
             false,
             false,
         );

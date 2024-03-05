@@ -165,7 +165,7 @@ impl AFnSig {
 
             let this_type = ctx.must_get_type(this_arg.type_key);
             let other_type = ctx.must_get_type(other_arg.type_key);
-            if !this_type.is_same_as(ctx, other_type) {
+            if !this_type.is_same_as(ctx, other_type, false) {
                 return false;
             }
         }

@@ -51,7 +51,14 @@ impl AConst {
         };
 
         // Make sure the constant value is a valid constant.
-        let value = AExpr::from(ctx, const_decl.value.clone(), declared_tk, false, false);
+        let value = AExpr::from(
+            ctx,
+            const_decl.value.clone(),
+            declared_tk,
+            false,
+            false,
+            false,
+        );
 
         // Just return a dummy value if the expression already failed analysis.
         if ctx.must_get_type(value.type_key).is_unknown() {

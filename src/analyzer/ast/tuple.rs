@@ -106,7 +106,7 @@ impl ATupleType {
             let type1 = ctx.must_get_type(field1.type_key);
             let type2 = ctx.must_get_type(field2.type_key);
 
-            if !type1.is_same_as(ctx, type2) {
+            if !type1.is_same_as(ctx, type2, false) {
                 return false;
             }
         }
@@ -163,7 +163,14 @@ impl ATupleInit {
                 None => None,
             };
 
-            let val = AExpr::from(ctx, expr.clone(), maybe_expected_field_type, false, false);
+            let val = AExpr::from(
+                ctx,
+                expr.clone(),
+                maybe_expected_field_type,
+                false,
+                false,
+                false,
+            );
             field_values.push((
                 AField {
                     name: i.to_string(),

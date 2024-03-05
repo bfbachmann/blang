@@ -53,6 +53,7 @@ impl AArrayType {
             Some(ctx.u64_type_key()),
             false,
             false,
+            false,
         );
 
         // Try to evaluate the length expression as a constant u64. We'll skip this step if the
@@ -111,7 +112,7 @@ impl AArrayType {
         // make sure the type keys match.
         let elem_type1 = ctx.must_get_type(self.maybe_element_type_key.unwrap());
         let elem_type2 = ctx.must_get_type(other.maybe_element_type_key.unwrap());
-        elem_type1.is_same_as(ctx, elem_type2)
+        elem_type1.is_same_as(ctx, elem_type2, false)
     }
 }
 
@@ -171,6 +172,7 @@ impl AArrayInit {
                 maybe_expected_element_type_key,
                 false,
                 false,
+                false,
             );
             contained_values.push(expr);
         }
@@ -186,7 +188,7 @@ impl AArrayInit {
                 }
 
                 let value_type = ctx.must_get_type(value.type_key);
-                if !value_type.is_same_as(ctx, expected_type) {
+                if !value_type.is_same_as(ctx, expected_type, false) {
                     ctx.insert_err(AnalyzeError::new(
                         ErrorKind::MismatchedTypes,
                         format_code!(
@@ -220,6 +222,7 @@ impl AArrayInit {
                     ctx,
                     repeat_expr.clone(),
                     Some(ctx.u64_type_key()),
+                    false,
                     false,
                     false,
                 );

@@ -34,7 +34,7 @@ impl AMemberAccess {
     /// Performs semantic analysis on the given member access expression.
     pub fn from(ctx: &mut ProgramContext, access: &MemberAccess) -> AMemberAccess {
         // Analyze the expression whose member is being accessed.
-        let base_expr = AExpr::from(ctx, access.expr.clone(), None, false, true);
+        let base_expr = AExpr::from(ctx, access.expr.clone(), None, false, true, false);
 
         // Abort early if the expression failed analysis.
         let base_type = ctx.must_get_type(base_expr.type_key);

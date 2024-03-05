@@ -210,11 +210,17 @@ impl AType {
     ///  - For struct types, they must be exactly the same type.
     ///  - For function types, they must have arguments of the same type in the same order and the
     ///    same return types.
-    pub fn is_same_as(&self, ctx: &ProgramContext, other: &AType) -> bool {
+    pub fn is_same_as(&self, ctx: &ProgramContext, other: &AType, ignore_mutability: bool) -> bool {
         match (self, other) {
             (AType::Function(f1), AType::Function(f2)) => f1.is_same_as(ctx, f2),
             (AType::Tuple(t1), AType::Tuple(t2)) => t1.is_same_as(ctx, t2),
             (AType::Array(a1), AType::Array(a2)) => a1.is_same_as(ctx, a2),
+            (AType::Pointer(p1), AType::Pointer(p2)) => {
+                let p1_pointee_type = ctx.must_get_type(p1.pointee_type_key);
+                let p2_pointee_type = ctx.must_get_type(p2.pointee_type_key);
+                let same_pointee_types = p1_pointee_type.is_same_as(ctx, p2_pointee_type, false);
+                same_pointee_types && (ignore_mutability || p1.is_mut == p2.is_mut)
+            }
             (a, b) => a == b,
         }
     }
@@ -339,6 +345,11 @@ impl AType {
             self,
             AType::U8 | AType::I8 | AType::U32 | AType::I32 | AType::U64 | AType::I64
         )
+    }
+
+    /// Returns true if this is a pointer type.
+    pub fn is_pointer(&self) -> bool {
+        matches!(self, AType::Pointer(_) | AType::RawPtr)
     }
 
     /// Returns true if arithmetic operations on this type should be signed. Otherwise, this type

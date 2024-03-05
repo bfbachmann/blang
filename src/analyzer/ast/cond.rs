@@ -72,6 +72,7 @@ impl ACond {
                         Some(ctx.bool_type_key()),
                         false,
                         false,
+                        false,
                     );
                     Some(rich_expr)
                 }

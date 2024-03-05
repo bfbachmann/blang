@@ -337,6 +337,7 @@ impl AEnumVariantInit {
                     variant.maybe_type_key,
                     false,
                     false,
+                    false,
                 )))
             }
             None => {
