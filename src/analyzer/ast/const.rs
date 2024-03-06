@@ -60,6 +60,12 @@ impl AConst {
             false,
         );
 
+        // Add the symbol to the program context so it can be used later.
+        ctx.insert_symbol(ScopedSymbol::new_const(
+            const_decl.name.as_str(),
+            value.type_key,
+        ));
+
         // Just return a dummy value if the expression already failed analysis.
         if ctx.must_get_type(value.type_key).is_unknown() {
             return AConst::new_zero_value(ctx, const_decl.name.as_str());
@@ -78,12 +84,6 @@ impl AConst {
 
             return AConst::new_zero_value(ctx, const_decl.name.as_str());
         }
-
-        // Add the symbol to the program context so it can be used later.
-        ctx.insert_symbol(ScopedSymbol::new_const(
-            const_decl.name.as_str(),
-            value.type_key,
-        ));
 
         // Store the constant value in the program context so we can use it when we've evaluating
         // constant expressions at compile time.

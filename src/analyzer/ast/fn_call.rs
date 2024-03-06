@@ -91,9 +91,14 @@ impl AFnCall {
         if actual_args != expected_args {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::WrongNumberOfArgs,
-                format_code!(
-                    "expected {} arguments, found {}",
+                format!(
+                    "{} expects {} {}, but found {}",
+                    format_code!("{}", fn_type.name),
                     expected_args,
+                    match expected_args {
+                        1 => "argument",
+                        _ => "arguments",
+                    },
                     actual_args
                 )
                 .as_str(),
