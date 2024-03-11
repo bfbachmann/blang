@@ -250,6 +250,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             .module
             .get_function(func.signature.mangled_name.as_str())
             .unwrap();
+
         self.fn_value = Some(fn_val);
 
         // Start building from the beginning of the entry block.
@@ -287,8 +288,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Push a function context onto the stack so we can reference it later.
         self.push_fn_ctx();
 
-        // Compile the function body. This will return true if the function already ends in an
-        // explicit return statement (or a set of unconditional branches that all return).
+        // Compile the function body.
         self.gen_closure(&func.body)?;
 
         // If the function body does not end in an explicit return (or other terminator

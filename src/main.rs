@@ -21,7 +21,7 @@ use crate::lexer::pos::Locatable;
 use crate::lexer::stream::Stream;
 use crate::parser::ast::statement::Statement;
 
-use crate::parser::error::{ParseResult};
+use crate::parser::error::ParseResult;
 
 mod codegen;
 #[macro_use]
@@ -59,7 +59,6 @@ fn main() {
             .arg(
                 arg!(-f --format <FORMAT> "Output file format")
                     .required(false)
-                    .default_value("exe")
                     .value_parser(["exe", "ir", "bc", "obj", "asm"]),
             )
             .arg(arg!(-o --out <OUTPUT_PATH> "Output file path").required(false))
@@ -92,16 +91,38 @@ fn main() {
         Some(("build", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(src_path) => {
                 let target = sub_matches.get_one::<String>("target");
-                let output_format = match sub_matches.get_one::<String>("format").unwrap().as_str()
-                {
-                    "obj" => OutputFormat::Object,
-                    "ir" => OutputFormat::LLVMIR,
-                    "bc" => OutputFormat::LLVMBitcode,
-                    "asm" => OutputFormat::Assembly,
-                    "exe" => OutputFormat::Executable,
-                    _ => unreachable!(),
-                };
                 let dst_path = sub_matches.get_one::<String>("out");
+                let output_format = match sub_matches.get_one::<String>("format") {
+                    // If an output format was explicitly set, use that.
+                    Some(output_format) => match output_format.as_str() {
+                        "obj" => OutputFormat::Object,
+                        "ir" => OutputFormat::LLVMIR,
+                        "bc" => OutputFormat::LLVMBitcode,
+                        "asm" => OutputFormat::Assembly,
+                        "exe" => OutputFormat::Executable,
+                        _ => unreachable!(),
+                    },
+
+                    // If no output format was set, try to determine the output format based on the
+                    // destination file extension. If there is no dest file, just default to executable
+                    // output format.
+                    None => match dst_path {
+                        Some(path) => match Path::new(path).extension() {
+                            Some(ext) => match ext.to_str().unwrap().to_lowercase().as_str() {
+                                "o" => OutputFormat::Object,
+                                "ll" => OutputFormat::LLVMIR,
+                                "bc" => OutputFormat::LLVMBitcode,
+                                "s" | "asm" => OutputFormat::Assembly,
+                                _ => OutputFormat::Executable,
+                            },
+
+                            None => OutputFormat::Executable,
+                        },
+
+                        None => OutputFormat::Executable,
+                    },
+                };
+
                 let optimize = !sub_matches.get_flag("unoptimized");
                 let quiet = sub_matches.get_flag("quiet");
                 let linker = sub_matches.get_one::<String>("linker");

@@ -11,9 +11,9 @@ use inkwell::passes::PassManager;
 use inkwell::targets::{
     CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine, TargetTriple,
 };
-use inkwell::types::AnyType;
+use inkwell::types::{AnyType};
 use inkwell::values::FunctionValue;
-use inkwell::OptimizationLevel;
+use inkwell::{OptimizationLevel};
 
 use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::module::AModule;
@@ -49,7 +49,7 @@ pub enum OutputFormat {
 impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
     /// Compiles the program to LLVM IR.
     fn gen_program(&mut self) -> CompileResult<()> {
-        // Define top-level functions and constants in the LLVM module.
+        // Define top-level functions and constants from the program in the LLVM module.
         self.declare_fns_and_consts();
 
         // Compile all the statements in the program.

@@ -312,11 +312,7 @@ impl FunctionSignature {
                     break;
                 }
 
-                Some(Token {
-                    kind:
-                        TokenKind::Fn | TokenKind::Identifier(_) | TokenKind::Struct | TokenKind::Mut,
-                    ..
-                }) => {
+                Some(_) => {
                     // The next few tokens represent an argument.
                     tokens.rewind(1);
                     let arg = if named {
@@ -341,19 +337,6 @@ impl FunctionSignature {
                         start_pos,
                         start_pos.clone(),
                     ));
-                }
-
-                Some(other) => {
-                    return Err(ParseError::new_with_token(
-                        ErrorKind::ExpectedArgOrEndOfArgs,
-                        format_code!(
-                            r#"expected argument or {}, but found {}"#,
-                            TokenKind::RightParen,
-                            other
-                        )
-                        .as_str(),
-                        other.clone(),
-                    ))
                 }
             };
 
