@@ -31,7 +31,7 @@ locatable_impl!(PointerType);
 impl PointerType {
     /// Parses a pointer type from the token stream. Expects token sequences of the form
     ///
-    ///     *<type>
+    ///     &type>
     ///     *mut <type>
     ///
     /// where

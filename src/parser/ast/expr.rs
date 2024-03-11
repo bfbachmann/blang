@@ -79,7 +79,11 @@ impl Display for Expression {
             Expression::FunctionCall(call) => write!(f, "{}", call),
             Expression::AnonFunction(func) => write!(f, "{}", func),
             Expression::Lambda(func) => write!(f, "{}", func),
-            Expression::UnaryOperation(op, expr) => write!(f, "{}{}", op, expr),
+            Expression::UnaryOperation(op, expr) => match op {
+                Operator::Defererence => write!(f, "{}{}", expr, op),
+                Operator::MutReference => write!(f, "{} {}", op, expr),
+                _ => write!(f, "{}{}", op, expr),
+            },
             Expression::BinaryOperation(left_expr, op, right_expr) => {
                 write!(f, "{} {} {}", left_expr, op, right_expr)
             }
@@ -313,7 +317,9 @@ fn parse_unary_operators(tokens: &mut Stream<Token>) -> Vec<Operator> {
     let mut unary_ops = vec![];
     while let Some(token) = tokens.peek_next() {
         match Operator::from(&token.kind) {
-            Some(op) if op.is_unary() => {
+            // Make sure the operator is unary and is not a deref (because derefs are suffix
+            // operators).
+            Some(op) if op.is_unary() && op != Operator::Defererence => {
                 unary_ops.push(op);
                 tokens.next();
             }
@@ -470,6 +476,11 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                     start_pos,
                     end_pos,
                 )));
+            }
+
+            TokenKind::Dereference => {
+                tokens.next();
+                expr = Expression::UnaryOperation(Operator::Defererence, Box::new(expr));
             }
 
             _ => return Ok(expr),

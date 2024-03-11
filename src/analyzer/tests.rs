@@ -990,7 +990,7 @@ mod tests {
         let result = analyze(
             r#"
             fn main() {
-                let a = *>1234
+                let a = 1234?
             } 
             "#,
         );
@@ -1222,7 +1222,7 @@ mod tests {
             r#"
             fn main() {
                 let a = true
-                let b = *<mut a
+                let b = &mut a
             }
         "#,
         );
@@ -1234,8 +1234,8 @@ mod tests {
         let result = analyze(
             r#"
             fn main() {
-                let a = *<true
-                *>a = false
+                let a = &true
+                a? = false
             }
         "#,
         );
@@ -1247,7 +1247,7 @@ mod tests {
         let result = analyze(
             r#"
             fn main() {
-                let a: *mut i64 = *<0 
+                let a: *mut i64 = &0 
             }
         "#,
         );
@@ -1260,7 +1260,7 @@ mod tests {
             r#"
             fn main() {
                 // This is valid because `*mut _` coerces to `*_`.
-                let a: *i64 = *<mut 0 
+                let a: *i64 = &mut 0 
             }
         "#,
         );
@@ -1273,7 +1273,7 @@ mod tests {
             r#"
             fn main() {
                 let a = true
-                let a_ptr = *<a as *mut i64 
+                let a_ptr = &a as *mut i64 
             }
         "#,
         );
@@ -1299,7 +1299,7 @@ mod tests {
             struct State {}
             
             fn main() {
-                let new = *>*<State{}
+                let new = (&State{})?
             }
         "#,
         );
@@ -1313,8 +1313,8 @@ mod tests {
             struct State {i: i64}
             
             fn main() {
-                let state_ptr = *<State{i: 0}
-                let i = (*>state_ptr).i
+                let state_ptr = &State{i: 0}
+                let i = state_ptr?.i
             }
         "#,
         );
@@ -1328,8 +1328,8 @@ mod tests {
             struct State {i: {}}
             
             fn main() {
-                let state_ptr = *<State{i: {}}
-                let i = (*>state_ptr).i
+                let state_ptr = &State{i: {}}
+                let i = state_ptr?.i
             }
         "#,
         );
@@ -1369,7 +1369,7 @@ mod tests {
         let result = analyze(
             r#"
             fn main() {
-                let a = ((*<2) as u64) as *str
+                let a = ((&2) as u64) as *str
             }
         "#,
         );
@@ -1391,7 +1391,7 @@ mod tests {
         let result = analyze(
             r#"
                 fn main() {
-                    let x = *<mut f
+                    let x = &mut f
                 }
             "#,
         );

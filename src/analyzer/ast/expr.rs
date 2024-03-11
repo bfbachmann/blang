@@ -78,15 +78,11 @@ impl fmt::Display for AExprKind {
             AExprKind::Index(i) => write!(f, "{}", i),
             AExprKind::FunctionCall(call) => write!(f, "{}", call),
             AExprKind::AnonFunction(func) => write!(f, "{}", *func),
-            AExprKind::UnaryOperation(op, expr) => write!(
-                f,
-                "{}{}",
-                match op {
-                    Operator::MutReference => format!("{} ", op),
-                    _ => op.to_string(),
-                },
-                expr
-            ),
+            AExprKind::UnaryOperation(op, expr) => match op {
+                Operator::Defererence => write!(f, "{}{}", expr, op),
+                Operator::MutReference => write!(f, "{} {}", op, expr),
+                _ => write!(f, "{}{}", op, expr),
+            },
             AExprKind::BinaryOperation(left, op, right) => {
                 write!(f, "{} {} {}", left, op, right)
             }
@@ -232,7 +228,11 @@ impl AExprKind {
             AExprKind::Index(i) => i.display(ctx),
             AExprKind::FunctionCall(call) => call.display(ctx),
             AExprKind::AnonFunction(func) => func.display(ctx),
-            AExprKind::UnaryOperation(op, expr) => format!("{} {}", op, expr.display(ctx)),
+            AExprKind::UnaryOperation(op, expr) => match op {
+                Operator::Defererence => format!("{}{}", expr.display(ctx), op),
+                Operator::MutReference => format!("{} {}", op, expr.display(ctx)),
+                _ => format!("{}{}", op, expr.display(ctx)),
+            },
             AExprKind::BinaryOperation(left, op, right) => {
                 format!("{} {} {}", left.display(ctx), op, right.display(ctx))
             }

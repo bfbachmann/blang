@@ -21,7 +21,6 @@ pub enum TokenKind {
     Reference,
     MutReference,
     Dereference,
-    Ampersand,
 
     // Variable assignment
     Equal,
@@ -157,7 +156,6 @@ impl Clone for TokenKind {
             TokenKind::DollarSign => TokenKind::DollarSign,
             TokenKind::Like => TokenKind::Like,
             TokenKind::NotLike => TokenKind::NotLike,
-            TokenKind::Ampersand => TokenKind::Ampersand,
             TokenKind::Reference => TokenKind::Reference,
             TokenKind::MutReference => TokenKind::MutReference,
             TokenKind::Dereference => TokenKind::Dereference,
@@ -248,10 +246,9 @@ impl TokenKind {
             TokenKind::DollarSign => "$".to_string(),
             TokenKind::Like => "~==".to_string(),
             TokenKind::NotLike => "~!=".to_string(),
-            TokenKind::Ampersand => "&".to_string(),
-            TokenKind::Reference => "*<".to_string(),
-            TokenKind::MutReference => "*<mut".to_string(),
-            TokenKind::Dereference => "*>".to_string(),
+            TokenKind::Reference => "&".to_string(),
+            TokenKind::MutReference => "&mut".to_string(),
+            TokenKind::Dereference => "?".to_string(),
             TokenKind::Use => "use".to_string(),
             TokenKind::From => "from".to_string(),
         }
@@ -319,7 +316,6 @@ impl TokenKind {
             (TokenKind::DollarSign.to_string(), TokenKind::DollarSign),
             (TokenKind::Like.to_string(), TokenKind::Like),
             (TokenKind::NotLike.to_string(), TokenKind::NotLike),
-            (TokenKind::Ampersand.to_string(), TokenKind::Ampersand),
             (TokenKind::Reference.to_string(), TokenKind::Reference),
             (TokenKind::MutReference.to_string(), TokenKind::MutReference),
             (TokenKind::Dereference.to_string(), TokenKind::Dereference),

@@ -133,7 +133,7 @@ mod tests {
             ]),
         );
 
-        let result = tokenize(r#"<?>"#);
+        let result = tokenize(r#"<ø>"#);
         assert!(matches!(
             result,
             Err(LexError {

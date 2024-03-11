@@ -28,7 +28,7 @@ The language and compiler are still very young, so they still lack some critical
       * [`for` loops](#for-loops)
       * [`while` loops](#while-loops)
       * [`loop` loops](#loop-loops)
-    * [Pointers and Memory Access: `*_`, `*mut _`, `*<`, `*<mut`, `*>`](#pointers-and-memory-access-_-mut-_--mut-)
+    * [Pointers and Memory Access: `*_`, `*mut _`, `&`, `&mut`, `?`](#pointers-and-memory-access-_-mut-_--mut-)
     * [Externs: `extern`](#externs-extern)
     * [Imports: `use`](#imports-use)
     * [Type Casts: `as`](#type-casts-as)
@@ -319,20 +319,20 @@ fn main() {
 }
 ```
 
-### Pointers and Memory Access: `*_`, `*mut _`, `*<`, `*<mut`, `*>`
+### Pointers and Memory Access: `*_`, `*mut _`, `&`, `&mut`, `?`
 
 Raw pointers work the same way they do in C, except that they come with immutability guarantees.
 
-The reference operator `*<` can be used to get a read-only pointer (`*_`) so some value in memory. If the value being
+The reference operator `&` can be used to get a read-only pointer (`*_`) so some value in memory. If the value being
 referenced is not already stack-allocated - for instance, if it's a constant - it will be stack allocated and
 the reference operation will return the new stack address. Raw pointers of type `*_` that result from reference 
 operations can be read from but not written to.
 
-The reference-mutably operator `*<mut` can be used to get a read-write pointer (`*mut _`) to a value in memory.
+The reference-mutably operator `&mut` can be used to get a read-write pointer (`*mut _`) to a value in memory.
 This works like the reference operator, only the resulting pointer can be used to write to memory as well. Only mutable
 values can be referenced mutably.
 
-The dereference operator `*>` can be used to retrieve a value from memory referenced by a pointer.
+The dereference operator `?` can be used to retrieve a value from memory referenced by a pointer.
 Dereferencing a pointer that points to an invalid or un-allocated region of memory can cause undefined behaviour.
 
 ```rust
@@ -340,15 +340,15 @@ fn main() {
     let mut x = 123
     
     // Get a pointer to `x`.
-    let x_ptr = *<x
+    let x_ptr = &x
     
     // Dereference the pointer to `x` to get its value.
-    let x_copy = *>x
+    let x_copy = x?
     
     // Change the value of `x` via a pointer (must use `*mut`). We're only allowed
     // to get a `*mut` to `x` here because `x` itself is `mut`.
-    let x_mut_ptr = *<mut x
-    (*>x) = 321
+    let x_mut_ptr = &mut x
+    x? = 321
 }
 ```
 
@@ -380,7 +380,7 @@ fn main() {
     let a: u32 = 10i64 as u32
     
     // Casting between pointers and numeric types.
-    let a: i64 = *<10 as *i64
+    let a: i64 = &10 as *i64
     let ptr: *i64 = 100 as *i64
     
     // Casting between pointer types.
