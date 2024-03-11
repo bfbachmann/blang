@@ -49,28 +49,8 @@ pub enum OutputFormat {
 impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
     /// Compiles the program to LLVM IR.
     fn gen_program(&mut self) -> CompileResult<()> {
-        // Define external functions (like syscalls) so we can call the safely from within the
-        // module. Their actual implementations should be linked from libc when generating an
-        // executable.
-        self.define_extern_fns();
-
-        // Defined constants so they can be used inside the functions we compile later.
-        self.define_consts();
-
-        // Do one shallow pass to define all top-level functions in the module.
-        for statement in &self.program.statements {
-            match statement {
-                AStatement::FunctionDeclaration(func) => {
-                    self.gen_fn_sig(&func.signature);
-                }
-                AStatement::Impl(impl_) => {
-                    for mem_fn in &impl_.member_fns {
-                        self.gen_fn_sig(&mem_fn.signature);
-                    }
-                }
-                _ => {}
-            }
-        }
+        // Define top-level functions and constants in the LLVM module.
+        self.declare_fns_and_consts();
 
         // Compile all the statements in the program.
         for statement in &self.program.statements {
@@ -183,31 +163,43 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
         }
     }
 
-    /// Defines external functions in the current module.
-    fn define_extern_fns(&mut self) {
+    /// Declares the following inside the LLVM module (without assigning values)
+    /// - functions
+    /// - extern functions (to be linked by the linker)
+    /// - constants
+    fn declare_fns_and_consts(&mut self) {
         for statement in &self.program.statements {
-            if let AStatement::ExternFns(fn_sigs) = statement {
-                for fn_sig in fn_sigs {
-                    let ll_fn_type = self.type_converter.get_fn_type(fn_sig.type_key);
-                    self.module.add_function(
-                        fn_sig.name.as_str(),
-                        ll_fn_type,
-                        Some(Linkage::External),
-                    );
+            match statement {
+                AStatement::Consts(consts) => {
+                    for const_decl in consts {
+                        self.module_consts
+                            .insert(const_decl.name.clone(), const_decl.clone());
+                    }
                 }
-            }
-        }
-    }
 
-    /// Defines constants in the current module.
-    fn define_consts(&mut self) {
-        for statement in &self.program.statements {
-            if let AStatement::Consts(consts) = statement {
-                for const_decl in consts {
-                    self.module_consts
-                        .insert(const_decl.name.clone(), const_decl.clone());
+                AStatement::ExternFns(fn_sigs) => {
+                    for fn_sig in fn_sigs {
+                        let ll_fn_type = self.type_converter.get_fn_type(fn_sig.type_key);
+                        self.module.add_function(
+                            fn_sig.name.as_str(),
+                            ll_fn_type,
+                            Some(Linkage::External),
+                        );
+                    }
                 }
-            }
+
+                AStatement::FunctionDeclaration(func) => {
+                    self.gen_fn_sig(&func.signature);
+                }
+
+                AStatement::Impl(impl_) => {
+                    for mem_fn in &impl_.member_fns {
+                        self.gen_fn_sig(&mem_fn.signature);
+                    }
+                }
+
+                _ => {}
+            };
         }
     }
 }
