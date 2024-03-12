@@ -7,13 +7,13 @@ fn assert(b: bool, code: u64) {
 }
 
 struct Calculator {
-    calc_fn: fn (i64, i64) ~ i64
+    calc_fn: fn (i64, i64): i64
     accumulator: i64
 }
 
 impl Calculator {
-    fn new(f: CalcFn) ~ Calculator
-    with [CalcFn = fn (i64, i64) ~ i64] 
+    fn new(f: CalcFn): Calculator
+    with [CalcFn = fn (i64, i64): i64]
     {
         return Calculator{
             calc_fn: f
@@ -21,24 +21,24 @@ impl Calculator {
         }
     }
 
-    fn update(mut this, value: i64) ~ Calculator {
+    fn update(mut this, value: i64): Calculator {
         this.accumulator = this.calc_fn(this.accumulator, value)
         return this
     }
 
-    fn with_calc_fn(mut this, f: CalcFn) ~ Calculator 
-    with [CalcFn = fn (i64, i64) ~ i64] 
+    fn with_calc_fn(mut this, f: CalcFn): Calculator
+    with [CalcFn = fn (i64, i64): i64]
     {
         this.calc_fn = f
         return this
     }
 }
 
-fn add(a: i64, b: i64) ~ i64 {
+fn add(a: i64, b: i64): i64 {
     return a + b
 }
 
-fn mul(a: i64, b: i64) ~ i64 {
+fn mul(a: i64, b: i64): i64 {
     return a * b
 }
 

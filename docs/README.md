@@ -40,7 +40,7 @@ A regular function can be defined as follows.
 
 ```rust
 /// This function takes an unsigned integer `n` and returns the nth number in the Fibonnaci sequence. 
-fn fibonacci(n: u64) ~ u64 {
+fn fibonacci(n: u64): u64 {
     if n <= 1 {
         return 1
     }
@@ -71,7 +71,7 @@ Variables declared this way are always either stack-allocated or inlined dependi
 By default, all variables are immutable. To declare a mutable variable, use the `mut` modifier.
 
 ```rust
-fn calculate(n: u64, double: bool, max: u64) ~ u64 {
+fn calculate(n: u64, double: bool, max: u64): u64 {
     let mut result = n
 
     if double: result = result * 2
@@ -96,7 +96,7 @@ const {
     SEASONS = ["Spring", "Summer", "Autumn", "Winter"]
 }
 
-fn is_bad_day(day_in_month: u64) ~ bool {
+fn is_bad_day(day_in_month: u64): bool {
     const BAD_DAY = 13
     return day_in_month == BAD_DAY
 }
@@ -223,7 +223,7 @@ struct User {
 
 impl User {
     // Creates a new user with the given username and age.
-    fn new(username: str, age: u64) ~ User {
+    fn new(username: str, age: u64): User {
         return User{
             username: username
             age: age
@@ -231,12 +231,12 @@ impl User {
     }
     
     // Returns a copy of this user with the new username.
-    fn with_username(self, new_username: str) ~ User {
+    fn with_username(self, new_username: str): User {
         // This is a call to a class method.
         return User.new(new_username, self.age)
     }
 
-    fn is_senior(self) ~ bool {
+    fn is_senior(self): bool {
         return self.age
     }
 }
@@ -263,7 +263,7 @@ enum Cmp {
     LessThan,
 }
 
-fn compare(a: i64, b: i64) ~ Cmp {
+fn compare(a: i64, b: i64): Cmp {
     if a > b: return Cmp::GreaterThan
     elsif a < b: return Cmp::LessThan
     else: return Cmp::Equal

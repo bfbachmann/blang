@@ -6,15 +6,15 @@ fn assert(b: bool, code: u64) {
     }
 }
 
-fn apply(f: F, arg: T) ~ T
+fn apply(f: F, arg: T): T
 with [
     T,
-    F = fn (T) ~ T,
+    F = fn (T): T,
 ] {
     return f(arg)
 }
 
-fn double_if(v: T, b: B) ~ i64
+fn double_if(v: T, b: B): i64
 with [T = i64, B = bool]
 {
     if b {
@@ -23,12 +23,12 @@ with [T = i64, B = bool]
     return v
 }
 
-fn double(v: i64) ~ i64 {
+fn double(v: i64): i64 {
     return v * 2
 }
 
 spec Task {
-    fn run(this) ~ bool
+    fn run(this): bool
 }
 
 struct BasicTask {
@@ -36,16 +36,16 @@ struct BasicTask {
 }
 
 impl BasicTask {
-    fn new(succeed: bool) ~ BasicTask {
+    fn new(succeed: bool): BasicTask {
         return BasicTask{succeed: succeed}
     }
 
-    fn run(this) ~ bool {
+    fn run(this): bool {
         return this.succeed
     }
 }
 
-fn run_task(task: T) ~ bool
+fn run_task(task: T): bool
 with [T: Task]
 {
     return task.run()
@@ -54,21 +54,21 @@ with [T: Task]
 fn do_nothing(a: T, b: T) with [T] {}
 
 impl i64 {
-    fn zero() ~ i64 {
+    fn zero(): i64 {
         return 0
     }
 }
 
 spec Zero {
-    fn zero() ~ i64
+    fn zero(): i64
 }
 
-fn is_zero_value(v: T) ~ bool
+fn is_zero_value(v: T): bool
 with [T: Zero] {
     return v == T.zero()
 }
 
-fn get_value(t: T) ~ T
+fn get_value(t: T): T
 with [T] {
     return t
 }
@@ -101,7 +101,7 @@ fn main() {
 
     // Check that we can use templated functions as variables.
     {
-        let f: fn (u64) ~ u64 = get_value
+        let f: fn (u64): u64 = get_value
         assert(apply(f, 10u64) == 10u64, 5)
     }
 

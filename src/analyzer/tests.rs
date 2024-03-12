@@ -147,7 +147,7 @@ mod tests {
                 
                 let result = fib(
                     i,
-                    fn (n: i64) ~ bool {
+                    fn (n: i64): bool {
                         print(str_concat("fib visitor sees n=", itoa(n)))
                         return n % 2 == 0
                     },
@@ -168,7 +168,7 @@ mod tests {
         }
         
         // Calls `visitor_fn` with n and returns the n'th Fibonacci number.
-        fn fib(n: i64, visitor_fn: fn (i64) ~ bool) ~ i64 {
+        fn fib(n: i64, visitor_fn: fn (i64): bool): i64 {
             if visitor_fn(n) {
                 print("visitor returned true")
             }
@@ -180,11 +180,11 @@ mod tests {
         
         fn print(s: str) {}
         
-        fn str_concat(a: str, b: str) ~ str {
+        fn str_concat(a: str, b: str): str {
             return a
         }
         
-        fn itoa(i: i64) ~ str {
+        fn itoa(i: i64): str {
             return "fake"
         }
         
@@ -213,7 +213,7 @@ mod tests {
             struct Inner {
                 count: i64,
                 msg: str,
-                get_person: fn (str) ~ Person,
+                get_person: fn (str): Person,
                 inline_struct_field: struct {
                     something: bool,
                     another: Person,
@@ -227,7 +227,7 @@ mod tests {
             
             struct Empty {}
             
-            fn get_person(name: str) ~ Person {
+            fn get_person(name: str): Person {
                 return Person{
                     name: "dave",
                     age: 43,
@@ -308,7 +308,7 @@ mod tests {
                 do_thing()
             }
             
-            fn do_thing() ~ bool {
+            fn do_thing(): bool {
                 return true
                 let a = 1
             }
@@ -348,14 +348,14 @@ mod tests {
             r#"
            struct Thing {
                i: i64,
-               func: fn (i64, i64) ~ bool,
+               func: fn (i64, i64): bool,
            }
            
-           fn eq(a: i64, b: i64) ~ bool {
+           fn eq(a: i64, b: i64): bool {
                return a == b
            }
            
-           fn neq(a: i64, b: i64) ~ bool {
+           fn neq(a: i64, b: i64): bool {
                return !eq(a, b)
            }
            
@@ -737,7 +737,7 @@ mod tests {
             }
             
             impl T {
-                fn get_value(self) ~ i64 {
+                fn get_value(self): i64 {
                     return self.value
                 }
             }
@@ -903,7 +903,7 @@ mod tests {
     fn unresolved_tmpl_params() {
         let result = analyze(
             r#"
-            fn test(a: A, b: B) ~ C with [A, B, C] {
+            fn test(a: A, b: B): C with [A, B, C] {
                 return a + b
             }
             
@@ -1040,7 +1040,7 @@ mod tests {
         let result = analyze(
             r#"
             impl i64 {
-                fn add(self, v: i64) ~ i64 { return self + v }
+                fn add(self, v: i64): i64 { return self + v }
             }
             
             struct Thing {
@@ -1048,7 +1048,7 @@ mod tests {
             }
             
             impl Thing {
-                fn new(i: i64) ~ Thing {
+                fn new(i: i64): Thing {
                     return Thing{
                         i: i
                     }
@@ -1068,7 +1068,7 @@ mod tests {
         let result = analyze(
             r#"
             impl i64 {
-                fn add(self, v: i64) ~ i64 { return self + v }
+                fn add(self, v: i64): i64 { return self + v }
             }
             
             struct Thing {
@@ -1076,7 +1076,7 @@ mod tests {
             }
             
             impl Thing {
-                fn new(i: u64) ~ Thing {
+                fn new(i: u64): Thing {
                     return Thing{
                         i: i
                     }
@@ -1134,7 +1134,7 @@ mod tests {
     fn illegal_move_in_array_index() {
         let result = analyze(
             r#"
-            fn take(array: [i64; 2]) ~ i64 {
+            fn take(array: [i64; 2]): i64 {
                 return 1
             }
             

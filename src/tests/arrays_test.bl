@@ -64,7 +64,7 @@ fn main() {
     exit(0)
 }
 
-fn take(a: [i64; 2]) ~ [str; 1] {
+fn take(a: [i64; 2]): [str; 1] {
     assert(a[0] == -8, 12)
     assert(a[1] == 12, 13)
     return ["test"]

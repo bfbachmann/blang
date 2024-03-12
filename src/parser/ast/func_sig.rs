@@ -60,7 +60,7 @@ impl fmt::Display for FunctionSignature {
         }
 
         if let Some(typ) = &self.maybe_ret_type {
-            write!(f, ") ~ {}", typ)
+            write!(f, "): {}", typ)
         } else {
             write!(f, ")")
         }
@@ -152,9 +152,9 @@ impl FunctionSignature {
 
     /// Parses function signatures. Expects token sequences of the forms
     ///
-    ///      fn <fn_name>(<arg_name>: <arg_type>, ...) ~ <return_type>
+    ///      fn <fn_name>(<arg_name>: <arg_type>, ...): <return_type>
     ///      fn <fn_name>(<arg_name>: <arg_type>, ...)
-    ///      fn <fn_name>(<arg_name>: <arg_type>, ...) ~ <return_type> with <tmpl_params>
+    ///      fn <fn_name>(<arg_name>: <arg_type>, ...): <return_type> with <tmpl_params>
     ///      fn <fn_name>(<arg_name>: <arg_type>, ...) with <tmpl_params>
     ///
     /// where
@@ -206,12 +206,12 @@ impl FunctionSignature {
     /// Parses anonymous function signatures. If `named` is true, expects token sequences of the
     /// forms
     ///
-    ///      fn (<arg_name>: <arg_type>, ...) ~ <return_type>
+    ///      fn (<arg_name>: <arg_type>, ...): <return_type>
     ///      fn (<arg_name>: <arg_type>, ...)
     ///
     /// Otherwise, expects token sequences of the forms
     ///
-    ///      fn (<arg_type>, ...) ~ <return_type>
+    ///      fn (<arg_type>, ...): <return_type>
     ///      fn (<arg_type>, ...)
     ///
     /// where
@@ -233,7 +233,7 @@ impl FunctionSignature {
     /// Parses function arguments and return value from a function signature. If `named` is true,
     /// expects token sequences of the forms
     ///
-    ///     (<arg_name>: <arg_type>, ...) ~ <return_type>
+    ///     (<arg_name>: <arg_type>, ...): <return_type>
     ///     (<arg_name>: <arg_type>, ...)
     ///
     /// Otherwise, expects token sequences of the form
@@ -248,15 +248,15 @@ impl FunctionSignature {
         // The next tokens should represent function arguments.
         let (args, args_end_pos) = FunctionSignature::arg_declarations_from(tokens, named)?;
 
-        // The next token should be `~` if there is a return type. Otherwise, there is no return
+        // The next token should be `:` if there is a return type. Otherwise, there is no return
         // type and we're done.
         let mut return_type = None;
         match tokens.peek_next() {
             Some(Token {
-                kind: TokenKind::Tilde,
+                kind: TokenKind::Colon,
                 ..
             }) => {
-                // Remove the `~` and parse the return type.
+                // Remove the `:` and parse the return type.
                 tokens.next();
                 return_type = Some(Type::from(tokens)?);
             }

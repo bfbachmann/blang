@@ -101,13 +101,13 @@ fn take(ptr: *u64) {
     assert(ptr? == 223, 4)
 }
 
-fn take_t(t: *T) ~ T {
+fn take_t(t: *T): T {
     return T{
         i: t?.i
         b: t?.b
     }
 }
 
-fn take_tuple(tup: *{i64}) ~ i64 {
+fn take_tuple(tup: *{i64}): i64 {
     return tup?.0
 }

@@ -1,6 +1,6 @@
 extern {
-    fn puts(msg: str) ~ u32
-    fn read(fd: u32, buf: *u8, size: u32) ~ u32
+    fn puts(msg: str): u32
+    fn read(fd: u32, buf: *u8, size: u32): u32
     fn fflush(fd: u32)
 }
 

@@ -48,7 +48,7 @@ mod tests {
                 let prefix = "Fibonacci number " + itoa(i) + " is: "
                 let result = fib(
                     i,
-                    fn (n: i64) ~ bool {
+                    fn (n: i64): bool {
                         print("fib visitor sees n=" + itoa(n))
                         return n % 2 == 0
                     },
@@ -63,7 +63,7 @@ mod tests {
         }
         
         // Calls `visitor_fn` with n and returns the n'th Fibonacci number.
-        fn fib(n: i64, visitor_fn: fn (i64) ~ bool) ~ i64 {
+        fn fib(n: i64, visitor_fn: fn (i64): bool): i64 {
             if visitor_fn(n) {
                 print("visitor returned true")
             }
@@ -122,8 +122,7 @@ mod tests {
 
     #[test]
     fn parse_function_declaration() {
-        let tokens =
-            tokenize(r#"fn my_fn(arg1: str, arg2: i64) ~ str { let s = "hello world!"; }"#);
+        let tokens = tokenize(r#"fn my_fn(arg1: str, arg2: i64): str { let s = "hello world!"; }"#);
         let result = Function::from(&mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
@@ -156,8 +155,8 @@ mod tests {
                     ],
                     Some(Type::Unresolved(UnresolvedType::new(
                         "str",
-                        Position::new(1, 34),
-                        Position::new(1, 37)
+                        Position::new(1, 33),
+                        Position::new(1, 36)
                     ))),
                     Position::new(1, 1),
                     Position::new(1, 31),
@@ -169,20 +168,20 @@ mod tests {
                         "s".to_string(),
                         Expression::StrLiteral(StrLit {
                             value: "hello world!".to_string(),
-                            start_pos: Position::new(1, 48),
-                            end_pos: Position::new(1, 62),
+                            start_pos: Position::new(1, 47),
+                            end_pos: Position::new(1, 61),
                         }),
-                        Position::new(1, 40),
-                        Position::new(1, 62),
+                        Position::new(1, 39),
+                        Position::new(1, 61),
                     ))],
                     None,
-                    Position::new(1, 38),
-                    Position::new(1, 65),
+                    Position::new(1, 37),
+                    Position::new(1, 64),
                 ),
             )
         );
 
-        let tokens = tokenize("fn bigboi(f: fn (str, i64) ~ bool, i: i64) ~ fn (bool) ~ str {}");
+        let tokens = tokenize("fn bigboi(f: fn (str, i64): bool, i: i64): fn (bool): str {}");
         let result = Function::from(&mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
@@ -219,8 +218,8 @@ mod tests {
                                 ],
                                 Some(Type::Unresolved(UnresolvedType::new(
                                     "bool",
-                                    Position::new(1, 30),
-                                    Position::new(1, 34)
+                                    Position::new(1, 29),
+                                    Position::new(1, 33)
                                 ))),
                                 Position::new(1, 14),
                                 Position::new(1, 27),
@@ -233,12 +232,12 @@ mod tests {
                             "i",
                             Type::Unresolved(UnresolvedType::new(
                                 "i64",
-                                Position::new(1, 39),
-                                Position::new(1, 42)
+                                Position::new(1, 38),
+                                Position::new(1, 41)
                             )),
                             false,
-                            Position::new(1, 36),
-                            Position::new(1, 42)
+                            Position::new(1, 35),
+                            Position::new(1, 41)
                         )
                     ],
                     Some(Type::Function(Box::new(FunctionSignature::new_anon(
@@ -246,25 +245,25 @@ mod tests {
                             "",
                             Type::Unresolved(UnresolvedType::new(
                                 "bool",
-                                Position::new(1, 50),
-                                Position::new(1, 54)
+                                Position::new(1, 48),
+                                Position::new(1, 52)
                             )),
                             false,
-                            Position::new(1, 50),
-                            Position::new(1, 54)
+                            Position::new(1, 48),
+                            Position::new(1, 52)
                         )],
                         Some(Type::Unresolved(UnresolvedType::new(
                             "str",
-                            Position::new(1, 58),
-                            Position::new(1, 61)
+                            Position::new(1, 55),
+                            Position::new(1, 58)
                         ))),
-                        Position::new(1, 46),
-                        Position::new(1, 55),
+                        Position::new(1, 44),
+                        Position::new(1, 53),
                     )))),
                     Position::new(1, 1),
-                    Position::new(1, 43),
+                    Position::new(1, 42),
                 ),
-                Closure::new(vec![], None, Position::new(1, 62), Position::new(1, 64)),
+                Closure::new(vec![], None, Position::new(1, 59), Position::new(1, 61)),
             )
         );
     }
@@ -474,7 +473,7 @@ mod tests {
 
     #[test]
     fn missing_fn_closing_brace() {
-        let raw = r#"fn thing() ~ i64 {
+        let raw = r#"fn thing(): i64 {
             return 4 / 2 + 8
         "#;
         let mut char_stream = Stream::from(raw.chars().collect());
@@ -500,7 +499,7 @@ mod tests {
 
     #[test]
     fn inline_struct_types_in_fn_sig() {
-        let input = r#"fn one(a: struct {one: i64, two: bool}, b: i64) ~ struct {thing: str} {}"#;
+        let input = r#"fn one(a: struct {one: i64, two: bool}, b: i64): struct {thing: str} {}"#;
         let tokens = lex(&mut Stream::from(input.chars().collect())).expect("should succeed");
         let result = Module::from("", &mut Stream::from(tokens));
         assert!(matches!(result, Ok(_)));

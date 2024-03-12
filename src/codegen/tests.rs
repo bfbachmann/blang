@@ -42,16 +42,16 @@ mod tests {
                 str_stuff("test")
             }
             
-            fn thing(b: bool) ~ bool {
+            fn thing(b: bool): bool {
                 let a = true
                 return !a or b
             }
             
-            fn other(a: i64, b: i64) ~ i64 {
+            fn other(a: i64, b: i64): i64 {
                 return a * b + a / 2 - 1
             }
             
-            fn fib(n: i64) ~ i64 {
+            fn fib(n: i64): i64 {
                 if n < 2 {
                     return 1
                 }
@@ -59,7 +59,7 @@ mod tests {
                 return fib(n-1) + fib(n-2)
             }
             
-            fn do_thing(a: i64) ~ i64 {
+            fn do_thing(a: i64): i64 {
                 let mut result = 5
                 let mut mut_a = a
                 loop {
@@ -79,7 +79,7 @@ mod tests {
                 }
             }
             
-            fn cum_sum(n: i64) ~ i64 {
+            fn cum_sum(n: i64): i64 {
                 let mut i = 1
                 let mut result = 0
                 loop {
@@ -94,7 +94,7 @@ mod tests {
                 }
             }
             
-            fn str_stuff(s: str) ~ str {
+            fn str_stuff(s: str): str {
                 return "test"
             }
         "#,
@@ -108,10 +108,10 @@ mod tests {
             struct Person {
                 name: str,
                 age: i64,
-                do_thing: fn(str) ~ i64,
+                do_thing: fn(str): i64,
             }
             
-            fn new_person(name: str, age: i64) ~ Person {
+            fn new_person(name: str, age: i64): Person {
                 return Person{
                     name: name,
                     age: age,
@@ -119,7 +119,7 @@ mod tests {
                 }
             }
             
-            fn test(s: str) ~ i64 {
+            fn test(s: str): i64 {
                 return 1
             }
             
@@ -144,7 +144,7 @@ mod tests {
                 age: i64,
             }
             
-            fn is_old(p: Person) ~ bool {
+            fn is_old(p: Person): bool {
                 let p = Person{age: 100}
                 return false
             }
@@ -186,7 +186,7 @@ mod tests {
             
             fn do(a: A) {}
             
-            fn new_a(count: i64) ~ A {
+            fn new_a(count: i64): A {
                 return A {
                     count: count,
                     f: do,
@@ -214,8 +214,8 @@ mod tests {
         assert_compiles(
             r#"
             impl i64 {
-                fn add(self, v: i64) ~ i64 { return self + v }
-                fn sub(self, v: i64) ~ i64 { return self - v }
+                fn add(self, v: i64): i64 { return self + v }
+                fn sub(self, v: i64): i64 { return self - v }
             }
             fn main() {
                 let i = 1
@@ -262,10 +262,10 @@ mod tests {
     fn function_template_using_specs() {
         assert_compiles(
             r#"
-            extern fn write(fd: i64, msg: str, len: i64) ~ i64
+            extern fn write(fd: i64, msg: str, len: i64): i64
 
             spec Task {
-                fn run(self) ~ bool
+                fn run(self): bool
             }
             
             struct PrintTask {
@@ -273,13 +273,13 @@ mod tests {
             }
             
             impl PrintTask {
-                fn run(self) ~ bool {
+                fn run(self): bool {
                     write(1, self.msg, 100)
                     return true
                 }
             }
             
-            fn run_task(task: T) ~ bool
+            fn run_task(task: T): bool
             with [T: Task] {
                 return task.run()
             }
@@ -306,13 +306,13 @@ mod tests {
             }
             
             struct Calculator {
-                calc_fn: fn (i64, i64) ~ i64
+                calc_fn: fn (i64, i64): i64
                 accumulator: i64
             }
             
             impl Calculator {
-                fn new(f: CalcFn) ~ Calculator
-                with [CalcFn = fn (i64, i64) ~ i64] 
+                fn new(f: CalcFn): Calculator
+                with [CalcFn = fn (i64, i64): i64] 
                 {
                     return Calculator{
                         calc_fn: f
@@ -320,25 +320,25 @@ mod tests {
                     }
                 }
             
-                fn update(mut self, value: i64) ~ Calculator {
+                fn update(mut self, value: i64): Calculator {
                     let func = self.calc_fn
                     self.accumulator = func(self.accumulator, value)
                     return self
                 }
             
-                fn with_calc_fn(mut self, f: CalcFn) ~ Calculator 
-                with [CalcFn = fn (i64, i64) ~ i64] 
+                fn with_calc_fn(mut self, f: CalcFn): Calculator 
+                with [CalcFn = fn (i64, i64): i64] 
                 {
                     self.calc_fn = f
                     return this
                 }
             }
             
-            fn add(a: i64, b: i64) ~ i64 {
+            fn add(a: i64, b: i64): i64 {
                 return a + b
             }
             
-            fn mul(a: i64, b: i64) ~ i64 {
+            fn mul(a: i64, b: i64): i64 {
                 return a * b
             }
             
@@ -364,15 +364,15 @@ mod tests {
     fn nested_tmpl_params() {
         assert_compiles(
             r#"
-            fn apply(f: F, arg: T) ~ T
+            fn apply(f: F, arg: T): T
             with [
                 T,
-                F = fn (T) ~ T,
+                F = fn (T): T,
             ] {
                 return f(arg)
             }
             
-            fn double(v: i64) ~ i64 {
+            fn double(v: i64): i64 {
                 return v * 2
             }
             
@@ -389,16 +389,16 @@ mod tests {
         assert_compiles(
             r#"
             impl i64 {
-                fn zero() ~ i64 {
+                fn zero(): i64 {
                     return 0
                 }
             }
             
             spec Zero {
-                fn zero() ~ i64
+                fn zero(): i64
             }
             
-            fn is_zero_value(v: T) ~ bool
+            fn is_zero_value(v: T): bool
             with [T: Zero] {
                 return v == T.zero()
             }
@@ -431,22 +431,22 @@ mod tests {
             // Any type that has an associated default member function implments the 
             // Default spec.
             spec Default {
-                fn default() ~ T with [T]
+                fn default(): T with [T]
             }
             
             // Returns the default value any type that implements the Default spec.
-            fn default() ~ T with [T: Default] {
+            fn default(): T with [T: Default] {
                 return T.default()
             }
             
             impl i64 {
-                fn default() ~ i64 {
+                fn default(): i64 {
                     return 0
                 }
             }
             
             impl u64 {
-                fn default() ~ u64 {
+                fn default(): u64 {
                     return 0
                 }
             }
@@ -457,7 +457,7 @@ mod tests {
             }
             
             impl MyStruct {
-                fn default() ~ MyStruct {
+                fn default(): MyStruct {
                     return MyStruct{
                         i: default()
                         u: default()
@@ -477,19 +477,19 @@ mod tests {
     fn tmpl_fn_used_as_var() {
         assert_compiles(
             r#"
-            fn test(t: T) ~ T 
+            fn test(t: T): T 
             with [T] {
                 return t
             }
             
-            fn apply(f: F, t: T) ~ T
-            with [T, F = fn (T) ~ T] {
+            fn apply(f: F, t: T): T
+            with [T, F = fn (T): T] {
                 return f(t)
             }
             
             fn main() {
                 let result: i64 = test(1)
-                let t: fn (u64) ~ u64 = test
+                let t: fn (u64): u64 = test
                 let result = apply(t, 234u64)
             }
             "#,
@@ -501,7 +501,7 @@ mod tests {
     fn lambda_as_variable() {
         assert_compiles(
             r#"
-            fn max(a: T, b: T) ~ T
+            fn max(a: T, b: T): T
             with [T] {
                 if a > b {
                     return a
@@ -510,8 +510,8 @@ mod tests {
             }
     
             fn main() {
-                let f1: fn (i64, i64) ~ i64 = max
-                let f2: fn (u64, u64) ~ u64 = max
+                let f1: fn (i64, i64): i64 = max
+                let f2: fn (u64, u64): u64 = max
                 
                 let result1 = f1(-3, 4)
                 let result2 = f2(12, 642)
@@ -525,8 +525,8 @@ mod tests {
     fn lambda_as_argument() {
         assert_compiles(
             r#"
-            fn select(selector: F, a: T, b: T) ~ T
-            with [T, F = fn (T, T) ~ T] {
+            fn select(selector: F, a: T, b: T): T
+            with [T, F = fn (T, T): T] {
                 return selector(a, b)
             }
             
@@ -542,10 +542,10 @@ mod tests {
     fn tmpl_fn_with_only_fn_arg() {
         assert_compiles(
             r#"
-            fn do(f: fn (T) ~ T) with [T] {}
+            fn do(f: fn (T): T) with [T] {}
 
             fn main() {
-                let f: fn (str) ~ str = $(a) a
+                let f: fn (str): str = $(a) a
                 do(f)
             }
             "#,
@@ -557,13 +557,13 @@ mod tests {
     fn lambda_with_fn_arg_as_variable() {
         assert_compiles(
             r#"
-            fn apply(f: fn (T) ~ T, t: T) ~ T
+            fn apply(f: fn (T): T, t: T): T
             with [T] {
                 return f(t)
             }
     
             fn main() {
-                let a: fn (fn (str) ~ str, str) ~ str = apply
+                let a: fn (fn (str): str, str): str = apply
             }
             "#,
         )

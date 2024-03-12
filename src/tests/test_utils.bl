@@ -1,6 +1,6 @@
 extern {
     fn exit(code: u64)
-    fn malloc(size: u64) ~ rawptr
+    fn malloc(size: u64): rawptr
     fn free(ptr: rawptr)
 }
 
