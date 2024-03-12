@@ -40,15 +40,19 @@ impl Locatable for Loop {
 impl Loop {
     /// Parses a loop. Expects token sequences of the form
     ///
-    ///     for <init>; <cond>; <update>; <body>
-    ///     while <cond>; <body>
-    ///     loop <body>
+    ///     for <init>, <cond>, <update>: <statement>
+    ///     for <init>, <cond>, <update> <closure>
+    ///     while <cond>: <statement>
+    ///     while <cond> <closure>
+    ///     loop: <statement>
+    ///     loop <closure>
     ///
     /// where
     /// - `init` is an initialization statement
     /// - `cond` is the expression representing the loop condition that executes before each iteration
     /// - `update` is the update statement that runs at the end of each iteration
-    /// - `body` is a statement representing the loop body.
+    /// - `statement` is a statement representing the loop body
+    /// - `closure` is a closure representing the loop body.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         let token = Module::parse_expecting_any(
             tokens,
@@ -73,8 +77,15 @@ fn parse_loop(tokens: &mut Stream<Token>) -> ParseResult<Loop> {
     // The first token should be `loop`.
     Module::parse_expecting(tokens, TokenKind::Loop)?;
 
-    // The rest should be the statement or closure representing the loop body.
-    let body = Closure::from(tokens)?;
+    // The next tokens should either be `: <statement>` or just a closure.
+    let body = if Module::parse_optional(tokens, TokenKind::Colon).is_some() {
+        let statement = Statement::from(tokens)?;
+        let start_pos = statement.start_pos().clone();
+        let end_pos = statement.end_pos().clone();
+        Closure::new(vec![statement], None, start_pos, end_pos)
+    } else {
+        Closure::from(tokens)?
+    };
 
     Ok(Loop {
         maybe_init: None,
@@ -96,10 +107,15 @@ fn parse_while(tokens: &mut Stream<Token>) -> ParseResult<Loop> {
     // The next tokens should be the loop condition expression.
     let maybe_cond = Some(Expression::from(tokens)?);
 
-    Module::parse_expecting(tokens, TokenKind::SemiColon)?;
-
-    // The rest should be the statement or closure representing the loop body.
-    let body = Closure::from(tokens)?;
+    // The next tokens should either be `: <statement>` or just a closure.
+    let body = if Module::parse_optional(tokens, TokenKind::Colon).is_some() {
+        let statement = Statement::from(tokens)?;
+        let start_pos = statement.start_pos().clone();
+        let end_pos = statement.end_pos().clone();
+        Closure::new(vec![statement], None, start_pos, end_pos)
+    } else {
+        Closure::from(tokens)?
+    };
 
     Ok(Loop {
         maybe_init: None,
@@ -120,34 +136,39 @@ fn parse_for(tokens: &mut Stream<Token>) -> ParseResult<Loop> {
 
     // If this is a for loop, parse the init, condition, and update segments before the loop body.
     // Parse the optional initialization statement.
-    let maybe_init = if Module::next_token_is(tokens, &TokenKind::SemiColon) {
+    let maybe_init = if Module::next_token_is(tokens, &TokenKind::Comma) {
         None
     } else {
         Some(Statement::from(tokens)?)
     };
 
-    Module::parse_expecting(tokens, TokenKind::SemiColon)?;
+    Module::parse_expecting(tokens, TokenKind::Comma)?;
 
     // Parse the optional condition expression.
-    let maybe_cond = if Module::next_token_is(tokens, &TokenKind::SemiColon) {
+    let maybe_cond = if Module::next_token_is(tokens, &TokenKind::Comma) {
         None
     } else {
         Some(Expression::from(tokens)?)
     };
 
-    Module::parse_expecting(tokens, TokenKind::SemiColon)?;
+    Module::parse_expecting(tokens, TokenKind::Comma)?;
 
     // Parse the optional update statement.
-    let maybe_update = if Module::next_token_is(tokens, &TokenKind::SemiColon) {
+    let maybe_update = if Module::next_token_is(tokens, &TokenKind::Comma) {
         None
     } else {
         Some(Statement::from(tokens)?)
     };
 
-    Module::parse_expecting(tokens, TokenKind::SemiColon)?;
-
-    // The rest should be the statement representing the loop body.
-    let body = Closure::from(tokens)?;
+    // The next tokens should either be `: <statement>` or just a closure.
+    let body = if Module::parse_optional(tokens, TokenKind::Colon).is_some() {
+        let statement = Statement::from(tokens)?;
+        let start_pos = statement.start_pos().clone();
+        let end_pos = statement.end_pos().clone();
+        Closure::new(vec![statement], None, start_pos, end_pos)
+    } else {
+        Closure::from(tokens)?
+    };
 
     Ok(Loop {
         maybe_init,

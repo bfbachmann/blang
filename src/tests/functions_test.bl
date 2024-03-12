@@ -2,22 +2,24 @@ use "src/tests/test_utils.bl"
 
 fn cumulative_sum(n: i64) ~ i64 {
     let mut result = 0
-    for let mut i = n; i > 0; i = i - 1;
+    for let mut i = n, i > 0, i = i - 1:
         result = result + i
 
     return result
 }
 
 fn fib(n: i64) ~ i64 {
-    if n <= 2 return 1
+    if n <= 2: return 1
     return fib(n-1) + fib(n-2)
 }
 
-fn run_fn_with_arg(f: fn (i64) ~ i64, arg: i64) ~ i64
+fn run_fn_with_arg(f: fn (i64) ~ i64, arg: i64) ~ i64 {
     return f(arg)
+}
 
-fn double(i: i64) ~ i64 
+fn double(i: i64) ~ i64 {
     return i * 2
+}
 
 struct CalcTask {
     f: fn (i64) ~ i64
@@ -25,8 +27,9 @@ struct CalcTask {
 }
 
 impl CalcTask {
-    fn run(self) ~ i64
+    fn run(self) ~ i64 {
         return self.f(self.arg)
+    }
 }
 
 fn main() {

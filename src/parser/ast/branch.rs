@@ -1,11 +1,14 @@
+
 use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
+use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::closure::Closure;
 use crate::parser::ast::expr::Expression;
+use crate::parser::ast::statement::Statement;
 use crate::parser::error::ParseResult;
 use crate::parser::module::Module;
 
@@ -44,17 +47,20 @@ impl Branch {
         }
     }
 
-    /// Parses a branch. If `with_condition` is true, expects token sequences of the form
+    /// Parses a branch. If `with_condition` is true, expects token sequences of the forms
     ///
-    ///     <expr> <body>
+    ///     <expr>: <statement>
+    ///     <expr> <closure>
     ///
     /// Otherwise, expects token sequences of the form
     ///
-    ///     <body>
+    ///     : <statement>
+    ///     <closure>
     ///
     /// where
     ///  - `expr` is the branch condition expression (see `Expression::from`)
-    ///  - `body` is the branch body statement (see `Statement::from`)
+    ///  - `statement` is the branch body statement (see `Statement::from`)
+    ///  - `closure` is the branch body closure (see `Closure::from`)
     pub fn from(tokens: &mut Stream<Token>, with_condition: bool) -> ParseResult<Self> {
         // Record the starting position of the branch.
         let start_pos = Module::current_position(tokens);
@@ -66,11 +72,17 @@ impl Branch {
             cond_expr = Some(expr);
         }
 
-        // The following tokens should be a closure that contains the statements that would be
-        // executed if the branch were taken.
-        let body = Closure::from(tokens)?;
-        let end_pos = body.end_pos().clone();
+        // The next tokens should either be `: <statement>` or just a closure.
+        let body = if Module::parse_optional(tokens, TokenKind::Colon).is_some() {
+            let statement = Statement::from(tokens)?;
+            let start_pos = statement.start_pos().clone();
+            let end_pos = statement.end_pos().clone();
+            Closure::new(vec![statement], None, start_pos, end_pos)
+        } else {
+            Closure::from(tokens)?
+        };
 
+        let end_pos = body.end_pos().clone();
         Ok(Branch::new(cond_expr, body, start_pos, end_pos))
     }
 }

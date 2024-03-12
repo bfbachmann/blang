@@ -52,27 +52,19 @@ impl Closure {
         }
     }
 
-    /// Parses closures. Expects token sequences of the forms
+    /// Parses closures. Expects token sequences of the form
     ///
-    ///     <statement>
     ///     { <statement>; ... }
     ///
     /// where
     /// - `statement` is any valid statement (see `Statement::from`)
+    /// - the semicolon is optional
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Record the closure starting position.
-        let start_pos = Module::current_position(tokens);
+        let start_pos = Module::parse_expecting(tokens, TokenKind::LeftBrace)?.start;
         let end_pos: Position;
 
-        // The first token should be `{` if it's a closure. Otherwise, it's just
-        // a statement.
-        if Module::parse_optional(tokens, TokenKind::LeftBrace).is_none() {
-            let statement = Statement::from(tokens)?;
-            end_pos = statement.end_pos().clone();
-            return Ok(Closure::new(vec![statement], None, start_pos, end_pos));
-        }
-
-        // The following nodes should be statements separated by ";".
+        // The following nodes should be statements separated by an optional ";".
         let mut statements = vec![];
         loop {
             match tokens.peek_next() {
