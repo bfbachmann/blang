@@ -3,10 +3,14 @@ use std::fmt::Display;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-use colored::Colorize;
 use colored::CustomColor;
+use colored::{control, Colorize};
 
 use crate::lexer::pos::Position;
+
+/// Represents the maximum number of lines that can be printed in source
+/// code that appears in error messages.
+const MAX_LINES_IN_PRINTED_SOURCE: usize = 3;
 
 /// Prints an error message and exits with code 1.
 #[macro_export]
@@ -131,9 +135,20 @@ pub fn format_file_loc(path: &str, line: Option<usize>, col: Option<usize>) -> S
 /// Pretty-prints source code between the lines in given positions in the given file.
 /// Highlights the region between `start_pos` and `end_pos` in red.
 pub fn print_source(file_path: &str, start_pos: &Position, end_pos: &Position) {
+    if control::SHOULD_COLORIZE.should_colorize() {
+        print_source_color(file_path, start_pos, end_pos);
+    } else {
+        print_source_no_color(file_path, start_pos, end_pos);
+    }
+}
+
+/// Pretty-prints source code between the lines in given positions in the given file.
+/// Highlights the region between `start_pos` and `end_pos` in red.
+fn print_source_color(file_path: &str, start_pos: &Position, end_pos: &Position) {
     let file = File::open(file_path).unwrap();
     let reader = BufReader::new(file);
     let width = end_pos.line.to_string().len();
+    let print_all_lines = end_pos.line - start_pos.line <= MAX_LINES_IN_PRINTED_SOURCE;
 
     println!(
         "{}{}",
@@ -192,13 +207,109 @@ pub fn print_source(file_path: &str, start_pos: &Position, end_pos: &Position) {
                 left.on_bright_red(),
                 right
             );
-        } else {
+        } else if print_all_lines {
             println!(
                 "{} {}",
                 format!("{:>width$}|", line_num, width = width)
                     .blue()
                     .bold(),
                 line.on_bright_red()
+            );
+        }
+    }
+}
+
+/// Pretty-prints source code between the lines in given positions in the given file.
+/// Underlines or annotates code between the given positions.
+fn print_source_no_color(file_path: &str, start_pos: &Position, end_pos: &Position) {
+    let file = File::open(file_path).unwrap();
+    let reader = BufReader::new(file);
+    let width = end_pos.line.to_string().len();
+    let print_all_lines = end_pos.line - start_pos.line <= MAX_LINES_IN_PRINTED_SOURCE;
+
+    println!(
+        "{}{}",
+        " ".repeat(width),
+        format_file_loc(file_path, Some(start_pos.line), Some(start_pos.col))
+    );
+
+    for (i, line) in reader.lines().enumerate() {
+        let line_num = i + 1;
+        if line_num < start_pos.line {
+            continue;
+        } else if line_num > end_pos.line {
+            break;
+        }
+
+        let line = line.unwrap();
+
+        if line_num == start_pos.line && start_pos.line == end_pos.line {
+            // The whole segment we're printing spans one line.
+            let (left, right) = line.split_at(start_pos.col - 1);
+            let (mid, right) = right.split_at(end_pos.col - start_pos.col);
+            println!("{pipe:>width$}", pipe = "|", width = width + 1);
+            println!(
+                "{} {}{}{}",
+                format!("{:>width$}|", line_num, width = width),
+                left,
+                mid,
+                right
+            );
+            println!(
+                "{} {}{}",
+                format!(
+                    "{:>width$}|",
+                    " ".repeat(line_num.to_string().len()),
+                    width = width
+                ),
+                " ".repeat(left.len()),
+                "^".repeat(mid.len()),
+            );
+        } else if line_num == start_pos.line {
+            // The segment we're printing spans multiple lines, and this is the first.
+            let (left, right) = line.split_at(start_pos.col - 1);
+            println!("{pipe:>width$}", pipe = "|", width = width + 1);
+            println!(
+                "{} {}{}",
+                format!("{:>width$}|", line_num, width = width),
+                left,
+                right,
+            );
+            println!(
+                "{} {}^-- starts here",
+                format!(
+                    "{:>width$}|",
+                    " ".repeat(line_num.to_string().len()),
+                    width = width
+                ),
+                " ".repeat(left.len()),
+            );
+        } else if line_num == end_pos.line {
+            // The segment we're printing spans multiple lines, and this is the last.
+            let (left, right) = line.split_at(end_pos.col - 1);
+            println!(
+                "{} {}{}",
+                format!("{:>width$}|", line_num, width = width),
+                left,
+                right
+            );
+            println!(
+                "{} {}^-- ends here",
+                format!(
+                    "{:>width$}|",
+                    " ".repeat(line_num.to_string().len()),
+                    width = width
+                ),
+                " ".repeat(left.len() - 1),
+            );
+        } else if print_all_lines {
+            // The segment we're printing spans multiple lines, and this is neither the first
+            // nor the last. We only print these lines if the total segment spans more than the maximum
+            // number of lines.
+            println!(
+                "{} {}",
+                format!("{:>width$}|", line_num, width = width),
+                line
             );
         }
     }
