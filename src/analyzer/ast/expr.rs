@@ -1284,8 +1284,9 @@ fn is_valid_type_cast(left_type: &AType, right_type: &AType) -> bool {
 
         // Casting between numeric types and pointers is allowed so long as
         // immutability is not violated.
+        // Casting `str` to `*u8` is also allowed.
         (AType::Pointer(_), target) => target.is_numeric(),
-        (source, AType::Pointer(APointerType{is_mut: false, ..})) => source.is_numeric(),
+        (source, AType::Pointer(APointerType{is_mut: false, ..})) => source.is_numeric() || source == &AType::Str,
 
         _ => false,
     }

@@ -561,6 +561,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             // Nothing to do here since all pointers are represented the same way in LLVM.
             (AType::Pointer(_) | AType::RawPtr, AType::Pointer(_) | AType::RawPtr) => ll_src_val,
 
+            // Casting `str` to a pointer. Nothing to do here either because `str`s are pointers.
+            (AType::Str, AType::Pointer(_)) => ll_src_val,
+
             // Zero-extended upcasts.
             (AType::U32, AType::I32 | AType::U64 | AType::I64)
             | (AType::U8, AType::I8 | AType::U32 | AType::I32 | AType::U64 | AType::I64) => self
