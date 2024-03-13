@@ -222,11 +222,11 @@ mod tests {
                                     Position::new(1, 33)
                                 ))),
                                 Position::new(1, 14),
-                                Position::new(1, 27),
+                                Position::new(1, 33),
                             ))),
                             false,
                             Position::new(1, 11),
-                            Position::new(1, 27),
+                            Position::new(1, 33),
                         ),
                         Argument::new(
                             "i",
@@ -258,10 +258,10 @@ mod tests {
                             Position::new(1, 58)
                         ))),
                         Position::new(1, 44),
-                        Position::new(1, 53),
+                        Position::new(1, 58),
                     )))),
                     Position::new(1, 1),
-                    Position::new(1, 42),
+                    Position::new(1, 58),
                 ),
                 Closure::new(vec![], None, Position::new(1, 59), Position::new(1, 61)),
             )

@@ -88,8 +88,9 @@ impl ProgramContext {
     /// a single scope representing the global scope and a type store containing primitive types.
     pub fn new() -> Self {
         let mut type_store = TypeStore::new();
-        let mut primitive_type_keys = HashMap::new();
 
+        // Set up primitive type keys.
+        let mut primitive_type_keys = HashMap::new();
         for typ in AType::primitives() {
             let name = typ.name().to_string();
             let key = type_store.insert(typ);

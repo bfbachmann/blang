@@ -80,7 +80,6 @@ locatable_impl!(FunctionSignature);
 
 impl FunctionSignature {
     /// Creates a new function signature with default start and end positions.
-    #[cfg(test)]
     pub fn new_with_default_pos(
         name: &str,
         args: Vec<Argument>,
@@ -246,11 +245,11 @@ impl FunctionSignature {
     ///  - `return_type` is the type of the optional return value
     fn from_args_and_return(tokens: &mut Stream<Token>, named: bool) -> ParseResult<Self> {
         // The next tokens should represent function arguments.
-        let (args, args_end_pos) = FunctionSignature::arg_declarations_from(tokens, named)?;
+        let (args, mut end_pos) = FunctionSignature::arg_declarations_from(tokens, named)?;
 
         // The next token should be `:` if there is a return type. Otherwise, there is no return
         // type and we're done.
-        let mut return_type = None;
+        let mut maybe_ret_type = None;
         match tokens.peek_next() {
             Some(Token {
                 kind: TokenKind::Colon,
@@ -258,17 +257,19 @@ impl FunctionSignature {
             }) => {
                 // Remove the `:` and parse the return type.
                 tokens.next();
-                return_type = Some(Type::from(tokens)?);
+                let return_type = Type::from(tokens)?;
+                end_pos = return_type.end_pos().clone();
+                maybe_ret_type = Some(return_type);
             }
             _ => {}
         }
 
         Ok(FunctionSignature::new_anon(
             args,
-            return_type,
+            maybe_ret_type,
             // We can leave the start position as default here because it will be set by the caller.
             Position::default(),
-            args_end_pos,
+            end_pos,
         ))
     }
 

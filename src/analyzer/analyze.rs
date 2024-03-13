@@ -1,3 +1,4 @@
+use crate::analyzer::ast::func::AFnSig;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -9,6 +10,9 @@ use crate::analyzer::type_store::TypeStore;
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::fmt::hierarchy_to_string;
 use crate::lexer::pos::{Locatable, Position};
+use crate::parser::ast::arg::Argument;
+use crate::parser::ast::func_sig::FunctionSignature;
+use crate::parser::ast::r#type::Type;
 use crate::parser::ast::r#use::UsedModule;
 use crate::parser::ast::statement::Statement;
 use crate::parser::module::Module;
@@ -59,6 +63,8 @@ pub fn analyze_modules(modules: Vec<Module>) -> ProgramAnalysis {
         HashMap::from_iter(modules.into_iter().map(|m| (PathBuf::from(&m.path), m)));
     let mut analyzed_mods: HashMap<PathBuf, AnalyzedModule> = HashMap::new();
     let mut ctx = ProgramContext::new();
+
+    define_intrinsics(&mut ctx);
 
     analyze_module::<UsedModule>(
         &mut ctx,
@@ -156,4 +162,25 @@ pub fn analyze_module<T: Locatable>(
             std::mem::take(&mut ctx.warnings),
         ),
     );
+}
+
+/// Defines all intrinsic (built-in) functions, methods, values, and types.
+fn define_intrinsics(ctx: &mut ProgramContext) {
+    // Generate the method `len(self: str): u32`.
+    let maybe_impl_tk = ctx.get_cur_self_type_key();
+    ctx.set_cur_self_type_key(Some(ctx.str_type_key()));
+    let fn_sig = AFnSig::from(
+        ctx,
+        &FunctionSignature::new_with_default_pos(
+            "len",
+            vec![Argument::new_with_default_pos(
+                "self",
+                Type::new_unresolved("Self"),
+                false,
+            )],
+            Some(Type::new_unresolved("u32")),
+        ),
+    );
+    ctx.insert_member_fn(ctx.str_type_key(), fn_sig);
+    ctx.set_cur_self_type_key(maybe_impl_tk);
 }

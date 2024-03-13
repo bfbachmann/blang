@@ -11,9 +11,9 @@ use inkwell::passes::PassManager;
 use inkwell::targets::{
     CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine, TargetTriple,
 };
-use inkwell::types::{AnyType};
+use inkwell::types::AnyType;
 use inkwell::values::FunctionValue;
-use inkwell::{OptimizationLevel};
+use inkwell::OptimizationLevel;
 
 use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::module::AModule;

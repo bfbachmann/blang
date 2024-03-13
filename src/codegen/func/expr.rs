@@ -4,6 +4,7 @@ use inkwell::{AddressSpace, IntPredicate};
 use crate::analyzer::ast::array::AArrayInit;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::fn_call::AFnCall;
+use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::index::AIndex;
 use crate::analyzer::ast::member::AMemberAccess;
 use crate::analyzer::ast::r#enum::AEnumVariantInit;
@@ -341,6 +342,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             } else {
                 args.push(ll_arg_val.into());
             }
+        }
+
+        // Check if this is a call to an intrinsic function or method. If so, we'll use
+        // whatever result the custom intrinsic code generator returned.
+        if let Some(result) = self.maybe_gen_intrinsic_call(call, fn_sig) {
+            return Some(result);
         }
 
         // Compile the function call and return the result.
@@ -741,5 +748,32 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             },
             other => panic!("unexpected arithmetic operator {other}"),
         }
+    }
+
+    /// Checks if the given function call is a call to an intrinsic function. If so,
+    /// generates code for the intrinsic function and returns the result.
+    fn maybe_gen_intrinsic_call(
+        &mut self,
+        call: &AFnCall,
+        fn_sig: &AFnSig,
+    ) -> Option<BasicValueEnum<'ctx>> {
+        if fn_sig.mangled_name == "str.len" {
+            match &call.fn_expr.kind {
+                AExprKind::MemberAccess(access) if access.is_method => {
+                    if let AExprKind::StrLiteral(literal) = &access.base_expr.kind {
+                        return Some(
+                            self.ctx
+                                .i32_type()
+                                .const_int(literal.len() as u64, false)
+                                .as_basic_value_enum(),
+                        );
+                    }
+                }
+
+                _ => {}
+            }
+        }
+
+        None
     }
 }
