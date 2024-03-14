@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::analyzer::ast::array::AArrayType;
 use inkwell::context::Context;
 use inkwell::types::{
     AnyType, AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType,
@@ -10,6 +9,7 @@ use inkwell::AddressSpace;
 use llvm_sys::core::LLVMFunctionType;
 use llvm_sys::prelude::LLVMTypeRef;
 
+use crate::analyzer::ast::array::AArrayType;
 use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#struct::AStructType;
@@ -29,6 +29,8 @@ pub struct TypeConverter<'ctx> {
 impl<'ctx> TypeConverter<'ctx> {
     /// Creates a new type converter.
     pub fn new(ctx: &'ctx Context, type_store: &'ctx TypeStore) -> TypeConverter<'ctx> {
+        gen_intrinsic_types(ctx);
+
         TypeConverter {
             ctx,
             type_store,
@@ -112,8 +114,8 @@ fn to_basic_type<'ctx>(
             .as_basic_type_enum(),
 
         AType::Str => ctx
-            .i8_type()
-            .ptr_type(AddressSpace::default())
+            .get_struct_type(typ.name())
+            .unwrap()
             .as_basic_type_enum(),
 
         AType::Struct(struct_type) => {
@@ -339,5 +341,18 @@ fn to_metadata_type_enum<'ctx>(
         )
     } else {
         BasicMetadataTypeEnum::from(to_basic_type(ctx, type_store, typ))
+    }
+}
+
+/// Generates type definitions for intrinsic types.
+fn gen_intrinsic_types(ctx: &Context) {
+    // Create the LLVM struct type for the `str` type.
+    {
+        let ll_struct_type = ctx.opaque_struct_type(AType::Str.name());
+        let ll_field_types: [BasicTypeEnum; 2] = [
+            ctx.i8_type().ptr_type(AddressSpace::default()).into(),
+            ctx.i64_type().into(),
+        ];
+        ll_struct_type.set_body(&ll_field_types, false);
     }
 }

@@ -166,7 +166,7 @@ pub fn analyze_module<T: Locatable>(
 
 /// Defines all intrinsic (built-in) functions, methods, values, and types.
 fn define_intrinsics(ctx: &mut ProgramContext) {
-    // Generate the method `len(self: str): u32`.
+    // Generate the method `len(self: str): u64`.
     let maybe_impl_tk = ctx.get_cur_self_type_key();
     ctx.set_cur_self_type_key(Some(ctx.str_type_key()));
     let fn_sig = AFnSig::from(
@@ -178,7 +178,7 @@ fn define_intrinsics(ctx: &mut ProgramContext) {
                 Type::new_unresolved("Self"),
                 false,
             )],
-            Some(Type::new_unresolved("u32")),
+            Some(Type::new_unresolved("u64")),
         ),
     );
     ctx.insert_member_fn(ctx.str_type_key(), fn_sig);

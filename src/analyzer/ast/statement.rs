@@ -506,12 +506,12 @@ mod tests {
                 name: "MyStruct".to_string(),
                 fields: vec![
                     AField {
-                        name: "counter".to_string(),
-                        type_key: ctx.i64_type_key(),
-                    },
-                    AField {
                         name: "message".to_string(),
                         type_key: ctx.str_type_key(),
+                    },
+                    AField {
+                        name: "counter".to_string(),
+                        type_key: ctx.i64_type_key(),
                     },
                     AField {
                         name: "is_even".to_string(),

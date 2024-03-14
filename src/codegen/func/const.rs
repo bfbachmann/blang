@@ -3,6 +3,7 @@ use inkwell::values::{
 };
 
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
+
 use crate::analyzer::ast::symbol::ASymbol;
 
 use super::FnCodeGen;
@@ -93,11 +94,16 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     global
                 };
 
-                self.builder.build_bitcast(
-                    global.as_pointer_value(),
-                    self.type_converter.get_basic_type(expr.type_key),
-                    "str_lit_as_i8_ptr",
-                )
+                let ll_str_type = self.type_converter.get_struct_type(expr.type_key);
+                let ll_str_val = ll_str_type.const_named_struct(&[
+                    global.as_basic_value_enum(),
+                    self.ctx
+                        .i64_type()
+                        .const_int(literal.len() as u64, false)
+                        .as_basic_value_enum(),
+                ]);
+
+                ll_str_val.as_basic_value_enum()
             }
 
             AExprKind::TupleInit(tuple_init) => {

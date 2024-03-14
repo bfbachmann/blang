@@ -561,8 +561,26 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             // Nothing to do here since all pointers are represented the same way in LLVM.
             (AType::Pointer(_) | AType::RawPtr, AType::Pointer(_) | AType::RawPtr) => ll_src_val,
 
-            // Casting `str` to a pointer. Nothing to do here either because `str`s are pointers.
-            (AType::Str, AType::Pointer(_)) => ll_src_val,
+            // Casting `str` to a pointer.
+            (AType::Str, AType::Pointer(_)) => {
+                let ll_str_ptr = if ll_src_val.is_pointer_value() {
+                    self.builder
+                        .build_struct_gep(
+                            self.ctx.i8_type(),
+                            ll_src_val.into_pointer_value(),
+                            1,
+                            "len",
+                        )
+                        .unwrap()
+                        .as_basic_value_enum()
+                } else {
+                    self.builder
+                        .build_extract_value(ll_src_val.into_struct_value(), 0, "ptr")
+                        .unwrap()
+                };
+
+                ll_str_ptr.as_basic_value_enum()
+            }
 
             // Zero-extended upcasts.
             (AType::U32, AType::I32 | AType::U64 | AType::I64)
@@ -651,10 +669,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles a comparison operation expression.
     fn gen_cmp(
         &mut self,
-        ll_lhs: BasicValueEnum<'ctx>,
+        mut ll_lhs: BasicValueEnum<'ctx>,
         left_type_key: TypeKey,
         op: &Operator,
-        ll_rhs: BasicValueEnum<'ctx>,
+        mut ll_rhs: BasicValueEnum<'ctx>,
         signed: bool,
     ) -> IntValue<'ctx> {
         // Handle the special case of enum variant comparisons.
@@ -673,6 +691,20 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 ll_right_variant,
                 "variants_equal",
             );
+        }
+
+        // Handle the special case of `str` comparisons.
+        if self.type_store.must_get(left_type_key) == &AType::Str {
+            ll_lhs = self
+                .builder
+                .build_extract_value(ll_lhs.into_struct_value(), 0, "left_ptr")
+                .unwrap()
+                .as_basic_value_enum();
+            ll_rhs = self
+                .builder
+                .build_extract_value(ll_rhs.into_struct_value(), 0, "right_ptr")
+                .unwrap()
+                .as_basic_value_enum();
         }
 
         // At this point we know it's safe to represent the types numerically for comparison.
@@ -761,20 +793,24 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         fn_sig: &AFnSig,
     ) -> Option<BasicValueEnum<'ctx>> {
         if fn_sig.mangled_name == "str.len" {
-            match &call.fn_expr.kind {
-                AExprKind::MemberAccess(access) if access.is_method => {
-                    if let AExprKind::StrLiteral(literal) = &access.base_expr.kind {
-                        return Some(
-                            self.ctx
-                                .i32_type()
-                                .const_int(literal.len() as u64, false)
-                                .as_basic_value_enum(),
-                        );
-                    }
-                }
+            let ll_str_value = self.gen_expr(call.args.first().unwrap());
+            let ll_str_len = if ll_str_value.is_pointer_value() {
+                self.builder
+                    .build_struct_gep(
+                        self.ctx.i8_type(),
+                        ll_str_value.into_pointer_value(),
+                        1,
+                        "len",
+                    )
+                    .unwrap()
+                    .as_basic_value_enum()
+            } else {
+                self.builder
+                    .build_extract_value(ll_str_value.into_struct_value(), 1, "len")
+                    .unwrap()
+            };
 
-                _ => {}
-            }
+            return Some(ll_str_len);
         }
 
         None

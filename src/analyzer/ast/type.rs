@@ -383,12 +383,11 @@ impl AType {
             AType::U32 | AType::I32 => 4,
 
             // All the following types are 64 bits (8 bytes).
-            AType::I64
-            | AType::RawPtr
-            | AType::Pointer(_)
-            | AType::U64
-            | AType::Function(_)
-            | AType::Str => 8,
+            AType::I64 | AType::RawPtr | AType::Pointer(_) | AType::U64 | AType::Function(_) => 8,
+
+            // `str`s are 16 bits because they are composed of
+            // a pointer and a length, both of which are 8 bits.
+            AType::Str => 16,
 
             // The size of a struct type is the sum of the sizes of all of its fields.
             AType::Struct(struct_type) => {
