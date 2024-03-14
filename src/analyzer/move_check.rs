@@ -145,9 +145,9 @@ impl Scope {
     }
 
     /// Creates a new scope representing a function body.
-    fn new_fn_body() -> Self {
+    fn new_fn_body(name: &str) -> Self {
         Scope {
-            kind: ScopeKind::FnBody,
+            kind: ScopeKind::FnBody(name.to_string()),
             declared_vars: HashSet::new(),
             moved_vars: HashMap::new(),
             deferred_moves: HashMap::new(),
@@ -413,7 +413,7 @@ impl<'a> MoveChecker<'a> {
     /// Recursively performs move checks on `fn_decl`.
     fn check_fn_decl(&mut self, fn_decl: &AFn) {
         // Push a new scope onto the stack for the function body.
-        self.push_scope(Scope::new_fn_body());
+        self.push_scope(Scope::new_fn_body(""));
 
         // Perform move analysis on the function body.
         self.check_statements(&fn_decl.body.statements);

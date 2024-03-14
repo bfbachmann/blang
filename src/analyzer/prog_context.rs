@@ -445,7 +445,7 @@ impl ProgramContext {
     /// Pushes `scope` onto the stack.
     pub fn push_scope(&mut self, scope: Scope) {
         match &scope.kind {
-            ScopeKind::FnBody => self.fn_scope_indices.push(self.stack.len()),
+            ScopeKind::FnBody(_) => self.fn_scope_indices.push(self.stack.len()),
             ScopeKind::LoopBody => self.loop_scope_indices.push(self.stack.len()),
             _ => {}
         }
@@ -458,7 +458,7 @@ impl ProgramContext {
         let scope = self.stack.pop_back().unwrap();
 
         match &scope.kind {
-            ScopeKind::FnBody => {
+            ScopeKind::FnBody(_) => {
                 self.fn_scope_indices.pop();
             }
             ScopeKind::LoopBody => {
@@ -639,6 +639,25 @@ impl ProgramContext {
     /// Returns true if the current scope is a function body or exists inside a function body.
     pub fn is_in_fn(&self) -> bool {
         !self.fn_scope_indices.is_empty()
+    }
+
+    /// Returns a new name for a nested function with the given name. The new name will contain
+    /// all the names of the functions within which this function is nested.
+    pub fn mangle_name(&self, name: &str) -> String {
+        if self.fn_scope_indices.is_empty() {
+            return name.to_string();
+        }
+
+        let mut path = "".to_string();
+        for i in &self.fn_scope_indices {
+            let fn_name = match &self.stack.get(*i).unwrap().kind {
+                ScopeKind::FnBody(name) => name.as_str(),
+                _ => unreachable!(),
+            };
+            path = path + fn_name + "::";
+        }
+
+        path + name
     }
 
     /// Returns true if the current scope is a loop body or falls within a loop body.

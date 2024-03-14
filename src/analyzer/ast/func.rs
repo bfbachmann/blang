@@ -141,7 +141,7 @@ impl AFnSig {
                 let impl_type = ctx.must_get_type(type_key);
                 format!("{}.{}", impl_type.name(), fn_name)
             }
-            None => fn_name.to_string(),
+            None => ctx.mangle_name(fn_name),
         }
     }
 
@@ -257,7 +257,7 @@ impl AFn {
         let a_closure = AClosure::from(
             ctx,
             &func.body,
-            ScopeKind::FnBody,
+            ScopeKind::FnBody(func.signature.name.clone()),
             func.signature.args.clone(),
             func.signature.maybe_ret_type.clone(),
         );
@@ -265,7 +265,12 @@ impl AFn {
         // Make sure the function return conditions are satisfied by the closure.
         if let Some(ret_type) = &func.signature.maybe_ret_type {
             let a_ret_type = ctx.resolve_type(&ret_type);
-            check_closure_returns(ctx, &a_closure, a_ret_type, &ScopeKind::FnBody);
+            check_closure_returns(
+                ctx,
+                &a_closure,
+                a_ret_type,
+                &ScopeKind::FnBody(func.signature.name.clone()),
+            );
         }
 
         AFn {

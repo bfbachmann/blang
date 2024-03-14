@@ -93,16 +93,6 @@ impl AStatement {
             }
 
             Statement::FunctionDeclaration(fn_decl) => {
-                // Make sure we are not already inside a function. For now, functions cannot be defined
-                // within other functions.
-                if ctx.is_in_fn() {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::InvalidStatement,
-                        "cannot declare functions inside other functions",
-                        &fn_decl.signature,
-                    ));
-                }
-
                 // Analyze the function and add it to the program context so we can reference it
                 // later.
                 let a_fn = AFn::from(ctx, fn_decl);

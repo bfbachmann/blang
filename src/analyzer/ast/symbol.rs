@@ -74,7 +74,7 @@ impl ASymbol {
         allow_type: bool,
         maybe_impl_type_key: Option<TypeKey>,
     ) -> Self {
-        let var_name = symbol.name.as_str();
+        let mut var_name = symbol.name.as_str();
 
         // Find the type key for the symbol.
         // Return a placeholder value if we failed to resolve the symbol type key.
@@ -109,7 +109,20 @@ impl ASymbol {
 
         // At this point the symbol must be resolved, or it doesn't exist in this scope.
         let var_type_key = match maybe_type_key {
-            Some(t) => t,
+            Some(t) => {
+                // If the variable refers to a function, be sure to update its name to
+                // match the function name. We have to do this because function names
+                // get mangled, and we have to be sure that the variables that reference
+                // them get mangled too.
+                let typ = ctx.must_get_type(t);
+                if typ.is_fn() {
+                    let manged_name = typ.to_fn_sig().mangled_name.as_str();
+                    if !manged_name.is_empty() {
+                        var_name = manged_name;
+                    }
+                }
+                t
+            }
             None => {
                 // We could not find the value with the given name, so record the error and return
                 // a placeholder value.
@@ -178,7 +191,7 @@ impl ASymbol {
         if include_fns {
             // Search for a function with the given name. Functions take precedence over extern
             // functions.
-            if let Some(func) = ctx.get_fn(name) {
+            if let Some(func) = ctx.get_fn(ctx.mangle_name(name).as_str()) {
                 return (Some(func.signature.type_key), None);
             };
 

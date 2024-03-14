@@ -177,7 +177,7 @@ pub fn check_closure_returns(
     match kind {
         // If this closure is a function body, branch body, or inline closure, we need to ensure
         // that the final statement satisfies the return conditions.
-        ScopeKind::FnBody | ScopeKind::BranchBody | ScopeKind::InlineClosure => {
+        ScopeKind::FnBody(_) | ScopeKind::BranchBody | ScopeKind::InlineClosure => {
             match closure.statements.last() {
                 // If it's a return, we're done checking. We don't need to validate the return
                 // itself because return statements are validated in `ARet::from`.

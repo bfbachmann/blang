@@ -3,7 +3,7 @@ use std::fs::remove_file;
 use std::path::Path;
 use std::process::Command;
 
-use inkwell::attributes::{Attribute, AttributeLoc};
+
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
@@ -11,18 +11,19 @@ use inkwell::passes::PassManager;
 use inkwell::targets::{
     CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetTriple,
 };
-use inkwell::types::AnyType;
+
 use inkwell::values::FunctionValue;
 use inkwell::OptimizationLevel;
 use target_lexicon::Triple;
 
-use crate::analyzer::ast::func::AFnSig;
+
 use crate::analyzer::ast::module::AModule;
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::type_store::TypeStore;
 use crate::codegen::convert::TypeConverter;
 use crate::codegen::error::{CodeGenError, CompileResult, ErrorKind};
+use crate::codegen::func;
 use crate::codegen::func::FnCodeGen;
 
 /// Compiles a type-rich and semantically valid program to LLVM IR and/or bitcode.
@@ -106,64 +107,6 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
         Ok(())
     }
 
-    /// Defines the given function in the current module based on the function signature.
-    fn gen_fn_sig(&mut self, sig: &AFnSig) {
-        // Define the function in the module using the fully-qualified function name.
-        let fn_type = self.type_converter.get_fn_type(sig.type_key);
-        let fn_val = self
-            .module
-            .add_function(sig.mangled_name.as_str(), fn_type, None);
-
-        // For now, all functions get the `frame-pointer=non-leaf` attribute. This tells
-        // LLVM that the frame pointer should be kept if the function calls other functions.
-        // This is important for stack unwinding.
-        fn_val.add_attribute(
-            AttributeLoc::Function,
-            self.ctx
-                .create_string_attribute("frame-pointer", "non-leaf"),
-        );
-
-        // Set arg names and mark arguments as pass-by-value where necessary.
-        if fn_val.count_params() == sig.args.len() as u32 {
-            // The compiled function arguments match those of the original function signature, so
-            // just assign arg names normally.
-            for (arg_val, arg) in fn_val.get_param_iter().zip(sig.args.iter()) {
-                arg_val.set_name(arg.name.as_str());
-            }
-        } else {
-            // The compiled function arguments do not match those of the original function
-            // signature. This means the function is taking an additional pointer as its first
-            // argument, to which the result will be written. This is done for functions that
-            // return structured types.
-            let first_arg_val = fn_val.get_first_param().unwrap();
-            first_arg_val.set_name("ret_val_ptr");
-
-            // Add the "sret" attribute to the first argument to tell LLVM that it is being used to
-            // pass the return value.
-            self.add_fn_arg_attrs(fn_val, 0, vec!["sret"]);
-
-            // Name the remaining function arguments normally.
-            for i in 1..fn_val.count_params() {
-                let arg_val = fn_val.get_nth_param(i).unwrap();
-                arg_val.set_name(sig.args.get((i - 1) as usize).unwrap().name.as_str());
-            }
-        }
-    }
-
-    /// Adds the given attributes to the function argument at the given index.
-    fn add_fn_arg_attrs(&self, fn_val: FunctionValue<'ctx>, arg_index: u32, attrs: Vec<&str>) {
-        let param = fn_val.get_nth_param(arg_index).unwrap();
-        let param_type = param.get_type().as_any_type_enum();
-
-        for attr in attrs {
-            let attr_kind = Attribute::get_named_enum_kind_id(attr);
-            // Make sure the attribute is properly defined.
-            assert_ne!(attr_kind, 0);
-            let attr = self.ctx.create_type_attribute(attr_kind, param_type);
-            fn_val.add_attribute(AttributeLoc::Param(arg_index), attr);
-        }
-    }
-
     /// Declares the following inside the LLVM module (without assigning values)
     /// - functions
     /// - extern functions (to be linked by the linker)
@@ -190,12 +133,22 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                 }
 
                 AStatement::FunctionDeclaration(func) => {
-                    self.gen_fn_sig(&func.signature);
+                    func::gen_fn_sig(
+                        self.ctx,
+                        self.module,
+                        &mut self.type_converter,
+                        &func.signature,
+                    );
                 }
 
                 AStatement::Impl(impl_) => {
                     for mem_fn in &impl_.member_fns {
-                        self.gen_fn_sig(&mem_fn.signature);
+                        func::gen_fn_sig(
+                            self.ctx,
+                            self.module,
+                            &mut self.type_converter,
+                            &mem_fn.signature,
+                        );
                     }
                 }
 

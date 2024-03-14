@@ -32,6 +32,14 @@ impl CalcTask {
     }
 }
 
+fn get_sum_fn(): fn (int, int): int {
+    fn sum(a: int, b: int): int {
+        return a + b
+    }
+
+    return sum
+}
+
 fn main() {
     // Check that regular function calls work.
     {
@@ -49,6 +57,20 @@ fn main() {
             arg: -5
         }
         assert(task.run() == -10, 4)
+    }
+
+    // Check that nested functions are usable.
+    {
+        fn mul(val_ptr: *mut int, factor: int) {
+            val_ptr? = val_ptr? * factor
+        }
+
+        let mut x = 11
+        mul(&mut x, 2)
+        assert(x == 22, 5)
+
+        let f = get_sum_fn()
+        assert(f(3, 4) == 7, 6)
     }
 
     exit(0)

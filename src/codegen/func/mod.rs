@@ -1,14 +1,16 @@
 use std::collections::HashMap;
 
 use colored::Colorize;
+use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::passes::PassManager;
+use inkwell::types::AnyType;
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
 
-use crate::analyzer::ast::func::AFn;
+use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::type_store::{TypeKey, TypeStore};
@@ -245,11 +247,16 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     fn gen_fn(&mut self, func: &AFn) -> CompileResult<FunctionValue<'ctx>> {
         // Retrieve the function and create a new "entry" block at the start of the function
         // body.
-        // TODO: This will panic when accessing nested functions.
         let fn_val = self
             .module
             .get_function(func.signature.mangled_name.as_str())
-            .unwrap();
+            .expect(
+                format!(
+                    r#"function {} was not found in the LLVM module"#,
+                    &func.signature
+                )
+                .as_str(),
+            );
 
         self.fn_value = Some(fn_val);
 
@@ -647,5 +654,70 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 .unwrap()
                 .into_int_value()
         }
+    }
+}
+
+/// Defines the given function in the current module based on the function signature.
+pub fn gen_fn_sig<'a, 'ctx>(
+    ctx: &'ctx Context,
+    module: &'a Module<'ctx>,
+    type_converter: &'a mut TypeConverter<'ctx>,
+    sig: &AFnSig,
+) {
+    // Define the function in the module using the fully-qualified function name.
+    let fn_type = type_converter.get_fn_type(sig.type_key);
+    let fn_val = module.add_function(sig.mangled_name.as_str(), fn_type, None);
+
+    // For now, all functions get the `frame-pointer=non-leaf` attribute. This tells
+    // LLVM that the frame pointer should be kept if the function calls other functions.
+    // This is important for stack unwinding.
+    fn_val.add_attribute(
+        AttributeLoc::Function,
+        ctx.create_string_attribute("frame-pointer", "non-leaf"),
+    );
+
+    // Set arg names and mark arguments as pass-by-value where necessary.
+    if fn_val.count_params() == sig.args.len() as u32 {
+        // The compiled function arguments match those of the original function signature, so
+        // just assign arg names normally.
+        for (arg_val, arg) in fn_val.get_param_iter().zip(sig.args.iter()) {
+            arg_val.set_name(arg.name.as_str());
+        }
+    } else {
+        // The compiled function arguments do not match those of the original function
+        // signature. This means the function is taking an additional pointer as its first
+        // argument, to which the result will be written. This is done for functions that
+        // return structured types.
+        let first_arg_val = fn_val.get_first_param().unwrap();
+        first_arg_val.set_name("ret_val_ptr");
+
+        // Add the "sret" attribute to the first argument to tell LLVM that it is being used to
+        // pass the return value.
+        add_fn_arg_attrs(ctx, fn_val, 0, vec!["sret"]);
+
+        // Name the remaining function arguments normally.
+        for i in 1..fn_val.count_params() {
+            let arg_val = fn_val.get_nth_param(i).unwrap();
+            arg_val.set_name(sig.args.get((i - 1) as usize).unwrap().name.as_str());
+        }
+    }
+}
+
+/// Adds the given attributes to the function argument at the given index.
+fn add_fn_arg_attrs<'ctx>(
+    ctx: &'ctx Context,
+    fn_val: FunctionValue<'ctx>,
+    arg_index: u32,
+    attrs: Vec<&str>,
+) {
+    let param = fn_val.get_nth_param(arg_index).unwrap();
+    let param_type = param.get_type().as_any_type_enum();
+
+    for attr in attrs {
+        let attr_kind = Attribute::get_named_enum_kind_id(attr);
+        // Make sure the attribute is properly defined.
+        assert_ne!(attr_kind, 0);
+        let attr = ctx.create_type_attribute(attr_kind, param_type);
+        fn_val.add_attribute(AttributeLoc::Param(arg_index), attr);
     }
 }

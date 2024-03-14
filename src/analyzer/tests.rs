@@ -75,17 +75,6 @@ mod tests {
     }
 
     #[test]
-    fn illegal_nested_fn() {
-        let raw = r#"
-            fn my_func() {
-                fn another() {}
-            }
-        "#;
-        let result = analyze(raw);
-        check_result(result, Some(ErrorKind::InvalidStatement));
-    }
-
-    #[test]
     fn assign_to_immutable_arg() {
         let raw = r#"
             fn my_func(arg: i64) {
@@ -1400,6 +1389,22 @@ mod tests {
             r#"
                 fn main() {
                     let x = &mut f
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::UndefSymbol));
+    }
+
+    #[test]
+    fn invalid_nested_fn_use() {
+        let result = analyze(
+            r#"
+                fn one() {
+                    fn inner() {}
+                }
+                
+                fn two() {
+                    inner()
                 }
             "#,
         );

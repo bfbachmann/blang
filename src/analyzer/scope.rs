@@ -40,9 +40,10 @@ impl ScopedSymbol {
 }
 
 /// Represents a kind of scope in which symbols can be defined.
-#[derive(PartialEq, Copy, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum ScopeKind {
-    FnBody,
+    /// A function body scope. The string inside is the function name.
+    FnBody(String),
     InlineClosure,
     BranchBody,
     LoopBody,
@@ -51,7 +52,7 @@ pub enum ScopeKind {
 impl fmt::Display for ScopeKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ScopeKind::FnBody => write!(f, "function body"),
+            ScopeKind::FnBody(_) => write!(f, "function body"),
             ScopeKind::InlineClosure => write!(f, "inline closure"),
             ScopeKind::BranchBody => write!(f, "branch body"),
             ScopeKind::LoopBody => write!(f, "loop body"),

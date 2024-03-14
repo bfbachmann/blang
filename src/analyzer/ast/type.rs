@@ -362,6 +362,11 @@ impl AType {
         matches!(self, AType::Pointer(_))
     }
 
+    /// Returns true if this is a function type.
+    pub fn is_fn(&self) -> bool {
+        matches!(self, AType::Function(_))
+    }
+
     /// Returns true if arithmetic operations on this type should be signed. Otherwise, this type
     /// either doesn't support arithmetic operations, or requires unsigned operations.
     pub fn is_signed(&self) -> bool {

@@ -49,6 +49,30 @@ fn fibonacci(n: u64): u64 {
 }
 ```
 
+Functions can be nested.
+
+```rust
+fn call_nested(): int {
+    fn sum(a: int, b: int): int {
+        return a + b
+    }
+  
+    return sum(1, 2)
+}
+```
+
+Functions can be assigned to and used as variables.
+
+```rust
+fn call_nested(): fn (int, int): int {
+    fn sum(a: int, b: int): int {
+        return a + b
+    }
+
+    return sum
+}
+```
+
 ### Variable Declarations: `let`
 
 Variables can only be declared using the `let` keyword inside functions (i.e. there is currently no support for global or 

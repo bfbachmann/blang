@@ -518,8 +518,7 @@ impl AExpr {
                         ctx.insert_err(AnalyzeError::new(
                             ErrorKind::ExpectedReturnValue,
                             format_code!(
-                                "{} has no return value, but is called in an expression \
-                                where a return value is expected",
+                                "{} has no return value, but is called in an expression",
                                 a_call.display(ctx),
                             )
                             .as_str(),
@@ -559,7 +558,7 @@ impl AExpr {
                 let a_closure = AClosure::from(
                     ctx,
                     &anon_fn.body,
-                    ScopeKind::FnBody,
+                    ScopeKind::FnBody(sig.name.clone()),
                     sig.args.clone(),
                     sig.maybe_ret_type.clone(),
                 );

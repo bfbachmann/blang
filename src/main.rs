@@ -10,7 +10,7 @@ use std::{fs, process};
 
 use clap::{arg, ArgAction, Command};
 use colored::*;
-use inkwell::targets::{TargetTriple};
+use inkwell::targets::TargetTriple;
 use target_lexicon::Triple;
 
 use parser::module::Module;
@@ -148,7 +148,7 @@ fn main() {
 
         Some(("check", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(file_path) => {
-                let target_triple = &get_target_triple(sub_matches.get_one::<String>("target"));
+                let target_triple = &get_target_triple(None);
                 let maybe_dump_path = sub_matches.get_one::<String>("dump");
                 analyze(file_path, maybe_dump_path, target_triple);
             }
