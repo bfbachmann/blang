@@ -542,7 +542,7 @@ impl AType {
             AType::Enum(e) => format!("{}", e.display(ctx)),
             AType::Tuple(t) => format!("{}", t.display(ctx)),
             AType::Array(a) => format!("{}", a.display(ctx)),
-            AType::Function(func) => format!("{}", func.display(ctx)),
+            AType::Function(func) => format!("{}", func.display(ctx, true)),
             AType::Pointer(t) => format!("{}", t.display(ctx)),
             AType::Unknown(name) => format!("{}", name),
         }

@@ -34,9 +34,10 @@ impl AArg {
     }
 
     /// Returns a string containing a human-readable version of the argument.
-    pub fn display(&self, ctx: &ProgramContext) -> String {
+    /// If `as_type` is true, the argument will be displayed as a type (without the name).
+    pub fn display(&self, ctx: &ProgramContext, as_type: bool) -> String {
         let type_display = ctx.display_type_for_key(self.type_key);
-        match self.name.is_empty() {
+        match self.name.is_empty() || as_type {
             true => format!("{}", type_display).to_string(),
             false => format!("{}: {}", self.name, type_display).to_string(),
         }

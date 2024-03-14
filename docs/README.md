@@ -64,7 +64,12 @@ fn call_nested(): int {
 Functions can be assigned to and used as variables.
 
 ```rust
-fn call_nested(): fn (int, int): int {
+fn main() {
+    let func = get_fn()
+    let three = func(1, 2)
+}
+
+fn get_fn(): fn (int, int): int {
     fn sum(a: int, b: int): int {
         return a + b
     }
