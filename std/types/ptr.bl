@@ -1,5 +1,5 @@
 impl *u8 {
-    fn offset(self, offset: i64): *u8 {
-        return ((self as i64) + offset) as *u8
+    fn offset(self, offset: int): *u8 {
+        return ((self as int) + offset) as *u8
     }
 }

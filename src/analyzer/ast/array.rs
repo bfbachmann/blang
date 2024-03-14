@@ -50,18 +50,18 @@ impl AArrayType {
         let len_expr = AExpr::from(
             ctx,
             array_type.length_expr.clone(),
-            Some(ctx.u64_type_key()),
+            Some(ctx.uint_type_key()),
             false,
             false,
             false,
         );
 
-        // Try to evaluate the length expression as a constant u64. We'll skip this step if the
+        // Try to evaluate the length expression as a constant `uint`. We'll skip this step if the
         // expression is already of the wrong type.
-        let len = if len_expr.type_key != ctx.u64_type_key() {
+        let len = if len_expr.type_key != ctx.uint_type_key() {
             0
         } else {
-            match len_expr.try_into_const_u64(ctx) {
+            match len_expr.try_into_const_uint(ctx) {
                 Ok(u) => {
                     // If the array is empty, we'll also make sure it has no assigned type key
                     // for consistency.
@@ -221,16 +221,16 @@ impl AArrayInit {
                 let expr = AExpr::from(
                     ctx,
                     repeat_expr.clone(),
-                    Some(ctx.u64_type_key()),
+                    Some(ctx.uint_type_key()),
                     false,
                     false,
                     false,
                 );
-                if expr.type_key != ctx.u64_type_key() {
+                if expr.type_key != ctx.uint_type_key() {
                     // Default to zero length if the repeat parameter is invalid.
                     Some(0)
                 } else {
-                    match expr.try_into_const_u64(ctx) {
+                    match expr.try_into_const_uint(ctx) {
                         Ok(u) => Some(u),
                         Err(mut err) => {
                             err.detail = Some("Array lengths must be constant.".to_string());

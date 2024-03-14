@@ -1,10 +1,10 @@
 extern {
     fn exit(code: u64)
-    fn malloc(size: u64): rawptr
-    fn free(ptr: rawptr)
+    fn malloc(size: u64): *mut u8
+    fn free(ptr: *u8)
 }
 
-const NULL = 0_u64 as rawptr
+const NULL = 0_u64 as *u8
 
 fn assert(b: bool, exit_code: u64) {
     if !b: exit(exit_code)

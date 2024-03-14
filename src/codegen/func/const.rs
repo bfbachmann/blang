@@ -50,15 +50,29 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 .const_int(*u as u64, false)
                 .as_basic_value_enum(),
 
-            AExprKind::I64Literal(i, _) => self
+            AExprKind::I64Literal(i) => self
                 .ctx
                 .i64_type()
                 .const_int(*i as u64, *i < 0)
                 .as_basic_value_enum(),
 
-            AExprKind::U64Literal(u, _) => self
+            AExprKind::U64Literal(u) => self
                 .ctx
                 .i64_type()
+                .const_int(*u, false)
+                .as_basic_value_enum(),
+
+            AExprKind::IntLiteral(i) => self
+                .type_converter
+                .get_basic_type(expr.type_key)
+                .into_int_type()
+                .const_int(*i as u64, *i < 0)
+                .as_basic_value_enum(),
+
+            AExprKind::UintLiteral(u) => self
+                .type_converter
+                .get_basic_type(expr.type_key)
+                .into_int_type()
                 .const_int(*u, false)
                 .as_basic_value_enum(),
 

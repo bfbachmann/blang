@@ -41,10 +41,10 @@ pub enum TokenKind {
     I8Literal(i8),
     U32Literal(u32),
     I32Literal(i32),
-    // The bool here will be true if the "i64" suffix was included in the literal.
-    I64Literal(i64, bool),
-    // The bool here will be true if the "u64" suffix was included in the literal.
-    U64Literal(u64, bool),
+    I64Literal(i64),
+    U64Literal(u64),
+    IntLiteral(i64),
+    UintLiteral(u64),
     StrLiteral(String),
     Fn,
     Struct,
@@ -115,8 +115,10 @@ impl Clone for TokenKind {
             TokenKind::U8Literal(v) => TokenKind::U8Literal(*v),
             TokenKind::I32Literal(v) => TokenKind::I32Literal(*v),
             TokenKind::U32Literal(v) => TokenKind::U32Literal(*v),
-            TokenKind::I64Literal(v, has_suffix) => TokenKind::I64Literal(*v, *has_suffix),
-            TokenKind::U64Literal(v, has_suffix) => TokenKind::U64Literal(*v, *has_suffix),
+            TokenKind::I64Literal(v) => TokenKind::I64Literal(*v),
+            TokenKind::U64Literal(v) => TokenKind::U64Literal(*v),
+            TokenKind::IntLiteral(v) => TokenKind::IntLiteral(*v),
+            TokenKind::UintLiteral(v) => TokenKind::UintLiteral(*v),
             TokenKind::StrLiteral(v) => TokenKind::StrLiteral(v.clone()),
             TokenKind::Fn => TokenKind::Fn,
             TokenKind::Struct => TokenKind::Struct,
@@ -169,12 +171,6 @@ impl fmt::Display for TokenKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             TokenKind::BoolLiteral(b) => write!(f, "{}", b),
-            TokenKind::I64Literal(i, has_suffix) => {
-                write!(f, "{}{}", i, if *has_suffix { "i64" } else { "" })
-            }
-            TokenKind::U64Literal(u, has_suffix) => {
-                write!(f, "{}{}", u, if *has_suffix { "u64" } else { "" })
-            }
             TokenKind::StrLiteral(s) => write!(f, r#""{}""#, s),
             TokenKind::Identifier(s) => write!(f, "{}", s),
             other => write!(f, "{}", other.to_string()),
@@ -205,8 +201,10 @@ impl TokenKind {
             TokenKind::U8Literal(v) => v.to_string(),
             TokenKind::I32Literal(v) => v.to_string(),
             TokenKind::U32Literal(v) => v.to_string(),
-            TokenKind::I64Literal(v, _) => v.to_string(),
-            TokenKind::U64Literal(v, _) => v.to_string(),
+            TokenKind::I64Literal(v) => v.to_string(),
+            TokenKind::U64Literal(v) => v.to_string(),
+            TokenKind::IntLiteral(v) => v.to_string(),
+            TokenKind::UintLiteral(v) => v.to_string(),
             TokenKind::StrLiteral(v) => v.to_string(),
             TokenKind::Fn => "fn".to_string(),
             TokenKind::Struct => "struct".to_string(),
@@ -370,6 +368,18 @@ impl TokenKind {
             _ => {}
         };
 
+        match TokenKind::lex_int_literal(segment) {
+            Ok(Some(v)) => return Ok(Some(v)),
+            Err(e) => return Err(e),
+            _ => {}
+        };
+
+        match TokenKind::lex_uint_literal(segment) {
+            Ok(Some(v)) => return Ok(Some(v)),
+            Err(e) => return Err(e),
+            _ => {}
+        };
+
         if let Some(v) = TokenKind::lex_string_literal(segment) {
             return Ok(Some(v));
         }
@@ -474,7 +484,7 @@ impl TokenKind {
 
     fn lex_i64_literal(segment: &str) -> Result<Option<TokenKind>, String> {
         lazy_static! {
-            static ref RE_I64: Regex = Regex::new(r"^[0-9][0-9_]*(i64)?$").unwrap();
+            static ref RE_I64: Regex = Regex::new(r"^[0-9][0-9_]*i64$").unwrap();
         }
         match RE_I64.is_match(segment) {
             true => {
@@ -485,7 +495,7 @@ impl TokenKind {
                     .collect::<String>()
                     .parse::<i64>()
                 {
-                    Ok(i) => Ok(Some(TokenKind::I64Literal(i, segment.ends_with("i64")))),
+                    Ok(i) => Ok(Some(TokenKind::I64Literal(i))),
                     Err(e) => Err(e.to_string()),
                 }
             }
@@ -495,7 +505,7 @@ impl TokenKind {
 
     fn lex_u64_literal(segment: &str) -> Result<Option<TokenKind>, String> {
         lazy_static! {
-            static ref RE_U64: Regex = Regex::new(r"^[0-9][0-9_]*(u64)?$").unwrap();
+            static ref RE_U64: Regex = Regex::new(r"^[0-9][0-9_]*u64$").unwrap();
         }
         match RE_U64.is_match(segment) {
             true => {
@@ -506,7 +516,48 @@ impl TokenKind {
                     .collect::<String>()
                     .parse::<u64>()
                 {
-                    Ok(i) => Ok(Some(TokenKind::U64Literal(i, segment.ends_with("u64")))),
+                    Ok(i) => Ok(Some(TokenKind::U64Literal(i))),
+                    Err(e) => Err(e.to_string()),
+                }
+            }
+            false => Ok(None),
+        }
+    }
+
+    fn lex_int_literal(segment: &str) -> Result<Option<TokenKind>, String> {
+        lazy_static! {
+            static ref RE_INT: Regex = Regex::new(r"^[0-9][0-9_]*$").unwrap();
+        }
+        match RE_INT.is_match(segment) {
+            true => {
+                match segment
+                    .chars()
+                    .filter(|c| c.is_digit(10))
+                    .collect::<String>()
+                    .parse::<i64>()
+                {
+                    Ok(i) => Ok(Some(TokenKind::IntLiteral(i))),
+                    Err(e) => Err(e.to_string()),
+                }
+            }
+            false => Ok(None),
+        }
+    }
+
+    fn lex_uint_literal(segment: &str) -> Result<Option<TokenKind>, String> {
+        lazy_static! {
+            static ref RE_UINT: Regex = Regex::new(r"^[0-9][0-9_]*uint$").unwrap();
+        }
+        match RE_UINT.is_match(segment) {
+            true => {
+                match segment
+                    .replace("uint", "")
+                    .chars()
+                    .filter(|c| c.is_digit(10))
+                    .collect::<String>()
+                    .parse::<u64>()
+                {
+                    Ok(i) => Ok(Some(TokenKind::UintLiteral(i))),
                     Err(e) => Err(e.to_string()),
                 }
             }

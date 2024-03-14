@@ -1,6 +1,9 @@
 use crate::analyzer::ast::func::AFnSig;
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+
+use target_lexicon::Triple;
 
 use crate::analyzer::ast::module::AModule;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
@@ -57,12 +60,15 @@ pub struct ProgramAnalysis {
 }
 
 /// Analyzes all the given modules.
-pub fn analyze_modules(modules: Vec<Module>) -> ProgramAnalysis {
+pub fn analyze_modules(modules: Vec<Module>, target_triple: &Triple) -> ProgramAnalysis {
     let root_mod_path = PathBuf::from(&modules.first().unwrap().path);
     let mods: HashMap<PathBuf, Module> =
         HashMap::from_iter(modules.into_iter().map(|m| (PathBuf::from(&m.path), m)));
     let mut analyzed_mods: HashMap<PathBuf, AnalyzedModule> = HashMap::new();
-    let mut ctx = ProgramContext::new();
+    let mut ctx = match target_triple.pointer_width() {
+        Ok(width) => ProgramContext::new(width.bits()),
+        Err(_) => ProgramContext::new_with_host_ptr_width(),
+    };
 
     define_intrinsics(&mut ctx);
 
@@ -166,7 +172,7 @@ pub fn analyze_module<T: Locatable>(
 
 /// Defines all intrinsic (built-in) functions, methods, values, and types.
 fn define_intrinsics(ctx: &mut ProgramContext) {
-    // Generate the method `len(self: str): u64`.
+    // Generate the method `len(self: str): uint`.
     let maybe_impl_tk = ctx.get_cur_self_type_key();
     ctx.set_cur_self_type_key(Some(ctx.str_type_key()));
     let fn_sig = AFnSig::from(
@@ -178,7 +184,7 @@ fn define_intrinsics(ctx: &mut ProgramContext) {
                 Type::new_unresolved("Self"),
                 false,
             )],
-            Some(Type::new_unresolved("u64")),
+            Some(Type::new_unresolved("uint")),
         ),
     );
     ctx.insert_member_fn(ctx.str_type_key(), fn_sig);

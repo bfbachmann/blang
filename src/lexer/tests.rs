@@ -38,12 +38,12 @@ mod tests {
     }
 
     #[test]
-    fn lex_i64_literal() {
+    fn lex_int_literal() {
         let result = TokenKind::from(" 123 ");
-        assert_eq!(result, Ok(Some(TokenKind::I64Literal(123, false))));
+        assert_eq!(result, Ok(Some(TokenKind::IntLiteral(123))));
 
         let result = TokenKind::from(" 9923423 ");
-        assert_eq!(result, Ok(Some(TokenKind::I64Literal(9923423, false))));
+        assert_eq!(result, Ok(Some(TokenKind::IntLiteral(9923423))));
 
         let result = TokenKind::from(" ..23423;lj1 ");
         assert_eq!(result, Ok(None));
@@ -106,7 +106,7 @@ mod tests {
             Ok(vec![
                 Token::new(TokenKind::Identifier(String::from("thing")), 1, 1, 6),
                 Token::new(TokenKind::Equal, 1, 7, 8),
-                Token::new(TokenKind::I64Literal(234, false), 1, 9, 12),
+                Token::new(TokenKind::IntLiteral(234), 1, 9, 12),
                 Token::new(TokenKind::StrLiteral(String::from("onetwo")), 1, 13, 21),
                 Token::new(TokenKind::StrLiteral(String::from("three")), 1, 22, 29),
                 Token::new(TokenKind::Identifier(String::from("four")), 1, 29, 33),

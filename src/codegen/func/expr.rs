@@ -35,8 +35,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             | AExprKind::U8Literal(_)
             | AExprKind::I32Literal(_)
             | AExprKind::U32Literal(_)
-            | AExprKind::I64Literal(_, _)
-            | AExprKind::U64Literal(_, _)
+            | AExprKind::I64Literal(_)
+            | AExprKind::U64Literal(_)
+            | AExprKind::IntLiteral(_)
+            | AExprKind::UintLiteral(_)
             | AExprKind::StrLiteral(_) => {
                 panic!("constant expression {} was not marked as constant", expr)
             }
@@ -559,7 +561,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         match (src_type, dst_type) {
             // Nothing to do here since all pointers are represented the same way in LLVM.
-            (AType::Pointer(_) | AType::RawPtr, AType::Pointer(_) | AType::RawPtr) => ll_src_val,
+            (AType::Pointer(_), AType::Pointer(_)) => ll_src_val,
 
             // Casting `str` to a pointer.
             (AType::Str, AType::Pointer(_)) => {

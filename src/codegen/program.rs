@@ -3,19 +3,18 @@ use std::fs::remove_file;
 use std::path::Path;
 use std::process::Command;
 
-
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::passes::PassManager;
 use inkwell::targets::{
-    CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine, TargetTriple,
+    CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetTriple,
 };
 use inkwell::types::AnyType;
 use inkwell::values::FunctionValue;
 use inkwell::OptimizationLevel;
-
+use target_lexicon::Triple;
 
 use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::module::AModule;
@@ -206,12 +205,36 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
     }
 }
 
+/// Initialize the target machine from the given triple (or from information gathered from the host
+/// platform if the given target is None.
+pub fn init_target(maybe_target_triple: Option<&String>) -> Result<TargetTriple, CodeGenError> {
+    match maybe_target_triple {
+        Some(target_triple) => {
+            // TODO: We probably don't need to initialize all targets - just the one we're
+            // compiling to.
+            Target::initialize_all(&InitializationConfig::default());
+            Ok(TargetTriple::create(target_triple))
+        }
+
+        None => {
+            match Target::initialize_native(&InitializationConfig::default()) {
+                Ok(_) => {}
+                Err(msg) => {
+                    return Err(CodeGenError::new(ErrorKind::TargetInitFailed, msg.as_str()))
+                }
+            };
+
+            Ok(TargetTriple::create(Triple::host().to_string().as_str()))
+        }
+    }
+}
+
 /// Generates the program code for the given target. If there is no target, compiles the
 /// program for the host system.
 pub fn generate(
     analyzed_modules: Vec<AModule>,
     type_store: TypeStore,
-    maybe_target_triple: Option<&String>,
+    target_triple: &TargetTriple,
     output_format: OutputFormat,
     output_path: &Path,
     optimize: bool,
@@ -223,26 +246,7 @@ pub fn generate(
     let module = ctx.create_module("main");
 
     // Initialize the target machine and set the target on the LLVM module.
-    let target_triple = match maybe_target_triple {
-        Some(target_triple) => {
-            // TODO: We probably don't need to initialize all targets - just the one we're
-            // compiling to.
-            Target::initialize_all(&InitializationConfig::default());
-            TargetTriple::create(target_triple)
-        }
-
-        None => {
-            match Target::initialize_native(&InitializationConfig::default()) {
-                Ok(_) => {}
-                Err(msg) => {
-                    return Err(CodeGenError::new(ErrorKind::TargetInitFailed, msg.as_str()))
-                }
-            };
-
-            TargetMachine::get_default_triple()
-        }
-    };
-    module.set_triple(&target_triple);
+    module.set_triple(target_triple);
 
     // Set up function pass manager that performs LLVM IR optimization.
     let fpm = PassManager::create(&module);

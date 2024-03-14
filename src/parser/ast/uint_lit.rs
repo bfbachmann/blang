@@ -13,49 +13,57 @@ use crate::parser::error::{ErrorKind, ParseError};
 
 /// Represents a signed 64 bit integer literal.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct U64Lit {
+pub struct UintLit {
     pub value: u64,
     pub start_pos: Position,
     pub end_pos: Position,
 }
 
-impl Display for U64Lit {
+impl Display for UintLit {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.value)
     }
 }
 
-impl Hash for U64Lit {
+impl Hash for UintLit {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.value.hash(state);
     }
 }
 
-locatable_impl!(U64Lit);
+locatable_impl!(UintLit);
 
-impl U64Lit {
-    /// Attempts to parse an u64 literal from the token sequence.
+impl UintLit {
+    pub fn new_with_default_pos(u: u64) -> UintLit {
+        UintLit {
+            value: u,
+            start_pos: Default::default(),
+            end_pos: Default::default(),
+        }
+    }
+
+    /// Attempts to parse a `uint` literal from the token sequence.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         match tokens.next() {
             Some(&Token {
-                kind: TokenKind::U64Literal(value),
+                kind: TokenKind::UintLiteral(value),
                 start,
                 end,
-            }) => Ok(U64Lit {
+            }) => Ok(UintLit {
                 value,
                 start_pos: start,
                 end_pos: end,
             }),
             Some(other) => Err(ParseError::new(
                 ErrorKind::UnexpectedToken,
-                format_code!("expected {} literal, but found {}", "u64", other).as_str(),
+                format_code!("expected {} literal, but found {}", "uint", other).as_str(),
                 Some(other.clone()),
                 other.start,
                 other.end,
             )),
             None => Err(ParseError::new(
                 ErrorKind::UnexpectedEOF,
-                "expected u64 literal, but found EOF",
+                "expected uint literal, but found EOF",
                 None,
                 Position::default(),
                 Position::default(),

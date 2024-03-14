@@ -81,7 +81,7 @@ mod tests {
 
     #[test]
     fn var_redeclared() {
-        let mut ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new_with_host_ptr_width();
         let var_decl = VariableDeclaration::new(
             Some(Type::new_unresolved("str")),
             false,
@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn type_mismatch() {
-        let mut ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new_with_host_ptr_width();
         let var_decl = VariableDeclaration::new(
             Some(Type::new_unresolved("i64")),
             false,

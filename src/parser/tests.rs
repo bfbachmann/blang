@@ -14,7 +14,8 @@ mod tests {
     use crate::parser::ast::func::Function;
     use crate::parser::ast::func_call::FuncCall;
     use crate::parser::ast::func_sig::FunctionSignature;
-    use crate::parser::ast::i64_lit::I64Lit;
+    
+    use crate::parser::ast::int_lit::IntLit;
     use crate::parser::ast::op::Operator;
     use crate::parser::ast::r#type::Type;
     use crate::parser::ast::ret::Ret;
@@ -48,7 +49,7 @@ mod tests {
                 let prefix = "Fibonacci number " + itoa(i) + " is: "
                 let result = fib(
                     i,
-                    fn (n: i64): bool {
+                    fn (n: int): bool {
                         print("fib visitor sees n=" + itoa(n))
                         return n % 2 == 0
                     },
@@ -63,7 +64,7 @@ mod tests {
         }
         
         // Calls `visitor_fn` with n and returns the n'th Fibonacci number.
-        fn fib(n: i64, visitor_fn: fn (i64): bool): i64 {
+        fn fib(n: int, visitor_fn: fn (int): bool): int {
             if visitor_fn(n) {
                 print("visitor returned true")
             }
@@ -93,9 +94,8 @@ mod tests {
                         Some(Type::new_unresolved("i64")),
                         false,
                         "i".to_string(),
-                        Expression::I64Literal(I64Lit {
+                        Expression::IntLiteral(IntLit {
                             value: 123,
-                            has_type_suffix: false,
                             start_pos: Position::new(1, 14),
                             end_pos: Position::new(1, 17),
                         }),
@@ -106,9 +106,8 @@ mod tests {
                         None,
                         false,
                         "j".to_string(),
-                        Expression::I64Literal(I64Lit {
+                        Expression::IntLiteral(IntLit {
                             value: 1231,
-                            has_type_suffix: false,
                             start_pos: Position::new(1, 26),
                             end_pos: Position::new(1, 30),
                         }),
@@ -553,9 +552,8 @@ mod tests {
                         start_pos: Position::new(3, 14),
                         end_pos: Position::new(3, 19),
                     }),
-                    Expression::I64Literal(I64Lit {
+                    Expression::IntLiteral(IntLit {
                         value: 2,
-                        has_type_suffix: false,
                         start_pos: Position::new(3, 23),
                         end_pos: Position::new(3, 24),
                     }),

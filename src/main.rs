@@ -4,23 +4,25 @@ use std::io::prelude::*;
 use std::io::{BufReader, Result};
 use std::os::unix::prelude::CommandExt;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::time::Instant;
 use std::{fs, process};
 
 use clap::{arg, ArgAction, Command};
 use colored::*;
+use inkwell::targets::{TargetTriple};
+use target_lexicon::Triple;
 
 use parser::module::Module;
 
 use crate::analyzer::analyze::{analyze_modules, ProgramAnalysis};
-use crate::codegen::program::{generate, OutputFormat};
+use crate::codegen::program::{generate, init_target, OutputFormat};
 use crate::fmt::{display_err, format_file_loc};
 use crate::lexer::error::LexError;
 use crate::lexer::lex::lex;
 use crate::lexer::pos::Locatable;
 use crate::lexer::stream::Stream;
 use crate::parser::ast::statement::Statement;
-
 use crate::parser::error::ParseResult;
 
 mod codegen;
@@ -90,7 +92,7 @@ fn main() {
     match cmd.get_matches().subcommand() {
         Some(("build", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(src_path) => {
-                let target = sub_matches.get_one::<String>("target");
+                let target_triple = &get_target_triple(sub_matches.get_one::<String>("target"));
                 let dst_path = sub_matches.get_one::<String>("out");
                 let output_format = match sub_matches.get_one::<String>("format") {
                     // If an output format was explicitly set, use that.
@@ -134,7 +136,7 @@ fn main() {
                     src_path,
                     dst_path,
                     output_format,
-                    target,
+                    target_triple,
                     optimize,
                     quiet,
                     linker,
@@ -146,21 +148,31 @@ fn main() {
 
         Some(("check", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(file_path) => {
+                let target_triple = &get_target_triple(sub_matches.get_one::<String>("target"));
                 let maybe_dump_path = sub_matches.get_one::<String>("dump");
-                analyze(file_path, maybe_dump_path);
+                analyze(file_path, maybe_dump_path, target_triple);
             }
             _ => fatalln!("expected source path"),
         },
 
         Some(("run", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(file_path) => {
-                run(file_path);
+                let target_triple = &get_target_triple(None);
+                run(file_path, target_triple);
             }
             _ => fatalln!("expected source path"),
         },
 
         _ => unreachable!("no subcommand"),
     };
+}
+
+// Initializes the LLVM target that we're compiling to.
+fn get_target_triple(target: Option<&String>) -> TargetTriple {
+    match init_target(target) {
+        Ok(t) => t,
+        Err(e) => fatalln!("{}", e),
+    }
 }
 
 /// Opens the file at the given path and returns a reader for it.
@@ -305,12 +317,20 @@ fn parse_source_file(input_path: &str) -> ParseResult<Module> {
 /// Performs static analysis on the source code at the given path. If `input_path` is a directory,
 /// all source files therein will be analyzed. Returns the analyzed set of sources, or logs an
 /// error and exits with code 1.
-fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> ProgramAnalysis {
+fn analyze(
+    input_path: &str,
+    maybe_dump_path: Option<&String>,
+    target_triple: &TargetTriple,
+) -> ProgramAnalysis {
     // Parse all targeted source files.
     let modules = parse_source_files(input_path);
 
     // Analyze the program.
-    let analysis = analyze_modules(modules);
+    let target = match Triple::from_str(target_triple.as_str().to_str().unwrap()) {
+        Ok(t) => t,
+        Err(e) => fatalln!("failed to initialize target: {}", e),
+    };
+    let analysis = analyze_modules(modules, &target);
 
     // Display warnings and errors that occurred.
     let mut err_count = 0;
@@ -391,7 +411,7 @@ fn compile(
     src_path: &str,
     dst_path: Option<&String>,
     output_format: OutputFormat,
-    target: Option<&String>,
+    target_triple: &TargetTriple,
     optimize: bool,
     quiet: bool,
     linker: Option<&String>,
@@ -400,7 +420,7 @@ fn compile(
     let start_time = Instant::now();
 
     // Read and analyze the program.
-    let prog_analysis = analyze(src_path, None);
+    let prog_analysis = analyze(src_path, None, &target_triple);
 
     // If no output path was specified, just use the source file name.
     let src = Path::new(src_path);
@@ -425,7 +445,7 @@ fn compile(
             .map(|s| s.module)
             .collect(),
         prog_analysis.type_store,
-        target,
+        &target_triple,
         output_format,
         dst.as_path(),
         optimize,
@@ -448,9 +468,9 @@ fn compile(
 }
 
 /// Compiles and runs Blang source code at the given path.
-fn run(src_path: &str) {
+fn run(src_path: &str, target_triple: &TargetTriple) {
     // Read and analyze the program.
-    let prog_analysis = analyze(src_path, None);
+    let prog_analysis = analyze(src_path, None, target_triple);
 
     // Set output executable path to the source path without the extension.
     let src = Path::new(src_path);
@@ -464,7 +484,7 @@ fn run(src_path: &str) {
             .map(|s| s.module)
             .collect(),
         prog_analysis.type_store,
-        None,
+        target_triple,
         OutputFormat::Executable,
         dst.as_path(),
         true,
@@ -483,12 +503,13 @@ fn run(src_path: &str) {
 mod tests {
     use std::fs;
 
-    use crate::codegen::program::OutputFormat;
+    use crate::codegen::program::{init_target, OutputFormat};
     use crate::compile;
 
     #[test]
     fn compile_all_test_files() {
         // Check that all the `_test.bl` files in src/tests compile.
+        let target = init_target(None).unwrap();
         let entries = fs::read_dir("src/tests").expect("should succeed");
         for entry in entries {
             let file_path = entry.unwrap().path();
@@ -502,7 +523,7 @@ mod tests {
                 file_path.to_str().unwrap(),
                 Some(&output_path),
                 OutputFormat::Object,
-                None,
+                &target,
                 true,
                 true,
                 None,
@@ -514,6 +535,7 @@ mod tests {
     #[test]
     fn compile_std_lib() {
         // Check that we can compile the standard library.
+        let target = init_target(None).unwrap();
         let entries = fs::read_dir("std").expect("should succeed");
         for entry in entries {
             let lib_path = entry.unwrap().path();
@@ -523,7 +545,7 @@ mod tests {
                 lib_path.to_str().unwrap(),
                 Some(&output_path),
                 OutputFormat::Object,
-                None,
+                &target,
                 true,
                 true,
                 None,

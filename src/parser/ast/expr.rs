@@ -16,6 +16,7 @@ use crate::parser::ast::i32_lit::I32Lit;
 use crate::parser::ast::i64_lit::I64Lit;
 use crate::parser::ast::i8_lit::I8Lit;
 use crate::parser::ast::index::Index;
+use crate::parser::ast::int_lit::IntLit;
 use crate::parser::ast::lambda::LambdaDecl;
 use crate::parser::ast::member::MemberAccess;
 use crate::parser::ast::op::Operator;
@@ -29,6 +30,7 @@ use crate::parser::ast::tuple::TupleInit;
 use crate::parser::ast::u32_lit::U32Lit;
 use crate::parser::ast::u64_lit::U64Lit;
 use crate::parser::ast::u8_lit::U8Lit;
+use crate::parser::ast::uint_lit::UintLit;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::module::Module;
@@ -46,6 +48,8 @@ pub enum Expression {
     U32Literal(U32Lit),
     I64Literal(I64Lit),
     U64Literal(U64Lit),
+    IntLiteral(IntLit),
+    UintLiteral(UintLit),
     StrLiteral(StrLit),
     FunctionCall(Box<FuncCall>),
     AnonFunction(Box<Function>),
@@ -75,6 +79,8 @@ impl Display for Expression {
             Expression::U32Literal(i) => write!(f, "{}", i),
             Expression::I64Literal(i) => write!(f, "{}", i),
             Expression::U64Literal(i) => write!(f, "{}", i),
+            Expression::IntLiteral(i) => write!(f, "{}", i),
+            Expression::UintLiteral(i) => write!(f, "{}", i),
             Expression::StrLiteral(s) => write!(f, "{}", s),
             Expression::FunctionCall(call) => write!(f, "{}", call),
             Expression::AnonFunction(func) => write!(f, "{}", func),
@@ -114,6 +120,8 @@ impl Locatable for Expression {
             Expression::U32Literal(i) => i.start_pos(),
             Expression::I64Literal(i) => i.start_pos(),
             Expression::U64Literal(i) => i.start_pos(),
+            Expression::IntLiteral(i) => i.start_pos(),
+            Expression::UintLiteral(i) => i.start_pos(),
             Expression::StrLiteral(string_lit) => string_lit.start_pos(),
             Expression::FunctionCall(fn_call) => fn_call.start_pos(),
             Expression::AnonFunction(func) => func.start_pos(),
@@ -141,6 +149,8 @@ impl Locatable for Expression {
             Expression::U32Literal(i) => i.end_pos(),
             Expression::I64Literal(i) => i.end_pos(),
             Expression::U64Literal(i) => i.end_pos(),
+            Expression::IntLiteral(i) => i.end_pos(),
+            Expression::UintLiteral(i) => i.end_pos(),
             Expression::StrLiteral(string_lit) => string_lit.end_pos(),
             Expression::FunctionCall(fn_call) => fn_call.end_pos(),
             Expression::AnonFunction(func) => func.end_pos(),
@@ -446,7 +456,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                     }) => (name.clone(), start.clone(), end.clone()),
 
                     Some(Token {
-                        kind: TokenKind::I64Literal(index, false),
+                        kind: TokenKind::IntLiteral(index),
                         start,
                         end,
                     }) => (index.to_string(), start.clone(), end.clone()),
@@ -521,8 +531,10 @@ fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
         TokenKind::U8Literal(_) => Expression::U8Literal(U8Lit::from(tokens)?),
         TokenKind::I32Literal(_) => Expression::I32Literal(I32Lit::from(tokens)?),
         TokenKind::U32Literal(_) => Expression::U32Literal(U32Lit::from(tokens)?),
-        TokenKind::I64Literal(_, _) => Expression::I64Literal(I64Lit::from(tokens)?),
-        TokenKind::U64Literal(_, _) => Expression::U64Literal(U64Lit::from(tokens)?),
+        TokenKind::I64Literal(_) => Expression::I64Literal(I64Lit::from(tokens)?),
+        TokenKind::U64Literal(_) => Expression::U64Literal(U64Lit::from(tokens)?),
+        TokenKind::IntLiteral(_) => Expression::IntLiteral(IntLit::from(tokens)?),
+        TokenKind::UintLiteral(_) => Expression::UintLiteral(UintLit::from(tokens)?),
         TokenKind::StrLiteral(_) => Expression::StrLiteral(StrLit::from(tokens)?),
 
         // Composite value initialization.
@@ -591,7 +603,8 @@ mod tests {
     use crate::parser::ast::bool_lit::BoolLit;
     use crate::parser::ast::expr::Expression;
     use crate::parser::ast::func_call::FuncCall;
-    use crate::parser::ast::i64_lit::I64Lit;
+    
+    use crate::parser::ast::int_lit::IntLit;
     use crate::parser::ast::op::Operator;
     use crate::parser::ast::str_lit::StrLit;
     use crate::parser::ast::symbol::Symbol;
@@ -631,12 +644,11 @@ mod tests {
     }
 
     #[test]
-    fn parse_basic_i64_literal() {
+    fn parse_basic_int_literal() {
         assert_eq!(
             parse("123").unwrap(),
-            Expression::I64Literal(I64Lit {
+            Expression::IntLiteral(IntLit {
                 value: 123,
-                has_type_suffix: false,
                 start_pos: Position::new(1, 1),
                 end_pos: Position::new(1, 4),
             })
@@ -668,24 +680,21 @@ mod tests {
                 vec![
                     Expression::BinaryOperation(
                         Box::new(Expression::BinaryOperation(
-                            Box::new(Expression::I64Literal(I64Lit {
+                            Box::new(Expression::IntLiteral(IntLit {
                                 value: 3,
-                                has_type_suffix: false,
                                 start_pos: Position::new(1, 6),
                                 end_pos: Position::new(1, 7),
                             })),
                             Operator::Multiply,
-                            Box::new(Expression::I64Literal(I64Lit {
+                            Box::new(Expression::IntLiteral(IntLit {
                                 value: 2,
-                                has_type_suffix: false,
                                 start_pos: Position::new(1, 10),
                                 end_pos: Position::new(1, 11),
                             }))
                         )),
                         Operator::Subtract,
-                        Box::new(Expression::I64Literal(I64Lit {
+                        Box::new(Expression::IntLiteral(IntLit {
                             value: 2,
-                            has_type_suffix: false,
                             start_pos: Position::new(1, 14),
                             end_pos: Position::new(1, 15),
                         }))
@@ -706,9 +715,8 @@ mod tests {
                                 }))
                             ),
                             Expression::BinaryOperation(
-                                Box::new(Expression::I64Literal(I64Lit {
+                                Box::new(Expression::IntLiteral(IntLit {
                                     value: 1,
-                                    has_type_suffix: false,
                                     start_pos: Position::new(1, 31),
                                     end_pos: Position::new(1, 32),
                                 })),
@@ -720,9 +728,8 @@ mod tests {
                                         end_pos: Position::new(1, 38),
                                     })),
                                     Operator::Modulo,
-                                    Box::new(Expression::I64Literal(I64Lit {
+                                    Box::new(Expression::IntLiteral(IntLit {
                                         value: 2,
-                                        has_type_suffix: false,
                                         start_pos: Position::new(1, 41),
                                         end_pos: Position::new(1, 42),
                                     }))
@@ -738,55 +745,49 @@ mod tests {
     }
 
     #[test]
-    fn parse_i64_arithmetic() {
+    fn parse_int_arithmetic() {
         assert_eq!(
             parse("(3 + 6) / 3 - 5 + 298 * 3").unwrap(),
             Expression::BinaryOperation(
                 Box::new(Expression::BinaryOperation(
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::BinaryOperation(
-                            Box::new(Expression::I64Literal(I64Lit {
+                            Box::new(Expression::IntLiteral(IntLit {
                                 value: 3,
-                                has_type_suffix: false,
                                 start_pos: Position::new(1, 2),
                                 end_pos: Position::new(1, 3),
                             })),
                             Operator::Add,
-                            Box::new(Expression::I64Literal(I64Lit {
+                            Box::new(Expression::IntLiteral(IntLit {
                                 value: 6,
-                                has_type_suffix: false,
                                 start_pos: Position::new(1, 6),
                                 end_pos: Position::new(1, 7),
                             }))
                         )),
                         Operator::Divide,
-                        Box::new(Expression::I64Literal(I64Lit {
+                        Box::new(Expression::IntLiteral(IntLit {
                             value: 3,
-                            has_type_suffix: false,
                             start_pos: Position::new(1, 11),
                             end_pos: Position::new(1, 12),
                         }))
                     )),
                     Operator::Subtract,
-                    Box::new(Expression::I64Literal(I64Lit {
+                    Box::new(Expression::IntLiteral(IntLit {
                         value: 5,
-                        has_type_suffix: false,
                         start_pos: Position::new(1, 15),
                         end_pos: Position::new(1, 16),
                     }))
                 )),
                 Operator::Add,
                 Box::new(Expression::BinaryOperation(
-                    Box::new(Expression::I64Literal(I64Lit {
+                    Box::new(Expression::IntLiteral(IntLit {
                         value: 298,
-                        has_type_suffix: false,
                         start_pos: Position::new(1, 19),
                         end_pos: Position::new(1, 22),
                     })),
                     Operator::Multiply,
-                    Box::new(Expression::I64Literal(I64Lit {
+                    Box::new(Expression::IntLiteral(IntLit {
                         value: 3,
-                        has_type_suffix: false,
                         start_pos: Position::new(1, 25),
                         end_pos: Position::new(1, 26),
                     }))
@@ -810,17 +811,15 @@ mod tests {
                                 end_pos: Position::new(1, 5),
                             })),
                             Operator::Subtract,
-                            Box::new(Expression::I64Literal(I64Lit {
+                            Box::new(Expression::IntLiteral(IntLit {
                                 value: 3,
-                                has_type_suffix: false,
                                 start_pos: Position::new(1, 8),
                                 end_pos: Position::new(1, 9)
                             })),
                         )),
                         Operator::Divide,
-                        Box::new(Expression::I64Literal(I64Lit {
+                        Box::new(Expression::IntLiteral(IntLit {
                             value: 4,
-                            has_type_suffix: false,
                             start_pos: Position::new(1, 13),
                             end_pos: Position::new(1, 14)
                         })),
@@ -841,18 +840,16 @@ mod tests {
                             Position::new(2, 12)
                         )))),
                         Operator::Modulo,
-                        Box::new(Expression::I64Literal(I64Lit {
+                        Box::new(Expression::IntLiteral(IntLit {
                             value: 2,
-                            has_type_suffix: false,
                             start_pos: Position::new(2, 15),
                             end_pos: Position::new(2, 16)
                         })),
                     )),
                 )),
                 Operator::Add,
-                Box::new(Expression::I64Literal(I64Lit {
+                Box::new(Expression::IntLiteral(IntLit {
                     value: 5,
-                    has_type_suffix: false,
                     start_pos: Position::new(3, 1),
                     end_pos: Position::new(3, 2)
                 })),
@@ -888,9 +885,8 @@ mod tests {
                 Box::new(Expression::BinaryOperation(
                     Box::new(Expression::UnaryOperation(
                         Operator::Subtract,
-                        Box::new(Expression::I64Literal(I64Lit {
+                        Box::new(Expression::IntLiteral(IntLit {
                             value: 8,
-                            has_type_suffix: false,
                             start_pos: Position::new(1, 2),
                             end_pos: Position::new(1, 3),
                         })),
@@ -901,42 +897,37 @@ mod tests {
                             Box::new(Expression::BinaryOperation(
                                 Box::new(Expression::UnaryOperation(
                                     Operator::Subtract,
-                                    Box::new(Expression::I64Literal(I64Lit {
+                                    Box::new(Expression::IntLiteral(IntLit {
                                         value: 100,
-                                        has_type_suffix: false,
                                         start_pos: Position::new(1, 8),
                                         end_pos: Position::new(1, 11),
                                     }))
                                 )),
                                 Operator::Add,
-                                Box::new(Expression::I64Literal(I64Lit {
+                                Box::new(Expression::IntLiteral(IntLit {
                                     value: 2,
-                                    has_type_suffix: false,
                                     start_pos: Position::new(1, 14),
                                     end_pos: Position::new(1, 15)
                                 })),
                             )),
                             Operator::Multiply,
-                            Box::new(Expression::I64Literal(I64Lit {
+                            Box::new(Expression::IntLiteral(IntLit {
                                 value: 4,
-                                has_type_suffix: false,
                                 start_pos: Position::new(1, 19),
                                 end_pos: Position::new(1, 20)
                             })),
                         )),
                         Operator::Divide,
-                        Box::new(Expression::I64Literal(I64Lit {
+                        Box::new(Expression::IntLiteral(IntLit {
                             value: 2,
-                            has_type_suffix: false,
                             start_pos: Position::new(1, 23),
                             end_pos: Position::new(1, 24)
                         })),
                     )),
                 )),
                 Operator::Add,
-                Box::new(Expression::I64Literal(I64Lit {
+                Box::new(Expression::IntLiteral(IntLit {
                     value: 8,
-                    has_type_suffix: false,
                     start_pos: Position::new(1, 27),
                     end_pos: Position::new(1, 28)
                 })),
@@ -951,9 +942,8 @@ mod tests {
             result,
             Expression::UnaryOperation(
                 Operator::Subtract,
-                Box::new(Expression::I64Literal(I64Lit {
+                Box::new(Expression::IntLiteral(IntLit {
                     value: 8,
-                    has_type_suffix: false,
                     start_pos: Position::new(1, 2),
                     end_pos: Position::new(1, 3),
                 })),
@@ -1017,24 +1007,21 @@ mod tests {
             result,
             Expression::BinaryOperation(
                 Box::new(Expression::BinaryOperation(
-                    Box::new(Expression::I64Literal(I64Lit {
+                    Box::new(Expression::IntLiteral(IntLit {
                         value: 1,
-                        has_type_suffix: false,
                         start_pos: Position::new(1, 4),
                         end_pos: Position::new(1, 5)
                     })),
                     Operator::GreaterThan,
-                    Box::new(Expression::I64Literal(I64Lit {
+                    Box::new(Expression::IntLiteral(IntLit {
                         value: 0,
-                        has_type_suffix: false,
                         start_pos: Position::new(1, 6),
                         end_pos: Position::new(1, 7)
                     })),
                 )),
                 Operator::Add,
-                Box::new(Expression::I64Literal(I64Lit {
+                Box::new(Expression::IntLiteral(IntLit {
                     value: 1,
-                    has_type_suffix: false,
                     start_pos: Position::new(1, 9),
                     end_pos: Position::new(1, 10)
                 })),
@@ -1089,9 +1076,8 @@ mod tests {
                         )),
                     )),
                     Operator::Subtract,
-                    Box::new(Expression::I64Literal(I64Lit {
+                    Box::new(Expression::IntLiteral(IntLit {
                         value: 2,
-                        has_type_suffix: false,
                         start_pos: Position { line: 1, col: 11 },
                         end_pos: Position { line: 1, col: 12 },
                     })),
@@ -1102,9 +1088,8 @@ mod tests {
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::UnaryOperation(
                             Operator::Subtract,
-                            Box::new(Expression::I64Literal(I64Lit {
+                            Box::new(Expression::IntLiteral(IntLit {
                                 value: 100,
-                                has_type_suffix: false,
                                 start_pos: Position { line: 1, col: 16 },
                                 end_pos: Position { line: 1, col: 19 },
                             })),
@@ -1118,9 +1103,8 @@ mod tests {
                                     start_pos: Position { line: 1, col: 23 },
                                     end_pos: Position { line: 1, col: 27 },
                                 },),
-                                args: vec![Expression::I64Literal(I64Lit {
+                                args: vec![Expression::IntLiteral(IntLit {
                                     value: 1,
-                                    has_type_suffix: false,
                                     start_pos: Position { line: 1, col: 28 },
                                     end_pos: Position { line: 1, col: 29 },
                                 })],
@@ -1153,9 +1137,8 @@ mod tests {
                     Operator::Subtract,
                     Box::new(Expression::UnaryOperation(
                         Operator::Subtract,
-                        Box::new(Expression::I64Literal(I64Lit {
+                        Box::new(Expression::IntLiteral(IntLit {
                             value: 100,
-                            has_type_suffix: false,
                             start_pos: Position::new(1, 8),
                             end_pos: Position::new(1, 11),
                         })),

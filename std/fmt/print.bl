@@ -1,0 +1,10 @@
+use "std/libc/io.bl"
+use "std/types/string.bl"
+
+fn print(msg: String) {
+    write(STDOUT, msg.ptr, msg.len)
+}
+
+fn println(msg: String) {
+    print(msg.concat(String.from_str("\n")))
+}

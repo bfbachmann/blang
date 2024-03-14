@@ -10,12 +10,22 @@ pub struct TypeStore {
     /// We're just using a Vec here because types should never be removed from the store after
     /// insertion, and Vecs allow for fast and simple access.
     types: Vec<AType>,
+    /// Represents the width (in bits) of a pointer on the target architecture.
+    target_ptr_width: u8,
 }
 
 impl TypeStore {
     /// Creates a new empty type store.
-    pub fn new() -> Self {
-        TypeStore { types: vec![] }
+    pub fn new(target_ptr_width: u8) -> Self {
+        TypeStore {
+            types: vec![],
+            target_ptr_width,
+        }
+    }
+
+    /// Returns the width (in bits) of a pointer on the target architecture.
+    pub fn get_target_ptr_width(&self) -> u8 {
+        self.target_ptr_width
     }
 
     /// Generates the type key to be used for the next stored type.

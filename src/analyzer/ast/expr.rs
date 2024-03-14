@@ -36,10 +36,10 @@ pub enum AExprKind {
     U8Literal(u8),
     I32Literal(i32),
     U32Literal(u32),
-    /// The bool here will be true if this literal includes an explicit type suffix.
-    I64Literal(i64, bool),
-    /// The bool here will be true if this literal includes an explicit type suffix.
-    U64Literal(u64, bool),
+    I64Literal(i64),
+    U64Literal(u64),
+    IntLiteral(i64),
+    UintLiteral(u64),
     StrLiteral(String),
     StructInit(AStructInit),
     EnumInit(AEnumVariantInit),
@@ -60,16 +60,14 @@ impl fmt::Display for AExprKind {
             AExprKind::Symbol(sym) => write!(f, "{}", sym),
             AExprKind::MemberAccess(m) => write!(f, "{}", m),
             AExprKind::BoolLiteral(b) => write!(f, "{}", b),
-            AExprKind::I8Literal(i) => write!(f, "{}", i),
-            AExprKind::U8Literal(i) => write!(f, "{}", i),
-            AExprKind::I32Literal(i) => write!(f, "{}", i),
-            AExprKind::U32Literal(i) => write!(f, "{}", i),
-            AExprKind::I64Literal(i, has_suffix) => {
-                write!(f, "{}{}", i, if *has_suffix { "i64" } else { "" })
-            }
-            AExprKind::U64Literal(i, has_suffix) => {
-                write!(f, "{}{}", i, if *has_suffix { "u64" } else { "" })
-            }
+            AExprKind::I8Literal(i) => write!(f, "{}i8", i),
+            AExprKind::U8Literal(i) => write!(f, "{}u8", i),
+            AExprKind::I32Literal(i) => write!(f, "{}i32", i),
+            AExprKind::U32Literal(i) => write!(f, "{}u32", i),
+            AExprKind::I64Literal(i) => write!(f, "{}i64", i),
+            AExprKind::U64Literal(i) => write!(f, "{}u64", i),
+            AExprKind::IntLiteral(i) => write!(f, "{}", i),
+            AExprKind::UintLiteral(i) => write!(f, "{}", i),
             AExprKind::StrLiteral(s) => write!(f, "{}", s),
             AExprKind::StructInit(s) => write!(f, "{}", s),
             AExprKind::EnumInit(e) => write!(f, "{}", e),
@@ -101,8 +99,10 @@ impl PartialEq for AExprKind {
         match (self, other) {
             (AExprKind::Symbol(v1), AExprKind::Symbol(v2)) => v1 == v2,
             (AExprKind::BoolLiteral(b1), AExprKind::BoolLiteral(b2)) => b1 == b2,
-            (AExprKind::I64Literal(i1, _), AExprKind::I64Literal(i2, _)) => i1 == i2,
-            (AExprKind::U64Literal(i1, _), AExprKind::U64Literal(i2, _)) => i1 == i2,
+            (AExprKind::I64Literal(i1), AExprKind::I64Literal(i2)) => i1 == i2,
+            (AExprKind::U64Literal(i1), AExprKind::U64Literal(i2)) => i1 == i2,
+            (AExprKind::IntLiteral(i1), AExprKind::IntLiteral(i2)) => i1 == i2,
+            (AExprKind::UintLiteral(i1), AExprKind::UintLiteral(i2)) => i1 == i2,
             (AExprKind::StrLiteral(s1), AExprKind::StrLiteral(s2)) => s1 == s2,
             (AExprKind::StructInit(s1), AExprKind::StructInit(s2)) => s1 == s2,
             (AExprKind::EnumInit(e1), AExprKind::EnumInit(e2)) => e1 == e2,
@@ -132,8 +132,10 @@ impl AExprKind {
             | AExprKind::U8Literal(_)
             | AExprKind::I32Literal(_)
             | AExprKind::U32Literal(_)
-            | AExprKind::I64Literal(_, _)
-            | AExprKind::U64Literal(_, _)
+            | AExprKind::I64Literal(_)
+            | AExprKind::U64Literal(_)
+            | AExprKind::IntLiteral(_)
+            | AExprKind::UintLiteral(_)
             | AExprKind::StrLiteral(_) => true,
 
             // Unary and binary operations are constants if they only operate on constants and have
@@ -218,8 +220,10 @@ impl AExprKind {
             AExprKind::U8Literal(i) => format!("{}", i),
             AExprKind::I32Literal(i) => format!("{}", i),
             AExprKind::U32Literal(i) => format!("{}", i),
-            AExprKind::I64Literal(i, _) => format!("{}", i),
-            AExprKind::U64Literal(i, _) => format!("{}", i),
+            AExprKind::I64Literal(i) => format!("{}", i),
+            AExprKind::U64Literal(i) => format!("{}", i),
+            AExprKind::IntLiteral(i) => format!("{}", i),
+            AExprKind::UintLiteral(i) => format!("{}", i),
             AExprKind::StrLiteral(s) => format!("{}", s),
             AExprKind::StructInit(s) => s.display(ctx),
             AExprKind::EnumInit(e) => e.display(ctx),
@@ -379,15 +383,29 @@ impl AExpr {
             },
 
             Expression::I64Literal(i) => AExpr {
-                kind: AExprKind::I64Literal(i.value, i.has_type_suffix),
+                kind: AExprKind::I64Literal(i.value),
                 type_key: ctx.i64_type_key(),
                 start_pos,
                 end_pos,
             },
 
             Expression::U64Literal(i) => AExpr {
-                kind: AExprKind::U64Literal(i.value, i.has_type_suffix),
+                kind: AExprKind::U64Literal(i.value),
                 type_key: ctx.u64_type_key(),
+                start_pos,
+                end_pos,
+            },
+
+            Expression::IntLiteral(i) => AExpr {
+                kind: AExprKind::IntLiteral(i.value),
+                type_key: ctx.int_type_key(),
+                start_pos,
+                end_pos,
+            },
+
+            Expression::UintLiteral(i) => AExpr {
+                kind: AExprKind::UintLiteral(i.value),
+                type_key: ctx.uint_type_key(),
                 start_pos,
                 end_pos,
             },
@@ -472,12 +490,12 @@ impl AExpr {
             }
 
             Expression::SizeOf(sizeof) => {
-                // Get the size of the type and just represent it as a u64 literal.
+                // Get the size of the type and just represent it as a `uint` literal.
                 let type_key = ctx.resolve_type(&sizeof.typ);
                 let typ = ctx.must_get_type(type_key);
                 AExpr {
-                    kind: AExprKind::U64Literal(typ.size_bytes(ctx) as u64, false),
-                    type_key: ctx.u64_type_key(),
+                    kind: AExprKind::UintLiteral(typ.size_bytes(ctx) as u64),
+                    type_key: ctx.uint_type_key(),
                     start_pos,
                     end_pos,
                 }
@@ -916,41 +934,43 @@ impl AExpr {
         }
 
         match &self.kind {
-            // Only coerce i64 literals with they don't have explicit type suffixes.
-            AExprKind::I64Literal(i, has_type_suffix) if !has_type_suffix && *i >= 0 => {
-                match target_type {
-                    AType::U64 => {
-                        self.kind = AExprKind::U64Literal(*i as u64, false);
-                        self.type_key = ctx.u64_type_key();
-                    }
-                    AType::U32 => {
-                        self.kind = AExprKind::U32Literal(*i as u32);
-                        self.type_key = ctx.u32_type_key();
-                    }
-                    AType::U8 => {
-                        self.kind = AExprKind::U8Literal(*i as u8);
-                        self.type_key = ctx.u8_type_key();
-                    }
-                    AType::I32 => {
-                        self.kind = AExprKind::I32Literal(*i as i32);
-                        self.type_key = ctx.i32_type_key();
-                    }
-                    AType::I8 => {
-                        self.kind = AExprKind::I8Literal(*i as i8);
-                        self.type_key = ctx.i8_type_key();
-                    }
-                    _ => {}
+            AExprKind::IntLiteral(i) if *i >= 0 => match target_type {
+                AType::Uint => {
+                    self.kind = AExprKind::UintLiteral(*i as u64);
+                    self.type_key = ctx.uint_type_key();
                 }
-            }
-
-            // Only coerce u64 literals with they don't have explicit type suffixes.
-            AExprKind::U64Literal(u, has_type_suffix) if !has_type_suffix => match target_type {
                 AType::I64 => {
-                    self.kind = AExprKind::I64Literal(*u as i64, false);
+                    self.kind = AExprKind::I64Literal(*i);
                     self.type_key = ctx.i64_type_key();
+                }
+                AType::U64 => {
+                    self.kind = AExprKind::U64Literal(*i as u64);
+                    self.type_key = ctx.u64_type_key();
+                }
+                AType::U32 => {
+                    self.kind = AExprKind::U32Literal(*i as u32);
+                    self.type_key = ctx.u32_type_key();
+                }
+                AType::U8 => {
+                    self.kind = AExprKind::U8Literal(*i as u8);
+                    self.type_key = ctx.u8_type_key();
+                }
+                AType::I32 => {
+                    self.kind = AExprKind::I32Literal(*i as i32);
+                    self.type_key = ctx.i32_type_key();
+                }
+                AType::I8 => {
+                    self.kind = AExprKind::I8Literal(*i as i8);
+                    self.type_key = ctx.i8_type_key();
                 }
                 _ => {}
             },
+
+            AExprKind::UnaryOperation(op, operand) if op == &Operator::Subtract => {
+                let new_operand = operand.clone().try_coerce_to(ctx, target_type_key);
+                self.type_key = new_operand.type_key;
+                self.kind = AExprKind::UnaryOperation(op.clone(), Box::new(new_operand));
+            }
 
             AExprKind::Symbol(symbol) => {
                 match ctx.must_get_type(symbol.type_key) {
@@ -984,10 +1004,10 @@ impl AExpr {
         AExpr {
             kind: AExprKind::TypeCast(
                 Box::new(AExpr::new_with_default_pos(
-                    AExprKind::U64Literal(0, false),
-                    ctx.u64_type_key(),
+                    AExprKind::UintLiteral(0),
+                    ctx.uint_type_key(),
                 )),
-                ctx.rawptr_type_key(),
+                ctx.unknown_type_key(),
             ),
             type_key: ctx.unknown_type_key(),
             start_pos: Position::default(),
@@ -1062,8 +1082,14 @@ impl AExpr {
             Type::Unresolved(unresolved_type) => {
                 let kind = match unresolved_type.name.as_str() {
                     "bool" => AExprKind::BoolLiteral(false),
-                    "i64" => AExprKind::I64Literal(0, false),
-                    "u64" => AExprKind::U64Literal(0, false),
+                    "i8" => AExprKind::I8Literal(0),
+                    "u8" => AExprKind::U8Literal(0),
+                    "i32" => AExprKind::I32Literal(0),
+                    "u32" => AExprKind::U32Literal(0),
+                    "i64" => AExprKind::I64Literal(0),
+                    "u64" => AExprKind::U64Literal(0),
+                    "int" => AExprKind::IntLiteral(0),
+                    "uint" => AExprKind::UintLiteral(0),
                     "str" => AExprKind::StrLiteral("".to_string()),
                     "rawptr" => AExpr::new_null_ptr(ctx).kind,
                     _ => AExprKind::Unknown,
@@ -1081,16 +1107,16 @@ impl AExpr {
         }
     }
 
-    /// Tries to compute the value of this expression as a u64. Returns an error if this expression
-    /// does not result in a constant u64 value.
-    pub fn try_into_const_u64(&self, ctx: &mut ProgramContext) -> AnalyzeResult<u64> {
-        let expr = self.clone().try_coerce_to(ctx, ctx.u64_type_key());
+    /// Tries to compute the value of this expression as a `uint`. Returns an error if this expression
+    /// does not result in a constant `uint` value.
+    pub fn try_into_const_uint(&self, ctx: &mut ProgramContext) -> AnalyzeResult<u64> {
+        let expr = self.clone().try_coerce_to(ctx, ctx.uint_type_key());
 
         let err = Err(AnalyzeError::new(
             ErrorKind::InvalidArraySize,
             format_code!(
                 "expected constant expression of type {}, but found {}",
-                "u64",
+                "uint",
                 self.display(ctx)
             )
             .as_str(),
@@ -1100,7 +1126,7 @@ impl AExpr {
         if !expr.kind.is_const()
             || !ctx
                 .must_get_type(expr.type_key)
-                .is_same_as(ctx, &AType::U64, true)
+                .is_same_as(ctx, &AType::Uint, true)
         {
             return err;
         }
@@ -1108,10 +1134,10 @@ impl AExpr {
         let result = match &expr.kind {
             AExprKind::Symbol(symbol) => {
                 let const_value = ctx.get_const_value(symbol.name.as_str()).unwrap().clone();
-                return const_value.try_into_const_u64(ctx);
+                return const_value.try_into_const_uint(ctx);
             }
 
-            AExprKind::I64Literal(i, _) => {
+            AExprKind::IntLiteral(i) => {
                 if *i < 0 {
                     None
                 } else {
@@ -1119,11 +1145,11 @@ impl AExpr {
                 }
             }
 
-            AExprKind::U64Literal(u, _) => Some(*u),
+            AExprKind::UintLiteral(u) => Some(*u),
 
             AExprKind::BinaryOperation(left_expr, op, right_expr) => {
-                let left = left_expr.try_into_const_u64(ctx).unwrap();
-                let right = right_expr.try_into_const_u64(ctx).unwrap();
+                let left = left_expr.try_into_const_uint(ctx).unwrap();
+                let right = right_expr.try_into_const_uint(ctx).unwrap();
                 match op {
                     Operator::Add => Some(left + right),
                     Operator::Subtract => Some(left - right),
@@ -1139,7 +1165,7 @@ impl AExpr {
                 // we checked its type above.
                 let mut expr = expr.clone();
                 expr.type_key = *target_type_key;
-                return expr.try_into_const_u64(ctx);
+                return expr.try_into_const_uint(ctx);
             }
 
             other => panic!("cannot evaluate expression {} as constant u64", other),
@@ -1238,7 +1264,7 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
         | Operator::Subtract
         | Operator::Multiply
         | Operator::Divide
-        | Operator::Modulo => operand_type.is_numeric() || operand_type == &AType::RawPtr,
+        | Operator::Modulo => operand_type.is_numeric(),
 
         // Logical operators only work on bools.
         Operator::LogicalAnd | Operator::LogicalOr => operand_type == &AType::Bool,
@@ -1267,26 +1293,19 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
 /// Returns true only if it is possible to cast from `left_type` to `right_type`.
 fn is_valid_type_cast(left_type: &AType, right_type: &AType) -> bool {
     match (left_type, right_type) {
-        // Casting between `rawptr` and `u64` is allowed.
-        (AType::RawPtr, AType::U64)
-        | (AType::U64, AType::RawPtr)
-
-        // Casting between typed pointers and `rawptr`s is allowed, but `rawptrs`
-        // can't be cast to `*mut _`, only `*_`.
-        | (AType::Pointer(_), AType::RawPtr)
-        | (AType::RawPtr, AType::Pointer(APointerType{is_mut: false, ..})) => true,
-
         // Casting between numeric types is allowed.
         (a, b) if a.is_numeric() && b.is_numeric() => true,
 
         // Casting between pointer types is allowed as long as immutability isn't broken.
-        | (AType::Pointer(p1), AType::Pointer(p2)) => p1.is_mut || !p2.is_mut,
+        (AType::Pointer(p1), AType::Pointer(p2)) => p1.is_mut || !p2.is_mut,
 
         // Casting between numeric types and pointers is allowed so long as
         // immutability is not violated.
         // Casting `str` to `*u8` is also allowed.
         (AType::Pointer(_), target) => target.is_numeric(),
-        (source, AType::Pointer(APointerType{is_mut: false, ..})) => source.is_numeric() || source == &AType::Str,
+        (source, AType::Pointer(APointerType { is_mut: false, .. })) => {
+            source.is_numeric() || source == &AType::Str
+        }
 
         _ => false,
     }
@@ -1307,7 +1326,7 @@ fn get_result_type(
         | Operator::Divide
         | Operator::Modulo => match operand_type_key {
             Some(type_key) => type_key,
-            None => ctx.i64_type_key(),
+            None => ctx.int_type_key(),
         },
 
         // Logical operators result in bools.
@@ -1390,14 +1409,14 @@ mod tests {
 
     #[test]
     fn analyze_i64_literal() {
-        let mut ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new_with_host_ptr_width();
         let expr = Expression::I64Literal(I64Lit::new_with_default_pos(1));
         let result = AExpr::from(&mut ctx, expr, None, false, false, false);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
             AExpr {
-                kind: AExprKind::I64Literal(1, false),
+                kind: AExprKind::I64Literal(1),
                 type_key: ctx.i64_type_key(),
                 start_pos: Position::default(),
                 end_pos: Position::default(),
@@ -1407,7 +1426,7 @@ mod tests {
 
     #[test]
     fn analyze_bool_literal() {
-        let mut ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new_with_host_ptr_width();
         let expr = Expression::BoolLiteral(BoolLit::new_with_default_pos(false));
         let result = AExpr::from(&mut ctx, expr, None, false, false, false);
         assert!(ctx.errors().is_empty());
@@ -1424,7 +1443,7 @@ mod tests {
 
     #[test]
     fn analyze_string_literal() {
-        let mut ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new_with_host_ptr_width();
         let expr = Expression::StrLiteral(StrLit::new_with_default_pos("test"));
         let result = AExpr::from(&mut ctx, expr, None, false, false, false);
         assert!(ctx.errors().is_empty());
@@ -1441,7 +1460,7 @@ mod tests {
 
     #[test]
     fn analyze_var() {
-        let mut ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new_with_host_ptr_width();
         ctx.insert_symbol(ScopedSymbol::new("myvar", ctx.str_type_key(), false, false));
         let result = AExpr::from(
             &mut ctx,
@@ -1467,7 +1486,7 @@ mod tests {
 
     #[test]
     fn analyze_invalid_var() {
-        let mut ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new_with_host_ptr_width();
         let result = AExpr::from(
             &mut ctx,
             Expression::Symbol(Symbol::new_with_default_pos("myvar")),
@@ -1503,7 +1522,7 @@ mod tests {
 
     #[test]
     fn analyze_fn_call() {
-        let mut ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new_with_host_ptr_width();
         let fn_sig = FunctionSignature::new_with_default_pos(
             "do_thing",
             vec![Argument::new_with_default_pos(
@@ -1574,7 +1593,7 @@ mod tests {
 
     #[test]
     fn fn_call_no_return() {
-        let mut ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new_with_host_ptr_width();
         let fn_sig = FunctionSignature::new_with_default_pos("do_thing", vec![], None);
         let fn_type_key = ctx.resolve_type(&Type::Function(Box::new(fn_sig.clone())));
         let a_fn = AFn {
@@ -1623,7 +1642,7 @@ mod tests {
                 assert_eq!(
                     *left,
                     AExpr {
-                        kind: AExprKind::I64Literal(1, false),
+                        kind: AExprKind::I64Literal(1),
                         type_key: ctx.i64_type_key(),
                         start_pos: Position::default(),
                         end_pos: Position::default(),
@@ -1638,7 +1657,7 @@ mod tests {
                         end_pos: Position::default(),
                     }
                 );
-                assert_eq!(type_key, ctx.i64_type_key())
+                assert_eq!(type_key, ctx.int_type_key())
             }
             other => panic!("incorrect result {}", other),
         }
@@ -1658,7 +1677,7 @@ mod tests {
 
     #[test]
     fn fn_call_missing_arg() {
-        let mut ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new_with_host_ptr_width();
         let fn_sig = FunctionSignature::new_with_default_pos(
             "do_thing",
             vec![
@@ -1764,7 +1783,7 @@ mod tests {
 
     #[test]
     fn fn_call_invalid_arg_type() {
-        let mut ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new_with_host_ptr_width();
         let fn_sig = FunctionSignature::new_with_default_pos(
             "do_thing",
             vec![Argument::new_with_default_pos(
@@ -1821,7 +1840,7 @@ mod tests {
                         a_fn.signature.type_key,
                     ),
                     args: vec![AExpr {
-                        kind: AExprKind::I64Literal(1, false),
+                        kind: AExprKind::I64Literal(1),
                         type_key: ctx.i64_type_key(),
                         start_pos: Position::default(),
                         end_pos: Position::default(),
@@ -1847,7 +1866,7 @@ mod tests {
 
     #[test]
     fn binary_op_invalid_operand_types() {
-        let mut ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new_with_host_ptr_width();
         let result = AExpr::from(
             &mut ctx,
             Expression::BinaryOperation(
@@ -1866,7 +1885,7 @@ mod tests {
             AExpr {
                 kind: AExprKind::BinaryOperation(
                     Box::new(AExpr {
-                        kind: AExprKind::I64Literal(1, false),
+                        kind: AExprKind::I64Literal(1),
                         type_key: ctx.i64_type_key(),
                         start_pos: Position::default(),
                         end_pos: Position::default(),
@@ -1879,7 +1898,7 @@ mod tests {
                         end_pos: Position::default(),
                     })
                 ),
-                type_key: ctx.i64_type_key(),
+                type_key: ctx.int_type_key(),
                 start_pos: Position::default(),
                 end_pos: Position::default(),
             }
@@ -1897,7 +1916,7 @@ mod tests {
             }
         ));
 
-        let mut ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new_with_host_ptr_width();
         let result = AExpr::from(
             &mut ctx,
             Expression::BinaryOperation(
@@ -1923,13 +1942,13 @@ mod tests {
                     }),
                     Operator::Add,
                     Box::new(AExpr {
-                        kind: AExprKind::I64Literal(1, false),
+                        kind: AExprKind::I64Literal(1),
                         type_key: ctx.i64_type_key(),
                         start_pos: Position::default(),
                         end_pos: Position::default(),
                     })
                 ),
-                type_key: ctx.i64_type_key(),
+                type_key: ctx.int_type_key(),
                 start_pos: Position::default(),
                 end_pos: Position::default(),
             }
@@ -1950,7 +1969,7 @@ mod tests {
 
     #[test]
     fn unary_op() {
-        let mut ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new_with_host_ptr_width();
         let result = AExpr::from(
             &mut ctx,
             Expression::UnaryOperation(
@@ -1988,7 +2007,7 @@ mod tests {
 
     #[test]
     fn unary_op_invalid_operand_type() {
-        let mut ctx = ProgramContext::new();
+        let mut ctx = ProgramContext::new_with_host_ptr_width();
         let result = AExpr::from(
             &mut ctx,
             Expression::UnaryOperation(

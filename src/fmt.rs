@@ -8,10 +8,6 @@ use colored::{control, Colorize};
 
 use crate::lexer::pos::Position;
 
-/// Represents the maximum number of lines that can be printed in source
-/// code that appears in error messages.
-const MAX_LINES_IN_PRINTED_SOURCE: usize = 3;
-
 /// Prints an error message and exits with code 1.
 #[macro_export]
 macro_rules! fatalln {
@@ -148,7 +144,6 @@ fn print_source_color(file_path: &str, start_pos: &Position, end_pos: &Position)
     let file = File::open(file_path).unwrap();
     let reader = BufReader::new(file);
     let width = end_pos.line.to_string().len();
-    let print_all_lines = end_pos.line - start_pos.line <= MAX_LINES_IN_PRINTED_SOURCE;
 
     println!(
         "{}{}",
@@ -207,7 +202,7 @@ fn print_source_color(file_path: &str, start_pos: &Position, end_pos: &Position)
                 left.on_bright_red(),
                 right
             );
-        } else if print_all_lines {
+        } else {
             println!(
                 "{} {}",
                 format!("{:>width$}|", line_num, width = width)
@@ -225,7 +220,6 @@ fn print_source_no_color(file_path: &str, start_pos: &Position, end_pos: &Positi
     let file = File::open(file_path).unwrap();
     let reader = BufReader::new(file);
     let width = end_pos.line.to_string().len();
-    let print_all_lines = end_pos.line - start_pos.line <= MAX_LINES_IN_PRINTED_SOURCE;
 
     println!(
         "{}{}",
@@ -302,7 +296,7 @@ fn print_source_no_color(file_path: &str, start_pos: &Position, end_pos: &Positi
                 ),
                 " ".repeat(left.len() - 1),
             );
-        } else if print_all_lines {
+        } else {
             // The segment we're printing spans multiple lines, and this is neither the first
             // nor the last. We only print these lines if the total segment spans more than the maximum
             // number of lines.

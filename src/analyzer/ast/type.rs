@@ -1,5 +1,4 @@
 use std::cmp::max;
-
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
@@ -25,10 +24,9 @@ pub enum AType {
     I32,
     I64,
     U64,
+    Int,
+    Uint,
     Str,
-    /// These are pointers that are not garbage collected and allow pointer arithmetic.
-    /// This type translates directly to `void *` in C.
-    RawPtr,
 
     // Composite types.
     Struct(AStructType),
@@ -53,7 +51,8 @@ impl Display for AType {
             AType::I32 => write!(f, "i32"),
             AType::I64 => write!(f, "i64"),
             AType::U64 => write!(f, "u64"),
-            AType::RawPtr => write!(f, "rawptr"),
+            AType::Int => write!(f, "int"),
+            AType::Uint => write!(f, "uint"),
             AType::Struct(s) => write!(f, "{}", s),
             AType::Enum(e) => write!(f, "{}", e),
             AType::Tuple(t) => write!(f, "{}", t),
@@ -74,9 +73,10 @@ impl PartialEq for AType {
             | (AType::U32, AType::U32)
             | (AType::I32, AType::I32)
             | (AType::I64, AType::I64)
-            | (AType::Str, AType::Str)
-            | (AType::RawPtr, AType::RawPtr)
-            | (AType::U64, AType::U64) => true,
+            | (AType::U64, AType::U64)
+            | (AType::Int, AType::Int)
+            | (AType::Uint, AType::Uint)
+            | (AType::Str, AType::Str) => true,
             (AType::Struct(s1), AType::Struct(s2)) => s1 == s2,
             (AType::Enum(e1), AType::Enum(e2)) => e1 == e2,
             (AType::Tuple(t1), AType::Tuple(t2)) => t1 == t2,
@@ -171,8 +171,9 @@ impl AType {
             AType::I32,
             AType::I64,
             AType::U64,
+            AType::Int,
+            AType::Uint,
             AType::Str,
-            AType::RawPtr,
             AType::Unknown("<unknown>".to_string()),
             AType::Unknown("<none>".to_string()),
             AType::Unknown("Self".to_string()),
@@ -190,8 +191,9 @@ impl AType {
             AType::I32 => "i32",
             AType::I64 => "i64",
             AType::U64 => "u64",
+            AType::Int => "int",
+            AType::Uint => "uint",
             AType::Str => "str",
-            AType::RawPtr => "rawptr",
             AType::Struct(t) => t.name.as_str(),
             AType::Enum(t) => t.name.as_str(),
             AType::Tuple(_) | AType::Pointer(_) | AType::Array(_) => "",
@@ -262,8 +264,9 @@ impl AType {
             | AType::U32
             | AType::I32
             | AType::I64
-            | AType::RawPtr
             | AType::U64
+            | AType::Int
+            | AType::Uint
             | AType::Str
             | AType::Function(_)
             | AType::Pointer(_)
@@ -343,26 +346,33 @@ impl AType {
     pub fn is_numeric(&self) -> bool {
         matches!(
             self,
-            AType::U8 | AType::I8 | AType::U32 | AType::I32 | AType::U64 | AType::I64
+            AType::U8
+                | AType::I8
+                | AType::U32
+                | AType::I32
+                | AType::U64
+                | AType::I64
+                | AType::Int
+                | AType::Uint
         )
     }
 
     /// Returns true if this is a pointer type.
     pub fn is_pointer(&self) -> bool {
-        matches!(self, AType::Pointer(_) | AType::RawPtr)
+        matches!(self, AType::Pointer(_))
     }
 
     /// Returns true if arithmetic operations on this type should be signed. Otherwise, this type
     /// either doesn't support arithmetic operations, or requires unsigned operations.
     pub fn is_signed(&self) -> bool {
         match self {
-            AType::I8 | AType::I32 | AType::I64 => true,
+            AType::I8 | AType::I32 | AType::I64 | AType::Int => true,
             AType::Bool
             | AType::Str
-            | AType::RawPtr
             | AType::U8
             | AType::U32
             | AType::U64
+            | AType::Uint
             | AType::Struct(_)
             | AType::Enum(_)
             | AType::Tuple(_)
@@ -383,11 +393,17 @@ impl AType {
             AType::U32 | AType::I32 => 4,
 
             // All the following types are 64 bits (8 bytes).
-            AType::I64 | AType::RawPtr | AType::Pointer(_) | AType::U64 | AType::Function(_) => 8,
+            AType::I64 | AType::U64 | AType::Function(_) => 8,
 
-            // `str`s are 16 bits because they are composed of
-            // a pointer and a length, both of which are 8 bits.
-            AType::Str => 16,
+            // `int`s, `uint`s, and pointers are sized based on the target platform (64 or 32 bits, generally).
+            AType::Int | AType::Uint | AType::Pointer(_) => {
+                (ctx.type_store.get_target_ptr_width() / 8) as u32
+            }
+
+            // `str`s are composed of a pointer and an integer.
+            AType::Str => {
+                (ctx.type_store.get_target_ptr_width() / 8) as u32 + AType::Int.size_bytes(ctx)
+            }
 
             // The size of a struct type is the sum of the sizes of all of its fields.
             AType::Struct(struct_type) => {
@@ -513,7 +529,8 @@ impl AType {
             | AType::I32
             | AType::I64
             | AType::U64
-            | AType::RawPtr => {
+            | AType::Int
+            | AType::Uint => {
                 format!("{}", self)
             }
             AType::Struct(s) => format!("{}", s.display(ctx)),

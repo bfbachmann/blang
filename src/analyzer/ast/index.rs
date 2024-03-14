@@ -45,7 +45,7 @@ impl AIndex {
         // This value will serve as a placeholder for when we error.
         let placeholder = AIndex {
             collection_expr: collection_expr.clone(),
-            index_expr: AExpr::new_zero_value(ctx, Type::new_unresolved("u64")),
+            index_expr: AExpr::new_zero_value(ctx, Type::new_unresolved("uint")),
             result_type_key: ctx.unknown_type_key(),
             start_pos: index.start_pos().clone(),
             end_pos: index.end_pos().clone(),
@@ -84,18 +84,18 @@ impl AIndex {
             }
         };
 
-        // Analyze the index expression. It should be of type `u64`.
+        // Analyze the index expression. It should be of type `uint`.
         let index_expr = AExpr::from(
             ctx,
             index.index_expr.clone(),
-            Some(ctx.u64_type_key()),
+            Some(ctx.uint_type_key()),
             false,
             false,
             false,
         );
 
         // If the index is a constant, we can check if it's in-bounds.
-        match index_expr.try_into_const_u64(ctx) {
+        match index_expr.try_into_const_uint(ctx) {
             Ok(i) if i >= array_len => {
                 ctx.insert_err(AnalyzeError::new(
                     ErrorKind::IndexOutOfBounds,

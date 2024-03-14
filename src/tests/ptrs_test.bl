@@ -1,26 +1,15 @@
 use "src/tests/test_utils.bl"
 
 struct T {
-    i: i64,
+    i: int,
     b: bool,
 }
 
 struct HasPtr {
-    field: *i64
+    field: *int
 }
 
 fn main() {
-    // Check that rawptrs work.
-    {
-        let t_ptr = malloc(sizeof T)
-        free(t_ptr)
-    
-        let s_ptr = malloc(sizeof {i64, bool})
-        free(s_ptr)
-    
-        assert(sizeof T == sizeof {bool, i64}, 1)
-    }
-
     // Check that typed pointers work.
     {
         // Check normal reference and dereference operations.
@@ -57,12 +46,12 @@ fn main() {
     // Check that we can cast between pointer types.
     {
         let bool_ptr = malloc(1) as *bool
-        assert(bool_ptr as rawptr != NULL, 10)
+        assert(bool_ptr as *u8 != NULL, 10)
 
         let bool_val: bool = bool_ptr?
         assert(bool_val == bool_ptr?, 11)
 
-        free(bool_ptr as rawptr)
+        free(bool_ptr as *u8)
     }
 
     // Check that we can chain references and dereferences.
@@ -84,13 +73,13 @@ fn main() {
     {
         let mut v = true
         let v_ptr: *mut bool = &mut v
-        let other_ptr = v_ptr as *mut i64
+        let other_ptr = v_ptr as *mut int
     }
 
     // Check that pointers can be compared regardles of mutability.
     {
-        let x: *mut i64 = &mut 1
-        let y: *i64 = &2
+        let x: *mut int = &mut 1
+        let y: *int = &2
         assert(x != y, 16)
     }
     
@@ -108,6 +97,6 @@ fn take_t(t: *T): T {
     }
 }
 
-fn take_tuple(tup: *{i64}): i64 {
+fn take_tuple(tup: *{int}): int {
     return tup?.0
 }

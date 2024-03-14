@@ -1,0 +1,38 @@
+use "std/libc/mem.bl"
+use "std/types/ptr.bl"
+
+struct String {
+    ptr: *u8
+    len: uint
+}
+
+impl String {
+    fn from_str(s: str): String {
+        let ptr = malloc(s.len())
+        memcpy(ptr, s as *u8, s.len())
+        return String{
+            ptr: ptr
+            len: s.len()
+        }
+    }
+
+    fn concat(self, other: String): String {
+        let new_len = self.len + other.len
+        let ptr = malloc(new_len)
+
+        memcpy(ptr, self.ptr, self.len)
+        memcpy((ptr as *u8).offset(self.len as int), other.ptr, other.len)
+
+        other.free()
+        self.free()
+
+        return String{
+            ptr: ptr
+            len: new_len
+        }
+    }
+
+    fn free(self) {
+        if self.len > 0: free(self.ptr)
+    }
+}

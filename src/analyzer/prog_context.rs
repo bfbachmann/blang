@@ -86,8 +86,8 @@ pub struct ProgramContext {
 impl ProgramContext {
     /// Creates a new program context. The program context will be initialized with stack containing
     /// a single scope representing the global scope and a type store containing primitive types.
-    pub fn new() -> Self {
-        let mut type_store = TypeStore::new();
+    pub fn new(target_ptr_width: u8) -> Self {
+        let mut type_store = TypeStore::new(target_ptr_width);
 
         // Set up primitive type keys.
         let mut primitive_type_keys = HashMap::new();
@@ -122,6 +122,17 @@ impl ProgramContext {
             warnings: Default::default(),
             errors: Default::default(),
         }
+    }
+
+    /// Creates a new program context where the pointer width is set according to the
+    /// host system.
+    pub fn new_with_host_ptr_width() -> ProgramContext {
+        ProgramContext::new(
+            target_lexicon::Triple::host()
+                .pointer_width()
+                .unwrap()
+                .bits(),
+        )
     }
 
     /// Calls `visit` on each scope on the stack starting from the current scope and ending at the
@@ -411,14 +422,19 @@ impl ProgramContext {
         *self.primitive_type_keys.get("u64").unwrap()
     }
 
+    /// Returns the type key for the `int` type.
+    pub fn int_type_key(&self) -> TypeKey {
+        *self.primitive_type_keys.get("int").unwrap()
+    }
+
+    /// Returns the type key for the `uint` type.
+    pub fn uint_type_key(&self) -> TypeKey {
+        *self.primitive_type_keys.get("uint").unwrap()
+    }
+
     /// Returns the type key for the `str` type.
     pub fn str_type_key(&self) -> TypeKey {
         *self.primitive_type_keys.get("str").unwrap()
-    }
-
-    /// Returns the type key for the `rawptr` type.
-    pub fn rawptr_type_key(&self) -> TypeKey {
-        *self.primitive_type_keys.get("rawptr").unwrap()
     }
 
     /// Returns the type key for the special `This` type.

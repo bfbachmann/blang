@@ -1,9 +1,14 @@
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
+    use target_lexicon::Triple;
+
     use crate::analyzer::analyze::{analyze_modules, ProgramAnalysis};
     use crate::analyzer::ast::module::AModule;
     use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
     use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
+    use crate::codegen::program::init_target;
     use crate::lexer::lex::lex;
     use crate::lexer::stream::Stream;
     use crate::parser::module::Module;
@@ -12,7 +17,10 @@ mod tests {
         let mut char_stream = Stream::from(raw.chars().collect());
         let tokens = lex(&mut char_stream).expect("should not error");
         let module = Module::from("", &mut Stream::from(tokens)).expect("should not error");
-        analyze_modules(vec![module])
+        analyze_modules(
+            vec![module],
+            &Triple::from_str(init_target(None).unwrap().as_str().to_str().unwrap()).unwrap(),
+        )
     }
 
     fn analyze(raw: &str) -> AnalyzeResult<AModule> {
@@ -140,63 +148,63 @@ mod tests {
     #[test]
     fn big_program() {
         let raw = r#"
-        fn main() {
-            let mut i = 0
-            loop {
-                let prefix = str_concat(str_concat("Fibonacci number ", itoa(i)), " is: ")
-                
-                let result = fib(
-                    i,
-                    fn (n: i64): bool {
-                        print(str_concat("fib visitor sees n=", itoa(n)))
-                        return n % 2 == 0
-                    },
-                )
-                
-                print(str_concat(prefix, itoa(result)))
-                
-                if i == 10 {
-                    break
-                } elsif i % 2 == 0 {
-                    print("i is even")
-                } else {
-                    print("i is odd")
+            fn main() {
+                let mut i = 0
+                loop {
+                    let prefix = str_concat(str_concat("Fibonacci number ", itoa(i)), " is: ")
+                    
+                    let result = fib(
+                        i,
+                        fn (n: int): bool {
+                            print(str_concat("fib visitor sees n=", itoa(n)))
+                            return n % 2 == 0
+                        },
+                    )
+                    
+                    print(str_concat(prefix, itoa(result)))
+                    
+                    if i == 10 {
+                        break
+                    } elsif i % 2 == 0 {
+                        print("i is even")
+                    } else {
+                        print("i is odd")
+                    }
+                    
+                    i = i + 1
                 }
-                
-                i = i + 1
             }
-        }
-        
-        // Calls `visitor_fn` with n and returns the n'th Fibonacci number.
-        fn fib(n: i64, visitor_fn: fn (i64): bool): i64 {
-            if visitor_fn(n) {
-                print("visitor returned true")
+            
+            // Calls `visitor_fn` with n and returns the n'th Fibonacci number.
+            fn fib(n: int, visitor_fn: fn (int): bool): int {
+                if visitor_fn(n) {
+                    print("visitor returned true")
+                }
+                if n <= 1 {
+                    return 1
+                }
+                return fib(n-1, visitor_fn) + fib(n-2, visitor_fn)
             }
-            if n <= 1 {
-                return 1
+            
+            fn print(s: str) {}
+            
+            fn str_concat(a: str, b: str): str {
+                return a
             }
-            return fib(n-1, visitor_fn) + fib(n-2, visitor_fn)
-        }
-        
-        fn print(s: str) {}
-        
-        fn str_concat(a: str, b: str): str {
-            return a
-        }
-        
-        fn itoa(i: i64): str {
-            return "fake"
-        }
-        
-        struct MyStruct {
-            inner: MyInnerStruct
-        }
-        
-        struct MyInnerStruct {
-            cond: bool
-        }
-        
-        fn check_struct(s: MyStruct) {}
+            
+            fn itoa(i: int): str {
+                return "fake"
+            }
+            
+            struct MyStruct {
+                inner: MyInnerStruct
+            }
+            
+            struct MyInnerStruct {
+                cond: bool
+            }
+            
+            fn check_struct(s: MyStruct) {}
         "#;
         let result = analyze(raw);
         check_result(result, None);
@@ -1002,7 +1010,7 @@ mod tests {
         let result = analyze(
             r#"
             fn main() {
-                let len: u64 = 2 
+                let len: uint = 2 
                 let x = [1; len] 
             }
             "#,
@@ -1015,7 +1023,7 @@ mod tests {
         let result = analyze(
             r#"
             fn main() {
-                let len: u64 = 2
+                let len: uint = 2
                 let x: [bool; len] = [true, false]
             }
             "#,
@@ -1134,13 +1142,13 @@ mod tests {
     fn illegal_move_in_array_index() {
         let result = analyze(
             r#"
-            fn take(array: [i64; 2]): i64 {
+            fn take(array: [int; 2]): uint {
                 return 1
             }
             
             fn main() {
                 let array = [1, 2]
-                let illegal = array[take(array) as u64]
+                let illegal = array[take(array)]
             }
         "#,
         );
@@ -1260,7 +1268,7 @@ mod tests {
             r#"
             fn main() {
                 // This is valid because `*mut _` coerces to `*_`.
-                let a: *i64 = &mut 0 
+                let a: *int = &mut 0 
             }
         "#,
         );

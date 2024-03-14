@@ -7,14 +7,14 @@ use "src/tests/test_utils.bl"
 fn do_nothing() {}
 
 struct Thing {
-    value: i64
+    value: int
 }
 
 const SOME_BOOL = true
-const SOME_ARRAY_LEN = 100
+const SOME_ARRAY_LEN = 100uint
 
 // Check that arrays can be declared constant at the module level.
-const SOME_ARRAY = [SOME_BOOL; SOME_ARRAY_LEN as u64]
+const SOME_ARRAY = [SOME_BOOL; SOME_ARRAY_LEN]
 
 fn main() {
     // Check that array variables can be declared, initialized, and accessed.
@@ -24,12 +24,12 @@ fn main() {
         assert(a[0] == 1u64, 1)
         assert(a[1] == 2u64, 2)
         assert(a[2] == 3u64, 3)
-
+    
         let b = ["one", "two", "three"]
         assert(b[0] == "one", 4)
         assert(b[1] == "two", 5)
         assert(b[2] == "three", 6)
-
+    
         // Make sure empty arrays are allowed.
         let empty: [] = []
         let empty: [u64; 0] = [1; 0]
@@ -64,7 +64,7 @@ fn main() {
     exit(0)
 }
 
-fn take(a: [i64; 2]): [str; 1] {
+fn take(a: [int; 2]): [str; 1] {
     assert(a[0] == -8, 12)
     assert(a[1] == 12, 13)
     return ["test"]

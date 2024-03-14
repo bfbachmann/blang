@@ -15,6 +15,7 @@ use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::tuple::ATupleType;
+
 use crate::analyzer::type_store::{TypeKey, TypeStore};
 
 /// Converts types from the Blang analyzer to LLVM types. This struct also caches mappings from
@@ -29,7 +30,7 @@ pub struct TypeConverter<'ctx> {
 impl<'ctx> TypeConverter<'ctx> {
     /// Creates a new type converter.
     pub fn new(ctx: &'ctx Context, type_store: &'ctx TypeStore) -> TypeConverter<'ctx> {
-        gen_intrinsic_types(ctx);
+        gen_intrinsic_types(ctx, type_store);
 
         TypeConverter {
             ctx,
@@ -105,13 +106,7 @@ fn to_basic_type<'ctx>(
 
         AType::I64 | AType::U64 => ctx.i64_type().as_basic_type_enum(),
 
-        // TODO: There has to be a better way of representing `void *`... but then again, maybe not.
-        // LLVM doesn't actually care about the pointee type, so really all pointers are treated
-        // equally.
-        AType::RawPtr => ctx
-            .i64_type()
-            .ptr_type(AddressSpace::default())
-            .as_basic_type_enum(),
+        AType::Int | AType::Uint => get_ptr_sized_int_type(ctx, type_store),
 
         AType::Str => ctx
             .get_struct_type(typ.name())
@@ -145,6 +140,17 @@ fn to_basic_type<'ctx>(
         AType::Unknown(name) => {
             panic!("encountered unknown type {}", name)
         }
+    }
+}
+
+/// Returns the LLVM type to be used in place of pointer-sized integer types which are sized
+/// based on the target platform.
+fn get_ptr_sized_int_type<'ctx>(ctx: &'ctx Context, type_store: &TypeStore) -> BasicTypeEnum<'ctx> {
+    match type_store.get_target_ptr_width() {
+        64 => ctx.i64_type().as_basic_type_enum(),
+        32 => ctx.i32_type().as_basic_type_enum(),
+        16 => ctx.i16_type().as_basic_type_enum(),
+        _ => ctx.i8_type().as_basic_type_enum(),
     }
 }
 
@@ -345,13 +351,13 @@ fn to_metadata_type_enum<'ctx>(
 }
 
 /// Generates type definitions for intrinsic types.
-fn gen_intrinsic_types(ctx: &Context) {
+fn gen_intrinsic_types(ctx: &Context, type_store: &TypeStore) {
     // Create the LLVM struct type for the `str` type.
     {
         let ll_struct_type = ctx.opaque_struct_type(AType::Str.name());
         let ll_field_types: [BasicTypeEnum; 2] = [
             ctx.i8_type().ptr_type(AddressSpace::default()).into(),
-            ctx.i64_type().into(),
+            get_ptr_sized_int_type(ctx, type_store),
         ];
         ll_struct_type.set_body(&ll_field_types, false);
     }

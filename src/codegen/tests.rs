@@ -1,9 +1,11 @@
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+    use std::str::FromStr;
+    use target_lexicon::Triple;
 
     use crate::analyzer::analyze::analyze_modules;
-    use crate::codegen::program::{generate, OutputFormat};
+    use crate::codegen::program::{generate, init_target, OutputFormat};
     use crate::lexer::lex::lex;
     use crate::lexer::stream::Stream;
     use crate::parser::module::Module;
@@ -12,7 +14,10 @@ mod tests {
         let mut char_stream = Stream::from(code.chars().collect());
         let tokens = lex(&mut char_stream).expect("should not error");
         let module = Module::from("", &mut Stream::from(tokens)).expect("should not error");
-        let analysis = analyze_modules(vec![module]);
+        let analysis = analyze_modules(
+            vec![module],
+            &Triple::from_str(init_target(None).unwrap().as_str().to_str().unwrap()).unwrap(),
+        );
         generate(
             analysis
                 .analyzed_modules
@@ -20,7 +25,7 @@ mod tests {
                 .map(|a| a.module)
                 .collect(),
             analysis.type_store,
-            None,
+            &init_target(None).unwrap(),
             OutputFormat::Object,
             Path::new("/dev/null"),
             true,
@@ -218,7 +223,7 @@ mod tests {
                 fn sub(self, v: i64): i64 { return self - v }
             }
             fn main() {
-                let i = 1
+                let i = 1i64
                 let v = i.add(10).sub(50).sub(2).add(-24)
                 i.sub(10).add(1)
             }

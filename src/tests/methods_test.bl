@@ -1,25 +1,25 @@
 use "src/tests/test_utils.bl"
 
 struct T {
-    value: i64
+    value: int
 }
 
 impl T {
-    fn get_value(self): i64 {
+    fn get_value(self): int {
         return self.value
     }
 
-    fn new(value: i64): T {
+    fn new(value: int): T {
         return T{value: value}
     }
 }
 
-impl i64 {
-    fn mul(self, v: i64): i64 {
+impl int {
+    fn mul(self, v: int): int {
         return self * v
     }
 
-    fn add(self, v: i64): i64 {
+    fn add(self, v: int): int {
         return self + v
     }
 }

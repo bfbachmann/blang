@@ -1,7 +1,9 @@
 extern {
-    fn signal(signal: u32, handler: fn (u32))
+    fn signal(signal: uint, handler: fn (uint))
+    fn backtrace(buf: *mut *u8, size: uint): uint
+    fn backtrace_symbols(buf: **u8, size: uint): **u8
 }
 
 const {
-    SIGSEGV: u32 = 11
+    SIGSEGV: uint = 11
 }

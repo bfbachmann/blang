@@ -506,8 +506,10 @@ impl<'a> MoveChecker<'a> {
             | AExprKind::I8Literal(_)
             | AExprKind::U32Literal(_)
             | AExprKind::I32Literal(_)
-            | AExprKind::U64Literal(_, _)
-            | AExprKind::I64Literal(_, _)
+            | AExprKind::U64Literal(_)
+            | AExprKind::I64Literal(_)
+            | AExprKind::IntLiteral(_)
+            | AExprKind::UintLiteral(_)
             | AExprKind::StrLiteral(_)
             | AExprKind::Unknown => {}
         }

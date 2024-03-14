@@ -15,8 +15,6 @@ use crate::parser::error::{ErrorKind, ParseError};
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct I64Lit {
     pub value: i64,
-    /// Will be true if the i64 literal in the source code included the explicit "i64" suffix.
-    pub has_type_suffix: bool,
     pub start_pos: Position,
     pub end_pos: Position,
 }
@@ -24,7 +22,6 @@ pub struct I64Lit {
 impl Hash for I64Lit {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.value.hash(state);
-        self.has_type_suffix.hash(state);
     }
 }
 
@@ -37,10 +34,10 @@ impl Display for I64Lit {
 locatable_impl!(I64Lit);
 
 impl I64Lit {
+    #[cfg(test)]
     pub fn new_with_default_pos(i: i64) -> I64Lit {
         I64Lit {
             value: i,
-            has_type_suffix: false,
             start_pos: Default::default(),
             end_pos: Default::default(),
         }
@@ -50,12 +47,11 @@ impl I64Lit {
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<I64Lit> {
         match tokens.next() {
             Some(&Token {
-                kind: TokenKind::I64Literal(value, has_type_suffix),
+                kind: TokenKind::I64Literal(value),
                 start,
                 end,
             }) => Ok(I64Lit {
                 value,
-                has_type_suffix,
                 start_pos: start,
                 end_pos: end,
             }),

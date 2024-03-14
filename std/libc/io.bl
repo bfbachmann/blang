@@ -1,12 +1,12 @@
 extern {
-    fn puts(msg: str): u32
-    fn read(fd: u32, buf: *u8, size: u64): u64
-    fn fflush(fd: u32)
-    fn write(fd: u32, ptr: *u8, nbytes: u64)
+    fn puts(msg: str): uint
+    fn read(fd: uint, buf: *u8, size: uint): uint
+    fn fflush(fd: uint)
+    fn write(fd: uint, ptr: *u8, nbytes: uint)
 }
 
 const {
-    STDIN: u32 = 0
-    STDOUT: u32 = 1
-    STDERR: u32 = 2
+    STDIN: uint = 0
+    STDOUT: uint = 1
+    STDERR: uint = 2
 }

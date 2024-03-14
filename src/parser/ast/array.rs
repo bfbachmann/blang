@@ -9,8 +9,8 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
-use crate::parser::ast::i64_lit::I64Lit;
 use crate::parser::ast::r#type::Type;
+use crate::parser::ast::uint_lit::UintLit;
 use crate::parser::error::ParseResult;
 use crate::parser::module::Module;
 
@@ -52,7 +52,7 @@ impl ArrayType {
         if let Some(token) = Module::parse_optional(tokens, TokenKind::RightBracket) {
             return Ok(ArrayType {
                 maybe_element_type: None,
-                length_expr: Expression::I64Literal(I64Lit::new_with_default_pos(0)),
+                length_expr: Expression::UintLiteral(UintLit::new_with_default_pos(0)),
                 start_pos,
                 end_pos: token.end.clone(),
             });
