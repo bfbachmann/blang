@@ -1,12 +1,14 @@
 use "std/libc/mem.bl"
 use "std/types/ptr.bl"
 
+/// Strings are heap-allocated sequences of bytes.
 struct String {
     ptr: *u8
     len: uint
 }
 
 impl String {
+    /// Creates a new `String` from the given `str`.
     fn from_str(s: str): String {
         let ptr = malloc(s.len())
         memcpy(ptr, s as *u8, s.len())
@@ -16,15 +18,13 @@ impl String {
         }
     }
 
-    fn concat(self, other: String): String {
-        let new_len = self.len + other.len
+    /// Creates a new `String` from the concatenation of `first` and `second`.
+    fn concat(first: *String, second: *String): String {
+        let new_len = first?.len + second?.len
         let ptr = malloc(new_len)
 
-        memcpy(ptr, self.ptr, self.len)
-        memcpy((ptr as *u8).offset(self.len as int), other.ptr, other.len)
-
-        other.free()
-        self.free()
+        memcpy(ptr, first?.ptr, first?.len)
+        memcpy((ptr as *u8).offset(first?.len as int), second?.ptr, second?.len)
 
         return String{
             ptr: ptr
@@ -32,7 +32,8 @@ impl String {
         }
     }
 
+    /// Frees heap space allocated for this `String`.
     fn free(self) {
-        if self.len > 0: free(self.ptr)
+        free(self.ptr)
     }
 }

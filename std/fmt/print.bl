@@ -1,10 +1,12 @@
 use "std/libc/io.bl"
 use "std/types/string.bl"
 
-fn print(msg: String) {
-    write(STDOUT, msg.ptr, msg.len)
+fn print(msg: *String) {
+    write(STDOUT, msg?.ptr, msg?.len)
 }
 
-fn println(msg: String) {
-    print(msg.concat(String.from_str("\n")))
+fn println(msg: *String) {
+    let msg_newline = String.concat(msg, &String.from_str("\n"))
+    print(&msg_newline)
+    msg_newline.free()
 }
