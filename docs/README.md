@@ -61,7 +61,7 @@ fn call_nested(): int {
 }
 ```
 
-Functions can be assigned to and used as variables.
+Functions pointers can be used as values and assigned to variables.
 
 ```rust
 fn main() {
@@ -69,6 +69,7 @@ fn main() {
     let three = func(1, 2)
 }
 
+// This function returns a function pointer.
 fn get_fn(): fn (int, int): int {
     fn sum(a: int, b: int): int {
         return a + b
@@ -80,8 +81,8 @@ fn get_fn(): fn (int, int): int {
 
 ### Variable Declarations: `let`
 
-Variables can only be declared using the `let` keyword inside functions (i.e. there is currently no support for global or 
-module-level variables).
+Variables can only be declared using the `let` keyword inside functions.There is currently no support for global or 
+module-level variables.
 
 ```rust
 fn demo() {
@@ -102,11 +103,8 @@ By default, all variables are immutable. To declare a mutable variable, use the 
 ```rust
 fn calculate(n: u64, double: bool, max: u64): u64 {
     let mut result = n
-
     if double: result = result * 2
-
     if result > max: return max
-
     return result
 }
 ```
@@ -125,7 +123,7 @@ const {
     SEASONS = ["Spring", "Summer", "Autumn", "Winter"]
 }
 
-fn is_bad_day(day_in_month: u64): bool {
+fn is_bad_day(day_in_month: int): bool {
     const BAD_DAY = 13
     return day_in_month == BAD_DAY
 }
@@ -400,7 +398,7 @@ fn main() {
     let a: u32 = 10i64 as u32
     
     // Casting between pointers and numeric types.
-    let a: i64 = &10 as *i64
+    let a: i64 = &10 as i64
     let ptr: *i64 = 100 as *i64
     
     // Casting between pointer types.
