@@ -103,8 +103,13 @@ By default, all variables are immutable. To declare a mutable variable, use the 
 ```rust
 fn calculate(n: u64, double: bool, max: u64): u64 {
     let mut result = n
-    if double: result = result * 2
-    if result > max: return max
+    if double {
+        result = result * 2
+    }
+
+    if result > max {
+        return max
+    }
     return result
 }
 ```
@@ -291,9 +296,13 @@ enum Cmp {
 }
 
 fn compare(a: i64, b: i64): Cmp {
-    if a > b: return Cmp::GreaterThan
-    elsif a < b: return Cmp::LessThan
-    else: return Cmp::Equal
+    if a > b {
+        return Cmp::GreaterThan
+    } elsif a < b {
+        return Cmp::LessThan
+    } else {
+        return Cmp::Equal
+    }
 }
 ```
 
@@ -318,9 +327,9 @@ fn main() {
 fn main() {
     let mut x = 1
     
-    // Curly braces around conditional or loop bodies are optional if the body
-    // is just one statement.
-    while x < 100: x = x * 2
+    while x < 100 {
+        x = x * 2
+    }
 }
 ```
 
@@ -332,7 +341,9 @@ fn main() {
     
     loop {
         x = x * 2
-        if x >= 100: return
+        if x >= 100 {
+            return
+        }
     }
 }
 ```
