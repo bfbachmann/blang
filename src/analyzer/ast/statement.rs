@@ -247,9 +247,13 @@ mod tests {
         let raw = r#"
             fn thing(a: i64): bool {
                 let mut mut_a = a * 2
-                if mut_a > 10: return true
-                elsif mut_a > 5: return false
-                else: mut_a = 2
+                if mut_a > 10 {
+                    return true
+                } elsif mut_a > 5 {
+                    return false
+                } else {
+                    mut_a = 2
+                } 
             }
         "#;
         let mut ctx = ProgramContext::new_with_host_ptr_width();
@@ -323,10 +327,13 @@ mod tests {
         let raw = r#"
             fn thing(a: i64): bool {
                 let mut mut_a = a * 2
-                if a > 10: return true
-                else {
+                if a > 10 {
+                    return true
+                } else {
                     {
-                        if mut_a > 50: return true
+                        if mut_a > 50 {
+                            return true
+                        }
                     }
                 }
             }
@@ -401,7 +408,9 @@ mod tests {
                 let mut mut_a = a
                 loop {
                     mut_a = mut_a - 1
-                    if mut_a == 1: continue
+                    if mut_a == 1 {
+                        continue
+                    }
                     return true
                 }
             }
@@ -455,7 +464,11 @@ mod tests {
         let raw = r#"
             fn thing(a: i64): bool {
                 loop {
-                    loop: if a == 1: return true
+                    loop {
+                        if a == 1 {
+                            return true
+                        }
+                    }
                     break
                 }
             }

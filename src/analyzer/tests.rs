@@ -378,7 +378,7 @@ mod tests {
         let programs = vec![
             r#"let a = 1"#,
             r#"thing = 1"#,
-            r#"if true: {}"#,
+            r#"if true {}"#,
             r#"loop {}"#,
             r#"{}"#,
         ];

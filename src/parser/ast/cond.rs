@@ -63,12 +63,9 @@ impl Conditional {
 
     /// Parses conditionals. Expects token sequences of the forms
     ///
-    ///     if <if_cond>: <statement>
-    ///     if <if_cond> <closure>
-    ///     elsif <elsif_cond>: <statement>
-    ///     elsif <elsif_cond> <closure>
-    ///     else: <statement>
-    ///     else <closure>
+    ///     if <if_cond> <body>
+    ///     elsif <elsif_cond> <body>
+    ///     else <body>
     ///
     /// where
     ///  - the `elsif` and `else` branches are optional, and the `elsif` branch is repeatable
