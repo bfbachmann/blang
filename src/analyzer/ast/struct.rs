@@ -140,7 +140,9 @@ impl AStructType {
         fields.sort_by(|f1, f2| {
             let type1 = ctx.must_get_type(f1.type_key);
             let type2 = ctx.must_get_type(f2.type_key);
-            type2.size_bytes(ctx).cmp(&type1.size_bytes(ctx))
+            type2
+                .size_bytes(&ctx.type_store)
+                .cmp(&type1.size_bytes(&ctx.type_store))
         });
 
         let a_struct = AStructType {

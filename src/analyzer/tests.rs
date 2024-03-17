@@ -1410,4 +1410,20 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::UndefSymbol));
     }
+
+    #[test]
+    fn valid_struck_use_in_loop() {
+        let result = analyze(
+            r#"
+                struct S { arr: [int; 1] }
+                fn main() {
+                    let s = S{arr: [3]}
+                    loop {
+                        let v = s.arr[0] 
+                    }
+                }
+            "#,
+        );
+        check_result(result, None);
+    }
 }

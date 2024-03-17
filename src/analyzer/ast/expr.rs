@@ -494,7 +494,7 @@ impl AExpr {
                 let type_key = ctx.resolve_type(&sizeof.typ);
                 let typ = ctx.must_get_type(type_key);
                 AExpr {
-                    kind: AExprKind::UintLiteral(typ.size_bytes(ctx) as u64),
+                    kind: AExprKind::UintLiteral(typ.size_bytes(&ctx.type_store) as u64),
                     type_key: ctx.uint_type_key(),
                     start_pos,
                     end_pos,
@@ -1301,9 +1301,11 @@ fn is_valid_type_cast(left_type: &AType, right_type: &AType) -> bool {
         // Casting between numeric types and pointers is allowed so long as
         // immutability is not violated.
         // Casting `str` to `*u8` is also allowed.
-        (AType::Pointer(_), target) => target.is_numeric(),
+        // Casting between pointer and function types is allowed (because they're both
+        // just functions).
+        (AType::Pointer(_), target) => target.is_numeric() || target.is_fn(),
         (source, AType::Pointer(APointerType { is_mut: false, .. })) => {
-            source.is_numeric() || source == &AType::Str
+            source.is_numeric() || source == &AType::Str || source.is_fn()
         }
 
         _ => false,

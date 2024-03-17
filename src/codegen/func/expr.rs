@@ -561,7 +561,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         match (src_type, dst_type) {
             // Nothing to do here since all pointers are represented the same way in LLVM.
-            (AType::Pointer(_), AType::Pointer(_)) => ll_src_val,
+            (AType::Pointer(_), AType::Pointer(_))
+            | (AType::Function(_), AType::Pointer(_))
+            | (AType::Pointer(_), AType::Function(_)) => ll_src_val,
 
             // Casting `str` to a pointer.
             (AType::Str, AType::Pointer(_)) => {
@@ -584,38 +586,43 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 ll_str_ptr.as_basic_value_enum()
             }
 
-            // Zero-extended upcasts.
-            (AType::U32, AType::I32 | AType::U64 | AType::I64)
-            | (AType::U8, AType::I8 | AType::U32 | AType::I32 | AType::U64 | AType::I64) => self
-                .builder
-                .build_int_z_extend_or_bit_cast(
-                    ll_src_val.into_int_value(),
-                    ll_dst_type.into_int_type(),
-                    format!("as_{}", dst_type.name()).as_str(),
-                )
-                .as_basic_value_enum(),
+            // Casting between numeric types.
+            (src, dst) if src.is_numeric() && dst.is_numeric() => {
+                let src_is_signed = src.is_signed();
+                let src_size = src.size_bytes(&self.type_store);
+                let dst_size = dst.size_bytes(&self.type_store);
 
-            // Sign-extended upcasts.
-            (AType::I32, AType::U32 | AType::U64 | AType::I64)
-            | (AType::I8, AType::U8 | AType::U32 | AType::I32 | AType::U64 | AType::I64) => self
-                .builder
-                .build_int_s_extend_or_bit_cast(
-                    ll_src_val.into_int_value(),
-                    ll_dst_type.into_int_type(),
-                    format!("as_{}", dst_type.name()).as_str(),
-                )
-                .as_basic_value_enum(),
-
-            // Truncating downcasts.
-            (AType::U64 | AType::I64, AType::I32 | AType::U32 | AType::I8 | AType::U8)
-            | (AType::U32 | AType::I32, AType::I8 | AType::U8) => self
-                .builder
-                .build_int_truncate_or_bit_cast(
-                    ll_src_val.into_int_value(),
-                    ll_dst_type.into_int_type(),
-                    format!("as_{}", dst_type.name()).as_str(),
-                )
-                .as_basic_value_enum(),
+                if src_size <= dst_size {
+                    if src_is_signed {
+                        // Sign-extended upcasts.
+                        self.builder
+                            .build_int_s_extend_or_bit_cast(
+                                ll_src_val.into_int_value(),
+                                ll_dst_type.into_int_type(),
+                                format!("as_{}", dst_type.name()).as_str(),
+                            )
+                            .as_basic_value_enum()
+                    } else {
+                        // Zero-extended upcasts.
+                        self.builder
+                            .build_int_z_extend_or_bit_cast(
+                                ll_src_val.into_int_value(),
+                                ll_dst_type.into_int_type(),
+                                format!("as_{}", dst_type.name()).as_str(),
+                            )
+                            .as_basic_value_enum()
+                    }
+                } else {
+                    // Truncating downcasts.
+                    self.builder
+                        .build_int_truncate_or_bit_cast(
+                            ll_src_val.into_int_value(),
+                            ll_dst_type.into_int_type(),
+                            format!("as_{}", dst_type.name()).as_str(),
+                        )
+                        .as_basic_value_enum()
+                }
+            }
 
             // Regular bitcasts.
             (_, _) => {

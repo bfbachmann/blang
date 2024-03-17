@@ -312,13 +312,19 @@ impl<'a> MoveChecker<'a> {
         true
     }
 
-    /// Returns true only if `var` was declared inside the current scope.
-    fn var_declared_in_cur_scope(&self, var: &ASymbol) -> bool {
-        self.stack
-            .last()
-            .unwrap()
-            .declared_vars
-            .contains(var.name.as_str())
+    /// Returns true only if `var` was declared inside the current (innermost) loop scope.
+    fn var_declared_in_cur_loop_scope(&self, var: &ASymbol) -> bool {
+        for scope in self.stack.iter().rev() {
+            if scope.declared_vars.contains(var.name.as_str()) {
+                return true;
+            }
+
+            if scope.kind == ScopeKind::LoopBody {
+                break;
+            }
+        }
+
+        false
     }
 
     /// Recursively performs move checks on `module`.
@@ -695,7 +701,7 @@ impl<'a> MoveChecker<'a> {
                     access,
                     symbol,
                     access.member_type_key,
-                    track_move || member_requires_move,
+                    track_move && !member_requires_move,
                 );
             }
 
@@ -784,7 +790,7 @@ impl<'a> MoveChecker<'a> {
         // guaranteed to exit the loop (i.e. is not guaranteed to execute at most once), then the
         // move is illegal as it could execute more than once.
         if track_move
-            && !self.var_declared_in_cur_scope(base_var)
+            && !self.var_declared_in_cur_loop_scope(base_var)
             && !self.cur_scope_executes_at_most_once()
         {
             self.add_err(

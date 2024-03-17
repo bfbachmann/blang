@@ -135,8 +135,10 @@ impl AEnumType {
 
                     // Update the size of the largest variant, if necessary.
                     let variant_type = ctx.must_get_type(variant_type_key);
-                    largest_variant_size_bytes =
-                        max(largest_variant_size_bytes, variant_type.size_bytes(ctx));
+                    largest_variant_size_bytes = max(
+                        largest_variant_size_bytes,
+                        variant_type.size_bytes(&ctx.type_store),
+                    );
 
                     Some(variant_type_key)
                 }
