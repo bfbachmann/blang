@@ -1,7 +1,7 @@
 use "std/libc/string.bl"
 use "std/libc/mem.bl"
 
-use "ignore/utils.bl"
+use "machine-interpreter/utils.bl"
 
 /// Represents a machine instruction.
 struct Instruction {

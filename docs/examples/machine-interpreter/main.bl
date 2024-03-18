@@ -4,13 +4,13 @@ use "std/libc/mem.bl"
 use "std/libc/file.bl"
 use "std/libc/signal.bl"
 
-use "ignore/parser.bl"
-use "ignore/machine.bl"
-use "ignore/utils.bl"
+use "machine-interpreter/parser.bl"
+use "machine-interpreter/machine.bl"
+use "machine-interpreter/utils.bl"
 
 fn main() {
     // Open file for reading.
-    let file = fopen("program.txt\0" as *u8, "rb\0" as *u8)
+    let file = fopen("machine-interpreter/program.txt\0" as *u8, "rb\0" as *u8)
     assert(file as uint != 0, "failed to open file")
 
     // Figure out how many bytes are in the file.
