@@ -2,6 +2,7 @@ extern {
     fn signal(signal: uint, handler: fn (uint))
     fn backtrace(buf: *mut *u8, size: uint): uint
     fn backtrace_symbols(buf: **u8, size: uint): **u8
+    fn backtrace_symbols_fd(buf: **u8, size: uint, fd: uint)
 }
 
 const {

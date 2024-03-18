@@ -1,3 +1,4 @@
+use inkwell::types::BasicTypeEnum;
 use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, IntValue};
 use inkwell::{AddressSpace, IntPredicate};
 
@@ -332,7 +333,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             // Make sure we write constant values that are supposed to be passed as pointers to
             // the stack and use their pointers as the arguments rather than the constant values
             // themselves.
-            if arg.kind.is_const() && arg_type.is_composite() {
+            if !ll_arg_val.is_pointer_value() && arg_type.is_composite() {
                 let ll_arg_ptr = self.create_entry_alloc(
                     format!("arg_{}_literal", i).as_str(),
                     arg.type_key,
@@ -554,7 +555,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         src_expr: &AExpr,
         dst_type_key: TypeKey,
     ) -> BasicValueEnum<'ctx> {
-        let mut ll_src_val = self.gen_expr(src_expr);
+        let ll_src_val = self.gen_expr(src_expr);
         let src_type = self.type_store.must_get(src_expr.type_key);
         let dst_type = self.type_store.must_get(dst_type_key);
         let ll_dst_type = self.type_converter.get_basic_type(dst_type_key);
@@ -588,72 +589,79 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             // Casting between numeric types.
             (src, dst) if src.is_numeric() && dst.is_numeric() => {
-                let src_is_signed = src.is_signed();
-                let src_size = src.size_bytes(&self.type_store);
-                let dst_size = dst.size_bytes(&self.type_store);
-
-                if src_size <= dst_size {
-                    if src_is_signed {
-                        // Sign-extended upcasts.
-                        self.builder
-                            .build_int_s_extend_or_bit_cast(
-                                ll_src_val.into_int_value(),
-                                ll_dst_type.into_int_type(),
-                                format!("as_{}", dst_type.name()).as_str(),
-                            )
-                            .as_basic_value_enum()
-                    } else {
-                        // Zero-extended upcasts.
-                        self.builder
-                            .build_int_z_extend_or_bit_cast(
-                                ll_src_val.into_int_value(),
-                                ll_dst_type.into_int_type(),
-                                format!("as_{}", dst_type.name()).as_str(),
-                            )
-                            .as_basic_value_enum()
-                    }
-                } else {
-                    // Truncating downcasts.
-                    self.builder
-                        .build_int_truncate_or_bit_cast(
-                            ll_src_val.into_int_value(),
-                            ll_dst_type.into_int_type(),
-                            format!("as_{}", dst_type.name()).as_str(),
-                        )
-                        .as_basic_value_enum()
-                }
+                self.gen_numeric_type_cast(ll_src_val, src, dst, ll_dst_type)
             }
+
+            // Casting from pointer to numeric type.
+            (AType::Pointer(_), dst) if dst.is_numeric() => self
+                .builder
+                .build_ptr_to_int(
+                    ll_src_val.into_pointer_value(),
+                    ll_dst_type.into_int_type(),
+                    "ptr_as_int",
+                )
+                .as_basic_value_enum(),
+
+            // Casting from numeric type to pointer.
+            (src, AType::Pointer(_)) if src.is_numeric() => self
+                .builder
+                .build_int_to_ptr(
+                    ll_src_val.into_int_value(),
+                    ll_dst_type.into_pointer_type(),
+                    "int_as_ptr",
+                )
+                .as_basic_value_enum(),
 
             // Regular bitcasts.
-            (_, _) => {
-                // Check if we need to convert between integer and pointer types before
-                // the bitcast.
-                if ll_src_val.is_pointer_value() {
-                    ll_src_val = self
-                        .builder
-                        .build_ptr_to_int(
-                            ll_src_val.into_pointer_value(),
-                            ll_dst_type.into_int_type(),
-                            "ptr_as_int",
-                        )
-                        .as_basic_value_enum();
-                } else if ll_dst_type.is_pointer_type() {
-                    ll_src_val = self
-                        .builder
-                        .build_int_to_ptr(
-                            ll_src_val.into_int_value(),
-                            ll_dst_type.into_pointer_type(),
-                            "int_as_ptr",
-                        )
-                        .as_basic_value_enum();
-                }
+            (_, _) => self.builder.build_bitcast(
+                ll_src_val,
+                ll_dst_type,
+                format!("as_{}", dst_type.name()).as_str(),
+            ),
+        }
+    }
 
-                self.builder.build_bitcast(
-                    ll_src_val,
-                    ll_dst_type,
+    /// Generates a type cast between numeric types.
+    fn gen_numeric_type_cast(
+        &self,
+        ll_src_val: BasicValueEnum<'ctx>,
+        src_type: &AType,
+        dst_type: &AType,
+        ll_dst_type: BasicTypeEnum<'ctx>,
+    ) -> BasicValueEnum<'ctx> {
+        let src_is_signed = src_type.is_signed();
+        let src_size = src_type.size_bytes(&self.type_store);
+        let dst_size = dst_type.size_bytes(&self.type_store);
+
+        if src_size <= dst_size {
+            if src_is_signed {
+                // Sign-extended upcasts.
+                self.builder
+                    .build_int_s_extend_or_bit_cast(
+                        ll_src_val.into_int_value(),
+                        ll_dst_type.into_int_type(),
+                        format!("as_{}", dst_type.name()).as_str(),
+                    )
+                    .as_basic_value_enum()
+            } else {
+                // Zero-extended upcasts.
+                self.builder
+                    .build_int_z_extend_or_bit_cast(
+                        ll_src_val.into_int_value(),
+                        ll_dst_type.into_int_type(),
+                        format!("as_{}", dst_type.name()).as_str(),
+                    )
+                    .as_basic_value_enum()
+            }
+        } else {
+            // Truncating downcasts.
+            self.builder
+                .build_int_truncate_or_bit_cast(
+                    ll_src_val.into_int_value(),
+                    ll_dst_type.into_int_type(),
                     format!("as_{}", dst_type.name()).as_str(),
                 )
-            }
+                .as_basic_value_enum()
         }
     }
 

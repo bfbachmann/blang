@@ -1,0 +1,306 @@
+use "std/libc/string.bl"
+use "std/libc/mem.bl"
+
+use "ignore/utils.bl"
+
+struct Instruction {
+    kind: InstKind
+    operands: {int, int}
+}
+
+impl Instruction {
+    fn new_nop(): Instruction {
+        return Instruction{
+            kind: InstKind::JumpIf0
+            operands: {1, 0}
+        }
+    }
+}
+
+enum InstKind {
+    // store <value> <dst_loc>
+    Store
+    // copy <src_loc> <dst_loc>
+    Copy
+    // add <src_loc> <dst_loc>
+    Add
+    // jumpif0 <src_loc> <dst_inst>
+    JumpIf0
+}
+
+const MAX_INSTS: uint = 128
+
+struct Program {
+    instructions: [Instruction; 128]
+    len: uint
+}
+
+impl Program {
+    fn new(): Program {
+        return Program{
+            instructions: [Instruction.new_nop(); MAX_INSTS]
+            len: 0
+        }
+    }
+
+    fn push_inst(prog: *mut Program, inst: Instruction) {
+        assert(prog?.len < MAX_INSTS, "maximum program length exceeded")
+        prog?.instructions[prog?.len] = inst
+        prog?.len = prog?.len + 1
+    }
+}
+
+enum ParseStatus {
+    Ok
+    Done
+    Err
+}
+
+struct ParseResult {
+    status: ParseStatus
+    inst: Instruction
+    msg: str
+}
+
+impl ParseResult {
+    fn new_ok(inst: Instruction): ParseResult {
+        return ParseResult{
+            status: ParseStatus::Ok
+            inst: inst
+            msg: ""
+        }
+    }
+
+    fn new_err(msg: str): ParseResult {
+        return ParseResult{
+            status: ParseStatus::Err
+            inst: Instruction.new_nop()
+            msg: msg
+        }
+    }
+
+    fn new_done(): ParseResult {
+        return ParseResult{
+            status: ParseStatus::Done
+            inst: Instruction.new_nop()
+            msg: ""
+        }
+    }
+}
+
+struct Parser {
+    buf: *u8
+    buf_len: uint
+    cursor: uint
+    inst_count: uint
+}
+
+impl Parser {
+    fn new(buf: *u8, buf_len: uint): Parser {
+        return Parser{
+            buf: buf
+            buf_len: buf_len
+            cursor: 0
+            inst_count: 0
+        }
+    }
+
+    fn parse_prog(parser: *mut Parser): Program {
+        let mut prog = Program.new()
+        loop {
+            let result = Parser.try_parse_inst(parser)
+            assert(result.status ~!= ParseStatus::Err, result.msg)
+    
+            if result.status ~== ParseStatus::Done {
+                return prog
+            }
+    
+            Program.push_inst(&mut prog, result.inst)
+        }
+    }
+
+    fn try_parse_inst(parser: *mut Parser): ParseResult {
+        // Remove all leading whitespace
+        Parser.parse_spaces(parser)
+
+        // Check if we're at the end of the buffer
+        if parser?.cursor >= parser?.buf_len {
+            return ParseResult.new_done()
+        }
+
+        // Increment instruction counter
+        parser?.inst_count = parser?.inst_count + 1
+
+        // Try parse an instruction
+        {
+            if Parser.try_parse(parser, "store") {
+                return Parser.try_parse_store_operands(parser)
+            }
+
+            if Parser.try_parse(parser, "copy") {
+                return Parser.try_parse_copy_operands(parser)
+            }
+
+            if Parser.try_parse(parser, "add") {
+                return Parser.try_parse_add_operands(parser)
+            }
+
+            if Parser.try_parse(parser, "jumpif0") {
+                return Parser.try_parse_jump_operands(parser)
+            }
+        }
+
+        return ParseResult.new_err("unrecognized instruction")
+    }
+
+    fn try_parse_store_operands(parser: *mut Parser): ParseResult {
+        Parser.parse_spaces(parser)
+
+        // Parse first operand
+        let value_result = Parser.try_parse_int(parser)
+        if !value_result.1 {
+            return ParseResult.new_err("invalid integer value in first 'store' operand")
+        }
+        
+        Parser.parse_spaces(parser)
+        
+        // Parse second operand
+        let addr_result = Parser.try_parse_addr(parser)
+        if !addr_result.1 {
+            return ParseResult.new_err("invalid address in second 'store' operand")
+        }
+
+        return ParseResult.new_ok(Instruction{
+            kind: InstKind::Store
+            operands: {value_result.0, addr_result.0}
+        })
+    }
+
+    fn try_parse_copy_operands(parser: *mut Parser): ParseResult {
+        Parser.parse_spaces(parser)
+
+        // Parse first operand
+        let src_addr_result = Parser.try_parse_addr(parser)
+        if !src_addr_result.1 {
+            return ParseResult.new_err("invalid address in first 'copy' operand")
+        }
+        
+        Parser.parse_spaces(parser)
+        
+        // Parse second operand
+        let dst_addr_result = Parser.try_parse_addr(parser)
+        if !dst_addr_result.1 {
+            return ParseResult.new_err("invalid address in second 'copy' operand")
+        }
+
+        return ParseResult.new_ok(Instruction{
+            kind: InstKind::Copy
+            operands: {src_addr_result.0, dst_addr_result.0}
+        })
+    }
+
+    fn try_parse_add_operands(parser: *mut Parser): ParseResult {
+        Parser.parse_spaces(parser)
+
+        // Parse first operand
+        let src_addr_result = Parser.try_parse_addr(parser)
+        if !src_addr_result.1 {
+            return ParseResult.new_err("invalid address in first 'add' operand")
+        }
+        
+        Parser.parse_spaces(parser)
+        
+        // Parse second operand
+        let dst_addr_result = Parser.try_parse_addr(parser)
+        if !dst_addr_result.1 {
+            return ParseResult.new_err("invalid address in second 'add' operand")
+        }
+
+        return ParseResult.new_ok(Instruction{
+            kind: InstKind::Add
+            operands: {src_addr_result.0, dst_addr_result.0}
+        })
+    }
+
+    fn try_parse_jump_operands(parser: *mut Parser): ParseResult {
+        Parser.parse_spaces(parser)
+
+        // Parse first operand
+        let src_addr_result = Parser.try_parse_addr(parser)
+        if !src_addr_result.1 {
+            return ParseResult.new_err("invalid address in first 'jumpif0' operand")
+        }
+        
+        Parser.parse_spaces(parser)
+        
+        // Parse second operand
+        let dst_addr_result = Parser.try_parse_addr(parser)
+        if !dst_addr_result.1 {
+            return ParseResult.new_err("invalid address in second 'jumpif0' operand")
+        }
+
+        return ParseResult.new_ok(Instruction{
+            kind: InstKind::JumpIf0
+            operands: {src_addr_result.0, dst_addr_result.0}
+        })
+    }
+
+    fn try_parse_addr(parser: *mut Parser): {int, bool} {
+        if !Parser.try_parse(parser, "#") {
+            return {0, false}
+        }
+
+        let result = Parser.try_parse_int(parser)
+
+        // Make sure the address is not a negative number
+        if result.0 < 0 {
+            return {0, false}
+        }
+
+        return result 
+    }
+
+    fn try_parse_int(parser: *mut Parser): {int, bool} {
+        let mut end_ptr = Parser.buf_at_cursor(parser)
+        let value = strtol(end_ptr, &mut end_ptr, 10)
+        let num_chars = end_ptr as int - Parser.buf_at_cursor(parser) as int
+        Parser.move_cursor(parser, num_chars)
+        return {value, num_chars > 0}
+    }
+
+    fn parse_spaces(parser: *mut Parser) {
+        while Parser.try_parse(parser, " ")
+            or Parser.try_parse(parser, "\t")
+            or Parser.try_parse(parser, "\n")
+        {}
+    }
+
+    fn try_parse(parser: *mut Parser, s: str): bool {
+        if Parser.buf_starts_with(parser, s) {
+            Parser.move_cursor(parser, s.len() as int)
+            return true
+        }
+
+        return false
+    }
+
+    fn move_cursor(parser: *mut Parser, offset: int) {
+        let new_cursor = (parser?.cursor as int + offset) as uint
+
+        // Make sure not to overrun the buffer
+        if new_cursor >= parser?.buf_len {
+            parser?.cursor = parser?.buf_len
+            return
+        }
+
+        parser?.cursor = new_cursor
+    }
+
+    fn buf_at_cursor(parser: *Parser): *u8 {
+        return (parser?.buf as int + parser?.cursor as int) as *u8
+    }
+
+    fn buf_starts_with(parser: *Parser, s: str): bool {
+        return strncmp(Parser.buf_at_cursor(parser), s as *u8, s.len()) == 0
+    }
+}

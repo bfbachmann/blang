@@ -1,0 +1,4 @@
+extern {
+    fn strncmp(s1: *u8, s2: *u8, size: uint): int
+    fn strtol(s: *u8, end: *mut *u8, base: int): int
+}

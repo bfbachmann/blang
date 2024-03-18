@@ -1,0 +1,48 @@
+use "std/libc/io.bl"
+use "std/libc/proc.bl"
+use "std/libc/mem.bl"
+use "std/libc/file.bl"
+use "std/libc/signal.bl"
+
+use "ignore/parser.bl"
+use "ignore/machine.bl"
+use "ignore/utils.bl"
+
+fn main() {
+    // Open file for reading.
+    let file = fopen("program.txt\0" as *u8, "rb\0" as *u8)
+    assert(file as uint != 0, "failed to open file")
+
+    // Figure out how many bytes are in the file.
+    assert(fseek(file, 0, SEEK_END) == 0, "could not seek end of file")
+    let size_bytes = ftell(file)
+    assert(size_bytes != -1, "failed to get file cursor")
+    rewind(file)
+
+    // Allocate space to store the file contents and copy the file.
+    // contents into the buffer.
+    let prog_data = calloc(1, size_bytes as uint + 1)
+    assert(prog_data as uint != 0, "failed to allocate memory")
+    let bytes_read = fread(prog_data, 1, size_bytes as uint, file)
+    assert(bytes_read == size_bytes as uint, "failed to read file into memory")
+
+    // Read instructions from the file.
+    let mut parser = Parser.new(prog_data, bytes_read)
+    let prog = Parser.parse_prog(&mut parser)
+
+    // Execute instructions.
+    let mut machine = Machine.new(&prog)
+    let result = Machine.exec_prog(&mut machine)
+    assert(result.status ~== ExecStatus::Ok, result.msg)
+
+    // For debugging purposes, sum the machine memory and use it as
+    // the exit code.
+    let mut sum = 0
+    for let mut i = 0uint, i < 10, i = i + 1 {
+        sum = sum + machine.memory[i]
+    }
+    
+    free(prog_data)
+    fclose(file)
+    exit(sum as uint)
+}

@@ -310,10 +310,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             self.fpm.run_on(&fn_val);
             Ok(fn_val)
         } else {
-            // TODO: this is gross
-            println!("\n----BEGIN MODULE----\n");
-            self.module.print_to_stderr();
-            println!("----END MODULE----\n");
             fn_val.print_to_stderr();
             unsafe {
                 fn_val.delete();

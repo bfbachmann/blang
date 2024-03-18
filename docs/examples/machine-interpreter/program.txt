@@ -1,0 +1,7 @@
+store 0 #0
+store 5 #1
+store -1 #10
+add #10 #1
+jumpif0 #1 #6
+jumpif0 #0 #3
+store 0 #10
