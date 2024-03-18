@@ -33,7 +33,7 @@ enum InstKind {
     /// Adds a value from one location in memory to another.
     /// Example: Add the value at address 3 to the value at address 4
     ///          and store the result in address 4.
-    ///     add 3 4
+    ///     add #3 #4
     Add
 
     /// Jumps to a designation instruction number if the value at the given
