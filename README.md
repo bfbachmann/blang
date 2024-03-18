@@ -4,7 +4,7 @@ _A simple, statically typed, ahead-of-time compiled toy programming language wri
 
 ## Documentation
 
-See [docs](docs/README.md) for high-level language documentation.
+See [docs](docs) for high-level language documentation and examples.
 
 See [src/tests](src/tests) for runnable examples.
 
