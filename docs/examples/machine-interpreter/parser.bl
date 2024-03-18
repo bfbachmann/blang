@@ -3,6 +3,7 @@ use "std/libc/mem.bl"
 
 use "ignore/utils.bl"
 
+/// Represents a machine instruction.
 struct Instruction {
     kind: InstKind
     operands: {int, int}
@@ -17,19 +18,35 @@ impl Instruction {
     }
 }
 
+/// Represents a kind of instruction.
 enum InstKind {
-    // store <value> <dst_loc>
+    /// Stores the immediate `value` into memory at the location `dst_loc`.
+    /// Example: Store the value 234 into memory at address 9
+    ///     store 234 #9
     Store
-    // copy <src_loc> <dst_loc>
+
+    /// Copies a value from one location in memory to another.
+    /// Example: Copy the value from address 8 to address 3
+    ///     copy #8 #3
     Copy
-    // add <src_loc> <dst_loc>
+
+    /// Adds a value from one location in memory to another.
+    /// Example: Add the value at address 3 to the value at address 4
+    ///          and store the result in address 4.
+    ///     add 3 4
     Add
-    // jumpif0 <src_loc> <dst_inst>
+
+    /// Jumps to a designation instruction number if the value at the given
+    /// address is 0.
+    /// Example: Jump to instruction 3 if the value at address 8 is 0.
+    ///     jumpif0 #8 #3
     JumpIf0
 }
 
+/// The maximum number of instructions in a program.
 const MAX_INSTS: uint = 128
 
+/// A program is just an array of instructions.
 struct Program {
     instructions: [Instruction; 128]
     len: uint
@@ -43,6 +60,7 @@ impl Program {
         }
     }
 
+    /// Adds the given instruction to the program.
     fn push_inst(prog: *mut Program, inst: Instruction) {
         assert(prog?.len < MAX_INSTS, "maximum program length exceeded")
         prog?.instructions[prog?.len] = inst
@@ -50,12 +68,17 @@ impl Program {
     }
 }
 
+/// Indicates whether parsing succeeded.
 enum ParseStatus {
+    /// Parsing succeeded, but there is more to parse.
     Ok
+    /// Parsing complete.
     Done
+    /// Parsing failed.
     Err
 }
 
+/// Represents the result of parsing.
 struct ParseResult {
     status: ParseStatus
     inst: Instruction
@@ -88,6 +111,7 @@ impl ParseResult {
     }
 }
 
+/// Parses a program from a character buffer.
 struct Parser {
     buf: *u8
     buf_len: uint
@@ -96,6 +120,7 @@ struct Parser {
 }
 
 impl Parser {
+    /// Returns a new parser for parsing the instructions in `buf` with a length of `buf_len` bytes.
     fn new(buf: *u8, buf_len: uint): Parser {
         return Parser{
             buf: buf
@@ -105,6 +130,8 @@ impl Parser {
         }
     }
 
+    /// Parses the program stored in the parser and returns the result. This function
+    /// will abort with an error message if the program is syntactically invalid.
     fn parse_prog(parser: *mut Parser): Program {
         let mut prog = Program.new()
         loop {
@@ -119,6 +146,8 @@ impl Parser {
         }
     }
 
+    /// Tries to parse an instruction from the current position in the program
+    /// buffer and returns the result.
     fn try_parse_inst(parser: *mut Parser): ParseResult {
         // Remove all leading whitespace
         Parser.parse_spaces(parser)
@@ -153,6 +182,8 @@ impl Parser {
         return ParseResult.new_err("unrecognized instruction")
     }
 
+    /// Tries to parse store instruction operands from the current location in the
+    /// program buffer and returns the result.
     fn try_parse_store_operands(parser: *mut Parser): ParseResult {
         Parser.parse_spaces(parser)
 
@@ -176,6 +207,8 @@ impl Parser {
         })
     }
 
+    /// Tries to parse copy instruction operands from the current location in the
+    /// program buffer and returns the result.
     fn try_parse_copy_operands(parser: *mut Parser): ParseResult {
         Parser.parse_spaces(parser)
 
@@ -199,6 +232,8 @@ impl Parser {
         })
     }
 
+    /// Tries to parse add instruction operands from the current location in the
+    /// program buffer and returns the result.
     fn try_parse_add_operands(parser: *mut Parser): ParseResult {
         Parser.parse_spaces(parser)
 
@@ -222,6 +257,8 @@ impl Parser {
         })
     }
 
+    /// Tries to parse jumpif0 instruction operands from the current location in the
+    /// program buffer and returns the result.
     fn try_parse_jump_operands(parser: *mut Parser): ParseResult {
         Parser.parse_spaces(parser)
 
@@ -245,6 +282,9 @@ impl Parser {
         })
     }
 
+    /// Tries to parse an address from the current location in the
+    /// program buffer and returns the result with `true` if successful, and
+    /// `false` otherwise.
     fn try_parse_addr(parser: *mut Parser): {int, bool} {
         if !Parser.try_parse(parser, "#") {
             return {0, false}
@@ -260,6 +300,8 @@ impl Parser {
         return result 
     }
 
+    /// Tries to parse an integer from the current location in the program buffer
+    /// and returns the result with `true` if successful, and `false` otherwise.
     fn try_parse_int(parser: *mut Parser): {int, bool} {
         let mut end_ptr = Parser.buf_at_cursor(parser)
         let value = strtol(end_ptr, &mut end_ptr, 10)
@@ -268,6 +310,7 @@ impl Parser {
         return {value, num_chars > 0}
     }
 
+    /// Parses all spaces at the current location in the program buffer.
     fn parse_spaces(parser: *mut Parser) {
         while Parser.try_parse(parser, " ")
             or Parser.try_parse(parser, "\t")
@@ -275,6 +318,8 @@ impl Parser {
         {}
     }
 
+    /// Tries to parse the given `str` from the current location in the buffer
+    /// and returns `true` if successful.
     fn try_parse(parser: *mut Parser, s: str): bool {
         if Parser.buf_starts_with(parser, s) {
             Parser.move_cursor(parser, s.len() as int)
@@ -284,6 +329,7 @@ impl Parser {
         return false
     }
 
+    /// Moves the parser's cursor in the buffer by the given offset.
     fn move_cursor(parser: *mut Parser, offset: int) {
         let new_cursor = (parser?.cursor as int + offset) as uint
 
@@ -296,10 +342,13 @@ impl Parser {
         parser?.cursor = new_cursor
     }
 
+    /// Returns a pointer to the parser's current position in the program buffer.
     fn buf_at_cursor(parser: *Parser): *u8 {
         return (parser?.buf as int + parser?.cursor as int) as *u8
     }
 
+    /// Returns `true` if the program buffer starting at the parser's current position
+    /// contains `s`.
     fn buf_starts_with(parser: *Parser, s: str): bool {
         return strncmp(Parser.buf_at_cursor(parser), s as *u8, s.len()) == 0
     }
