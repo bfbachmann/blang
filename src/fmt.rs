@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::time::Duration;
 
 use colored::CustomColor;
 use colored::{control, Colorize};
@@ -323,4 +324,9 @@ pub fn hierarchy_to_string(hierarchy: &Vec<String>) -> String {
     }
 
     s.to_string()
+}
+
+/// Returns the string representation of the given duration.
+pub fn format_duration(duration: Duration) -> String {
+    format!("{}.{}s", duration.as_secs(), duration.subsec_millis())
 }

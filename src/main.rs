@@ -17,7 +17,7 @@ use parser::module::Module;
 
 use crate::analyzer::analyze::{analyze_modules, ProgramAnalysis};
 use crate::codegen::program::{generate, init_target, OutputFormat};
-use crate::fmt::{display_err, format_file_loc};
+use crate::fmt::{display_err, format_duration, format_file_loc};
 use crate::lexer::error::LexError;
 use crate::lexer::lex::lex;
 use crate::lexer::pos::Locatable;
@@ -417,10 +417,10 @@ fn compile(
     linker: Option<&String>,
     linker_flags: Vec<&String>,
 ) {
-    let start_time = Instant::now();
-
     // Read and analyze the program.
+    let analyze_start = Instant::now();
     let prog_analysis = analyze(src_path, None, &target_triple);
+    let analyze_duration = Instant::now() - analyze_start;
 
     // If no output path was specified, just use the source file name.
     let src = Path::new(src_path);
@@ -438,6 +438,7 @@ fn compile(
     };
 
     // Compile the program.
+    let generate_start = Instant::now();
     if let Err(e) = generate(
         prog_analysis
             .analyzed_modules
@@ -455,15 +456,35 @@ fn compile(
         fatalln!("{}", e);
     }
 
+    let generate_duration = Instant::now() - generate_start;
+    let total_duration = analyze_duration + generate_duration;
+
     // Print the success message with the compile time.
     if !quiet {
-        let compile_time = Instant::now() - start_time;
+        let analyze_time = format_duration(analyze_duration);
+        let generate_time = format_duration(generate_duration);
+        let total_time = format_duration(total_duration);
+        let align_width = [analyze_time.len(), generate_time.len(), total_time.len()]
+            .into_iter()
+            .reduce(usize::max)
+            .unwrap();
+
+        println!("Compiled {}.\n", src_path);
         println!(
-            "Compiled {} in {}.{}s.",
-            src_path,
-            compile_time.as_secs(),
-            compile_time.subsec_millis()
-        )
+            "Analyze time:  {:>width$}",
+            format_duration(analyze_duration),
+            width = align_width
+        );
+        println!(
+            "Generate time: {:>width$}",
+            format_duration(generate_duration),
+            width = align_width
+        );
+        println!(
+            "Total time:    {:>width$}",
+            format_duration(total_duration),
+            width = align_width
+        );
     }
 }
 
