@@ -5,7 +5,7 @@ use inkwell::{AddressSpace, IntPredicate};
 use crate::analyzer::ast::array::AArrayInit;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::fn_call::AFnCall;
-use crate::analyzer::ast::func::AFnSig;
+use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::index::AIndex;
 use crate::analyzer::ast::member::AMemberAccess;
 use crate::analyzer::ast::r#enum::AEnumVariantInit;
@@ -64,19 +64,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             AExprKind::Index(index) => self.gen_index(index),
 
-            AExprKind::AnonFunction(anon_fn) => FnCodeGen::compile(
-                self.ctx,
-                self.builder,
-                self.fpm,
-                self.module,
-                self.type_store,
-                self.type_converter,
-                self.module_consts,
-                anon_fn,
-            )
-            .unwrap()
-            .as_global_value()
-            .as_basic_value_enum(),
+            AExprKind::AnonFunction(anon_fn) => self.gen_nested_fn(anon_fn),
 
             AExprKind::MemberAccess(access) => self.gen_member_access(access),
 
@@ -88,6 +76,33 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Dereference the result if it's a pointer.
         let expr_type = self.type_store.must_get(expr.type_key);
         self.maybe_deref(result, expr_type)
+    }
+
+    /// Generates code for a function or anonymous function that was declared inside
+    /// another function.
+    pub(crate) fn gen_nested_fn(&mut self, func: &AFn) -> BasicValueEnum<'ctx> {
+        // Generate the function in the LLVM module.
+        let ll_result = FnCodeGen::compile(
+            self.ctx,
+            self.builder,
+            self.fpm,
+            self.module,
+            self.type_store,
+            self.type_converter,
+            self.module_consts,
+            func,
+        )
+        .unwrap()
+        .as_global_value()
+        .as_basic_value_enum();
+
+        // Now that the inline function has been generated, we need to make sure
+        // LLVM continues generating code from the current block, because the
+        // function codegen above would have changed the LLVM's builder's block
+        // cursor.
+        self.set_current_block(self.cur_block.unwrap());
+
+        ll_result
     }
 
     /// Compiles member access expressions.

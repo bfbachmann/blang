@@ -2,7 +2,6 @@ use crate::analyzer::ast::ret::ARet;
 use crate::analyzer::ast::statement::AStatement;
 use crate::codegen::error::CompileResult;
 
-
 use super::{gen_fn_sig, FnCodeGen};
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
@@ -25,21 +24,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AStatement::FunctionDeclaration(func) => {
                 // Declare and compile the new function.
                 gen_fn_sig(self.ctx, self.module, self.type_converter, &func.signature);
-                FnCodeGen::compile(
-                    self.ctx,
-                    self.builder,
-                    self.fpm,
-                    self.module,
-                    self.type_store,
-                    self.type_converter,
-                    self.module_consts,
-                    func,
-                )?;
-
-                // Now that the inline function has been compiled, we need to make sure
-                // LLVM continues generating code from the current block, because the
-                // function codegen above would have changed LLVM's block cursor.
-                self.set_current_block(self.cur_block.unwrap());
+                self.gen_nested_fn(func);
             }
             AStatement::Closure(closure) => {
                 self.gen_closure(closure)?;

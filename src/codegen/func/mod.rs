@@ -315,6 +315,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             Ok(fn_val)
         } else {
             fn_val.print_to_stderr();
+
+            println!("__ BEGIN MODULE __");
+            self.module.print_to_stderr();
+            println!("__ END MODULE __");
             unsafe {
                 fn_val.delete();
             }

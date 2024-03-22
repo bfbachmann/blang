@@ -85,6 +85,12 @@ fn main() {
             return get_43() - 1
         }
         assert(f() == 42, "expected anon fn to return 42")
+        assert(
+            fn (i: int): int {
+                return i * 2
+            }(-3) == -6,
+            "expected inline anonymous function call to return -6",
+        )
     }
 
     // Check that methods can be used as variables, just like regular
