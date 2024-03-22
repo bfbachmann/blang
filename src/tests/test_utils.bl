@@ -1,13 +1,12 @@
-extern {
-    fn exit(code: u64)
-    fn malloc(size: u64): *mut u8
-    fn free(ptr: *u8)
-}
+use "std/libc/io.bl"
+use "std/libc/proc.bl"
+use "std/libc/mem.bl"
 
 const NULL = 0_u64 as *u8
 
-fn assert(b: bool, exit_code: u64) {
-    if !b {
-        exit(exit_code)
+fn assert(cond: bool, msg: str) {
+    if !cond {
+        puts(msg)
+        exit(1)
     }
 }

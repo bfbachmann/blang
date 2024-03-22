@@ -46,20 +46,20 @@ fn get_sum_fn(): fn (int, int): int {
 fn main() {
     // Check that regular function calls work.
     {
-        assert(cumulative_sum(50) == 1275, 1)
-        assert(fib(10) == 55, 2)
+        assert(cumulative_sum(50) == 1275, "expected sum to be 1275")
+        assert(fib(10) == 55, "expected fib(10) to be 55")
     }
 
     // Check that functions can be passed like any other data and called from
     // variables.
     {
-        assert(run_fn_with_arg(double, 2) == 4, 3)
+        assert(run_fn_with_arg(double, 2) == 4, "expected 4")
 
         let task = CalcTask{
             f: double
             arg: -5
         }
-        assert(task.run() == -10, 4)
+        assert(task.run() == -10, "expected task to return -10")
     }
 
     // Check that nested functions are usable.
@@ -70,10 +70,10 @@ fn main() {
 
         let mut x = 11
         mul(&mut x, 2)
-        assert(x == 22, 5)
+        assert(x == 22, "expected 22")
 
         let f = get_sum_fn()
-        assert(f(3, 4) == 7, 6)
+        assert(f(3, 4) == 7, "expected 7")
     }
 
     // Check that anonymous functions work.
@@ -84,7 +84,7 @@ fn main() {
             }
             return get_43() - 1
         }
-        assert(f() == 42, 7)
+        assert(f() == 42, "expected anon fn to return 42")
     }
 
     // Check that methods can be used as variables, just like regular
@@ -95,7 +95,7 @@ fn main() {
             f: double
             arg: 2
         }
-        assert(method(task) == 4, 8)
+        assert(method(task) == 4, "expected indirect method call to return 4")
     }
 
     exit(0)

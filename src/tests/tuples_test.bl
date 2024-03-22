@@ -8,10 +8,10 @@ fn main() {
         let t: {bool, i64, {i64, bool}} = {true, 100, {-5, false}}
         let t2 = t
 
-        assert(t2.0 == true, 1)
-        assert(t2.1 == 100, 2)
-        assert(t2.2.0 == -5, 3)
-        assert(t2.2.1 == false, 4)
+        assert(t2.0 == true, "1")
+        assert(t2.1 == 100, "2")
+        assert(t2.2.0 == -5, "3")
+        assert(t2.2.1 == false, "4")
     }
 
     // Check that tuples work as arguments.
@@ -25,10 +25,10 @@ fn main() {
     {
         let ret_tuple = new_tuple()
 
-        assert(ret_tuple.0 == -100, 7)
-        assert(ret_tuple.1 == false, 8)
-        assert(ret_tuple.2.0 == true, 9)
-        assert(ret_tuple.2.1 == 555, 10)
+        assert(ret_tuple.0 == -100, "7")
+        assert(ret_tuple.1 == false, "8")
+        assert(ret_tuple.2.0 == true, "9")
+        assert(ret_tuple.2.1 == 555, "10")
     }
 
     // Check that tuple field assignment works.
@@ -37,11 +37,11 @@ fn main() {
         t.0 = -2
         t.1.0 = 15
 
-        assert(t.0 == -2, 11)
-        assert(t.1.0 == 15, 12)
+        assert(t.0 == -2, "11")
+        assert(t.1.0 == 15, "12")
 
         t.1 = {-99}
-        assert(t.1.0 == -99, 13)
+        assert(t.1.0 == -99, "13")
     }
 
     // Check that tuple types that contain the same types are considered
@@ -54,8 +54,8 @@ fn main() {
 }
 
 fn take_tuple(t: {{i64}, bool}) {
-    assert(t.0.0 == 53, 5)
-    assert(t.1 == true, 6)
+    assert(t.0.0 == 53, "5")
+    assert(t.1 == true, "6")
 }
 
 fn new_tuple(): {int, bool, {bool, i64}} {

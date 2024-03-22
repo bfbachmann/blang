@@ -15,20 +15,20 @@ fn main() {
         // Check normal reference and dereference operations.
         let val = 91
         let val_ptr = &val
-        assert(val_ptr? == 91, 2)
+        assert(val_ptr? == 91, "2")
 
         let true_ptr = &true
-        assert(true_ptr? == true, 3)
+        assert(true_ptr? == true, "3")
 
         // Check pointers as arguments.
         take(&223_u64)
 
         let t = &T{i: -87, b: false}
         let result = take_t(t)
-        assert(result.i == -87, 5)
-        assert(result.b == false, 6)
+        assert(result.i == -87, "5")
+        assert(result.b == false, "6")
 
-        assert(take_tuple(&{9}) == 9, 7)
+        assert(take_tuple(&{9}) == 9, "7")
 
         // Check pointer type coercion.
         let u: *u64 = &mut 1234u64
@@ -37,27 +37,27 @@ fn main() {
         // that are pointers.
         let t = HasPtr{field: &123}
     
-        assert(t.field? == 123, 8)
+        assert(t.field? == 123, "8")
     
         let field_ptr = &t.field
-        assert(field_ptr?? == 123, 9)
+        assert(field_ptr?? == 123, "9")
     }
 
     // Check that we can cast between pointer types.
     {
         let bool_ptr = malloc(1) as *bool
-        assert(bool_ptr as *u8 != NULL, 10)
+        assert(bool_ptr as *u8 != NULL, "10")
 
         let bool_val: bool = bool_ptr?
-        assert(bool_val == bool_ptr?, 11)
+        assert(bool_val == bool_ptr?, "11")
 
         free(bool_ptr as *u8)
     }
 
     // Check that we can chain references and dereferences.
     {
-        assert((&!(!(6-1 > 2)))?, 12)
-        assert((&NULL)? == NULL, 13)
+        assert((&!(!(6-1 > 2)))?, "12")
+        assert((&NULL)? == NULL, "13")
     }
 
     // Check that we can write to memory using pointers.
@@ -65,8 +65,8 @@ fn main() {
         let mut t = T{i: 0, b: false}
         let ptr = &mut t
         ptr? = T{i: -23, b: true}
-        assert(ptr?.i == -23, 14)
-        assert(ptr?.b == true, 15)
+        assert(ptr?.i == -23, "14")
+        assert(ptr?.b == true, "15")
     }
 
     // Check that we can cast pointer types.
@@ -80,14 +80,14 @@ fn main() {
     {
         let x: *mut int = &mut 1
         let y: *int = &2
-        assert(x != y, 16)
+        assert(x != y, "16")
     }
     
     exit(0)
 }
 
 fn take(ptr: *u64) {
-    assert(ptr? == 223, 4)
+    assert(ptr? == 223, "4")
 }
 
 fn take_t(t: *T): T {

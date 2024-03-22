@@ -34,7 +34,7 @@ fn main() {
         }
     }
 
-    assert(prime_count == 25, 1)
+    assert(prime_count == 25, "1")
 
     exit(0)
 }

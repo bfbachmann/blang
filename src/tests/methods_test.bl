@@ -27,15 +27,15 @@ impl int {
 fn main() {
     // Check that normal method calls work.
     let t = T{value: 23}
-    assert(t.get_value() == 23, 1)
+    assert(t.get_value() == 23, "1")
     
     // Check that chained method calls work.
     let two = 2
-    assert(two.mul(5).add(10).add(1) == 21, 2)
+    assert(two.mul(5).add(10).add(1) == 21, "2")
 
     // Check that type member functions work.
     let new_t = T.new(-52)
-    assert(new_t.get_value().mul(-2) == 104, 4)
+    assert(new_t.get_value().mul(-2) == 104, "4")
 
     // Check that chained method calls work as statements.
     let five = 5

@@ -21,21 +21,21 @@ enum Result {
 }
 
 fn main() {
-    assert(INT == -50, 1)
-    assert(STRUCT.i == 987, 2)
-    assert(STRUCT.b == false, 3)
-    assert(TUPLE.0 == 345, 4)
-    assert(TUPLE.1 == true, 5)
-    assert(PTR == NULL, 6)
-    assert(OTHER_INT == INT + 1, 7)
-    assert(ENUM_ERR ~== Result::Err("failed"), 8)
-    assert(SAME_STRS, 9)
-    assert(STR != "not the same", 10)
-    assert(STRUCT_I == 987, 11)
+    assert(INT == -50, "1")
+    assert(STRUCT.i == 987, "2")
+    assert(STRUCT.b == false, "3")
+    assert(TUPLE.0 == 345, "4")
+    assert(TUPLE.1 == true, "5")
+    assert(PTR == NULL, "6")
+    assert(OTHER_INT == INT + 1, "7")
+    assert(ENUM_ERR ~== Result::Err("failed"), "8")
+    assert(SAME_STRS, "9")
+    assert(STR != "not the same", "10")
+    assert(STRUCT_I == 987, "11")
 
     // Make sure constant declaration is allows inside functions.
     const THING: str = "test"
-    assert(THING == "test", 12)
+    assert(THING == "test", "12")
 
     exit(0)
 }

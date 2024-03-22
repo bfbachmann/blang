@@ -1,9 +1,9 @@
 use "src/tests/test_utils.bl"
 
 fn main() {
-    assert("test".len() == 4, 0)
-    assert("".len() == 0, 1)
-    assert("\nthing\0\r".len() == 8, 2)
+    assert("test".len() == 4, "0")
+    assert("".len() == 0, "1")
+    assert("\nthing\0\r".len() == 8, "2")
 
     exit(0)
 }

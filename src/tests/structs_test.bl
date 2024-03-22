@@ -25,11 +25,11 @@ fn main() {
         }
     }
 
-    assert(t.int_val1 == 432, 1)
-    assert(t.bool_val, 2)
-    assert(t.int_val2 == 543, 3)
-    assert(t.nested.int_val == -75, 4)
-    assert(t.nested.bool_val == false, 5)
+    assert(t.int_val1 == 432, "1")
+    assert(t.bool_val, "2")
+    assert(t.int_val2 == 543, "3")
+    assert(t.nested.int_val == -75, "4")
+    assert(t.nested.bool_val == false, "5")
 
     // Check that struct field values can be changed.
     {
@@ -41,11 +41,11 @@ fn main() {
             bool_val: true,
         }
 
-        assert(t.int_val1 == 9, 6)
-        assert(!t.bool_val, 7)
-        assert(t.int_val2 == 5, 8)
-        assert(t.nested.int_val == -45, 9)
-        assert(t.nested.bool_val == true, 10)
+        assert(t.int_val1 == 9, "6")
+        assert(!t.bool_val, "7")
+        assert(t.int_val2 == 5, "8")
+        assert(t.nested.int_val == -45, "9")
+        assert(t.nested.bool_val == true, "10")
     }
 
     // Check that structs can be passed by value.
@@ -62,22 +62,22 @@ fn main() {
 
         take_struct(t_copy)
         
-        assert(t.int_val1 == 9, 21)
-        assert(!t.bool_val, 22)
-        assert(t.int_val2 == 5, 23)
-        assert(t.nested.int_val == -45, 24)
-        assert(t.nested.bool_val == true, 25)
+        assert(t.int_val1 == 9, "21")
+        assert(!t.bool_val, "22")
+        assert(t.int_val2 == 5, "23")
+        assert(t.nested.int_val == -45, "24")
+        assert(t.nested.bool_val == true, "25")
     }
 
     // Check that struct assignment works.
     {
         let mut t2 = t;
 
-        assert(t2.int_val1 == 9, 31)
-        assert(!t2.bool_val, 32)
-        assert(t2.int_val2 == 5, 33)
-        assert(t2.nested.int_val == -45, 34)
-        assert(t2.nested.bool_val == true, 35)
+        assert(t2.int_val1 == 9, "31")
+        assert(!t2.bool_val, "32")
+        assert(t2.int_val2 == 5, "33")
+        assert(t2.nested.int_val == -45, "34")
+        assert(t2.nested.bool_val == true, "35")
 
         t2.int_val1 = -6
         t2.bool_val = false
@@ -85,22 +85,22 @@ fn main() {
         t2.nested.int_val = 555
         t2.nested.bool_val = false
 
-        assert(t2.int_val1 == -6, 41)
-        assert(!t2.bool_val, 42)
-        assert(t2.int_val2 == -18, 43)
-        assert(t2.nested.int_val == 555, 44)
-        assert(t2.nested.bool_val == false, 45)
+        assert(t2.int_val1 == -6, "41")
+        assert(!t2.bool_val, "42")
+        assert(t2.int_val2 == -18, "43")
+        assert(t2.nested.int_val == 555, "44")
+        assert(t2.nested.bool_val == false, "45")
     }
 
     // Check that structs work as return values.
     {
         let ret_struct = new_struct()
 
-        assert(ret_struct.int_val1 == 555, 46)
-        assert(ret_struct.bool_val == false, 47)
-        assert(ret_struct.int_val2 == 777, 48)
-        assert(ret_struct.nested.int_val == -99, 49)
-        assert(ret_struct.nested.bool_val == true, 50)
+        assert(ret_struct.int_val1 == 555, "46")
+        assert(ret_struct.bool_val == false, "47")
+        assert(ret_struct.int_val2 == 777, "48")
+        assert(ret_struct.nested.int_val == -99, "49")
+        assert(ret_struct.nested.bool_val == true, "50")
     }
 
     // Test structs that contain tuples.
@@ -110,18 +110,18 @@ fn main() {
         }
 
         let mut t = T{tuple: {1, 2}}
-        assert(t.tuple.0 == 1, 51)
-        assert(t.tuple.1 == 2, 52)
+        assert(t.tuple.0 == 1, "51")
+        assert(t.tuple.1 == 2, "52")
 
         t.tuple.0 = 42
-        assert(t.tuple.0 == 42, 52)
+        assert(t.tuple.0 == 42, "52")
 
         let mut tuple = t.tuple
-        assert(tuple.0 == 42, 53)
-        assert(tuple.1 == 2, 54)
+        assert(tuple.0 == 42, "53")
+        assert(tuple.1 == 2, "54")
 
         tuple.1 = 100
-        assert(tuple.1 == 100, 55)
+        assert(tuple.1 == 100, "55")
     }
 
     exit(0)
@@ -129,11 +129,11 @@ fn main() {
 
 fn take_struct(mut t: Test) {
     // Make sure the struct field values are correct.
-    assert(t.int_val1 == 9, 11)
-    assert(!t.bool_val, 12)
-    assert(t.int_val2 == 5, 13)
-    assert(t.nested.int_val == -45, 14)
-    assert(t.nested.bool_val == true, 15)
+    assert(t.int_val1 == 9, "11")
+    assert(!t.bool_val, "12")
+    assert(t.int_val2 == 5, "13")
+    assert(t.nested.int_val == -45, "14")
+    assert(t.nested.bool_val == true, "15")
 
     // This should not modify the caller's struct.
     t.int_val1 = 845
@@ -142,11 +142,11 @@ fn take_struct(mut t: Test) {
     t.nested.int_val = 123
     t.nested.bool_val = false
 
-    assert(t.int_val1 == 845, 16)
-    assert(t.bool_val, 17)
-    assert(t.int_val2 == 57, 18)
-    assert(t.nested.int_val == 123, 19)
-    assert(t.nested.bool_val == false, 20)
+    assert(t.int_val1 == 845, "16")
+    assert(t.bool_val, "17")
+    assert(t.int_val2 == 57, "18")
+    assert(t.nested.int_val == 123, "19")
+    assert(t.nested.bool_val == false, "20")
 }
 
 fn new_struct(): Test {
