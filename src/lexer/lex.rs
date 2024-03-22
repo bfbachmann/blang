@@ -1,4 +1,5 @@
 use colored::Colorize;
+use flamer::flame;
 
 use crate::lexer::error::{LexError, LexResult};
 use crate::lexer::stream::Stream;
@@ -6,6 +7,7 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 
 /// Lexes the given character stream into tokens.
+#[flame]
 pub fn lex(chars: &mut Stream<char>) -> LexResult<Vec<Token>> {
     let mut tokens = vec![];
     let mut line = 1;

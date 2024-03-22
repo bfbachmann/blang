@@ -3,7 +3,7 @@ use std::fs::remove_file;
 use std::path::Path;
 use std::process::Command;
 
-
+use flamer::flame;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
@@ -11,11 +11,9 @@ use inkwell::passes::PassManager;
 use inkwell::targets::{
     CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetTriple,
 };
-
 use inkwell::values::FunctionValue;
 use inkwell::OptimizationLevel;
 use target_lexicon::Triple;
-
 
 use crate::analyzer::ast::module::AModule;
 use crate::analyzer::ast::r#const::AConst;
@@ -184,6 +182,7 @@ pub fn init_target(maybe_target_triple: Option<&String>) -> Result<TargetTriple,
 
 /// Generates the program code for the given target. If there is no target, compiles the
 /// program for the host system.
+#[flame]
 pub fn generate(
     analyzed_modules: Vec<AModule>,
     type_store: TypeStore,
@@ -257,7 +256,7 @@ pub fn generate(
                     &target_triple,
                     &"",
                     &"",
-                    OptimizationLevel::Aggressive,
+                    OptimizationLevel::Default,
                     RelocMode::Default,
                     CodeModel::Default,
                 )
@@ -271,13 +270,15 @@ pub fn generate(
             if output_format == OutputFormat::Executable {
                 // Write temporary object file.
                 let obj_file_path = output_path.with_extension("o");
-                if let Err(msg) =
-                    target_machine.write_to_file(&module, file_type, obj_file_path.as_path())
                 {
-                    return Err(CodeGenError::new(
-                        ErrorKind::WriteOutFailed,
-                        msg.to_str().unwrap(),
-                    ));
+                    if let Err(msg) =
+                        target_machine.write_to_file(&module, file_type, obj_file_path.as_path())
+                    {
+                        return Err(CodeGenError::new(
+                            ErrorKind::WriteOutFailed,
+                            msg.to_str().unwrap(),
+                        ));
+                    }
                 }
 
                 // To generate an executable, we need to invoke the system linker to link object
@@ -311,6 +312,7 @@ pub fn generate(
 
 /// Invokes the system linker to link the given object files into an executable that is created
 /// at the given output path.
+#[flame]
 fn link(
     linker: Option<&String>,
     target_triple: TargetTriple,

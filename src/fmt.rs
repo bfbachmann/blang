@@ -39,7 +39,7 @@ macro_rules! warnln {
 /// Formats an output message where all the arguments should display as pieces of source code.
 /// Example:
 ///
-///     format_output!("invalid statement: {}", statement_ast_node)
+///     format_code!("invalid statement: {}", statement_ast_node)
 ///
 /// where `statement_ast_node` looks like `let a = 1`, should expand to
 /// "invalid statement: `let a = 1`", where the source code in backticks is blue (in environments

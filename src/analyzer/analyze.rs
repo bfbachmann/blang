@@ -1,10 +1,10 @@
-use crate::analyzer::ast::func::AFnSig;
-
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use flamer::flame;
 use target_lexicon::Triple;
 
+use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::module::AModule;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::move_check::MoveChecker;
@@ -60,6 +60,7 @@ pub struct ProgramAnalysis {
 }
 
 /// Analyzes all the given modules.
+#[flame]
 pub fn analyze_modules(modules: Vec<Module>, target_triple: &Triple) -> ProgramAnalysis {
     let root_mod_path = PathBuf::from(&modules.first().unwrap().path);
     let mods: HashMap<PathBuf, Module> =

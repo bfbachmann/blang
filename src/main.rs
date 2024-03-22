@@ -10,6 +10,7 @@ use std::{fs, process};
 
 use clap::{arg, ArgAction, Command};
 use colored::*;
+use flamer::flame;
 use inkwell::targets::TargetTriple;
 use target_lexicon::Triple;
 
@@ -40,7 +41,12 @@ fn main() {
         .author("Bruno Bachmann")
         .about("The Blang programming language.")
         .subcommand_required(true)
-        .arg_required_else_help(true);
+        .arg_required_else_help(true)
+        .arg(
+            arg!(--time "Dump compile time information to HTML")
+                .required(false)
+                .action(ArgAction::SetTrue),
+        );
 
     // Add the "build" subcommand for compiling.
     let cmd = cmd.subcommand(
@@ -88,8 +94,10 @@ fn main() {
             .arg(arg!([SRC_PATH] "Path to the source code to run").required(true)),
     );
 
+    let matches = cmd.get_matches();
+
     // Handle the command.
-    match cmd.get_matches().subcommand() {
+    match matches.subcommand() {
         Some(("build", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(src_path) => {
                 let target_triple = &get_target_triple(sub_matches.get_one::<String>("target"));
@@ -165,6 +173,11 @@ fn main() {
 
         _ => unreachable!("no subcommand"),
     };
+
+    // Dump compiler performance/timing graph for debugging.
+    if matches.get_one::<bool>("time").is_some() {
+        flame::dump_html(&mut File::create("compile-time.html").unwrap()).unwrap();
+    };
 }
 
 // Initializes the LLVM target that we're compiling to.
@@ -192,6 +205,7 @@ fn open_file(file_path: &str) -> Result<Stream<char>> {
 /// Prints parse errors and exits if there were any parse errors. Otherwise,
 /// returns parse sources.
 // TODO: Allow compilation of bare modules (without `main`).
+#[flame]
 fn parse_source_files(input_path: &str) -> Vec<Module> {
     let is_dir = match fs::metadata(input_path) {
         Ok(meta) => meta.is_dir(),
@@ -311,12 +325,14 @@ fn parse_source_file(input_path: &str) -> ParseResult<Module> {
     };
 
     // Parse the program.
-    Module::from(input_path, &mut Stream::from(tokens))
+    let result = Module::from(input_path, &mut Stream::from(tokens));
+    result
 }
 
 /// Performs static analysis on the source code at the given path. If `input_path` is a directory,
 /// all source files therein will be analyzed. Returns the analyzed set of sources, or logs an
 /// error and exits with code 1.
+#[flame]
 fn analyze(
     input_path: &str,
     maybe_dump_path: Option<&String>,
@@ -407,6 +423,7 @@ fn analyze(
 /// Compiles a source files for the given target ISA. If `src_path` points to a directory, all
 /// source files therein will be compiled. If there is no target, infers configuration
 /// for the current host system.
+#[flame]
 fn compile(
     src_path: &str,
     dst_path: Option<&String>,
