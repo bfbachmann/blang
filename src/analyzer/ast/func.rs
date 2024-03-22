@@ -246,6 +246,17 @@ impl AFn {
     pub fn from(ctx: &mut ProgramContext, func: &Function) -> Self {
         let signature = AFnSig::from(ctx, &func.signature);
 
+        // Make sure there isn't already another function by the same name. There are already
+        // checks for regular function name collisions in `analyze_fn_sig`, but those
+        // won't detect nested function name collisions - that's what this is for.
+        if ctx.get_fn(signature.mangled_name.as_str()).is_some() {
+            ctx.insert_err(AnalyzeError::new(
+                ErrorKind::DuplicateFunction,
+                format_code!("function {} was already defined", &signature.name).as_str(),
+                &func.signature,
+            ));
+        }
+
         // Templated functions will be rendered and analyzed when we analyze statements or
         // expressions where they're used. This way, we can use information from the context in
         // which they're used to render and check templated values.

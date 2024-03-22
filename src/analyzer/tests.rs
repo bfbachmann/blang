@@ -1426,4 +1426,17 @@ mod tests {
         );
         check_result(result, None);
     }
+
+    #[test]
+    fn duplicate_nested_fn() {
+        let result = analyze(
+            r#"
+                fn main() {
+                    fn f() {}
+                    fn f() {}
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::DuplicateFunction));
+    }
 }
