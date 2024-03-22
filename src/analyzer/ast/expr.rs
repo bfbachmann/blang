@@ -4,7 +4,7 @@ use std::fmt::Formatter;
 use colored::Colorize;
 
 use crate::analyzer::ast::array::AArrayInit;
-use crate::analyzer::ast::closure::AClosure;
+use crate::analyzer::ast::closure::{check_closure_returns, AClosure};
 use crate::analyzer::ast::fn_call::AFnCall;
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::index::AIndex;
@@ -554,7 +554,11 @@ impl AExpr {
             }
 
             Expression::AnonFunction(anon_fn) => {
-                let sig = anon_fn.signature.clone();
+                // Give the anonymous function a unique name based on the order in which it appears
+                // inside the current scope.
+                let mut sig = anon_fn.signature.clone();
+                sig.name = ctx.get_anon_fn_name();
+
                 let a_closure = AClosure::from(
                     ctx,
                     &anon_fn.body,
@@ -562,15 +566,28 @@ impl AExpr {
                     sig.args.clone(),
                     sig.maybe_ret_type.clone(),
                 );
-                let type_key = ctx.resolve_type(&Type::Function(Box::new(sig)));
+
+                // Make sure the function return conditions are satisfied by the closure.
+                if let Some(ret_type) = &sig.maybe_ret_type {
+                    let a_ret_type = ctx.resolve_type(&ret_type);
+                    check_closure_returns(
+                        ctx,
+                        &a_closure,
+                        a_ret_type,
+                        &ScopeKind::FnBody(sig.name.clone()),
+                    );
+                }
+
+                let a_fn = AFn {
+                    signature: AFnSig::from(ctx, &sig),
+                    body: a_closure,
+                };
+                let type_key = a_fn.signature.type_key;
 
                 AExpr {
                     start_pos,
                     end_pos,
-                    kind: AExprKind::AnonFunction(Box::new(AFn {
-                        signature: AFnSig::from(ctx, &anon_fn.signature),
-                        body: a_closure,
-                    })),
+                    kind: AExprKind::AnonFunction(Box::new(a_fn)),
                     type_key,
                 }
             }

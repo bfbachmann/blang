@@ -5,7 +5,7 @@ use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
-use inkwell::module::Module;
+use inkwell::module::{Linkage, Module};
 use inkwell::passes::PassManager;
 use inkwell::types::AnyType;
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
@@ -247,16 +247,20 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     fn gen_fn(&mut self, func: &AFn) -> CompileResult<FunctionValue<'ctx>> {
         // Retrieve the function and create a new "entry" block at the start of the function
         // body.
-        let fn_val = self
+        let fn_val = match self
             .module
             .get_function(func.signature.mangled_name.as_str())
-            .expect(
-                format!(
-                    r#"function {} was not found in the LLVM module"#,
-                    &func.signature
+        {
+            Some(f) => f,
+            None => {
+                let fn_type = self.type_converter.get_fn_type(func.signature.type_key);
+                self.module.add_function(
+                    func.signature.mangled_name.as_str(),
+                    fn_type,
+                    Some(Linkage::Internal),
                 )
-                .as_str(),
-            );
+            }
+        };
 
         self.fn_value = Some(fn_val);
 

@@ -64,9 +64,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             AExprKind::Index(index) => self.gen_index(index),
 
-            // TODO: Compiling this function works fine, but trying to actually use it will cause
-            // a panic because it has no name. The fix likely involves giving anon functions unique
-            // auto-generated names.
             AExprKind::AnonFunction(anon_fn) => FnCodeGen::compile(
                 self.ctx,
                 self.builder,

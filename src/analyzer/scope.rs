@@ -73,6 +73,9 @@ pub struct Scope {
     /// Represents the expected return type for the current scope. This should only ever be `Some`
     /// for scopes with kind `FnBody`.
     maybe_ret_type_key: Option<TypeKey>,
+    /// Tracks the number of anonymous functions that were defined directly inside this scope.
+    /// This is used to give each anonymous function a unique mangled name within this scope.
+    anon_fn_count: usize,
 }
 
 impl Scope {
@@ -93,6 +96,7 @@ impl Scope {
             symbols,
             type_keys: Default::default(),
             maybe_ret_type_key,
+            anon_fn_count: 0,
         }
     }
 
@@ -126,5 +130,13 @@ impl Scope {
     /// should have expected return types.
     pub fn ret_type_key(&self) -> Option<TypeKey> {
         self.maybe_ret_type_key
+    }
+
+    /// Returns the current number of anonymous functions inside this scope and increments
+    /// the counter.
+    pub fn get_and_inc_fn_count(&mut self) -> usize {
+        let count = self.anon_fn_count;
+        self.anon_fn_count += 1;
+        count
     }
 }

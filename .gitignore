@@ -15,3 +15,5 @@ bin
 *.dump
 env.nu
 ignore*
+main
+compile-time.html

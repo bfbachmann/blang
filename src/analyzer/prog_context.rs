@@ -660,6 +660,17 @@ impl ProgramContext {
         path + name
     }
 
+    /// Returns a new name for an anonymous function created inside the current scope. This
+    /// also has the side effect of incrementing the anonymous function count for the current
+    /// scope.
+    pub fn get_anon_fn_name(&mut self) -> String {
+        let scope = self
+            .stack
+            .get_mut(*self.fn_scope_indices.last().unwrap())
+            .unwrap();
+        format!("anon_fn::{}", scope.get_and_inc_fn_count())
+    }
+
     /// Returns true if the current scope is a loop body or falls within a loop body.
     pub fn is_in_loop(&self) -> bool {
         !self.loop_scope_indices.is_empty()

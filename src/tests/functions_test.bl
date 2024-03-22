@@ -76,5 +76,16 @@ fn main() {
         assert(f(3, 4) == 7, 6)
     }
 
+    // Check that anonymous functions work.
+    {
+        let f = fn (): int {
+            fn get_43(): int {
+                return 43
+            }
+            return get_43() - 1
+        }
+        assert(f() == 42, 7)
+    }
+
     exit(0)
 }
