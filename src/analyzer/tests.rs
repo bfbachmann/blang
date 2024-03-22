@@ -1439,4 +1439,20 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::DuplicateFunction));
     }
+
+    #[test]
+    fn illegal_use_of_value_from_parent_fn() {
+        let result = analyze(
+            r#"
+                fn main() {
+                    let x = 1
+                    
+                    fn illegal(): int {
+                        return x
+                    }
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::UndefSymbol));
+    }
 }

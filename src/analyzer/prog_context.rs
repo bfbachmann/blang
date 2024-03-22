@@ -137,7 +137,12 @@ impl ProgramContext {
 
     /// Calls `visit` on each scope on the stack starting from the current scope and ending at the
     /// global scope until `visit` returns `Some`.
-    fn search_stack_ref<F, R>(&self, visit: F) -> Option<&R>
+    /// If `cross_fn_boundaries` is true, the `visit` function will be called with scopes
+    /// that belong to other functions that the current function falls within. Otherwise,
+    /// only scopes that fall under the current function and the top-level scope will be visited.
+    /// `cross_fn_boundaries` only exists as a means of preventing a function that is declared
+    /// inside another function from finding values that were declared inside its parent.
+    fn search_stack_ref<F, R>(&self, visit: F, cross_fn_boundaries: bool) -> Option<&R>
     where
         F: Fn(&Scope) -> Option<&R>,
     {
@@ -145,9 +150,17 @@ impl ProgramContext {
             if let Some(result) = visit(scope) {
                 return Some(result);
             }
+
+            // If we're not allowed to cross function boundaries (i.e. if we're
+            // not allowed to visit scopes that belong to other functions in
+            // which the current function is nested), then just break and visit
+            // the outermost (top-level) scope.
+            if !cross_fn_boundaries && matches!(scope.kind, ScopeKind::FnBody(_)) {
+                break;
+            }
         }
 
-        None
+        visit(self.stack.front().unwrap())
     }
 
     /// Does the same thing as `search_stack_ref`, except allows `visit` to return an owned value
@@ -663,7 +676,7 @@ impl ProgramContext {
     /// Returns a new name for an anonymous function created inside the current scope. This
     /// also has the side effect of incrementing the anonymous function count for the current
     /// scope.
-    pub fn get_anon_fn_name(&mut self) -> String {
+    pub fn new_anon_fn_name(&mut self) -> String {
         let scope = self
             .stack
             .get_mut(*self.fn_scope_indices.last().unwrap())
@@ -683,8 +696,11 @@ impl ProgramContext {
     }
 
     /// Attempts to locate the symbol with the given name and returns it, if found.
+    /// Note that only the current function body and the top-level scope will be
+    /// searched. In other words, if we're inside function A that is declared inside
+    /// function B, then we won't be able to resolve symbols defined in function B.
     pub fn get_symbol(&self, name: &str) -> Option<&ScopedSymbol> {
-        self.search_stack_ref(|scope| scope.get_symbol(name))
+        self.search_stack_ref(|scope| scope.get_symbol(name), false)
     }
 
     /// Adds the given function to the program context, so it can be looked up by full name in the

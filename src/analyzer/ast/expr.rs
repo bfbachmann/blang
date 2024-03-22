@@ -557,7 +557,7 @@ impl AExpr {
                 // Give the anonymous function a unique name based on the order in which it appears
                 // inside the current scope.
                 let mut sig = anon_fn.signature.clone();
-                sig.name = ctx.get_anon_fn_name();
+                sig.name = ctx.new_anon_fn_name();
 
                 let a_closure = AClosure::from(
                     ctx,
