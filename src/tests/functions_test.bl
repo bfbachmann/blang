@@ -87,5 +87,16 @@ fn main() {
         assert(f() == 42, 7)
     }
 
+    // Check that methods can be used as variables, just like regular
+    // functions.
+    {
+        let method = CalcTask.run
+        let task = CalcTask{
+            f: double
+            arg: 2
+        }
+        assert(method(task) == 4, 8)
+    }
+
     exit(0)
 }

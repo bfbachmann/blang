@@ -92,10 +92,22 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Compiles member access expressions.
     pub(crate) fn gen_member_access(&mut self, access: &AMemberAccess) -> BasicValueEnum<'ctx> {
-        // This member access should never be a method by this point. Methods are detected
-        // separately in `gen_call`.
-        assert!(!access.is_method);
+        // Since method calls are detected separately in `gen_call`, if this is a method
+        // then it must be a method that is being used as a variable rather than being
+        // called directly.
+        if access.is_method {
+            let fn_sig = self.type_store.must_get(access.member_type_key).to_fn_sig();
+            return self
+                .module
+                .get_function(fn_sig.mangled_name.as_str())
+                .unwrap()
+                .as_global_value()
+                .as_basic_value_enum();
+        }
 
+        // At this point we know that the member access does not refer to some method,
+        // so we can just generate code for the base expression the regular way
+        // and then generate a member access (probably a GEP) on it.
         let ll_base_val = self.gen_expr(&access.base_expr);
         self.get_member_value(
             ll_base_val,
