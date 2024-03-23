@@ -448,7 +448,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
             TokenKind::Dot => {
                 tokens.next();
 
-                let (member_name, start_pos, end_pos) = match tokens.next() {
+                let (member_name, _, end_pos) = match tokens.next() {
                     Some(Token {
                         kind: TokenKind::Identifier(name),
                         start,
@@ -480,6 +480,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                     }
                 };
 
+                let start_pos = expr.start_pos().clone();
                 expr = Expression::MemberAccess(Box::new(MemberAccess::new(
                     expr,
                     member_name,
@@ -603,7 +604,7 @@ mod tests {
     use crate::parser::ast::bool_lit::BoolLit;
     use crate::parser::ast::expr::Expression;
     use crate::parser::ast::func_call::FuncCall;
-    
+
     use crate::parser::ast::int_lit::IntLit;
     use crate::parser::ast::op::Operator;
     use crate::parser::ast::str_lit::StrLit;

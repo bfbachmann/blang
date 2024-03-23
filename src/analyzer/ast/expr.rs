@@ -1218,7 +1218,8 @@ fn check_operand_types(
     let left_type = ctx.must_get_type(left_expr.type_key);
     let right_type = ctx.must_get_type(right_expr.type_key);
 
-    let mut operand_type_key = None;
+    let mut left_type_key = None;
+    let mut right_type_key = None;
     let mut errors = vec![];
 
     if !is_valid_operand_type(op, left_type) {
@@ -1233,7 +1234,7 @@ fn check_operand_types(
             left_expr,
         ));
     } else {
-        operand_type_key = Some(left_expr.type_key);
+        left_type_key = Some(left_expr.type_key);
     }
 
     if !is_valid_operand_type(op, right_type) {
@@ -1248,7 +1249,7 @@ fn check_operand_types(
             right_expr,
         ));
     } else {
-        operand_type_key = Some(right_expr.type_key);
+        right_type_key = Some(right_expr.type_key);
     }
 
     if !right_type.is_same_as(ctx, left_type, true) {
@@ -1265,8 +1266,24 @@ fn check_operand_types(
         ));
     }
 
+    // Determine the result type from whichever operand type isn't None.
+    let maybe_result_tk = match (left_type_key, right_type_key) {
+        (Some(ltk), Some(rtk)) => {
+            // In the case of pointer arithmetic, if either of the pointers is
+            // mutable, we'll make the result mutable as well.
+            if ctx.must_get_type(rtk).is_mut_pointer() {
+                Some(rtk)
+            } else {
+                Some(ltk)
+            }
+        }
+        (Some(ltk), _) => Some(ltk),
+        (_, Some(rtk)) => Some(rtk),
+        _ => None,
+    };
+
     match errors.is_empty() {
-        true => Ok(operand_type_key),
+        true => Ok(maybe_result_tk),
         false => Err(errors),
     }
 }
@@ -1275,12 +1292,12 @@ fn check_operand_types(
 fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
     // Determine the expected operand types on the operator.
     match op {
-        // Mathematical operators only work on numeric types.
+        // Mathematical operators only work on numeric and pointer types.
         Operator::Add
         | Operator::Subtract
         | Operator::Multiply
         | Operator::Divide
-        | Operator::Modulo => operand_type.is_numeric(),
+        | Operator::Modulo => operand_type.is_numeric() || operand_type.is_pointer(),
 
         // Logical operators only work on bools.
         Operator::LogicalAnd | Operator::LogicalOr => operand_type == &AType::Bool,

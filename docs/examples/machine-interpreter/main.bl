@@ -43,6 +43,7 @@ fn main() {
     }
     
     free(prog_data)
+    prog.free()
     fclose(file)
     exit(sum as uint)
 }

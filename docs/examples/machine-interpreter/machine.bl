@@ -55,8 +55,8 @@ impl Machine {
             machine?.pc < machine?.prog?.len, 
             machine?.pc = machine?.pc + 1 
         {
-            let inst = &machine?.prog?.instructions[machine?.pc]
-            let result = Machine.exec_inst(machine, inst)
+            let inst_ptr = Program.inst_at(machine?.prog, machine?.pc)
+            let result = Machine.exec_inst(machine, inst_ptr)
             if result.status ~== ExecStatus::Err {
                 return result
             }

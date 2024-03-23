@@ -43,28 +43,63 @@ enum InstKind {
     JumpIf0
 }
 
-/// The maximum number of instructions in a program.
-const MAX_INSTS: uint = 128
-
 /// A program is just an array of instructions.
 struct Program {
-    instructions: [Instruction; 128]
+    instructions: *mut Instruction
     len: uint
+    cap: uint
 }
 
 impl Program {
     fn new(): Program {
         return Program{
-            instructions: [Instruction.new_nop(); MAX_INSTS]
+            instructions: malloc(0) as *mut Instruction
             len: 0
+            cap: 0
         }
+    }
+
+    /// Increases the amount of heap memory allocated to store this program's
+    /// instructions.
+    fn grow(prog: *mut Program) {
+        let mut new_cap = prog?.cap * 2
+        if new_cap == 0 {
+            new_cap = 128
+        }
+
+        prog?.instructions = realloc(
+            prog?.instructions as *u8,
+            sizeof Instruction * new_cap,
+        ) as *mut Instruction
+        prog?.cap = new_cap
     }
 
     /// Adds the given instruction to the program.
     fn push_inst(prog: *mut Program, inst: Instruction) {
-        assert(prog?.len < MAX_INSTS, "maximum program length exceeded")
-        prog?.instructions[prog?.len] = inst
+        if prog?.len == prog?.cap {
+            Program.grow(prog)
+        }
+
+        let inst_ptr = Program.inst_ptr_mut(prog, prog?.len)
+        inst_ptr? = inst
         prog?.len = prog?.len + 1
+    }
+
+    /// Returns a `*mut` to the instruction at the given index.
+    fn inst_ptr_mut(prog: *mut Program, index: uint): *mut Instruction {
+        assert(index < prog?.cap, "instruction index out of bounds")
+        return prog?.instructions + (index * sizeof Instruction) as *Instruction
+    }
+
+    /// Returns a pointer to the instruction at the given index.
+    fn inst_at(prog: *Program, index: uint): *Instruction {
+        assert(index < prog?.len, "instruction index out of bounds")
+        return prog?.instructions + (index * sizeof Instruction) as *Instruction
+    }
+
+    /// Frees heap memory associated with this program.
+    fn free(prog: Program) {
+        free(prog.instructions as *u8)
     }
 }
 
