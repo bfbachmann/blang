@@ -82,6 +82,14 @@ fn main() {
         let y: *int = &2
         assert(x != y, "16")
     }
+
+    // Check that pointer arithmetic works.
+    {
+        let mut x = 100
+        let x_ptr = &mut x
+        ((x_ptr + 20 as *int) - 20 as *int)? = 82
+        assert(x == 82, "expected x to be 82")
+    }
     
     exit(0)
 }
