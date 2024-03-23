@@ -1,4 +1,4 @@
-use "machine-interpreter/utils.bl"
+use "docs/examples/machine-interpreter/utils.bl"
 
 const MEM_SIZE: uint = 1024
 

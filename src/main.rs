@@ -340,6 +340,9 @@ fn analyze(
 ) -> ProgramAnalysis {
     // Parse all targeted source files.
     let modules = parse_source_files(input_path);
+    if modules.is_empty() {
+        fatalln!("no source files found in {}", input_path);
+    }
 
     // Analyze the program.
     let target = match Triple::from_str(target_triple.as_str().to_str().unwrap()) {
@@ -586,6 +589,32 @@ mod tests {
                 &target,
                 true,
                 true,
+                None,
+                vec![],
+            );
+        }
+    }
+
+    #[test]
+    fn compile_examples() {
+        let target = init_target(None).unwrap();
+        let entries = fs::read_dir("docs/examples").expect("should succeed");
+        for entry in entries {
+            let entry = entry.unwrap();
+            if !entry.metadata().unwrap().is_dir() {
+                continue;
+            }
+
+            let path = entry.path();
+            let output_path = format!("bin/{}", path.file_stem().unwrap().to_str().unwrap());
+
+            compile(
+                path.to_str().unwrap(),
+                Some(&output_path),
+                OutputFormat::Executable,
+                &target,
+                true,
+                false,
                 None,
                 vec![],
             );

@@ -4,9 +4,9 @@ use "std/libc/mem.bl"
 use "std/libc/file.bl"
 use "std/libc/signal.bl"
 
-use "machine-interpreter/parser.bl"
-use "machine-interpreter/machine.bl"
-use "machine-interpreter/utils.bl"
+use "docs/examples/machine-interpreter/parser.bl"
+use "docs/examples/machine-interpreter/machine.bl"
+use "docs/examples/machine-interpreter/utils.bl"
 
 fn main() {
     // Open file for reading.
