@@ -570,8 +570,36 @@ impl<'a> MoveChecker<'a> {
 
     /// Performs move checks on values used in array initialization.
     fn check_array_init(&mut self, array_init: &AArrayInit) {
+        let repeats = match array_init.maybe_repeat_count {
+            Some(count) => count > 1,
+            None => false,
+        };
+
         for value in &array_init.values {
             self.check_expr(value, true);
+
+            // If the value is being repeated to initialize the array and its
+            // type requires moves by default, then there will be duplicate
+            // moves (much like in a loop), which is illegal.
+            let typ = self.type_store.must_get(value.type_key);
+            if repeats && typ.requires_move() {
+                self.add_err(
+                    AnalyzeError::new(
+                        ErrorKind::UseOfMovedValue,
+                        format_code!("duplicate move of {} in array initialization", value)
+                            .as_str(),
+                        value,
+                    )
+                    .with_help(
+                        format_code!(
+                            "Value used in array initialization has type \
+                            {} which cannot be copied into the array automatically.",
+                            typ
+                        )
+                        .as_str(),
+                    ),
+                )
+            }
         }
     }
 

@@ -1455,4 +1455,17 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::UndefSymbol));
     }
+
+    #[test]
+    fn illegal_repeated_move_in_array_init() {
+        let result = analyze(
+            r#"
+                struct Test {}
+                fn main() {
+                    let a = [Test{}; 2]
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::UseOfMovedValue));
+    }
 }

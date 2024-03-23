@@ -40,9 +40,9 @@ fn main() {
         assert(c[1].0 == false, "expected false")
 
         // Initialization usinig repeat count.
-        let d = [Thing{value: -8}; 2]
-        assert(d[0].value == -8, "expected first value to be -8")
-        assert(d[1].value == -8, "expected second value to be -8")
+        let d = [-8; 2]
+        assert(d[0] == -8, "expected first value to be -8")
+        assert(d[1] == -8, "expected second value to be -8")
 
         // Assigning array elements.
         let mut e = [3; 5]
