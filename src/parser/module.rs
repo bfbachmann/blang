@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use colored::Colorize;
 
+
 use crate::lexer::pos::Position;
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
@@ -25,6 +26,27 @@ impl PartialEq for Module {
 }
 
 impl Module {
+    // pub fn parse(path: &str) -> ParseResult<Module> {
+    //     let mut lexer = TokenKind2::lexer(path);
+    //     let mut statements = vec![];
+    //
+    //     loop {
+    //         match Statement::from(&mut lexer) {
+    //             Ok(statement) => statements.push(statement),
+    //             Err(err) => {
+    //                 if err.kind == ErrorKind::Done {
+    //                     return Ok(Module {
+    //                         path: path.to_string(),
+    //                         statements,
+    //                     });
+    //                 }
+    //
+    //                 return Err(err);
+    //             }
+    //         };
+    //     }
+    // }
+
     /// Attempts to parse a list of statements from the deque of tokens. Expects token sequences of
     /// the form
     ///

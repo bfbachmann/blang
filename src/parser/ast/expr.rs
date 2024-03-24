@@ -612,7 +612,7 @@ mod tests {
     use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 
     fn parse(raw: &str) -> ParseResult<Expression> {
-        let tokens = lex(&mut Stream::from(raw.chars().collect())).expect("should succeed");
+        let tokens = lex(raw).expect("should succeed");
         Expression::from(&mut Stream::from(tokens))
     }
 
@@ -798,7 +798,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_multiline() {
+    fn parse_multiline_expr() {
         let raw = "(var - 3) / 4 * \n(call(true) % 2) + \n5";
         assert_eq!(
             parse(raw).unwrap(),

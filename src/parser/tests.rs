@@ -14,7 +14,6 @@ mod tests {
     use crate::parser::ast::func::Function;
     use crate::parser::ast::func_call::FuncCall;
     use crate::parser::ast::func_sig::FunctionSignature;
-    
     use crate::parser::ast::int_lit::IntLit;
     use crate::parser::ast::op::Operator;
     use crate::parser::ast::r#type::Type;
@@ -29,7 +28,7 @@ mod tests {
     use crate::parser::module::Module;
 
     fn tokenize(code: &str) -> Vec<Token> {
-        lex(&mut Stream::from(code.chars().collect())).expect("should succeed")
+        lex(code).expect("should succeed")
     }
 
     #[test]
@@ -304,8 +303,7 @@ mod tests {
     #[test]
     fn invalid_extra_comma() {
         let raw = r#"let i = call(,,)"#;
-        let mut char_stream = Stream::from(raw.chars().collect());
-        let tokens = lex(&mut char_stream).expect("should not error");
+        let tokens = lex(raw).expect("should not error");
         let result = Module::from("", &mut Stream::from(tokens));
         assert!(matches!(
             result,
@@ -326,8 +324,7 @@ mod tests {
     #[test]
     fn invalid_extra_close_paren() {
         let raw = r#"let i = call())"#;
-        let mut char_stream = Stream::from(raw.chars().collect());
-        let tokens = lex(&mut char_stream).expect("should not error");
+        let tokens = lex(raw).expect("should not error");
         let result = Module::from("", &mut Stream::from(tokens));
         assert!(matches!(
             result,
@@ -348,8 +345,7 @@ mod tests {
     #[test]
     fn invalid_missing_close_paren() {
         let raw = r#"do(((x+3) > 2) or other"#;
-        let mut char_stream = Stream::from(raw.chars().collect());
-        let tokens = lex(&mut char_stream).expect("should not error");
+        let tokens = lex(raw).expect("should not error");
         let result = Module::from("", &mut Stream::from(tokens));
         assert!(matches!(
             result,
@@ -365,8 +361,7 @@ mod tests {
     #[test]
     fn invalid_start_of_expression() {
         let raw = r#"do(and true)"#;
-        let mut char_stream = Stream::from(raw.chars().collect());
-        let tokens = lex(&mut char_stream).expect("should not error");
+        let tokens = lex(raw).expect("should not error");
         let result = Module::from("", &mut Stream::from(tokens));
         assert!(matches!(
             result,
@@ -393,8 +388,7 @@ mod tests {
            
             print(\"not dog\")
         }";
-        let mut char_stream = Stream::from(raw.chars().collect());
-        let tokens = lex(&mut char_stream).expect("should not error");
+        let tokens = lex(raw).expect("should not error");
         let result = Module::from("", &mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
@@ -475,8 +469,7 @@ mod tests {
         let raw = r#"fn thing(): i64 {
             return 4 / 2 + 8
         "#;
-        let mut char_stream = Stream::from(raw.chars().collect());
-        let tokens = lex(&mut char_stream).expect("should not error");
+        let tokens = lex(raw).expect("should not error");
         let result = Module::from("", &mut Stream::from(tokens));
         assert!(matches!(
             result,
@@ -491,28 +484,28 @@ mod tests {
 
     #[test]
     fn parse_var_assignment() {
-        let input = "let thing: i64 = 234";
-        let tokens = lex(&mut Stream::from(input.chars().collect())).expect("should succeed");
+        let raw = "let thing: i64 = 234";
+        let tokens = lex(raw).expect("should succeed");
         Statement::from(&mut Stream::from(tokens)).expect("should not error");
     }
 
     #[test]
     fn inline_struct_types_in_fn_sig() {
-        let input = r#"fn one(a: struct {one: i64, two: bool}, b: i64): struct {thing: str} {}"#;
-        let tokens = lex(&mut Stream::from(input.chars().collect())).expect("should succeed");
+        let raw = r#"fn one(a: struct {one: i64, two: bool}, b: i64): struct {thing: str} {}"#;
+        let tokens = lex(raw).expect("should succeed");
         let result = Module::from("", &mut Stream::from(tokens));
         assert!(matches!(result, Ok(_)));
     }
 
     #[test]
     fn invalid_type_cast() {
-        let input = r#"
+        let raw = r#"
             fn main() {
                 let a = 5u64
                 let b = a as 543
             }
         "#;
-        let tokens = lex(&mut Stream::from(input.chars().collect())).expect("should succeed");
+        let tokens = lex(raw).expect("should succeed");
         let result = Module::from("", &mut Stream::from(tokens));
         assert!(matches!(
             result,
@@ -525,11 +518,11 @@ mod tests {
 
     #[test]
     fn parenthesized_assign_after_expr() {
-        let input = r#"
+        let raw = r#"
             let a = thing
             (thing) = 2
         "#;
-        let tokens = lex(&mut Stream::from(input.chars().collect())).expect("should succeed");
+        let tokens = lex(raw).expect("should succeed");
         let result = Module::from("", &mut Stream::from(tokens));
         assert_eq!(
             result.unwrap().statements,
@@ -566,8 +559,8 @@ mod tests {
     #[test]
     fn invalid_mod_paths() {
         for path in ["./thing.bl", "../thing.bl", "path/../other.bl"] {
-            let input = format!(r#"use "{path}""#);
-            let tokens = lex(&mut Stream::from(input.chars().collect())).expect("should succeed");
+            let raw = format!(r#"use "{path}""#);
+            let tokens = lex(raw.as_str()).expect("should succeed");
             let result = Module::from("", &mut Stream::from(tokens));
             assert!(matches!(
                 result,

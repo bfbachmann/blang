@@ -1,5 +1,4 @@
-use std::error::Error;
-use std::fmt;
+use crate::lexer::pos::Position;
 
 pub type LexResult<T> = Result<T, LexError>;
 
@@ -7,28 +6,16 @@ pub type LexResult<T> = Result<T, LexError>;
 #[derive(Debug, PartialEq)]
 pub struct LexError {
     pub message: String,
-    pub line: usize,
-    pub col: usize,
+    pub start_pos: Position,
+    pub end_pos: Position,
 }
-
-impl Error for LexError {}
 
 impl LexError {
-    pub fn new(message: &str, line: usize, col: usize) -> Self {
+    pub fn new(message: &str, line: usize, start_col: usize, end_col: usize) -> Self {
         LexError {
             message: message.to_string(),
-            line,
-            col,
+            start_pos: Position::new(line, start_col),
+            end_pos: Position::new(line, end_col),
         }
-    }
-}
-
-impl fmt::Display for LexError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "[{}:{}] Syntax error: {}",
-            self.line, self.col, self.message
-        )
     }
 }

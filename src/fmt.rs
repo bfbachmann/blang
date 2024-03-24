@@ -328,5 +328,5 @@ pub fn hierarchy_to_string(hierarchy: &Vec<String>) -> String {
 
 /// Returns the string representation of the given duration.
 pub fn format_duration(duration: Duration) -> String {
-    format!("{}.{}s", duration.as_secs(), duration.subsec_millis())
+    format!("{:.2}s", duration.as_secs_f64())
 }

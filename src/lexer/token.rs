@@ -1,10 +1,5 @@
 use std::fmt;
 
-
-
-
-
-
 use crate::lexer::pos::Position;
 use crate::lexer::token_kind::TokenKind;
 

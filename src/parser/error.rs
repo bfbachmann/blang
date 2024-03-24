@@ -7,7 +7,7 @@ use crate::locatable_impl;
 
 pub type ParseResult<T> = Result<T, ParseError>;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ErrorKind {
     ExpectedExpr,
     ExpectedBasicExpr,

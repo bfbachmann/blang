@@ -204,8 +204,7 @@ mod tests {
     use crate::parser::ast::statement::Statement;
 
     fn analyze_statement(raw: &str, ctx: &mut ProgramContext) -> AStatement {
-        let mut char_stream = Stream::from(raw.chars().collect());
-        let tokens = lex(&mut char_stream).expect("should not error");
+        let tokens = lex(raw).expect("should not error");
         let statement = Statement::from(&mut Stream::from(tokens)).expect("should not error");
         AStatement::from(ctx, &statement)
     }

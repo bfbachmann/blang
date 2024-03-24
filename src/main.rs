@@ -1,7 +1,7 @@
 use std::collections::{HashSet, VecDeque};
 use std::fs::File;
 use std::io::prelude::*;
-use std::io::{BufReader, Result};
+
 use std::os::unix::prelude::CommandExt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -12,14 +12,15 @@ use clap::{arg, ArgAction, Command};
 use colored::*;
 use flamer::flame;
 use inkwell::targets::TargetTriple;
+
+
 use target_lexicon::Triple;
 
 use parser::module::Module;
 
 use crate::analyzer::analyze::{analyze_modules, ProgramAnalysis};
 use crate::codegen::program::{generate, init_target, OutputFormat};
-use crate::fmt::{display_err, format_duration, format_file_loc};
-use crate::lexer::error::LexError;
+use crate::fmt::{display_err, format_duration};
 use crate::lexer::lex::lex;
 use crate::lexer::pos::Locatable;
 use crate::lexer::stream::Stream;
@@ -188,17 +189,6 @@ fn get_target_triple(target: Option<&String>) -> TargetTriple {
     }
 }
 
-/// Opens the file at the given path and returns a reader for it.
-fn open_file(file_path: &str) -> Result<Stream<char>> {
-    let file = File::open(file_path)?;
-    let mut reader = BufReader::new(file);
-
-    let mut contents = String::new();
-    reader.read_to_string(&mut contents)?;
-
-    Ok(Stream::from(contents.chars().collect()))
-}
-
 /// Parses source code. If `input_path` is a directory, we'll try to locate and parse
 /// the `main.bl` file inside it along with any imported paths. Otherwise, the file
 /// at `input_path` and all its imports will be parsed.
@@ -306,21 +296,27 @@ fn parse_source_files(input_path: &str) -> Vec<Module> {
 
 /// Lexes and parses a source file.
 fn parse_source_file(input_path: &str) -> ParseResult<Module> {
-    // Get a stream of characters from the source file.
-    let mut char_stream = match open_file(input_path) {
-        Ok(r) => r,
-        Err(err) => fatalln!(r#"error opening file "{}": {}"#, input_path, err),
+    let source_code = match fs::read_to_string(input_path) {
+        Ok(code) => code,
+        Err(err) => {
+            fatalln!("error reading {}: {}", input_path, err)
+        }
     };
 
-    // Break the char stream into tokens.
-    let tokens = match lex(&mut char_stream) {
+    let tokens = match lex(source_code.as_str()) {
         Ok(tokens) => tokens,
-        Err(LexError { message, line, col }) => {
-            fatalln!(
-                "{}\n  {}\n  This syntax error prevents any further program analysis.",
-                message.bold(),
-                format_file_loc(input_path, Some(line), Some(col)),
+        Err(err) => {
+            display_err(
+                err.message.as_str(),
+                None,
+                None,
+                input_path,
+                &err.start_pos,
+                &err.end_pos,
+                false,
             );
+
+            process::exit(1);
         }
     };
 

@@ -14,8 +14,7 @@ mod tests {
     use crate::parser::module::Module;
 
     fn get_analysis(raw: &str) -> ProgramAnalysis {
-        let mut char_stream = Stream::from(raw.chars().collect());
-        let tokens = lex(&mut char_stream).expect("should not error");
+        let tokens = lex(raw).expect("should not error");
         let module = Module::from("", &mut Stream::from(tokens)).expect("should not error");
         analyze_modules(
             vec![module],

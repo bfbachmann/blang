@@ -11,8 +11,7 @@ mod tests {
     use crate::parser::module::Module;
 
     fn assert_compiles(code: &str) {
-        let mut char_stream = Stream::from(code.chars().collect());
-        let tokens = lex(&mut char_stream).expect("should not error");
+        let tokens = lex(code).expect("should not error");
         let module = Module::from("", &mut Stream::from(tokens)).expect("should not error");
         let analysis = analyze_modules(
             vec![module],
