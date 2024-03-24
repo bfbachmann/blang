@@ -200,6 +200,14 @@ pub fn generate(
     // Initialize the target machine and set the target on the LLVM module.
     module.set_triple(target_triple);
 
+    // Set data layout.
+    let data_layout = module
+        .create_jit_execution_engine(OptimizationLevel::None)
+        .unwrap()
+        .get_target_data()
+        .get_data_layout();
+    module.set_data_layout(&data_layout);
+
     // Set up function pass manager that performs LLVM IR optimization.
     let fpm = PassManager::create(&module);
     if optimize {

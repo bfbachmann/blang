@@ -79,21 +79,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 // memory pointed to by the first argument and return void.
                 let expr_type = self.type_store.must_get(expr.type_key);
                 if expr_type.is_composite() {
-                    // Load the return value from the result pointer.
-                    let ll_ret_type = self.type_converter.get_basic_type(expr.type_key);
-                    let ret_val = match result.is_pointer_value() {
-                        true => self.builder.build_load(
-                            ll_ret_type,
-                            result.into_pointer_value(),
-                            "ret_val",
-                        ),
-                        false => result,
-                    };
-
-                    // Write the return value into the pointer from the first function argument.
-                    let ret_ptr = self.fn_value.unwrap().get_first_param().unwrap();
-                    self.builder
-                        .build_store(ret_ptr.into_pointer_value(), ret_val);
+                    // Copy the return value into the pointer from the first function argument.
+                    let ll_ret_ptr = self.fn_value.unwrap().get_first_param().unwrap();
+                    self.copy_value(result, ll_ret_ptr.into_pointer_value(), expr.type_key);
 
                     // Return void.
                     self.builder.build_return(None);

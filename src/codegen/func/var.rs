@@ -19,7 +19,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         type_key: TypeKey,
         ll_val: BasicValueEnum<'ctx>,
     ) -> PointerValue<'ctx> {
-        let ll_dst_ptr = self.create_entry_alloc(name, type_key, ll_val);
+        let ll_dst_ptr = self.stack_alloc(name, type_key);
         self.copy_value(ll_val, ll_dst_ptr, type_key);
         self.vars.insert(name.to_string(), ll_dst_ptr);
         ll_dst_ptr
@@ -98,13 +98,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // Load the value from the pointer (unless it's a composite value that is passed with
         // pointers, or a pointer to a module-level function).
-        let var_type = self.type_store.must_get(var.type_key);
-        if var_type.is_composite() || self.is_var_module_fn(var) {
+        if self.is_var_module_fn(var) {
             ll_var_ptr.as_basic_value_enum()
         } else {
-            let ll_var_type = self.type_converter.get_basic_type(var.type_key);
-            self.builder
-                .build_load(ll_var_type, ll_var_ptr, var.name.as_str())
+            self.load_if_basic(ll_var_ptr, var.type_key, var.name.as_str())
         }
     }
 
@@ -132,34 +129,20 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     ) -> PointerValue<'ctx> {
         let base_expr_type = self.type_store.must_get(base_expr_type_key);
         let ll_base_expr_type = self.type_converter.get_basic_type(base_expr_type_key);
-
-        match base_expr_type {
-            AType::Struct(struct_type) => {
-                // Get a pointer to the struct field at the computed index.
-                self.builder
-                    .build_struct_gep(
-                        ll_base_expr_type,
-                        ll_base_val.into_pointer_value(),
-                        struct_type.get_field_index(member_name).unwrap() as u32,
-                        format!("{}_ptr", member_name).as_str(),
-                    )
-                    .unwrap()
-            }
-
-            AType::Tuple(tuple_type) => {
-                // Get a pointer to the tuple field at the computed index.
-                self.builder
-                    .build_struct_gep(
-                        ll_base_expr_type,
-                        ll_base_val.into_pointer_value(),
-                        tuple_type.get_field_index(member_name) as u32,
-                        format!("{}_ptr", member_name).as_str(),
-                    )
-                    .unwrap()
-            }
-
+        let ll_field_index = match base_expr_type {
+            AType::Struct(struct_type) => struct_type.get_field_index(member_name).unwrap() as u32,
+            AType::Tuple(tuple_type) => tuple_type.get_field_index(member_name) as u32,
             other => panic!("invalid member access on type {}", other),
-        }
+        };
+
+        self.builder
+            .build_struct_gep(
+                ll_base_expr_type,
+                ll_base_val.into_pointer_value(),
+                ll_field_index,
+                format!("{}_ptr", member_name).as_str(),
+            )
+            .unwrap()
     }
 
     /// Returns the value of the member with name `member_name` on `ll_base_val`.
@@ -173,10 +156,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Handle the case where the value we're accessing is a pointer.
         if ll_base_val.is_pointer_value() {
             let ll_member_ptr = self.get_member_ptr(ll_base_val, base_expr_type_key, member_name);
-            let ll_member_type = self.type_converter.get_basic_type(member_type_key);
-            return self
-                .builder
-                .build_load(ll_member_type, ll_member_ptr, member_name);
+            return self.load_if_basic(ll_member_ptr, member_type_key, member_name);
         }
 
         // At this point we know that we're accessing a member on a constant.

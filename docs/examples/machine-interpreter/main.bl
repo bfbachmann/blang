@@ -10,7 +10,7 @@ use "docs/examples/machine-interpreter/utils.bl"
 
 fn main() {
     // Open file for reading.
-    let file = fopen("machine-interpreter/program.txt\0" as *u8, "rb\0" as *u8)
+    let file = fopen("docs/examples/machine-interpreter/program.txt\0" as *u8, "rb\0" as *u8)
     assert(file as uint != 0, "failed to open file")
 
     // Figure out how many bytes are in the file.

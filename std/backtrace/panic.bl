@@ -1,9 +1,16 @@
+use "std/libc/proc.bl"
 use "std/libc/io.bl"
 use "std/libc/signal.bl"
 
 fn panic(msg: str) {
+    let panic_str = "Panic: "
+    write(STDERR, panic_str as *u8, panic_str.len())
+    write(STDERR, msg as *u8, msg.len())
+    write(STDERR, "\n" as *u8, 1)
+
     const MAX_FRAMES: uint = 512
     let frame_buf = &mut [0 as *u8; MAX_FRAMES] as *mut *u8
     let num_frames = backtrace(frame_buf, MAX_FRAMES)
     backtrace_symbols_fd(frame_buf, num_frames, STDERR)
+    exit(1)
 }

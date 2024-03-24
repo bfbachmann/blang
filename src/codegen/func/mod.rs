@@ -7,7 +7,7 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::passes::PassManager;
-use inkwell::types::AnyType;
+use inkwell::types::{AnyType, BasicType, BasicTypeEnum};
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
 
 use crate::analyzer::ast::func::{AFn, AFnSig};
@@ -355,188 +355,39 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         let typ = self.type_store.must_get(type_key);
-        match typ {
-            AType::Struct(struct_type) => {
-                let ll_src_val_type = self.type_converter.get_basic_type(type_key);
+        if typ.is_composite() {
+            // Copy the value from the source pointer to the destination pointer.
+            let ll_type_size = self
+                .type_converter
+                .get_basic_type(type_key)
+                .size_of()
+                .unwrap();
 
-                // We need to copy the struct fields recursively one by one.
-                for field in &struct_type.fields {
-                    let field_type = self.type_store.must_get(field.type_key);
-                    let ll_field_type = self.type_converter.get_basic_type(field.type_key);
-                    let ll_field_index = struct_type.get_field_index(&field.name).unwrap() as u32;
-
-                    // Get a pointer to the source struct field.
-                    let ll_src_field_ptr = self
-                        .builder
-                        .build_struct_gep(
-                            ll_src_val_type,
-                            ll_src_val.into_pointer_value(),
-                            ll_field_index,
-                            format!("{}.{}_src_ptr", struct_type.name, field.name).as_str(),
-                        )
-                        .unwrap();
-
-                    // Get a pointer to the destination struct field.
-                    let ll_dst_field_ptr = self
-                        .builder
-                        .build_struct_gep(
-                            ll_src_val_type,
-                            ll_dst_ptr,
-                            ll_field_index,
-                            format!("{}.{}_dst_ptr", struct_type.name, field.name).as_str(),
-                        )
-                        .unwrap();
-
-                    // Copy the field value.
-                    if field_type.is_composite() {
-                        self.copy_value(
-                            ll_src_field_ptr.as_basic_value_enum(),
-                            ll_dst_field_ptr,
-                            field.type_key,
-                        );
-                    } else {
-                        // Load the field value from the pointer.
-                        let ll_src_field_val = self.builder.build_load(
-                            ll_field_type,
-                            ll_src_field_ptr,
-                            field.name.as_str(),
-                        );
-
-                        // Copy the value to the target field pointer.
-                        self.copy_value(ll_src_field_val, ll_dst_field_ptr, field.type_key)
-                    }
-                }
-            }
-
-            AType::Enum(enum_type) => {
-                let ll_src_val_type = self.type_converter.get_basic_type(type_key);
-
-                // Copy the enum number.
-                let ll_enum_number = self.builder.build_load(
-                    self.ctx.i8_type(),
+            self.builder
+                .build_memcpy(
+                    ll_dst_ptr,
+                    2,
                     ll_src_val.into_pointer_value(),
-                    format!("{}.number", enum_type.name).as_str(),
-                );
-                self.builder.build_store(ll_dst_ptr, ll_enum_number);
-
-                // Copy the enum variant value, if necessary.
-                // TODO: does `max_variant_size_bytes` need to be even for the `memcpy` to work?
-                if enum_type.max_variant_size_bytes > 0 {
-                    let ll_src_value_ptr = self
-                        .builder
-                        .build_struct_gep(
-                            ll_src_val_type,
-                            ll_src_val.into_pointer_value(),
-                            1u32,
-                            format!("{}.src_value_ptr", enum_type.name).as_str(),
-                        )
-                        .unwrap();
-
-                    let ll_dst_value_ptr = self
-                        .builder
-                        .build_struct_gep(
-                            ll_src_val_type,
-                            ll_dst_ptr,
-                            1u32,
-                            format!("{}.dst_value_ptr", enum_type.name).as_str(),
-                        )
-                        .unwrap();
-
-                    self.builder
-                        .build_memcpy(
-                            ll_dst_value_ptr,
-                            2,
-                            ll_src_value_ptr,
-                            2,
-                            self.ctx
-                                .i32_type()
-                                .const_int(enum_type.max_variant_size_bytes as u64, false),
-                        )
-                        .unwrap();
-                }
-            }
-
-            AType::Tuple(tuple_type) => {
-                let ll_src_val_type = self.type_converter.get_basic_type(type_key);
-
-                // We need to copy the tuple fields recursively one by one.
-                for (ll_field_index, field) in tuple_type.fields.iter().enumerate() {
-                    let field_type_key = field.type_key;
-                    let field_type = self.type_store.must_get(field_type_key);
-                    let ll_field_type = self.type_converter.get_basic_type(field_type_key);
-
-                    // Get a pointer to the source struct field.
-                    let ll_src_field_ptr = self
-                        .builder
-                        .build_struct_gep(
-                            ll_src_val_type,
-                            ll_src_val.into_pointer_value(),
-                            ll_field_index as u32,
-                            format!("tuple.{}_src_ptr", ll_field_index).as_str(),
-                        )
-                        .unwrap();
-
-                    // Get a pointer to the destination struct field.
-                    let ll_dst_field_ptr = self
-                        .builder
-                        .build_struct_gep(
-                            ll_src_val_type,
-                            ll_dst_ptr,
-                            ll_field_index as u32,
-                            format!("tuple.{}_dst_ptr", ll_field_index).as_str(),
-                        )
-                        .unwrap();
-
-                    // Copy the field value.
-                    if field_type.is_composite() {
-                        self.copy_value(
-                            ll_src_field_ptr.as_basic_value_enum(),
-                            ll_dst_field_ptr,
-                            field_type_key,
-                        );
-                    } else {
-                        // Load the field value from the pointer.
-                        let ll_src_field_val = self.builder.build_load(
-                            ll_field_type,
-                            ll_src_field_ptr,
-                            format!("tuple.{}", ll_field_index).as_str(),
-                        );
-
-                        // Copy the value to the target field pointer.
-                        self.copy_value(ll_src_field_val, ll_dst_field_ptr, field_type_key)
-                    }
-                }
-            }
-
-            AType::Array(_) => {
-                // Load the array from the source pointer.
-                let ll_array_type = self.type_converter.get_basic_type(type_key);
-                let ll_array_val = self.builder.build_load(
-                    ll_array_type,
-                    ll_src_val.into_pointer_value(),
-                    "src_array",
-                );
-
-                // Store the array at the destination pointer.
-                self.builder.build_store(ll_dst_ptr, ll_array_val);
-            }
-
-            _ => {
-                // Store the expression value to the pointer address.
-                self.builder.build_store(ll_dst_ptr, ll_src_val);
-            }
+                    2,
+                    ll_type_size,
+                )
+                .unwrap();
+        } else {
+            // Store the expression value to the pointer address.
+            self.builder.build_store(ll_dst_ptr, ll_src_val);
         }
     }
 
-    /// Creates a new stack allocation instruction in the entry block of the current function and
-    /// returns a pointer to the allocated memory.
-    fn create_entry_alloc(
-        &mut self,
-        name: &str,
-        type_key: TypeKey,
-        ll_val: BasicValueEnum<'ctx>,
-    ) -> PointerValue<'ctx> {
-        let typ = self.type_store.must_get(type_key);
+    /// Allocates space on the stack in the current function's entry block to store
+    /// a value of the given type.
+    fn stack_alloc(&mut self, name: &str, type_key: TypeKey) -> PointerValue<'ctx> {
+        let ll_type = self.type_converter.get_basic_type(type_key);
+        self.build_entry_alloc(name, ll_type)
+    }
+
+    /// Allocates space on the stack in the current function's entry block to store
+    /// a value of the given LLVM type.
+    fn build_entry_alloc(&mut self, name: &str, ll_typ: BasicTypeEnum<'ctx>) -> PointerValue<'ctx> {
         let entry = self.fn_value.unwrap().get_first_basic_block().unwrap();
 
         // Switch to the beginning of the entry block if we're not already there.
@@ -548,20 +399,34 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             None => self.set_current_block(entry),
         };
 
-        let var_name = format!("{}_ptr", name);
-        let ll_ptr = if *typ == AType::Str {
-            self.builder
-                .build_alloca(ll_val.get_type(), var_name.as_str())
-        } else {
-            let ll_typ = self.type_converter.get_basic_type(type_key);
-            self.builder.build_alloca(ll_typ, var_name.as_str())
-        };
+        let ll_ptr = self
+            .builder
+            .build_alloca(ll_typ, format!("{}_ptr", name).as_str());
 
         // Make sure we continue from where we left off as our builder position may have changed
         // in this function.
         self.set_current_block(prev_block.unwrap());
 
         ll_ptr
+    }
+
+    /// Builds a load instruction to load data from a pointer in `ll_ptr` if
+    /// `type_key` refers to a basic type that can be loaded from memory at low
+    /// cost. Otherwise, just returns `ll_ptr` under the assumption that it
+    /// is a composite value that can be passed as a pointer.
+    fn load_if_basic(
+        &mut self,
+        ll_ptr: PointerValue<'ctx>,
+        type_key: TypeKey,
+        name: &str,
+    ) -> BasicValueEnum<'ctx> {
+        let typ = self.type_store.must_get(type_key);
+        if typ.is_composite() {
+            ll_ptr.as_basic_value_enum()
+        } else {
+            self.builder
+                .build_load(self.type_converter.get_basic_type(type_key), ll_ptr, name)
+        }
     }
 
     /// Returns the given value as a boolean int value. This is useful for cases where the value may

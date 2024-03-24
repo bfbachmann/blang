@@ -1,6 +1,7 @@
 use inkwell::values::{
-    AggregateValue, ArrayValue, BasicValue, BasicValueEnum, IntValue, PointerValue, StructValue,
+    ArrayValue, BasicValue, BasicValueEnum, IntValue, PointerValue, StructValue,
 };
+
 
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 
@@ -134,6 +135,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
 
             AExprKind::ArrayInit(array_init) => {
+                let ll_array_type = self.type_converter.get_array_type(array_init.type_key);
+                let ll_global_array = self.module.add_global(ll_array_type, None, "const_array");
+
                 // Just return an empty array if there is no element type (this can only happen
                 // if the array is actually empty).
                 if array_init.maybe_element_type_key.is_none() {
@@ -152,7 +156,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     None => array_init.values.clone(),
                 };
 
-                if ll_element_type.is_pointer_type() {
+                let ll_array_value = if ll_element_type.is_pointer_type() {
                     let ll_elements: Vec<PointerValue> = elements
                         .iter()
                         .map(|v| self.gen_const_expr(v).into_pointer_value())
@@ -193,7 +197,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                         "unexpected array element type {}",
                         ll_element_type.to_string()
                     )
-                }
+                };
+
+                ll_global_array.set_initializer(&ll_array_value);
+                ll_global_array.as_basic_value_enum()
             }
 
             AExprKind::StructInit(struct_init) => {
@@ -248,23 +255,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     access.member_type_key,
                     access.member_name.as_str(),
                 )
-            }
-
-            AExprKind::Index(index) => {
-                let ll_collection_val = self.gen_const_expr(&index.collection_expr);
-                let ll_index_val = self.gen_const_expr(&index.index_expr);
-                self.builder
-                    .build_extract_value(
-                        ll_collection_val
-                            .into_array_value()
-                            .as_aggregate_value_enum(),
-                        ll_index_val
-                            .into_int_value()
-                            .get_zero_extended_constant()
-                            .unwrap() as u32,
-                        "elem",
-                    )
-                    .unwrap()
             }
 
             _ => panic!("unexpected const expression {}", expr),

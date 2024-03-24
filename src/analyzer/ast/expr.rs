@@ -190,11 +190,9 @@ impl AExprKind {
                 true
             }
 
-            // An index expression is constant if the collection being indexed and the index
-            // itself are both constant.
-            AExprKind::Index(index) => {
-                index.collection_expr.kind.is_const() && index.index_expr.kind.is_const()
-            }
+            // Array index expressions are never constant. This is mostly for
+            // simplicity.
+            AExprKind::Index(_) => false,
 
             // Symbols can be constants.
             AExprKind::Symbol(sym) => sym.is_const,

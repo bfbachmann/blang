@@ -6,7 +6,9 @@ const NULL = 0_u64 as *u8
 
 fn assert(cond: bool, msg: str) {
     if !cond {
-        puts(msg)
+        let err_str = "ERROR: "
+        write(STDERR, err_str as *u8, err_str.len())
+        write(STDERR, msg as *u8, msg.len())
         exit(1)
     }
 }

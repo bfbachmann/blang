@@ -1096,7 +1096,13 @@ mod tests {
 
     #[test]
     fn array_index_wrong_type() {
-        let result = analyze(r#"const wrong_type = [1, 2, 3][true]"#);
+        let result = analyze(
+            r#"
+            fn main() {
+                let wrong_type = [1, 2, 3][true]
+            }"#,
+        );
+
         check_result(result, Some(ErrorKind::MismatchedTypes));
     }
 

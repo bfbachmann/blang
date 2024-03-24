@@ -1,4 +1,4 @@
-use inkwell::types::BasicTypeEnum;
+use inkwell::types::{BasicType, BasicTypeEnum};
 use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, IntValue};
 use inkwell::{AddressSpace, IntPredicate};
 
@@ -144,7 +144,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let ll_struct_type = self.type_converter.get_struct_type(tuple_init.type_key);
 
         // Allocate space for the struct on the stack.
-        let ll_struct_ptr = self.builder.build_alloca(ll_struct_type, "tuple_init_ptr");
+        let ll_struct_ptr = self.stack_alloc("tuple_init_ptr", tuple_init.type_key);
 
         // Assign values to initialized tuple fields.
         for (i, field_val) in tuple_init.values.iter().enumerate() {
@@ -169,7 +169,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Generates collection indexing expressions.
-    fn gen_index(&mut self, index: &AIndex) -> BasicValueEnum<'ctx> {
+    pub(crate) fn gen_index(&mut self, index: &AIndex) -> BasicValueEnum<'ctx> {
         // Generate code that gives us the collection.
         let ll_collection_val = self.gen_expr(&index.collection_expr);
         let ll_array_type = self
@@ -184,11 +184,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let ll_collection_ptr = if ll_collection_val.is_pointer_value() {
             ll_collection_val.into_pointer_value()
         } else {
-            let ll_ptr = self.create_entry_alloc(
-                "collection",
-                index.collection_expr.type_key,
-                ll_collection_val,
-            );
+            let ll_ptr = self.stack_alloc("collection", index.collection_expr.type_key);
             self.copy_value(ll_collection_val, ll_ptr, index.collection_expr.type_key);
             ll_ptr
         };
@@ -207,47 +203,120 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         };
 
         // Load the value from the pointer.
-        let ll_elem_type = self.type_converter.get_basic_type(index.result_type_key);
-        self.builder.build_load(ll_elem_type, ll_elem_ptr, "elem")
+        self.load_if_basic(ll_elem_ptr, index.result_type_key, "elem")
     }
 
     /// Generates array initialization instructions and returns the resulting LLVM array value.
-    fn gen_array_init(&mut self, array_init: &AArrayInit) -> BasicValueEnum<'ctx> {
+    pub(crate) fn gen_array_init(&mut self, array_init: &AArrayInit) -> BasicValueEnum<'ctx> {
         let array_type = self
             .type_store
             .must_get(array_init.type_key)
             .to_array_type();
         let ll_array_type = self.type_converter.get_array_type(array_init.type_key);
 
+        // Just return a zero-array if this is an empty array type.
+        if array_type.len == 0 {
+            return ll_array_type.const_zero().as_basic_value_enum();
+        }
+
         // Allocate stack space for the array.
+        let ll_elem_type = self
+            .type_converter
+            .get_basic_type(array_init.maybe_element_type_key.unwrap());
         let ll_array_ptr = self.builder.build_array_alloca(
-            ll_array_type,
+            ll_elem_type,
             self.ctx.i32_type().const_int(array_type.len, false),
             "array",
         );
 
-        // Repeat array elements by cloning, if necessary.
-        let elements = match &array_init.maybe_repeat_count {
-            Some(count) => {
-                vec![array_init.values.first().unwrap().clone(); *count as usize]
+        // If the array element is repeated multiple times, we'll generate a loop
+        // that copies the value into each index in the array. Otherwise, we'll
+        // just write each value into the array individually.
+        match array_init.maybe_repeat_count {
+            Some(repeat_count) if repeat_count > 1 => {
+                let ll_loop_cond = self.append_block("array_init_cond");
+                let ll_loop_body = self.append_block("array_init_body");
+                let ll_loop_update = self.append_block("array_init_update");
+                let ll_loop_end = self.append_block("array_init_done");
+
+                // Init array index and jump to condition branch.
+                let ll_index_type = self.ctx.i64_type();
+                let ll_index_ptr =
+                    self.build_entry_alloc("array_index_ptr", ll_index_type.as_basic_type_enum());
+                self.builder
+                    .build_store(ll_index_ptr, ll_index_type.const_int(0, false));
+                self.builder.build_unconditional_branch(ll_loop_cond);
+
+                // Check if loop index is at end of array. If so, break the loop.
+                // Otherwise, continue to loop body.
+                self.set_current_block(ll_loop_cond);
+                let ll_index = self
+                    .builder
+                    .build_load(ll_index_type, ll_index_ptr, "array_index");
+                let ll_continue = self.builder.build_int_compare(
+                    IntPredicate::ULT,
+                    ll_index.into_int_value(),
+                    ll_index_type.const_int(repeat_count, false),
+                    "should_continue",
+                );
+                self.builder
+                    .build_conditional_branch(ll_continue, ll_loop_body, ll_loop_end);
+
+                // Write the value into the current index in the array.
+                self.set_current_block(ll_loop_body);
+                let ll_index = self
+                    .builder
+                    .build_load(ll_index_type, ll_index_ptr, "array_index");
+                let ll_element_ptr = unsafe {
+                    self.builder.build_in_bounds_gep(
+                        ll_elem_type,
+                        ll_array_ptr,
+                        &[ll_index.into_int_value()],
+                        "array_elem_ptr",
+                    )
+                };
+                let elem = array_init.values.get(0).unwrap();
+                let ll_elem = self.gen_expr(elem);
+                self.copy_value(
+                    ll_elem,
+                    ll_element_ptr,
+                    array_init.maybe_element_type_key.unwrap(),
+                );
+                self.builder.build_unconditional_branch(ll_loop_update);
+
+                // Increment the loop index and jump back to condition block.
+                self.set_current_block(ll_loop_update);
+                let ll_index = self
+                    .builder
+                    .build_load(ll_index_type, ll_index_ptr, "array_index");
+                let ll_new_index = self.builder.build_int_add(
+                    ll_index.into_int_value(),
+                    ll_index_type.const_int(1, false),
+                    "new_index",
+                );
+                self.builder.build_store(ll_index_ptr, ll_new_index);
+                self.builder.build_unconditional_branch(ll_loop_cond);
+
+                // Continue on loop end block.
+                self.set_current_block(ll_loop_end);
             }
-            None => array_init.values.clone(),
-        };
 
-        // Init array elements.
-        for (i, value) in elements.iter().enumerate() {
-            let ll_index = self.ctx.i32_type().const_int(i as u64, false);
-            let ll_element_ptr = unsafe {
-                self.builder.build_in_bounds_gep(
-                    ll_array_type,
-                    ll_array_ptr,
-                    &[ll_index],
-                    "array_gep",
-                )
-            };
+            _ => {
+                for (i, value) in array_init.values.iter().enumerate() {
+                    let ll_index = self.ctx.i32_type().const_int(i as u64, false);
+                    let ll_element_ptr = unsafe {
+                        self.builder.build_in_bounds_gep(
+                            ll_elem_type,
+                            ll_array_ptr,
+                            &[ll_index],
+                            "array_elem_ptr",
+                        )
+                    };
 
-            let ll_elem = self.gen_expr(value);
-            self.copy_value(ll_elem, ll_element_ptr, value.type_key);
+                    let ll_elem = self.gen_expr(value);
+                    self.copy_value(ll_elem, ll_element_ptr, value.type_key);
+                }
+            }
         }
 
         ll_array_ptr.as_basic_value_enum()
@@ -259,7 +328,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let ll_struct_type = self.type_converter.get_struct_type(enum_init.type_key);
 
         // Allocate space for the struct on the stack.
-        let ll_struct_ptr = self.builder.build_alloca(ll_struct_type, "enum_init_ptr");
+        let ll_struct_ptr = self.stack_alloc("enum_init_ptr", enum_init.type_key);
 
         // Set the number variant number on the struct.
         let ll_number_field_ptr = self
@@ -302,9 +371,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let ll_struct_type = self.type_converter.get_struct_type(struct_init.type_key);
 
         // Allocate space for the struct on the stack.
-        let ll_struct_ptr = self.builder.build_alloca(
-            ll_struct_type,
+        let ll_struct_ptr = self.stack_alloc(
             format!("{}.init_ptr", struct_type.name).as_str(),
+            struct_init.type_key,
         );
 
         // Assign values to initialized struct fields.
@@ -342,10 +411,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // need to add that argument. This should only be the case for functions that return
         // structured types.
         if ll_fn_type.count_param_types() == call.args.len() as u32 + 1 {
-            let ll_ret_type = self
-                .type_converter
-                .get_basic_type(call.maybe_ret_type_key.unwrap());
-            let ptr = self.builder.build_alloca(ll_ret_type, "ret_val_ptr");
+            let ptr = self.stack_alloc("ret_val_ptr", call.maybe_ret_type_key.unwrap());
             args.push(ptr.into());
         }
 
@@ -358,11 +424,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             // the stack and use their pointers as the arguments rather than the constant values
             // themselves.
             if !ll_arg_val.is_pointer_value() && arg_type.is_composite() {
-                let ll_arg_ptr = self.create_entry_alloc(
-                    format!("arg_{}_literal", i).as_str(),
-                    arg.type_key,
-                    ll_arg_val,
-                );
+                let ll_arg_ptr =
+                    self.stack_alloc(format!("arg_{}_literal", i).as_str(), arg.type_key);
 
                 self.copy_value(ll_arg_val, ll_arg_ptr, arg.type_key);
                 args.push(ll_arg_ptr.into());
@@ -493,11 +556,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 }
                 _ => {
                     let ll_operand_val = self.gen_expr(operand_expr);
-                    let ll_ptr = self.create_entry_alloc(
-                        "referenced_val",
-                        operand_expr.type_key,
-                        ll_operand_val,
-                    );
+                    let ll_ptr = self.stack_alloc("referenced_val_ptr", operand_expr.type_key);
                     self.copy_value(ll_operand_val, ll_ptr, operand_expr.type_key);
                     ll_ptr.as_basic_value_enum()
                 }
@@ -507,11 +566,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 // Compile the operand expression.
                 let ll_operand = self.gen_expr(operand_expr);
 
-                // Load the pointee value from the operand pointer and return it.
-                let ll_pointee_type = self.type_converter.get_basic_type(result_type_key);
-                self.builder.build_load(
-                    ll_pointee_type,
+                // Load the pointee value from the operand pointer if necessary and return it.
+                self.load_if_basic(
                     ll_operand.into_pointer_value(),
+                    result_type_key,
                     "deref_val",
                 )
             }

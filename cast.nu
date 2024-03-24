@@ -9,25 +9,7 @@ if ("env.nu" | path exists) {
 
 # Runs all unit and end-to-end tests.
 def test [] {
-    test unit
-    test e2e
-}
-
-# Runs unit tests.
-def "test unit" [] {
-    cargo $env.CARGO_FLAGS llvm-cov -- --nocapture
-}
-
-# Runs end-to-end tests.
-def "test e2e" [] {
-    ls src/tests | find "_test.bl" | get name | ansi strip | par-each {|src_file|
-        let exit_code = run -q $src_file
-        if $exit_code == 0 {
-            print $"(ansi green)PASS(ansi reset) ($src_file)"
-        } else {
-            print $"(ansi red)FAIL(ansi reset) ($src_file)"
-        }
-    }
+    cargo $env.CARGO_FLAGS llvm-cov
 }
 
 # Generates documentation.

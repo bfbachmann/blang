@@ -543,34 +543,39 @@ fn run(src_path: &str, target_triple: &TargetTriple) {
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::path::PathBuf;
+    use std::process::Command;
 
     use crate::codegen::program::{init_target, OutputFormat};
     use crate::compile;
 
-    #[test]
-    fn compile_all_test_files() {
-        // Check that all the `_test.bl` files in src/tests compile.
+    /// Compiles and executes the code at the given path and asserts that
+    /// execution succeeded.
+    fn run_and_check_result(file_path: PathBuf) {
         let target = init_target(None).unwrap();
-        let entries = fs::read_dir("src/tests").expect("should succeed");
-        for entry in entries {
-            let file_path = entry.unwrap().path();
-            if !file_path.to_str().unwrap().ends_with("_test.bl") {
-                continue;
-            }
+        let output_path = format!("bin/{}", file_path.file_stem().unwrap().to_str().unwrap());
 
-            let output_path = format!("bin/{}.o", file_path.file_stem().unwrap().to_str().unwrap());
+        compile(
+            file_path.to_str().unwrap(),
+            Some(&output_path),
+            OutputFormat::Executable,
+            &target,
+            true,
+            true,
+            None,
+            vec![],
+        );
 
-            compile(
-                file_path.to_str().unwrap(),
-                Some(&output_path),
-                OutputFormat::Object,
-                &target,
-                true,
-                true,
-                None,
-                vec![],
-            );
-        }
+        let output = Command::new(output_path.as_str())
+            .output()
+            .expect("should succeed");
+        eprintln!("{}", String::from_utf8(output.stderr).unwrap());
+        assert!(
+            output.status.success(),
+            "{} failed with {}",
+            file_path.to_str().unwrap(),
+            output.status,
+        );
     }
 
     #[test]
@@ -596,28 +601,27 @@ mod tests {
     }
 
     #[test]
-    fn compile_examples() {
-        let target = init_target(None).unwrap();
-        let entries = fs::read_dir("docs/examples").expect("should succeed");
+    fn run_all_test_files() {
+        // Check that all the `_test.bl` files in src/tests compile.
+        let entries = fs::read_dir("src/tests").expect("should succeed");
         for entry in entries {
-            let entry = entry.unwrap();
-            if !entry.metadata().unwrap().is_dir() {
+            let file_path = entry.unwrap().path();
+            if !file_path.to_str().unwrap().ends_with("_test.bl") {
                 continue;
             }
 
-            let path = entry.path();
-            let output_path = format!("bin/{}", path.file_stem().unwrap().to_str().unwrap());
+            run_and_check_result(file_path);
+        }
+    }
 
-            compile(
-                path.to_str().unwrap(),
-                Some(&output_path),
-                OutputFormat::Executable,
-                &target,
-                true,
-                false,
-                None,
-                vec![],
-            );
+    #[test]
+    fn compile_examples() {
+        let entries = fs::read_dir("docs/examples").expect("should succeed");
+        for entry in entries {
+            let entry = entry.unwrap();
+            if entry.metadata().unwrap().is_dir() {
+                run_and_check_result(entry.path());
+            }
         }
     }
 }
