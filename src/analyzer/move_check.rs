@@ -517,6 +517,7 @@ impl<'a> MoveChecker<'a> {
             | AExprKind::IntLiteral(_)
             | AExprKind::UintLiteral(_)
             | AExprKind::StrLiteral(_)
+            | AExprKind::Sizeof(_)
             | AExprKind::Unknown => {}
         }
     }

@@ -51,6 +51,7 @@ pub enum AExprKind {
     UnaryOperation(Operator, Box<AExpr>),
     BinaryOperation(Box<AExpr>, Operator, Box<AExpr>),
     TypeCast(Box<AExpr>, TypeKey),
+    Sizeof(TypeKey),
     Unknown,
 }
 
@@ -87,6 +88,9 @@ impl fmt::Display for AExprKind {
             AExprKind::TypeCast(expr, target_type_key) => {
                 write!(f, "{} as {}", expr, target_type_key)
             }
+            AExprKind::Sizeof(type_key) => {
+                write!(f, "sizeof {}", type_key)
+            }
             AExprKind::Unknown => {
                 write!(f, "<unknown>")
             }
@@ -116,6 +120,7 @@ impl PartialEq for AExprKind {
             (AExprKind::BinaryOperation(l1, o1, r1), AExprKind::BinaryOperation(l2, o2, r2)) => {
                 l1 == l2 && o1 == o2 && r1 == r2
             }
+            (AExprKind::Sizeof(tk1), AExprKind::Sizeof(tk2)) => tk1 == tk2,
             (AExprKind::Unknown, AExprKind::Unknown) => true,
             (_, _) => false,
         }
@@ -206,6 +211,9 @@ impl AExprKind {
 
             // Member access expressions are constants if their parent values are constants.
             AExprKind::MemberAccess(access) => access.base_expr.kind.is_const(),
+
+            // `sizeof` expressions always yield a constant value.
+            AExprKind::Sizeof(_) => true,
         }
     }
 
@@ -244,6 +252,9 @@ impl AExprKind {
                     left_expr.display(ctx),
                     ctx.display_type_for_key(*target_type_key)
                 )
+            }
+            AExprKind::Sizeof(type_key) => {
+                format!("sizeof {}", ctx.display_type_for_key(*type_key))
             }
             AExprKind::MemberAccess(access) => {
                 format!("{}.{}", access.base_expr.display(ctx), access.member_name)
@@ -488,11 +499,9 @@ impl AExpr {
             }
 
             Expression::SizeOf(sizeof) => {
-                // Get the size of the type and just represent it as a `uint` literal.
                 let type_key = ctx.resolve_type(&sizeof.typ);
-                let typ = ctx.must_get_type(type_key);
                 AExpr {
-                    kind: AExprKind::UintLiteral(typ.size_bytes(&ctx.type_store) as u64),
+                    kind: AExprKind::Sizeof(type_key),
                     type_key: ctx.uint_type_key(),
                     start_pos,
                     end_pos,

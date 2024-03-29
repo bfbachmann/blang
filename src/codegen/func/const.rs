@@ -1,7 +1,7 @@
+use inkwell::types::BasicType;
 use inkwell::values::{
     ArrayValue, BasicValue, BasicValueEnum, IntValue, PointerValue, StructValue,
 };
-
 
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 
@@ -245,6 +245,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             AExprKind::TypeCast(left_expr, target_type_key) => self
                 .gen_type_cast(left_expr, *target_type_key)
+                .as_basic_value_enum(),
+
+            AExprKind::Sizeof(type_key) => self
+                .type_converter
+                .get_basic_type(*type_key)
+                .size_of()
+                .unwrap()
                 .as_basic_value_enum(),
 
             AExprKind::MemberAccess(access) => {

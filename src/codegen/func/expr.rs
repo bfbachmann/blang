@@ -29,6 +29,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 .gen_type_cast(left_expr, *target_type_key)
                 .as_basic_value_enum(),
 
+            AExprKind::Sizeof(type_key) => self
+                .type_converter
+                .get_basic_type(*type_key)
+                .size_of()
+                .unwrap()
+                .as_basic_value_enum(),
+
             AExprKind::Symbol(var) => self.get_var_value(var),
 
             AExprKind::BoolLiteral(_)
