@@ -1,3 +1,4 @@
+use colored::Colorize;
 use flamer::flame;
 use logos::Logos;
 
@@ -77,9 +78,9 @@ pub fn lex(source_code: &str) -> LexResult<Vec<Token>> {
 
             Err(_) => {
                 return Err(LexError {
-                    message: "invalid token".to_string(),
+                    message: format_code!("invalid token {}", lexer.slice()),
                     start_pos: token_start,
-                    end_pos: token_end,
+                    end_pos: Position::default(),
                 })
             }
         }

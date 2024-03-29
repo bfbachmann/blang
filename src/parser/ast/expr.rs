@@ -1166,4 +1166,13 @@ mod tests {
             })
         )
     }
+
+    #[test]
+    fn unclosed_str_lit() {
+        let result = lex(r#"
+            fn main() {
+                let a = "        ayyy
+            }"#);
+        assert!(matches!(result, Err(_)));
+    }
 }
