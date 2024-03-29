@@ -16,13 +16,3 @@ impl fmt::Display for Token {
         write!(f, "{}", self.kind)
     }
 }
-
-impl Token {
-    pub fn new(kind: TokenKind, line: usize, start_col: usize, end_col: usize) -> Self {
-        Token {
-            kind,
-            start: Position::new(line, start_col),
-            end: Position::new(line, end_col),
-        }
-    }
-}

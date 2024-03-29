@@ -1,15 +1,15 @@
 use std::fmt;
 
-use logos::{Lexer, Logos, Skip};
+use logos::{Lexer, Logos};
 
 /// Represents any valid token in the language.
 #[derive(Logos, Debug, PartialEq, Eq, Hash, Clone)]
 #[logos(skip r"[ \t\f]+")]
-#[logos(extras = usize)]
+#[logos(extras = (usize, usize))]
 pub enum TokenKind {
     // Whitespace and comments
-    #[regex(r"\n", track_line_count)]
-    Newline(usize),
+    #[regex(r"\n", update_line_count)]
+    Newline,
     #[regex(r"//[^\n]*")]
     LineComment,
     #[regex(r"/\*(?:[^*]|\*[^/])*\*/", update_line_count)]
@@ -172,7 +172,7 @@ pub enum TokenKind {
 impl TokenKind {
     fn to_string(&self) -> String {
         match self {
-            TokenKind::Newline(_) => "\n".to_string(),
+            TokenKind::Newline => "\n".to_string(),
             TokenKind::LineComment | TokenKind::BlockComment => "<comment>".to_string(),
             TokenKind::Plus => "+".to_string(),
             TokenKind::Minus => "-".to_string(),
@@ -246,22 +246,26 @@ impl TokenKind {
     }
 }
 
-/// Update the line count and the char index.
-fn track_line_count(lexer: &mut Lexer<TokenKind>) -> usize {
-    lexer.extras += 1;
-    lexer.extras + 1
-}
-
 /// Updates the line counter in the lexer based on the number of newlines
 /// in the lexer slice.
-fn update_line_count(lexer: &mut Lexer<TokenKind>) -> Skip {
+fn update_line_count(lexer: &mut Lexer<TokenKind>) {
     let comment = lexer.slice();
-    lexer.extras += comment.chars().filter(|&c| c == '\n').count();
-    Skip
+
+    // Update the lexer line counter with the newlines in the token.
+    let newlines = comment.chars().filter(|&c| c == '\n').count();
+    lexer.extras.0 += newlines;
+
+    // Set the lexer's last newline offset if there are new newlines.
+    if newlines > 0 {
+        lexer.extras.1 = lexer.span().start + comment.rfind('\n').unwrap();
+    }
 }
 
+/// Lexes a string literal.
 fn lex_str_lit(lexer: &mut Lexer<TokenKind>) -> String {
     let str_lit = lexer.slice();
+
+    update_line_count(lexer);
 
     // Remove quotes.
     let chars: Vec<char> = str_lit[1..str_lit.len() - 1].chars().collect();
@@ -274,12 +278,6 @@ fn lex_str_lit(lexer: &mut Lexer<TokenKind>) -> String {
         let next_char = chars.get(i + 1);
 
         let to_add = match cur_char {
-            // Increment line counter when we see newlines.
-            '\n' => {
-                lexer.extras += 1;
-                '\n'
-            }
-
             // Handle potential escape sequence.
             '\\' => match next_char {
                 Some('\\') => {

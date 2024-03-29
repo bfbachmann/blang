@@ -9,13 +9,3 @@ pub struct LexError {
     pub start_pos: Position,
     pub end_pos: Position,
 }
-
-impl LexError {
-    pub fn new(message: &str, line: usize, start_col: usize, end_col: usize) -> Self {
-        LexError {
-            message: message.to_string(),
-            start_pos: Position::new(line, start_col),
-            end_pos: Position::new(line, end_col),
-        }
-    }
-}

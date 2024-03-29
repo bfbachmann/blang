@@ -643,7 +643,6 @@ mod tests {
             ))
         );
     }
-
     #[test]
     fn parse_basic_int_literal() {
         assert_eq!(
@@ -1146,6 +1145,25 @@ mod tests {
                     )),
                 )),
             )
+        )
+    }
+
+    #[test]
+    fn parse_multiline_string() {
+        let string = r#""this
+            is a string
+            that runs
+            multiple
+            lines!
+        ""#;
+        let result = parse(string).unwrap();
+        assert_eq!(
+            result,
+            Expression::StrLiteral(StrLit {
+                value: string.replace('"', ""),
+                start_pos: Position::new(1, 1),
+                end_pos: Position::new(6, 9),
+            })
         )
     }
 }
