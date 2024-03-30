@@ -1473,4 +1473,16 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::UseOfMovedValue));
     }
+
+    #[test]
+    fn invalid_use_in_fn() {
+        let result = analyze(
+            r#"
+                fn main() {
+                    use "std/libc/mem.bl"
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::InvalidStatement));
+    }
 }

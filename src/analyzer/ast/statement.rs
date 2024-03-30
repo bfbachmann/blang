@@ -1,6 +1,8 @@
 use std::fmt;
 use std::fmt::Formatter;
 
+use colored::Colorize;
+
 use crate::analyzer::ast::closure::{analyze_break, analyze_continue, AClosure};
 use crate::analyzer::ast::cond::ACond;
 use crate::analyzer::ast::fn_call::AFnCall;
@@ -170,8 +172,17 @@ impl AStatement {
             }
 
             Statement::Use(_) => {
-                // This should never happen because `use` statements are handled by the parser.
-                unreachable!()
+                // Use statements aren't allowed inside functions. We know we're
+                // inside a function at this point because top-level `use` statements
+                // are handled separately in `AModule::from`.
+                ctx.insert_err(AnalyzeError::new(
+                    ErrorKind::InvalidStatement,
+                    format_code!("{} is not allowed inside functions", "use").as_str(),
+                    statement,
+                ));
+
+                // Return and empty closure as a placeholder statement.
+                AStatement::Closure(AClosure::new_empty())
             }
 
             Statement::SpecDeclaration(_) => {
