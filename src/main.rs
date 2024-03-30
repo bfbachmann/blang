@@ -138,7 +138,7 @@ fn main() {
                     .get_many::<String>("linker-flag")
                     .unwrap_or_default()
                     .collect();
-                compile(
+                if let Err(e) = compile(
                     src_path,
                     dst_path,
                     output_format,
@@ -147,7 +147,9 @@ fn main() {
                     quiet,
                     linker,
                     linker_flags,
-                );
+                ) {
+                    fatalln!("{}", e);
+                }
             }
             _ => fatalln!("expected source path"),
         },
@@ -156,7 +158,9 @@ fn main() {
             Some(file_path) => {
                 let target_triple = &get_target_triple(None);
                 let maybe_dump_path = sub_matches.get_one::<String>("dump");
-                analyze(file_path, maybe_dump_path, target_triple);
+                if let Err(e) = analyze(file_path, maybe_dump_path, target_triple) {
+                    fatalln!("{}", e);
+                };
             }
             _ => fatalln!("expected source path"),
         },
@@ -330,17 +334,17 @@ fn analyze(
     input_path: &str,
     maybe_dump_path: Option<&String>,
     target_triple: &TargetTriple,
-) -> ProgramAnalysis {
+) -> Result<ProgramAnalysis, String> {
     // Parse all targeted source files.
     let modules = parse_source_files(input_path);
     if modules.is_empty() {
-        fatalln!("no source files found in {}", input_path);
+        return Err(format!("no source files found in {}", input_path));
     }
 
     // Analyze the program.
     let target = match Triple::from_str(target_triple.as_str().to_str().unwrap()) {
         Ok(t) => t,
-        Err(e) => fatalln!("failed to initialize target: {}", e),
+        Err(e) => return Err(format!("failed to initialize target: {}", e)),
     };
     let analysis = analyze_modules(modules, &target);
 
@@ -381,13 +385,13 @@ fn analyze(
 
     // Die if analysis failed.
     if err_count > 0 {
-        fatalln!(
+        return Err(format!(
             "analysis failed due to previous {}",
             match err_count {
                 1 => "error".to_string(),
                 n => format!("{} errors", n),
             }
-        )
+        ));
     }
 
     // Dump the AST to a file, if necessary.
@@ -395,25 +399,25 @@ fn analyze(
         let dst = Path::new(dump_path.as_str());
         let mut dst_file = match File::create(dst) {
             Err(err) => {
-                fatalln!(
+                return Err(format!(
                     "error opening file {}: {}",
                     dst.to_str().unwrap_or_default(),
                     err
-                );
+                ));
             }
             Ok(result) => result,
         };
 
         if let Err(err) = write!(dst_file, "{:#?}", analysis) {
-            fatalln!(
+            return Err(format!(
                 "error writing AST to file {}: {}",
                 dst.to_str().unwrap_or_default(),
                 err
-            );
+            ));
         }
     }
 
-    analysis
+    Ok(analysis)
 }
 
 /// Compiles a source files for the given target ISA. If `src_path` points to a directory, all
@@ -429,10 +433,10 @@ fn compile(
     quiet: bool,
     linker: Option<&String>,
     linker_flags: Vec<&String>,
-) {
+) -> Result<(), String> {
     // Read and analyze the program.
     let analyze_start = Instant::now();
-    let prog_analysis = analyze(src_path, None, &target_triple);
+    let prog_analysis = analyze(src_path, None, &target_triple)?;
     let analyze_duration = Instant::now() - analyze_start;
 
     // If no output path was specified, just use the source file name.
@@ -466,7 +470,7 @@ fn compile(
         linker,
         linker_flags,
     ) {
-        fatalln!("{}", e);
+        return Err(format!("{}", e));
     }
 
     let generate_duration = Instant::now() - generate_start;
@@ -499,12 +503,17 @@ fn compile(
             width = align_width
         );
     }
+
+    Ok(())
 }
 
 /// Compiles and runs Blang source code at the given path.
 fn run(src_path: &str, target_triple: &TargetTriple) {
     // Read and analyze the program.
-    let prog_analysis = analyze(src_path, None, target_triple);
+    let prog_analysis = match analyze(src_path, None, target_triple) {
+        Ok(pa) => pa,
+        Err(e) => fatalln!("{}", e),
+    };
 
     // Set output executable path to the source path without the extension.
     let src = Path::new(src_path);
@@ -536,11 +545,11 @@ fn run(src_path: &str, target_triple: &TargetTriple) {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{PathBuf};
     use std::process::Command;
 
     use crate::codegen::program::{init_target, OutputFormat};
-    use crate::compile;
+    use crate::{compile};
 
     /// Compiles and executes the code at the given path and asserts that
     /// execution succeeded.
@@ -548,6 +557,7 @@ mod tests {
         let target = init_target(None).unwrap();
         let output_path = format!("bin/{}", file_path.file_stem().unwrap().to_str().unwrap());
 
+        // Compile the program.
         compile(
             file_path.to_str().unwrap(),
             Some(&output_path),
@@ -557,8 +567,10 @@ mod tests {
             true,
             None,
             vec![],
-        );
+        )
+        .expect("should succeed");
 
+        // Run the executable.
         let output = Command::new(output_path.as_str())
             .output()
             .expect("should succeed");
@@ -580,6 +592,7 @@ mod tests {
             let lib_path = entry.unwrap().path();
             let output_path = format!("bin/{}.o", lib_path.file_stem().unwrap().to_str().unwrap());
 
+            // Compile the program.
             compile(
                 lib_path.to_str().unwrap(),
                 Some(&output_path),
@@ -589,7 +602,8 @@ mod tests {
                 true,
                 None,
                 vec![],
-            );
+            )
+            .expect("should succeed");
         }
     }
 

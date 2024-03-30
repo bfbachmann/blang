@@ -986,7 +986,7 @@ mod tests {
         let result = analyze(
             r#"
             fn main() {
-                let a = 1234?
+                let a = 1234^
             } 
             "#,
         );
@@ -1237,7 +1237,7 @@ mod tests {
             r#"
             fn main() {
                 let a = &true
-                a? = false
+                a^ = false
             }
         "#,
         );
@@ -1301,7 +1301,7 @@ mod tests {
             struct State {}
             
             fn main() {
-                let new = (&State{})?
+                let new = (&State{})^
             }
         "#,
         );
@@ -1316,7 +1316,7 @@ mod tests {
             
             fn main() {
                 let state_ptr = &State{i: 0}
-                let i = state_ptr?.i
+                let i = state_ptr^.i
             }
         "#,
         );
@@ -1331,7 +1331,7 @@ mod tests {
             
             fn main() {
                 let state_ptr = &State{i: {}}
-                let i = state_ptr?.i
+                let i = state_ptr^.i
             }
         "#,
         );

@@ -65,7 +65,7 @@ fn main() {
     // Check that nested functions are usable.
     {
         fn mul(val_ptr: *mut int, factor: int) {
-            val_ptr? = val_ptr? * factor
+            val_ptr^ = val_ptr^ * factor
         }
 
         let mut x = 11

@@ -489,7 +489,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                 )));
             }
 
-            TokenKind::Dereference => {
+            TokenKind::Deref => {
                 tokens.next();
                 expr = Expression::UnaryOperation(Operator::Defererence, Box::new(expr));
             }

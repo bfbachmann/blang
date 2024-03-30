@@ -1,5 +1,4 @@
 use "std/libc/mem.bl"
-use "std/types/ptr.bl"
 
 /// Strings are heap-allocated sequences of bytes.
 struct String {
@@ -20,11 +19,11 @@ impl String {
 
     /// Creates a new `String` from the concatenation of `first` and `second`.
     fn concat(first: *String, second: *String): String {
-        let new_len = first?.len + second?.len
+        let new_len = first^.len + second^.len
         let ptr = malloc(new_len)
 
-        memcpy(ptr, first?.ptr, first?.len)
-        memcpy((ptr as *u8).offset(first?.len as int), second?.ptr, second?.len)
+        memcpy(ptr, first^.ptr, first^.len)
+        memcpy(ptr.(first^.len), second^.ptr, second^.len)
 
         return String{
             ptr: ptr

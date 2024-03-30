@@ -62,39 +62,39 @@ impl Program {
     /// Increases the amount of heap memory allocated to store this program's
     /// instructions.
     fn grow(prog: *mut Program) {
-        let mut new_cap = prog?.cap * 2
+        let mut new_cap = prog^.cap * 2
         if new_cap == 0 {
             new_cap = 128
         }
 
-        prog?.instructions = realloc(
-            prog?.instructions as *u8,
+        prog^.instructions = realloc(
+            prog^.instructions as *u8,
             sizeof Instruction * new_cap,
         ) as *mut Instruction
-        prog?.cap = new_cap
+        prog^.cap = new_cap
     }
 
     /// Adds the given instruction to the program.
     fn push_inst(prog: *mut Program, inst: Instruction) {
-        if prog?.len == prog?.cap {
+        if prog^.len == prog^.cap {
             Program.grow(prog)
         }
 
-        let inst_ptr = Program.inst_ptr_mut(prog, prog?.len)
-        inst_ptr? = inst
-        prog?.len = prog?.len + 1
+        let inst_ptr = Program.inst_ptr_mut(prog, prog^.len)
+        inst_ptr^ = inst
+        prog^.len = prog^.len + 1
     }
 
     /// Returns a `*mut` to the instruction at the given index.
     fn inst_ptr_mut(prog: *mut Program, index: uint): *mut Instruction {
-        assert(index < prog?.cap, "instruction index out of bounds")
-        return prog?.instructions + (index * sizeof Instruction) as *Instruction
+        assert(index < prog^.cap, "instruction index out of bounds")
+        return prog^.instructions + (index * sizeof Instruction) as *Instruction
     }
 
     /// Returns a pointer to the instruction at the given index.
     fn inst_at(prog: *Program, index: uint): *Instruction {
-        assert(index < prog?.len, "instruction index out of bounds")
-        return prog?.instructions + (index * sizeof Instruction) as *Instruction
+        assert(index < prog^.len, "instruction index out of bounds")
+        return prog^.instructions + (index * sizeof Instruction) as *Instruction
     }
 
     /// Frees heap memory associated with this program.
@@ -171,9 +171,9 @@ impl Parser {
         let mut prog = Program.new()
         loop {
             let result = Parser.try_parse_inst(parser)
-            assert(result.status ~!= ParseStatus::Err, result.msg)
+            assert(result.status !~ ParseStatus::Err, result.msg)
     
-            if result.status ~== ParseStatus::Done {
+            if result.status ~~ ParseStatus::Done {
                 return prog
             }
     
@@ -188,12 +188,12 @@ impl Parser {
         Parser.parse_spaces(parser)
 
         // Check if we're at the end of the buffer
-        if parser?.cursor >= parser?.buf_len {
+        if parser^.cursor >= parser^.buf_len {
             return ParseResult.new_done()
         }
 
         // Increment instruction counter
-        parser?.inst_count = parser?.inst_count + 1
+        parser^.inst_count = parser^.inst_count + 1
 
         // Try parse an instruction
         {
@@ -366,20 +366,20 @@ impl Parser {
 
     /// Moves the parser's cursor in the buffer by the given offset.
     fn move_cursor(parser: *mut Parser, offset: int) {
-        let new_cursor = (parser?.cursor as int + offset) as uint
+        let new_cursor = (parser^.cursor as int + offset) as uint
 
         // Make sure not to overrun the buffer
-        if new_cursor >= parser?.buf_len {
-            parser?.cursor = parser?.buf_len
+        if new_cursor >= parser^.buf_len {
+            parser^.cursor = parser^.buf_len
             return
         }
 
-        parser?.cursor = new_cursor
+        parser^.cursor = new_cursor
     }
 
     /// Returns a pointer to the parser's current position in the program buffer.
     fn buf_at_cursor(parser: *Parser): *u8 {
-        return parser?.buf.(parser?.cursor)
+        return parser^.buf.(parser^.cursor)
     }
 
     /// Returns `true` if the program buffer starting at the parser's current position

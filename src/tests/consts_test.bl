@@ -28,7 +28,7 @@ fn main() {
     assert(some_tuple.1 == true, "5")
     assert(ptr == null, "6")
     assert(other_int == some_int + 1, "7")
-    assert(enum_err ~== Result::Err("failed"), "8")
+    assert(enum_err ~~ Result::Err("failed"), "8")
     assert(same_strs, "9")
     assert(some_str != "not the same", "10")
     assert(some_struct_I == 987, "11")

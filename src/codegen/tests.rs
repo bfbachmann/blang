@@ -580,10 +580,10 @@ mod tests {
             enum Result { Ok, Err }
             
             fn main() {
-                let a = Result::Ok ~== Result::Err
+                let a = Result::Ok ~~ Result::Err
                 let r = Result::Err
                 
-                let b = r ~!= Result::Ok
+                let b = r !~ Result::Ok
             }
             "#,
         )

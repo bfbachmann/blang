@@ -60,9 +60,9 @@ impl Operator {
             TokenKind::As => Some(Operator::As),
             TokenKind::Like => Some(Operator::Like),
             TokenKind::NotLike => Some(Operator::NotLike),
-            TokenKind::Reference => Some(Operator::Reference),
-            TokenKind::MutReference => Some(Operator::MutReference),
-            TokenKind::Dereference => Some(Operator::Defererence),
+            TokenKind::Ref => Some(Operator::Reference),
+            TokenKind::RefMut => Some(Operator::MutReference),
+            TokenKind::Deref => Some(Operator::Defererence),
             _ => None,
         }
     }
@@ -86,9 +86,9 @@ impl Operator {
             Operator::GreaterThanOrEqual => TokenKind::GreaterThanOrEqual.to_string(),
             Operator::LessThanOrEqual => TokenKind::LessThanOrEqual.to_string(),
             Operator::As => TokenKind::As.to_string(),
-            Operator::Reference => TokenKind::Reference.to_string(),
-            Operator::MutReference => TokenKind::MutReference.to_string(),
-            Operator::Defererence => TokenKind::Dereference.to_string(),
+            Operator::Reference => TokenKind::Ref.to_string(),
+            Operator::MutReference => TokenKind::RefMut.to_string(),
+            Operator::Defererence => TokenKind::Deref.to_string(),
         }
     }
 

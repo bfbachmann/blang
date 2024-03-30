@@ -35,11 +35,11 @@ pub enum TokenKind {
     #[token("!")]
     LogicalNot,
     #[token("&")]
-    Reference,
+    Ref,
     #[token("&mut")]
-    MutReference,
-    #[token("?")]
-    Dereference,
+    RefMut,
+    #[token("^")]
+    Deref,
 
     // Variable assignment
     #[token("=")]
@@ -48,9 +48,9 @@ pub enum TokenKind {
     // Comparators
     #[token("==")]
     EqualTo,
-    #[token("~==")]
+    #[token("~~")]
     Like,
-    #[token("~!=")]
+    #[token("!~")]
     NotLike,
     #[token("!=")]
     NotEqualTo,
@@ -157,8 +157,6 @@ pub enum TokenKind {
     DoubleColon,
     #[token(".")]
     Dot,
-    #[token("~")]
-    Tilde,
     #[token("@")]
     At,
     #[token("with")]
@@ -229,7 +227,6 @@ impl TokenKind {
             TokenKind::Continue => "continue".to_string(),
             TokenKind::SizeOf => "sizeof".to_string(),
             TokenKind::Extern => "extern".to_string(),
-            TokenKind::Tilde => "~".to_string(),
             TokenKind::Const => "const".to_string(),
             TokenKind::Impl => "impl".to_string(),
             TokenKind::Enum => "enum".to_string(),
@@ -238,11 +235,11 @@ impl TokenKind {
             TokenKind::With => "with".to_string(),
             TokenKind::As => "as".to_string(),
             TokenKind::DollarSign => "$".to_string(),
-            TokenKind::Like => "~==".to_string(),
-            TokenKind::NotLike => "~!=".to_string(),
-            TokenKind::Reference => "&".to_string(),
-            TokenKind::MutReference => "&mut".to_string(),
-            TokenKind::Dereference => "?".to_string(),
+            TokenKind::Like => "~~".to_string(),
+            TokenKind::NotLike => "!~".to_string(),
+            TokenKind::Ref => "&".to_string(),
+            TokenKind::RefMut => "&mut".to_string(),
+            TokenKind::Deref => "^".to_string(),
             TokenKind::Use => "use".to_string(),
             TokenKind::From => "from".to_string(),
         }

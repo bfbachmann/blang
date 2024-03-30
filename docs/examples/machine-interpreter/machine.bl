@@ -51,13 +51,13 @@ impl Machine {
     /// Executes the program associated with the machine and returns a result
     /// indicating whether execution succeeded.
     fn exec_prog(machine: *mut Machine): ExecResult {
-        for machine?.pc = 0, 
-            machine?.pc < machine?.prog?.len, 
-            machine?.pc = machine?.pc + 1 
+        for machine^.pc = 0, 
+            machine^.pc < machine^.prog^.len, 
+            machine^.pc = machine^.pc + 1 
         {
-            let inst_ptr = Program.inst_at(machine?.prog, machine?.pc)
+            let inst_ptr = Program.inst_at(machine^.prog, machine^.pc)
             let result = Machine.exec_inst(machine, inst_ptr)
-            if result.status ~== ExecStatus::Err {
+            if result.status ~~ ExecStatus::Err {
                 return result
             }
         }
@@ -68,24 +68,24 @@ impl Machine {
 
     /// Executes an instruction.
     fn exec_inst(machine: *mut Machine, inst: *Instruction): ExecResult {
-        if inst?.kind ~== InstKind::Store {
+        if inst^.kind ~~ InstKind::Store {
             print_str("store\n")
-            return Machine.store(machine, inst?.operands.0, inst?.operands.1 as uint)
+            return Machine.store(machine, inst^.operands.0, inst^.operands.1 as uint)
         }
 
-        if inst?.kind ~== InstKind::Copy {
+        if inst^.kind ~~ InstKind::Copy {
             print_str("copy\n")
-            return Machine.copy(machine, inst?.operands.0 as uint, inst?.operands.1 as uint)
+            return Machine.copy(machine, inst^.operands.0 as uint, inst^.operands.1 as uint)
         }
 
-        if inst?.kind ~== InstKind::Add {
+        if inst^.kind ~~ InstKind::Add {
             print_str("add\n")
-            return Machine.add(machine, inst?.operands.0 as uint, inst?.operands.1 as uint)
+            return Machine.add(machine, inst^.operands.0 as uint, inst^.operands.1 as uint)
         }
 
-        if inst?.kind ~== InstKind::JumpIf0 {
+        if inst^.kind ~~ InstKind::JumpIf0 {
             print_str("jumpif0\n")
-            return Machine.jumpif0(machine, inst?.operands.0 as uint, inst?.operands.1 as uint)
+            return Machine.jumpif0(machine, inst^.operands.0 as uint, inst^.operands.1 as uint)
         }
 
         return ExecResult.new_err("unimplemented instruction")
@@ -97,7 +97,7 @@ impl Machine {
             return ExecResult.new_err("store address out of bounds")
         }
 
-        machine?.memory.(addr) = value
+        machine^.memory.(addr) = value
         return ExecResult.new_ok()
     }
 
@@ -111,7 +111,7 @@ impl Machine {
             return ExecResult.new_err("copy destination address out of bounds")
         }
 
-        machine?.memory.(dst_addr) = machine?.memory.(src_addr)
+        machine^.memory.(dst_addr) = machine^.memory.(src_addr)
         return ExecResult.new_ok()
     }
 
@@ -125,7 +125,7 @@ impl Machine {
             return ExecResult.new_err("add destination address out of bounds")
         }
 
-        machine?.memory.(dst_addr) = machine?.memory.(src_addr) + machine?.memory.(dst_addr)
+        machine^.memory.(dst_addr) = machine^.memory.(src_addr) + machine^.memory.(dst_addr)
         return ExecResult.new_ok()
     }
 
@@ -135,12 +135,12 @@ impl Machine {
             return ExecResult.new_err("jumpif0 source address out of bounds")
         }
 
-        if dst_inst >= machine?.prog?.len {
+        if dst_inst >= machine^.prog^.len {
             return ExecResult.new_err("jumpif0 destination address out of bounds")
         }
 
-        if machine?.memory.(src_addr) == 0 {
-            machine?.pc = dst_inst - 1
+        if machine^.memory.(src_addr) == 0 {
+            machine^.pc = dst_inst - 1
         }
 
         return ExecResult.new_ok()

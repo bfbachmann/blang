@@ -15,10 +15,10 @@ fn main() {
         // Check normal reference and dereference operations.
         let val = 91
         let val_ptr = &val
-        assert(val_ptr? == 91, "2")
+        assert(val_ptr^ == 91, "2")
 
         let true_ptr = &true
-        assert(true_ptr? == true, "3")
+        assert(true_ptr^ == true, "3")
 
         // Check pointers as arguments.
         take(&223_u64)
@@ -37,10 +37,10 @@ fn main() {
         // that are pointers.
         let t = HasPtr{field: &123}
     
-        assert(t.field? == 123, "8")
+        assert(t.field^ == 123, "8")
     
         let field_ptr = &t.field
-        assert(field_ptr?? == 123, "9")
+        assert(field_ptr^^ == 123, "9")
     }
 
     // Check that we can cast between pointer types.
@@ -48,25 +48,25 @@ fn main() {
         let bool_ptr = malloc(1) as *bool
         assert(bool_ptr as *u8 != null, "10")
 
-        let bool_val: bool = bool_ptr?
-        assert(bool_val == bool_ptr?, "11")
+        let bool_val: bool = bool_ptr^
+        assert(bool_val == bool_ptr^, "11")
 
         free(bool_ptr as *u8)
     }
 
     // Check that we can chain references and dereferences.
     {
-        assert((&!(!(6-1 > 2)))?, "12")
-        assert((&null)? == null, "13")
+        assert((&!(!(6-1 > 2)))^, "12")
+        assert((&null)^ == null, "13")
     }
 
     // Check that we can write to memory using pointers.
     {
         let mut t = T{i: 0, b: false}
         let ptr = &mut t
-        ptr? = T{i: -23, b: true}
-        assert(ptr?.i == -23, "14")
-        assert(ptr?.b == true, "15")
+        ptr^ = T{i: -23, b: true}
+        assert(ptr^.i == -23, "14")
+        assert(ptr^.b == true, "15")
     }
 
     // Check that we can cast pointer types.
@@ -87,7 +87,7 @@ fn main() {
     {
         let mut x = 100
         let x_ptr = &mut x
-        ((x_ptr + 20 as *int) - 20 as *int)? = 82
+        ((x_ptr + 20 as *int) - 20 as *int)^ = 82
         assert(x == 82, "expected x to be 82")
     }
 
@@ -103,25 +103,25 @@ fn main() {
             Thing{b: true, i: 8},
         ]
         let ptr = &x as *Thing
-        assert(ptr.(2)?.b == true, "expected true")
-        assert(ptr.(1)?.i == -38, "expected -38")
-        assert(ptr.(1).(-1)?.i == 3, "expected 3")
+        assert(ptr.(2)^.b == true, "expected true")
+        assert(ptr.(1)^.i == -38, "expected -38")
+        assert(ptr.(1).(-1)^.i == 3, "expected 3")
     }
     
     exit(0)
 }
 
 fn take(ptr: *u64) {
-    assert(ptr? == 223, "4")
+    assert(ptr^ == 223, "4")
 }
 
 fn take_t(t: *T): T {
     return T{
-        i: t?.i
-        b: t?.b
+        i: t^.i
+        b: t^.b
     }
 }
 
 fn take_tuple(tup: *{int}): int {
-    return tup?.0
+    return tup^.0
 }

@@ -56,7 +56,7 @@ fn main() {
 
     // String casting.
     {
-        assert(("Test" as *u8)? == 84, "31")
+        assert(("Test" as *u8)^ == 84, "31")
     }
 
     exit(0)

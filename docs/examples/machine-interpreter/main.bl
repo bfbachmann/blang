@@ -33,7 +33,7 @@ fn main() {
     // Execute instructions.
     let mut machine = Machine.new(&prog)
     let result = Machine.exec_prog(&mut machine)
-    assert(result.status ~== ExecStatus::Ok, result.msg)
+    assert(result.status ~~ ExecStatus::Ok, result.msg)
 
     // For debugging purposes, sum the machine memory and use it as
     // the exit code.
