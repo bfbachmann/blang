@@ -21,14 +21,14 @@ fn main() {
     {
         // Initialization using constant expressions.
         let a: [u64; 3] = [1, 2, 3]
-        assert(a[0] == 1u64, "expected 1")
-        assert(a[1] == 2u64, "expected 2")
-        assert(a[2] == 3u64, "expected 3")
+        assert(a.(0) == 1u64, "expected 1")
+        assert(a.(1) == 2u64, "expected 2")
+        assert(a.(2) == 3u64, "expected 3")
     
         let b = ["one", "two", "three"]
-        assert(b[0] == "one", "expected 'one'")
-        assert(b[1] == "two", "expected 'two'")
-        assert(b[2] == "three", "expected 'three'")
+        assert(b.(0) == "one", "expected 'one'")
+        assert(b.(1) == "two", "expected 'two'")
+        assert(b.(2) == "three", "expected 'three'")
     
         // Make sure empty arrays are allowed.
         let empty: [] = []
@@ -36,24 +36,24 @@ fn main() {
 
         // Constant array declaration at the function level.
         const c = [{true}, {false}]
-        assert(c[0].0 == true, "expected true")
-        assert(c[1].0 == false, "expected false")
+        assert(c.(0).0 == true, "expected true")
+        assert(c.(1).0 == false, "expected false")
 
         // Initialization usinig repeat count.
         let d = [-8; 2]
-        assert(d[0] == -8, "expected first value to be -8")
-        assert(d[1] == -8, "expected second value to be -8")
+        assert(d.(0) == -8, "expected first value to be -8")
+        assert(d.(1) == -8, "expected second value to be -8")
 
         // Assigning array elements.
         let mut e = [3; 5]
-        e[4] = -10
-        assert(e[4] == -10, "expected -10")
+        e.(4) = -10
+        assert(e.(4) == -10, "expected -10")
     }
 
     // Check that arrays can be passed to and returned from functions.
     {
         let result = take([-8, 12])
-        assert(result[0] == "test", "expected 'test'")
+        assert(result.(0) == "test", "expected 'test'")
     }
 
     // Check that array type equality works.
@@ -65,7 +65,7 @@ fn main() {
 }
 
 fn take(a: [int; 2]): [str; 1] {
-    assert(a[0] == -8, "12")
-    assert(a[1] == 12, "13")
+    assert(a.(0) == -8, "12")
+    assert(a.(1) == 12, "13")
     return ["test"]
 }

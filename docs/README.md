@@ -1,19 +1,23 @@
 # The Blang Programming Language
 
-Blang is a statically-typed, ahead-of-time (AOT) compiled toy programming language that is heavily inspired by Rust. It is 
+Blang is a statically-typed, ahead-of-time (AOT) compiled toy programming language that is heavily inspired by Rust. It
+is
 still under active development and is not intended to be a legitimate production-ready language.
 
 **Goals**
 
 - Safety: Unsafe code should always be explicitly opt-in.
-- Simplicity: Any experienced programmer should be able to learn the core of the language within the few hours. The language
+- Simplicity: Any experienced programmer should be able to learn the core of the language within the few hours. The
+  language
   should not offer programmers many ways to do the same things.
-- Flexibility: Blang should be powerful and expressive without forcing any particular programming paradigms upon its users.
+- Flexibility: Blang should be powerful and expressive without forcing any particular programming paradigms upon its
+  users.
 
 The documentation below aims to provide a quick glance at what Blang code looks like, and what it does.
 The language and compiler are still very young, so they still lack some critical functionality.
 
 <!-- TOC -->
+
 * [The Blang Programming Language](#the-blang-programming-language)
     * [Function Declarations & Calls: `fn`](#function-declarations--calls-fn)
     * [Variable Declarations: `let`](#variable-declarations-let)
@@ -25,13 +29,14 @@ The language and compiler are still very young, so they still lack some critical
     * [Implementations, Methods, and Method Calls: `impl`, `fn`](#implementations-methods-and-method-calls-impl-fn)
     * [Conditionals: `if`, `elsif`, `else`](#conditionals-if-elsif-else)
     * [Loops: `for`, `while`, `loop`](#loops-for-while-loop)
-      * [`for` loops](#for-loops)
-      * [`while` loops](#while-loops)
-      * [`loop` loops](#loop-loops)
+        * [`for` loops](#for-loops)
+        * [`while` loops](#while-loops)
+        * [`loop` loops](#loop-loops)
     * [Pointers and Memory Access: `*_`, `*mut _`, `&`, `&mut`, `?`](#pointers-and-memory-access-_-mut-_--mut-)
     * [Externs: `extern`](#externs-extern)
     * [Imports: `use`](#imports-use)
     * [Type Casts: `as`](#type-casts-as)
+
 <!-- TOC -->
 
 ### Function Declarations & Calls: `fn`
@@ -41,11 +46,11 @@ A regular function can be defined as follows.
 ```rust
 /// This function takes an unsigned integer `n` and returns the nth number in the Fibonnaci sequence. 
 fn fibonacci(n: u64): u64 {
-    if n <= 1 {
-        return 1
-    }
-    
-    return fibonacci(n-1) + fibonacci(n-2)
+if n < = 1 {
+return 1
+}
+
+return fibonacci(n - 1) + fibonacci(n - 2)
 }
 ```
 
@@ -53,11 +58,11 @@ Functions can be nested.
 
 ```rust
 fn call_nested(): int {
-    fn sum(a: int, b: int): int {
-        return a + b
-    }
-  
-    return sum(1, 2)
+fn sum(a: int, b: int): int {
+return a + b
+}
+
+return sum(1, 2)
 }
 ```
 
@@ -71,17 +76,17 @@ fn main() {
 
 // This function returns a function pointer.
 fn get_fn(): fn (int, int): int {
-    fn sum(a: int, b: int): int {
-        return a + b
-    }
+fn sum(a: int, b: int): int {
+return a + b
+}
 
-    return sum
+return sum
 }
 ```
 
 ### Variable Declarations: `let`
 
-Variables can only be declared using the `let` keyword inside functions.There is currently no support for global or 
+Variables can only be declared using the `let` keyword inside functions.There is currently no support for global or
 module-level variables.
 
 ```rust
@@ -89,7 +94,7 @@ fn demo() {
     // Declare a variable named `x` with the value 2.
     // Since the type type of `x` was not specified, it is assumed here to be `i64`. 
     let x = 2
-    
+
     // Declare a variable named `y` with the value 10.
     // Since the type is specified as `u64` here, the expression assigned to the variable will be coerced to a `u64`.
     let y: u64 = 123_234 / 3
@@ -102,21 +107,21 @@ By default, all variables are immutable. To declare a mutable variable, use the 
 
 ```rust
 fn calculate(n: u64, double: bool, max: u64): u64 {
-    let mut result = n
-    if double {
-        result = result * 2
-    }
+let mut result = n
+if double {
+result = result * 2
+}
 
-    if result > max {
-        return max
-    }
-    return result
+if result > max {
+return max
+}
+return result
 }
 ```
 
 ### Constant Declarations: `const`
 
-Constants can be declared at the module level or inside functions using the `const` keyword. 
+Constants can be declared at the module level or inside functions using the `const` keyword.
 
 ```rust
 // Define a const representing the number of hours in a day.
@@ -124,13 +129,13 @@ const HOURS_IN_DAY = 24
 
 // Define multiple constants, all in one `const` block.
 const {
-    DAYS_IN_YEAR = 365
-    SEASONS = ["Spring", "Summer", "Autumn", "Winter"]
+DAYS_IN_YEAR = 365
+SEASONS = ["Spring", "Summer", "Autumn", "Winter"]
 }
 
 fn is_bad_day(day_in_month: int): bool {
-    const BAD_DAY = 13
-    return day_in_month == BAD_DAY
+const BAD_DAY = 13
+return day_in_month == BAD_DAY
 }
 ```
 
@@ -141,7 +146,8 @@ const DEFAULT_BALANCE: u64 = 10_000
 ```
 
 Constant values don't occupy any place in memory or program data. Instead, they are always inlined by the compiler. This
-is the key difference between immutable variables (which may occupy space on the stack, and may even be copied), and constants.
+is the key difference between immutable variables (which may occupy space on the stack, and may even be copied), and
+constants.
 
 ```rust
 const X = 6 * 6
@@ -156,7 +162,7 @@ fn test() {
 Any expression composed exclusively of constant values can be declared as a constant.
 
 ```rust
-const MY_TUPLE = {"this", "is my tuple", 123 / 23 - 1}
+const MY_TUPLE = { "this", "is my tuple", 123 / 23 - 1 }
 ```
 
 ### Structures: `struct`
@@ -172,14 +178,14 @@ struct User {
 
 fn main() {
     // All struct fields must be initialized explicitly.
-    let user = User{
+    let user = User {
         username: "bohr"
         age: 36
     }
-    
+
     // Struct values are not copied automatically, so this is a move.
     let new_user = user
-    
+
     // This line would cause a use-after-move compile error. 
     let username = user.username  // error: cannot use `user.username` because `user` was already moved
 }
@@ -198,7 +204,7 @@ enum Result {
 
 fn main() {
     let result = Result::Err("failed!")
-    
+
     // Enum values are not copied automatically, so this is a move.
     let new_result = result
 
@@ -213,8 +219,9 @@ Tuples are like structs, except their fields are identified by index rather than
 
 ```rust
 fn main() {
-    let values: {str, i64, bool} = {"thing", 1, true}
-    
+    let values:
+    { str, i64, bool } = { "thing", 1, true }
+
     // Tuple values are not copied automatically, so this is a move.
     let new_values = values
 
@@ -230,15 +237,15 @@ Arrays are stack-allocated, fixed-sized sequences of values of the same type.
 ```rust
 fn main() {
     let byte_array: [i64; 5] = [1, 2, 3, 4, 5]
-    
+
     // Arrays can be declared by repeating an expression.
     let ten_zeros = [0; 10]
-    
+
     // Arrays can be indexed.
-    let five = byte_array[4]
-    
+    let five = byte_array.(4)
+
     // Array access is bounds-checked at compile time if possible.
-    let undef = byte_array[200]  // error: index (200) is outside of array bounds ([0:4])
+    let undef = byte_array.(200)  // error: index (200) is outside of array bounds ([0:4])
 }
 ```
 
@@ -256,21 +263,21 @@ struct User {
 impl User {
     // Creates a new user with the given username and age.
     fn new(username: str, age: u64): User {
-        return User{
-            username: username
-            age: age
-        }
+    return User{
+    username: username
+    age: age
     }
-    
-    // Returns a copy of this user with the new username.
-    fn with_username(self, new_username: str): User {
-        // This is a call to a class method.
-        return User.new(new_username, self.age)
     }
 
-    fn is_senior(self): bool {
-        return self.age
-    }
+    // Returns a copy of this user with the new username.
+    fn with_username(self, new_username: str): User {
+    // This is a call to a class method.
+    return User.new(new_username, self .age)
+}
+
+fn is_senior(self): bool {
+return self.age
+}
 }
 
 fn apply_discounts(user: User) {
@@ -296,13 +303,13 @@ enum Cmp {
 }
 
 fn compare(a: i64, b: i64): Cmp {
-    if a > b {
-        return Cmp::GreaterThan
-    } elsif a < b {
-        return Cmp::LessThan
-    } else {
-        return Cmp::Equal
-    }
+if a > b {
+return Cmp::GreaterThan
+} elsif a < b {
+return Cmp::LessThan
+} else {
+return Cmp::Equal
+}
 }
 ```
 
@@ -313,10 +320,12 @@ fn compare(a: i64, b: i64): Cmp {
 ```rust
 fn main() {
     let mut a = [1, 2, 3]
-    
+
     // Double all elements in the array.
-    for let mut i: u64 = 0, i < 3, i = i + 1 {
-        a[i] = a[i] * 2
+    for
+    let mut i: u64 = 0, i < 3, i = i + 1
+    {
+        a.(i) = a.(i) * 2
     }
 }
 ```
@@ -326,7 +335,7 @@ fn main() {
 ```rust
 fn main() {
     let mut x = 1
-    
+
     while x < 100 {
         x = x * 2
     }
@@ -338,11 +347,11 @@ fn main() {
 ```rust
 fn main() {
     let mut x = 1
-    
+
     loop {
         x = x * 2
         if x >= 100 {
-            return
+            return;
         }
     }
 }
@@ -354,7 +363,7 @@ Raw pointers work the same way they do in C, except that they come with immutabi
 
 The reference operator `&` can be used to get a read-only pointer (`*_`) so some value in memory. If the value being
 referenced is not already stack-allocated - for instance, if it's a constant - it will be stack allocated and
-the reference operation will return the new stack address. Raw pointers of type `*_` that result from reference 
+the reference operation will return the new stack address. Raw pointers of type `*_` that result from reference
 operations can be read from but not written to.
 
 The reference-mutably operator `&mut` can be used to get a read-write pointer (`*mut _`) to a value in memory.
@@ -367,17 +376,27 @@ Dereferencing a pointer that points to an invalid or un-allocated region of memo
 ```rust
 fn main() {
     let mut x = 123
-    
+
     // Get a pointer to `x`.
     let x_ptr = &x
-    
+
     // Dereference the pointer to `x` to get its value.
     let x_copy = x?
-    
+
     // Change the value of `x` via a pointer (must use `*mut`). We're only allowed
     // to get a `*mut` to `x` here because `x` itself is `mut`.
     let x_mut_ptr = &mut x
     x? = 321
+}
+```
+
+Pointer arithmetic can be done simply be indexing the pointer like one would an array.
+
+```rust
+fn main() {
+    let ptr: * int = &[1, 2, 3] as * int
+    let ptr_to_three: * int = ptr.(2) // equivalent to `ptr + 2 * sizeof int`
+    let three = ptr_to_three?
 }
 ```
 
@@ -407,12 +426,12 @@ Values can be explicitly cast to other compatible types with the typecast operat
 fn main() {
     // Casting between numeric types.
     let a: u32 = 10i64 as u32
-    
+
     // Casting between pointers and numeric types.
     let a: i64 = &10 as i64
-    let ptr: *i64 = 100 as *i64
-    
+    let ptr: * i64 = 100 as * i64
+
     // Casting between pointer types.
-    let x_u8_ptr = ptr as *u8  
+    let x_u8_ptr = ptr as * u8
 }
 ```

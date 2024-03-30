@@ -1089,7 +1089,7 @@ mod tests {
 
     #[test]
     fn array_index_out_of_bounds() {
-        let result = analyze(r#"const oob = [1, 2, 3][5]"#);
+        let result = analyze(r#"const oob = [1, 2, 3].(5)"#);
         check_result(result, Some(ErrorKind::IndexOutOfBounds));
     }
 
@@ -1098,7 +1098,7 @@ mod tests {
         let result = analyze(
             r#"
             fn main() {
-                let wrong_type = [1, 2, 3][true]
+                let wrong_type = [1, 2, 3].(true)
             }"#,
         );
 
@@ -1112,7 +1112,7 @@ mod tests {
             fn main() {
                 let array = [true]
                 let moved = array
-                let illegal = array[0]
+                let illegal = array.(0)
             }
         "#,
         );
@@ -1125,7 +1125,7 @@ mod tests {
             r#"
             fn main() {
                 let array = [[true]]
-                let illegal = array[0]
+                let illegal = array.(0)
             }
         "#,
         );
@@ -1142,7 +1142,7 @@ mod tests {
             
             fn main() {
                 let array = [1, 2]
-                let illegal = array[take(array)]
+                let illegal = array.(take(array))
             }
         "#,
         );
@@ -1211,7 +1211,7 @@ mod tests {
         let result = analyze(
             r#"
             fn main() {
-                [1, 2][0] = 0
+                [1, 2].(0) = 0
             }
         "#,
         );
@@ -1358,7 +1358,7 @@ mod tests {
             fn main() {
                 let array = [0; 10]
                 loop {
-                    let x = array[0]
+                    let x = array.(0)
                 }
             }
         "#,
@@ -1424,7 +1424,7 @@ mod tests {
                 fn main() {
                     let s = S{arr: [3]}
                     loop {
-                        let v = s.arr[0] 
+                        let v = s.arr.(0)
                     }
                 }
             "#,

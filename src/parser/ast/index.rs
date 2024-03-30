@@ -17,7 +17,7 @@ locatable_impl!(Index);
 
 impl Display for Index {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}[{}]", self.collection_expr, self.index_expr)
+        write!(f, "{}.({})", self.collection_expr, self.index_expr)
     }
 }
 

@@ -438,11 +438,11 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
             }
 
             // TODO: move index parsing into its own fn
-            TokenKind::LeftBracket => {
+            TokenKind::BeginIndex => {
                 tokens.next();
 
                 expr = Expression::Index(Box::new(Index::new(expr, parse_expr(tokens)?)));
-                Module::parse_expecting(tokens, TokenKind::RightBracket)?;
+                Module::parse_expecting(tokens, TokenKind::RightParen)?;
             }
 
             TokenKind::Dot => {

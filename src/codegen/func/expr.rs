@@ -175,16 +175,37 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         ll_struct_ptr.as_basic_value_enum()
     }
 
-    /// Generates collection indexing expressions.
+    /// Generates collection indexing expressions. Index expressions can be
+    /// used to retrieve values from arrays or calculate pointer offsets.
     pub(crate) fn gen_index(&mut self, index: &AIndex) -> BasicValueEnum<'ctx> {
         // Generate code that gives us the collection.
         let ll_collection_val = self.gen_expr(&index.collection_expr);
-        let ll_array_type = self
-            .type_converter
-            .get_array_type(index.collection_expr.type_key);
 
         // Generate code that gives us the index value.
         let ll_index_val = self.gen_expr(&index.index_expr);
+
+        // If the collection is a pointer type, then we're just doing pointer
+        // arithmetic.
+        if let AType::Pointer(ptr_type) = self.type_store.must_get(index.collection_expr.type_key) {
+            let ll_pointee_type = self
+                .type_converter
+                .get_basic_type(ptr_type.pointee_type_key);
+            return unsafe {
+                self.builder
+                    .build_in_bounds_gep(
+                        ll_pointee_type,
+                        ll_collection_val.into_pointer_value(),
+                        &[ll_index_val.into_int_value()],
+                        "ptr_at_offset",
+                    )
+                    .as_basic_value_enum()
+            };
+        }
+
+        // At this point we know we're indexing into an array to get an element.
+        let ll_array_type = self
+            .type_converter
+            .get_array_type(index.collection_expr.type_key);
 
         // Copy the collection to the stack, so we have a pointer to it that we can use for
         // the GEP below if it is not already a pointer.

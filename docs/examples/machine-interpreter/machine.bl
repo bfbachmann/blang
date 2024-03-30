@@ -97,7 +97,7 @@ impl Machine {
             return ExecResult.new_err("store address out of bounds")
         }
 
-        machine?.memory[addr] = value
+        machine?.memory.(addr) = value
         return ExecResult.new_ok()
     }
 
@@ -111,7 +111,7 @@ impl Machine {
             return ExecResult.new_err("copy destination address out of bounds")
         }
 
-        machine?.memory[dst_addr] = machine?.memory[src_addr]
+        machine?.memory.(dst_addr) = machine?.memory.(src_addr)
         return ExecResult.new_ok()
     }
 
@@ -125,7 +125,7 @@ impl Machine {
             return ExecResult.new_err("add destination address out of bounds")
         }
 
-        machine?.memory[dst_addr] = machine?.memory[src_addr] + machine?.memory[dst_addr]
+        machine?.memory.(dst_addr) = machine?.memory.(src_addr) + machine?.memory.(dst_addr)
         return ExecResult.new_ok()
     }
 
@@ -139,7 +139,7 @@ impl Machine {
             return ExecResult.new_err("jumpif0 destination address out of bounds")
         }
 
-        if machine?.memory[src_addr] == 0 {
+        if machine?.memory.(src_addr) == 0 {
             machine?.pc = dst_inst - 1
         }
 

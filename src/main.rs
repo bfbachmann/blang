@@ -13,7 +13,6 @@ use colored::*;
 use flamer::flame;
 use inkwell::targets::TargetTriple;
 
-
 use target_lexicon::Triple;
 
 use parser::module::Module;

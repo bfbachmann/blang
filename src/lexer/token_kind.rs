@@ -141,6 +141,8 @@ pub enum TokenKind {
     LeftParen,
     #[token(")")]
     RightParen,
+    #[token(".(")]
+    BeginIndex,
     #[token("[")]
     LeftBracket,
     #[token("]")]
@@ -211,6 +213,7 @@ impl TokenKind {
             TokenKind::Loop => "loop".to_string(),
             TokenKind::LeftBrace => "{".to_string(),
             TokenKind::RightBrace => "}".to_string(),
+            TokenKind::BeginIndex => ".(".to_string(),
             TokenKind::LeftBracket => "[".to_string(),
             TokenKind::RightBracket => "]".to_string(),
             TokenKind::Identifier(v) => v.to_string(),

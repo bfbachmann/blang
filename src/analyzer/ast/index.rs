@@ -12,6 +12,9 @@ use crate::parser::ast::index::Index;
 use crate::parser::ast::r#type::Type;
 
 /// Represents the access of some value at a specific index in a collection.
+/// The collection can either be an array or a pointer. If it is a pointer
+/// the index expression represents calculating an offset from the pointer
+/// (a GEP, essentially).
 #[derive(Clone, Debug, PartialEq)]
 pub struct AIndex {
     pub collection_expr: AExpr,
@@ -53,7 +56,7 @@ impl AIndex {
 
         // For now, we'll require that the expression if of some array type.
         let collection_type = ctx.must_get_type(collection_expr.type_key);
-        let (result_type_key, array_len) = match collection_type {
+        let (result_type_key, maybe_array_len) = match collection_type {
             AType::Unknown(_) => {
                 // The collection expression already failed analysis, so we can
                 // just return early.
@@ -61,7 +64,7 @@ impl AIndex {
             }
 
             AType::Array(array_type) => match array_type.maybe_element_type_key {
-                Some(tk) => (tk, array_type.len),
+                Some(tk) => (tk, Some(array_type.len)),
                 None => {
                     ctx.insert_err(AnalyzeError::new(
                         ErrorKind::IndexOutOfBounds,
@@ -72,6 +75,8 @@ impl AIndex {
                     return placeholder;
                 }
             },
+
+            AType::Pointer(_) => (collection_expr.type_key, None),
 
             other => {
                 ctx.insert_err(AnalyzeError::new(
@@ -94,36 +99,36 @@ impl AIndex {
             false,
         );
 
-        // If the index is a constant, we can check if it's in-bounds.
-        match index_expr.try_into_const_uint(ctx) {
-            Ok(i) if i >= array_len => {
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::IndexOutOfBounds,
-                    format!(
-                        "index {} is outside of array bounds [0:{}]",
-                        i,
-                        array_len - 1
-                    )
-                    .as_str(),
-                    index,
-                ));
+        // If this is an array access with a constant index, we can perform
+        // bounds checking.
+        if let Some(len) = maybe_array_len {
+            match index_expr.try_into_const_uint(ctx) {
+                Ok(i) if i >= len => {
+                    ctx.insert_err(AnalyzeError::new(
+                        ErrorKind::IndexOutOfBounds,
+                        format!("index {} is outside of array bounds [0:{}]", i, len - 1).as_str(),
+                        index,
+                    ));
 
-                placeholder
+                    return placeholder;
+                }
+                _ => {}
             }
-            _ => AIndex {
-                collection_expr,
-                index_expr,
-                result_type_key,
-                start_pos: index.start_pos().clone(),
-                end_pos: index.end_pos().clone(),
-            },
+        }
+
+        AIndex {
+            collection_expr,
+            index_expr,
+            result_type_key,
+            start_pos: index.start_pos().clone(),
+            end_pos: index.end_pos().clone(),
         }
     }
 
     /// Returns a string containing the human-readable version of this index expression.
     pub fn display(&self, ctx: &ProgramContext) -> String {
         format!(
-            "{}[{}]",
+            "{}.({})",
             self.collection_expr.display(ctx),
             self.index_expr.display(ctx)
         )
