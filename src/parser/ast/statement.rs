@@ -218,8 +218,17 @@ impl Statement {
                 Ok(Statement::VariableDeclaration(var_decl))
             }
 
-            // If the first two tokens are "<identifier> =", it must be a variable assignment.
-            (TokenKind::Identifier(_), TokenKind::Equal) => {
+            // If the first two tokens are "<identifier> <assignment_operator>",
+            // then it must be a variable assignment.
+            (
+                TokenKind::Identifier(_),
+                TokenKind::Equal
+                | TokenKind::PlusEqual
+                | TokenKind::MinusEqual
+                | TokenKind::AsteriskEqual
+                | TokenKind::ForwardSlashEqual
+                | TokenKind::PercentEqual,
+            ) => {
                 let assign = VariableAssignment::from(tokens)?;
                 Ok(Statement::VariableAssignment(assign))
             }

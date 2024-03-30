@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Locatable, Position};
@@ -5,6 +6,7 @@ use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::expr::Expression;
+use crate::parser::ast::op::Operator;
 use crate::parser::error::ParseResult;
 use crate::parser::module::Module;
 
@@ -43,9 +45,14 @@ impl VariableAssignment {
         }
     }
 
-    /// Parses variable assignments. Expects token sequences of the form
+    /// Parses variable assignments. Expects token sequences of the forms
     ///
     ///     <target> = <expr>
+    ///     <target> += <expr>
+    ///     <target> -= <expr>
+    ///     <target> *= <expr>
+    ///     <target> /= <expr>
+    ///     <target> %= <expr>
     ///
     /// where
     ///  - `target` is the target that is being assigned to (see `Expression::from`)
@@ -57,11 +64,39 @@ impl VariableAssignment {
         // The next token should be an expression representing the target to which a value is being assigned.
         let target = Expression::from(tokens)?;
 
-        // The next token should be an assignment "=".
-        Module::parse_expecting(tokens, TokenKind::Equal)?;
+        // The next token should be an assignment operator.
+        let assign_op = Module::parse_expecting_any(
+            tokens,
+            HashSet::from([
+                TokenKind::Equal,
+                TokenKind::PlusEqual,
+                TokenKind::MinusEqual,
+                TokenKind::AsteriskEqual,
+                TokenKind::ForwardSlashEqual,
+                TokenKind::PercentEqual,
+            ]),
+        )?
+        .kind;
 
-        // The next tokens should be some expression.
-        let value = Expression::from(tokens)?;
+        // The rest should be an expression representing the assigned value or
+        // operand.
+        let assign_operand = Expression::from(tokens)?;
+
+        let value = match assign_op {
+            TokenKind::Equal => assign_operand,
+            other => {
+                let op = match other {
+                    TokenKind::PlusEqual => Operator::Add,
+                    TokenKind::MinusEqual => Operator::Subtract,
+                    TokenKind::AsteriskEqual => Operator::Multiply,
+                    TokenKind::ForwardSlashEqual => Operator::Divide,
+                    TokenKind::PercentEqual => Operator::Modulo,
+                    _ => unreachable!(),
+                };
+
+                Expression::BinaryOperation(Box::new(target.clone()), op, Box::new(assign_operand))
+            }
+        };
 
         Ok(VariableAssignment::new(target, value, start_pos))
     }

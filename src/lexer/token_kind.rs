@@ -26,6 +26,16 @@ pub enum TokenKind {
     ForwardSlash,
     #[token("%")]
     Percent,
+    #[token("+=")]
+    PlusEqual,
+    #[token("-=")]
+    MinusEqual,
+    #[token("*=")]
+    AsteriskEqual,
+    #[token("/=")]
+    ForwardSlashEqual,
+    #[token("%=")]
+    PercentEqual,
     #[token("and")]
     LogicalAnd,
     #[token("or")]
@@ -179,6 +189,11 @@ impl TokenKind {
             TokenKind::Asterisk => "*".to_string(),
             TokenKind::ForwardSlash => "/".to_string(),
             TokenKind::Percent => "%".to_string(),
+            TokenKind::PlusEqual => "+=".to_string(),
+            TokenKind::MinusEqual => "-=".to_string(),
+            TokenKind::AsteriskEqual => "*=".to_string(),
+            TokenKind::ForwardSlashEqual => "/=".to_string(),
+            TokenKind::PercentEqual => "%=".to_string(),
             TokenKind::LogicalAnd => "and".to_string(),
             TokenKind::LogicalOr => "or".to_string(),
             TokenKind::LogicalNot => "!".to_string(),

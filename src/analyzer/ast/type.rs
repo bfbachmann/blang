@@ -393,6 +393,9 @@ impl AType {
     }
 
     /// Returns the size of this type (i.e. the amount of memory required to store it) in bytes.
+    /// Note that this WILL NOT necessarily be the actual size of the type in the generated
+    /// machine code, as that is partially determined by LLVM based on the target arch.
+    /// This function should only be used to get a sense for the minimum size of a given type.
     pub fn size_bytes(&self, type_store: &TypeStore) -> u32 {
         match self {
             // Bools are 1 byte.
