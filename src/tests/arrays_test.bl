@@ -1,6 +1,6 @@
 // This program is for testing the compilation and execution of code
 // that makes use of arrays: fixed-size, stack-allocated chunks of 
-// memory that contain continguous values of the same type.
+// memory that contain continuous values of the same type.
 
 use "src/tests/test_utils.bl"
 
@@ -10,11 +10,11 @@ struct Thing {
     value: int
 }
 
-const SOME_BOOL = true
-const SOME_ARRAY_LEN = 100uint
+const some_bool = true
+const some_array_len = 100uint
 
 // Check that arrays can be declared constant at the module level.
-const SOME_ARRAY = [SOME_BOOL; SOME_ARRAY_LEN]
+const SOME_ARRAY = [some_bool; some_array_len]
 
 fn main() {
     // Check that array variables can be declared, initialized, and accessed.

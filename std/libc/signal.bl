@@ -6,5 +6,5 @@ extern {
 }
 
 const {
-    SIGSEGV: uint = 11
+    sigsegv: uint = 11
 }

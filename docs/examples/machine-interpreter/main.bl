@@ -14,7 +14,7 @@ fn main() {
     assert(file as uint != 0, "failed to open file")
 
     // Figure out how many bytes are in the file.
-    assert(fseek(file, 0, SEEK_END) == 0, "could not seek end of file")
+    assert(fseek(file, 0, seek_end) == 0, "could not seek end of file")
     let size_bytes = ftell(file)
     assert(size_bytes != -1, "failed to get file cursor")
     rewind(file)

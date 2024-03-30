@@ -1,18 +1,18 @@
 use "src/tests/test_utils.bl"
 
 const {
-    INT = -50
-    STRUCT = struct{i: i64, b: bool}{
+    some_int = -50
+    some_struct = struct{i: i64, b: bool}{
         i: 987
         b: false
     }
-    STRUCT_I = STRUCT.i
-    TUPLE = {345, true}
-    PTR = NULL
-    OTHER_INT = INT + 1
-    ENUM_ERR = Result::Err("failed")
-    STR = "Hello world! 你好世界\n"
-    SAME_STRS = STR == "Hello world! 你好世界\n"
+    some_struct_I = some_struct.i
+    some_tuple = {345, true}
+    ptr = null
+    other_int = some_int + 1
+    enum_err = Result::Err("failed")
+    some_str = "Hello world! 你好世界\n"
+    same_strs = some_str == "Hello world! 你好世界\n"
 }
 
 enum Result {
@@ -21,21 +21,21 @@ enum Result {
 }
 
 fn main() {
-    assert(INT == -50, "1")
-    assert(STRUCT.i == 987, "2")
-    assert(STRUCT.b == false, "3")
-    assert(TUPLE.0 == 345, "4")
-    assert(TUPLE.1 == true, "5")
-    assert(PTR == NULL, "6")
-    assert(OTHER_INT == INT + 1, "7")
-    assert(ENUM_ERR ~== Result::Err("failed"), "8")
-    assert(SAME_STRS, "9")
-    assert(STR != "not the same", "10")
-    assert(STRUCT_I == 987, "11")
+    assert(some_int == -50, "1")
+    assert(some_struct.i == 987, "2")
+    assert(some_struct.b == false, "3")
+    assert(some_tuple.0 == 345, "4")
+    assert(some_tuple.1 == true, "5")
+    assert(ptr == null, "6")
+    assert(other_int == some_int + 1, "7")
+    assert(enum_err ~== Result::Err("failed"), "8")
+    assert(same_strs, "9")
+    assert(some_str != "not the same", "10")
+    assert(some_struct_I == 987, "11")
 
     // Make sure constant declaration is allows inside functions.
-    const THING: str = "test"
-    assert(THING == "test", "12")
+    const thing: str = "test"
+    assert(thing == "test", "12")
 
     exit(0)
 }

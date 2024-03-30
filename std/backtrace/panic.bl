@@ -4,13 +4,13 @@ use "std/libc/signal.bl"
 
 fn panic(msg: str) {
     let panic_str = "Panic: "
-    write(STDERR, panic_str as *u8, panic_str.len())
-    write(STDERR, msg as *u8, msg.len())
-    write(STDERR, "\n" as *u8, 1)
+    write(stderr, panic_str as *u8, panic_str.len())
+    write(stderr, msg as *u8, msg.len())
+    write(stderr, "\n" as *u8, 1)
 
-    const MAX_FRAMES: uint = 512
-    let frame_buf = &mut [0 as *u8; MAX_FRAMES] as *mut *u8
-    let num_frames = backtrace(frame_buf, MAX_FRAMES)
-    backtrace_symbols_fd(frame_buf, num_frames, STDERR)
+    const max_frames: uint = 512
+    let frame_buf = &mut [0 as *u8; max_frames] as *mut *u8
+    let num_frames = backtrace(frame_buf, max_frames)
+    backtrace_symbols_fd(frame_buf, num_frames, stderr)
     exit(1)
 }

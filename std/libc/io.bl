@@ -6,7 +6,7 @@ extern {
 }
 
 const {
-    STDIN: uint = 0
-    STDOUT: uint = 1
-    STDERR: uint = 2
+    stdin: uint = 0
+    stdout: uint = 1
+    stderr: uint = 2
 }

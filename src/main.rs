@@ -1,7 +1,6 @@
 use std::collections::{HashSet, VecDeque};
 use std::fs::File;
 use std::io::prelude::*;
-
 use std::os::unix::prelude::CommandExt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -12,7 +11,6 @@ use clap::{arg, ArgAction, Command};
 use colored::*;
 use flamer::flame;
 use inkwell::targets::TargetTriple;
-
 use target_lexicon::Triple;
 
 use parser::module::Module;
@@ -610,7 +608,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_examples() {
+    fn run_examples() {
         let entries = fs::read_dir("docs/examples").expect("should succeed");
         for entry in entries {
             let entry = entry.unwrap();

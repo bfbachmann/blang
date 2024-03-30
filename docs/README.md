@@ -125,24 +125,24 @@ Constants can be declared at the module level or inside functions using the `con
 
 ```rust
 // Define a const representing the number of hours in a day.
-const HOURS_IN_DAY = 24
+const hours_in_day = 24
 
 // Define multiple constants, all in one `const` block.
 const {
-DAYS_IN_YEAR = 365
-SEASONS = ["Spring", "Summer", "Autumn", "Winter"]
+days_in_year = 365
+seasons = ["Spring", "Summer", "Autumn", "Winter"]
 }
 
 fn is_bad_day(day_in_month: int): bool {
-const BAD_DAY = 13
-return day_in_month == BAD_DAY
+const bad_day = 13
+return day_in_month == bad_day
 }
 ```
 
 Like variables, constant types can be declared explicitly.
 
 ```rust
-const DEFAULT_BALANCE: u64 = 10_000
+const default_balance: u64 = 10_000
 ```
 
 Constant values don't occupy any place in memory or program data. Instead, they are always inlined by the compiler. This
@@ -150,11 +150,11 @@ is the key difference between immutable variables (which may occupy space on the
 constants.
 
 ```rust
-const X = 6 * 6
+const x = 6 * 6
 
 fn test() {
     // The following two statements produce identical machine code.
-    do_thing(X)
+    do_thing(x)
     do_thing(6 * 6)
 }
 ```
@@ -162,7 +162,7 @@ fn test() {
 Any expression composed exclusively of constant values can be declared as a constant.
 
 ```rust
-const MY_TUPLE = { "this", "is my tuple", 123 / 23 - 1 }
+const my_tuple = { "this", "is my tuple", 123 / 23 - 1 }
 ```
 
 ### Structures: `struct`
@@ -335,7 +335,6 @@ fn main() {
 ```rust
 fn main() {
     let mut x = 1
-
     while x < 100 {
         x = x * 2
     }

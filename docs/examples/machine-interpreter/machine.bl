@@ -1,6 +1,6 @@
 use "docs/examples/machine-interpreter/utils.bl"
 
-const MEM_SIZE: uint = 1024
+const mem_size: uint = 1024
 
 /// A machine executes a program by manipulating its memory according
 /// to program instructions.
@@ -42,7 +42,7 @@ impl Machine {
     /// Creates a new machine for executing the given program.
     fn new(prog: *Program): Machine {
         return Machine{
-            memory: [0; MEM_SIZE]
+            memory: [0; mem_size]
             prog: prog
             pc: 0
         }
@@ -93,7 +93,7 @@ impl Machine {
 
     /// Executes a store instruction.
     fn store(machine: *mut Machine, value: int, addr: uint): ExecResult {
-        if addr >= MEM_SIZE {
+        if addr >= mem_size {
             return ExecResult.new_err("store address out of bounds")
         }
 
@@ -103,11 +103,11 @@ impl Machine {
 
     /// Executes a copy instruction.
     fn copy(machine: *mut Machine, src_addr: uint, dst_addr: uint): ExecResult {
-        if src_addr >= MEM_SIZE {
+        if src_addr >= mem_size {
             return ExecResult.new_err("copy source address out of bounds")
         }
 
-        if dst_addr >= MEM_SIZE {
+        if dst_addr >= mem_size {
             return ExecResult.new_err("copy destination address out of bounds")
         }
 
@@ -117,11 +117,11 @@ impl Machine {
 
     /// Executes an add instruction.
     fn add(machine: *mut Machine, src_addr: uint, dst_addr: uint): ExecResult {
-        if src_addr >= MEM_SIZE {
+        if src_addr >= mem_size {
             return ExecResult.new_err("add source address out of bounds")
         }
 
-        if dst_addr >= MEM_SIZE {
+        if dst_addr >= mem_size {
             return ExecResult.new_err("add destination address out of bounds")
         }
 
@@ -131,7 +131,7 @@ impl Machine {
 
     /// Executes a jumpif0 instruction.
     fn jumpif0(machine: *mut Machine, src_addr: uint, dst_inst: uint): ExecResult {
-        if src_addr >= MEM_SIZE {
+        if src_addr >= mem_size {
             return ExecResult.new_err("jumpif0 source address out of bounds")
         }
 

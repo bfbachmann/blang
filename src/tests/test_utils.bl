@@ -2,13 +2,13 @@ use "std/libc/io.bl"
 use "std/libc/proc.bl"
 use "std/libc/mem.bl"
 
-const NULL = 0_u64 as *u8
+const null = 0_u64 as *u8
 
 fn assert(cond: bool, msg: str) {
     if !cond {
         let err_str = "ERROR: "
-        write(STDERR, err_str as *u8, err_str.len())
-        write(STDERR, msg as *u8, msg.len())
+        write(stderr, err_str as *u8, err_str.len())
+        write(stderr, msg as *u8, msg.len())
         exit(1)
     }
 }

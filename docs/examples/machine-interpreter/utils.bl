@@ -2,7 +2,7 @@ use "std/libc/proc.bl"
 use "std/libc/io.bl"
 
 fn print_str(s: str) {
-    write(STDOUT, s as *u8, s.len())
+    write(stdout, s as *u8, s.len())
 }
 
 fn assert(cond: bool, msg: str) {

@@ -2,7 +2,7 @@ use "std/libc/io.bl"
 use "std/types/string.bl"
 
 fn print(msg: *String) {
-    write(STDOUT, msg?.ptr, msg?.len)
+    write(stdout, msg?.ptr, msg?.len)
 }
 
 fn println(msg: *String) {
