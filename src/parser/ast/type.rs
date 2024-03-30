@@ -1,8 +1,6 @@
 use std::fmt;
 use std::hash::Hash;
 
-use colored::Colorize;
-
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;

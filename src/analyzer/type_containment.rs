@@ -1,5 +1,3 @@
-use colored::Colorize;
-
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::parser::ast::array::ArrayType;

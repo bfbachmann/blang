@@ -1,8 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 
-use colored::Colorize;
-
 use crate::analyzer::ast::array::AArrayInit;
 use crate::analyzer::ast::closure::AClosure;
 use crate::analyzer::ast::cond::ACond;

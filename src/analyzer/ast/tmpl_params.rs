@@ -1,8 +1,6 @@
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 
-use colored::*;
-
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;

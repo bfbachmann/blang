@@ -1,4 +1,3 @@
-use colored::Colorize;
 use flamer::flame;
 use logos::Logos;
 

@@ -1,8 +1,6 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use colored::*;
-
 use crate::analyzer::ast::arg::AArg;
 use crate::analyzer::ast::cond::ACond;
 use crate::analyzer::ast::statement::AStatement;

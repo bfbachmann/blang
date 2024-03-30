@@ -2,8 +2,6 @@ use std::fmt::{Display, Formatter};
 use std::fs;
 use std::hash::{Hash, Hasher};
 
-use colored::Colorize;
-
 use crate::lexer::pos::Locatable;
 use crate::lexer::pos::Position;
 use crate::lexer::stream::Stream;

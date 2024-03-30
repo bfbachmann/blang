@@ -1,7 +1,5 @@
 use std::fmt;
 
-use colored::Colorize;
-
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;

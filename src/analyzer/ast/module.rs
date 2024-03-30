@@ -1,5 +1,3 @@
-use colored::Colorize;
-
 use crate::analyzer::ast::func::{analyze_fn_sig, AFnSig};
 use crate::analyzer::ast::spec::ASpec;
 use crate::analyzer::ast::statement::AStatement;

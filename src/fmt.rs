@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::time::Duration;
 
-use colored::CustomColor;
+
 use colored::{control, Colorize};
 
 use crate::lexer::pos::Position;
@@ -22,6 +22,7 @@ macro_rules! fatalln {
 #[macro_export]
 macro_rules! errorln {
     ($($arg:tt)*) => {{
+        use colored::Colorize;
         print!("{}", "error: ".red().bold());
         println!($($arg)*);
     }};
@@ -31,6 +32,7 @@ macro_rules! errorln {
 #[macro_export]
 macro_rules! warnln {
     ($($arg:tt)*) => {{
+        use colored::{CustomColor, Colorize};
         print!("{}", "warning: ".custom_color(CustomColor::new(255, 165, 0)).bold());
         println!($($arg)*);
     }};
@@ -51,7 +53,10 @@ macro_rules! format_code {
     };
 
     ($arg:expr) => {
-        format!("`{}`", $arg).blue()
+        {
+            use colored::Colorize;
+            format!("`{}`", $arg).blue()
+        }
     }
 }
 

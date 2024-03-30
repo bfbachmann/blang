@@ -8,7 +8,6 @@ use std::time::Instant;
 use std::{fs, process};
 
 use clap::{arg, ArgAction, Command};
-use colored::*;
 use flamer::flame;
 use inkwell::targets::TargetTriple;
 use target_lexicon::Triple;
@@ -545,11 +544,11 @@ fn run(src_path: &str, target_triple: &TargetTriple) {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::path::{PathBuf};
+    use std::path::PathBuf;
     use std::process::Command;
 
     use crate::codegen::program::{init_target, OutputFormat};
-    use crate::{compile};
+    use crate::compile;
 
     /// Compiles and executes the code at the given path and asserts that
     /// execution succeeded.

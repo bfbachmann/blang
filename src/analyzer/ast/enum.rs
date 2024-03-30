@@ -2,8 +2,6 @@ use std::cmp::max;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
-use colored::Colorize;
-
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};

@@ -1,7 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use colored::Colorize;
-
 use crate::analyzer::ast::array::AArrayType;
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::func::{AFn, AFnSig};

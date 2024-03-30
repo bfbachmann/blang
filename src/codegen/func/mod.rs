@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use colored::Colorize;
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;

@@ -2,8 +2,6 @@ use std::cmp::max;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
-use colored::Colorize;
-
 use crate::analyzer::ast::array::AArrayType;
 use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::pointer::APointerType;

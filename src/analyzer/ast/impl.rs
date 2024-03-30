@@ -1,5 +1,3 @@
-use colored::Colorize;
-
 use crate::analyzer::ast::func::AFn;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;

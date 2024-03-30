@@ -2,8 +2,6 @@ use std::collections::{HashSet, VecDeque};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
-use colored::Colorize;
-
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;

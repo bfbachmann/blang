@@ -2,8 +2,6 @@ use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Formatter;
 
-use colored::Colorize;
-
 use crate::analyzer::ast::arg::AArg;
 use crate::analyzer::ast::closure::{check_closure_returns, AClosure};
 use crate::analyzer::ast::r#type::AType;

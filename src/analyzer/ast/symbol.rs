@@ -1,7 +1,5 @@
 use std::fmt::{Display, Formatter};
 
-use colored::Colorize;
-
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;

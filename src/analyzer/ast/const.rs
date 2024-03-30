@@ -1,8 +1,6 @@
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
-use colored::Colorize;
-
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;

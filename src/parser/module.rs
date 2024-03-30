@@ -1,8 +1,5 @@
 use std::collections::HashSet;
 
-use colored::Colorize;
-
-
 use crate::lexer::pos::Position;
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;

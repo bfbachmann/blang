@@ -1,8 +1,6 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use colored::Colorize;
-
 use crate::analyzer::ast::closure::{analyze_break, analyze_continue, AClosure};
 use crate::analyzer::ast::cond::ACond;
 use crate::analyzer::ast::fn_call::AFnCall;
