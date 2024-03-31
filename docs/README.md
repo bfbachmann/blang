@@ -32,7 +32,7 @@ The language and compiler are still very young, so they still lack some critical
         * [`for` loops](#for-loops)
         * [`while` loops](#while-loops)
         * [`loop` loops](#loop-loops)
-    * [Pointers and Memory Access: `*_`, `*mut _`, `&`, `&mut`, `?`](#pointers-and-memory-access-_-mut-_--mut-)
+    * [Pointers and Memory Access: `*_`, `*mut _`, `&`, `&mut`, `^`](#pointers-and-memory-access-_-mut-_--mut-)
     * [Externs: `extern`](#externs-extern)
     * [Imports: `use`](#imports-use)
     * [Type Casts: `as`](#type-casts-as)
@@ -356,7 +356,7 @@ fn main() {
 }
 ```
 
-### Pointers and Memory Access: `*_`, `*mut _`, `&`, `&mut`, `?`
+### Pointers and Memory Access: `*_`, `*mut _`, `&`, `&mut`, `^`
 
 Raw pointers work the same way they do in C, except that they come with immutability guarantees.
 
@@ -369,7 +369,7 @@ The reference-mutably operator `&mut` can be used to get a read-write pointer (`
 This works like the reference operator, only the resulting pointer can be used to write to memory as well. Only mutable
 values can be referenced mutably.
 
-The dereference operator `?` can be used to retrieve a value from memory referenced by a pointer.
+The dereference operator `^` can be used to retrieve a value from memory referenced by a pointer.
 Dereferencing a pointer that points to an invalid or un-allocated region of memory can cause undefined behaviour.
 
 ```rust
@@ -380,12 +380,12 @@ fn main() {
     let x_ptr = &x
 
     // Dereference the pointer to `x` to get its value.
-    let x_copy = x?
+    let x_copy = x ^
 
     // Change the value of `x` via a pointer (must use `*mut`). We're only allowed
     // to get a `*mut` to `x` here because `x` itself is `mut`.
     let x_mut_ptr = &mut x
-    x? = 321
+    x ^ = 321
 }
 ```
 
@@ -395,7 +395,7 @@ Pointer arithmetic can be done simply be indexing the pointer like one would an 
 fn main() {
     let ptr: * int = &[1, 2, 3] as * int
     let ptr_to_three: * int = ptr.(2) // equivalent to `ptr + 2 * sizeof int`
-    let three = ptr_to_three?
+    let three = ptr_to_three ^
 }
 ```
 
