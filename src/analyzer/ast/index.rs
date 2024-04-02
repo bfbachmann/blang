@@ -53,17 +53,12 @@ impl AIndex {
             end_pos: index.end_pos().clone(),
         };
 
-        // For now, we'll require that the expression if of some array type.
+        // The collection expression must be of an array or pointer type.
         let collection_type = ctx.must_get_type(collection_expr.type_key);
-        let (result_type_key, maybe_array_len) = match collection_type {
-            AType::Unknown(_) => {
-                // The collection expression already failed analysis, so we can
-                // just return early.
-                return placeholder;
-            }
-
+        let (maybe_array_len, result_type_key) = match collection_type {
             AType::Array(array_type) => match array_type.maybe_element_type_key {
-                Some(tk) => (tk, Some(array_type.len)),
+                Some(elem_tk) => (Some(array_type.len), elem_tk),
+
                 None => {
                     ctx.insert_err(AnalyzeError::new(
                         ErrorKind::IndexOutOfBounds,
@@ -75,7 +70,13 @@ impl AIndex {
                 }
             },
 
-            AType::Pointer(_) => (collection_expr.type_key, None),
+            AType::Pointer(_) => (None, collection_expr.type_key),
+
+            AType::Unknown(_) => {
+                // The collection expression already failed analysis, so we can
+                // just return early.
+                return placeholder;
+            }
 
             other => {
                 ctx.insert_err(AnalyzeError::new(
@@ -88,21 +89,24 @@ impl AIndex {
             }
         };
 
-        // Analyze the index expression. It should be of type `uint`.
-        let index_expr = AExpr::from(
-            ctx,
-            index.index_expr.clone(),
-            Some(ctx.uint_type_key()),
-            false,
-            false,
-            false,
-        );
+        // Analyze the index expression based on whether we're indexing an array
+        // or a pointer. Arrays have `uint` indices, while pointers have `int`
+        // indices.
+        let index_expr = if let Some(len) = maybe_array_len {
+            // Analyze the index expression. It should be of type `uint`.
+            let index_expr = AExpr::from(
+                ctx,
+                index.index_expr.clone(),
+                Some(ctx.uint_type_key()),
+                false,
+                false,
+                false,
+            );
 
-        // If this is an array access with a constant index, we can perform
-        // bounds checking.
-        if let Some(len) = maybe_array_len {
-            match index_expr.try_into_const_uint(ctx) {
-                Ok(i) if i >= len => {
+            // If the index expression is constant, we can perform
+            // bounds checking at compile time.
+            if let Some(i) = index_expr.try_into_const_uint(ctx) {
+                if i >= len {
                     ctx.insert_err(AnalyzeError::new(
                         ErrorKind::IndexOutOfBounds,
                         format!("index {} is outside of array bounds [0:{}]", i, len - 1).as_str(),
@@ -111,9 +115,21 @@ impl AIndex {
 
                     return placeholder;
                 }
-                _ => {}
-            }
-        }
+            };
+
+            index_expr
+        } else {
+            // At this point we know a pointer is being indexed, so we can
+            // just analyze the index expression expecting type `int`.
+            AExpr::from(
+                ctx,
+                index.index_expr.clone(),
+                Some(ctx.int_type_key()),
+                false,
+                false,
+                false,
+            )
+        };
 
         AIndex {
             collection_expr,

@@ -379,7 +379,7 @@ impl Parser {
 
     /// Returns a pointer to the parser's current position in the program buffer.
     fn buf_at_cursor(parser: *Parser): *u8 {
-        return parser^.buf.(parser^.cursor)
+        return parser^.buf.(parser^.cursor as int)
     }
 
     /// Returns `true` if the program buffer starting at the parser's current position

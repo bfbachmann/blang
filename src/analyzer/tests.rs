@@ -1103,6 +1103,15 @@ mod tests {
         );
 
         check_result(result, Some(ErrorKind::MismatchedTypes));
+
+        let result = analyze(
+            r#"
+            fn main() {
+                let wrong_type = [1, 2, 3].(-2)
+            }"#,
+        );
+
+        check_result(result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -1484,5 +1493,20 @@ mod tests {
             "#,
         );
         check_result(result, Some(ErrorKind::InvalidStatement));
+    }
+
+    #[test]
+    fn invalid_ptr_index_type() {
+        let result = analyze(
+            r#"
+                fn main() {
+                    let x = 1
+                    let ptr = &x
+                    let index: uint = 123
+                    let ptr_at_offset = ptr.(index)
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MismatchedTypes));
     }
 }

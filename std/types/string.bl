@@ -23,7 +23,7 @@ impl String {
         let ptr = malloc(new_len)
 
         memcpy(ptr, first^.ptr, first^.len)
-        memcpy(ptr.(first^.len), second^.ptr, second^.len)
+        memcpy(ptr.(first^.len as int), second^.ptr, second^.len)
 
         return String{
             ptr: ptr

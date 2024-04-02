@@ -60,7 +60,7 @@ impl AArrayType {
             0
         } else {
             match len_expr.try_into_const_uint(ctx) {
-                Ok(u) => {
+                Some(u) => {
                     // If the array is empty, we'll also make sure it has no assigned type key
                     // for consistency.
                     if u == 0 {
@@ -68,9 +68,12 @@ impl AArrayType {
                     }
                     u
                 }
-                Err(mut err) => {
-                    err.detail = Some("Array lengths must be constant.".to_string());
-                    ctx.insert_err(err);
+                None => {
+                    ctx.insert_err(AnalyzeError::new(
+                        ErrorKind::InvalidArraySize,
+                        format_code!("expected constant of type {}", "uint").as_str(),
+                        &array_type.length_expr,
+                    ));
                     0
                 }
             }
@@ -229,10 +232,13 @@ impl AArrayInit {
                     Some(0)
                 } else {
                     match expr.try_into_const_uint(ctx) {
-                        Ok(u) => Some(u),
-                        Err(mut err) => {
-                            err.detail = Some("Array lengths must be constant.".to_string());
-                            ctx.insert_err(err);
+                        Some(u) => Some(u),
+                        None => {
+                            ctx.insert_err(AnalyzeError::new(
+                                ErrorKind::InvalidArraySize,
+                                format_code!("expected constant of type {}", "uint").as_str(),
+                                repeat_expr,
+                            ));
 
                             // Just return an empty array since it's invalid.
                             return AArrayInit {

@@ -13,7 +13,7 @@ use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::ast::tuple::ATupleInit;
-use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
+use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
 use crate::analyzer::type_store::TypeKey;
@@ -987,10 +987,11 @@ impl AExpr {
                 _ => {}
             },
 
-            AExprKind::UnaryOperation(op, operand) if op == &Operator::Subtract => {
+            // Only allow coercion of negated values if the target type is signed.
+            AExprKind::UnaryOperation(Operator::Subtract, operand) if target_type.is_signed() => {
                 let new_operand = operand.clone().try_coerce_to(ctx, target_type_key);
                 self.type_key = new_operand.type_key;
-                self.kind = AExprKind::UnaryOperation(op.clone(), Box::new(new_operand));
+                self.kind = AExprKind::UnaryOperation(Operator::Subtract, Box::new(new_operand));
             }
 
             AExprKind::Symbol(symbol) => {
@@ -1128,34 +1129,23 @@ impl AExpr {
         }
     }
 
-    /// Tries to compute the value of this expression as a `uint`. Returns an error if this expression
-    /// does not result in a constant `uint` value.
-    pub fn try_into_const_uint(&self, ctx: &mut ProgramContext) -> AnalyzeResult<u64> {
+    /// Tries to compute the value of this expression as a `uint`. Returns `None` if
+    /// this expression does not result in a constant `uint` value.
+    pub fn try_into_const_uint(&self, ctx: &mut ProgramContext) -> Option<u64> {
         let expr = self.clone().try_coerce_to(ctx, ctx.uint_type_key());
-
-        let err = Err(AnalyzeError::new(
-            ErrorKind::InvalidArraySize,
-            format_code!(
-                "expected constant expression of type {}, but found {}",
-                "uint",
-                self.display(ctx)
-            )
-            .as_str(),
-            self,
-        ));
 
         if !expr.kind.is_const()
             || !ctx
                 .must_get_type(expr.type_key)
                 .is_same_as(ctx, &AType::Uint, true)
         {
-            return err;
+            return None;
         }
 
-        let result = match &expr.kind {
+        return match &expr.kind {
             AExprKind::Symbol(symbol) => {
                 let const_value = ctx.get_const_value(symbol.name.as_str()).unwrap().clone();
-                return const_value.try_into_const_uint(ctx);
+                const_value.try_into_const_uint(ctx)
             }
 
             AExprKind::IntLiteral(i) => {
@@ -1189,13 +1179,8 @@ impl AExpr {
                 return expr.try_into_const_uint(ctx);
             }
 
-            other => panic!("cannot evaluate expression {} as constant u64", other),
+            _ => None,
         };
-
-        match result {
-            Some(v) => Ok(v),
-            None => err,
-        }
     }
 
     /// Locates and returns the symbol at the base of this expression. This will return `None` for all expressions
