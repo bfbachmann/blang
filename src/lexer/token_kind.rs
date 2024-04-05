@@ -93,7 +93,7 @@ pub enum TokenKind {
     IntLiteral(i64),
     #[regex(r"[0-9][0-9_]*uint", |lex| lex.slice().trim_end_matches("uint").replace("_", "").parse::<u64>().unwrap())]
     UintLiteral(u64),
-    #[regex(r#""(?:[^"\\]|\\.)*""#, lex_str_lit)]
+    #[regex(r#""(?:[^"]|\\.)*""#, lex_str_lit)]
     StrLiteral(String),
     #[token("fn")]
     Fn,
@@ -288,7 +288,7 @@ fn lex_str_lit(lexer: &mut Lexer<TokenKind>) -> String {
     // Handle escape sequences and newlines.
     let mut replaced = String::from("");
     let mut i = 0;
-    while i < chars.len() {
+    'outer: while i < chars.len() {
         let cur_char = chars.get(i).unwrap();
         let next_char = chars.get(i + 1);
 
@@ -318,6 +318,23 @@ fn lex_str_lit(lexer: &mut Lexer<TokenKind>) -> String {
                 Some('0') => {
                     i += 1;
                     '\0'
+                }
+                Some('\n') => {
+                    // This is an escaped newline. We need to trim the newline
+                    // and all whitespace that immediately follows it.
+                    while i < chars.len() - 1 {
+                        i += 1;
+                        if !chars.get(i).unwrap().is_whitespace() {
+                            // We've found the first non-whitespace char that
+                            // follows the escaped newline. Now we can continue
+                            // on the outer loop.
+                            continue 'outer;
+                        }
+                    }
+
+                    // If we get here, it means we've reached the end of the
+                    // string literal, so we can just return.
+                    return replaced;
                 }
                 _ => '\\',
             },

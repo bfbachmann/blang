@@ -4,6 +4,14 @@ fn main() {
     assert("test".len() == 4, "0")
     assert("".len() == 0, "1")
     assert("\nthing\0\r".len() == 8, "2")
+    assert(
+        "this \
+        is a \
+        multiline \
+        test\
+        " == "this is a multiline test",
+        "multiline",
+    )
 
     exit(0)
 }
