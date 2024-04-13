@@ -1009,6 +1009,14 @@ impl AExpr {
                 _ => {}
             },
 
+            AExprKind::F64Literal(f) => match target_type {
+                AType::F32 => {
+                    self.kind = AExprKind::F32Literal(*f as f32);
+                    self.type_key = ctx.f32_type_key();
+                }
+                _ => {}
+            },
+
             // Only allow coercion of negated values if the target type is signed.
             AExprKind::UnaryOperation(Operator::Subtract, operand) if target_type.is_signed() => {
                 let new_operand = operand.clone().try_coerce_to(ctx, target_type_key);

@@ -52,6 +52,8 @@ fn main() {
         assert(-843i64 as i8 == -75i8, "28")
         assert(3000i64 as u32 == 3000u32, "29")
         assert(9_223_372_036_854_775_807i64 as i32 == -1i32, "30")
+
+        // TODO Check that float type casting works.
     }
 
     // String casting.

@@ -35,8 +35,11 @@ fn main() {
         assert(-3.7 % 2.9 == -0.8000000000000003, "expected -0.8000000000000003")
     }
 
-    // TODO: Check that type coercion between float types works.
-    // TODO: Check that float type casting works.
+    // Check that type coercion between float types works.
+    {
+        let v: f32 = 0.8 * 7.3
+        assert(v == 5.84, "expected 5.84")
+    }
 
     exit(0)
 }
