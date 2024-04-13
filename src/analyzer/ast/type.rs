@@ -416,11 +416,11 @@ impl AType {
         }
     }
 
-    /// Returns the size of this type (i.e. the amount of memory required to store it) in bytes.
-    /// Note that this WILL NOT necessarily be the actual size of the type in the generated
-    /// machine code, as that is partially determined by LLVM based on the target arch.
+    /// Returns the minimum size of this type (i.e. the amount of memory required to store it)
+    /// in bytes. Note that this WILL NOT necessarily be the actual size of the type in the
+    /// generated machine code, as that is partially determined by LLVM based on the target arch.
     /// This function should only be used to get a sense for the minimum size of a given type.
-    pub fn size_bytes(&self, type_store: &TypeStore) -> u32 {
+    pub fn min_size_bytes(&self, type_store: &TypeStore) -> u32 {
         match self {
             // Bools are 1 byte.
             AType::Bool | AType::U8 | AType::I8 => 1,
@@ -438,7 +438,8 @@ impl AType {
 
             // `str`s are composed of a pointer and an integer.
             AType::Str => {
-                (type_store.get_target_ptr_width() / 8) as u32 + AType::Int.size_bytes(type_store)
+                (type_store.get_target_ptr_width() / 8) as u32
+                    + AType::Int.min_size_bytes(type_store)
             }
 
             // The size of a struct type is the sum of the sizes of all of its fields.
@@ -446,7 +447,7 @@ impl AType {
                 let mut size = 0;
                 for field in &struct_type.fields {
                     let field_type = type_store.must_get(field.type_key);
-                    size += field_type.size_bytes(type_store);
+                    size += field_type.min_size_bytes(type_store);
                 }
 
                 size
@@ -459,7 +460,7 @@ impl AType {
                 for variant in enum_type.variants.values() {
                     if let Some(type_key) = variant.maybe_type_key {
                         let variant_type = type_store.must_get(type_key);
-                        size = max(size, variant_type.size_bytes(type_store));
+                        size = max(size, variant_type.min_size_bytes(type_store));
                     }
                 }
 
@@ -470,7 +471,7 @@ impl AType {
                 let mut size = 0;
                 for field in &tuple_type.fields {
                     let field_type = type_store.must_get(field.type_key);
-                    size += field_type.size_bytes(type_store)
+                    size += field_type.min_size_bytes(type_store)
                 }
 
                 size
@@ -479,7 +480,7 @@ impl AType {
             AType::Array(array_type) => match &array_type.maybe_element_type_key {
                 Some(key) => {
                     let element_type = type_store.must_get(*key);
-                    element_type.size_bytes(type_store) * array_type.len as u32
+                    element_type.min_size_bytes(type_store) * array_type.len as u32
                 }
 
                 None => 0,

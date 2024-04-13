@@ -1,3 +1,4 @@
+use inkwell::intrinsics::Intrinsic;
 use inkwell::types::{BasicType, BasicTypeEnum};
 use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, FloatValue, IntValue};
 use inkwell::{AddressSpace, FloatPredicate, IntPredicate};
@@ -771,39 +772,85 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         ll_dst_type: BasicTypeEnum<'ctx>,
     ) -> BasicValueEnum<'ctx> {
         let src_is_signed = src_type.is_signed();
-        let src_size = src_type.size_bytes(&self.type_store);
-        let dst_size = dst_type.size_bytes(&self.type_store);
+        let dst_is_signed = dst_type.is_signed();
+        let src_is_float = src_type.is_float();
+        let dst_is_float = dst_type.is_float();
+        let src_size = src_type.min_size_bytes(&self.type_store);
+        let dst_size = dst_type.min_size_bytes(&self.type_store);
+        let name = format!("as_{}", dst_type.name());
 
-        if src_size <= dst_size {
-            if src_is_signed {
-                // Sign-extended upcasts.
-                self.builder
-                    .build_int_s_extend_or_bit_cast(
-                        ll_src_val.into_int_value(),
-                        ll_dst_type.into_int_type(),
-                        format!("as_{}", dst_type.name()).as_str(),
-                    )
-                    .as_basic_value_enum()
-            } else {
-                // Zero-extended upcasts.
-                self.builder
-                    .build_int_z_extend_or_bit_cast(
-                        ll_src_val.into_int_value(),
-                        ll_dst_type.into_int_type(),
-                        format!("as_{}", dst_type.name()).as_str(),
-                    )
-                    .as_basic_value_enum()
-            }
-        } else {
-            // Truncating downcasts.
-            self.builder
-                .build_int_truncate_or_bit_cast(
-                    ll_src_val.into_int_value(),
-                    ll_dst_type.into_int_type(),
-                    format!("as_{}", dst_type.name()).as_str(),
+        return match (src_is_float, dst_is_float, dst_is_signed) {
+            // Float to float.
+            (true, true, _) => self
+                .builder
+                .build_float_cast(
+                    ll_src_val.into_float_value(),
+                    ll_dst_type.into_float_type(),
+                    name.as_str(),
                 )
-                .as_basic_value_enum()
-        }
+                .as_basic_value_enum(),
+
+            // Float to signed int.
+            (true, false, true) => {
+                let convert_fn = Intrinsic::find("llvm.fptosi.sat")
+                    .unwrap()
+                    .get_declaration(self.module, &[ll_dst_type, ll_src_val.get_type()])
+                    .unwrap();
+                self.builder
+                    .build_call(convert_fn, &[ll_src_val.into()], name.as_str())
+                    .try_as_basic_value()
+                    .left()
+                    .unwrap()
+            }
+
+            // Float to unsigned int.
+            (true, false, false) => {
+                let convert_fn = Intrinsic::find("llvm.fptoui.sat")
+                    .unwrap()
+                    .get_declaration(self.module, &[ll_dst_type, ll_src_val.get_type()])
+                    .unwrap();
+                self.builder
+                    .build_call(convert_fn, &[ll_src_val.into()], name.as_str())
+                    .try_as_basic_value()
+                    .left()
+                    .unwrap()
+            }
+
+            // Int to int.
+            _ => {
+                if src_size <= dst_size {
+                    if src_is_signed {
+                        // Sign-extended upcasts.
+                        self.builder
+                            .build_int_s_extend_or_bit_cast(
+                                ll_src_val.into_int_value(),
+                                ll_dst_type.into_int_type(),
+                                name.as_str(),
+                            )
+                            .as_basic_value_enum()
+                    } else {
+                        // Zero-extended upcasts.
+                        return self
+                            .builder
+                            .build_int_z_extend_or_bit_cast(
+                                ll_src_val.into_int_value(),
+                                ll_dst_type.into_int_type(),
+                                name.as_str(),
+                            )
+                            .as_basic_value_enum();
+                    }
+                } else {
+                    // Truncating downcasts.
+                    self.builder
+                        .build_int_truncate_or_bit_cast(
+                            ll_src_val.into_int_value(),
+                            ll_dst_type.into_int_type(),
+                            name.as_str(),
+                        )
+                        .as_basic_value_enum()
+                }
+            }
+        };
     }
 
     /// Compiles a logical (boolean) operation expression.

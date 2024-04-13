@@ -139,8 +139,8 @@ impl AStructType {
             let type1 = ctx.must_get_type(f1.type_key);
             let type2 = ctx.must_get_type(f2.type_key);
             type2
-                .size_bytes(&ctx.type_store)
-                .cmp(&type1.size_bytes(&ctx.type_store))
+                .min_size_bytes(&ctx.type_store)
+                .cmp(&type1.min_size_bytes(&ctx.type_store))
         });
 
         let a_struct = AStructType {

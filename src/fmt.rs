@@ -324,5 +324,5 @@ pub fn format_vec<T: Display>(vec: &Vec<T>, sep: &str) -> String {
 
 /// Returns the string representation of the given duration.
 pub fn format_duration(duration: Duration) -> String {
-    format!("{:.2}s", duration.as_secs_f64())
+    format!("{:.3}s", duration.as_secs_f64())
 }

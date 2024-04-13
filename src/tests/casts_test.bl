@@ -53,7 +53,29 @@ fn main() {
         assert(3000i64 as u32 == 3000u32, "29")
         assert(9_223_372_036_854_775_807i64 as i32 == -1i32, "30")
 
-        // TODO Check that float type casting works.
+        // Extended upcasts from f32.
+        assert(-83.20f32 as i32 == -83i32, "expected -83")
+        assert(74.2f32 as u32 == 74u32, "expected 74")
+        assert(-3.4e2f32 as i64 == -340i64, "expected -340")
+        assert(12.32f32 as u64 == 12u64, "expected 12")
+        assert(89.3e-2f32 as f64 == 0.8930000066757202f64, "expected 0.8930000066757202")
+
+        // Truncated downcast from f32.
+        assert(89.32f32 as u8 == 89u8, "expected 89")
+        assert(3.000f32 as i8 == 3i8, "expected 3")
+
+        // Extended upcasts from f64.
+        assert(-8.0e-2 as u64 == 0u64, "expected 0")
+        assert(9.424e3 as u64 == 9424u64, "expected 64")
+        assert(-29.3 as i64 == -29i64, "expected -29")
+
+        // Truncated downcast from f64.
+        assert(32.78 as u8 == 32u8, "expected 32")
+        assert(-2.32 as i8 == -2i8, "expected -128")
+        assert(-3.0 as u32 == 0u32, "expected 0")
+        assert(-78.3 as i32 == -78i32, "expected -78")
+        assert(8.0e-89 as f32 == 0.0, "expected 0.0")
+        assert(-8.0e4 as f32 == -8.0e4, "expected -8.0e4")
     }
 
     // String casting.
