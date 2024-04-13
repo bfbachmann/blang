@@ -21,8 +21,10 @@ pub enum AType {
     I8,
     U32,
     I32,
+    F32,
     I64,
     U64,
+    F64,
     Int,
     Uint,
     Str,
@@ -48,8 +50,10 @@ impl Display for AType {
             AType::I8 => write!(f, "i8"),
             AType::U32 => write!(f, "u32"),
             AType::I32 => write!(f, "i32"),
+            AType::F32 => write!(f, "f32"),
             AType::I64 => write!(f, "i64"),
             AType::U64 => write!(f, "u64"),
+            AType::F64 => write!(f, "f64"),
             AType::Int => write!(f, "int"),
             AType::Uint => write!(f, "uint"),
             AType::Struct(s) => write!(f, "{}", s),
@@ -71,8 +75,10 @@ impl PartialEq for AType {
             | (AType::I8, AType::I8)
             | (AType::U32, AType::U32)
             | (AType::I32, AType::I32)
+            | (AType::F32, AType::F32)
             | (AType::I64, AType::I64)
             | (AType::U64, AType::U64)
+            | (AType::F64, AType::F64)
             | (AType::Int, AType::Int)
             | (AType::Uint, AType::Uint)
             | (AType::Str, AType::Str) => true,
@@ -168,8 +174,10 @@ impl AType {
             AType::I8,
             AType::U32,
             AType::I32,
+            AType::F32,
             AType::I64,
             AType::U64,
+            AType::F64,
             AType::Int,
             AType::Uint,
             AType::Str,
@@ -188,8 +196,10 @@ impl AType {
             AType::I8 => "i8",
             AType::U32 => "u32",
             AType::I32 => "i32",
+            AType::F32 => "f32",
             AType::I64 => "i64",
             AType::U64 => "u64",
+            AType::F64 => "f64",
             AType::Int => "int",
             AType::Uint => "uint",
             AType::Str => "str",
@@ -262,8 +272,10 @@ impl AType {
             | AType::I8
             | AType::U32
             | AType::I32
+            | AType::F32
             | AType::I64
             | AType::U64
+            | AType::F64
             | AType::Int
             | AType::Uint
             | AType::Str
@@ -349,8 +361,10 @@ impl AType {
                 | AType::I8
                 | AType::U32
                 | AType::I32
+                | AType::F32
                 | AType::U64
                 | AType::I64
+                | AType::F64
                 | AType::Int
                 | AType::Uint
         )
@@ -371,11 +385,21 @@ impl AType {
         matches!(self, AType::Function(_))
     }
 
+    /// Returns true if this is a floating-point type.
+    pub fn is_float(&self) -> bool {
+        matches!(self, AType::F64 | AType::F32)
+    }
+
+    /// Returns true if this is a tuple type.
+    pub fn is_tuple(&self) -> bool {
+        matches!(self, AType::Tuple(_))
+    }
+
     /// Returns true if arithmetic operations on this type should be signed. Otherwise, this type
     /// either doesn't support arithmetic operations, or requires unsigned operations.
     pub fn is_signed(&self) -> bool {
         match self {
-            AType::I8 | AType::I32 | AType::I64 | AType::Int => true,
+            AType::I8 | AType::I32 | AType::F32 | AType::I64 | AType::F64 | AType::Int => true,
             AType::Bool
             | AType::Str
             | AType::U8
@@ -402,10 +426,10 @@ impl AType {
             AType::Bool | AType::U8 | AType::I8 => 1,
 
             // All the following types are 32 bits (4 bytes).
-            AType::U32 | AType::I32 => 4,
+            AType::U32 | AType::I32 | AType::F32 => 4,
 
             // All the following types are 64 bits (8 bytes).
-            AType::I64 | AType::U64 | AType::Function(_) => 8,
+            AType::I64 | AType::U64 | AType::F64 | AType::Function(_) => 8,
 
             // `int`s, `uint`s, and pointers are sized based on the target platform (64 or 32 bits, generally).
             AType::Int | AType::Uint | AType::Pointer(_) => {
@@ -539,8 +563,10 @@ impl AType {
             | AType::U8
             | AType::U32
             | AType::I32
+            | AType::F32
             | AType::I64
             | AType::U64
+            | AType::F64
             | AType::Int
             | AType::Uint => {
                 format!("{}", self)

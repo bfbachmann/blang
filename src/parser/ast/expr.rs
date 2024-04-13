@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
@@ -8,6 +8,8 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::array::ArrayInit;
 use crate::parser::ast::bool_lit::BoolLit;
+use crate::parser::ast::f32_lit::F32Lit;
+use crate::parser::ast::f64_lit::F64Lit;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::func_call::FuncCall;
 use crate::parser::ast::i32_lit::I32Lit;
@@ -44,8 +46,10 @@ pub enum Expression {
     U8Literal(U8Lit),
     I32Literal(I32Lit),
     U32Literal(U32Lit),
+    F32Literal(F32Lit),
     I64Literal(I64Lit),
     U64Literal(U64Lit),
+    F64Literal(F64Lit),
     IntLiteral(IntLit),
     UintLiteral(UintLit),
     StrLiteral(StrLit),
@@ -75,8 +79,10 @@ impl Display for Expression {
             Expression::U8Literal(i) => write!(f, "{}", i),
             Expression::I32Literal(i) => write!(f, "{}", i),
             Expression::U32Literal(i) => write!(f, "{}", i),
+            Expression::F32Literal(i) => write!(f, "{}", i),
             Expression::I64Literal(i) => write!(f, "{}", i),
             Expression::U64Literal(i) => write!(f, "{}", i),
+            Expression::F64Literal(i) => write!(f, "{}", i),
             Expression::IntLiteral(i) => write!(f, "{}", i),
             Expression::UintLiteral(i) => write!(f, "{}", i),
             Expression::StrLiteral(s) => write!(f, "{}", s),
@@ -116,8 +122,10 @@ impl Locatable for Expression {
             Expression::U8Literal(i) => i.start_pos(),
             Expression::I32Literal(i) => i.start_pos(),
             Expression::U32Literal(i) => i.start_pos(),
+            Expression::F32Literal(i) => i.start_pos(),
             Expression::I64Literal(i) => i.start_pos(),
             Expression::U64Literal(i) => i.start_pos(),
+            Expression::F64Literal(i) => i.start_pos(),
             Expression::IntLiteral(i) => i.start_pos(),
             Expression::UintLiteral(i) => i.start_pos(),
             Expression::StrLiteral(string_lit) => string_lit.start_pos(),
@@ -145,8 +153,10 @@ impl Locatable for Expression {
             Expression::U8Literal(i) => i.end_pos(),
             Expression::I32Literal(i) => i.end_pos(),
             Expression::U32Literal(i) => i.end_pos(),
+            Expression::F32Literal(i) => i.end_pos(),
             Expression::I64Literal(i) => i.end_pos(),
             Expression::U64Literal(i) => i.end_pos(),
+            Expression::F64Literal(i) => i.end_pos(),
             Expression::IntLiteral(i) => i.end_pos(),
             Expression::UintLiteral(i) => i.end_pos(),
             Expression::StrLiteral(string_lit) => string_lit.end_pos(),
@@ -423,7 +433,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                         ..
                     } = Module::parse_expecting_any(
                         tokens,
-                        HashSet::from([TokenKind::Comma, TokenKind::RightParen]),
+                        vec![TokenKind::Comma, TokenKind::RightParen],
                     )? {
                         expr = Expression::FunctionCall(Box::new(FuncCall::new(
                             expr,
@@ -452,12 +462,6 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                         start,
                         end,
                     }) => (name.clone(), start.clone(), end.clone()),
-
-                    Some(Token {
-                        kind: TokenKind::IntLiteral(index),
-                        start,
-                        end,
-                    }) => (index.to_string(), start.clone(), end.clone()),
 
                     Some(other) => {
                         return Err(ParseError::new_with_token(
@@ -530,8 +534,10 @@ fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
         TokenKind::U8Literal(_) => Expression::U8Literal(U8Lit::from(tokens)?),
         TokenKind::I32Literal(_) => Expression::I32Literal(I32Lit::from(tokens)?),
         TokenKind::U32Literal(_) => Expression::U32Literal(U32Lit::from(tokens)?),
+        TokenKind::F32Literal(_) => Expression::F32Literal(F32Lit::from(tokens)?),
         TokenKind::I64Literal(_) => Expression::I64Literal(I64Lit::from(tokens)?),
         TokenKind::U64Literal(_) => Expression::U64Literal(U64Lit::from(tokens)?),
+        TokenKind::F64Literal(_) => Expression::F64Literal(F64Lit::from(tokens)?),
         TokenKind::IntLiteral(_) => Expression::IntLiteral(IntLit::from(tokens)?),
         TokenKind::UintLiteral(_) => Expression::UintLiteral(UintLit::from(tokens)?),
         TokenKind::StrLiteral(_) => Expression::StrLiteral(StrLit::from(tokens)?),
@@ -585,7 +591,7 @@ fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                 ErrorKind::ExpectedExpr,
                 format_code!("expected expression, but found {}", other).as_str(),
                 token.clone(),
-            ))
+            ));
         }
     };
 
@@ -602,7 +608,6 @@ mod tests {
     use crate::parser::ast::bool_lit::BoolLit;
     use crate::parser::ast::expr::Expression;
     use crate::parser::ast::func_call::FuncCall;
-
     use crate::parser::ast::int_lit::IntLit;
     use crate::parser::ast::op::Operator;
     use crate::parser::ast::str_lit::StrLit;

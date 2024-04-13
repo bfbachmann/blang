@@ -10,6 +10,8 @@ pub mod cont;
 pub mod r#enum;
 pub mod expr;
 pub mod ext;
+pub mod f32_lit;
+pub mod f64_lit;
 pub mod func;
 pub mod func_call;
 pub mod func_sig;

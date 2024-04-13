@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+
 use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Locatable, Position};
@@ -53,7 +53,7 @@ impl Loop {
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         let token = Module::parse_expecting_any(
             tokens,
-            HashSet::from([TokenKind::Loop, TokenKind::While, TokenKind::For]),
+            vec![TokenKind::Loop, TokenKind::While, TokenKind::For],
         )?;
         tokens.rewind(1);
 

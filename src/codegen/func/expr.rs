@@ -1,6 +1,6 @@
 use inkwell::types::{BasicType, BasicTypeEnum};
-use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, IntValue};
-use inkwell::{AddressSpace, IntPredicate};
+use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, FloatValue, IntValue};
+use inkwell::{AddressSpace, FloatPredicate, IntPredicate};
 
 use crate::analyzer::ast::array::AArrayInit;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
@@ -24,7 +24,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             return self.gen_const_expr(expr);
         }
 
-        let result = match &expr.kind {
+        match &expr.kind {
             AExprKind::TypeCast(left_expr, target_type_key) => self
                 .gen_type_cast(left_expr, *target_type_key)
                 .as_basic_value_enum(),
@@ -43,8 +43,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             | AExprKind::U8Literal(_)
             | AExprKind::I32Literal(_)
             | AExprKind::U32Literal(_)
+            | AExprKind::F32Literal(_)
             | AExprKind::I64Literal(_)
             | AExprKind::U64Literal(_)
+            | AExprKind::F64Literal(_)
             | AExprKind::IntLiteral(_)
             | AExprKind::UintLiteral(_)
             | AExprKind::StrLiteral(_) => {
@@ -78,11 +80,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AExprKind::Unknown => {
                 panic!("encountered unknown expression");
             }
-        };
+        }
 
         // Dereference the result if it's a pointer.
-        let expr_type = self.type_store.must_get(expr.type_key);
-        self.maybe_deref(result, expr_type)
+        // let expr_type = self.type_store.must_get(expr.type_key);
+        // self.maybe_deref(result, expr_type)
     }
 
     /// Generates code for a function or anonymous function that was declared inside
@@ -176,7 +178,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Generates collection indexing expressions. Index expressions can be
-    /// used to retrieve values from arrays or calculate pointer offsets.
+    /// used to retrieve values from arrays and tuples, or to calculate pointer
+    /// offsets.
     pub(crate) fn gen_index(&mut self, index: &AIndex) -> BasicValueEnum<'ctx> {
         // Generate code that gives us the collection.
         let ll_collection_val = self.gen_expr(&index.collection_expr);
@@ -184,54 +187,74 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Generate code that gives us the index value.
         let ll_index_val = self.gen_expr(&index.index_expr);
 
-        // If the collection is a pointer type, then we're just doing pointer
-        // arithmetic.
-        if let AType::Pointer(ptr_type) = self.type_store.must_get(index.collection_expr.type_key) {
-            let ll_pointee_type = self
-                .type_converter
-                .get_basic_type(ptr_type.pointee_type_key);
-            return unsafe {
-                self.builder
-                    .build_in_bounds_gep(
-                        ll_pointee_type,
-                        ll_collection_val.into_pointer_value(),
-                        &[ll_index_val.into_int_value()],
-                        "ptr_at_offset",
+        // Generate code that retrieves the value from the collection at the
+        // specified index.
+        let collection_type = self.type_store.must_get(index.collection_expr.type_key);
+        match collection_type {
+            AType::Tuple(_) => self.get_member_value(
+                ll_collection_val,
+                index.collection_expr.type_key,
+                index.result_type_key,
+                ll_index_val
+                    .into_int_value()
+                    .get_zero_extended_constant()
+                    .unwrap()
+                    .to_string()
+                    .as_str(),
+            ),
+
+            AType::Array(_) => {
+                let ll_array_type = self
+                    .type_converter
+                    .get_array_type(index.collection_expr.type_key);
+
+                // Copy the collection to the stack, so we have a pointer to it that we can use for
+                // the GEP below if it is not already a pointer.
+                let ll_collection_ptr = if ll_collection_val.is_pointer_value() {
+                    ll_collection_val.into_pointer_value()
+                } else {
+                    let ll_ptr = self.stack_alloc("collection", index.collection_expr.type_key);
+                    self.copy_value(ll_collection_val, ll_ptr, index.collection_expr.type_key);
+                    ll_ptr
+                };
+
+                // Compute the pointer to the value at the given index in the collection.
+                let ll_elem_ptr = unsafe {
+                    self.builder.build_in_bounds_gep(
+                        ll_array_type,
+                        ll_collection_ptr,
+                        &[
+                            self.ctx.i32_type().const_int(0, false),
+                            ll_index_val.into_int_value(),
+                        ],
+                        "elem_ptr",
                     )
-                    .as_basic_value_enum()
-            };
+                };
+
+                // Load the value from the pointer.
+                self.load_if_basic(ll_elem_ptr, index.result_type_key, "elem")
+            }
+
+            AType::Pointer(ptr_type) => {
+                // The collection is a pointer type, so we're just doing pointer
+                // arithmetic.
+                let ll_pointee_type = self
+                    .type_converter
+                    .get_basic_type(ptr_type.pointee_type_key);
+                unsafe {
+                    self.builder
+                        .build_in_bounds_gep(
+                            ll_pointee_type,
+                            ll_collection_val.into_pointer_value(),
+                            &[ll_index_val.into_int_value()],
+                            "ptr_at_offset",
+                        )
+                        .as_basic_value_enum()
+                }
+            }
+
+            other => panic!("unexpected collection type {other}"),
         }
-
-        // At this point we know we're indexing into an array to get an element.
-        let ll_array_type = self
-            .type_converter
-            .get_array_type(index.collection_expr.type_key);
-
-        // Copy the collection to the stack, so we have a pointer to it that we can use for
-        // the GEP below if it is not already a pointer.
-        let ll_collection_ptr = if ll_collection_val.is_pointer_value() {
-            ll_collection_val.into_pointer_value()
-        } else {
-            let ll_ptr = self.stack_alloc("collection", index.collection_expr.type_key);
-            self.copy_value(ll_collection_val, ll_ptr, index.collection_expr.type_key);
-            ll_ptr
-        };
-
-        // Compute the pointer to the value at the given index in the collection.
-        let ll_elem_ptr = unsafe {
-            self.builder.build_in_bounds_gep(
-                ll_array_type,
-                ll_collection_ptr,
-                &[
-                    self.ctx.i32_type().const_int(0, false),
-                    ll_index_val.into_int_value(),
-                ],
-                "elem_ptr",
-            )
-        };
-
-        // Load the value from the pointer.
-        self.load_if_basic(ll_elem_ptr, index.result_type_key, "elem")
     }
 
     /// Generates array initialization instructions and returns the resulting LLVM array value.
@@ -607,9 +630,16 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let ll_operand = self.gen_expr(operand_expr);
 
                 // Negate the operand.
-                self.builder
-                    .build_int_neg(ll_operand.into_int_value(), "neg")
-                    .as_basic_value_enum()
+                let operand_type = self.type_store.must_get(operand_expr.type_key);
+                if operand_type.is_float() {
+                    self.builder
+                        .build_float_neg(ll_operand.into_float_value(), "neg")
+                        .as_basic_value_enum()
+                } else {
+                    self.builder
+                        .build_int_neg(ll_operand.into_int_value(), "neg")
+                        .as_basic_value_enum()
+                }
             }
 
             _ => {
@@ -625,20 +655,20 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         op: &Operator,
         right_expr: &AExpr,
     ) -> BasicValueEnum<'ctx> {
-        let lhs = self.gen_expr(left_expr);
-        let rhs = self.gen_expr(right_expr);
+        let ll_lhs = self.gen_expr(left_expr);
+        let ll_rhs = self.gen_expr(right_expr);
 
         // Determine whether the operation should be signed or unsigned based on the operand types.
         let signed = self.type_store.must_get(left_expr.type_key).is_signed();
 
         if op.is_arithmetic() {
             let result = self
-                .gen_arith_op(lhs, op, rhs, signed)
+                .gen_arith_op(ll_lhs, op, ll_rhs, signed)
                 .as_basic_value_enum();
 
             // If the left operator was a pointer, then we just did pointer arithmetic and need
             // to return a pointer rather than an int.
-            if lhs.is_pointer_value() {
+            if ll_lhs.is_pointer_value() {
                 self.builder
                     .build_int_to_ptr(
                         result.into_int_value(),
@@ -650,10 +680,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 result
             }
         } else if op.is_comparator() {
-            self.gen_cmp(lhs, left_expr.type_key, op, rhs, signed)
+            self.gen_cmp(ll_lhs, left_expr.type_key, op, ll_rhs, signed)
                 .as_basic_value_enum()
         } else if op.is_logical() {
-            self.gen_logical_op(lhs, op, rhs).as_basic_value_enum()
+            self.gen_logical_op(ll_lhs, op, ll_rhs)
+                .as_basic_value_enum()
         } else {
             panic!("unsupported operator {op}")
         }
@@ -821,7 +852,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         // Handle the special case of `str` comparisons.
-        if self.type_store.must_get(left_type_key) == &AType::Str {
+        let left_type = self.type_store.must_get(left_type_key);
+        if left_type == &AType::Str {
             ll_lhs = self
                 .builder
                 .build_extract_value(ll_lhs.into_struct_value(), 0, "left_ptr")
@@ -834,7 +866,68 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 .as_basic_value_enum();
         }
 
-        // At this point we know it's safe to represent the types numerically for comparison.
+        // Handle the special case of floating point comparisons.
+        if left_type.is_float() {
+            return self.gen_float_cmp(op, ll_lhs, ll_rhs);
+        }
+
+        // At this point we know it's safe to represent the types as ints for comparison.
+        self.gen_int_cmp(op, ll_lhs, ll_rhs, signed)
+    }
+
+    /// Generates code for floating-point value comparisons.
+    fn gen_float_cmp(
+        &mut self,
+        op: &Operator,
+        ll_lhs: BasicValueEnum<'ctx>,
+        ll_rhs: BasicValueEnum<'ctx>,
+    ) -> IntValue<'ctx> {
+        let lhs = ll_lhs.into_float_value();
+        let rhs = ll_rhs.into_float_value();
+
+        match op {
+            Operator::EqualTo => {
+                self.builder
+                    .build_float_compare(FloatPredicate::OEQ, lhs, rhs, "eq")
+            }
+
+            Operator::NotEqualTo => {
+                self.builder
+                    .build_float_compare(FloatPredicate::ONE, lhs, rhs, "ne")
+            }
+
+            Operator::GreaterThan => {
+                self.builder
+                    .build_float_compare(FloatPredicate::OGT, lhs, rhs, "gt")
+            }
+
+            Operator::LessThan => {
+                self.builder
+                    .build_float_compare(FloatPredicate::OLT, lhs, rhs, "lt")
+            }
+
+            Operator::GreaterThanOrEqual => {
+                self.builder
+                    .build_float_compare(FloatPredicate::OGE, lhs, rhs, "ge")
+            }
+
+            Operator::LessThanOrEqual => {
+                self.builder
+                    .build_float_compare(FloatPredicate::OLE, lhs, rhs, "le")
+            }
+
+            other => panic!("unexpected comparison operator {other}"),
+        }
+    }
+
+    /// Generates code for integer value comparisons.
+    fn gen_int_cmp(
+        &mut self,
+        op: &Operator,
+        ll_lhs: BasicValueEnum<'ctx>,
+        ll_rhs: BasicValueEnum<'ctx>,
+        signed: bool,
+    ) -> IntValue<'ctx> {
         let lhs = self.get_int(ll_lhs);
         let rhs = self.get_int(ll_rhs);
 
@@ -884,30 +977,67 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
     }
 
-    /// Compiles a binary arithmetic operation expression.
+    /// Generates code an arithmetic operation on integer or floating-point
+    /// values.
     fn gen_arith_op(
         &self,
         ll_lhs: BasicValueEnum<'ctx>,
         op: &Operator,
         ll_rhs: BasicValueEnum<'ctx>,
         signed: bool,
+    ) -> BasicValueEnum<'ctx> {
+        if ll_lhs.is_float_value() {
+            self.gen_float_arith_op(ll_lhs.into_float_value(), op, ll_rhs.into_float_value())
+                .as_basic_value_enum()
+        } else {
+            self.gen_int_arith_op(ll_lhs, op, ll_rhs, signed)
+                .as_basic_value_enum()
+        }
+    }
+
+    /// Compiles an integer arithmetic binary operation expression.
+    /// This function accepts operands as basic values instead of int values
+    /// as the arguments could be integers or pointers.
+    fn gen_int_arith_op(
+        &self,
+        ll_lhs: BasicValueEnum<'ctx>,
+        op: &Operator,
+        ll_rhs: BasicValueEnum<'ctx>,
+        signed: bool,
     ) -> IntValue<'ctx> {
-        // Expect both operands to be of some integer type.
-        let lhs = self.get_int(ll_lhs);
-        let rhs = self.get_int(ll_rhs);
+        // Expect both operands to be of some integer type (pointers are ints).
+        let ll_lhs = self.get_int(ll_lhs);
+        let ll_rhs = self.get_int(ll_rhs);
 
         match op {
-            Operator::Add => self.builder.build_int_add(lhs, rhs, "sum"),
-            Operator::Subtract => self.builder.build_int_sub(lhs, rhs, "diff"),
-            Operator::Multiply => self.builder.build_int_mul(lhs, rhs, "prod"),
+            Operator::Add => self.builder.build_int_add(ll_lhs, ll_rhs, "sum"),
+            Operator::Subtract => self.builder.build_int_sub(ll_lhs, ll_rhs, "diff"),
+            Operator::Multiply => self.builder.build_int_mul(ll_lhs, ll_rhs, "prod"),
             Operator::Divide => match signed {
-                true => self.builder.build_int_signed_div(lhs, rhs, "quot"),
-                false => self.builder.build_int_unsigned_div(lhs, rhs, "quot"),
+                true => self.builder.build_int_signed_div(ll_lhs, ll_rhs, "quot"),
+                false => self.builder.build_int_unsigned_div(ll_lhs, ll_rhs, "quot"),
             },
             Operator::Modulo => match signed {
-                true => self.builder.build_int_signed_rem(lhs, rhs, "rem"),
-                false => self.builder.build_int_unsigned_rem(lhs, rhs, "rem"),
+                true => self.builder.build_int_signed_rem(ll_lhs, ll_rhs, "rem"),
+                false => self.builder.build_int_unsigned_rem(ll_lhs, ll_rhs, "rem"),
             },
+            other => panic!("unexpected arithmetic operator {other}"),
+        }
+    }
+
+    /// Compiles a floating-point arithmetic binary operation expression.
+    fn gen_float_arith_op(
+        &self,
+        ll_lhs: FloatValue<'ctx>,
+        op: &Operator,
+        ll_rhs: FloatValue<'ctx>,
+    ) -> FloatValue<'ctx> {
+        match op {
+            Operator::Add => self.builder.build_float_add(ll_lhs, ll_rhs, "sum"),
+            Operator::Subtract => self.builder.build_float_sub(ll_lhs, ll_rhs, "diff"),
+            Operator::Multiply => self.builder.build_float_mul(ll_lhs, ll_rhs, "prod"),
+            Operator::Divide => self.builder.build_float_div(ll_lhs, ll_rhs, "quot"),
+            Operator::Modulo => self.builder.build_float_rem(ll_lhs, ll_rhs, "rem"),
             other => panic!("unexpected arithmetic operator {other}"),
         }
     }

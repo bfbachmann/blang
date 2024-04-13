@@ -8,10 +8,10 @@ fn main() {
         let t: {bool, i64, {i64, bool}} = {true, 100, {-5, false}}
         let t2 = t
 
-        assert(t2.0 == true, "expected true")
-        assert(t2.1 == 100, "expected 100")
-        assert(t2.2.0 == -5, "expected -5")
-        assert(t2.2.1 == false, "expected false")
+        assert(t2.(0) == true, "expected true")
+        assert(t2.(1) == 100, "expected 100")
+        assert(t2.(2).(0) == -5, "expected -5")
+        assert(t2.(2).(1) == false, "expected false")
     }
 
     // Check that tuples work as arguments.
@@ -25,23 +25,23 @@ fn main() {
     {
         let ret_tuple = new_tuple()
 
-        assert(ret_tuple.0 == -100, "expected -100")
-        assert(ret_tuple.1 == false, "expected false")
-        assert(ret_tuple.2.0 == true, "expected true")
-        assert(ret_tuple.2.1 == 555, "expected 555")
+        assert(ret_tuple.(0) == -100, "expected -100")
+        assert(ret_tuple.(1) == false, "expected false")
+        assert(ret_tuple.(2).(0) == true, "expected true")
+        assert(ret_tuple.(2).(1) == 555, "expected 555")
     }
 
     // Check that tuple field assignment works.
     {
         let mut t = {1, {2}}
-        t.0 = -2
-        t.1.0 = 15
+        t.(0) = -2
+        t.(1).(0) = 15
 
-        assert(t.0 == -2, "expected -2")
-        assert(t.1.0 == 15, "expected 15")
+        assert(t.(0) == -2, "expected -2")
+        assert(t.(1).(0) == 15, "expected 15")
 
-        t.1 = {-99}
-        assert(t.1.0 == -99, "expected -99")
+        t.(1) = {-99}
+        assert(t.(1).(0) == -99, "expected -99")
     }
 
     // Check that tuple types that contain the same types are considered
@@ -54,8 +54,8 @@ fn main() {
 }
 
 fn take_tuple(t: {{i64}, bool}) {
-    assert(t.0.0 == 53, "expected 53")
-    assert(t.1 == true, "expected true")
+    assert(t.(0).(0) == 53, "expected 53")
+    assert(t.(1) == true, "expected true")
 }
 
 fn new_tuple(): {int, bool, {bool, i64}} {

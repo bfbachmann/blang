@@ -70,22 +70,22 @@ impl Machine {
     fn exec_inst(machine: *mut Machine, inst: *Instruction): ExecResult {
         if inst^.kind ~~ InstKind::Store {
             print_str("store\n")
-            return Machine.store(machine, inst^.operands.0, inst^.operands.1 as uint)
+            return Machine.store(machine, inst^.operands.(0), inst^.operands.(1) as uint)
         }
 
         if inst^.kind ~~ InstKind::Copy {
             print_str("copy\n")
-            return Machine.copy(machine, inst^.operands.0 as uint, inst^.operands.1 as uint)
+            return Machine.copy(machine, inst^.operands.(0) as uint, inst^.operands.(1) as uint)
         }
 
         if inst^.kind ~~ InstKind::Add {
             print_str("add\n")
-            return Machine.add(machine, inst^.operands.0 as uint, inst^.operands.1 as uint)
+            return Machine.add(machine, inst^.operands.(0) as uint, inst^.operands.(1) as uint)
         }
 
         if inst^.kind ~~ InstKind::JumpIf0 {
             print_str("jumpif0\n")
-            return Machine.jumpif0(machine, inst^.operands.0 as uint, inst^.operands.1 as uint)
+            return Machine.jumpif0(machine, inst^.operands.(0) as uint, inst^.operands.(1) as uint)
         }
 
         return ExecResult.new_err("unimplemented instruction")

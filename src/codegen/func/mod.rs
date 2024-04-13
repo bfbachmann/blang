@@ -11,7 +11,7 @@ use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, Point
 
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::r#const::AConst;
-use crate::analyzer::ast::r#type::AType;
+
 use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::codegen::context::{
     BranchContext, CompilationContext, FnContext, LoopContext, StatementContext,
@@ -453,38 +453,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             )
         } else {
             ll_val.into_int_value()
-        }
-    }
-
-    /// Dereferences `ll_val` to the given type if it is not a type that is typically represented
-    /// by a pointer. Otherwise, just returns `ll_val`.
-    fn maybe_deref(&self, ll_val: BasicValueEnum<'ctx>, typ: &AType) -> BasicValueEnum<'ctx> {
-        match typ {
-            // Strings, structs, enums, tuples, and pointers should already be represented as
-            // pointers.
-            AType::Str
-            | AType::Struct(_)
-            | AType::Enum(_)
-            | AType::Tuple(_)
-            | AType::Array(_)
-            | AType::Pointer(_) => ll_val,
-
-            AType::I8
-            | AType::U8
-            | AType::I32
-            | AType::U32
-            | AType::I64
-            | AType::U64
-            | AType::Int
-            | AType::Uint => self.get_int(ll_val).as_basic_value_enum(),
-
-            AType::Bool => self.get_bool(ll_val).as_basic_value_enum(),
-
-            AType::Function(_) => ll_val.as_basic_value_enum(),
-
-            AType::Unknown(name) => {
-                panic!("encountered unknown type {}", name)
-            }
         }
     }
 

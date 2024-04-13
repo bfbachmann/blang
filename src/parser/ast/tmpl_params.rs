@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Locatable, Position};
@@ -166,7 +165,7 @@ impl TmplParams {
             // The next token should either be a comma or the closing bracket.
             match Module::parse_expecting_any(
                 tokens,
-                HashSet::from([TokenKind::Comma, TokenKind::RightBracket]),
+                vec![TokenKind::Comma, TokenKind::RightBracket],
             )? {
                 Token {
                     kind: TokenKind::RightBracket,

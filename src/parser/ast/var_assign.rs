@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+
 use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Locatable, Position};
@@ -67,14 +67,14 @@ impl VariableAssignment {
         // The next token should be an assignment operator.
         let assign_op = Module::parse_expecting_any(
             tokens,
-            HashSet::from([
+            vec![
                 TokenKind::Equal,
                 TokenKind::PlusEqual,
                 TokenKind::MinusEqual,
                 TokenKind::AsteriskEqual,
                 TokenKind::ForwardSlashEqual,
                 TokenKind::PercentEqual,
-            ]),
+            ],
         )?
         .kind;
 

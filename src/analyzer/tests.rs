@@ -655,11 +655,11 @@ mod tests {
             r#"
             fn main() {
                 let a = {1, 2, 3}
-                let b = a.5
+                let b = a.(5)
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::UndefMember));
+        check_result(result, Some(ErrorKind::IndexOutOfBounds));
     }
 
     #[test]
@@ -668,7 +668,7 @@ mod tests {
             r#"
             fn main() {
                 let mut a = {1, 2, 3}
-                a.0 = true
+                a.(0) = true
             }
             "#,
         );

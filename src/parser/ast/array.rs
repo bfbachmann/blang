@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 
@@ -143,11 +142,11 @@ impl ArrayInit {
         // Parse the rest of the values in the array, or the `; <repeat_count>`, or `]`.
         let end_pos = match Module::parse_expecting_any(
             tokens,
-            HashSet::from([
+            vec![
                 TokenKind::Comma,
                 TokenKind::SemiColon,
                 TokenKind::RightBracket,
-            ]),
+            ],
         ) {
             Ok(Token {
                 kind: TokenKind::Comma,
@@ -159,7 +158,7 @@ impl ArrayInit {
                 // The next token should either be `,` or `]`.
                 match Module::parse_expecting_any(
                     tokens,
-                    HashSet::from([TokenKind::Comma, TokenKind::RightBracket]),
+                    vec![TokenKind::Comma, TokenKind::RightBracket],
                 ) {
                     Ok(Token {
                         kind: TokenKind::RightBracket,

@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
@@ -68,10 +66,8 @@ impl LambdaDecl {
             });
 
             // The next token should either be `,` or `)`.
-            let next_token = Module::parse_expecting_any(
-                tokens,
-                HashSet::from([TokenKind::Comma, TokenKind::RightParen]),
-            )?;
+            let next_token =
+                Module::parse_expecting_any(tokens, vec![TokenKind::Comma, TokenKind::RightParen])?;
             match next_token.kind {
                 TokenKind::RightParen => break,
                 _ => {}

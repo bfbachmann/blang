@@ -3,7 +3,7 @@ use std::fmt;
 use logos::{Lexer, Logos};
 
 /// Represents any valid token in the language.
-#[derive(Logos, Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(skip r"[ \t\f]+")]
 #[logos(extras = (usize, usize))]
 pub enum TokenKind {
@@ -85,10 +85,14 @@ pub enum TokenKind {
     U32Literal(u32),
     #[regex(r"[0-9][0-9_]*i32", |lex| lex.slice().trim_end_matches("i32").replace("_", "").parse::<i32>().unwrap())]
     I32Literal(i32),
+    #[regex(r"\d+[0-9_]*\.[0-9_]*(e-?[0-9_]+)?f32", |lex| lex.slice().trim_end_matches("f32").replace("_", "").parse::<f32>().unwrap())]
+    F32Literal(f32),
     #[regex(r"[0-9][0-9_]*i64", |lex| lex.slice().trim_end_matches("i64").replace("_", "").parse::<i64>().unwrap())]
     I64Literal(i64),
     #[regex(r"[0-9][0-9_]*u64", |lex| lex.slice().trim_end_matches("u64").replace("_", "").parse::<u64>().unwrap())]
     U64Literal(u64),
+    #[regex(r"\d+[0-9_]*\.[0-9_]*(e-?[0-9_]+)?(f64)?", |lex| lex.slice().trim_end_matches("f64").replace("_", "").parse::<f64>().unwrap())]
+    F64Literal(f64),
     #[regex(r"[0-9][0-9_]*(int)?", |lex| lex.slice().trim_end_matches("int").replace("_", "").parse::<i64>().unwrap())]
     IntLiteral(i64),
     #[regex(r"[0-9][0-9_]*uint", |lex| lex.slice().trim_end_matches("uint").replace("_", "").parse::<u64>().unwrap())]
@@ -209,8 +213,10 @@ impl TokenKind {
             TokenKind::U8Literal(v) => v.to_string(),
             TokenKind::I32Literal(v) => v.to_string(),
             TokenKind::U32Literal(v) => v.to_string(),
+            TokenKind::F32Literal(v) => v.to_string(),
             TokenKind::I64Literal(v) => v.to_string(),
             TokenKind::U64Literal(v) => v.to_string(),
+            TokenKind::F64Literal(v) => v.to_string(),
             TokenKind::IntLiteral(v) => v.to_string(),
             TokenKind::UintLiteral(v) => v.to_string(),
             TokenKind::StrLiteral(v) => v.to_owned(),

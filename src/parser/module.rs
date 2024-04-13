@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use crate::lexer::pos::Position;
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
@@ -23,27 +21,6 @@ impl PartialEq for Module {
 }
 
 impl Module {
-    // pub fn parse(path: &str) -> ParseResult<Module> {
-    //     let mut lexer = TokenKind2::lexer(path);
-    //     let mut statements = vec![];
-    //
-    //     loop {
-    //         match Statement::from(&mut lexer) {
-    //             Ok(statement) => statements.push(statement),
-    //             Err(err) => {
-    //                 if err.kind == ErrorKind::Done {
-    //                     return Ok(Module {
-    //                         path: path.to_string(),
-    //                         statements,
-    //                     });
-    //                 }
-    //
-    //                 return Err(err);
-    //             }
-    //         };
-    //     }
-    // }
-
     /// Attempts to parse a list of statements from the deque of tokens. Expects token sequences of
     /// the form
     ///
@@ -96,7 +73,7 @@ impl Module {
     /// Returns an error if the next token is not any of the given kinds, or the token otherwise.
     pub fn parse_expecting_any(
         tokens: &mut Stream<Token>,
-        expected: HashSet<TokenKind>,
+        expected: Vec<TokenKind>,
     ) -> ParseResult<Token> {
         match tokens.next() {
             None => {
@@ -105,7 +82,7 @@ impl Module {
                     format!(
                         r#"expected {}{}, but found EOF"#,
                         if expected.len() > 1 { "one of " } else { "" },
-                        fmt::format_hashset(expected)
+                        fmt::format_vec(&expected, ", ")
                     )
                     .as_str(),
                     None,
@@ -122,7 +99,7 @@ impl Module {
                         format!(
                             r#"expected {}{}, but found {}"#,
                             if expected.len() > 1 { "one of " } else { "" },
-                            fmt::format_hashset(expected),
+                            fmt::format_vec(&expected, ", "),
                             format_code!("{}", token),
                         )
                         .as_str(),

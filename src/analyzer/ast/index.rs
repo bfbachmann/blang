@@ -11,9 +11,9 @@ use crate::parser::ast::index::Index;
 use crate::parser::ast::r#type::Type;
 
 /// Represents the access of some value at a specific index in a collection.
-/// The collection can either be an array or a pointer. If it is a pointer
-/// the index expression represents calculating an offset from the pointer
-/// (a GEP, essentially).
+/// The collection can either be an array, a tuple, or a pointer. If it is a
+/// pointer, the index expression represents calculating an offset from the
+/// pointer (a GEP, essentially).
 #[derive(Clone, Debug, PartialEq)]
 pub struct AIndex {
     pub collection_expr: AExpr,
@@ -27,7 +27,7 @@ locatable_impl!(AIndex);
 
 impl Display for AIndex {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}[{}]", self.collection_expr, self.index_expr)
+        write!(f, "{}.({})", self.collection_expr, self.index_expr)
     }
 }
 
@@ -53,11 +53,11 @@ impl AIndex {
             end_pos: index.end_pos().clone(),
         };
 
-        // The collection expression must be of an array or pointer type.
+        // The collection expression must be of an array, tuple, or pointer type.
         let collection_type = ctx.must_get_type(collection_expr.type_key);
-        let (maybe_array_len, result_type_key) = match collection_type {
+        let (maybe_collection_len, mut result_type_key, is_tuple) = match collection_type {
             AType::Array(array_type) => match array_type.maybe_element_type_key {
-                Some(elem_tk) => (Some(array_type.len), elem_tk),
+                Some(elem_tk) => (Some(array_type.len), elem_tk, false),
 
                 None => {
                     ctx.insert_err(AnalyzeError::new(
@@ -70,7 +70,15 @@ impl AIndex {
                 }
             },
 
-            AType::Pointer(_) => (None, collection_expr.type_key),
+            // We'll figure out what the result type is after we analyze the index
+            // expression.
+            AType::Tuple(tuple_type) => (
+                Some(tuple_type.fields.len() as u64),
+                ctx.unknown_type_key(),
+                true,
+            ),
+
+            AType::Pointer(_) => (None, collection_expr.type_key, false),
 
             AType::Unknown(_) => {
                 // The collection expression already failed analysis, so we can
@@ -89,10 +97,10 @@ impl AIndex {
             }
         };
 
-        // Analyze the index expression based on whether we're indexing an array
-        // or a pointer. Arrays have `uint` indices, while pointers have `int`
-        // indices.
-        let index_expr = if let Some(len) = maybe_array_len {
+        // Analyze the index expression based on whether we're indexing an array,
+        // a tuple, or a pointer. Arrays and tuples have `uint` indices, whereas
+        // pointers have `int` indices.
+        let index_expr = if let Some(len) = maybe_collection_len {
             // Analyze the index expression. It should be of type `uint`.
             let index_expr = AExpr::from(
                 ctx,
@@ -109,12 +117,46 @@ impl AIndex {
                 if i >= len {
                     ctx.insert_err(AnalyzeError::new(
                         ErrorKind::IndexOutOfBounds,
-                        format!("index {} is outside of array bounds [0:{}]", i, len - 1).as_str(),
-                        index,
+                        format!("index {} is out of bounds (0:{})", i, len - 1).as_str(),
+                        &index.index_expr,
                     ));
 
                     return placeholder;
                 }
+
+                // If the collection is a tuple, set the result type to the type
+                // of the tuple field at the specified index.
+                if let AType::Tuple(tuple_type) = ctx.must_get_type(collection_expr.type_key) {
+                    result_type_key = tuple_type.get_field_type_key(i as usize).unwrap();
+                }
+            } else if is_tuple {
+                // At this point we know we're indexing a tuple with a value
+                // that is not constant and/or not a `uint`, which is illegal.
+                ctx.insert_err(
+                    AnalyzeError::new(
+                        ErrorKind::MismatchedTypes,
+                        format!(
+                            "expected constant of type {}, but found {}{}",
+                            format_code!("uint"),
+                            match index_expr.kind.is_const() {
+                                true => "",
+                                false => "non-constant ",
+                            },
+                            ctx.display_type_for_key(index_expr.type_key)
+                        )
+                        .as_str(),
+                        &index.index_expr,
+                    )
+                    .with_detail(
+                        format_code!(
+                            "Tuple indices must be {} values that are known at compile time.",
+                            "unit"
+                        )
+                        .as_str(),
+                    ),
+                );
+
+                return placeholder;
             };
 
             index_expr

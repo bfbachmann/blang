@@ -224,7 +224,7 @@ impl Parser {
 
         // Parse first operand
         let value_result = Parser.try_parse_int(parser)
-        if !value_result.1 {
+        if !value_result.(1) {
             return ParseResult.new_err("invalid integer value in first 'store' operand")
         }
         
@@ -232,13 +232,13 @@ impl Parser {
         
         // Parse second operand
         let addr_result = Parser.try_parse_addr(parser)
-        if !addr_result.1 {
+        if !addr_result.(1) {
             return ParseResult.new_err("invalid address in second 'store' operand")
         }
 
         return ParseResult.new_ok(Instruction{
             kind: InstKind::Store
-            operands: {value_result.0, addr_result.0}
+            operands: {value_result.(0), addr_result.(0)}
         })
     }
 
@@ -249,7 +249,7 @@ impl Parser {
 
         // Parse first operand
         let src_addr_result = Parser.try_parse_addr(parser)
-        if !src_addr_result.1 {
+        if !src_addr_result.(1) {
             return ParseResult.new_err("invalid address in first 'copy' operand")
         }
         
@@ -257,13 +257,13 @@ impl Parser {
         
         // Parse second operand
         let dst_addr_result = Parser.try_parse_addr(parser)
-        if !dst_addr_result.1 {
+        if !dst_addr_result.(1) {
             return ParseResult.new_err("invalid address in second 'copy' operand")
         }
 
         return ParseResult.new_ok(Instruction{
             kind: InstKind::Copy
-            operands: {src_addr_result.0, dst_addr_result.0}
+            operands: {src_addr_result.(0), dst_addr_result.(0)}
         })
     }
 
@@ -274,7 +274,7 @@ impl Parser {
 
         // Parse first operand
         let src_addr_result = Parser.try_parse_addr(parser)
-        if !src_addr_result.1 {
+        if !src_addr_result.(1) {
             return ParseResult.new_err("invalid address in first 'add' operand")
         }
         
@@ -282,13 +282,13 @@ impl Parser {
         
         // Parse second operand
         let dst_addr_result = Parser.try_parse_addr(parser)
-        if !dst_addr_result.1 {
+        if !dst_addr_result.(1) {
             return ParseResult.new_err("invalid address in second 'add' operand")
         }
 
         return ParseResult.new_ok(Instruction{
             kind: InstKind::Add
-            operands: {src_addr_result.0, dst_addr_result.0}
+            operands: {src_addr_result.(0), dst_addr_result.(0)}
         })
     }
 
@@ -299,7 +299,7 @@ impl Parser {
 
         // Parse first operand
         let src_addr_result = Parser.try_parse_addr(parser)
-        if !src_addr_result.1 {
+        if !src_addr_result.(1) {
             return ParseResult.new_err("invalid address in first 'jumpif0' operand")
         }
         
@@ -307,13 +307,13 @@ impl Parser {
         
         // Parse second operand
         let dst_addr_result = Parser.try_parse_addr(parser)
-        if !dst_addr_result.1 {
+        if !dst_addr_result.(1) {
             return ParseResult.new_err("invalid address in second 'jumpif0' operand")
         }
 
         return ParseResult.new_ok(Instruction{
             kind: InstKind::JumpIf0
-            operands: {src_addr_result.0, dst_addr_result.0}
+            operands: {src_addr_result.(0), dst_addr_result.(0)}
         })
     }
 
@@ -328,7 +328,7 @@ impl Parser {
         let result = Parser.try_parse_int(parser)
 
         // Make sure the address is not a negative number
-        if result.0 < 0 {
+        if result.(0) < 0 {
             return {0, false}
         }
 

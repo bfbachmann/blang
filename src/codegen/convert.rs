@@ -104,7 +104,11 @@ fn to_basic_type<'ctx>(
 
         AType::I32 | AType::U32 => ctx.i32_type().as_basic_type_enum(),
 
+        AType::F32 => ctx.f32_type().as_basic_type_enum(),
+
         AType::I64 | AType::U64 => ctx.i64_type().as_basic_type_enum(),
+
+        AType::F64 => ctx.f64_type().as_basic_type_enum(),
 
         AType::Int | AType::Uint => get_ptr_sized_int_type(ctx, type_store),
 

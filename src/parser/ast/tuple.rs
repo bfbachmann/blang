@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
@@ -126,7 +125,7 @@ impl TupleType {
                         ..
                     } = Module::parse_expecting_any(
                         tokens,
-                        HashSet::from([TokenKind::Comma, TokenKind::RightBrace]),
+                        vec![TokenKind::Comma, TokenKind::RightBrace],
                     )? {
                         // Record the ending position of this statement.
                         end_pos = token.end;
@@ -247,7 +246,7 @@ impl TupleInit {
                         ..
                     } = Module::parse_expecting_any(
                         tokens,
-                        HashSet::from([TokenKind::Comma, TokenKind::RightBrace]),
+                        vec![TokenKind::Comma, TokenKind::RightBrace],
                     )? {
                         // Record the ending position of this statement.
                         end_pos = token.end;

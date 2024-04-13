@@ -4,7 +4,6 @@ use inkwell::values::{
 };
 
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
-
 use crate::analyzer::ast::symbol::ASymbol;
 
 use super::FnCodeGen;
@@ -51,6 +50,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 .const_int(*u as u64, false)
                 .as_basic_value_enum(),
 
+            AExprKind::F32Literal(f) => self
+                .ctx
+                .f32_type()
+                .const_float(*f as f64)
+                .as_basic_value_enum(),
+
             AExprKind::I64Literal(i) => self
                 .ctx
                 .i64_type()
@@ -62,6 +67,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 .i64_type()
                 .const_int(*u, false)
                 .as_basic_value_enum(),
+
+            AExprKind::F64Literal(f) => self.ctx.f64_type().const_float(*f).as_basic_value_enum(),
 
             AExprKind::IntLiteral(i) => self
                 .type_converter

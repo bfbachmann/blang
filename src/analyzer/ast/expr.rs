@@ -34,8 +34,10 @@ pub enum AExprKind {
     U8Literal(u8),
     I32Literal(i32),
     U32Literal(u32),
+    F32Literal(f32),
     I64Literal(i64),
     U64Literal(u64),
+    F64Literal(f64),
     IntLiteral(i64),
     UintLiteral(u64),
     StrLiteral(String),
@@ -63,8 +65,10 @@ impl fmt::Display for AExprKind {
             AExprKind::U8Literal(i) => write!(f, "{}u8", i),
             AExprKind::I32Literal(i) => write!(f, "{}i32", i),
             AExprKind::U32Literal(i) => write!(f, "{}u32", i),
+            AExprKind::F32Literal(i) => write!(f, "{}f32", i),
             AExprKind::I64Literal(i) => write!(f, "{}i64", i),
             AExprKind::U64Literal(i) => write!(f, "{}u64", i),
+            AExprKind::F64Literal(i) => write!(f, "{}f64", i),
             AExprKind::IntLiteral(i) => write!(f, "{}", i),
             AExprKind::UintLiteral(i) => write!(f, "{}", i),
             AExprKind::StrLiteral(s) => write!(f, "{}", s),
@@ -135,8 +139,10 @@ impl AExprKind {
             | AExprKind::U8Literal(_)
             | AExprKind::I32Literal(_)
             | AExprKind::U32Literal(_)
+            | AExprKind::F32Literal(_)
             | AExprKind::I64Literal(_)
             | AExprKind::U64Literal(_)
+            | AExprKind::F64Literal(_)
             | AExprKind::IntLiteral(_)
             | AExprKind::UintLiteral(_)
             | AExprKind::StrLiteral(_) => true,
@@ -224,8 +230,10 @@ impl AExprKind {
             AExprKind::U8Literal(i) => format!("{}", i),
             AExprKind::I32Literal(i) => format!("{}", i),
             AExprKind::U32Literal(i) => format!("{}", i),
+            AExprKind::F32Literal(i) => format!("{}", i),
             AExprKind::I64Literal(i) => format!("{}", i),
             AExprKind::U64Literal(i) => format!("{}", i),
+            AExprKind::F64Literal(i) => format!("{}", i),
             AExprKind::IntLiteral(i) => format!("{}", i),
             AExprKind::UintLiteral(i) => format!("{}", i),
             AExprKind::StrLiteral(s) => format!("{}", s),
@@ -389,6 +397,13 @@ impl AExpr {
                 end_pos,
             },
 
+            Expression::F32Literal(i) => AExpr {
+                kind: AExprKind::F32Literal(i.value),
+                type_key: ctx.f32_type_key(),
+                start_pos,
+                end_pos,
+            },
+
             Expression::I64Literal(i) => AExpr {
                 kind: AExprKind::I64Literal(i.value),
                 type_key: ctx.i64_type_key(),
@@ -399,6 +414,13 @@ impl AExpr {
             Expression::U64Literal(i) => AExpr {
                 kind: AExprKind::U64Literal(i.value),
                 type_key: ctx.u64_type_key(),
+                start_pos,
+                end_pos,
+            },
+
+            Expression::F64Literal(i) => AExpr {
+                kind: AExprKind::F64Literal(i.value),
+                type_key: ctx.f64_type_key(),
                 start_pos,
                 end_pos,
             },

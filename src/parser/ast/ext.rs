@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
@@ -76,10 +75,7 @@ impl Extern {
         Module::parse_expecting(tokens, TokenKind::Extern)?;
 
         // The next token should either be `{` or `fn`.
-        match Module::parse_expecting_any(
-            tokens,
-            HashSet::from([TokenKind::LeftBrace, TokenKind::Fn]),
-        )? {
+        match Module::parse_expecting_any(tokens, vec![TokenKind::LeftBrace, TokenKind::Fn])? {
             Token {
                 kind: TokenKind::LeftBrace,
                 ..

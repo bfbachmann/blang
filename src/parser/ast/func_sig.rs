@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
@@ -340,10 +339,8 @@ impl FunctionSignature {
             };
 
             // After the argument, the next token should be `,` or `)`.
-            let token = Module::parse_expecting_any(
-                tokens,
-                HashSet::from([TokenKind::Comma, TokenKind::RightParen]),
-            )?;
+            let token =
+                Module::parse_expecting_any(tokens, vec![TokenKind::Comma, TokenKind::RightParen])?;
             match token {
                 Token {
                     kind: TokenKind::Comma,

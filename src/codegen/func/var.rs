@@ -55,19 +55,37 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AExprKind::Index(index) => {
                 let ll_collection_ptr = self.get_ptr_to(&index.collection_expr);
                 let ll_index_val = self.gen_expr(&index.index_expr);
-                let ll_array_type = self
-                    .type_converter
-                    .get_array_type(index.collection_expr.type_key);
-                unsafe {
-                    self.builder.build_in_bounds_gep(
-                        ll_array_type,
-                        ll_collection_ptr,
-                        &[
-                            self.ctx.i32_type().const_int(0, false),
-                            ll_index_val.into_int_value(),
-                        ],
-                        "elem_ptr",
+                let collection_type = self.type_store.must_get(index.collection_expr.type_key);
+
+                if collection_type.is_tuple() {
+                    // Handle tuple indexing the same way we handle struct member access
+                    // because tuples are just structs.
+                    self.get_member_ptr(
+                        ll_collection_ptr.as_basic_value_enum(),
+                        index.collection_expr.type_key,
+                        ll_index_val
+                            .into_int_value()
+                            .get_zero_extended_constant()
+                            .unwrap()
+                            .to_string()
+                            .as_str(),
                     )
+                } else {
+                    // At this point we know we're indexing an array.
+                    let ll_array_type = self
+                        .type_converter
+                        .get_array_type(index.collection_expr.type_key);
+                    unsafe {
+                        self.builder.build_in_bounds_gep(
+                            ll_array_type,
+                            ll_collection_ptr,
+                            &[
+                                self.ctx.i32_type().const_int(0, false),
+                                ll_index_val.into_int_value(),
+                            ],
+                            "elem_ptr",
+                        )
+                    }
                 }
             }
 

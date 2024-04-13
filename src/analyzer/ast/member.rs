@@ -47,19 +47,11 @@ impl AMemberAccess {
             };
         }
 
-        // TODO: Disambiguate struct/tuple fields and methods.
-        // Check if the member access is accessing a field on a struct or tuple type.
+        // Check if the member access is accessing a field on a struct type.
         let maybe_field_type_key = match base_type {
             AType::Struct(struct_type) => {
                 struct_type.get_field_type_key(access.member_name.as_str())
             }
-            AType::Tuple(tuple_type) => match access.member_name.parse::<usize>() {
-                Ok(field_index) => match tuple_type.get_field_type_key(field_index) {
-                    Some(i) => Some(i),
-                    None => None,
-                },
-                Err(_) => None,
-            },
             _ => None,
         };
 

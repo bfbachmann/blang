@@ -123,5 +123,5 @@ fn take_t(t: *T): T {
 }
 
 fn take_tuple(tup: *{int}): int {
-    return tup^.0
+    return tup^.(0)
 }

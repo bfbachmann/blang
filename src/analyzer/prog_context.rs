@@ -423,6 +423,11 @@ impl ProgramContext {
         *self.primitive_type_keys.get("u32").unwrap()
     }
 
+    /// Returns the type key for the `f32` type.
+    pub fn f32_type_key(&self) -> TypeKey {
+        *self.primitive_type_keys.get("f32").unwrap()
+    }
+
     /// Returns the type key for the `i64` type.
     pub fn i64_type_key(&self) -> TypeKey {
         *self.primitive_type_keys.get("i64").unwrap()
@@ -431,6 +436,11 @@ impl ProgramContext {
     /// Returns the type key for the `u64` type.
     pub fn u64_type_key(&self) -> TypeKey {
         *self.primitive_type_keys.get("u64").unwrap()
+    }
+
+    /// Returns the type key for the `f64` type.
+    pub fn f64_type_key(&self) -> TypeKey {
+        *self.primitive_type_keys.get("f64").unwrap()
     }
 
     /// Returns the type key for the `int` type.

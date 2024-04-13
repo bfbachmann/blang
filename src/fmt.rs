@@ -1,9 +1,7 @@
-use std::collections::HashSet;
 use std::fmt::Display;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::time::Duration;
-
 
 use colored::{control, Colorize};
 
@@ -58,24 +56,6 @@ macro_rules! format_code {
             format!("`{}`", $arg).blue()
         }
     }
-}
-
-/// Returns the contents of a HashSet as a string of the form `<value1>, <value2>, ...`.
-pub fn format_hashset<T>(set: HashSet<T>) -> String
-where
-    T: Display,
-{
-    let mut count = set.len();
-    let mut s = "".to_string();
-    for v in set {
-        s += format_code!("{}", v).as_str();
-        if count > 1 {
-            s += ", ";
-        }
-        count -= 1;
-    }
-
-    return s;
 }
 
 /// Displays the given error/warning message in a user-friendly form.
@@ -319,12 +299,23 @@ fn print_source_no_color(file_path: &str, start_pos: &Position, end_pos: &Positi
 ///
 ///     A -> B -> C
 pub fn hierarchy_to_string(hierarchy: &Vec<String>) -> String {
+    return format_vec(hierarchy, " -> ");
+}
+
+/// Formats the given vector by placing `sep` between its elements.
+/// For example, if `sep` is ",", and `vec` is `[1, 2, 3]`, then this function
+/// would return the string `"1, 2, 3"`.
+pub fn format_vec<T: Display>(vec: &Vec<T>, sep: &str) -> String {
     let mut s = String::from("");
-    for (i, type_name) in hierarchy.iter().enumerate() {
+    for (i, val) in vec.iter().enumerate() {
         if i == 0 {
-            s.push_str(format_code!(type_name).to_string().as_str());
+            s.push_str(format_code!(val).to_string().as_str());
         } else {
-            s.push_str(format_code!(" -> {}", type_name).to_string().as_str())
+            s.push_str(
+                format!("{}{}", sep, format_code!("{}", val))
+                    .to_string()
+                    .as_str(),
+            )
         }
     }
 
