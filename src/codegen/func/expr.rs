@@ -817,7 +817,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
 
             // Int to int.
-            _ => {
+            (false, false, _) => {
                 if src_size <= dst_size {
                     if src_is_signed {
                         // Sign-extended upcasts.
@@ -845,6 +845,27 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                         .build_int_truncate_or_bit_cast(
                             ll_src_val.into_int_value(),
                             ll_dst_type.into_int_type(),
+                            name.as_str(),
+                        )
+                        .as_basic_value_enum()
+                }
+            }
+
+            // Int to float.
+            (false, true, _) => {
+                if src_is_signed {
+                    self.builder
+                        .build_signed_int_to_float(
+                            ll_src_val.into_int_value(),
+                            ll_dst_type.into_float_type(),
+                            name.as_str(),
+                        )
+                        .as_basic_value_enum()
+                } else {
+                    self.builder
+                        .build_unsigned_int_to_float(
+                            ll_src_val.into_int_value(),
+                            ll_dst_type.into_float_type(),
                             name.as_str(),
                         )
                         .as_basic_value_enum()

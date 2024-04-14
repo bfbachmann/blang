@@ -9,6 +9,8 @@ fn main() {
         assert(12u8 as u32 == 12u32, "3")
         assert(43u8 as i64 == 43i64, "4")
         assert(3u8 as u64 == 3u64, "5")
+        assert(8u8 as f32 == 8.0f32, "expected 8.0")
+        assert(98u8 as f64 == 98.0f64, "expected 98.0")
 
         // Sign-extended upcast from i8.
         assert(-89i8 as u8 == 167u8, "6")
@@ -16,11 +18,15 @@ fn main() {
         assert(12i8 as u32 == 12u32, "8")
         assert(-43i8 as i64 == -43i64, "9")
         assert(3i8 as u64 == 3u64, "10")
+        assert(-83i8 as f32 == -83.0f32, "expected -83.0f32")
+        assert(47i8 as f64 == 47.0f64, "expected 47f64")
 
         // Zero-extended upcast from u32.
         assert(4_294_967_295u32 as i32 == -1i32, "11")
         assert(43u32 as i64 == 43i64, "12")
         assert(3u32 as u64 == 3u64, "13")
+        assert(23874u32 as f32 == 23874.0f32, "expected 23874f32")
+        assert(378u32 as f64 == 378.0f64, "expected 378.0f64")
 
         // Truncated downcast from u32.
         assert(4_294_967_295u32 as u8 == 255u8, "14")
@@ -30,6 +36,8 @@ fn main() {
         assert(-43i32 as u32 == 4_294_967_253u32, "16")
         assert(-43i32 as i64 == -43i64, "17")
         assert(3i32 as u64 == 3u64, "18")
+        assert(-389i32 as f32 == -389.0f32, "expected -389f32")
+        assert(-293i32 as f64 == -293.0f64, "expected -293.0f64")
 
         // Truncated downcast from i32.
         assert(-99i32 as u8 == 157u8, "19")
@@ -37,21 +45,25 @@ fn main() {
 
         // Zero-extended upcast from u64.
         assert(18_446_744_073_709_551_615u64 as i64 == -1i64, "21")
+        assert(3782346u64 as f64 == 3782346.0f64, "expected 3782346.0f64")
 
         // Truncated downcast from u64.
         assert(999u64 as u8 == 231u8, "22")
         assert(843u64 as i8 == 75i8, "23")
         assert(3000u64 as u32 == 3000u32, "24")
         assert(43_983_378_748u64 as i32 == 1_033_705_788i32, "25")
+        assert(738436u64 as f32 == 738436.0f32, "expected 738436.0f32")
 
         // Sign-extended upcast from i64.
         assert(-43i64 as u64 == 18_446_744_073_709_551_573u64, "26")
+        assert(-3234i64 as f64 == -3234.0f64, "expected -3234.0f64")
 
         // Truncated downcast from i64.
         assert(-999i64 as u8 == 25u8, "27")
         assert(-843i64 as i8 == -75i8, "28")
         assert(3000i64 as u32 == 3000u32, "29")
         assert(9_223_372_036_854_775_807i64 as i32 == -1i32, "30")
+        assert(-734834i64 as f32 == -734834.0f32, "expected -734834.0f32")
 
         // Extended upcasts from f32.
         assert(-83.20f32 as i32 == -83i32, "expected -83")
