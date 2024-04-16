@@ -13,6 +13,10 @@ use crate::parser::error::{ErrorKind, ParseError};
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct IntLit {
     pub value: i64,
+    /// Indicates whether the literal was declared with an explicit type suffix.
+    /// For example, this would be true for the literal `123int` and false for
+    /// `123`.
+    pub has_suffix: bool,
     pub start_pos: Position,
     pub end_pos: Position,
 }
@@ -36,11 +40,12 @@ impl IntLit {
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<IntLit> {
         match tokens.next() {
             Some(&Token {
-                kind: TokenKind::IntLiteral(value),
+                kind: TokenKind::IntLiteral((value, has_suffix)),
                 start,
                 end,
             }) => Ok(IntLit {
                 value,
+                has_suffix,
                 start_pos: start,
                 end_pos: end,
             }),

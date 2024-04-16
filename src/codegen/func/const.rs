@@ -68,9 +68,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 .const_int(*u, false)
                 .as_basic_value_enum(),
 
-            AExprKind::F64Literal(f) => self.ctx.f64_type().const_float(*f).as_basic_value_enum(),
+            AExprKind::F64Literal(f, _) => {
+                self.ctx.f64_type().const_float(*f).as_basic_value_enum()
+            }
 
-            AExprKind::IntLiteral(i) => self
+            AExprKind::IntLiteral(i, _) => self
                 .type_converter
                 .get_basic_type(expr.type_key)
                 .into_int_type()

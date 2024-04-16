@@ -37,8 +37,8 @@ pub enum AExprKind {
     F32Literal(f32),
     I64Literal(i64),
     U64Literal(u64),
-    F64Literal(f64),
-    IntLiteral(i64),
+    F64Literal(f64, bool),
+    IntLiteral(i64, bool),
     UintLiteral(u64),
     StrLiteral(String),
     StructInit(AStructInit),
@@ -68,8 +68,24 @@ impl fmt::Display for AExprKind {
             AExprKind::F32Literal(i) => write!(f, "{}f32", i),
             AExprKind::I64Literal(i) => write!(f, "{}i64", i),
             AExprKind::U64Literal(i) => write!(f, "{}u64", i),
-            AExprKind::F64Literal(i) => write!(f, "{}f64", i),
-            AExprKind::IntLiteral(i) => write!(f, "{}", i),
+            AExprKind::F64Literal(i, has_suffix) => write!(
+                f,
+                "{}{}",
+                i,
+                match has_suffix {
+                    true => "f64",
+                    false => "",
+                }
+            ),
+            AExprKind::IntLiteral(i, has_suffix) => write!(
+                f,
+                "{}{}",
+                i,
+                match has_suffix {
+                    true => "int",
+                    false => "",
+                }
+            ),
             AExprKind::UintLiteral(i) => write!(f, "{}", i),
             AExprKind::StrLiteral(s) => write!(f, "{}", s),
             AExprKind::StructInit(s) => write!(f, "{}", s),
@@ -107,7 +123,7 @@ impl PartialEq for AExprKind {
             (AExprKind::BoolLiteral(b1), AExprKind::BoolLiteral(b2)) => b1 == b2,
             (AExprKind::I64Literal(i1), AExprKind::I64Literal(i2)) => i1 == i2,
             (AExprKind::U64Literal(i1), AExprKind::U64Literal(i2)) => i1 == i2,
-            (AExprKind::IntLiteral(i1), AExprKind::IntLiteral(i2)) => i1 == i2,
+            (AExprKind::IntLiteral(i1, _), AExprKind::IntLiteral(i2, _)) => i1 == i2,
             (AExprKind::UintLiteral(i1), AExprKind::UintLiteral(i2)) => i1 == i2,
             (AExprKind::StrLiteral(s1), AExprKind::StrLiteral(s2)) => s1 == s2,
             (AExprKind::StructInit(s1), AExprKind::StructInit(s2)) => s1 == s2,
@@ -142,8 +158,8 @@ impl AExprKind {
             | AExprKind::F32Literal(_)
             | AExprKind::I64Literal(_)
             | AExprKind::U64Literal(_)
-            | AExprKind::F64Literal(_)
-            | AExprKind::IntLiteral(_)
+            | AExprKind::F64Literal(_, _)
+            | AExprKind::IntLiteral(_, _)
             | AExprKind::UintLiteral(_)
             | AExprKind::StrLiteral(_) => true,
 
@@ -233,8 +249,22 @@ impl AExprKind {
             AExprKind::F32Literal(i) => format!("{}", i),
             AExprKind::I64Literal(i) => format!("{}", i),
             AExprKind::U64Literal(i) => format!("{}", i),
-            AExprKind::F64Literal(i) => format!("{}", i),
-            AExprKind::IntLiteral(i) => format!("{}", i),
+            AExprKind::F64Literal(i, has_suffix) => format!(
+                "{}{}",
+                i,
+                match has_suffix {
+                    true => "f64",
+                    false => "",
+                }
+            ),
+            AExprKind::IntLiteral(i, has_suffix) => format!(
+                "{}{}",
+                i,
+                match has_suffix {
+                    true => "int",
+                    false => "",
+                }
+            ),
             AExprKind::UintLiteral(i) => format!("{}", i),
             AExprKind::StrLiteral(s) => format!("{}", s),
             AExprKind::StructInit(s) => s.display(ctx),
@@ -419,14 +449,14 @@ impl AExpr {
             },
 
             Expression::F64Literal(i) => AExpr {
-                kind: AExprKind::F64Literal(i.value),
+                kind: AExprKind::F64Literal(i.value, i.has_suffix),
                 type_key: ctx.f64_type_key(),
                 start_pos,
                 end_pos,
             },
 
             Expression::IntLiteral(i) => AExpr {
-                kind: AExprKind::IntLiteral(i.value),
+                kind: AExprKind::IntLiteral(i.value, i.has_suffix),
                 type_key: ctx.int_type_key(),
                 start_pos,
                 end_pos,
@@ -977,7 +1007,8 @@ impl AExpr {
         }
 
         match &self.kind {
-            AExprKind::IntLiteral(i) if *i >= 0 => match target_type {
+            // Only allow coercion of `int` literals if they don't have explicit type suffixes.
+            AExprKind::IntLiteral(i, false) if *i >= 0 => match target_type {
                 AType::Uint => {
                     self.kind = AExprKind::UintLiteral(*i as u64);
                     self.type_key = ctx.uint_type_key();
@@ -1009,7 +1040,8 @@ impl AExpr {
                 _ => {}
             },
 
-            AExprKind::F64Literal(f) => match target_type {
+            // Only allow coercion of `f64` literals if they don't have explicit type suffixes.
+            AExprKind::F64Literal(f, false) => match target_type {
                 AType::F32 => {
                     self.kind = AExprKind::F32Literal(*f as f32);
                     self.type_key = ctx.f32_type_key();
@@ -1086,7 +1118,7 @@ impl AExpr {
 
             Type::Enum(_) => AExpr {
                 kind: AExprKind::EnumInit(AEnumVariantInit {
-                    type_key: type_key,
+                    type_key,
                     variant: AEnumTypeVariant {
                         number: 0,
                         name: "<unknown>".to_string(),
@@ -1140,7 +1172,7 @@ impl AExpr {
                     "u32" => AExprKind::U32Literal(0),
                     "i64" => AExprKind::I64Literal(0),
                     "u64" => AExprKind::U64Literal(0),
-                    "int" => AExprKind::IntLiteral(0),
+                    "int" => AExprKind::IntLiteral(0, false),
                     "uint" => AExprKind::UintLiteral(0),
                     "str" => AExprKind::StrLiteral("".to_string()),
                     "rawptr" => AExpr::new_null_ptr(ctx).kind,
@@ -1178,7 +1210,7 @@ impl AExpr {
                 const_value.try_into_const_uint(ctx)
             }
 
-            AExprKind::IntLiteral(i) => {
+            AExprKind::IntLiteral(i, false) => {
                 if *i < 0 {
                     None
                 } else {

@@ -43,7 +43,7 @@ mod tests {
         let raw_code = r#"
         fn main() {
             let i = 0
-        
+
             loop {
                 let prefix = "Fibonacci number " + itoa(i) + " is: "
                 let result = fib(
@@ -53,28 +53,28 @@ mod tests {
                         return n % 2 == 0
                     },
                 )
-        
+
                 print(prefix + itoa(result))
-        
+
                 if i == 10 {
                     break
                 }
             }
         }
-        
+
         // Calls `visitor_fn` with n and returns the n'th Fibonacci number.
         fn fib(n: int, visitor_fn: fn (int): bool): int {
             if visitor_fn(n) {
                 print("visitor returned true")
             }
-        
+
             if n <= 1 {
                 return 1
             }
-        
+
             return fib(n-1) + fib(n-2)
         }
-        
+
         fn do_nothing() {
             return
         }
@@ -95,6 +95,7 @@ mod tests {
                         "i".to_string(),
                         Expression::IntLiteral(IntLit {
                             value: 123,
+                            has_suffix: false,
                             start_pos: Position::new(1, 14),
                             end_pos: Position::new(1, 17),
                         }),
@@ -107,6 +108,7 @@ mod tests {
                         "j".to_string(),
                         Expression::IntLiteral(IntLit {
                             value: 1231,
+                            has_suffix: false,
                             start_pos: Position::new(1, 26),
                             end_pos: Position::new(1, 30),
                         }),
@@ -385,7 +387,7 @@ mod tests {
             if s == \"dog\" {
                 return
             }
-           
+
             print(\"not dog\")
         }";
         let tokens = lex(raw).expect("should not error");
@@ -547,6 +549,7 @@ mod tests {
                     }),
                     Expression::IntLiteral(IntLit {
                         value: 2,
+                        has_suffix: false,
                         start_pos: Position::new(3, 23),
                         end_pos: Position::new(3, 24),
                     }),

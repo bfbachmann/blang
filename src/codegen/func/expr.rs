@@ -47,8 +47,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             | AExprKind::F32Literal(_)
             | AExprKind::I64Literal(_)
             | AExprKind::U64Literal(_)
-            | AExprKind::F64Literal(_)
-            | AExprKind::IntLiteral(_)
+            | AExprKind::F64Literal(_, _)
+            | AExprKind::IntLiteral(_, _)
             | AExprKind::UintLiteral(_)
             | AExprKind::StrLiteral(_) => {
                 panic!("constant expression {} was not marked as constant", expr)

@@ -13,6 +13,10 @@ use crate::parser::error::{ErrorKind, ParseError};
 #[derive(Debug, PartialEq, Clone)]
 pub struct F64Lit {
     pub value: f64,
+    /// Indicates whether the literal was declared with an explicit type suffix.
+    /// For example, this would be true for the literal `123.0f64` and false for
+    /// `123.0`.
+    pub has_suffix: bool,
     pub start_pos: Position,
     pub end_pos: Position,
 }
@@ -38,11 +42,12 @@ impl F64Lit {
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<F64Lit> {
         match tokens.next() {
             Some(&Token {
-                kind: TokenKind::F64Literal(value),
+                kind: TokenKind::F64Literal((value, has_suffix)),
                 start,
                 end,
             }) => Ok(F64Lit {
                 value,
+                has_suffix,
                 start_pos: start,
                 end_pos: end,
             }),

@@ -88,8 +88,8 @@ mod tests {
     fn fn_decl() {
         let raw = r#"
         fn main() {}
-        fn test(a: i64, b: str) { 
-            let s = "hello world!" 
+        fn test(a: i64, b: str) {
+            let s = "hello world!"
         }"#;
         let result = analyze(raw);
         check_result(result, None);
@@ -122,7 +122,7 @@ mod tests {
         fn main() {
             do_thing()
         }
-        
+
         fn do_thing() {
             let s = "Hello world!"
             let v = s
@@ -140,7 +140,7 @@ mod tests {
                 let mut i = 0
                 loop {
                     let prefix = str_concat(str_concat("Fibonacci number ", itoa(i)), " is: ")
-                    
+
                     let result = fib(
                         i,
                         fn (n: int): bool {
@@ -148,9 +148,9 @@ mod tests {
                             return n % 2 == 0
                         },
                     )
-                    
+
                     print(str_concat(prefix, itoa(result)))
-                    
+
                     if i == 10 {
                         break
                     } elsif i % 2 == 0 {
@@ -158,11 +158,11 @@ mod tests {
                     } else {
                         print("i is odd")
                     }
-                    
+
                     i = i + 1
                 }
             }
-            
+
             // Calls `visitor_fn` with n and returns the n'th Fibonacci number.
             fn fib(n: int, visitor_fn: fn (int): bool): int {
                 if visitor_fn(n) {
@@ -173,25 +173,25 @@ mod tests {
                 }
                 return fib(n-1, visitor_fn) + fib(n-2, visitor_fn)
             }
-            
+
             fn print(s: str) {}
-            
+
             fn str_concat(a: str, b: str): str {
                 return a
             }
-            
+
             fn itoa(i: int): str {
                 return "fake"
             }
-            
+
             struct MyStruct {
                 inner: MyInnerStruct
             }
-            
+
             struct MyInnerStruct {
                 cond: bool
             }
-            
+
             fn check_struct(s: MyStruct) {}
         "#;
         let result = analyze(raw);
@@ -205,7 +205,7 @@ mod tests {
                 name: str,
                 age: i64,
             }
-            
+
             struct Inner {
                 count: i64,
                 msg: str,
@@ -215,21 +215,21 @@ mod tests {
                     another: Person,
                 },
             }
-            
+
             struct Outer {
                 inner: Inner,
                 cond: bool,
             }
-            
+
             struct Empty {}
-            
+
             fn get_person(name: str): Person {
                 return Person{
                     name: "dave",
                     age: 43,
                 }
             }
-            
+
             fn main() {
                 let a = Outer{
                     inner: Inner{
@@ -270,7 +270,7 @@ mod tests {
                 count: i64,
                 outer: Outer,
             }
-            
+
             struct Outer {
                 cond: bool,
                 inner: Inner,
@@ -287,7 +287,7 @@ mod tests {
                 count: i64,
                 outer: {Outer},
             }
-            
+
             struct Outer {
                 cond: bool,
                 inner: Inner,
@@ -303,7 +303,7 @@ mod tests {
             fn main() {
                 do_thing()
             }
-            
+
             fn do_thing(): bool {
                 return true
                 let a = 1
@@ -346,25 +346,25 @@ mod tests {
                i: i64,
                func: fn (i64, i64): bool,
            }
-           
+
            fn eq(a: i64, b: i64): bool {
                return a == b
            }
-           
+
            fn neq(a: i64, b: i64): bool {
                return !eq(a, b)
            }
-           
+
            fn main() {
                let mut t = Thing{
                    i: 234,
                    func: eq,
                }
-           
+
                let is_eq = t.func(t.i, 2)
                t.func = neq
                let is_neq = t.func(t.i, 234)
-           
+
                let x = t.i
            }
         "#,
@@ -393,11 +393,11 @@ mod tests {
         let result = analyze(
             r#"
             struct T {}
-            
+
             fn main() {
                 let t = T{}
                 let t1 = t
-                let t2 = t 
+                let t2 = t
             }
             "#,
         );
@@ -409,11 +409,11 @@ mod tests {
         let result = analyze(
             r#"
             struct Inner {}
-            
+
             struct T {
                 inner: Inner
             }
-            
+
             fn main() {
                 let t = T{inner: Inner{}}
                 let t1 = t
@@ -441,10 +441,10 @@ mod tests {
         let result = analyze(
             r#"
             struct T {}
-            
+
             fn main() {
                 let t = T{}
-                
+
                 loop {
                     let a = t
                 }
@@ -459,10 +459,10 @@ mod tests {
         let result = analyze(
             r#"
             struct T {}
-            
+
             fn main() {
                 let t = T{}
-                
+
                 loop {
                     let a = t
                     break
@@ -478,10 +478,10 @@ mod tests {
         let result = analyze(
             r#"
             struct T {}
-            
+
             fn main() {
                 let t = T{}
-                
+
                 loop {
                     loop {
                         let a = t
@@ -500,10 +500,10 @@ mod tests {
         let result = analyze(
             r#"
             struct T {}
-            
+
             fn main() {
                 let t = T{}
-                
+
                 loop {
                     loop {
                         if true {
@@ -530,7 +530,7 @@ mod tests {
                         let a = t
                         break
                     }
-                    
+
                     let a = t
                     return
                 }
@@ -552,11 +552,11 @@ mod tests {
                         let a = t
                         break
                     }
-                    
+
                     let a = t
                     return
                 }
-            
+
                 let a = t
             }
             "#,
@@ -577,7 +577,7 @@ mod tests {
                         break
                     }
                 }
-                
+
                 let b = t
             }
             "#,
@@ -598,7 +598,7 @@ mod tests {
                         return
                     }
                 }
-                
+
                 let b = t
             }
             "#,
@@ -611,18 +611,18 @@ mod tests {
         let result = analyze(
             r#"
             struct Inner {}
-            
+
             struct T {
                 inner1: Inner,
                 inner2: Inner,
             }
-            
+
             fn main() {
                 let t = T{
                     inner1: Inner{},
                     inner2: Inner{},
                 }
-                
+
                 let i1 = t.inner1
                 let i2 = t.inner2
             }
@@ -639,7 +639,7 @@ mod tests {
             fn main() {
                 let a = Thing{}
                 let b = Thing{}
-                
+
                 if a == b {
                     exit(1)
                 }
@@ -715,7 +715,7 @@ mod tests {
         let result = analyze(
             r#"
             const a = true
-            
+
             fn main() {
                 a = false
             }
@@ -731,13 +731,13 @@ mod tests {
             struct T {
                 value: i64
             }
-            
+
             impl T {
                 fn get_value(self): i64 {
                     return self.value
                 }
             }
-            
+
             impl T {
                 fn get_value() {}
             }
@@ -780,7 +780,7 @@ mod tests {
             enum E {
                 Thing(T)
             }
-            
+
             struct T {
                 e: E
             }
@@ -827,8 +827,8 @@ mod tests {
     fn function_template_with_invalid_spec() {
         let result = analyze(
             r#"
-            fn test(t: T) 
-            with [T: Thing] 
+            fn test(t: T)
+            with [T: Thing]
             {}
             "#,
         );
@@ -843,13 +843,13 @@ mod tests {
             spec Thing {
                 fn do_thing()
             }
-            
+
             struct Doer {}
-            
-            fn test(t: T) 
-            with [T: Thing] 
+
+            fn test(t: T)
+            with [T: Thing]
             {}
-            
+
             fn main() {
                 let doer = Doer{}
                 test(doer)
@@ -865,11 +865,11 @@ mod tests {
         let result = analyze(
             r#"
             struct Doer {}
-            
-            fn test(t: T) 
-            with [T = Doer] 
+
+            fn test(t: T)
+            with [T = Doer]
             {}
-            
+
             fn main() {
                 let doer = 1
                 test(doer)
@@ -885,7 +885,7 @@ mod tests {
         let result = analyze(
             r#"
             fn do_nothing(a: T, b: T) with [T] {}
-            
+
             fn main() {
                 do_nothing(1, "test")
             }
@@ -902,7 +902,7 @@ mod tests {
             fn test(a: A, b: B): C with [A, B, C] {
                 return a + b
             }
-            
+
             fn main() {
                 test(1, 2)
             }
@@ -969,13 +969,13 @@ mod tests {
         let result = analyze(
             r#"
             struct S {}
-            
+
             fn main() {
                 let a = S{}
                 let aa = a
                 let aa = aa
                 let aa = aa
-            } 
+            }
             "#,
         );
         check_result(result, None);
@@ -987,7 +987,7 @@ mod tests {
             r#"
             fn main() {
                 let a = 1234^
-            } 
+            }
             "#,
         );
         check_result(result, Some(ErrorKind::MismatchedTypes));
@@ -998,8 +998,8 @@ mod tests {
         let result = analyze(
             r#"
             fn main() {
-                let len: uint = 2 
-                let x = [1; len] 
+                let len: uint = 2
+                let x = [1; len]
             }
             "#,
         );
@@ -1038,11 +1038,11 @@ mod tests {
             impl i64 {
                 fn add(self, v: i64): i64 { return self + v }
             }
-            
+
             struct Thing {
                 i: i64
             }
-            
+
             impl Thing {
                 fn new(i: i64): Thing {
                     return Thing{
@@ -1050,7 +1050,7 @@ mod tests {
                     }
                 }
             }
-            
+
             fn main() {
                 let t = Thing.new(74).i.add(2)
             }
@@ -1066,11 +1066,11 @@ mod tests {
             impl i64 {
                 fn add(self, v: i64): i64 { return self + v }
             }
-            
+
             struct Thing {
                 i: u64
             }
-            
+
             impl Thing {
                 fn new(i: u64): Thing {
                     return Thing{
@@ -1078,7 +1078,7 @@ mod tests {
                     }
                 }
             }
-            
+
             fn main() {
                 let t = Thing.new(74).i.add(2)
             }
@@ -1148,7 +1148,7 @@ mod tests {
             fn take(array: [int; 2]): uint {
                 return 1
             }
-            
+
             fn main() {
                 let array = [1, 2]
                 let illegal = array.(take(array))
@@ -1168,7 +1168,7 @@ mod tests {
                 One(Thing)
                 Two
             }
-            
+
             fn main() {
                 let thing = Thing{}
                 let moved = thing
@@ -1184,11 +1184,11 @@ mod tests {
         let result = analyze(
             r#"
             struct Thing {}
-            
+
             struct Test {
                 thing: Thing
             }
-            
+
             fn main() {
                 let thing = Thing{}
                 let moved = thing
@@ -1204,7 +1204,7 @@ mod tests {
         let result = analyze(
             r#"
             struct Thing {}
-            
+
             fn main() {
                 let thing = Thing{}
                 let moved = thing
@@ -1258,7 +1258,7 @@ mod tests {
         let result = analyze(
             r#"
             fn main() {
-                let a: *mut i64 = &0 
+                let a: *mut i64 = &0
             }
         "#,
         );
@@ -1271,7 +1271,7 @@ mod tests {
             r#"
             fn main() {
                 // This is valid because `*mut _` coerces to `*_`.
-                let a: *int = &mut 0 
+                let a: *int = &mut 0
             }
         "#,
         );
@@ -1284,7 +1284,7 @@ mod tests {
             r#"
             fn main() {
                 let a = true
-                let a_ptr = &a as *mut i64 
+                let a_ptr = &a as *mut i64
             }
         "#,
         );
@@ -1308,7 +1308,7 @@ mod tests {
         let result = analyze(
             r#"
             struct State {}
-            
+
             fn main() {
                 let new = (&State{})^
             }
@@ -1322,7 +1322,7 @@ mod tests {
         let result = analyze(
             r#"
             struct State {i: i64}
-            
+
             fn main() {
                 let state_ptr = &State{i: 0}
                 let i = state_ptr^.i
@@ -1337,7 +1337,7 @@ mod tests {
         let result = analyze(
             r#"
             struct State {i: {}}
-            
+
             fn main() {
                 let state_ptr = &State{i: {}}
                 let i = state_ptr^.i
@@ -1416,7 +1416,7 @@ mod tests {
                 fn one() {
                     fn inner() {}
                 }
-                
+
                 fn two() {
                     inner()
                 }
@@ -1460,7 +1460,7 @@ mod tests {
             r#"
                 fn main() {
                     let x = 1
-                    
+
                     fn illegal(): int {
                         return x
                     }
@@ -1504,6 +1504,30 @@ mod tests {
                     let ptr = &x
                     let index: uint = 123
                     let ptr_at_offset = ptr.(index)
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
+
+    #[test]
+    fn no_int_type_coercion_with_explicit_type() {
+        let result = analyze(
+            r#"
+                fn main() {
+                    let x: uint = 1int
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
+
+    #[test]
+    fn no_f64_type_coercion_with_explicit_type() {
+        let result = analyze(
+            r#"
+                fn main() {
+                    let x: f32 = 1.0f64
                 }
             "#,
         );

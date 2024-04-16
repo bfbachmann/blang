@@ -91,10 +91,10 @@ pub enum TokenKind {
     I64Literal(i64),
     #[regex(r"[0-9][0-9_]*u64", |lex| lex.slice().trim_end_matches("u64").replace("_", "").parse::<u64>().unwrap())]
     U64Literal(u64),
-    #[regex(r"\d+[0-9_]*\.[0-9_]*(e-?[0-9_]+)?(f64)?", |lex| lex.slice().trim_end_matches("f64").replace("_", "").parse::<f64>().unwrap())]
-    F64Literal(f64),
-    #[regex(r"[0-9][0-9_]*(int)?", |lex| lex.slice().trim_end_matches("int").replace("_", "").parse::<i64>().unwrap())]
-    IntLiteral(i64),
+    #[regex(r"\d+[0-9_]*\.[0-9_]*(e-?[0-9_]+)?(f64)?", lex_f64_literal)]
+    F64Literal((f64, bool)),
+    #[regex(r"[0-9][0-9_]*(int)?", lex_int_literal)]
+    IntLiteral((i64, bool)),
     #[regex(r"[0-9][0-9_]*uint", |lex| lex.slice().trim_end_matches("uint").replace("_", "").parse::<u64>().unwrap())]
     UintLiteral(u64),
     #[regex(r#""(?:[^"]|\\.)*""#, lex_str_lit)]
@@ -216,8 +216,24 @@ impl TokenKind {
             TokenKind::F32Literal(v) => v.to_string(),
             TokenKind::I64Literal(v) => v.to_string(),
             TokenKind::U64Literal(v) => v.to_string(),
-            TokenKind::F64Literal(v) => v.to_string(),
-            TokenKind::IntLiteral(v) => v.to_string(),
+            TokenKind::F64Literal((v, has_suffix)) => format!(
+                "{}{}",
+                v.to_string(),
+                match has_suffix {
+                    true => "f64",
+                    false => "",
+                }
+            )
+            .to_string(),
+            TokenKind::IntLiteral((v, has_suffix)) => format!(
+                "{}{}",
+                v.to_string(),
+                match has_suffix {
+                    true => "int",
+                    false => "",
+                }
+            )
+            .to_string(),
             TokenKind::UintLiteral(v) => v.to_string(),
             TokenKind::StrLiteral(v) => v.to_owned(),
             TokenKind::Fn => "fn".to_string(),
@@ -353,6 +369,32 @@ fn lex_str_lit(lexer: &mut Lexer<TokenKind>) -> String {
     }
 
     replaced
+}
+
+/// Lexes an `int` literal.
+fn lex_int_literal(lexer: &mut Lexer<TokenKind>) -> (i64, bool) {
+    let slice = lexer.slice();
+    let has_suffix = slice.contains("int");
+    let lit = lexer
+        .slice()
+        .trim_end_matches("int")
+        .replace("_", "")
+        .parse::<i64>()
+        .unwrap();
+    (lit, has_suffix)
+}
+
+/// Lexes an `f64` literal.
+fn lex_f64_literal(lexer: &mut Lexer<TokenKind>) -> (f64, bool) {
+    let slice = lexer.slice();
+    let has_suffix = slice.contains("f64");
+    let lit = lexer
+        .slice()
+        .trim_end_matches("f64")
+        .replace("_", "")
+        .parse::<f64>()
+        .unwrap();
+    (lit, has_suffix)
 }
 
 impl fmt::Display for TokenKind {

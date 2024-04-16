@@ -652,6 +652,7 @@ mod tests {
             parse("123").unwrap(),
             Expression::IntLiteral(IntLit {
                 value: 123,
+                has_suffix: false,
                 start_pos: Position::new(1, 1),
                 end_pos: Position::new(1, 4),
             })
@@ -685,12 +686,14 @@ mod tests {
                         Box::new(Expression::BinaryOperation(
                             Box::new(Expression::IntLiteral(IntLit {
                                 value: 3,
+                                has_suffix: false,
                                 start_pos: Position::new(1, 6),
                                 end_pos: Position::new(1, 7),
                             })),
                             Operator::Multiply,
                             Box::new(Expression::IntLiteral(IntLit {
                                 value: 2,
+                                has_suffix: false,
                                 start_pos: Position::new(1, 10),
                                 end_pos: Position::new(1, 11),
                             }))
@@ -698,6 +701,7 @@ mod tests {
                         Operator::Subtract,
                         Box::new(Expression::IntLiteral(IntLit {
                             value: 2,
+                            has_suffix: false,
                             start_pos: Position::new(1, 14),
                             end_pos: Position::new(1, 15),
                         }))
@@ -720,6 +724,7 @@ mod tests {
                             Expression::BinaryOperation(
                                 Box::new(Expression::IntLiteral(IntLit {
                                     value: 1,
+                                    has_suffix: false,
                                     start_pos: Position::new(1, 31),
                                     end_pos: Position::new(1, 32),
                                 })),
@@ -733,6 +738,7 @@ mod tests {
                                     Operator::Modulo,
                                     Box::new(Expression::IntLiteral(IntLit {
                                         value: 2,
+                                        has_suffix: false,
                                         start_pos: Position::new(1, 41),
                                         end_pos: Position::new(1, 42),
                                     }))
@@ -757,12 +763,14 @@ mod tests {
                         Box::new(Expression::BinaryOperation(
                             Box::new(Expression::IntLiteral(IntLit {
                                 value: 3,
+                                has_suffix: false,
                                 start_pos: Position::new(1, 2),
                                 end_pos: Position::new(1, 3),
                             })),
                             Operator::Add,
                             Box::new(Expression::IntLiteral(IntLit {
                                 value: 6,
+                                has_suffix: false,
                                 start_pos: Position::new(1, 6),
                                 end_pos: Position::new(1, 7),
                             }))
@@ -770,6 +778,7 @@ mod tests {
                         Operator::Divide,
                         Box::new(Expression::IntLiteral(IntLit {
                             value: 3,
+                            has_suffix: false,
                             start_pos: Position::new(1, 11),
                             end_pos: Position::new(1, 12),
                         }))
@@ -777,6 +786,7 @@ mod tests {
                     Operator::Subtract,
                     Box::new(Expression::IntLiteral(IntLit {
                         value: 5,
+                        has_suffix: false,
                         start_pos: Position::new(1, 15),
                         end_pos: Position::new(1, 16),
                     }))
@@ -785,12 +795,14 @@ mod tests {
                 Box::new(Expression::BinaryOperation(
                     Box::new(Expression::IntLiteral(IntLit {
                         value: 298,
+                        has_suffix: false,
                         start_pos: Position::new(1, 19),
                         end_pos: Position::new(1, 22),
                     })),
                     Operator::Multiply,
                     Box::new(Expression::IntLiteral(IntLit {
                         value: 3,
+                        has_suffix: false,
                         start_pos: Position::new(1, 25),
                         end_pos: Position::new(1, 26),
                     }))
@@ -816,6 +828,7 @@ mod tests {
                             Operator::Subtract,
                             Box::new(Expression::IntLiteral(IntLit {
                                 value: 3,
+                                has_suffix: false,
                                 start_pos: Position::new(1, 8),
                                 end_pos: Position::new(1, 9)
                             })),
@@ -823,6 +836,7 @@ mod tests {
                         Operator::Divide,
                         Box::new(Expression::IntLiteral(IntLit {
                             value: 4,
+                            has_suffix: false,
                             start_pos: Position::new(1, 13),
                             end_pos: Position::new(1, 14)
                         })),
@@ -845,6 +859,7 @@ mod tests {
                         Operator::Modulo,
                         Box::new(Expression::IntLiteral(IntLit {
                             value: 2,
+                            has_suffix: false,
                             start_pos: Position::new(2, 15),
                             end_pos: Position::new(2, 16)
                         })),
@@ -853,6 +868,7 @@ mod tests {
                 Operator::Add,
                 Box::new(Expression::IntLiteral(IntLit {
                     value: 5,
+                    has_suffix: false,
                     start_pos: Position::new(3, 1),
                     end_pos: Position::new(3, 2)
                 })),
@@ -890,6 +906,7 @@ mod tests {
                         Operator::Subtract,
                         Box::new(Expression::IntLiteral(IntLit {
                             value: 8,
+                            has_suffix: false,
                             start_pos: Position::new(1, 2),
                             end_pos: Position::new(1, 3),
                         })),
@@ -902,6 +919,7 @@ mod tests {
                                     Operator::Subtract,
                                     Box::new(Expression::IntLiteral(IntLit {
                                         value: 100,
+                                        has_suffix: false,
                                         start_pos: Position::new(1, 8),
                                         end_pos: Position::new(1, 11),
                                     }))
@@ -909,6 +927,7 @@ mod tests {
                                 Operator::Add,
                                 Box::new(Expression::IntLiteral(IntLit {
                                     value: 2,
+                                    has_suffix: false,
                                     start_pos: Position::new(1, 14),
                                     end_pos: Position::new(1, 15)
                                 })),
@@ -916,6 +935,7 @@ mod tests {
                             Operator::Multiply,
                             Box::new(Expression::IntLiteral(IntLit {
                                 value: 4,
+                                has_suffix: false,
                                 start_pos: Position::new(1, 19),
                                 end_pos: Position::new(1, 20)
                             })),
@@ -923,6 +943,7 @@ mod tests {
                         Operator::Divide,
                         Box::new(Expression::IntLiteral(IntLit {
                             value: 2,
+                            has_suffix: false,
                             start_pos: Position::new(1, 23),
                             end_pos: Position::new(1, 24)
                         })),
@@ -931,6 +952,7 @@ mod tests {
                 Operator::Add,
                 Box::new(Expression::IntLiteral(IntLit {
                     value: 8,
+                    has_suffix: false,
                     start_pos: Position::new(1, 27),
                     end_pos: Position::new(1, 28)
                 })),
@@ -947,6 +969,7 @@ mod tests {
                 Operator::Subtract,
                 Box::new(Expression::IntLiteral(IntLit {
                     value: 8,
+                    has_suffix: false,
                     start_pos: Position::new(1, 2),
                     end_pos: Position::new(1, 3),
                 })),
@@ -1012,12 +1035,14 @@ mod tests {
                 Box::new(Expression::BinaryOperation(
                     Box::new(Expression::IntLiteral(IntLit {
                         value: 1,
+                        has_suffix: false,
                         start_pos: Position::new(1, 4),
                         end_pos: Position::new(1, 5)
                     })),
                     Operator::GreaterThan,
                     Box::new(Expression::IntLiteral(IntLit {
                         value: 0,
+                        has_suffix: false,
                         start_pos: Position::new(1, 6),
                         end_pos: Position::new(1, 7)
                     })),
@@ -1025,6 +1050,7 @@ mod tests {
                 Operator::Add,
                 Box::new(Expression::IntLiteral(IntLit {
                     value: 1,
+                    has_suffix: false,
                     start_pos: Position::new(1, 9),
                     end_pos: Position::new(1, 10)
                 })),
@@ -1081,6 +1107,7 @@ mod tests {
                     Operator::Subtract,
                     Box::new(Expression::IntLiteral(IntLit {
                         value: 2,
+                        has_suffix: false,
                         start_pos: Position { line: 1, col: 11 },
                         end_pos: Position { line: 1, col: 12 },
                     })),
@@ -1093,6 +1120,7 @@ mod tests {
                             Operator::Subtract,
                             Box::new(Expression::IntLiteral(IntLit {
                                 value: 100,
+                                has_suffix: false,
                                 start_pos: Position { line: 1, col: 16 },
                                 end_pos: Position { line: 1, col: 19 },
                             })),
@@ -1108,6 +1136,7 @@ mod tests {
                                 },),
                                 args: vec![Expression::IntLiteral(IntLit {
                                     value: 1,
+                                    has_suffix: false,
                                     start_pos: Position { line: 1, col: 28 },
                                     end_pos: Position { line: 1, col: 29 },
                                 })],
@@ -1142,6 +1171,7 @@ mod tests {
                         Operator::Subtract,
                         Box::new(Expression::IntLiteral(IntLit {
                             value: 100,
+                            has_suffix: false,
                             start_pos: Position::new(1, 8),
                             end_pos: Position::new(1, 11),
                         })),
