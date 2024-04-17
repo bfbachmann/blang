@@ -23,9 +23,9 @@ impl AModule {
     pub fn from(ctx: &mut ProgramContext, module: &Module) -> AModule {
         // Analyze the module now that dependencies have all been analyzed.
         // First pass: define types and functions in the module without analyzing them yet.
+        define_consts(ctx, module);
         define_types(ctx, module);
         define_fns(ctx, module);
-        define_consts(ctx, module);
 
         // Second pass: fully analyze all program statements.
         let mut analyzed_statements = vec![];

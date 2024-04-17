@@ -14,7 +14,15 @@ pub struct APointerType {
 
 impl Display for APointerType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "*{}", self.pointee_type_key)
+        write!(
+            f,
+            "*{}{}",
+            match self.is_mut {
+                true => "mut ",
+                false => "",
+            },
+            self.pointee_type_key
+        )
     }
 }
 

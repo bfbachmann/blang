@@ -5,7 +5,7 @@ const mem_size: uint = 1024
 /// A machine executes a program by manipulating its memory according
 /// to program instructions.
 struct Machine {
-    memory: [int; 1024]
+    memory: [int; mem_size]
     prog: *Program
     pc: uint
 }
@@ -51,9 +51,9 @@ impl Machine {
     /// Executes the program associated with the machine and returns a result
     /// indicating whether execution succeeded.
     fn exec_prog(machine: *mut Machine): ExecResult {
-        for machine^.pc = 0, 
-            machine^.pc < machine^.prog^.len, 
-            machine^.pc = machine^.pc + 1 
+        for machine^.pc = 0,
+            machine^.pc < machine^.prog^.len,
+            machine^.pc = machine^.pc + 1
         {
             let inst_ptr = Program.inst_at(machine^.prog, machine^.pc)
             let result = Machine.exec_inst(machine, inst_ptr)
