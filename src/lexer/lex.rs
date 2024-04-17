@@ -75,9 +75,9 @@ pub fn lex(source_code: &str) -> LexResult<Vec<Token>> {
                 }
             },
 
-            Err(_) => {
+            Err(e) => {
                 return Err(LexError {
-                    message: format_code!("invalid token {}", lexer.slice()),
+                    message: format!("{} {}", e, format_code!(lexer.slice())),
                     start_pos: token_start,
                     end_pos: Position::default(),
                 })

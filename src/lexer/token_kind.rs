@@ -1,11 +1,14 @@
 use std::fmt;
+use std::fmt::{Display, Formatter};
+use std::num::{ParseFloatError, ParseIntError};
 
-use logos::{Lexer, Logos};
+use logos::{FilterResult, Lexer, Logos};
 
 /// Represents any valid token in the language.
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(skip r"[ \t\f]+")]
 #[logos(extras = (usize, usize))]
+#[logos(error = LexingError)]
 pub enum TokenKind {
     // Whitespace and comments
     #[regex(r"\n", update_line_count)]
@@ -77,25 +80,25 @@ pub enum TokenKind {
     #[token("false", |_| false)]
     #[token("true", |_| true)]
     BoolLiteral(bool),
-    #[regex(r"[0-9][0-9_]*u8", |lex| lex.slice().trim_end_matches("u8").replace("_", "").parse::<u8>().unwrap())]
+    #[regex(r"[0-9][0-9_]*u8", lex_u8_literal)]
     U8Literal(u8),
-    #[regex(r"[0-9][0-9_]*i8", |lex| lex.slice().trim_end_matches("i8").replace("_", "").parse::<i8>().unwrap())]
+    #[regex(r"[0-9][0-9_]*i8", lex_i8_literal)]
     I8Literal(i8),
-    #[regex(r"[0-9][0-9_]*u32", |lex| lex.slice().trim_end_matches("u32").replace("_", "").parse::<u32>().unwrap())]
+    #[regex(r"[0-9][0-9_]*u32", lex_u32_literal)]
     U32Literal(u32),
-    #[regex(r"[0-9][0-9_]*i32", |lex| lex.slice().trim_end_matches("i32").replace("_", "").parse::<i32>().unwrap())]
+    #[regex(r"[0-9][0-9_]*i32", lex_i32_literal)]
     I32Literal(i32),
-    #[regex(r"\d+[0-9_]*\.[0-9_]*(e-?[0-9_]+)?f32", |lex| lex.slice().trim_end_matches("f32").replace("_", "").parse::<f32>().unwrap())]
+    #[regex(r"\d+[0-9_]*\.[0-9_]*(e-?[0-9_]+)?f32", lex_f32_literal)]
     F32Literal(f32),
-    #[regex(r"[0-9][0-9_]*i64", |lex| lex.slice().trim_end_matches("i64").replace("_", "").parse::<i64>().unwrap())]
+    #[regex(r"[0-9][0-9_]*i64", lex_i64_literal)]
     I64Literal(i64),
-    #[regex(r"[0-9][0-9_]*u64", |lex| lex.slice().trim_end_matches("u64").replace("_", "").parse::<u64>().unwrap())]
+    #[regex(r"[0-9][0-9_]*u64", lex_u64_literal)]
     U64Literal(u64),
     #[regex(r"\d+[0-9_]*\.[0-9_]*(e-?[0-9_]+)?(f64)?", lex_f64_literal)]
     F64Literal((f64, bool)),
     #[regex(r"[0-9][0-9_]*(int)?", lex_int_literal)]
     IntLiteral((i64, bool)),
-    #[regex(r"[0-9][0-9_]*uint", |lex| lex.slice().trim_end_matches("uint").replace("_", "").parse::<u64>().unwrap())]
+    #[regex(r"[0-9][0-9_]*uint", lex_uint_literal)]
     UintLiteral(u64),
     #[regex(r#""(?:[^"]|\\.)*""#, lex_str_lit)]
     StrLiteral(String),
@@ -298,7 +301,6 @@ fn update_line_count(lexer: &mut Lexer<TokenKind>) {
     }
 }
 
-/// Lexes a string literal.
 fn lex_str_lit(lexer: &mut Lexer<TokenKind>) -> String {
     let str_lit = lexer.slice();
 
@@ -371,39 +373,187 @@ fn lex_str_lit(lexer: &mut Lexer<TokenKind>) -> String {
     replaced
 }
 
-/// Lexes an `int` literal.
-fn lex_int_literal(lexer: &mut Lexer<TokenKind>) -> (i64, bool) {
+fn lex_u8_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<u8, LexingError> {
+    match lexer
+        .slice()
+        .trim_end_matches("u8")
+        .replace("_", "")
+        .parse::<u8>()
+    {
+        Ok(i) => FilterResult::Emit(i),
+        Err(e) => {
+            return FilterResult::Error(LexingError::InvalidInt(e));
+        }
+    }
+}
+
+fn lex_i8_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<i8, LexingError> {
+    match lexer
+        .slice()
+        .trim_end_matches("i8")
+        .replace("_", "")
+        .parse::<i8>()
+    {
+        Ok(i) => FilterResult::Emit(i),
+        Err(e) => {
+            return FilterResult::Error(LexingError::InvalidInt(e));
+        }
+    }
+}
+
+fn lex_u32_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<u32, LexingError> {
+    match lexer
+        .slice()
+        .trim_end_matches("u32")
+        .replace("_", "")
+        .parse::<u32>()
+    {
+        Ok(i) => FilterResult::Emit(i),
+        Err(e) => {
+            return FilterResult::Error(LexingError::InvalidInt(e));
+        }
+    }
+}
+
+fn lex_i32_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<i32, LexingError> {
+    match lexer
+        .slice()
+        .trim_end_matches("i32")
+        .replace("_", "")
+        .parse::<i32>()
+    {
+        Ok(i) => FilterResult::Emit(i),
+        Err(e) => {
+            return FilterResult::Error(LexingError::InvalidInt(e));
+        }
+    }
+}
+
+fn lex_f32_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<f32, LexingError> {
+    match lexer
+        .slice()
+        .trim_end_matches("f32")
+        .replace("_", "")
+        .parse::<f32>()
+    {
+        Ok(i) => FilterResult::Emit(i),
+        Err(e) => {
+            return FilterResult::Error(LexingError::InvalidF64(e));
+        }
+    }
+}
+
+fn lex_i64_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<i64, LexingError> {
+    match lexer
+        .slice()
+        .trim_end_matches("i64")
+        .replace("_", "")
+        .parse::<i64>()
+    {
+        Ok(i) => FilterResult::Emit(i),
+        Err(e) => {
+            return FilterResult::Error(LexingError::InvalidInt(e));
+        }
+    }
+}
+
+fn lex_u64_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<u64, LexingError> {
+    match lexer
+        .slice()
+        .trim_end_matches("u64")
+        .replace("_", "")
+        .parse::<u64>()
+    {
+        Ok(i) => FilterResult::Emit(i),
+        Err(e) => {
+            return FilterResult::Error(LexingError::InvalidInt(e));
+        }
+    }
+}
+
+fn lex_uint_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<u64, LexingError> {
+    match lexer
+        .slice()
+        .trim_end_matches("uint")
+        .replace("_", "")
+        .parse::<u64>()
+    {
+        Ok(i) => FilterResult::Emit(i),
+        Err(e) => {
+            return FilterResult::Error(LexingError::InvalidInt(e));
+        }
+    }
+}
+
+fn lex_int_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<(i64, bool), LexingError> {
     let slice = lexer.slice();
     let has_suffix = slice.contains("int");
-    let lit = lexer
+    match lexer
         .slice()
         .trim_end_matches("int")
         .replace("_", "")
         .parse::<i64>()
-        .unwrap();
-    (lit, has_suffix)
+    {
+        Ok(i) => FilterResult::Emit((i, has_suffix)),
+        Err(e) => {
+            return FilterResult::Error(LexingError::InvalidInt(e));
+        }
+    }
 }
 
-/// Lexes an `f64` literal.
-fn lex_f64_literal(lexer: &mut Lexer<TokenKind>) -> (f64, bool) {
+fn lex_f64_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<(f64, bool), LexingError> {
     let slice = lexer.slice();
     let has_suffix = slice.contains("f64");
-    let lit = lexer
+    match lexer
         .slice()
         .trim_end_matches("f64")
         .replace("_", "")
         .parse::<f64>()
-        .unwrap();
-    (lit, has_suffix)
+    {
+        Ok(f) => FilterResult::Emit((f, has_suffix)),
+        Err(e) => {
+            return FilterResult::Error(LexingError::InvalidF64(e));
+        }
+    }
 }
 
-impl fmt::Display for TokenKind {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl Display for TokenKind {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             TokenKind::BoolLiteral(b) => write!(f, "{}", b),
             TokenKind::StrLiteral(s) => write!(f, r#""{}""#, s),
             TokenKind::Identifier(s) => write!(f, "{}", s),
             other => write!(f, "{}", other.to_string()),
         }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Default)]
+pub enum LexingError {
+    InvalidInt(ParseIntError),
+    InvalidF64(ParseFloatError),
+    #[default]
+    Default,
+}
+
+impl Display for LexingError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            LexingError::InvalidInt(e) => write!(f, "{}", e),
+            LexingError::InvalidF64(e) => write!(f, "{}", e),
+            LexingError::Default => write!(f, "invalid token"),
+        }
+    }
+}
+
+impl From<ParseFloatError> for LexingError {
+    fn from(e: ParseFloatError) -> Self {
+        LexingError::InvalidF64(e)
+    }
+}
+
+impl From<ParseIntError> for LexingError {
+    fn from(e: ParseIntError) -> Self {
+        LexingError::InvalidInt(e)
     }
 }

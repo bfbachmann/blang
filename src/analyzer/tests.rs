@@ -1533,4 +1533,32 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::MismatchedTypes));
     }
+
+    #[test]
+    fn integer_literals_out_of_range() {
+        for lit in ["i8", "u8", "i32", "u32"] {
+            let result = analyze(
+                format!(
+                    "fn main() {{
+                    let x: {} = 99999999999999999
+                }}",
+                    lit
+                )
+                .as_str(),
+            );
+            check_result(result, Some(ErrorKind::LiteralOutOfRange));
+        }
+    }
+
+    #[test]
+    fn float_literals_out_of_range() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let x: f32 = 9.9e99999999999999999999999999999999
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::LiteralOutOfRange));
+    }
 }

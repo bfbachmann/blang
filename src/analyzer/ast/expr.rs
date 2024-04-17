@@ -1013,27 +1013,65 @@ impl AExpr {
                     self.kind = AExprKind::UintLiteral(*i as u64);
                     self.type_key = ctx.uint_type_key();
                 }
+
                 AType::I64 => {
                     self.kind = AExprKind::I64Literal(*i);
                     self.type_key = ctx.i64_type_key();
                 }
+
                 AType::U64 => {
                     self.kind = AExprKind::U64Literal(*i as u64);
                     self.type_key = ctx.u64_type_key();
                 }
+
                 AType::U32 => {
+                    if *i > u32::MAX as i64 {
+                        ctx.insert_err(AnalyzeError::new(
+                            ErrorKind::LiteralOutOfRange,
+                            format_code!("literal out of range for {}", "u32").as_str(),
+                            &self,
+                        ));
+                    }
+
                     self.kind = AExprKind::U32Literal(*i as u32);
                     self.type_key = ctx.u32_type_key();
                 }
+
                 AType::U8 => {
+                    if *i > u8::MAX as i64 {
+                        ctx.insert_err(AnalyzeError::new(
+                            ErrorKind::LiteralOutOfRange,
+                            format_code!("literal out of range for {}", "u8").as_str(),
+                            &self,
+                        ));
+                    }
+
                     self.kind = AExprKind::U8Literal(*i as u8);
                     self.type_key = ctx.u8_type_key();
                 }
+
                 AType::I32 => {
+                    if *i > i32::MAX as i64 {
+                        ctx.insert_err(AnalyzeError::new(
+                            ErrorKind::LiteralOutOfRange,
+                            format_code!("literal out of range for {}", "i32").as_str(),
+                            &self,
+                        ));
+                    }
+
                     self.kind = AExprKind::I32Literal(*i as i32);
                     self.type_key = ctx.i32_type_key();
                 }
+
                 AType::I8 => {
+                    if *i > i8::MAX as i64 {
+                        ctx.insert_err(AnalyzeError::new(
+                            ErrorKind::LiteralOutOfRange,
+                            format_code!("literal out of range for {}", "i8").as_str(),
+                            &self,
+                        ));
+                    }
+
                     self.kind = AExprKind::I8Literal(*i as i8);
                     self.type_key = ctx.i8_type_key();
                 }
@@ -1043,6 +1081,14 @@ impl AExpr {
             // Only allow coercion of `f64` literals if they don't have explicit type suffixes.
             AExprKind::F64Literal(f, false) => match target_type {
                 AType::F32 => {
+                    if *f > f32::MAX as f64 || *f < f32::MIN as f64 {
+                        ctx.insert_err(AnalyzeError::new(
+                            ErrorKind::LiteralOutOfRange,
+                            format_code!("literal out of range for {}", "f32").as_str(),
+                            &self,
+                        ));
+                    }
+
                     self.kind = AExprKind::F32Literal(*f as f32);
                     self.type_key = ctx.f32_type_key();
                 }
