@@ -55,15 +55,15 @@ impl Const {
     /// Parses a single constant declaration from the token stream. Expects token sequences of the
     /// forms
     ///
-    ///     <name>: <type> = <value>
-    ///     <name> = <value>
+    ///     const <name>: <type> = <value>
+    ///     const <name> = <value>
     ///
     /// where
     ///  - `name` is an identifier representing the constant name
     ///  - `type` is the optional constant type (see `Type::from`)
     ///  - `value` is an expression representing the constant value (see `Expression::from`).
-    fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let start_pos = Module::current_position(tokens);
+    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+        let start_pos = Module::parse_expecting(tokens, TokenKind::Const)?.start;
         let name = Module::parse_identifier(tokens)?;
 
         // Parse the optional `: <type>`.
@@ -83,90 +83,6 @@ impl Const {
             name,
             maybe_type: typ,
             value,
-            start_pos,
-            end_pos,
-        })
-    }
-}
-
-/// Represents a `const` statement that declares a set of module-level constants.
-#[derive(Debug, PartialEq, Eq)]
-pub struct ConstBlock {
-    pub consts: Vec<Const>,
-    start_pos: Position,
-    end_pos: Position,
-}
-
-impl Hash for ConstBlock {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.consts.hash(state);
-    }
-}
-
-impl Clone for ConstBlock {
-    fn clone(&self) -> Self {
-        ConstBlock {
-            consts: self.consts.iter().map(|c| c.clone()).collect(),
-            start_pos: self.start_pos.clone(),
-            end_pos: self.end_pos.clone(),
-        }
-    }
-}
-
-impl Display for ConstBlock {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.consts.len() == 1 {
-            write!(f, "{}", self.consts.first().unwrap())
-        } else {
-            write!(f, "const {{ <{} const declarations> }}", self.consts.len())
-        }
-    }
-}
-
-locatable_impl!(ConstBlock);
-
-impl ConstBlock {
-    /// Parses a `const` statement from the given token sequence. Expects token sequences of the
-    /// forms
-    ///
-    ///     const <name>: <type> = <value>
-    ///     const <name> = <value>
-    ///     const { ... }
-    ///
-    /// where
-    ///  - `name` is an identifier representing the constant name
-    ///  - `type` is the optional constant type (see `Type::from`)
-    ///  - `value` is an expression representing the constant value (see `Expression::from`).
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        // Get the start position of the statement.
-        let start_pos = Module::current_position(tokens);
-
-        // The first token should be `const`.
-        Module::parse_expecting(tokens, TokenKind::Const)?;
-
-        // The second token should be an identifier or `{`.
-        let mut consts = vec![];
-        let end_pos;
-        if Module::parse_optional(tokens, TokenKind::LeftBrace).is_some() {
-            // This is a constant block. We need to parse all the constant declarations contained
-            // within it until we reach the closing `}`.
-            loop {
-                if let Some(token) = Module::parse_optional(tokens, TokenKind::RightBrace) {
-                    end_pos = token.end;
-                    break;
-                }
-
-                consts.push(Const::from(tokens)?);
-            }
-        } else {
-            // This is just a single constant declaration.
-            let const_decl = Const::from(tokens)?;
-            end_pos = const_decl.end_pos.clone();
-            consts.push(const_decl);
-        }
-
-        Ok(ConstBlock {
-            consts,
             start_pos,
             end_pos,
         })

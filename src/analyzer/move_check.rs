@@ -345,8 +345,8 @@ impl<'a> MoveChecker<'a> {
         match statement {
             AStatement::StructTypeDeclaration(_)
             | AStatement::EnumTypeDeclaration(_)
-            | AStatement::ExternFns(_)
-            | AStatement::Consts(_)
+            | AStatement::ExternFn(_)
+            | AStatement::Const(_)
             | AStatement::Continue
             | AStatement::Break => {
                 // Nothing to do here since moves cannot occur in these types of statements.

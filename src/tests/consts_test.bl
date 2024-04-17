@@ -1,19 +1,17 @@
 use "src/tests/test_utils.bl"
 
-const {
-    some_int = -50
-    some_struct = struct{i: i64, b: bool}{
-        i: 987
-        b: false
-    }
-    some_struct_I = some_struct.i
-    some_tuple = {345, true}
-    ptr = null
-    other_int = some_int + 1
-    enum_err = Result::Err("failed")
-    some_str = "Hello world! 你好世界\n"
-    same_strs = some_str == "Hello world! 你好世界\n"
+const some_int = -50
+const some_struct = struct{i: i64, b: bool}{
+    i: 987
+    b: false
 }
+const some_struct_I = some_struct.i
+const some_tuple = {345, true}
+const ptr = null
+const other_int = some_int + 1
+const enum_err = Result::Err("failed")
+const some_str = "Hello world! 你好世界\n"
+const same_strs = some_str == "Hello world! 你好世界\n"
 
 enum Result {
     Ok

@@ -2,11 +2,9 @@ struct File {}
 
 const seek_end: int = 2
 
-extern {
-    fn fopen(s: *u8, mode: *u8): *File
-    fn fclose(stream: *File): int
-    fn fseek(stream: *File, offset: int, whence: int): int
-    fn ftell(stream: *File): int
-    fn fread(dst: *mut u8, size: uint, nitems: uint, stream: *File): uint
-    fn rewind(stream: *File)
-}
+extern fn fopen(s: *u8, mode: *u8): *File
+extern fn fclose(stream: *File): int
+extern fn fseek(stream: *File, offset: int, whence: int): int
+extern fn ftell(stream: *File): int
+extern fn fread(dst: *mut u8, size: uint, nitems: uint, stream: *File): uint
+extern fn rewind(stream: *File)

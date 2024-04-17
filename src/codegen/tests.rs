@@ -41,28 +41,28 @@ mod tests {
             fn main() {
                 let val = other(2, 10)
                 fib(val)
-                
+
                 let hi = "hello world!!"
                 str_stuff("test")
             }
-            
+
             fn thing(b: bool): bool {
                 let a = true
                 return !a or b
             }
-            
+
             fn other(a: i64, b: i64): i64 {
                 return a * b + a / 2 - 1
             }
-            
+
             fn fib(n: i64): i64 {
                 if n < 2 {
                     return 1
                 }
-                
+
                 return fib(n-1) + fib(n-2)
             }
-            
+
             fn do_thing(a: i64): i64 {
                 let mut result = 5
                 let mut mut_a = a
@@ -78,26 +78,26 @@ mod tests {
                             }
                         }
                     }
-                    
+
                     return mut_a * result
                 }
             }
-            
+
             fn cum_sum(n: i64): i64 {
                 let mut i = 1
                 let mut result = 0
                 loop {
                     if i >= n {
-                        return result 
+                        return result
                     }
-                
+
                     {{
                         result = result + i
                         i = i + 1
                     }}
                 }
             }
-            
+
             fn str_stuff(s: str): str {
                 return "test"
             }
@@ -114,7 +114,7 @@ mod tests {
                 age: i64,
                 do_thing: fn(str): i64,
             }
-            
+
             fn new_person(name: str, age: i64): Person {
                 return Person{
                     name: name,
@@ -122,18 +122,18 @@ mod tests {
                     do_thing: test
                 }
             }
-            
+
             fn test(s: str): i64 {
                 return 1
             }
-            
+
             fn main() {
                 let p = Person{
                     name: "test",
                     age: 12,
                     do_thing: test,
                 }
-            
+
                 let pp = new_person("guy", 32)
             }
         "#,
@@ -147,12 +147,12 @@ mod tests {
             struct Person {
                 age: i64,
             }
-            
+
             fn is_old(p: Person): bool {
                 let p = Person{age: 100}
                 return false
             }
-            
+
             fn main() {
                 let mut p = Person{age: 10}
                 is_old(p)
@@ -167,12 +167,10 @@ mod tests {
         assert_compiles(
             r#"
             extern fn write(fd: i64, msg: str, len: i64)
-            extern {
-                fn exit(code: i64)
-            }
-            
+            extern fn exit(code: i64)
+
             fn main() {
-                write(1, "Hello World!", 13) 
+                write(1, "Hello World!", 13)
                 exit(0)
             }
        "#,
@@ -187,9 +185,9 @@ mod tests {
                 count: i64,
                 f: fn(A),
             }
-            
+
             fn do(a: A) {}
-            
+
             fn new_a(count: i64): A {
                 return A {
                     count: count,
@@ -206,7 +204,7 @@ mod tests {
             r#"
             fn main() {
                 loop {}
-                
+
                 let a = 1
             }
             "#,
@@ -239,14 +237,14 @@ mod tests {
                 b: bool
                 s: str
             }
-            
+
             enum E {
                 One
                 Two(i64)
                 Three(bool)
                 Four(S)
             }
-            
+
             fn main() {
                 let e_one = E::One
                 let e_two = E::Two(-42)
@@ -271,23 +269,23 @@ mod tests {
             spec Task {
                 fn run(self): bool
             }
-            
+
             struct PrintTask {
                 msg: str
             }
-            
+
             impl PrintTask {
                 fn run(self): bool {
                     write(1, self.msg, 100)
                     return true
                 }
             }
-            
+
             fn run_task(task: T): bool
             with [T: Task] {
                 return task.run()
             }
-            
+
             fn main() {
                 let task = PrintTask{msg: "hello world"}
                 run_task(task)
@@ -308,44 +306,44 @@ mod tests {
                     exit(code)
                 }
             }
-            
+
             struct Calculator {
                 calc_fn: fn (i64, i64): i64
                 accumulator: i64
             }
-            
+
             impl Calculator {
                 fn new(f: CalcFn): Calculator
-                with [CalcFn = fn (i64, i64): i64] 
+                with [CalcFn = fn (i64, i64): i64]
                 {
                     return Calculator{
                         calc_fn: f
                         accumulator: 0
                     }
                 }
-            
+
                 fn update(mut self, value: i64): Calculator {
                     let func = self.calc_fn
                     self.accumulator = func(self.accumulator, value)
                     return self
                 }
-            
-                fn with_calc_fn(mut self, f: CalcFn): Calculator 
-                with [CalcFn = fn (i64, i64): i64] 
+
+                fn with_calc_fn(mut self, f: CalcFn): Calculator
+                with [CalcFn = fn (i64, i64): i64]
                 {
                     self.calc_fn = f
                     return this
                 }
             }
-            
+
             fn add(a: i64, b: i64): i64 {
                 return a + b
             }
-            
+
             fn mul(a: i64, b: i64): i64 {
                 return a * b
             }
-            
+
             fn main() {
                 let calc = Calculator.new(add)
                 let mut result = calc
@@ -354,9 +352,9 @@ mod tests {
                     .update(14)
                     .with_calc_fn(mul)
                     .update(10)
-                
+
                 assert(result.accumulator == 70, 1)
-            
+
                 exit(0)
             }
         "#,
@@ -375,11 +373,11 @@ mod tests {
             ] {
                 return f(arg)
             }
-            
+
             fn double(v: i64): i64 {
                 return v * 2
             }
-            
+
             fn main() {
                 let result: i64 = apply(double, 1)
             }
@@ -397,16 +395,16 @@ mod tests {
                     return 0
                 }
             }
-            
+
             spec Zero {
                 fn zero(): i64
             }
-            
+
             fn is_zero_value(v: T): bool
             with [T: Zero] {
                 return v == T.zero()
             }
-            
+
             fn main() {
                 is_zero_value(0)
             }
@@ -432,34 +430,34 @@ mod tests {
     fn templated_return_types() {
         assert_compiles(
             r#"
-            // Any type that has an associated default member function implments the 
+            // Any type that has an associated default member function implments the
             // Default spec.
             spec Default {
                 fn default(): T with [T]
             }
-            
+
             // Returns the default value any type that implements the Default spec.
             fn default(): T with [T: Default] {
                 return T.default()
             }
-            
+
             impl i64 {
                 fn default(): i64 {
                     return 0
                 }
             }
-            
+
             impl u64 {
                 fn default(): u64 {
                     return 0
                 }
             }
-            
+
             struct MyStruct {
                 i: i64
                 u: u64
             }
-            
+
             impl MyStruct {
                 fn default(): MyStruct {
                     return MyStruct{
@@ -468,7 +466,7 @@ mod tests {
                     }
                 }
             }
-            
+
             fn main() {
                 let my_struct: MyStruct = default()
             }
@@ -481,16 +479,16 @@ mod tests {
     fn tmpl_fn_used_as_var() {
         assert_compiles(
             r#"
-            fn test(t: T): T 
+            fn test(t: T): T
             with [T] {
                 return t
             }
-            
+
             fn apply(f: F, t: T): T
             with [T, F = fn (T): T] {
                 return f(t)
             }
-            
+
             fn main() {
                 let result: i64 = test(1)
                 let t: fn (u64): u64 = test
@@ -512,11 +510,11 @@ mod tests {
                 }
                 return b
             }
-    
+
             fn main() {
                 let f1: fn (i64, i64): i64 = max
                 let f2: fn (u64, u64): u64 = max
-                
+
                 let result1 = f1(-3, 4)
                 let result2 = f2(12, 642)
             }
@@ -533,7 +531,7 @@ mod tests {
             with [T, F = fn (T, T): T] {
                 return selector(a, b)
             }
-            
+
             fn main() {
                 let result = select($(a, b) b, "not this", "this")
             }
@@ -565,7 +563,7 @@ mod tests {
             with [T] {
                 return f(t)
             }
-    
+
             fn main() {
                 let a: fn (fn (str): str, str): str = apply
             }
@@ -578,11 +576,11 @@ mod tests {
         assert_compiles(
             r#"
             enum Result { Ok, Err }
-            
+
             fn main() {
                 let a = Result::Ok ~~ Result::Err
                 let r = Result::Err
-                
+
                 let b = r !~ Result::Ok
             }
             "#,

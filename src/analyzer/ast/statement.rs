@@ -33,9 +33,9 @@ pub enum AStatement {
     Return(ARet),
     StructTypeDeclaration(AStructType),
     EnumTypeDeclaration(AEnumType),
-    /// A set of external function declarations.
-    ExternFns(Vec<AFnSig>),
-    Consts(Vec<AConst>),
+    /// An external function declaration.
+    ExternFn(AFnSig),
+    Const(AConst),
     Impl(AImpl),
 }
 
@@ -54,19 +54,11 @@ impl fmt::Display for AStatement {
             AStatement::Return(v) => write!(f, "{}", v),
             AStatement::StructTypeDeclaration(s) => write!(f, "{}", s),
             AStatement::EnumTypeDeclaration(e) => write!(f, "{}", e),
-            AStatement::ExternFns(e) => {
-                if e.len() == 1 {
-                    write!(f, "extern {}", e.first().unwrap())
-                } else {
-                    write!(f, "extern {{ <{} function signatures> }}", e.len())
-                }
+            AStatement::ExternFn(e) => {
+                write!(f, "extern {}", e)
             }
-            AStatement::Consts(consts) => {
-                if consts.len() == 1 {
-                    write!(f, "const {}", consts.first().unwrap())
-                } else {
-                    write!(f, "const {{ <{} constant declarations> }}", consts.len())
-                }
+            AStatement::Const(const_decl) => {
+                write!(f, "const {}", const_decl)
             }
             AStatement::Impl(impl_) => {
                 write!(
@@ -139,7 +131,7 @@ impl AStatement {
 
             Statement::Impl(impl_) => AStatement::Impl(AImpl::from(ctx, &impl_)),
 
-            Statement::ExternFns(ext) => {
+            Statement::ExternFn(ext) => {
                 // Make sure we are not already inside a function. Extern functions cannot be
                 // defined within other functions.
                 if ctx.is_in_fn() {
@@ -150,24 +142,11 @@ impl AStatement {
                     ));
                 }
 
-                // Analyze all the function signatures in the `extern` block.
-                let mut a_fn_sigs = vec![];
-                for ext_fn_sig in &ext.fn_sigs {
-                    a_fn_sigs.push(AFnSig::from(ctx, ext_fn_sig));
-                }
-
-                AStatement::ExternFns(a_fn_sigs)
+                // Analyze the function signature in the `extern` block.
+                AStatement::ExternFn(AFnSig::from(ctx, &ext.fn_sig))
             }
 
-            Statement::Consts(const_block) => {
-                // Analyze all the constant declarations.
-                let mut consts = vec![];
-                for const_decl in &const_block.consts {
-                    consts.push(AConst::from(ctx, const_decl));
-                }
-
-                AStatement::Consts(consts)
-            }
+            Statement::Const(const_decl) => AStatement::Const(AConst::from(ctx, const_decl)),
 
             Statement::Use(_) => {
                 // Use statements aren't allowed inside functions. We know we're
@@ -261,7 +240,7 @@ mod tests {
                     return false
                 } else {
                     mut_a = 2
-                } 
+                }
             }
         "#;
         let mut ctx = ProgramContext::new_with_host_ptr_width();

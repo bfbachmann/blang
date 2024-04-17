@@ -32,8 +32,8 @@ impl AModule {
         for statement in &module.statements {
             match statement {
                 Statement::FunctionDeclaration(_)
-                | Statement::ExternFns(_)
-                | Statement::Consts(_)
+                | Statement::ExternFn(_)
+                | Statement::Const(_)
                 | Statement::StructDeclaration(_)
                 | Statement::EnumDeclaration(_)
                 | Statement::Impl(_) => {
@@ -124,10 +124,8 @@ fn define_types(ctx: &mut ProgramContext, module: &Module) {
 /// so they can be fetched and analyzed later when they're used.
 fn define_consts(ctx: &mut ProgramContext, module: &Module) {
     for statement in &module.statements {
-        if let Statement::Consts(const_block) = statement {
-            for const_decl in &const_block.consts {
-                ctx.try_insert_unchecked_const(const_decl.clone());
-            }
+        if let Statement::Const(const_decl) = statement {
+            ctx.try_insert_unchecked_const(const_decl.clone());
         }
     }
 }
@@ -142,8 +140,8 @@ fn define_fns(ctx: &mut ProgramContext, module: &Module) {
                 define_fn(ctx, func);
             }
 
-            Statement::ExternFns(ext) => {
-                define_extern_fns(ctx, ext);
+            Statement::ExternFn(ext) => {
+                define_extern_fn(ctx, ext);
             }
 
             Statement::Impl(impl_) => {
@@ -182,19 +180,17 @@ fn define_fn(ctx: &mut ProgramContext, func: &Function) {
     }
 }
 
-fn define_extern_fns(ctx: &mut ProgramContext, ext: &Extern) {
-    for sig in &ext.fn_sigs {
-        if sig.tmpl_params.is_some() {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::InvalidExtern,
-                "external functions cannot be templated",
-                sig,
-            ));
-            continue;
-        }
-
-        analyze_fn_sig(ctx, sig);
+fn define_extern_fn(ctx: &mut ProgramContext, ext: &Extern) {
+    if ext.fn_sig.tmpl_params.is_some() {
+        ctx.insert_err(AnalyzeError::new(
+            ErrorKind::InvalidExtern,
+            "external functions cannot be templated",
+            &ext.fn_sig,
+        ));
+        return;
     }
+
+    analyze_fn_sig(ctx, &ext.fn_sig);
 }
 
 fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {

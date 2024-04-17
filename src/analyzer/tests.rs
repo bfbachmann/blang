@@ -691,10 +691,8 @@ mod tests {
     fn duplicate_const() {
         let result = analyze(
             r#"
-            const {
-                a = {1, 2, true}
-                a = "test"
-            }
+            const a = {1, 2, true}
+            const a = "test"
             "#,
         );
         check_result(result, Some(ErrorKind::DuplicateConst));

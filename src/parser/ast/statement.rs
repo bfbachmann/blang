@@ -12,7 +12,7 @@ use crate::parser::ast::ext::Extern;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::func_call::FuncCall;
 use crate::parser::ast::r#break::Break;
-use crate::parser::ast::r#const::ConstBlock;
+use crate::parser::ast::r#const::Const;
 use crate::parser::ast::r#enum::EnumType;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#loop::Loop;
@@ -41,8 +41,8 @@ pub enum Statement {
     Return(Ret),
     StructDeclaration(StructType),
     EnumDeclaration(EnumType),
-    ExternFns(Extern),
-    Consts(ConstBlock),
+    ExternFn(Extern),
+    Const(Const),
     Impl(Impl),
     SpecDeclaration(Spec),
     Use(UsedModule),
@@ -95,10 +95,10 @@ impl fmt::Display for Statement {
             Statement::EnumDeclaration(e) => {
                 write!(f, "{}", e)
             }
-            Statement::ExternFns(extern_fn) => {
+            Statement::ExternFn(extern_fn) => {
                 write!(f, "{}", extern_fn)
             }
-            Statement::Consts(const_block) => {
+            Statement::Const(const_block) => {
                 write!(f, "{}", const_block)
             }
             Statement::Use(used_mod) => {
@@ -139,8 +139,8 @@ impl Locatable for Statement {
             Statement::Return(ret) => ret.start_pos(),
             Statement::StructDeclaration(s) => s.start_pos(),
             Statement::EnumDeclaration(e) => e.start_pos(),
-            Statement::ExternFns(e) => e.start_pos(),
-            Statement::Consts(c) => c.start_pos(),
+            Statement::ExternFn(e) => e.start_pos(),
+            Statement::Const(c) => c.start_pos(),
             Statement::Use(u) => u.start_pos(),
             Statement::Impl(i) => i.start_pos(),
             Statement::SpecDeclaration(t) => t.start_pos(),
@@ -161,8 +161,8 @@ impl Locatable for Statement {
             Statement::Return(ret) => ret.end_pos(),
             Statement::StructDeclaration(s) => s.end_pos(),
             Statement::EnumDeclaration(e) => e.end_pos(),
-            Statement::ExternFns(e) => e.end_pos(),
-            Statement::Consts(c) => c.end_pos(),
+            Statement::ExternFn(e) => e.end_pos(),
+            Statement::Const(c) => c.end_pos(),
             Statement::Use(u) => u.end_pos(),
             Statement::Impl(i) => i.end_pos(),
             Statement::SpecDeclaration(t) => t.end_pos(),
@@ -236,13 +236,13 @@ impl Statement {
             // If the first token is `extern`, it's a set of external function declarations.
             (TokenKind::Extern, _) => {
                 let ext = Extern::from(tokens)?;
-                Ok(Statement::ExternFns(ext))
+                Ok(Statement::ExternFn(ext))
             }
 
             // If the first token is `const`, it's a set of constant declarations.
             (TokenKind::Const, _) => {
-                let const_block = ConstBlock::from(tokens)?;
-                Ok(Statement::Consts(const_block))
+                let const_decl = Const::from(tokens)?;
+                Ok(Statement::Const(const_decl))
             }
 
             // If the first token is `fn`, it must be a function declaration.

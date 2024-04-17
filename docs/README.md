@@ -43,32 +43,32 @@ The language and compiler are still very young, so they still lack some critical
 
 A regular function can be defined as follows.
 
-```rust
-/// This function takes an unsigned integer `n` and returns the nth number in the Fibonnaci sequence. 
+```
+/// This function takes an unsigned integer `n` and returns the nth number in the Fibonnaci sequence.
 fn fibonacci(n: u64): u64 {
-if n < = 1 {
-return 1
-}
+    if n < = 1 {
+        return 1
+    }
 
-return fibonacci(n - 1) + fibonacci(n - 2)
+    return fibonacci(n - 1) + fibonacci(n - 2)
 }
 ```
 
 Functions can be nested.
 
-```rust
+```
 fn call_nested(): int {
-fn sum(a: int, b: int): int {
-return a + b
-}
+    fn sum(a: int, b: int): int {
+        return a + b
+    }
 
-return sum(1, 2)
+    return sum(1, 2)
 }
 ```
 
 Functions pointers can be used as values and assigned to variables.
 
-```rust
+```
 fn main() {
     let func = get_fn()
     let three = func(1, 2)
@@ -76,11 +76,11 @@ fn main() {
 
 // This function returns a function pointer.
 fn get_fn(): fn (int, int): int {
-fn sum(a: int, b: int): int {
-return a + b
-}
+    fn sum(a: int, b: int): int {
+        return a + b
+    }
 
-return sum
+    return sum
 }
 ```
 
@@ -89,10 +89,10 @@ return sum
 Variables can only be declared using the `let` keyword inside functions.There is currently no support for global or
 module-level variables.
 
-```rust
+```
 fn demo() {
     // Declare a variable named `x` with the value 2.
-    // Since the type type of `x` was not specified, it is assumed here to be `i64`. 
+    // Since the type type of `x` was not specified, it is assumed here to be `i64`.
     let x = 2
 
     // Declare a variable named `y` with the value 10.
@@ -105,17 +105,17 @@ Variables declared this way are always either stack-allocated or inlined dependi
 
 By default, all variables are immutable. To declare a mutable variable, use the `mut` modifier.
 
-```rust
+```
 fn calculate(n: u64, double: bool, max: u64): u64 {
-let mut result = n
-if double {
-result = result * 2
-}
+    let mut result = n
+    if double {
+        result = result * 2
+    }
 
-if result > max {
-return max
-}
-return result
+    if result > max {
+        return max
+    }
+    return result
 }
 ```
 
@@ -123,25 +123,23 @@ return result
 
 Constants can be declared at the module level or inside functions using the `const` keyword.
 
-```rust
+```
 // Define a const representing the number of hours in a day.
 const hours_in_day = 24
 
 // Define multiple constants, all in one `const` block.
-const {
-days_in_year = 365
-seasons = ["Spring", "Summer", "Autumn", "Winter"]
-}
+const days_in_year = 365
+const seasons = ["Spring", "Summer", "Autumn", "Winter"]
 
 fn is_bad_day(day_in_month: int): bool {
-const bad_day = 13
-return day_in_month == bad_day
+    const bad_day = 13
+    return day_in_month == bad_day
 }
 ```
 
 Like variables, constant types can be declared explicitly.
 
-```rust
+```
 const default_balance: u64 = 10_000
 ```
 
@@ -149,7 +147,7 @@ Constant values don't occupy any place in memory or program data. Instead, they 
 is the key difference between immutable variables (which may occupy space on the stack, and may even be copied), and
 constants.
 
-```rust
+```
 const x = 6 * 6
 
 fn test() {
@@ -161,7 +159,7 @@ fn test() {
 
 Any expression composed exclusively of constant values can be declared as a constant.
 
-```rust
+```
 const my_tuple = { "this", "is my tuple", 123 / 23 - 1 }
 ```
 
@@ -169,7 +167,7 @@ const my_tuple = { "this", "is my tuple", 123 / 23 - 1 }
 
 Structure types contain values of other types that are accessible via named fields.
 
-```rust
+```
 // Struct types can be declared both inside and outside functions.
 struct User {
     username: str
@@ -186,7 +184,7 @@ fn main() {
     // Struct values are not copied automatically, so this is a move.
     let new_user = user
 
-    // This line would cause a use-after-move compile error. 
+    // This line would cause a use-after-move compile error.
     let username = user.username  // error: cannot use `user.username` because `user` was already moved
 }
 ```
@@ -195,7 +193,7 @@ fn main() {
 
 An enum type represents one of a defined set of values.
 
-```rust
+```
 // Enum types can be declared both inside and outside functions.
 enum Result {
     Ok,
@@ -208,7 +206,7 @@ fn main() {
     // Enum values are not copied automatically, so this is a move.
     let new_result = result
 
-    // This line would cause a use-after-move compile error. 
+    // This line would cause a use-after-move compile error.
     let other_result = result  // error: cannot use `result` because `result` was already moved
 }
 ```
@@ -217,7 +215,7 @@ fn main() {
 
 Tuples are like structs, except their fields are identified by index rather than by name.
 
-```rust
+```
 fn main() {
     let values:
     { str, i64, bool } = { "thing", 1, true }
@@ -225,7 +223,7 @@ fn main() {
     // Tuple values are not copied automatically, so this is a move.
     let new_values = values
 
-    // This line would cause a use-after-move compile error. 
+    // This line would cause a use-after-move compile error.
     let msg = values.0  // error: cannot use `values.0` because `values` was already moved
 }
 ```
@@ -234,7 +232,7 @@ fn main() {
 
 Arrays are stack-allocated, fixed-sized sequences of values of the same type.
 
-```rust
+```
 fn main() {
     let byte_array: [i64; 5] = [1, 2, 3, 4, 5]
 
@@ -254,7 +252,7 @@ fn main() {
 Blang is not object-oriented in the classical sense, but it does support the declaration of methods for existing types
 using the `impl` keyword.
 
-```rust
+```
 struct User {
     username: str
     age: u64
@@ -263,29 +261,29 @@ struct User {
 impl User {
     // Creates a new user with the given username and age.
     fn new(username: str, age: u64): User {
-    return User{
-    username: username
-    age: age
-    }
+        return User{
+            username: username
+            age: age
+        }
     }
 
     // Returns a copy of this user with the new username.
     fn with_username(self, new_username: str): User {
-    // This is a call to a class method.
-    return User.new(new_username, self .age)
-}
+        // This is a call to a class method.
+        return User.new(new_username, self .age)
+    }
 
-fn is_senior(self): bool {
-return self.age
-}
+    fn is_senior(self): bool {
+        return self.age
+    }
 }
 
 fn apply_discounts(user: User) {
     // This is what a method call looks like.
     if user.is_senior() {
-        // ... 
+        // ...
     } else {
-        // ...    
+        // ...
     }
 }
 ```
@@ -295,7 +293,7 @@ be split up over multiple files.
 
 ### Conditionals: `if`, `elsif`, `else`
 
-```rust
+```
 enum Cmp {
     Equal,
     GreaterThan,
@@ -303,13 +301,13 @@ enum Cmp {
 }
 
 fn compare(a: i64, b: i64): Cmp {
-if a > b {
-return Cmp::GreaterThan
-} elsif a < b {
-return Cmp::LessThan
-} else {
-return Cmp::Equal
-}
+    if a > b {
+        return Cmp::GreaterThan
+    } elsif a < b {
+        return Cmp::LessThan
+    } else {
+        return Cmp::Equal
+    }
 }
 ```
 
@@ -317,14 +315,12 @@ return Cmp::Equal
 
 #### `for` loops
 
-```rust
+```
 fn main() {
     let mut a = [1, 2, 3]
 
     // Double all elements in the array.
-    for
-    let mut i: u64 = 0, i < 3, i = i + 1
-    {
+    for let mut i: u64 = 0, i < 3, i = i + 1 {
         a.(i) = a.(i) * 2
     }
 }
@@ -332,7 +328,7 @@ fn main() {
 
 #### `while` loops
 
-```rust
+```
 fn main() {
     let mut x = 1
     while x < 100 {
@@ -343,7 +339,7 @@ fn main() {
 
 #### `loop` loops
 
-```rust
+```
 fn main() {
     let mut x = 1
 
@@ -372,7 +368,7 @@ values can be referenced mutably.
 The dereference operator `^` can be used to retrieve a value from memory referenced by a pointer.
 Dereferencing a pointer that points to an invalid or un-allocated region of memory can cause undefined behaviour.
 
-```rust
+```
 fn main() {
     let mut x = 123
 
@@ -380,22 +376,22 @@ fn main() {
     let x_ptr = &x
 
     // Dereference the pointer to `x` to get its value.
-    let x_copy = x ^
+    let x_copy = x^
 
     // Change the value of `x` via a pointer (must use `*mut`). We're only allowed
     // to get a `*mut` to `x` here because `x` itself is `mut`.
     let x_mut_ptr = &mut x
-    x ^ = 321
+    x^ = 321
 }
 ```
 
 Pointer arithmetic can be done simply be indexing the pointer like one would an array.
 
-```rust
+```
 fn main() {
     let ptr: * int = &[1, 2, 3] as * int
     let ptr_to_three: * int = ptr.(2) // equivalent to `ptr + 2 * sizeof int`
-    let three = ptr_to_three ^
+    let three = ptr_to_three^
 }
 ```
 
@@ -403,7 +399,7 @@ fn main() {
 
 External functions can be declared in Blang the same way they can in languages like C.
 
-```rust
+```
 // Declare the `exit` system call so the linker can link it from libc.
 extern fn exit(code: u64)
 
@@ -421,7 +417,7 @@ TODO
 
 Values can be explicitly cast to other compatible types with the typecast operator `as`.
 
-```rust
+```
 fn main() {
     // Casting between numeric types.
     let a: u32 = 10i64 as u32

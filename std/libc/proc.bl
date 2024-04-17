@@ -1,3 +1,1 @@
-extern {
-    fn exit(code: uint)
-}
+ extern fn exit(code: uint)

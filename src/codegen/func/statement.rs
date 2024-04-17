@@ -47,12 +47,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AStatement::Return(ret) => {
                 self.gen_return(ret);
             }
-            AStatement::Consts(consts) => {
-                for c in consts {
-                    self.local_consts.insert(c.name.clone(), c.clone());
-                }
+            AStatement::Const(const_decl) => {
+                self.local_consts
+                    .insert(const_decl.name.clone(), const_decl.clone());
             }
-            AStatement::ExternFns(_) => {
+            AStatement::ExternFn(_) => {
                 // Nothing to do here. This is already handled in
                 // `ProgramCodeGen::gen_program`.
             }

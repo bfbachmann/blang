@@ -1,7 +1,5 @@
-extern {
-    fn memcpy(dst: *u8, src: *u8, n_bytes: uint): *mut u8
-    fn malloc(nbytes: uint): *mut u8
-    fn calloc(count: uint, size: uint): *mut u8
-    fn realloc(src: *u8, size: uint): *mut u8
-    fn free(ptr: *u8)
-}
+extern fn memcpy(dst: *u8, src: *u8, n_bytes: uint): *mut u8
+extern fn malloc(nbytes: uint): *mut u8
+extern fn calloc(count: uint, size: uint): *mut u8
+extern fn realloc(src: *u8, size: uint): *mut u8
+extern fn free(ptr: *u8)

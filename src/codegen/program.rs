@@ -84,11 +84,11 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                 AStatement::StructTypeDeclaration(_) | AStatement::EnumTypeDeclaration(_) => {
                     // Nothing to do here because types are compiled only when they're used.
                 }
-                AStatement::ExternFns(_) => {
+                AStatement::ExternFn(_) => {
                     // Nothing to do here because extern functions are compiled in the call to
-                    // `ProgramCodeGen::define_extern_fns` above.
+                    // `ProgramCodeGen::declare_fns_and_consts`.
                 }
-                AStatement::Consts(_) => {
+                AStatement::Const(_) => {
                     // Nothing to do here because constants are compiled in the call to
                     // `ProgramCodeGen::define_consts` above.
                 }
@@ -112,22 +112,18 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
     fn declare_fns_and_consts(&mut self) {
         for statement in &self.program.statements {
             match statement {
-                AStatement::Consts(consts) => {
-                    for const_decl in consts {
-                        self.module_consts
-                            .insert(const_decl.name.clone(), const_decl.clone());
-                    }
+                AStatement::Const(const_decl) => {
+                    self.module_consts
+                        .insert(const_decl.name.clone(), const_decl.clone());
                 }
 
-                AStatement::ExternFns(fn_sigs) => {
-                    for fn_sig in fn_sigs {
-                        let ll_fn_type = self.type_converter.get_fn_type(fn_sig.type_key);
-                        self.module.add_function(
-                            fn_sig.name.as_str(),
-                            ll_fn_type,
-                            Some(Linkage::External),
-                        );
-                    }
+                AStatement::ExternFn(fn_sig) => {
+                    let ll_fn_type = self.type_converter.get_fn_type(fn_sig.type_key);
+                    self.module.add_function(
+                        fn_sig.name.as_str(),
+                        ll_fn_type,
+                        Some(Linkage::External),
+                    );
                 }
 
                 AStatement::FunctionDeclaration(func) => {
