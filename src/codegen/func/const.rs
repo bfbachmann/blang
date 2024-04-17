@@ -1,6 +1,6 @@
 use inkwell::types::BasicType;
 use inkwell::values::{
-    ArrayValue, BasicValue, BasicValueEnum, IntValue, PointerValue, StructValue,
+    ArrayValue, BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue, StructValue,
 };
 
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
@@ -181,6 +181,15 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                         .collect();
                     ll_element_type
                         .into_int_type()
+                        .const_array(ll_elements.as_slice())
+                        .as_basic_value_enum()
+                } else if ll_element_type.is_float_type() {
+                    let ll_elements: Vec<FloatValue> = elements
+                        .iter()
+                        .map(|v| self.gen_const_expr(v).into_float_value())
+                        .collect();
+                    ll_element_type
+                        .into_float_type()
                         .const_array(ll_elements.as_slice())
                         .as_basic_value_enum()
                 } else if ll_element_type.is_struct_type() {
