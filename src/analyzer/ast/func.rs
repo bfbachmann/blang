@@ -215,10 +215,17 @@ pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) {
     // Add the function to the program context with an empty body, making sure it doesn't already
     // exist. We'll replace the function body when we analyze it later.
     let a_fn_sig = AFnSig::from(ctx, &sig);
-    if ctx.get_defined_fn_sig(a_fn_sig.name.as_str()).is_some() {
+
+    if ctx
+        .get_defined_fn_sig(None, a_fn_sig.name.as_str())
+        .is_some()
+        || ctx
+            .get_scoped_symbol(None, a_fn_sig.name.as_str())
+            .is_some()
+    {
         ctx.insert_err(AnalyzeError::new(
             ErrorKind::DuplicateFunction,
-            format_code!("function {} was already defined", sig.name).as_str(),
+            format_code!("{} was already defined", sig.name).as_str(),
             sig,
         ));
     } else {
@@ -247,10 +254,10 @@ impl AFn {
         // Make sure there isn't already another function by the same name. There are already
         // checks for regular function name collisions in `analyze_fn_sig`, but those
         // won't detect nested function name collisions - that's what this is for.
-        if ctx.get_fn(signature.mangled_name.as_str()).is_some() {
+        if ctx.get_fn(None, signature.mangled_name.as_str()).is_some() {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::DuplicateFunction,
-                format_code!("function {} was already defined", &signature.name).as_str(),
+                format_code!("{} was already defined", &signature.name).as_str(),
                 &func.signature,
             ));
         }

@@ -81,7 +81,7 @@ mod tests {
 
     #[test]
     fn var_redeclared() {
-        let mut ctx = ProgramContext::new_with_host_ptr_width();
+        let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
         let var_decl = VariableDeclaration::new(
             Some(Type::new_unresolved("str")),
             false,
@@ -104,7 +104,7 @@ mod tests {
             }
         );
         assert_eq!(
-            ctx.get_symbol("my_var").unwrap().type_key,
+            ctx.get_scoped_symbol(None, "my_var").unwrap().type_key,
             ctx.str_type_key()
         );
 
@@ -128,14 +128,14 @@ mod tests {
             }
         );
         assert_eq!(
-            ctx.get_symbol("my_var").unwrap().type_key,
+            ctx.get_scoped_symbol(None, "my_var").unwrap().type_key,
             ctx.bool_type_key()
         );
     }
 
     #[test]
     fn type_mismatch() {
-        let mut ctx = ProgramContext::new_with_host_ptr_width();
+        let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
         let var_decl = VariableDeclaration::new(
             Some(Type::new_unresolved("i64")),
             false,

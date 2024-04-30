@@ -1,3 +1,4 @@
+use std::default::Default;
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::hash::{Hash, Hasher};
@@ -43,7 +44,7 @@ impl ModulePath {
                     ..
                 },
             ) => {
-                if path.contains("..") || path.starts_with("/") || path.starts_with(".") {
+                if path.contains("..") || path.starts_with("/") {
                     return Err(ParseError::new_with_token(
                         ErrorKind::InvalidModPath,
                         format_code!("invalid module path {}", path).as_str(),
@@ -51,7 +52,7 @@ impl ModulePath {
                     ));
                 }
 
-                let path = match fs::canonicalize(path) {
+                let full_path = match fs::canonicalize(path) {
                     Ok(p) => p,
                     Err(_) => {
                         return Err(ParseError::new_with_token(
@@ -63,16 +64,16 @@ impl ModulePath {
                 };
 
                 // Make sure the path is valid.
-                match fs::metadata(path.clone()) {
+                match fs::metadata(full_path.clone()) {
                     Ok(_) => Ok(ModulePath {
-                        raw: path.to_str().unwrap().to_string(),
+                        raw: path.to_string(),
                         start_pos: token.start.clone(),
                         end_pos: token.end.clone(),
                     }),
 
                     Err(_) => Err(ParseError::new_with_token(
                         ErrorKind::ModNotFound,
-                        format_code!("module {} was not found", path.display()).as_str(),
+                        format_code!("module {} was not found", path).as_str(),
                         token.clone(),
                     )),
                 }
@@ -146,89 +147,73 @@ impl UsedModule {
     /// Parses a `use` statement from the given token sequence. Expects token sequences of
     /// the forms
     ///
-    ///     use "path/to/file.bl"
-    ///     use "path/to/file.bl" as <alias>
-    ///     use {<ident>, ...} from "path/to/file.bl"
-    ///     use * from "path/to/file.bl"
+    ///     use <name>: "path/to/file.bl"
+    ///     use {<ident>, ...}: "path/to/file.bl"
+    ///     use <name> {<ident>, ...}: "path/to/file.bl"
     ///
     /// where
-    /// - `ident` is any identifier to import from the given path
-    /// - `alias` is any identifier that will serve as an alias for the module.
+    /// - `name` is an identifier used to name the module being used
+    /// - `ident` is any identifier to import from the given path.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<UsedModule> {
         let start_pos = Module::parse_expecting(tokens, TokenKind::Use)?.start;
-        let end_pos;
 
-        match Module::parse_optional(tokens, TokenKind::LeftBrace) {
-            // If the next token is `{`, we'll assume we're parsing a `use` statement of
-            // the form `use {<ident>, ...} from "<path>"`.
-            Some(_) => {
-                // Parse all the identifiers being imported.
-                let mut identifiers = vec![];
-                while !Module::next_token_is(tokens, &TokenKind::RightBrace) {
-                    // Parse the next identifier.
-                    identifiers.push(Module::parse_identifier(tokens)?);
-
-                    // If there is no comma following the identifier, then we've reached the
-                    // end of the identifiers list.
-                    if Module::parse_optional(tokens, TokenKind::Comma).is_none() {
-                        break;
-                    };
-                }
-
-                // Parse the remaining `} from "<path>"`.
-                Module::parse_expecting(tokens, TokenKind::RightBrace)?.end;
-                Module::parse_expecting(tokens, TokenKind::From)?;
-                let path = ModulePath::from(tokens)?;
-                end_pos = path.end_pos().clone();
-
-                Ok(UsedModule {
-                    path,
-                    maybe_alias: None,
-                    identifiers,
-                    start_pos,
-                    end_pos,
-                })
+        // Parse the optional module alias.
+        let maybe_alias = match tokens.peek_next() {
+            Some(Token {
+                kind: TokenKind::Identifier(alias),
+                ..
+            }) => {
+                let result = Some(alias.to_owned());
+                tokens.next();
+                result
             }
 
-            // In this case, we'll assume we're just parsing a `use` statement of the forms
-            //
-            //      use * from "<path>"
-            //      use "<path>"
-            //      use "<path>" as <alias>
-            None => {
-                // Handle the special case of the wildcard `*` import.
-                if Module::parse_optional(tokens, TokenKind::Asterisk).is_some() {
-                    Module::parse_expecting(tokens, TokenKind::From)?;
+            _ => None,
+        };
 
-                    let path = ModulePath::from(tokens)?;
-                    end_pos = path.end_pos().clone();
-                    Ok(UsedModule {
-                        path,
-                        maybe_alias: None,
-                        identifiers: vec!["*".into()],
-                        start_pos,
-                        end_pos,
-                    })
-                } else {
-                    let path = ModulePath::from(tokens)?;
-                    let (maybe_alias, end_pos) = match Module::parse_optional(tokens, TokenKind::As)
-                    {
-                        Some(_) => {
-                            let alias = Module::parse_identifier(tokens)?;
-                            (Some(alias), Module::prev_position(tokens))
-                        }
-                        None => (None, path.end_pos().clone()),
-                    };
-
-                    Ok(UsedModule {
-                        path,
-                        maybe_alias,
-                        identifiers: vec![],
-                        start_pos,
-                        end_pos,
-                    })
-                }
+        // Parse the optional identifiers being imported from the module.
+        let identifiers = if Module::parse_optional(tokens, TokenKind::LeftBrace).is_some() {
+            let mut idents = vec![Module::parse_identifier(tokens)?];
+            while Module::parse_optional(tokens, TokenKind::Comma).is_some() {
+                idents.push(Module::parse_identifier(tokens)?);
             }
+
+            Module::parse_expecting(tokens, TokenKind::RightBrace)?;
+
+            idents
+        } else {
+            vec![]
+        };
+
+        // Make sure that some alias or identifiers were defined.
+        if maybe_alias.is_none() && identifiers.is_empty() {
+            if let Some(token) = tokens.next() {
+                return Err(ParseError::new_with_token(
+                    ErrorKind::UnexpectedToken,
+                    format_code!("expected identifier or {}, but found {}", "{", token).as_str(),
+                    token.clone(),
+                ));
+            }
+
+            return Err(ParseError::new(
+                ErrorKind::UnexpectedToken,
+                format_code!("expected identifier or {}, but found EOF", "{").as_str(),
+                None,
+                Position::default(),
+                Position::default(),
+            ));
         }
+
+        Module::parse_expecting(tokens, TokenKind::Colon)?;
+
+        let path = ModulePath::from(tokens)?;
+
+        Ok(UsedModule {
+            end_pos: path.end_pos().clone(),
+            path,
+            maybe_alias,
+            identifiers,
+            start_pos,
+        })
     }
 }

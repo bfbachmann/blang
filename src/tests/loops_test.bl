@@ -1,4 +1,6 @@
-use "src/tests/test_utils.bl"
+use {exit}: "std/libc/proc.bl"
+
+use {assert}: "src/tests/test_utils.bl"
 
 // Checks that we can use loops to calculate 25 primes between 1 and 100 (inclusive).
 fn main() {

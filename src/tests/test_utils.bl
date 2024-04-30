@@ -1,6 +1,5 @@
-use "std/libc/io.bl"
-use "std/libc/proc.bl"
-use "std/libc/mem.bl"
+use {exit}: "std/libc/proc.bl"
+use {write, stderr}: "std/libc/io.bl"
 
 const null = 0_u64 as *u8
 

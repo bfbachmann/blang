@@ -1,4 +1,7 @@
-use "src/tests/test_utils.bl"
+use {exit}: "std/libc/proc.bl"
+use {malloc, free}: "std/libc/mem.bl"
+
+use {assert, null}: "src/tests/test_utils.bl"
 
 struct T {
     i: int,

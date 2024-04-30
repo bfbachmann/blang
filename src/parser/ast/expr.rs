@@ -580,11 +580,14 @@ fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                 }
 
                 tokens.set_cursor(cursor);
-                Expression::Symbol(Symbol::from_identifier(tokens)?)
+                Expression::Symbol(Symbol::from(tokens)?)
             }
 
-            _ => Expression::Symbol(Symbol::from_identifier(tokens)?),
+            _ => Expression::Symbol(Symbol::from(tokens)?),
         },
+
+        // Any expression that begins with `@`.
+        TokenKind::At => Expression::Symbol(Symbol::from(tokens)?),
 
         other => {
             return Err(ParseError::new_with_token(
@@ -624,6 +627,7 @@ mod tests {
         assert_eq!(
             parse(r#"my_var"#).unwrap(),
             Expression::Symbol(Symbol {
+                maybe_mod_name: None,
                 name: "my_var".to_string(),
                 start_pos: Position::new(1, 1),
                 end_pos: Position::new(1, 7),
@@ -716,6 +720,7 @@ mod tests {
                             Expression::UnaryOperation(
                                 Operator::LogicalNot,
                                 Box::new(Expression::Symbol(Symbol {
+                                    maybe_mod_name: None,
                                     name: "thing".to_string(),
                                     start_pos: Position::new(1, 24),
                                     end_pos: Position::new(1, 29),
@@ -731,6 +736,7 @@ mod tests {
                                 Operator::GreaterThan,
                                 Box::new(Expression::BinaryOperation(
                                     Box::new(Expression::Symbol(Symbol {
+                                        maybe_mod_name: None,
                                         name: "var".to_string(),
                                         start_pos: Position::new(1, 35),
                                         end_pos: Position::new(1, 38),
@@ -821,6 +827,7 @@ mod tests {
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::BinaryOperation(
                             Box::new(Expression::Symbol(Symbol {
+                                maybe_mod_name: None,
                                 name: "var".to_string(),
                                 start_pos: Position::new(1, 2),
                                 end_pos: Position::new(1, 5),
@@ -982,6 +989,7 @@ mod tests {
             Expression::UnaryOperation(
                 Operator::Subtract,
                 Box::new(Expression::Symbol(Symbol {
+                    maybe_mod_name: None,
                     name: "x".to_string(),
                     start_pos: Position::new(1, 2),
                     end_pos: Position::new(1, 3),
@@ -1087,6 +1095,7 @@ mod tests {
                                 Box::new(Expression::UnaryOperation(
                                     Operator::Subtract,
                                     Box::new(Expression::Symbol(Symbol {
+                                        maybe_mod_name: None,
                                         name: "v".to_string(),
                                         start_pos: Position { line: 1, col: 5 },
                                         end_pos: Position { line: 1, col: 6 },
@@ -1096,6 +1105,7 @@ mod tests {
                                 Box::new(Expression::UnaryOperation(
                                     Operator::Subtract,
                                     Box::new(Expression::Symbol(Symbol {
+                                        maybe_mod_name: None,
                                         name: "a".to_string(),
                                         start_pos: Position { line: 1, col: 8 },
                                         end_pos: Position { line: 1, col: 9 },
@@ -1130,6 +1140,7 @@ mod tests {
                             Operator::Subtract,
                             Box::new(Expression::FunctionCall(Box::new(FuncCall {
                                 fn_expr: Expression::Symbol(Symbol {
+                                    maybe_mod_name: None,
                                     name: "call".to_string(),
                                     start_pos: Position { line: 1, col: 23 },
                                     end_pos: Position { line: 1, col: 27 },
@@ -1161,6 +1172,7 @@ mod tests {
                     Box::new(Expression::UnaryOperation(
                         Operator::Subtract,
                         Box::new(Expression::Symbol(Symbol {
+                            maybe_mod_name: None,
                             name: "b".to_string(),
                             start_pos: Position::new(1, 4),
                             end_pos: Position::new(1, 5),

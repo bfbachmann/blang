@@ -20,7 +20,6 @@ use crate::fmt::{display_err, format_duration};
 use crate::lexer::lex::lex;
 use crate::lexer::pos::Locatable;
 use crate::lexer::stream::Stream;
-use crate::parser::ast::statement::Statement;
 use crate::parser::error::ParseResult;
 
 mod codegen;
@@ -203,7 +202,7 @@ fn parse_source_files(input_path: &str) -> Vec<Module> {
     };
 
     // Get the project root directory and main file paths.
-    let (root_path, main_paths) = if is_dir {
+    let main_paths = if is_dir {
         let root_path = fs::canonicalize(input_path).unwrap();
         let main_path = root_path.join("main.bl");
 
@@ -231,16 +230,13 @@ fn parse_source_files(input_path: &str) -> Vec<Module> {
                 }
             };
 
-            (root_path.to_path_buf(), paths)
+            paths
         } else {
-            (root_path.to_path_buf(), vec![main_path.to_path_buf()])
+            vec![main_path.to_path_buf()]
         }
     } else {
         let main_path = Path::new(input_path);
-        (
-            main_path.parent().unwrap().to_path_buf(),
-            vec![main_path.to_path_buf()],
-        )
+        vec![main_path.to_path_buf()]
     };
 
     // Parse all source files by following imports.
@@ -251,13 +247,10 @@ fn parse_source_files(input_path: &str) -> Vec<Module> {
     while let Some(path) = files_to_parse.pop_front() {
         match parse_source_file(path.to_str().unwrap()) {
             Ok(module) => {
-                for statement in &module.statements {
-                    if let Statement::Use(used_mod) = statement {
-                        let used_mod_path = PathBuf::from(used_mod.path.raw.as_str());
-                        let full_used_mod_path = root_path.join(used_mod_path);
-                        if !parsed_mod_paths.contains(&full_used_mod_path) {
-                            files_to_parse.push_back(full_used_mod_path)
-                        }
+                for used_mod in &module.used_mods {
+                    let used_mod_path = PathBuf::from(used_mod.path.raw.as_str());
+                    if !parsed_mod_paths.contains(&used_mod_path) {
+                        files_to_parse.push_back(used_mod_path)
                     }
                 }
 
@@ -296,7 +289,14 @@ fn parse_source_files(input_path: &str) -> Vec<Module> {
 
 /// Lexes and parses a source file.
 fn parse_source_file(input_path: &str) -> ParseResult<Module> {
-    let source_code = match fs::read_to_string(input_path) {
+    let full_path = match fs::canonicalize(input_path) {
+        Ok(p) => p,
+        Err(err) => {
+            fatalln!("error reading {}: {}", input_path, err)
+        }
+    };
+
+    let source_code = match fs::read_to_string(full_path) {
         Ok(code) => code,
         Err(err) => {
             fatalln!("error reading {}: {}", input_path, err)

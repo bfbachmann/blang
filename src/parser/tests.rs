@@ -88,6 +88,7 @@ mod tests {
             result,
             Module {
                 path: "".to_string(),
+                used_mods: vec![],
                 statements: vec![
                     Statement::VariableDeclaration(VariableDeclaration::new(
                         Some(Type::new_unresolved("i64")),
@@ -396,6 +397,7 @@ mod tests {
             result,
             Module {
                 path: "".to_string(),
+                used_mods: vec![],
                 statements: vec![Statement::FunctionDeclaration(Function::new(
                     FunctionSignature::new(
                         "my_func",
@@ -419,6 +421,7 @@ mod tests {
                             Statement::Conditional(Conditional::new(vec![Branch::new(
                                 Some(Expression::BinaryOperation(
                                     Box::new(Expression::Symbol(Symbol {
+                                        maybe_mod_name: None,
                                         name: "s".to_string(),
                                         start_pos: Position::new(2, 16),
                                         end_pos: Position::new(2, 17),
@@ -512,7 +515,7 @@ mod tests {
         assert!(matches!(
             result,
             Err(ParseError {
-                kind: ErrorKind::ExpectedType,
+                kind: ErrorKind::ExpectedIdent,
                 ..
             })
         ))
@@ -534,6 +537,7 @@ mod tests {
                     is_mut: false,
                     name: "a".to_string(),
                     value: Expression::Symbol(Symbol {
+                        maybe_mod_name: None,
                         name: "thing".to_string(),
                         start_pos: Position::new(2, 21),
                         end_pos: Position::new(2, 26),
@@ -543,6 +547,7 @@ mod tests {
                 }),
                 Statement::VariableAssignment(VariableAssignment::new(
                     Expression::Symbol(Symbol {
+                        maybe_mod_name: None,
                         name: "thing".to_string(),
                         start_pos: Position::new(3, 14),
                         end_pos: Position::new(3, 19),
@@ -562,7 +567,7 @@ mod tests {
     #[test]
     fn invalid_mod_paths() {
         for path in ["./thing.bl", "../thing.bl", "path/../other.bl"] {
-            let raw = format!(r#"use "{path}""#);
+            let raw = format!(r#"use thing: "{path}""#);
             let tokens = lex(raw.as_str()).expect("should succeed");
             let result = Module::from("", &mut Stream::from(tokens));
             assert!(matches!(

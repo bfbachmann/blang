@@ -716,7 +716,8 @@ impl AExpr {
                         // Make sure the operand is mutable if it comes from a variable. If it generates
                         // some brand-new value, then it can trivially be considered mutable.
                         if let Some(symbol) = &operand_expr.get_base_symbol() {
-                            match ctx.get_symbol(symbol.name.as_str()) {
+                            // TODO: also check foreign symbols?
+                            match ctx.get_scoped_symbol(None, symbol.name.as_str()) {
                                 Some(scoped_symbol) => {
                                     if scoped_symbol.is_const {
                                         ctx.insert_err(
@@ -1542,7 +1543,7 @@ mod tests {
 
     #[test]
     fn analyze_i64_literal() {
-        let mut ctx = ProgramContext::new_with_host_ptr_width();
+        let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
         let expr = Expression::I64Literal(I64Lit::new_with_default_pos(1));
         let result = AExpr::from(&mut ctx, expr, None, false, false, false);
         assert!(ctx.errors().is_empty());
@@ -1559,7 +1560,7 @@ mod tests {
 
     #[test]
     fn analyze_bool_literal() {
-        let mut ctx = ProgramContext::new_with_host_ptr_width();
+        let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
         let expr = Expression::BoolLiteral(BoolLit::new_with_default_pos(false));
         let result = AExpr::from(&mut ctx, expr, None, false, false, false);
         assert!(ctx.errors().is_empty());
@@ -1576,7 +1577,7 @@ mod tests {
 
     #[test]
     fn analyze_string_literal() {
-        let mut ctx = ProgramContext::new_with_host_ptr_width();
+        let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
         let expr = Expression::StrLiteral(StrLit::new_with_default_pos("test"));
         let result = AExpr::from(&mut ctx, expr, None, false, false, false);
         assert!(ctx.errors().is_empty());
@@ -1593,7 +1594,7 @@ mod tests {
 
     #[test]
     fn analyze_var() {
-        let mut ctx = ProgramContext::new_with_host_ptr_width();
+        let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
         ctx.insert_symbol(ScopedSymbol::new("myvar", ctx.str_type_key(), false, false));
         let result = AExpr::from(
             &mut ctx,
@@ -1619,7 +1620,7 @@ mod tests {
 
     #[test]
     fn analyze_invalid_var() {
-        let mut ctx = ProgramContext::new_with_host_ptr_width();
+        let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
         let result = AExpr::from(
             &mut ctx,
             Expression::Symbol(Symbol::new_with_default_pos("myvar")),
@@ -1655,7 +1656,7 @@ mod tests {
 
     #[test]
     fn analyze_fn_call() {
-        let mut ctx = ProgramContext::new_with_host_ptr_width();
+        let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
         let fn_sig = FunctionSignature::new_with_default_pos(
             "do_thing",
             vec![Argument::new_with_default_pos(
@@ -1726,7 +1727,7 @@ mod tests {
 
     #[test]
     fn fn_call_no_return() {
-        let mut ctx = ProgramContext::new_with_host_ptr_width();
+        let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
         let fn_sig = FunctionSignature::new_with_default_pos("do_thing", vec![], None);
         let fn_type_key = ctx.resolve_type(&Type::Function(Box::new(fn_sig.clone())));
         let a_fn = AFn {
@@ -1810,7 +1811,7 @@ mod tests {
 
     #[test]
     fn fn_call_missing_arg() {
-        let mut ctx = ProgramContext::new_with_host_ptr_width();
+        let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
         let fn_sig = FunctionSignature::new_with_default_pos(
             "do_thing",
             vec![
@@ -1916,7 +1917,7 @@ mod tests {
 
     #[test]
     fn fn_call_invalid_arg_type() {
-        let mut ctx = ProgramContext::new_with_host_ptr_width();
+        let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
         let fn_sig = FunctionSignature::new_with_default_pos(
             "do_thing",
             vec![Argument::new_with_default_pos(
@@ -1999,7 +2000,7 @@ mod tests {
 
     #[test]
     fn binary_op_invalid_operand_types() {
-        let mut ctx = ProgramContext::new_with_host_ptr_width();
+        let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
         let result = AExpr::from(
             &mut ctx,
             Expression::BinaryOperation(
@@ -2049,7 +2050,7 @@ mod tests {
             }
         ));
 
-        let mut ctx = ProgramContext::new_with_host_ptr_width();
+        let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
         let result = AExpr::from(
             &mut ctx,
             Expression::BinaryOperation(
@@ -2102,7 +2103,7 @@ mod tests {
 
     #[test]
     fn unary_op() {
-        let mut ctx = ProgramContext::new_with_host_ptr_width();
+        let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
         let result = AExpr::from(
             &mut ctx,
             Expression::UnaryOperation(
@@ -2140,7 +2141,7 @@ mod tests {
 
     #[test]
     fn unary_op_invalid_operand_type() {
-        let mut ctx = ProgramContext::new_with_host_ptr_width();
+        let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
         let result = AExpr::from(
             &mut ctx,
             Expression::UnaryOperation(

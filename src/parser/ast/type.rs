@@ -10,10 +10,10 @@ use crate::parser::ast::func_sig::FunctionSignature;
 use crate::parser::ast::pointer::PointerType;
 use crate::parser::ast::r#enum::EnumType;
 use crate::parser::ast::r#struct::StructType;
+use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::tuple::TupleType;
 use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::ParseResult;
-use crate::parser::error::{ErrorKind, ParseError};
 
 /// Represents a type referenced in a program.
 #[derive(Debug, Clone, Hash, Eq)]
@@ -66,7 +66,7 @@ impl fmt::Display for Type {
             Type::Tuple(t) => write!(f, "{}", t),
             Type::Pointer(t) => write!(f, "{}", t),
             Type::Array(a) => write!(f, "{}", a),
-            Type::Unresolved(u) => write!(f, "{}", u.name),
+            Type::Unresolved(u) => write!(f, "{}", u),
         }
     }
 }
@@ -100,12 +100,11 @@ impl Locatable for Type {
 impl Type {
     /// Parses a type.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        match tokens.next() {
+        match tokens.peek_next() {
             Some(Token {
                 kind: TokenKind::Fn,
                 ..
             }) => {
-                tokens.rewind(1);
                 let sig = FunctionSignature::from_anon(tokens, false)?;
                 Ok(Type::Function(Box::new(sig)))
             }
@@ -114,7 +113,6 @@ impl Type {
                 kind: TokenKind::Struct,
                 ..
             }) => {
-                tokens.rewind(1);
                 let struct_type = StructType::from(tokens)?;
                 Ok(Type::Struct(struct_type))
             }
@@ -123,7 +121,6 @@ impl Type {
                 kind: TokenKind::LeftBrace,
                 ..
             }) => {
-                tokens.rewind(1);
                 let tuple_type = TupleType::from(tokens)?;
                 Ok(Type::Tuple(tuple_type))
             }
@@ -132,48 +129,23 @@ impl Type {
                 kind: TokenKind::Asterisk,
                 ..
             }) => {
-                tokens.rewind(1);
                 let ptr_type = PointerType::from(tokens)?;
                 Ok(Type::Pointer(Box::new(ptr_type)))
             }
 
-            Some(
-                ref token @ Token {
-                    kind: TokenKind::Identifier(ref type_name),
-                    ..
-                },
-            ) => Ok(Type::Unresolved(UnresolvedType::new(
-                type_name.as_str(),
-                token.start,
-                token.end,
-            ))),
-
             Some(Token {
                 kind: TokenKind::LeftBracket,
                 ..
-            }) => {
-                tokens.rewind(1);
-                Ok(Type::Array(Box::new(ArrayType::from(tokens)?)))
-            }
+            }) => Ok(Type::Array(Box::new(ArrayType::from(tokens)?))),
 
-            Some(other) => {
-                return Err(ParseError::new(
-                    ErrorKind::ExpectedType,
-                    format_code!("expected type, but found {}", other).as_str(),
-                    Some(other.clone()),
-                    other.start,
-                    other.end,
-                ))
-            }
-
-            None => {
-                return Err(ParseError::new(
-                    ErrorKind::UnexpectedEOF,
-                    "expected type, but found EOF",
-                    None,
-                    Position::default(),
-                    Position::default(),
-                ))
+            _ => {
+                let symbol = Symbol::from(tokens)?;
+                Ok(Type::Unresolved(UnresolvedType::new_with_mod(
+                    symbol.maybe_mod_name,
+                    symbol.name.as_str(),
+                    symbol.start_pos,
+                    symbol.end_pos,
+                )))
             }
         }
     }

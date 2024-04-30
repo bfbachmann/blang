@@ -1,4 +1,6 @@
-use "src/tests/test_utils.bl"
+use {exit}: "std/libc/proc.bl"
+
+use {assert, null}: "src/tests/test_utils.bl"
 
 const some_int = -50
 const some_struct = struct{i: i64, b: bool}{

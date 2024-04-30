@@ -60,7 +60,7 @@ fn check_mutablility(ctx: &mut ProgramContext, assign: &VariableAssignment, targ
     match &target_expr.kind {
         // We're just assigning to a variable. Make sure it's mutable.
         AExprKind::Symbol(symbol) => {
-            let var = match ctx.get_symbol(symbol.name.as_str()) {
+            let var = match ctx.get_scoped_symbol(None, symbol.name.as_str()) {
                 Some(v) => v,
                 None => {
                     // The variable does not exist. Record the error and skip any further checks.

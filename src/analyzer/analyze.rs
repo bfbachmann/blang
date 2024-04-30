@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use flamer::flame;
 use target_lexicon::Triple;
@@ -17,7 +17,6 @@ use crate::parser::ast::arg::Argument;
 use crate::parser::ast::func_sig::FunctionSignature;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::r#use::UsedModule;
-use crate::parser::ast::statement::Statement;
 use crate::parser::module::Module;
 
 /// An analyzed source file along with any errors or warnings that occurred during its analysis.
@@ -66,9 +65,14 @@ pub fn analyze_modules(modules: Vec<Module>, target_triple: &Triple) -> ProgramA
     let mods: HashMap<PathBuf, Module> =
         HashMap::from_iter(modules.into_iter().map(|m| (PathBuf::from(&m.path), m)));
     let mut analyzed_mods: HashMap<PathBuf, AnalyzedModule> = HashMap::new();
+    let mod_paths = mods.keys().map(|k| k.to_str().unwrap()).collect();
     let mut ctx = match target_triple.pointer_width() {
-        Ok(width) => ProgramContext::new(width.bits()),
-        Err(_) => ProgramContext::new_with_host_ptr_width(),
+        Ok(width) => ProgramContext::new(width.bits(), root_mod_path.to_str().unwrap(), mod_paths),
+
+        // TODO: Record error here and abort?
+        Err(_) => {
+            ProgramContext::new_with_host_ptr_width(root_mod_path.to_str().unwrap(), mod_paths)
+        }
     };
 
     define_intrinsics(&mut ctx);
@@ -129,23 +133,24 @@ pub fn analyze_module<T: Locatable>(
         return;
     }
 
+    let module = match mods.get(mod_path) {
+        Some(m) => m,
+        None => panic!("could not find module {}", mod_path.display()),
+    };
+
     // Make sure all modules that this module depends on are analyzed first.
-    let module = mods.get(mod_path).unwrap();
-    let mod_dir = Path::new(mod_path).parent().unwrap_or(Path::new("."));
-    for statement in &module.statements {
-        if let Statement::Use(used_mod) = statement {
-            // Analyze the module only if we have not already done so.
-            let used_mod_path = mod_dir.join(used_mod.path.raw.as_str());
-            if !analyzed_mods.contains_key(&used_mod_path) {
-                analyze_module(
-                    ctx,
-                    mods,
-                    analyzed_mods,
-                    &mod_chain,
-                    &used_mod_path,
-                    Some(used_mod),
-                );
-            }
+    for used_mod in &module.used_mods {
+        // Analyze the module only if we have not already done so.
+        let used_mod_path = PathBuf::from(&used_mod.path.raw);
+        if !analyzed_mods.contains_key(&used_mod_path) {
+            analyze_module(
+                ctx,
+                mods,
+                analyzed_mods,
+                &mod_chain,
+                &used_mod_path,
+                Some(used_mod),
+            );
         }
     }
 

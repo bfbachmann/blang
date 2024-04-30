@@ -74,7 +74,7 @@ impl AConst {
             ctx.insert_err(
                 AnalyzeError::new(
                     ErrorKind::InvalidConst,
-                    format_code!("{} is not a constant expression", value.display(ctx)).as_str(),
+                    format_code!("{} is not a constant", value.display(ctx)).as_str(),
                     &const_decl.value,
                 )
                 .with_detail("Constant expressions cannot contain variables or function calls."),

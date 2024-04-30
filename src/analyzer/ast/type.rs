@@ -13,7 +13,7 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeStore;
 use crate::parser::ast::r#type::Type;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum AType {
     // Primitive types.
     Bool,
@@ -61,34 +61,8 @@ impl Display for AType {
             AType::Tuple(t) => write!(f, "{}", t),
             AType::Array(a) => write!(f, "{}", a),
             AType::Function(func) => write!(f, "{}", func),
-            AType::Pointer(typ) => write!(f, "*{}", typ),
+            AType::Pointer(typ) => write!(f, "{}", typ),
             AType::Unknown(name) => write!(f, "{}", name),
-        }
-    }
-}
-
-impl PartialEq for AType {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (AType::Bool, AType::Bool)
-            | (AType::U8, AType::U8)
-            | (AType::I8, AType::I8)
-            | (AType::U32, AType::U32)
-            | (AType::I32, AType::I32)
-            | (AType::F32, AType::F32)
-            | (AType::I64, AType::I64)
-            | (AType::U64, AType::U64)
-            | (AType::F64, AType::F64)
-            | (AType::Int, AType::Int)
-            | (AType::Uint, AType::Uint)
-            | (AType::Str, AType::Str) => true,
-            (AType::Struct(s1), AType::Struct(s2)) => s1 == s2,
-            (AType::Enum(e1), AType::Enum(e2)) => e1 == e2,
-            (AType::Tuple(t1), AType::Tuple(t2)) => t1 == t2,
-            (AType::Array(t1), AType::Array(t2)) => t1 == t2,
-            (AType::Function(f1), AType::Function(f2)) => *f1 == *f2,
-            (AType::Pointer(t1), AType::Pointer(t2)) => t1 == t2,
-            (_, _) => false,
         }
     }
 }
@@ -98,6 +72,7 @@ impl AType {
     pub fn from(ctx: &mut ProgramContext, typ: &Type) -> AType {
         match typ {
             Type::Unresolved(unresolved_type) => {
+                let maybe_mod_name = unresolved_type.maybe_mod_name.as_ref();
                 let type_name = unresolved_type.name.as_str();
 
                 // Check if the type has already been marked as invalid. If so, we should avoid
@@ -107,16 +82,16 @@ impl AType {
                 }
 
                 // If the type has already been analyzed, just return it.
-                if let Some(struct_type) = ctx.get_struct_type(type_name) {
+                if let Some(struct_type) = ctx.get_struct_type(maybe_mod_name, type_name) {
                     return AType::Struct(struct_type.clone());
                 }
-                if let Some(enum_type) = ctx.get_enum_type(type_name) {
+                if let Some(enum_type) = ctx.get_enum_type(maybe_mod_name, type_name) {
                     return AType::Enum(enum_type.clone());
                 }
-                if let Some(fn_sig) = ctx.get_defined_fn_sig(type_name) {
+                if let Some(fn_sig) = ctx.get_defined_fn_sig(maybe_mod_name, type_name) {
                     return AType::from_fn_sig(fn_sig.clone());
                 }
-                if let Some(fn_type) = ctx.get_fn(type_name) {
+                if let Some(fn_type) = ctx.get_fn(maybe_mod_name, type_name) {
                     return AType::from_fn_sig(fn_type.signature.clone());
                 }
 
@@ -131,7 +106,7 @@ impl AType {
 
                 ctx.insert_err(AnalyzeError::new(
                     ErrorKind::UndefType,
-                    format_code!("type {} is not defined", type_name).as_str(),
+                    format_code!("type {} is not defined", unresolved_type).as_str(),
                     unresolved_type,
                 ));
 

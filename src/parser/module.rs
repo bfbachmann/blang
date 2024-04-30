@@ -1,22 +1,24 @@
+use crate::fmt;
 use crate::lexer::pos::Position;
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::parser::ast::r#use::UsedModule;
 use crate::parser::ast::statement::Statement;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
-use crate::{fmt, util};
 
 /// Represents a parsed source file.
 #[derive(Debug)]
 pub struct Module {
     pub path: String,
+    pub used_mods: Vec<UsedModule>,
     pub statements: Vec<Statement>,
 }
 
 impl PartialEq for Module {
     fn eq(&self, other: &Self) -> bool {
-        util::vecs_eq(&self.statements, &other.statements)
+        self.statements == other.statements && self.used_mods == other.used_mods
     }
 }
 
@@ -31,15 +33,22 @@ impl Module {
     ///  - `statement` is a valid statement (see `Statement::from`)
     pub fn from(path: &str, tokens: &mut Stream<Token>) -> ParseResult<Self> {
         let mut statements = vec![];
+        let mut used_mods = vec![];
         while tokens.has_next() {
             match Statement::from(tokens) {
-                Ok(statement) => statements.push(statement),
+                Ok(statement) => match statement {
+                    Statement::Use(used_mod) => {
+                        used_mods.push(used_mod);
+                    }
+                    other => statements.push(other),
+                },
                 Err(err) => return Err(err),
             };
         }
 
         Ok(Module {
             path: path.to_string(),
+            used_mods,
             statements,
         })
     }

@@ -50,6 +50,7 @@ pub enum ErrorKind {
     #[cfg(feature = "generics")]
     SpecNotSatisfied,
     ImportCycle,
+    DuplicateImportName,
 }
 
 impl fmt::Display for ErrorKind {
@@ -99,6 +100,7 @@ impl fmt::Display for ErrorKind {
             #[cfg(feature = "generics")]
             ErrorKind::SpecNotSatisfied => write!(f, "unsatisfied spec"),
             ErrorKind::ImportCycle => write!(f, "import cycle"),
+            ErrorKind::DuplicateImportName => write!(f, "duplicate import name"),
         }
     }
 }

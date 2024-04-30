@@ -1,5 +1,5 @@
-use "std/libc/io.bl"
-use "std/types/string.bl"
+use {write, stdout}: "std/libc/io.bl"
+use {String}: "std/types/string.bl"
 
 fn print(msg: *String) {
     write(stdout, msg^.ptr, msg^.len)

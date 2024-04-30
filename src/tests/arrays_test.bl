@@ -2,7 +2,9 @@
 // that makes use of arrays: fixed-size, stack-allocated chunks of 
 // memory that contain continuous values of the same type.
 
-use "src/tests/test_utils.bl"
+use {exit}: "std/libc/proc.bl"
+
+use {assert}: "src/tests/test_utils.bl"
 
 fn do_nothing() {}
 
@@ -39,7 +41,7 @@ fn main() {
         assert(c.(0).(0) == true, "expected true")
         assert(c.(1).(0) == false, "expected false")
 
-        // Initialization usinig repeat count.
+        // Initialization using repeat count.
         let d = [-8; 2]
         assert(d.(0) == -8, "expected first value to be -8")
         assert(d.(1) == -8, "expected second value to be -8")

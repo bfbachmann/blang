@@ -78,7 +78,7 @@ impl ASymbol {
         // Return a placeholder value if we failed to resolve the symbol type key.
         // TODO: Refactor
         let (mut maybe_type_key, maybe_symbol) =
-            ASymbol::get_type_key_by_symbol_name(ctx, symbol.name.as_str(), include_fns);
+            ASymbol::get_type_key_for_symbol(ctx, symbol, include_fns);
 
         let mut is_method = false;
         if maybe_type_key.is_none() && include_fns {
@@ -94,12 +94,12 @@ impl ASymbol {
         };
 
         // If the symbol still has not been resolved, check if it's a type.
-        let mut var_is_type = false;
+        let mut is_type = false;
         if maybe_type_key.is_none() && include_fns {
-            match ctx.get_type_key_by_type_name(var_name) {
+            match ctx.get_type_key_by_type_name(symbol.maybe_mod_name.as_ref(), var_name) {
                 Some(tk) if !ctx.must_get_type(tk).is_unknown() => {
                     maybe_type_key = Some(tk);
-                    var_is_type = true;
+                    is_type = true;
                 }
                 _ => {}
             }
@@ -126,7 +126,7 @@ impl ASymbol {
                 // a placeholder value.
                 ctx.insert_err(AnalyzeError::new(
                     ErrorKind::UndefSymbol,
-                    format_code!("{} is not defined in this scope", var_name).as_str(),
+                    format_code!("{} is not defined in this scope", symbol).as_str(),
                     symbol,
                 ));
 
@@ -135,7 +135,7 @@ impl ASymbol {
         };
 
         // We need to make sure the symbol is not just a type. This prevents types from being valid expressions.
-        if !allow_type && var_is_type {
+        if !allow_type && is_type {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::ExpectedExpr,
                 format_code!(
@@ -158,7 +158,7 @@ impl ASymbol {
         ASymbol {
             name: var_name.to_string(),
             type_key: var_type_key,
-            is_type: var_is_type,
+            is_type,
             is_const,
             is_var,
             is_method,
@@ -167,34 +167,37 @@ impl ASymbol {
         }
     }
 
-    /// Attempts to find the type key of a symbol with the given name. Additionally, if `name`
+    /// Attempts to find the type key of a symbol. Additionally, if `symbol`
     /// can be resolved to an actual variable, the variable will be returned.
-    fn get_type_key_by_symbol_name(
+    fn get_type_key_for_symbol(
         ctx: &mut ProgramContext,
-        name: &str,
+        symbol: &Symbol,
         include_fns: bool,
     ) -> (Option<TypeKey>, Option<ScopedSymbol>) {
+        let maybe_mod_name = symbol.maybe_mod_name.as_ref();
+        let name = symbol.name.as_str();
+
         // Search for a variable with the given name. Variables take precedence over functions.
-        if let Some(symbol) = ctx.get_symbol(name) {
-            return (Some(symbol.type_key), Some(symbol.clone()));
+        if let Some(scoped_symbol) = ctx.get_scoped_symbol(maybe_mod_name, name) {
+            return (Some(scoped_symbol.type_key), Some(scoped_symbol.clone()));
         }
 
         // Check if the symbol refers to a constant that has not yet been analyzed.
         if let Some(const_) = ctx.get_unchecked_const(name) {
             let a_const = AConst::from(ctx, &const_.clone());
-            let symbol = ctx.get_symbol(a_const.name.as_str()).unwrap();
+            let symbol = ctx.get_scoped_symbol(None, a_const.name.as_str()).unwrap();
             return (Some(symbol.type_key), Some(symbol.clone()));
         }
 
         if include_fns {
             // Search for a function with the given name. Functions take precedence over extern
             // functions.
-            if let Some(func) = ctx.get_fn(ctx.mangle_name(name).as_str()) {
+            if let Some(func) = ctx.get_fn(maybe_mod_name, ctx.mangle_name(name).as_str()) {
                 return (Some(func.signature.type_key), None);
             };
 
             // Search for an extern function with the given name.
-            if let Some(fn_sig) = ctx.get_defined_fn_sig(name) {
+            if let Some(fn_sig) = ctx.get_defined_fn_sig(maybe_mod_name, name) {
                 return (Some(fn_sig.type_key), None);
             }
         }

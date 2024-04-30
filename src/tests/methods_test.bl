@@ -1,4 +1,6 @@
-use "src/tests/test_utils.bl"
+use {exit}: "std/libc/proc.bl"
+
+use {assert}: "src/tests/test_utils.bl"
 
 struct T {
     value: int

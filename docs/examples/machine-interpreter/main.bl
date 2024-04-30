@@ -1,12 +1,10 @@
-use "std/libc/io.bl"
-use "std/libc/proc.bl"
-use "std/libc/mem.bl"
-use "std/libc/file.bl"
-use "std/libc/signal.bl"
+use {exit}: "std/libc/proc.bl"
+use {calloc, free}: "std/libc/mem.bl"
+use {fopen, fseek, fread, ftell, rewind, fclose, seek_end}: "std/libc/file.bl"
 
-use "docs/examples/machine-interpreter/parser.bl"
-use "docs/examples/machine-interpreter/machine.bl"
-use "docs/examples/machine-interpreter/utils.bl"
+use {Parser}: "docs/examples/machine-interpreter/parser.bl"
+use {Machine, ExecStatus}: "docs/examples/machine-interpreter/machine.bl"
+use {assert}: "docs/examples/machine-interpreter/utils.bl"
 
 fn main() {
     // Open file for reading.

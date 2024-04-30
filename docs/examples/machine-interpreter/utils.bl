@@ -1,5 +1,5 @@
-use "std/libc/proc.bl"
-use "std/libc/io.bl"
+use {exit}: "std/libc/proc.bl"
+use {write, stdout}: "std/libc/io.bl"
 
 fn print_str(s: str) {
     write(stdout, s as *u8, s.len())

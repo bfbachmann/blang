@@ -17,3 +17,4 @@ env.nu
 ignore*
 main
 compile-time.html
+*_test

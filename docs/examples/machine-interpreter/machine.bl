@@ -1,4 +1,5 @@
-use "docs/examples/machine-interpreter/utils.bl"
+use {Program, Instruction, InstKind}: "docs/examples/machine-interpreter/parser.bl"
+use {print_str}: "docs/examples/machine-interpreter/utils.bl"
 
 const mem_size: uint = 1024
 

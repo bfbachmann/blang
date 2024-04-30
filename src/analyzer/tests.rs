@@ -1486,7 +1486,7 @@ mod tests {
         let result = analyze(
             r#"
                 fn main() {
-                    use "std/libc/mem.bl"
+                    use mem: "std/libc/mem.bl"
                 }
             "#,
         );

@@ -1,6 +1,6 @@
-use "std/libc/proc.bl"
-use "std/libc/io.bl"
-use "std/libc/signal.bl"
+use {exit}: "std/libc/proc.bl"
+use {write, stderr}: "std/libc/io.bl"
+use {backtrace, backtrace_symbols_fd}: "std/libc/signal.bl"
 
 fn panic(msg: str) {
     let panic_str = "Panic: "

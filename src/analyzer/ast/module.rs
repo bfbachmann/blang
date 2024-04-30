@@ -21,6 +21,10 @@ pub struct AModule {
 impl AModule {
     /// Performs semantic analysis on the given module and returns a type-rich version of it.
     pub fn from(ctx: &mut ProgramContext, module: &Module) -> AModule {
+        // Set the current mod path in the program context so it can be used to
+        // create unique identifiers for symbols in this module during analysis.
+        ctx.set_cur_mod(&module);
+
         // Analyze the module now that dependencies have all been analyzed.
         // First pass: define types and functions in the module without analyzing them yet.
         define_consts(ctx, module);
@@ -115,7 +119,7 @@ fn define_types(ctx: &mut ProgramContext, module: &Module) {
         if ctx.consume_error(result).is_none() {
             ctx.remove_unchecked_struct_type(type_name.as_str());
             ctx.remove_unchecked_enum_type(type_name.as_str());
-            ctx.insert_invalid_type_name(type_name.as_str());
+            ctx.insert_invalid_type_name(type_name);
         }
     }
 }
@@ -195,7 +199,7 @@ fn define_extern_fn(ctx: &mut ProgramContext, ext: &Extern) {
 
 fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     // Set the current impl type key on the program context so we can access it when
-    // resolving type `This`.
+    // resolving type `Self`.
     let impl_type_key = ctx.resolve_type(&impl_.typ);
     ctx.set_cur_self_type_key(Some(impl_type_key));
 

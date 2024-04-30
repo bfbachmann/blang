@@ -8,6 +8,7 @@ use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::spec::ASpec;
+use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::ast::tuple::ATupleType;
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::scope::{Scope, ScopeKind, ScopedSymbol};
@@ -19,18 +20,11 @@ use crate::parser::ast::r#enum::EnumType;
 use crate::parser::ast::r#struct::StructType;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::spec::Spec;
+use crate::parser::ast::symbol::Symbol;
+use crate::parser::module::Module;
 
-/// Stores information about the program for reference during semantic analysis.
-pub struct ProgramContext {
-    /// Stores all types that are successfully analyzed during semantic analysis.
-    pub type_store: TypeStore,
-    /// Maps primitive type names to their type keys.
-    primitive_type_keys: HashMap<String, TypeKey>,
-    /// Contains the names of all types that have been marked as "invalid" by the analyzer. At the
-    /// time of writing this, this should only be used for illegal cyclical types with infinite
-    /// size.
-    invalid_type_names: HashSet<String>,
-
+/// Stores information about code in a given module.
+struct ModuleContext {
     /// Each scope on this stack corresponds to a scope in the program. Each scope will store
     /// information local to only that scope like variables (symbols).
     stack: VecDeque<Scope>,
@@ -44,7 +38,15 @@ pub struct ProgramContext {
     /// Will contain the type key corresponding to the current `spec` or `impl` block that is being
     /// analyzed, if any.
     cur_self_type_key: Option<TypeKey>,
+    /// Maps module name to full module path for each module that was imported into this
+    /// module. For example, if an import was specified with `use "my_project/my_mod.bl"`, then
+    /// this map would contain the mapping `"my_mod": "my_project/my_mod.bl"`.
+    imported_mod_paths: HashMap<String, String>,
 
+    /// Contains the names of all types that have been marked as "invalid" by the analyzer. At the
+    /// time of writing this, this should only be used for illegal cyclical types with infinite
+    /// size.
+    invalid_type_names: HashSet<String>,
     /// Maps un-analyzed struct names to un-analyzed structs.
     unchecked_struct_types: HashMap<String, StructType>,
     /// Maps un-analyzed enum names to un-analyzed enums.
@@ -59,50 +61,24 @@ pub struct ProgramContext {
     funcs: HashMap<String, AFn>,
     /// Maps constant names to their values.
     const_values: HashMap<String, AExpr>,
-    /// Maps type keys to mappings from their member function names to their member function
-    /// signatures.
-    type_member_fn_sigs: HashMap<TypeKey, HashMap<String, AFnSig>>,
     /// Maps spec names to analyzed specs.
     specs: HashMap<String, ASpec>,
     /// Maps struct type name to struct type key.
     struct_type_keys: HashMap<String, TypeKey>,
     /// Maps enum type name to enum type key.
     enum_type_keys: HashMap<String, TypeKey>,
-    /// Maps tuple type to tuple type key.
-    tuple_type_keys: HashMap<ATupleType, TypeKey>,
-    /// Maps array type to array type key.
-    array_type_keys: HashMap<AArrayType, TypeKey>,
-    /// Maps pointer type to pointer type key.
-    pointer_type_keys: HashMap<APointerType, TypeKey>,
-
-    /// Collects warnings emitted by the analyzer during analysis.
-    pub warnings: HashMap<Position, AnalyzeWarning>,
-    /// Collects errors emitted by the analyzer during analysis.
-    pub errors: HashMap<Position, AnalyzeError>,
 }
 
-impl ProgramContext {
-    /// Creates a new program context. The program context will be initialized with stack containing
-    /// a single scope representing the global scope and a type store containing primitive types.
-    pub fn new(target_ptr_width: u8) -> Self {
-        let mut type_store = TypeStore::new(target_ptr_width);
-
-        // Set up primitive type keys.
-        let mut primitive_type_keys = HashMap::new();
-        for typ in AType::primitives() {
-            let name = typ.name().to_string();
-            let key = type_store.insert(typ);
-            primitive_type_keys.insert(name, key);
-        }
-
-        ProgramContext {
-            type_store,
-            primitive_type_keys,
-            invalid_type_names: Default::default(),
+impl ModuleContext {
+    /// Creates a new empty module context.
+    fn new() -> ModuleContext {
+        ModuleContext {
             stack: VecDeque::from([Scope::new(ScopeKind::InlineClosure, vec![], None)]),
             fn_scope_indices: vec![],
             loop_scope_indices: vec![],
             cur_self_type_key: None,
+            imported_mod_paths: Default::default(),
+            invalid_type_names: Default::default(),
             unchecked_struct_types: Default::default(),
             unchecked_enum_types: Default::default(),
             unchecked_specs: Default::default(),
@@ -110,31 +86,14 @@ impl ProgramContext {
             defined_fn_sigs: Default::default(),
             funcs: Default::default(),
             const_values: Default::default(),
-            type_member_fn_sigs: Default::default(),
             specs: Default::default(),
             struct_type_keys: Default::default(),
             enum_type_keys: Default::default(),
-            tuple_type_keys: Default::default(),
-            array_type_keys: Default::default(),
-            pointer_type_keys: Default::default(),
-            warnings: Default::default(),
-            errors: Default::default(),
         }
     }
 
-    /// Creates a new program context where the pointer width is set according to the
-    /// host system.
-    pub fn new_with_host_ptr_width() -> ProgramContext {
-        ProgramContext::new(
-            target_lexicon::Triple::host()
-                .pointer_width()
-                .unwrap()
-                .bits(),
-        )
-    }
-
-    /// Calls `visit` on each scope on the stack starting from the current scope and ending at the
-    /// global scope until `visit` returns `Some`.
+    /// Calls `visit` on each scope on the stack of the module starting
+    /// from the current scope and ending at the global scope until `visit` returns `Some`.
     /// If `cross_fn_boundaries` is true, the `visit` function will be called with scopes
     /// that belong to other functions that the current function falls within. Otherwise,
     /// only scopes that fall under the current function and the top-level scope will be visited.
@@ -175,22 +134,132 @@ impl ProgramContext {
 
         None
     }
+}
+
+/// Stores information about the program for reference during semantic analysis.
+pub struct ProgramContext {
+    /// Stores all types that are successfully analyzed during semantic analysis.
+    pub type_store: TypeStore,
+    /// Maps primitive type names to their type keys.
+    primitive_type_keys: HashMap<String, TypeKey>,
+
+    /// The path of the module that is currently being analyzed.
+    cur_mod_path: String,
+
+    /// Maps module path to its context.
+    module_contexts: HashMap<String, ModuleContext>,
+
+    /// Maps tuple type to tuple type key.
+    tuple_type_keys: HashMap<ATupleType, TypeKey>,
+    /// Maps array type to array type key.
+    array_type_keys: HashMap<AArrayType, TypeKey>,
+    /// Maps pointer type to pointer type key.
+    pointer_type_keys: HashMap<APointerType, TypeKey>,
+    /// Maps type keys to mappings from their member function names to their member function
+    /// signatures.
+    type_member_fn_sigs: HashMap<TypeKey, HashMap<String, AFnSig>>,
+
+    /// Collects warnings emitted by the analyzer during analysis.
+    pub warnings: HashMap<Position, AnalyzeWarning>,
+    /// Collects errors emitted by the analyzer during analysis.
+    pub errors: HashMap<Position, AnalyzeError>,
+}
+
+impl ProgramContext {
+    /// Creates a new program context. The program context will be initialized with stack containing
+    /// a single scope representing the global scope and a type store containing primitive types.
+    pub fn new(target_ptr_width: u8, root_mod_path: &str, mod_paths: Vec<&str>) -> Self {
+        let mut type_store = TypeStore::new(target_ptr_width);
+
+        // Set up primitive type keys.
+        let mut primitive_type_keys = HashMap::new();
+        for typ in AType::primitives() {
+            let name = typ.name().to_string();
+            let key = type_store.insert(typ);
+            primitive_type_keys.insert(name, key);
+        }
+
+        // Initialize empty module contexts.
+        let mut mod_ctxs = HashMap::with_capacity(mod_paths.len());
+        for mod_path in &mod_paths {
+            mod_ctxs.insert(mod_path.to_string(), ModuleContext::new());
+        }
+
+        ProgramContext {
+            type_store,
+            primitive_type_keys,
+            cur_mod_path: root_mod_path.to_string(),
+            module_contexts: mod_ctxs,
+            tuple_type_keys: Default::default(),
+            array_type_keys: Default::default(),
+            pointer_type_keys: Default::default(),
+            type_member_fn_sigs: Default::default(),
+            warnings: Default::default(),
+            errors: Default::default(),
+        }
+    }
+
+    /// Creates a new program context where the pointer width is set according to the
+    /// host system.
+    pub fn new_with_host_ptr_width(root_mod_path: &str, mod_paths: Vec<&str>) -> ProgramContext {
+        ProgramContext::new(
+            target_lexicon::Triple::host()
+                .pointer_width()
+                .unwrap()
+                .bits(),
+            root_mod_path,
+            mod_paths,
+        )
+    }
+
+    /// Returns the module context corresponding to the module that is currently
+    /// being analysed.
+    fn cur_mod_ctx(&self) -> &ModuleContext {
+        self.module_contexts
+            .get(self.cur_mod_path.as_str())
+            .unwrap()
+    }
+
+    /// Returns the mutable module context corresponding to the module that is
+    /// currently being analysed.
+    fn cur_mod_ctx_mut(&mut self) -> &mut ModuleContext {
+        self.module_contexts
+            .get_mut(self.cur_mod_path.as_str())
+            .unwrap()
+    }
+
+    /// If `maybe_mod_name` is `Some`, returns the corresponding module context.
+    /// Otherwise, returns the current module context.
+    fn get_mod_ctx(&self, maybe_mod_name: Option<&String>) -> &ModuleContext {
+        let mod_ctx = self.cur_mod_ctx();
+        match maybe_mod_name {
+            Some(mod_name) => {
+                let mod_path = mod_ctx.imported_mod_paths.get(mod_name).unwrap();
+                self.module_contexts.get(mod_path).unwrap()
+            }
+
+            None => mod_ctx,
+        }
+    }
 
     /// Inserts a mapping from `typ` to `key` into the current scope.
     fn insert_type_key(&mut self, typ: Type, key: TypeKey) {
-        self.stack
+        self.cur_mod_ctx_mut()
+            .stack
             .back_mut()
             .unwrap()
             .insert_type_key(typ.clone(), key);
     }
 
-    /// Emits an error and returns false if there already exists a type with the given name.
+    /// Emits an error and returns false if there already exists a type with the
+    /// given name in the current module.
     /// Otherwise, returns true.
     fn check_type_name_not_used<T: Locatable>(&mut self, name: &str, loc: &T) -> bool {
+        let mod_ctx = self.cur_mod_ctx();
         if self.primitive_type_keys.contains_key(name)
-            || self.unchecked_struct_types.contains_key(name)
-            || self.unchecked_enum_types.contains_key(name)
-            || self.unchecked_specs.contains_key(name)
+            || mod_ctx.unchecked_struct_types.contains_key(name)
+            || mod_ctx.unchecked_enum_types.contains_key(name)
+            || mod_ctx.unchecked_specs.contains_key(name)
         {
             self.insert_err(AnalyzeError::new(
                 ErrorKind::DuplicateType,
@@ -244,8 +313,8 @@ impl ProgramContext {
 
     /// Inserts the given analyzed type into the program context. This function will also handle
     /// tracking struct and enum types by name. If another matching struct, enum, or tuple type
-    /// already exists, `typ` will not be inserted and the type key for the existing type will be
-    /// returned.
+    /// already exists in the current module, `typ` will not be inserted and the type key for the
+    /// existing type will be returned.
     pub fn insert_type(&mut self, typ: AType) -> TypeKey {
         // First, we'll check if this type already exists so we can avoid duplicating it if so.
         // TODO: refactor.
@@ -261,7 +330,11 @@ impl ProgramContext {
                 let maybe_name = match struct_type.name.is_empty() {
                     true => None,
                     false => {
-                        if let Some(tk) = self.struct_type_keys.get(struct_type.name.as_str()) {
+                        if let Some(tk) = self
+                            .cur_mod_ctx()
+                            .struct_type_keys
+                            .get(struct_type.name.as_str())
+                        {
                             return *tk;
                         }
 
@@ -276,7 +349,11 @@ impl ProgramContext {
                 let maybe_name = match enum_type.name.is_empty() {
                     true => None,
                     false => {
-                        if let Some(tk) = self.enum_type_keys.get(enum_type.name.as_str()) {
+                        if let Some(tk) = self
+                            .cur_mod_ctx()
+                            .enum_type_keys
+                            .get(enum_type.name.as_str())
+                        {
                             return *tk;
                         }
 
@@ -320,9 +397,11 @@ impl ProgramContext {
         // Create an additional mapping to the new type key to avoid type duplication, if necessary.
         if let Some(name) = maybe_type_name {
             if is_struct {
-                self.struct_type_keys.insert(name, type_key);
+                self.cur_mod_ctx_mut()
+                    .struct_type_keys
+                    .insert(name, type_key);
             } else if is_enum {
-                self.enum_type_keys.insert(name, type_key);
+                self.cur_mod_ctx_mut().enum_type_keys.insert(name, type_key);
             }
         } else if let Some(tuple_type) = maybe_tuple_type {
             self.tuple_type_keys.insert(tuple_type, type_key);
@@ -340,37 +419,42 @@ impl ProgramContext {
     /// type store and returns the resulting type key.
     pub fn resolve_type(&mut self, typ: &Type) -> TypeKey {
         if let Type::Unresolved(unresolved_type) = typ {
-            if unresolved_type.name == "Self" {
-                return match self.get_cur_self_type_key() {
-                    Some(tk) => tk,
-                    None => {
-                        self.insert_err(AnalyzeError::new(
-                            ErrorKind::UndefType,
-                            format_code!(
-                                "cannot use type {} outside of {} or {} block",
-                                "Self",
-                                "spec",
-                                "impl"
-                            )
-                            .as_str(),
-                            typ,
-                        ));
+            if unresolved_type.maybe_mod_name.is_none() {
+                if unresolved_type.name == "Self" {
+                    return match self.get_cur_self_type_key() {
+                        Some(tk) => tk,
+                        None => {
+                            self.insert_err(AnalyzeError::new(
+                                ErrorKind::UndefType,
+                                format_code!(
+                                    "cannot use type {} outside of {} or {} block",
+                                    "Self",
+                                    "spec",
+                                    "impl"
+                                )
+                                .as_str(),
+                                typ,
+                            ));
 
-                        self.unknown_type_key()
-                    }
-                };
+                            self.unknown_type_key()
+                        }
+                    };
+                }
+
+                if let Some(key) = self.primitive_type_keys.get(unresolved_type.name.as_str()) {
+                    return *key;
+                }
             }
+        };
 
-            if let Some(key) = self.primitive_type_keys.get(unresolved_type.name.as_str()) {
-                return *key;
-            }
-        }
-
-        if let Some(key) = self.search_stack(|scope| scope.get_type_key(typ)) {
+        if let Some(key) = self
+            .cur_mod_ctx()
+            .search_stack(|scope| scope.get_type_key(&typ))
+        {
             return key;
         }
 
-        let a_type = AType::from(self, typ);
+        let a_type = AType::from(self, &typ);
         let key = self.insert_type(a_type);
         self.insert_type_key(typ.clone(), key);
 
@@ -378,13 +462,20 @@ impl ProgramContext {
     }
 
     /// Tries to locate and return the type key associated with the type with the given name.
-    pub fn get_type_key_by_type_name(&self, name: &str) -> Option<TypeKey> {
-        if let Some(key) = self.primitive_type_keys.get(name) {
-            return Some(*key);
+    pub fn get_type_key_by_type_name(
+        &self,
+        maybe_mod_name: Option<&String>,
+        name: &str,
+    ) -> Option<TypeKey> {
+        if maybe_mod_name.is_none() {
+            if let Some(tk) = self.primitive_type_keys.get(name) {
+                return Some(*tk);
+            }
         }
 
+        let mod_ctx = self.get_mod_ctx(maybe_mod_name);
         let typ = Type::new_unresolved(name);
-        self.search_stack(|scope| scope.get_type_key(&typ))
+        mod_ctx.search_stack(|scope| scope.get_type_key(&typ))
     }
 
     /// Returns the type key for the analyzer-internal `<unknown>` type.
@@ -465,25 +556,27 @@ impl ProgramContext {
 
     /// Pushes `scope` onto the stack.
     pub fn push_scope(&mut self, scope: Scope) {
+        let mod_ctx = self.cur_mod_ctx_mut();
         match &scope.kind {
-            ScopeKind::FnBody(_) => self.fn_scope_indices.push(self.stack.len()),
-            ScopeKind::LoopBody => self.loop_scope_indices.push(self.stack.len()),
+            ScopeKind::FnBody(_) => mod_ctx.fn_scope_indices.push(mod_ctx.stack.len()),
+            ScopeKind::LoopBody => mod_ctx.loop_scope_indices.push(mod_ctx.stack.len()),
             _ => {}
         }
 
-        self.stack.push_back(scope);
+        mod_ctx.stack.push_back(scope);
     }
 
     /// Pops and returns the current scope from the stack.
     pub fn pop_scope(&mut self) -> Scope {
-        let scope = self.stack.pop_back().unwrap();
+        let mod_ctx = self.cur_mod_ctx_mut();
+        let scope = mod_ctx.stack.pop_back().unwrap();
 
         match &scope.kind {
             ScopeKind::FnBody(_) => {
-                self.fn_scope_indices.pop();
+                mod_ctx.fn_scope_indices.pop();
             }
             ScopeKind::LoopBody => {
-                self.loop_scope_indices.pop();
+                mod_ctx.loop_scope_indices.pop();
             }
             _ => {}
         };
@@ -501,97 +594,222 @@ impl ProgramContext {
         self.type_store.replace(type_key, typ);
     }
 
-    /// Tries to insert the un-analyzed struct type into the program context. Does nothing if the
-    /// struct type has a type name that is already used.
+    /// Tries to insert the un-analyzed struct type into the current module context.
+    /// Does nothing if the struct type has a type name that is already used.
     pub fn try_insert_unchecked_struct_type(&mut self, struct_type: StructType) {
-        if self.check_type_name_not_used(struct_type.name.as_str(), &struct_type) {
-            self.unchecked_struct_types
-                .insert(struct_type.name.clone(), struct_type);
+        let name = struct_type.name.clone();
+        if self.check_type_name_not_used(name.as_str(), &struct_type) {
+            self.cur_mod_ctx_mut()
+                .unchecked_struct_types
+                .insert(name, struct_type);
         }
     }
 
-    /// Tries to insert the un-analyzed enum type into the program context. Does nothing if the
-    /// enum type has a type name that is already used.
+    /// Tries to insert the un-analyzed enum type into the current module context.
+    /// Does nothing if the enum type has a type name that is already used.
     pub fn try_insert_unchecked_enum_type(&mut self, enum_type: EnumType) {
-        if self.check_type_name_not_used(enum_type.name.as_str(), &enum_type) {
-            self.unchecked_enum_types
-                .insert(enum_type.name.clone(), enum_type);
+        let name = enum_type.name.clone();
+        if self.check_type_name_not_used(name.as_str(), &enum_type) {
+            self.cur_mod_ctx_mut()
+                .unchecked_enum_types
+                .insert(name, enum_type);
         }
     }
 
-    /// Tries to insert the un-analyzed spec into the program context. Does nothing if the spec
-    /// has a name that is already used.
+    /// Tries to insert the un-analyzed spec into the current module context.
+    /// Does nothing if the spec has a name that is already used.
     pub fn try_insert_unchecked_spec(&mut self, spec: Spec) {
-        if self.check_type_name_not_used(spec.name.as_str(), &spec) {
-            self.unchecked_specs.insert(spec.name.clone(), spec);
+        let name = spec.name.clone();
+        if self.check_type_name_not_used(name.as_str(), &spec) {
+            self.cur_mod_ctx_mut().unchecked_specs.insert(name, spec);
         }
     }
 
-    /// Tries to insert the un-analyzed constant into the program context. Does nothing
-    /// if the constant is already defined.
+    /// Tries to insert the un-analyzed constant into the curren module context.
+    /// Does nothing if the constant is already defined.
     pub fn try_insert_unchecked_const(&mut self, const_decl: Const) {
-        if self
-            .unchecked_consts
-            .get(const_decl.name.as_str())
-            .is_some()
-        {
+        let name = const_decl.name.clone();
+        let symbol_already_defined = self.get_scoped_symbol(None, name.as_str()).is_some();
+        let mod_ctx = self.cur_mod_ctx_mut();
+        if symbol_already_defined || mod_ctx.unchecked_consts.get(name.as_str()).is_some() {
             self.insert_err(AnalyzeError::new(
                 ErrorKind::DuplicateConst,
-                format_code!(
-                    "constant {} is already defined in this scope",
-                    const_decl.name
-                )
-                .as_str(),
+                format_code!("{} was already defined", const_decl.name).as_str(),
                 &const_decl,
             ));
             return;
         }
 
-        self.unchecked_consts
-            .insert(const_decl.name.clone(), const_decl);
+        mod_ctx.unchecked_consts.insert(name, const_decl);
     }
 
-    /// Removes the un-analyzed struct type with the given name from the program context.
+    /// Removes the un-analyzed struct type with the given name from the current
+    /// module context.
     pub fn remove_unchecked_struct_type(&mut self, name: &str) {
-        self.unchecked_struct_types.remove(name);
+        self.cur_mod_ctx_mut().unchecked_struct_types.remove(name);
     }
 
-    /// Removes the un-analyzed enum type with the given name from the program context.
+    /// Removes the un-analyzed enum type with the given name from the current
+    /// module context.
     pub fn remove_unchecked_enum_type(&mut self, name: &str) {
-        self.unchecked_enum_types.remove(name);
+        self.cur_mod_ctx_mut().unchecked_enum_types.remove(name);
     }
 
-    /// Marks the given type name as invalid.
-    pub fn insert_invalid_type_name(&mut self, name: &str) {
-        self.invalid_type_names.insert(name.to_string());
+    /// Marks the given type name as invalid in the current module context.
+    pub fn insert_invalid_type_name(&mut self, name: String) {
+        self.cur_mod_ctx_mut().invalid_type_names.insert(name);
     }
 
-    /// Returns true if the given name is the name of a type that has been marked as invalid.
+    /// Returns true if the given name is the name of a type that has been marked
+    /// as invalid in the current module context.
     pub fn is_name_of_invalid_type(&self, name: &str) -> bool {
-        self.invalid_type_names.contains(name)
+        self.cur_mod_ctx().invalid_type_names.contains(name)
     }
 
-    /// Inserts the given function signature into the program context, thereby declaring it as
-    /// a defined function. This is done so we can locate function signatures before having
-    /// analyzed their bodies.
+    /// Inserts the given function signature into the current module context, thereby
+    /// declaring it as a defined function. This is done so we can locate function
+    /// signatures before having analyzed their bodies.
     pub fn insert_defined_fn_sig(&mut self, sig: AFnSig) {
-        assert!(self.defined_fn_sigs.insert(sig.name.clone(), sig).is_none());
+        let name = sig.name.clone();
+        assert!(self
+            .cur_mod_ctx_mut()
+            .defined_fn_sigs
+            .insert(name, sig)
+            .is_none());
     }
 
-    /// Gets the signatures for the function with the given name.
-    pub fn get_defined_fn_sig(&self, name: &str) -> Option<&AFnSig> {
-        self.defined_fn_sigs.get(name)
+    /// Gets the signature for the function with the given name in the module
+    /// with the given name, or in the current module if `maybe_mod_name` is
+    /// `None`.
+    pub fn get_defined_fn_sig(
+        &self,
+        maybe_mod_name: Option<&String>,
+        name: &str,
+    ) -> Option<&AFnSig> {
+        // Select the module to search in.
+        let mod_ctx = self.get_mod_ctx(maybe_mod_name);
+        mod_ctx.defined_fn_sigs.get(name)
     }
 
     /// Sets the type key associated with the current `impl` or `spec` type so it can be retrieved
     /// during analysis of the `impl` or `spec` body.
     pub fn set_cur_self_type_key(&mut self, maybe_type_key: Option<TypeKey>) {
-        self.cur_self_type_key = maybe_type_key;
+        self.cur_mod_ctx_mut().cur_self_type_key = maybe_type_key;
+    }
+
+    /// Sets the current module in the program context to `module`.
+    /// If any of the imports have names that collide with existing imports in this module,
+    /// they will not be mapped and error will be recorded for each conflict.
+    pub fn set_cur_mod(&mut self, module: &Module) {
+        self.cur_mod_path = module.path.clone();
+        self.cur_mod_ctx_mut().imported_mod_paths = HashMap::with_capacity(module.used_mods.len());
+
+        for used_mod in &module.used_mods {
+            // If the import is declared with an alias, map it to the module path,
+            // so we can resolve it later.
+            let mod_name = if let Some(alias) = &used_mod.maybe_alias {
+                if self
+                    .cur_mod_ctx()
+                    .imported_mod_paths
+                    .get(alias.as_str())
+                    .is_none()
+                {
+                    self.cur_mod_ctx_mut()
+                        .imported_mod_paths
+                        .insert(alias.to_string(), used_mod.path.raw.clone());
+                } else {
+                    self.insert_err(
+                        AnalyzeError::new(
+                            ErrorKind::DuplicateImportName,
+                            format_code!("another import named {} already exists", alias).as_str(),
+                            used_mod,
+                        )
+                        .with_detail(
+                            format_code!(
+                                "The name {} used for this import is not unique in this module.",
+                                alias
+                            )
+                            .as_str(),
+                        ),
+                    );
+                }
+
+                alias.clone()
+            } else {
+                // There is no alias for this module, so just use the module
+                // path as the module name.
+                self.cur_mod_ctx_mut()
+                    .imported_mod_paths
+                    .insert(used_mod.path.raw.clone(), used_mod.path.raw.clone());
+                used_mod.path.raw.clone()
+            };
+
+            // Resolve any imported identifiers from the module and add mappings
+            // for each to the program context.
+            for ident in &used_mod.identifiers {
+                let symbol = Symbol::new_with_mod(ident.as_str(), mod_name.as_str());
+                let a_symbol = ASymbol::from(self, &symbol, true, true, None);
+
+                // Skip the symbol if its type could not be resolved.
+                if a_symbol.type_key == self.unknown_type_key() {
+                    continue;
+                }
+
+                // Define the symbol in the program context.
+                if a_symbol.is_type {
+                    match self.type_store.must_get(a_symbol.type_key) {
+                        AType::Struct(struct_type) => {
+                            let name = struct_type.name.clone();
+                            self.cur_mod_ctx_mut()
+                                .struct_type_keys
+                                .insert(name, a_symbol.type_key);
+                        }
+
+                        AType::Enum(enum_type) => {
+                            let name = enum_type.name.clone();
+                            self.cur_mod_ctx_mut()
+                                .enum_type_keys
+                                .insert(name, a_symbol.type_key);
+                        }
+
+                        AType::Pointer(ptr_type) => {
+                            self.pointer_type_keys
+                                .insert(ptr_type.clone(), a_symbol.type_key);
+                        }
+
+                        AType::Array(array_type) => {
+                            self.array_type_keys
+                                .insert(array_type.clone(), a_symbol.type_key);
+                        }
+
+                        AType::Tuple(tuple_type) => {
+                            self.tuple_type_keys
+                                .insert(tuple_type.clone(), a_symbol.type_key);
+                        }
+
+                        _ => {}
+                    }
+
+                    self.cur_mod_ctx_mut()
+                        .stack
+                        .front_mut()
+                        .unwrap()
+                        .insert_type_key(
+                            Type::new_unresolved(symbol.name.as_str()),
+                            a_symbol.type_key,
+                        )
+                } else {
+                    let scoped_symbol =
+                        ScopedSymbol::new_const(a_symbol.name.as_str(), a_symbol.type_key);
+                    self.insert_symbol(scoped_symbol);
+                }
+            }
+        }
     }
 
     /// Returns the type key associated with the current `impl` or `spec` type being analyzed.
     pub fn get_cur_self_type_key(&mut self) -> Option<TypeKey> {
-        self.cur_self_type_key
+        self.cur_mod_ctx().cur_self_type_key
     }
 
     /// Returns the member function with the given name on the type associated with `type_key`.
@@ -619,59 +837,62 @@ impl ProgramContext {
 
     /// Returns the un-analyzed struct type with the given name.
     pub fn get_unchecked_struct_type(&self, name: &str) -> Option<&StructType> {
-        self.unchecked_struct_types.get(name)
+        self.cur_mod_ctx().unchecked_struct_types.get(name)
     }
 
     /// Returns the un-analyzed enum type with the given name.
     pub fn get_unchecked_enum_type(&self, name: &str) -> Option<&EnumType> {
-        self.unchecked_enum_types.get(name)
+        self.cur_mod_ctx().unchecked_enum_types.get(name)
     }
 
     /// Tries to locate and return the spec with the given name.
     pub fn get_unchecked_spec(&self, name: &str) -> Option<&Spec> {
-        self.unchecked_specs.get(name)
+        self.cur_mod_ctx().unchecked_specs.get(name)
     }
 
     /// Tries to locate and return the un-analyzed constant with the given name.
     pub fn get_unchecked_const(&self, name: &str) -> Option<&Const> {
-        self.unchecked_consts.get(name)
+        self.cur_mod_ctx().unchecked_consts.get(name)
     }
 
     /// Inserts `spec` into the program context.
     pub fn insert_spec(&mut self, spec: ASpec) {
-        self.specs.insert(spec.name.clone(), spec);
+        self.cur_mod_ctx_mut().specs.insert(spec.name.clone(), spec);
     }
 
-    /// Tries to locate and return the spec with the given name.
+    /// Tries to locate and return the spec with the given name in the current
+    /// module context.
     pub fn get_spec(&self, name: &str) -> Option<&ASpec> {
-        self.specs.get(name)
+        self.cur_mod_ctx().specs.get(name)
     }
 
-    /// Returns all unchecked struct types in the program context.
+    /// Returns all unchecked struct types in the current module context.
     pub fn unchecked_struct_types(&self) -> Vec<&StructType> {
-        self.unchecked_struct_types.values().collect()
+        self.cur_mod_ctx().unchecked_struct_types.values().collect()
     }
 
     /// Returns all unchecked enum types in the program context.
     pub fn unchecked_enum_types(&self) -> Vec<&EnumType> {
-        self.unchecked_enum_types.values().collect()
+        self.cur_mod_ctx().unchecked_enum_types.values().collect()
     }
 
     /// Returns true if the current scope is a function body or exists inside a function body.
     pub fn is_in_fn(&self) -> bool {
-        !self.fn_scope_indices.is_empty()
+        !self.cur_mod_ctx().fn_scope_indices.is_empty()
     }
 
     /// Returns a new name for a nested function with the given name. The new name will contain
     /// all the names of the functions within which this function is nested.
     pub fn mangle_name(&self, name: &str) -> String {
-        if self.fn_scope_indices.is_empty() {
+        let mod_ctx = self.cur_mod_ctx();
+
+        if mod_ctx.fn_scope_indices.is_empty() {
             return name.to_string();
         }
 
         let mut path = "".to_string();
-        for i in &self.fn_scope_indices {
-            let fn_name = match &self.stack.get(*i).unwrap().kind {
+        for i in &self.cur_mod_ctx().fn_scope_indices {
+            let fn_name = match &mod_ctx.stack.get(*i).unwrap().kind {
                 ScopeKind::FnBody(name) => name.as_str(),
                 _ => unreachable!(),
             };
@@ -685,56 +906,78 @@ impl ProgramContext {
     /// also has the side effect of incrementing the anonymous function count for the current
     /// scope.
     pub fn new_anon_fn_name(&mut self) -> String {
-        let scope = self
+        let mod_ctx = self.cur_mod_ctx_mut();
+        let scope = mod_ctx
             .stack
-            .get_mut(*self.fn_scope_indices.last().unwrap())
+            .get_mut(*mod_ctx.fn_scope_indices.last().unwrap())
             .unwrap();
         format!("anon_fn::{}", scope.get_and_inc_fn_count())
     }
 
     /// Returns true if the current scope is a loop body or falls within a loop body.
     pub fn is_in_loop(&self) -> bool {
-        !self.loop_scope_indices.is_empty()
+        !self.cur_mod_ctx().loop_scope_indices.is_empty()
     }
 
-    /// Adds the symbol type key to the current scope in the context. If there was already a symbol
-    /// with the same name, returns the old symbol.
+    /// Adds the symbol type key to the current scope in the current module context.
+    /// This will only make the symbol resolvable within the current module.
+    /// If there was already a symbol with the same name, returns the old symbol.
     pub fn insert_symbol(&mut self, symbol: ScopedSymbol) -> Option<ScopedSymbol> {
-        self.stack.back_mut().unwrap().add_symbol(symbol)
+        self.cur_mod_ctx_mut()
+            .stack
+            .back_mut()
+            .unwrap()
+            .add_symbol(symbol)
     }
 
-    /// Attempts to locate the symbol with the given name and returns it, if found.
+    /// Attempts to locate the symbol with the given name in the current module
+    /// and returns it, if found.
     /// Note that only the current function body and the top-level scope will be
     /// searched. In other words, if we're inside function A that is declared inside
     /// function B, then we won't be able to resolve symbols defined in function B.
-    pub fn get_symbol(&self, name: &str) -> Option<&ScopedSymbol> {
-        self.search_stack_ref(|scope| scope.get_symbol(name), false)
+    pub fn get_scoped_symbol(
+        &self,
+        maybe_mod_name: Option<&String>,
+        name: &str,
+    ) -> Option<&ScopedSymbol> {
+        let mod_ctx = self.get_mod_ctx(maybe_mod_name);
+        mod_ctx.search_stack_ref(|scope| scope.get_symbol(name), false)
     }
 
     /// Adds the given function to the program context, so it can be looked up by full name in the
     /// future. This function should only be used for adding non-templated (non-generic) functions.
     pub fn insert_fn(&mut self, func: AFn) {
         assert!(!func.signature.is_templated());
-        self.funcs.insert(func.signature.mangled_name.clone(), func);
+        self.cur_mod_ctx_mut()
+            .funcs
+            .insert(func.signature.mangled_name.clone(), func);
     }
 
-    /// Tries to locate and return the function with the given full name.
-    pub fn get_fn(&self, full_name: &str) -> Option<&AFn> {
-        self.funcs.get(full_name)
+    /// Tries to locate and return the function with the given full name in the
+    /// current module context.
+    pub fn get_fn(&self, maybe_mod_name: Option<&String>, name: &str) -> Option<&AFn> {
+        let mod_ctx = self.get_mod_ctx(maybe_mod_name);
+        mod_ctx.funcs.get(name)
     }
 
-    /// Returns the struct type with the given name.
-    pub fn get_struct_type(&self, name: &str) -> Option<&AStructType> {
-        if let Some(tk) = self.struct_type_keys.get(name) {
+    /// Returns the struct type with the given name in the given module.
+    pub fn get_struct_type(
+        &self,
+        maybe_mod_name: Option<&String>,
+        name: &str,
+    ) -> Option<&AStructType> {
+        let mod_ctx = self.get_mod_ctx(maybe_mod_name);
+        if let Some(tk) = mod_ctx.struct_type_keys.get(name) {
             return Some(self.must_get_type(*tk).to_struct_type());
         }
 
         None
     }
 
-    /// Returns the struct type with the given name.
-    pub fn get_enum_type(&self, name: &str) -> Option<&AEnumType> {
-        if let Some(tk) = self.struct_type_keys.get(name) {
+    /// Returns the struct type with the given name in the given module.
+    pub fn get_enum_type(&self, maybe_mod_name: Option<&String>, name: &str) -> Option<&AEnumType> {
+        let mod_ctx = self.get_mod_ctx(maybe_mod_name);
+        if let Some(tk) = mod_ctx.struct_type_keys.get(name) {
             return Some(self.must_get_type(*tk).to_enum_type());
         }
 
@@ -743,8 +986,9 @@ impl ProgramContext {
 
     /// Returns the expected return type key for the current function body scope.
     pub fn get_cur_expected_ret_type_key(&self) -> Option<TypeKey> {
-        let fn_scope_index = *self.fn_scope_indices.last().unwrap();
-        self.stack.get(fn_scope_index).unwrap().ret_type_key()
+        let mod_ctx = self.cur_mod_ctx();
+        let fn_scope_index = *mod_ctx.fn_scope_indices.last().unwrap();
+        mod_ctx.stack.get(fn_scope_index).unwrap().ret_type_key()
     }
 
     /// Returns a string containing the human-readable version of the type corresponding to the
@@ -756,12 +1000,13 @@ impl ProgramContext {
     /// Maps `const_name` to `const_value` in the program context so the value can be looked up by
     /// name.
     pub fn insert_const_value(&mut self, const_name: &str, const_value: AExpr) {
-        self.const_values
+        self.cur_mod_ctx_mut()
+            .const_values
             .insert(const_name.to_string(), const_value);
     }
 
     /// Returns the expression representing the value assigned to the constant with the given name.
     pub fn get_const_value(&self, name: &str) -> Option<&AExpr> {
-        self.const_values.get(name)
+        self.cur_mod_ctx().const_values.get(name)
     }
 }
