@@ -212,6 +212,24 @@ impl ProgramContext {
         )
     }
 
+    /// Returns true only if the module name refers to a valid imported module.
+    /// Otherwise, records an error and returns false.
+    pub fn check_mod_name<T: Locatable>(&mut self, mod_name: &String, loc: &T) -> bool {
+        let mod_ctx = self.cur_mod_ctx();
+        match mod_ctx.imported_mod_paths.contains_key(mod_name) {
+            true => true,
+            false => {
+                self.insert_err(AnalyzeError::new(
+                    ErrorKind::UndefMod,
+                    format_code!("module {} is not defined", mod_name).as_str(),
+                    loc,
+                ));
+
+                false
+            }
+        }
+    }
+
     /// Returns the module context corresponding to the module that is currently
     /// being analysed.
     fn cur_mod_ctx(&self) -> &ModuleContext {

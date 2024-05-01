@@ -75,6 +75,13 @@ impl AType {
                 let maybe_mod_name = unresolved_type.maybe_mod_name.as_ref();
                 let type_name = unresolved_type.name.as_str();
 
+                // Return early if the mod name is invalid.
+                if let Some(mod_name) = maybe_mod_name {
+                    if !ctx.check_mod_name(mod_name, typ) {
+                        return AType::Unknown("<unknown>".to_string());
+                    }
+                };
+
                 // Check if the type has already been marked as invalid. If so, we should avoid
                 // trying to resolve it and simply return the unknown type.
                 if ctx.is_name_of_invalid_type(type_name) {

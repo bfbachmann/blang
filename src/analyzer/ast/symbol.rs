@@ -74,6 +74,13 @@ impl ASymbol {
     ) -> Self {
         let mut var_name = symbol.name.as_str();
 
+        // Return early if the mod name is invalid.
+        if let Some(mod_name) = symbol.maybe_mod_name.as_ref() {
+            if !ctx.check_mod_name(mod_name, symbol) {
+                return ASymbol::new_with_default_pos(symbol.name.as_str(), ctx.unknown_type_key());
+            }
+        }
+
         // Find the type key for the symbol.
         // Return a placeholder value if we failed to resolve the symbol type key.
         // TODO: Refactor

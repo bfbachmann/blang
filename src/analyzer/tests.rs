@@ -1559,4 +1559,28 @@ mod tests {
         );
         check_result(result, Some(ErrorKind::LiteralOutOfRange));
     }
+
+    #[test]
+    fn undef_mod_name_in_symbol() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let x = @thing.value
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::UndefMod));
+    }
+
+    #[test]
+    fn undef_mod_name_in_type() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let x = @thing.Thing{}
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::UndefMod));
+    }
 }
