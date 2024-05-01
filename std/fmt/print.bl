@@ -6,7 +6,9 @@ fn print(msg: *String) {
 }
 
 fn println(msg: *String) {
-    let msg_newline = String.concat(msg, &String.from_str("\n"))
+    let newline = String.from_str("\n")
+    let msg_newline = String.concat(msg, &newline)
     print(&msg_newline)
     msg_newline.free()
+    newline.free()
 }
