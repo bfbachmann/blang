@@ -411,7 +411,39 @@ fn main() {
 
 ### Imports: `use`
 
-TODO
+Constants, types, and functions can be imported from other modules with `use` statements. For example, to import `Thing`
+from the module at `my_project/some_dir/thing.bl`, we can do the following.
+
+```
+use {Thing}: "my_project/some_dir/thing.bl"
+```
+
+Whole modules can also be imported with aliases and used as follows.
+
+```
+use mem: "std/libc/mem.bl"
+
+fn clone_bytes(src: *u8, len: uint): *mut u8 {
+    // Use the `malloc` function from the `mem` module.
+    let dst = @mem.malloc(len)
+    
+    // Use the `memcpy` function from the `mem` module.
+    return @mem.memcpy(dst, src, len)
+}
+```
+
+These two methods of importing from a foreign module can also be combined as follows.
+
+```
+use io {stdout}: "std/libc/io.bl"
+use proc: "std/libc/proc.bl"
+
+fn die(msg: str) {
+    @io.write(stdout, msg as *u8, msg.len())
+    @proc.exit(1)
+}
+
+```
 
 ### Type Casts: `as`
 
