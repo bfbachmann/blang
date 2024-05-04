@@ -12,11 +12,10 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeStore;
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::fmt::hierarchy_to_string;
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::Position;
 use crate::parser::ast::arg::Argument;
 use crate::parser::ast::func_sig::FunctionSignature;
 use crate::parser::ast::r#type::Type;
-use crate::parser::ast::r#use::UsedModule;
 use crate::parser::module::Module;
 
 /// An analyzed source file along with any errors or warnings that occurred during its analysis.
@@ -76,15 +75,7 @@ pub fn analyze_modules(modules: Vec<Module>, target_triple: &Triple) -> ProgramA
     };
 
     define_intrinsics(&mut ctx);
-
-    analyze_module::<UsedModule>(
-        &mut ctx,
-        &mods,
-        &mut analyzed_mods,
-        &vec![],
-        &root_mod_path,
-        None,
-    );
+    analyze_module(&mut ctx, &mods, &mut analyzed_mods, &vec![], &root_mod_path);
 
     ProgramAnalysis {
         type_store: ctx.type_store,
@@ -93,45 +84,16 @@ pub fn analyze_modules(modules: Vec<Module>, target_triple: &Triple) -> ProgramA
 }
 
 /// Recursively analyzes modules bottom-up by following imports.
-pub fn analyze_module<T: Locatable>(
+pub fn analyze_module(
     ctx: &mut ProgramContext,
     mods: &HashMap<PathBuf, Module>,
     analyzed_mods: &mut HashMap<PathBuf, AnalyzedModule>,
     mod_chain: &Vec<PathBuf>,
     mod_path: &PathBuf,
-    maybe_use_loc: Option<&T>,
 ) {
-    // Make sure this module isn't already under analysis. If it is, it means
-    // there is a cyclical import.
-    let is_import_cycle = mod_chain.contains(&mod_path);
-
     // Append the module we're analyzing to the dependency chain.
-    let mut mod_chain = mod_chain.clone();
-    mod_chain.push(mod_path.clone());
-
-    if is_import_cycle {
-        ctx.insert_err(
-            AnalyzeError::new(
-                ErrorKind::ImportCycle,
-                "import cycle",
-                maybe_use_loc.unwrap(),
-            )
-            .with_detail(
-                format!(
-                    "The offending import cycle is: {}",
-                    hierarchy_to_string(
-                        &mod_chain
-                            .iter()
-                            .map(|p| p.to_str().unwrap().to_string())
-                            .collect()
-                    )
-                )
-                .as_str(),
-            ),
-        );
-
-        return;
-    }
+    let mut new_mod_chain = mod_chain.clone();
+    new_mod_chain.push(mod_path.clone());
 
     let module = match mods.get(mod_path) {
         Some(m) => m,
@@ -139,18 +101,33 @@ pub fn analyze_module<T: Locatable>(
     };
 
     // Make sure all modules that this module depends on are analyzed first.
+    let mut import_cycle_errs = vec![];
     for used_mod in &module.used_mods {
-        // Analyze the module only if we have not already done so.
         let used_mod_path = PathBuf::from(&used_mod.path.raw);
-        if !analyzed_mods.contains_key(&used_mod_path) {
-            analyze_module(
-                ctx,
-                mods,
-                analyzed_mods,
-                &mod_chain,
-                &used_mod_path,
-                Some(used_mod),
+
+        // Record error and skip this import if it is cyclical.
+        if new_mod_chain.contains(&used_mod_path) {
+            let mut cycle = new_mod_chain.clone();
+            cycle.push(used_mod_path);
+
+            let import_cycle = hierarchy_to_string(
+                &cycle
+                    .iter()
+                    .map(|p| p.to_str().unwrap().to_string())
+                    .collect(),
             );
+            import_cycle_errs.push(
+                AnalyzeError::new(ErrorKind::ImportCycle, "import cycle", used_mod).with_detail(
+                    format!("The offending import cycle is: {}", import_cycle).as_str(),
+                ),
+            );
+
+            continue;
+        }
+
+        // Analyze the module only if we have not already done so.
+        if !analyzed_mods.contains_key(&used_mod_path) {
+            analyze_module(ctx, mods, analyzed_mods, &new_mod_chain, &used_mod_path);
         }
     }
 
@@ -166,13 +143,15 @@ pub fn analyze_module<T: Locatable>(
         }
     }
 
+    // Append the import cycle errors to the module analysis errors.
+    let mut errs = std::mem::take(&mut ctx.errors);
+    for cycle_err in import_cycle_errs {
+        errs.insert(cycle_err.start_pos.clone(), cycle_err);
+    }
+
     analyzed_mods.insert(
         mod_path.into(),
-        AnalyzedModule::new(
-            analyzed_module,
-            std::mem::take(&mut ctx.errors),
-            std::mem::take(&mut ctx.warnings),
-        ),
+        AnalyzedModule::new(analyzed_module, errs, std::mem::take(&mut ctx.warnings)),
     );
 }
 
