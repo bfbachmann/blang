@@ -233,20 +233,21 @@ impl Statement {
                 Ok(Statement::VariableAssignment(assign))
             }
 
-            // If the first token is `extern`, it's a set of external function declarations.
-            (TokenKind::Extern, _) => {
+            // If the next tokens are `extern` or `pub extern`, it's an
+            // external function declaration.
+            (TokenKind::Extern, _) | (TokenKind::Pub, TokenKind::Extern) => {
                 let ext = Extern::from(tokens)?;
                 Ok(Statement::ExternFn(ext))
             }
 
-            // If the first token is `const`, it's a set of constant declarations.
-            (TokenKind::Const, _) => {
+            // If the nex tokens are `const` or `pub const`, it's a constant declaration.
+            (TokenKind::Const, _) | (TokenKind::Pub, TokenKind::Const) => {
                 let const_decl = Const::from(tokens)?;
                 Ok(Statement::Const(const_decl))
             }
 
-            // If the first token is `fn`, it must be a function declaration.
-            (TokenKind::Fn, _) => {
+            // If the next tokens are `fn` or `pub fn`, it must be a function declaration.
+            (TokenKind::Fn, _) | (TokenKind::Pub, TokenKind::Fn) => {
                 let fn_decl = Function::from(tokens)?;
                 Ok(Statement::FunctionDeclaration(fn_decl))
             }
@@ -328,14 +329,14 @@ impl Statement {
                 )))
             }
 
-            // If the first token is `struct`, it must be a struct declaration.
-            (TokenKind::Struct, _) => {
+            // If the next tokens are `struct` or `pub struct`, it must be a struct declaration.
+            (TokenKind::Struct, _) | (TokenKind::Pub, TokenKind::Struct) => {
                 let struct_decl = StructType::from(tokens)?;
                 Ok(Statement::StructDeclaration(struct_decl))
             }
 
-            // If the first token is `enum`, it must be a struct declaration.
-            (TokenKind::Enum, _) => {
+            // If the next tokens are `enum` or `pub enum`, it must be an enum declaration.
+            (TokenKind::Enum, _) | (TokenKind::Pub, TokenKind::Enum) => {
                 let enum_decl = EnumType::from(tokens)?;
                 Ok(Statement::EnumDeclaration(enum_decl))
             }

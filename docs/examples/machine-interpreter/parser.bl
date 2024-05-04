@@ -4,7 +4,7 @@ use {strtol, strncmp}: "std/libc/string.bl"
 use {assert}: "docs/examples/machine-interpreter/utils.bl"
 
 /// Represents a machine instruction.
-struct Instruction {
+pub struct Instruction {
     kind: InstKind
     operands: {int, int}
 }
@@ -19,7 +19,7 @@ impl Instruction {
 }
 
 /// Represents a kind of instruction.
-enum InstKind {
+pub enum InstKind {
     /// Stores the immediate `value` into memory at the location `dst_loc`.
     /// Example: Store the value 234 into memory at address 9
     ///     store 234 #9
@@ -44,7 +44,7 @@ enum InstKind {
 }
 
 /// A program is just an array of instructions.
-struct Program {
+pub struct Program {
     instructions: *mut Instruction
     len: uint
     cap: uint
@@ -147,7 +147,7 @@ impl ParseResult {
 }
 
 /// Parses a program from a character buffer.
-struct Parser {
+pub struct Parser {
     buf: *u8
     buf_len: uint
     cursor: uint

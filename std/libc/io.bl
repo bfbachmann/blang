@@ -1,8 +1,8 @@
-extern fn puts(msg: str): uint
-extern fn read(fd: uint, buf: *u8, size: uint): uint
-extern fn fflush(fd: uint)
-extern fn write(fd: uint, ptr: *u8, nbytes: uint)
+pub extern fn puts(msg: str): uint
+pub extern fn read(fd: uint, buf: *u8, size: uint): uint
+pub extern fn fflush(fd: uint)
+pub extern fn write(fd: uint, ptr: *u8, nbytes: uint)
 
-const stdin: uint = 0
-const stdout: uint = 1
-const stderr: uint = 2
+pub const stdin: uint = 0
+pub const stdout: uint = 1
+pub const stderr: uint = 2

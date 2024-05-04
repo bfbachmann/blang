@@ -561,33 +561,39 @@ fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
             expr
         }
 
-        // Any expression that begins with an identifier.
-        TokenKind::Identifier(_) => match tokens.peek_ahead(1) {
-            Some(Token {
-                kind: TokenKind::DoubleColon,
-                ..
-            }) => Expression::EnumInit(EnumVariantInit::from(tokens)?),
+        // Any expression that begins with `@` or an identifier.
+        TokenKind::Identifier(_) | TokenKind::At => {
+            let cursor_before_symbol = tokens.cursor();
+            let symbol = Symbol::from(tokens)?;
+            let cursor_after_symbol = tokens.cursor();
 
-            Some(Token {
-                kind: TokenKind::LeftBrace,
-                ..
-            }) => {
-                // This might be struct initialization, or just part of a conditional that is
-                // followed by the conditional closure.
-                let cursor = tokens.cursor();
-                if let Ok(struct_init) = StructInit::from(tokens) {
-                    return Ok(Expression::StructInit(struct_init));
+            match tokens.peek_next() {
+                Some(Token {
+                    kind: TokenKind::DoubleColon,
+                    ..
+                }) => {
+                    tokens.set_cursor(cursor_before_symbol);
+                    Expression::EnumInit(EnumVariantInit::from(tokens)?)
                 }
 
-                tokens.set_cursor(cursor);
-                Expression::Symbol(Symbol::from(tokens)?)
+                Some(Token {
+                    kind: TokenKind::LeftBrace,
+                    ..
+                }) => {
+                    // This might be struct initialization, or just part of a conditional that is
+                    // followed by the conditional closure.
+                    tokens.set_cursor(cursor_before_symbol);
+                    if let Ok(struct_init) = StructInit::from(tokens) {
+                        return Ok(Expression::StructInit(struct_init));
+                    }
+
+                    tokens.set_cursor(cursor_after_symbol);
+                    Expression::Symbol(symbol)
+                }
+
+                _ => Expression::Symbol(symbol),
             }
-
-            _ => Expression::Symbol(Symbol::from(tokens)?),
-        },
-
-        // Any expression that begins with `@`.
-        TokenKind::At => Expression::Symbol(Symbol::from(tokens)?),
+        }
 
         other => {
             return Err(ParseError::new_with_token(

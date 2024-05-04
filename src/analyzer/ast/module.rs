@@ -195,6 +195,11 @@ fn define_extern_fn(ctx: &mut ProgramContext, ext: &Extern) {
     }
 
     analyze_fn_sig(ctx, &ext.fn_sig);
+
+    // Record the extern function name as public in the current module if necessary.
+    if ext.is_pub {
+        ctx.insert_pub_fn_name(ext.fn_sig.name.as_str());
+    }
 }
 
 fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {

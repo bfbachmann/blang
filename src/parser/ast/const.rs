@@ -17,6 +17,7 @@ pub struct Const {
     pub name: String,
     pub maybe_type: Option<Type>,
     pub value: Expression,
+    pub is_pub: bool,
     start_pos: Position,
     end_pos: Position,
 }
@@ -55,14 +56,16 @@ impl Const {
     /// Parses a single constant declaration from the token stream. Expects token sequences of the
     /// forms
     ///
-    ///     const <name>: <type> = <value>
-    ///     const <name> = <value>
+    ///     pub const <name>: <type> = <value>
+    ///     pub const <name> = <value>
     ///
     /// where
     ///  - `name` is an identifier representing the constant name
     ///  - `type` is the optional constant type (see `Type::from`)
-    ///  - `value` is an expression representing the constant value (see `Expression::from`).
+    ///  - `value` is an expression representing the constant value (see `Expression::from`)
+    ///  - `pub` is optional.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+        let is_pub = Module::parse_optional(tokens, TokenKind::Pub).is_some();
         let start_pos = Module::parse_expecting(tokens, TokenKind::Const)?.start;
         let name = Module::parse_identifier(tokens)?;
 
@@ -83,6 +86,7 @@ impl Const {
             name,
             maybe_type: typ,
             value,
+            is_pub,
             start_pos,
             end_pos,
         })

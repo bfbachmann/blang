@@ -1,11 +1,11 @@
 use {write, stdout}: "std/libc/io.bl"
 use {String}: "std/types/string.bl"
 
-fn print(msg: *String) {
+pub fn print(msg: *String) {
     write(stdout, msg^.ptr, msg^.len)
 }
 
-fn println(msg: *String) {
+pub fn println(msg: *String) {
     let newline = String.from_str("\n")
     let msg_newline = String.concat(msg, &newline)
     print(&msg_newline)

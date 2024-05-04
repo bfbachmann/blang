@@ -292,6 +292,15 @@ impl AFn {
             );
         }
 
+        // Record the function name as public in the current module if necessary.
+        if func.is_pub {
+            if let Some(type_key) = ctx.get_cur_self_type_key() {
+                ctx.insert_pub_member_fn_name(type_key, func.signature.name.as_str());
+            } else {
+                ctx.insert_pub_fn_name(func.signature.name.as_str());
+            }
+        }
+
         AFn {
             signature,
             body: a_closure,

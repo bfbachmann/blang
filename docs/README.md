@@ -46,7 +46,7 @@ A regular function can be defined as follows.
 ```
 /// This function takes an unsigned integer `n` and returns the nth number in the Fibonnaci sequence.
 fn fibonacci(n: u64): u64 {
-    if n < = 1 {
+    if n <= 1 {
         return 1
     }
 
@@ -217,8 +217,7 @@ Tuples are like structs, except their fields are identified by index rather than
 
 ```
 fn main() {
-    let values:
-    { str, i64, bool } = { "thing", 1, true }
+    let values: { str, i64, bool } = { "thing", 1, true }
 
     // Tuple values are not copied automatically, so this is a move.
     let new_values = values
@@ -385,7 +384,7 @@ fn main() {
 }
 ```
 
-Pointer arithmetic can be done simply be indexing the pointer like one would an array.
+Pointer arithmetic can be done simply by indexing the pointer like one would an array.
 
 ```
 fn main() {
@@ -442,7 +441,6 @@ fn die(msg: str) {
     @io.write(stdout, msg as *u8, msg.len())
     @proc.exit(1)
 }
-
 ```
 
 ### Type Casts: `as`
@@ -456,9 +454,9 @@ fn main() {
 
     // Casting between pointers and numeric types.
     let a: i64 = &10 as i64
-    let ptr: * i64 = 100 as * i64
+    let ptr: *i64 = 100 as *i64
 
     // Casting between pointer types.
-    let x_u8_ptr = ptr as * u8
+    let x_u8_ptr = ptr as *u8
 }
 ```

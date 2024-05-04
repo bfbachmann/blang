@@ -87,6 +87,11 @@ impl AConst {
         // constant expressions at compile time.
         ctx.insert_const_value(const_decl.name.as_str(), value.clone());
 
+        // Record the constant as a public value in this module if necessary.
+        if const_decl.is_pub {
+            ctx.insert_pub_const_name(const_decl.name.as_str());
+        }
+
         AConst {
             name: const_decl.name.clone(),
             declared_type_key: declared_tk,

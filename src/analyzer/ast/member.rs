@@ -61,6 +61,8 @@ impl AMemberAccess {
         let maybe_field_type_key = if maybe_field_type_key.is_none() {
             match ctx.get_member_fn(base_expr.type_key, access.member_name.as_str()) {
                 Some(member_fn_sig) => {
+                    // TODO: Only allow access to the member if it is public or local
+                    // to the current module.
                     is_method = true;
                     Some(member_fn_sig.type_key)
                 }

@@ -232,7 +232,8 @@ fn parse_source_files(input_path: &str) -> Vec<Module> {
 
             paths
         } else {
-            vec![main_path.to_path_buf()]
+            let main_path = Path::new(input_path);
+            vec![main_path.join("main.bl")]
         }
     } else {
         let main_path = Path::new(input_path);

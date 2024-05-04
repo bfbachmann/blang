@@ -8,7 +8,6 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::r#type::Type;
-use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::module::Module;
@@ -43,6 +42,7 @@ locatable_impl!(StructField);
 pub struct StructType {
     pub name: String,
     pub fields: Vec<StructField>,
+    pub is_pub: bool,
     start_pos: Position,
     end_pos: Position,
 }
@@ -77,7 +77,7 @@ locatable_impl!(StructType);
 impl StructType {
     /// Parses a struct declaration. Expects token sequences of the form
     ///
-    ///     struct <name> {
+    ///     pub struct <name> {
     ///         <field>: <type>,
     ///         ...
     ///     }
@@ -86,9 +86,12 @@ impl StructType {
     ///  - `name` is the struct type name (optional)
     ///  - `type` is the struct field type
     ///  - `field` is the struct field name
+    ///  - `pub` is optional
     ///
     /// The commas after each field declaration are optional.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+        let is_pub = Module::parse_optional(tokens, TokenKind::Pub).is_some();
+
         // Record the starting position of the struct type declaration.
         let start_pos = Module::current_position(tokens);
         let end_pos: Position;
@@ -96,7 +99,7 @@ impl StructType {
         // The first token should be `struct`.
         Module::parse_expecting(tokens, TokenKind::Struct)?;
 
-        // The next token should might be the struct type name, which is optional.
+        // The next token might be the struct type name, which is optional.
         let mut name = "".to_string();
         if let Some(Token {
             kind: TokenKind::Identifier(_),
@@ -158,6 +161,7 @@ impl StructType {
         Ok(StructType {
             name,
             fields,
+            is_pub,
             start_pos,
             end_pos,
         })
@@ -211,48 +215,7 @@ impl StructInit {
         let end_pos: Position;
 
         // Parse the struct type (either by name or inline declaration).
-        let struct_type = match tokens.next() {
-            Some(
-                _token @ Token {
-                    kind: TokenKind::Struct,
-                    ..
-                },
-            ) => {
-                tokens.rewind(1);
-                Type::Struct(StructType::from(tokens)?)
-            }
-
-            Some(
-                ref token @ Token {
-                    kind: TokenKind::Identifier(ref type_name),
-                    ..
-                },
-            ) => Type::Unresolved(UnresolvedType::new(
-                type_name.as_str(),
-                token.start,
-                token.end,
-            )),
-
-            Some(other) => {
-                return Err(ParseError::new(
-                    ErrorKind::ExpectedType,
-                    format_code!("expected struct type, but found {}", &other,).as_str(),
-                    Some(other.clone()),
-                    other.start,
-                    other.end,
-                ))
-            }
-
-            None => {
-                return Err(ParseError::new(
-                    ErrorKind::UnexpectedEOF,
-                    "expected struct type, but found EOF",
-                    None,
-                    Position::default(),
-                    Position::default(),
-                ))
-            }
-        };
+        let struct_type = Type::from(tokens)?;
 
         // Parse `{`.
         Module::parse_expecting(tokens, TokenKind::LeftBrace)?;

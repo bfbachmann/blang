@@ -14,6 +14,7 @@ use crate::parser::module::Module;
 #[derive(Clone, Debug, Eq)]
 pub struct Extern {
     pub fn_sig: FunctionSignature,
+    pub is_pub: bool,
     start_pos: Position,
     end_pos: Position,
 }
@@ -42,11 +43,13 @@ impl Extern {
     /// Attempts to parse an external function declaration from the token sequence.
     /// Expects token sequences of one of the following forms:
     ///
-    ///     extern <fn_sig>
+    ///     pub extern <fn_sig>
     ///
     /// where
-    ///  - `fn_sig` is a function signature (see `FunctionSignature::from`).
+    ///  - `fn_sig` is a function signature (see `FunctionSignature::from`)
+    ///  - `pub` is optional.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+        let is_pub = Module::parse_optional(tokens, TokenKind::Pub).is_some();
         let start_pos = Module::current_position(tokens);
 
         // Parse the `extern` token.
@@ -58,6 +61,7 @@ impl Extern {
 
         Ok(Extern {
             fn_sig,
+            is_pub,
             start_pos,
             end_pos,
         })

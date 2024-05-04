@@ -43,6 +43,12 @@ struct ModuleContext {
     /// this map would contain the mapping `"my_mod": "my_project/my_mod.bl"`.
     imported_mod_paths: HashMap<String, String>,
 
+    // TODO: document
+    pub_const_names: HashSet<String>,
+    pub_fn_names: HashSet<String>,
+    pub_type_names: HashSet<String>,
+    pub_type_member_fn_names: HashMap<TypeKey, String>,
+
     /// Contains the names of all types that have been marked as "invalid" by the analyzer. At the
     /// time of writing this, this should only be used for illegal cyclical types with infinite
     /// size.
@@ -78,6 +84,10 @@ impl ModuleContext {
             loop_scope_indices: vec![],
             cur_self_type_key: None,
             imported_mod_paths: Default::default(),
+            pub_const_names: Default::default(),
+            pub_fn_names: Default::default(),
+            pub_type_names: Default::default(),
+            pub_type_member_fn_names: Default::default(),
             invalid_type_names: Default::default(),
             unchecked_struct_types: Default::default(),
             unchecked_enum_types: Default::default(),
@@ -715,6 +725,33 @@ impl ProgramContext {
         self.cur_mod_ctx_mut().cur_self_type_key = maybe_type_key;
     }
 
+    /// Records the given name as a public constant name in the current module.
+    pub fn insert_pub_const_name(&mut self, name: &str) {
+        self.cur_mod_ctx_mut()
+            .pub_const_names
+            .insert(name.to_string());
+    }
+
+    /// Records the given name as a public type name in the current module.
+    pub fn insert_pub_type_name(&mut self, name: &str) {
+        self.cur_mod_ctx_mut()
+            .pub_type_names
+            .insert(name.to_string());
+    }
+
+    /// Records the given name as a public function name in the current module.
+    pub fn insert_pub_fn_name(&mut self, name: &str) {
+        self.cur_mod_ctx_mut().pub_fn_names.insert(name.to_string());
+    }
+
+    /// Records the given name as a public member function name on the given type
+    /// in the current module.
+    pub fn insert_pub_member_fn_name(&mut self, impl_type_key: TypeKey, name: &str) {
+        self.cur_mod_ctx_mut()
+            .pub_type_member_fn_names
+            .insert(impl_type_key, name.to_string());
+    }
+
     /// Sets the current module in the program context to `module`.
     /// If any of the imports have names that collide with existing imports in this module,
     /// they will not be mapped and error will be recorded for each conflict.
@@ -767,6 +804,26 @@ impl ProgramContext {
             for ident in &used_mod.identifiers {
                 let symbol = Symbol::new_with_mod(ident.as_str(), mod_name.as_str());
                 let a_symbol = ASymbol::from(self, &symbol, true, true, None);
+
+                // Record an error if the symbol was not declared public.
+                let mod_ctx = self.get_mod_ctx(Some(&mod_name));
+                let is_pub = if a_symbol.is_const {
+                    mod_ctx.pub_const_names.contains(ident)
+                } else if a_symbol.is_type {
+                    mod_ctx.pub_type_names.contains(ident)
+                } else {
+                    mod_ctx.pub_fn_names.contains(ident)
+                };
+
+                if !is_pub {
+                    // TODO: The location here is the entire import. It should
+                    // just be that of the invalid symbol.
+                    self.insert_err(AnalyzeError::new(
+                        ErrorKind::UseOfPrivateValue,
+                        format_code!("{} is not public", a_symbol).as_str(),
+                        used_mod,
+                    ));
+                }
 
                 // Skip the symbol if its type could not be resolved.
                 if a_symbol.type_key == self.unknown_type_key() {

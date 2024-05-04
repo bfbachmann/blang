@@ -5,20 +5,20 @@ const mem_size: uint = 1024
 
 /// A machine executes a program by manipulating its memory according
 /// to program instructions.
-struct Machine {
+pub struct Machine {
     memory: [int; mem_size]
     prog: *Program
     pc: uint
 }
 
 /// The result of instruction execution.
-struct ExecResult {
+pub struct ExecResult {
     status: ExecStatus
     msg: str
 }
 
 /// Indicates whether execution succeeded.
-enum ExecStatus {
+pub enum ExecStatus {
     Ok
     Err
 }

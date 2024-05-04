@@ -179,6 +179,7 @@ mod tests {
                     Position::new(1, 37),
                     Position::new(1, 64),
                 ),
+                false
             )
         );
 
@@ -265,6 +266,7 @@ mod tests {
                     Position::new(1, 58),
                 ),
                 Closure::new(vec![], None, Position::new(1, 59), Position::new(1, 61)),
+                false
             )
         );
     }
@@ -463,7 +465,8 @@ mod tests {
                         None,
                         Position::new(1, 20),
                         Position::new(7, 10),
-                    )
+                    ),
+                    false
                 ))]
             }
         );

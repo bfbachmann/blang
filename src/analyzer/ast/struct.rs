@@ -149,6 +149,11 @@ impl AStructType {
             fields,
         };
 
+        // Record the type name as public in the current module if necessary.
+        if struct_type.is_pub {
+            ctx.insert_pub_type_name(struct_type.name.as_str());
+        }
+
         let a_struct_type = AType::Struct(a_struct.clone());
         ctx.replace_type(type_key, a_struct_type);
         a_struct

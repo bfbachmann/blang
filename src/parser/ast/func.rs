@@ -4,6 +4,7 @@ use std::hash::Hash;
 use crate::lexer::pos::{Locatable, Position};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
+use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::arg::Argument;
 use crate::parser::ast::closure::Closure;
 use crate::parser::ast::func_sig::FunctionSignature;
@@ -13,12 +14,14 @@ use crate::parser::ast::ret::Ret;
 use crate::parser::ast::statement::Statement;
 use crate::parser::ast::tmpl_params::{TmplParam, TmplParams};
 use crate::parser::error::ParseResult;
+use crate::parser::module::Module;
 
 /// Represents a function declaration.
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub struct Function {
     pub signature: FunctionSignature,
     pub body: Closure,
+    pub is_pub: bool,
 }
 
 impl fmt::Display for Function {
@@ -38,14 +41,18 @@ impl Locatable for Function {
 }
 
 impl Function {
-    pub fn new(signature: FunctionSignature, body: Closure) -> Self {
-        Function { signature, body }
+    pub fn new(signature: FunctionSignature, body: Closure, is_pub: bool) -> Self {
+        Function {
+            signature,
+            body,
+            is_pub,
+        }
     }
 
     /// Parses function declarations. Expects token sequences of the form
     ///
-    ///      fn <fn_name>(<arg_name>: <arg_type>, ...): <return_type> { <body> }
-    ///      fn <fn_name>(<arg_name>: <arg_type>, ...) { <body> }
+    ///      pub fn <fn_name>(<arg_name>: <arg_type>, ...): <return_type> { <body> }
+    ///      pub fn <fn_name>(<arg_name>: <arg_type>, ...) { <body> }
     ///
     /// where
     ///  - `fn_name` is an identifier representing the name of the function
@@ -53,7 +60,10 @@ impl Function {
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return type
     ///  - `body` is the body of the function
+    ///  - `pub` is optional.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+        let is_pub = Module::parse_optional(tokens, TokenKind::Pub).is_some();
+
         // The first set of tokens should be the function signature.
         let sig = FunctionSignature::from(tokens)?;
 
@@ -61,7 +71,7 @@ impl Function {
         let body = Closure::from(tokens)?;
 
         // Now that we have the function name and args, create the node.
-        Ok(Function::new(sig, body))
+        Ok(Function::new(sig, body, is_pub))
     }
 
     /// Parses anonymous function declarations. Expects token sequences of the forms
@@ -83,7 +93,7 @@ impl Function {
         let body = Closure::from(tokens)?;
 
         // Now that we have the function name and args, create the node.
-        Ok(Function::new(sig, body))
+        Ok(Function::new(sig, body, false))
     }
 
     /// Converts the given lambda into a function.
@@ -144,6 +154,10 @@ impl Function {
             ret_end.clone(),
         );
 
-        Function { signature, body }
+        Function {
+            signature,
+            body,
+            is_pub: false,
+        }
     }
 }

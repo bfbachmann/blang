@@ -102,10 +102,11 @@ impl EnumTypeVariant {
 }
 
 /// An enumerated type.
-#[derive(Debug, Eq)]
+#[derive(Debug, Eq, Clone)]
 pub struct EnumType {
     pub name: String,
     pub variants: Vec<EnumTypeVariant>,
+    pub is_pub: bool,
     start_pos: Position,
     end_pos: Position,
 }
@@ -131,17 +132,6 @@ impl Display for EnumType {
     }
 }
 
-impl Clone for EnumType {
-    fn clone(&self) -> Self {
-        EnumType {
-            name: self.name.clone(),
-            variants: self.variants.iter().map(|v| v.clone()).collect(),
-            start_pos: self.start_pos.clone(),
-            end_pos: self.end_pos.clone(),
-        }
-    }
-}
-
 impl Hash for EnumType {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state);
@@ -157,7 +147,7 @@ locatable_impl!(EnumType);
 impl EnumType {
     /// Parses enum type declarations. Expects token sequences of the form
     ///
-    ///     enum <name> {
+    ///     pub enum <name> {
     ///         <variant_name>(<variant_type>)
     ///         ...
     ///     }
@@ -165,8 +155,10 @@ impl EnumType {
     /// where
     ///  - `name` is the name of the enum type
     ///  - `variant_name` is the name of a variant of the enum type
-    ///  - `variant_type` is the optional variant type (see `Type::from`).
+    ///  - `variant_type` is the optional variant type (see `Type::from`)
+    ///  - `pub` is optional.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+        let is_pub = Module::parse_optional(tokens, TokenKind::Pub).is_some();
         let start_pos = Module::current_position(tokens);
 
         // Parse `enum <name> {`.
@@ -190,6 +182,7 @@ impl EnumType {
         Ok(EnumType {
             name,
             variants,
+            is_pub,
             start_pos,
             end_pos,
         })

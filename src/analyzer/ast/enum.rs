@@ -185,6 +185,11 @@ impl AEnumType {
             );
         }
 
+        // Record the type name as public in the current module if necessary.
+        if enum_type.is_pub {
+            ctx.insert_pub_type_name(enum_type.name.as_str());
+        }
+
         // Now that we have a fully analyzed enum type, we can add it to the program context so it
         // can be referenced later.
         ctx.replace_type(type_key, a_enum_type);

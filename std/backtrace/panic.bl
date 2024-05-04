@@ -2,7 +2,7 @@ use {exit}: "std/libc/proc.bl"
 use {write, stderr}: "std/libc/io.bl"
 use {backtrace, backtrace_symbols_fd}: "std/libc/signal.bl"
 
-fn panic(msg: str) {
+pub fn panic(msg: str) {
     let panic_str = "Panic: "
     write(stderr, panic_str as *u8, panic_str.len())
     write(stderr, msg as *u8, msg.len())

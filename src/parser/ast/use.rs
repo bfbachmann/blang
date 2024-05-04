@@ -64,7 +64,7 @@ impl ModulePath {
                 };
 
                 // Make sure the path is valid.
-                match fs::metadata(full_path.clone()) {
+                match fs::metadata(full_path) {
                     Ok(_) => Ok(ModulePath {
                         raw: path.to_string(),
                         start_pos: token.start.clone(),

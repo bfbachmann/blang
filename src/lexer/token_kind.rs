@@ -110,6 +110,8 @@ pub enum TokenKind {
     Enum,
 
     // Keywords and control flow
+    #[token("pub")]
+    Pub,
     #[token("let")]
     Let,
     #[token("mut")]
@@ -242,6 +244,7 @@ impl TokenKind {
             TokenKind::Fn => "fn".to_string(),
             TokenKind::Struct => "struct".to_string(),
             TokenKind::Let => "let".to_string(),
+            TokenKind::Pub => "pub".to_string(),
             TokenKind::Mut => "mut".to_string(),
             TokenKind::If => "if".to_string(),
             TokenKind::Else => "else".to_string(),
