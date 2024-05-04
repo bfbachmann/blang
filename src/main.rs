@@ -17,10 +17,11 @@ use parser::module::Module;
 use crate::analyzer::analyze::{analyze_modules, ProgramAnalysis};
 use crate::codegen::program::{generate, init_target, OutputFormat};
 use crate::fmt::{display_err, format_duration};
+use crate::lexer::error::LexResult;
 use crate::lexer::lex::lex;
 use crate::lexer::pos::Locatable;
 use crate::lexer::stream::Stream;
-use crate::parser::error::ParseResult;
+use crate::lexer::token::Token;
 
 mod codegen;
 #[macro_use]
@@ -195,10 +196,10 @@ fn get_target_triple(target: Option<&String>) -> TargetTriple {
 /// returns parse sources.
 // TODO: Allow compilation of bare modules (without `main`).
 #[flame]
-fn parse_source_files(input_path: &str) -> Vec<Module> {
+fn parse_source_files(input_path: &str) -> Result<Vec<Module>, String> {
     let is_dir = match fs::metadata(input_path) {
         Ok(meta) => meta.is_dir(),
-        Err(err) => fatalln!(r#"error reading "{}": {}"#, input_path, err),
+        Err(err) => return Err(format!(r#"error reading "{}": {}"#, input_path, err)),
     };
 
     // Get the project root directory and main file paths.
@@ -225,9 +226,7 @@ fn parse_source_files(input_path: &str) -> Vec<Module> {
                     }
                 }
 
-                Err(err) => {
-                    fatalln!(r#"error reading "{}": {}"#, input_path, err)
-                }
+                Err(err) => return Err(format!(r#"error reading "{}": {}"#, input_path, err)),
             };
 
             paths
@@ -246,7 +245,28 @@ fn parse_source_files(input_path: &str) -> Vec<Module> {
     let mut parsed_mods = vec![];
     let mut parse_error_count = 0;
     while let Some(path) = files_to_parse.pop_front() {
-        match parse_source_file(path.to_str().unwrap()) {
+        let path = path.to_str().unwrap();
+
+        // Lex the source file and return early if there are any errors.
+        let tokens = match lex_source_file(path)? {
+            Ok(tokens) => tokens,
+            Err(err) => {
+                display_err(
+                    err.message.as_str(),
+                    None,
+                    None,
+                    input_path,
+                    &err.start_pos,
+                    &err.end_pos,
+                    false,
+                );
+
+                return Err("analysis skipped due to previous error".to_string());
+            }
+        };
+
+        // Parse the source file and log any parse errors.
+        match Module::from(path, &mut Stream::from(tokens)) {
             Ok(module) => {
                 for used_mod in &module.used_mods {
                     let used_mod_path = PathBuf::from(used_mod.path.raw.as_str());
@@ -265,7 +285,7 @@ fn parse_source_files(input_path: &str) -> Vec<Module> {
                     err.message.as_str(),
                     None,
                     None,
-                    path.to_str().unwrap(),
+                    path,
                     err.start_pos(),
                     err.end_pos(),
                     false,
@@ -274,56 +294,33 @@ fn parse_source_files(input_path: &str) -> Vec<Module> {
         };
     }
 
-    // Abort early if there are parse errors.
+    // Abort if there are parse errors.
     if parse_error_count > 0 {
-        fatalln!(
+        return Err(format!(
             "analysis skipped due to previous {}",
             match parse_error_count {
                 1 => "error".to_string(),
                 n => format!("{} errors", n),
             }
-        )
+        ));
     }
 
-    parsed_mods
+    Ok(parsed_mods)
 }
 
-/// Lexes and parses a source file.
-fn parse_source_file(input_path: &str) -> ParseResult<Module> {
+/// Lexes a source file.
+fn lex_source_file(input_path: &str) -> Result<LexResult<Vec<Token>>, String> {
     let full_path = match fs::canonicalize(input_path) {
         Ok(p) => p,
-        Err(err) => {
-            fatalln!("error reading {}: {}", input_path, err)
-        }
+        Err(err) => return Err(format!("error reading {}: {}", input_path, err)),
     };
 
     let source_code = match fs::read_to_string(full_path) {
         Ok(code) => code,
-        Err(err) => {
-            fatalln!("error reading {}: {}", input_path, err)
-        }
+        Err(err) => return Err(format!("error reading {}: {}", input_path, err)),
     };
 
-    let tokens = match lex(source_code.as_str()) {
-        Ok(tokens) => tokens,
-        Err(err) => {
-            display_err(
-                err.message.as_str(),
-                None,
-                None,
-                input_path,
-                &err.start_pos,
-                &err.end_pos,
-                false,
-            );
-
-            process::exit(1);
-        }
-    };
-
-    // Parse the program.
-    let result = Module::from(input_path, &mut Stream::from(tokens));
-    result
+    Ok(lex(source_code.as_str()))
 }
 
 /// Performs static analysis on the source code at the given path. If `input_path` is a directory,
@@ -336,7 +333,7 @@ fn analyze(
     target_triple: &TargetTriple,
 ) -> Result<ProgramAnalysis, String> {
     // Parse all targeted source files.
-    let modules = parse_source_files(input_path);
+    let modules = parse_source_files(input_path)?;
     if modules.is_empty() {
         return Err(format!("no source files found in {}", input_path));
     }
