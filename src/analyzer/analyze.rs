@@ -159,11 +159,13 @@ pub fn analyze_module(
 fn define_intrinsics(ctx: &mut ProgramContext) {
     // Generate the method `len(self: str): uint`.
     let maybe_impl_tk = ctx.get_cur_self_type_key();
-    ctx.set_cur_self_type_key(Some(ctx.str_type_key()));
+    let str_type_key = ctx.str_type_key();
+    let fn_name = "len";
+    ctx.set_cur_self_type_key(Some(str_type_key));
     let fn_sig = AFnSig::from(
         ctx,
         &FunctionSignature::new_with_default_pos(
-            "len",
+            fn_name,
             vec![Argument::new_with_default_pos(
                 "self",
                 Type::new_unresolved("Self"),
@@ -172,6 +174,7 @@ fn define_intrinsics(ctx: &mut ProgramContext) {
             Some(Type::new_unresolved("uint")),
         ),
     );
-    ctx.insert_member_fn(ctx.str_type_key(), fn_sig);
+    ctx.insert_member_fn(str_type_key, fn_sig);
+    ctx.mark_member_fn_pub(str_type_key, fn_name);
     ctx.set_cur_self_type_key(maybe_impl_tk);
 }

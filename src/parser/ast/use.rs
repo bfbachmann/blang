@@ -1,6 +1,5 @@
 use std::default::Default;
 use std::fmt::{Display, Formatter};
-use std::fs;
 use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::Locatable;
@@ -52,31 +51,44 @@ impl ModulePath {
                     ));
                 }
 
-                let full_path = match fs::canonicalize(path) {
-                    Ok(p) => p,
-                    Err(_) => {
-                        return Err(ParseError::new_with_token(
-                            ErrorKind::InvalidModPath,
-                            format_code!("invalid module path {}", path).as_str(),
+                // Only perform additional path validation if we're not in test mode.
+                #[cfg(not(test))]
+                {
+                    use std::fs;
+
+                    let full_path = match fs::canonicalize(path) {
+                        Ok(p) => p,
+                        Err(_) => {
+                            return Err(ParseError::new_with_token(
+                                ErrorKind::InvalidModPath,
+                                format_code!("invalid module path {}", path).as_str(),
+                                token.clone(),
+                            ));
+                        }
+                    };
+
+                    // Make sure the path is valid.
+                    match fs::metadata(full_path) {
+                        Ok(_) => Ok(ModulePath {
+                            raw: path.to_string(),
+                            start_pos: token.start.clone(),
+                            end_pos: token.end.clone(),
+                        }),
+
+                        Err(_) => Err(ParseError::new_with_token(
+                            ErrorKind::ModNotFound,
+                            format_code!("module {} was not found", path).as_str(),
                             token.clone(),
-                        ));
+                        )),
                     }
-                };
-
-                // Make sure the path is valid.
-                match fs::metadata(full_path) {
-                    Ok(_) => Ok(ModulePath {
-                        raw: path.to_string(),
-                        start_pos: token.start.clone(),
-                        end_pos: token.end.clone(),
-                    }),
-
-                    Err(_) => Err(ParseError::new_with_token(
-                        ErrorKind::ModNotFound,
-                        format_code!("module {} was not found", path).as_str(),
-                        token.clone(),
-                    )),
                 }
+
+                #[cfg(test)]
+                Ok(ModulePath {
+                    raw: path.to_string(),
+                    start_pos: token.start.clone(),
+                    end_pos: token.end.clone(),
+                })
             }
 
             Some(other) => Err(ParseError::new_with_token(

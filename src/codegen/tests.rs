@@ -215,12 +215,15 @@ mod tests {
     fn chained_method_calls() {
         assert_compiles(
             r#"
-            impl i64 {
-                fn add(self, v: i64): i64 { return self + v }
-                fn sub(self, v: i64): i64 { return self - v }
+            struct Value {
+                inner: int
+            }
+            impl Value {
+                fn add(self, v: i64): Value { return Value{inner: self.inner + v } }
+                fn sub(self, v: i64): Value { return Value{inner: self.inner - v } }
             }
             fn main() {
-                let i = 1i64
+                let i = Value{inner: 1i64}
                 let v = i.add(10).sub(50).sub(2).add(-24)
                 i.sub(10).add(1)
             }

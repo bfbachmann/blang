@@ -37,6 +37,24 @@ impl AImpl {
         // Get the type key of the type for this impl.
         let type_key = ctx.resolve_type(&impl_.typ);
 
+        // Record an error and return early if the type was not defined in this module.
+        if !ctx.type_declared_in_cur_mod(type_key) {
+            ctx.insert_err(AnalyzeError::new(
+                ErrorKind::IllegalImpl,
+                format_code!(
+                    "cannot define impl for foreign type {}",
+                    ctx.display_type_for_key(type_key)
+                )
+                .as_str(),
+                &impl_.typ,
+            ));
+
+            return AImpl {
+                type_key: ctx.unknown_type_key(),
+                member_fns: vec![],
+            };
+        }
+
         // Set the impl type key in the program context so we can use it when resolving type `This`.
         ctx.set_cur_self_type_key(Some(type_key));
 
@@ -44,6 +62,12 @@ impl AImpl {
         let mut member_fns = vec![];
         for mem_fn in &impl_.member_fns {
             let a_fn = AFn::from(ctx, mem_fn);
+
+            // Record public member functions, so we can check whether they're accessible
+            // whenever they're used.
+            if mem_fn.is_pub {
+                ctx.mark_member_fn_pub(type_key, mem_fn.signature.name.as_str());
+            }
 
             // Only add the member function if it's not templated.
             if !a_fn.signature.is_templated() {

@@ -168,6 +168,12 @@ pub struct ProgramContext {
     /// Maps type keys to mappings from their member function names to their member function
     /// signatures.
     type_member_fn_sigs: HashMap<TypeKey, HashMap<String, AFnSig>>,
+    /// Maps type keys to sets of public member function names for those types.
+    /// This is just used to figure out whether a given type member function
+    /// was declared public.
+    pub_member_fn_names: HashMap<TypeKey, HashSet<String>>,
+    /// Maps type keys to the modules in which the types are declared.
+    type_declaration_mods: HashMap<TypeKey, String>,
 
     /// Collects warnings emitted by the analyzer during analysis.
     pub warnings: HashMap<Position, AnalyzeWarning>,
@@ -204,6 +210,8 @@ impl ProgramContext {
             array_type_keys: Default::default(),
             pointer_type_keys: Default::default(),
             type_member_fn_sigs: Default::default(),
+            pub_member_fn_names: Default::default(),
+            type_declaration_mods: Default::default(),
             warnings: Default::default(),
             errors: Default::default(),
         }
@@ -438,6 +446,10 @@ impl ProgramContext {
         } else if let Some(array_type) = maybe_array_type {
             self.array_type_keys.insert(array_type, type_key);
         }
+
+        // Record the module in which the type was defined.
+        self.type_declaration_mods
+            .insert(type_key, self.cur_mod_path.clone());
 
         type_key
     }
@@ -892,6 +904,45 @@ impl ProgramContext {
         match self.type_member_fn_sigs.get(&type_key) {
             Some(member_fns) => member_fns.get(fn_name),
             None => None,
+        }
+    }
+
+    /// Records the given member function as public in the program context.
+    pub fn mark_member_fn_pub(&mut self, type_key: TypeKey, fn_name: &str) {
+        match self.pub_member_fn_names.get_mut(&type_key) {
+            Some(set) => {
+                set.insert(fn_name.to_string());
+            }
+            None => {
+                self.pub_member_fn_names
+                    .insert(type_key, HashSet::from([fn_name.to_string()]));
+            }
+        }
+    }
+
+    /// Returns true if the member function is accessible from the current module.
+    /// This will be true if the type is defined in this module or the function was
+    /// declared public.
+    pub fn member_fn_is_accessible(&self, type_key: TypeKey, fn_name: &str) -> bool {
+        self.type_declared_in_cur_mod(type_key) || self.member_fn_is_pub(type_key, fn_name)
+    }
+
+    /// Returns true if the given type was declared in the current module.
+    pub fn type_declared_in_cur_mod(&self, type_key: TypeKey) -> bool {
+        let is_primitive = self
+            .primitive_type_keys
+            .values()
+            .find(|&&tk| tk == type_key)
+            .is_some();
+
+        !is_primitive && self.type_declaration_mods.get(&type_key).unwrap() == &self.cur_mod_path
+    }
+
+    /// Returns true if the given type member function is public.
+    pub fn member_fn_is_pub(&self, type_key: TypeKey, fn_name: &str) -> bool {
+        match self.pub_member_fn_names.get(&type_key) {
+            Some(set) => set.contains(fn_name),
+            None => false,
         }
     }
 

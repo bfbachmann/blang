@@ -41,7 +41,7 @@ impl ExecResult {
 
 impl Machine {
     /// Creates a new machine for executing the given program.
-    fn new(prog: *Program): Machine {
+    pub fn new(prog: *Program): Machine {
         return Machine{
             memory: [0; mem_size]
             prog: prog
@@ -51,7 +51,7 @@ impl Machine {
 
     /// Executes the program associated with the machine and returns a result
     /// indicating whether execution succeeded.
-    fn exec_prog(machine: *mut Machine): ExecResult {
+    pub fn exec_prog(machine: *mut Machine): ExecResult {
         for machine^.pc = 0,
             machine^.pc < machine^.prog^.len,
             machine^.pc = machine^.pc + 1

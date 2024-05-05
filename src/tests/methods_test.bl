@@ -16,13 +16,23 @@ impl T {
     }
 }
 
-impl int {
-    fn mul(self, v: int): int {
-        return self * v
+struct Value {
+    inner: int
+}
+
+impl Value {
+    fn new(inner: int): Value {
+        return Value{
+            inner: inner
+        }
     }
 
-    fn add(self, v: int): int {
-        return self + v
+    fn mul(self, v: int): Value {
+        return Value.new(self.inner * v)
+    }
+
+    fn add(self, v: int): Value {
+        return Value.new(self.inner + v)
     }
 }
 
@@ -32,15 +42,15 @@ fn main() {
     assert(t.get_value() == 23, "1")
     
     // Check that chained method calls work.
-    let two = 2
-    assert(two.mul(5).add(10).add(1) == 21, "2")
+    let two = Value.new(2)
+    assert(two.mul(5).add(10).add(1).inner == 21, "2")
 
     // Check that type member functions work.
     let new_t = T.new(-52)
-    assert(new_t.get_value().mul(-2) == 104, "4")
+    assert(Value.new(new_t.get_value()).mul(-2).inner == 104, "4")
 
     // Check that chained method calls work as statements.
-    let five = 5
+    let five = Value.new(5)
     five.add(1).mul(10)
 
     exit(0)

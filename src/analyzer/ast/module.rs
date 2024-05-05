@@ -206,6 +206,12 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     // Set the current impl type key on the program context so we can access it when
     // resolving type `Self`.
     let impl_type_key = ctx.resolve_type(&impl_.typ);
+
+    // Skip the impl if it's illegal.
+    if !ctx.type_declared_in_cur_mod(impl_type_key) {
+        return;
+    }
+
     ctx.set_cur_self_type_key(Some(impl_type_key));
 
     // Analyze each member function signature and record it as a member of this type

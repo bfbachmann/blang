@@ -53,6 +53,7 @@ pub enum ErrorKind {
     SpecNotSatisfied,
     ImportCycle,
     DuplicateImportName,
+    IllegalImpl,
 }
 
 impl fmt::Display for ErrorKind {
@@ -105,6 +106,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::SpecNotSatisfied => write!(f, "unsatisfied spec"),
             ErrorKind::ImportCycle => write!(f, "import cycle"),
             ErrorKind::DuplicateImportName => write!(f, "duplicate import name"),
+            ErrorKind::IllegalImpl => write!(f, "illegal impl"),
         }
     }
 }

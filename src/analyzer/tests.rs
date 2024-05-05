@@ -1033,8 +1033,14 @@ mod tests {
     fn call_chain() {
         let result = analyze(
             r#"
-            impl i64 {
-                fn add(self, v: i64): i64 { return self + v }
+            struct Value {
+                inner: i64
+            }
+
+            impl Value {
+                fn new(inner: i64): Value { return Value{inner: inner} }
+
+                fn add(self, v: i64): i64 { return self.inner + v }
             }
 
             struct Thing {
@@ -1050,7 +1056,7 @@ mod tests {
             }
 
             fn main() {
-                let t = Thing.new(74).i.add(2)
+                let t = Value.new(Thing.new(74).i).add(2)
             }
             "#,
         );
@@ -1061,16 +1067,22 @@ mod tests {
     fn invalid_call_chain() {
         let result = analyze(
             r#"
-            impl i64 {
-                fn add(self, v: i64): i64 { return self + v }
+            struct Value {
+                inner: i64
+            }
+
+            impl Value {
+                fn new(inner: i64): Value { return Value{inner: inner} }
+
+                fn add(self, v: i64): i64 { return self.inner + v }
             }
 
             struct Thing {
-                i: u64
+                i: i64
             }
 
             impl Thing {
-                fn new(i: u64): Thing {
+                fn new(i: i64): Thing {
                     return Thing{
                         i: i
                     }
@@ -1582,5 +1594,59 @@ mod tests {
             "#,
         );
         check_result(result, Some(ErrorKind::UndefMod));
+    }
+
+    #[test]
+    fn illegal_impl() {
+        let result = analyze(r#"impl int {}"#);
+        check_result(result, Some(ErrorKind::IllegalImpl));
+    }
+
+    #[test]
+    fn private_member_access() {
+        // Define the `thing` module.
+        let tokens = lex(r#"
+            struct Thing {}
+            impl Thing {
+                fn do_nothing() {}
+            }
+        "#)
+        .expect("should not error");
+        let thing_mod =
+            Module::from("thing.bl", &mut Stream::from(tokens)).expect("should not error");
+
+        // Define the `impl` module that uses `thing` illegally.
+        let tokens = lex(r#"
+            use {Thing}: "thing.bl"
+            fn test() {
+                Thing.do_nothing()
+            }
+        "#)
+        .expect("should not error");
+        let impl_mod =
+            Module::from("impl.bl", &mut Stream::from(tokens)).expect("should not error");
+
+        // Analyze the modules and ensure the right error appears.
+        let analysis = analyze_modules(
+            vec![impl_mod, thing_mod],
+            &Triple::from_str(init_target(None).unwrap().as_str().to_str().unwrap()).unwrap(),
+        );
+
+        for analyzed_mod in analysis.analyzed_modules {
+            match analyzed_mod.module.path.as_str() {
+                "impl.bl" => {
+                    assert_eq!(
+                        analyzed_mod.errors.first().unwrap().kind,
+                        ErrorKind::UseOfPrivateValue
+                    )
+                }
+
+                "thing.bl" => {
+                    assert!(analyzed_mod.errors.is_empty())
+                }
+
+                _ => unreachable!(),
+            }
+        }
     }
 }

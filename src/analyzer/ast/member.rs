@@ -36,6 +36,7 @@ impl AMemberAccess {
 
         // Abort early if the expression failed analysis.
         let base_type = ctx.must_get_type(base_expr.type_key);
+        let base_type_string = base_type.display(ctx);
         if base_type.is_unknown() {
             return AMemberAccess {
                 base_expr,
@@ -58,35 +59,47 @@ impl AMemberAccess {
         // If we failed to find a field on this type with a matching name, check for a member
         // function with a matching name.
         let mut is_method = false;
-        let maybe_field_type_key = if maybe_field_type_key.is_none() {
-            match ctx.get_member_fn(base_expr.type_key, access.member_name.as_str()) {
-                Some(member_fn_sig) => {
-                    // TODO: Only allow access to the member if it is public or local
-                    // to the current module.
-                    is_method = true;
-                    Some(member_fn_sig.type_key)
-                }
-                None => None,
-            }
-        } else {
-            maybe_field_type_key
-        };
-
-        // Error and return a placeholder value if we couldn't locate the member being accessed.
         let member_type_key = match maybe_field_type_key {
-            Some(tk) => tk,
+            Some(type_key) => type_key,
+
             None => {
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::UndefMember,
-                    format_code!(
-                        "type {} has no member {}",
-                        base_type.display(ctx),
-                        access.member_name
-                    )
-                    .as_str(),
-                    access,
-                ));
-                ctx.unknown_type_key()
+                match ctx.get_member_fn(base_expr.type_key, access.member_name.as_str()) {
+                    Some(member_fn_sig) => {
+                        is_method = true;
+                        let member_type_key = member_fn_sig.type_key;
+
+                        // Only allow access to the member if it is public or local
+                        // to the current module.
+                        if !ctx.member_fn_is_accessible(
+                            base_expr.type_key,
+                            access.member_name.as_str(),
+                        ) {
+                            ctx.insert_err(AnalyzeError::new(
+                                ErrorKind::UseOfPrivateValue,
+                                format_code!("{} is not public", access).as_str(),
+                                access,
+                            ))
+                        }
+
+                        member_type_key
+                    }
+
+                    None => {
+                        // Error and return a placeholder value since we couldn't
+                        // locate the member being accessed.
+                        ctx.insert_err(AnalyzeError::new(
+                            ErrorKind::UndefMember,
+                            format_code!(
+                                "type {} has no member {}",
+                                base_type_string,
+                                access.member_name
+                            )
+                            .as_str(),
+                            access,
+                        ));
+                        ctx.unknown_type_key()
+                    }
+                }
             }
         };
 

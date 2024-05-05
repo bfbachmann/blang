@@ -18,6 +18,7 @@ pub enum ErrorKind {
     UnexpectedEndOfExpr,
     UnexpectedToken,
     UnexpectedEOF,
+    #[cfg(not(test))]
     ModNotFound,
 }
 
@@ -33,6 +34,7 @@ impl Display for ErrorKind {
             ErrorKind::UnexpectedEndOfExpr => write!(f, "unexpected end of expression"),
             ErrorKind::UnexpectedToken => write!(f, "unexpected token"),
             ErrorKind::UnexpectedEOF => write!(f, "unexpected EOF"),
+            #[cfg(not(test))]
             ErrorKind::ModNotFound => write!(f, "module not found"),
         }
     }

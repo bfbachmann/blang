@@ -51,7 +51,7 @@ pub struct Program {
 }
 
 impl Program {
-    fn new(): Program {
+    pub fn new(): Program {
         return Program{
             instructions: malloc(0) as *mut Instruction
             len: 0
@@ -92,13 +92,13 @@ impl Program {
     }
 
     /// Returns a pointer to the instruction at the given index.
-    fn inst_at(prog: *Program, index: uint): *Instruction {
+    pub fn inst_at(prog: *Program, index: uint): *Instruction {
         assert(index < prog^.len, "instruction index out of bounds")
         return prog^.instructions + (index * sizeof Instruction) as *Instruction
     }
 
     /// Frees heap memory associated with this program.
-    fn free(prog: Program) {
+    pub fn free(prog: Program) {
         free(prog.instructions as *u8)
     }
 }
@@ -156,7 +156,7 @@ pub struct Parser {
 
 impl Parser {
     /// Returns a new parser for parsing the instructions in `buf` with a length of `buf_len` bytes.
-    fn new(buf: *u8, buf_len: uint): Parser {
+    pub fn new(buf: *u8, buf_len: uint): Parser {
         return Parser{
             buf: buf
             buf_len: buf_len
@@ -167,7 +167,7 @@ impl Parser {
 
     /// Parses the program stored in the parser and returns the result. This function
     /// will abort with an error message if the program is syntactically invalid.
-    fn parse_prog(parser: *mut Parser): Program {
+    pub fn parse_prog(parser: *mut Parser): Program {
         let mut prog = Program.new()
         loop {
             let result = Parser.try_parse_inst(parser)
