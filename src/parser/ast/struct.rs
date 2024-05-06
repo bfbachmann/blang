@@ -18,6 +18,7 @@ use crate::{locatable_impl, util};
 pub struct StructField {
     pub name: String,
     pub typ: Type,
+    pub is_pub: bool,
     start_pos: Position,
     end_pos: Position,
 }
@@ -130,6 +131,9 @@ impl StructType {
             // Get the field start position.
             let field_start_pos = Module::current_position(tokens);
 
+            // Parse the optional `pub` keyword.
+            let is_pub = Module::parse_optional(tokens, TokenKind::Pub).is_some();
+
             // The next token should be the field name.
             let field_name = Module::parse_identifier(tokens)?;
 
@@ -140,8 +144,7 @@ impl StructType {
             let field_type = Type::from(tokens)?;
 
             // Get the field end position.
-            // TODO: Technically, this is wrong.
-            let field_end_pos = Module::current_position(tokens);
+            let field_end_pos = Module::prev_position(tokens);
 
             // Parse the optional comma.
             Module::parse_optional(tokens, TokenKind::Comma);
@@ -150,6 +153,7 @@ impl StructType {
             fields.push(StructField {
                 name: field_name,
                 typ: field_type,
+                is_pub,
                 start_pos: field_start_pos,
                 end_pos: field_end_pos,
             });

@@ -126,6 +126,11 @@ impl AStructType {
                 continue;
             }
 
+            // Mark the struct field as public if necessary.
+            if field.is_pub {
+                ctx.mark_struct_field_pub(type_key, field.name.as_str());
+            }
+
             // Resolve the struct field type and add it to the list of analyzed fields.
             fields.push(AField {
                 name: field.name.clone(),
@@ -161,13 +166,10 @@ impl AStructType {
 
     /// Returns the type of the struct field with the given name.
     pub fn get_field_type_key(&self, name: &str) -> Option<TypeKey> {
-        for field in &self.fields {
-            if field.name.as_str() == name {
-                return Some(field.type_key);
-            }
+        match self.fields.iter().find(|f| f.name.as_str() == name) {
+            Some(field) => Some(field.type_key),
+            None => None,
         }
-
-        None
     }
 
     /// Returns the index of the field with the given name.
@@ -253,15 +255,24 @@ impl AStructInit {
                             field_name
                         )
                         .as_str(),
-                        // TODO: This should be the location of the bad field instead of the entire
-                        // struct init.
-                        struct_init,
+                        // TODO: This should be the location of the bad field.
+                        field_value,
                     ));
 
                     // Skip this struct field since it's invalid.
                     continue;
                 }
             };
+
+            // Record an error if the struct field is not settable from the current
+            // module.
+            if !ctx.struct_field_is_accessible(type_key, field_name) {
+                errors.push(AnalyzeError::new(
+                    ErrorKind::UseOfPrivateValue,
+                    format_code!("{} is not public", field_name).as_str(),
+                    field_value,
+                ));
+            }
 
             // Analyze the value being assigned to the struct field.
             let expr = AExpr::from(

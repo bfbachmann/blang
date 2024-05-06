@@ -50,11 +50,26 @@ impl AMemberAccess {
 
         // Check if the member access is accessing a field on a struct type.
         let maybe_field_type_key = match base_type {
-            AType::Struct(struct_type) => {
+            // Only match struct field types if the base expression is not a type.
+            // If it is a type, then we should only be trying to resolve member
+            // functions on it.
+            AType::Struct(struct_type) if !base_expr.kind.is_type() => {
                 struct_type.get_field_type_key(access.member_name.as_str())
             }
             _ => None,
         };
+
+        // Only allow access to the struct field if the struct type is
+        // local to this module or if the field is public.
+        if maybe_field_type_key.is_some()
+            && !ctx.struct_field_is_accessible(base_expr.type_key, access.member_name.as_str())
+        {
+            ctx.insert_err(AnalyzeError::new(
+                ErrorKind::UseOfPrivateValue,
+                format_code!("{} is not public", access).as_str(),
+                access,
+            ));
+        }
 
         // If we failed to find a field on this type with a matching name, check for a member
         // function with a matching name.

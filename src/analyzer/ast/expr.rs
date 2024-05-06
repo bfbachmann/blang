@@ -146,6 +146,14 @@ impl PartialEq for AExprKind {
 }
 
 impl AExprKind {
+    /// Returns true if the expression is a symbol representing a type.
+    pub fn is_type(&self) -> bool {
+        match self {
+            AExprKind::Symbol(symbol) if symbol.is_type => true,
+            _ => false,
+        }
+    }
+
     /// Returns true if the expression kind can be used as a constant.
     pub fn is_const(&self) -> bool {
         match self {

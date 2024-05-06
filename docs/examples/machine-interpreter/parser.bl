@@ -5,8 +5,8 @@ use {assert}: "docs/examples/machine-interpreter/utils.bl"
 
 /// Represents a machine instruction.
 pub struct Instruction {
-    kind: InstKind
-    operands: {int, int}
+    pub kind: InstKind
+    pub operands: {int, int}
 }
 
 impl Instruction {
@@ -57,6 +57,11 @@ impl Program {
             len: 0
             cap: 0
         }
+    }
+
+    /// Returns the number of instructions in the program.
+    pub fn len(prog: *Program): uint {
+        return prog^.len
     }
 
     /// Increases the amount of heap memory allocated to store this program's

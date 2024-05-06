@@ -2,8 +2,9 @@ use mem: "std/libc/mem.bl"
 
 /// Strings are heap-allocated sequences of bytes.
 pub struct String {
-    ptr: *u8
-    len: uint
+    // TODO: Expose methods for accessing these values and make them private.
+    pub ptr: *u8
+    pub len: uint
 }
 
 impl String {

@@ -13,8 +13,8 @@ pub struct Machine {
 
 /// The result of instruction execution.
 pub struct ExecResult {
-    status: ExecStatus
-    msg: str
+    pub status: ExecStatus
+    pub msg: str
 }
 
 /// Indicates whether execution succeeded.
@@ -53,7 +53,7 @@ impl Machine {
     /// indicating whether execution succeeded.
     pub fn exec_prog(machine: *mut Machine): ExecResult {
         for machine^.pc = 0,
-            machine^.pc < machine^.prog^.len,
+            machine^.pc < Program.len(machine^.prog),
             machine^.pc = machine^.pc + 1
         {
             let inst_ptr = Program.inst_at(machine^.prog, machine^.pc)
@@ -136,7 +136,7 @@ impl Machine {
             return ExecResult.new_err("jumpif0 source address out of bounds")
         }
 
-        if dst_inst >= machine^.prog^.len {
+        if dst_inst >= Program.len(machine^.prog) {
             return ExecResult.new_err("jumpif0 destination address out of bounds")
         }
 
@@ -145,5 +145,10 @@ impl Machine {
         }
 
         return ExecResult.new_ok()
+    }
+
+    /// Returns the int in memory at the given index.
+    pub fn memory_at(machine: *Machine, index: uint): int {
+        return machine^.memory.(index)
     }
 }

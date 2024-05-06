@@ -2,6 +2,7 @@
 mod tests {
     use std::path::Path;
     use std::str::FromStr;
+
     use target_lexicon::Triple;
 
     use crate::analyzer::analyze::analyze_modules;

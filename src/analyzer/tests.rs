@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::str::FromStr;
 
     use target_lexicon::Triple;
@@ -16,10 +17,7 @@ mod tests {
     fn get_analysis(raw: &str) -> ProgramAnalysis {
         let tokens = lex(raw).expect("should not error");
         let module = Module::from("", &mut Stream::from(tokens)).expect("should not error");
-        analyze_modules(
-            vec![module],
-            &Triple::from_str(init_target(None).unwrap().as_str().to_str().unwrap()).unwrap(),
-        )
+        analyze_modules(vec![module], &&new_test_triple())
     }
 
     fn analyze(raw: &str) -> AnalyzeResult<AModule> {
@@ -35,6 +33,35 @@ mod tests {
         match expected_err_kind {
             Some(kind) => assert_eq!(result.unwrap_err().kind, kind),
             None => assert!(result.is_ok()),
+        }
+    }
+
+    fn new_test_triple() -> Triple {
+        Triple::from_str(init_target(None).unwrap().as_str().to_str().unwrap()).unwrap()
+    }
+
+    fn analyze_program(mods: HashMap<String, String>) -> ProgramAnalysis {
+        let mut parsed_mods = vec![];
+        for (mod_path, mod_code) in mods {
+            let tokens = lex(mod_code.as_str()).expect("lexing should succeed");
+            let parsed_mod = Module::from(mod_path.as_str(), &mut Stream::from(tokens))
+                .expect("should not error");
+            parsed_mods.push(parsed_mod);
+        }
+
+        analyze_modules(parsed_mods, &new_test_triple())
+    }
+
+    fn check_mod_errs(
+        program_analysis: &ProgramAnalysis,
+        mod_errs: HashMap<String, Vec<ErrorKind>>,
+    ) {
+        for analyzed_mod in &program_analysis.analyzed_modules {
+            let expected_errs = mod_errs.get(analyzed_mod.module.path.as_str()).unwrap();
+            assert_eq!(analyzed_mod.errors.len(), expected_errs.len());
+            for err in &analyzed_mod.errors {
+                assert!(expected_errs.contains(&err.kind));
+            }
         }
     }
 
@@ -1604,49 +1631,110 @@ mod tests {
 
     #[test]
     fn private_member_access() {
-        // Define the `thing` module.
-        let tokens = lex(r#"
-            struct Thing {}
-            impl Thing {
-                fn do_nothing() {}
-            }
-        "#)
-        .expect("should not error");
-        let thing_mod =
-            Module::from("thing.bl", &mut Stream::from(tokens)).expect("should not error");
+        let mods = HashMap::from([
+            (
+                "thing.bl".to_string(),
+                r#"
+                    pub struct Thing {}
+                    impl Thing {
+                        fn do_nothing() {}
+                    }
+                "#
+                .to_string(),
+            ),
+            (
+                "impl.bl".to_string(),
+                r#"
+                    use {Thing}: "thing.bl"
+                    fn test() {
+                        Thing.do_nothing()
+                    }
+                "#
+                .to_string(),
+            ),
+        ]);
 
-        // Define the `impl` module that uses `thing` illegally.
-        let tokens = lex(r#"
-            use {Thing}: "thing.bl"
-            fn test() {
-                Thing.do_nothing()
-            }
-        "#)
-        .expect("should not error");
-        let impl_mod =
-            Module::from("impl.bl", &mut Stream::from(tokens)).expect("should not error");
-
-        // Analyze the modules and ensure the right error appears.
-        let analysis = analyze_modules(
-            vec![impl_mod, thing_mod],
-            &Triple::from_str(init_target(None).unwrap().as_str().to_str().unwrap()).unwrap(),
+        let analysis = analyze_program(mods);
+        check_mod_errs(
+            &analysis,
+            HashMap::from([
+                ("impl.bl".to_string(), vec![ErrorKind::UseOfPrivateValue]),
+                ("thing.bl".to_string(), vec![]),
+            ]),
         );
+    }
 
-        for analyzed_mod in analysis.analyzed_modules {
-            match analyzed_mod.module.path.as_str() {
-                "impl.bl" => {
-                    assert_eq!(
-                        analyzed_mod.errors.first().unwrap().kind,
-                        ErrorKind::UseOfPrivateValue
-                    )
-                }
+    #[test]
+    fn private_struct_field_init() {
+        let mods = HashMap::from([
+            (
+                "thing.bl".to_string(),
+                r#"
+                    pub struct Thing {
+                        priv_field: int
+                    }
+                "#
+                .to_string(),
+            ),
+            (
+                "impl.bl".to_string(),
+                r#"
+                    use {Thing}: "thing.bl"
+                    fn test() {
+                        let invalid = Thing{priv_field: 1}
+                    }
+                "#
+                .to_string(),
+            ),
+        ]);
 
-                "thing.bl" => {
-                    assert!(analyzed_mod.errors.is_empty())
-                }
+        let analysis = analyze_program(mods);
+        check_mod_errs(
+            &analysis,
+            HashMap::from([
+                ("impl.bl".to_string(), vec![ErrorKind::UseOfPrivateValue]),
+                ("thing.bl".to_string(), vec![]),
+            ]),
+        );
+    }
 
-                _ => unreachable!(),
-            }
-        }
+    #[test]
+    fn private_struct_field_access() {
+        let mods = HashMap::from([
+            (
+                "thing.bl".to_string(),
+                r#"
+                    pub struct Thing {
+                        priv_field: int
+                    }
+        
+                    impl Thing {
+                        fn new(): Thing {
+                            return Thing{priv_field: 0}
+                        }
+                    }
+            "#
+                .to_string(),
+            ),
+            (
+                "impl.bl".to_string(),
+                r#"
+                    use {Thing}: "thing.bl"
+                    fn test() {
+                        let illegal = Thing.new().priv_field
+                    }
+                "#
+                .to_string(),
+            ),
+        ]);
+
+        let analysis = analyze_program(mods);
+        check_mod_errs(
+            &analysis,
+            HashMap::from([
+                ("impl.bl".to_string(), vec![ErrorKind::UseOfPrivateValue]),
+                ("thing.bl".to_string(), vec![]),
+            ]),
+        );
     }
 }

@@ -37,7 +37,7 @@ fn main() {
     // the exit code.
     let mut sum = 0
     for let mut i = 0uint, i < 10, i += 1 {
-        sum = sum + machine.memory.(i)
+        sum = sum + Machine.memory_at(&machine, i)
     }
     
     free(prog_data)

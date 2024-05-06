@@ -172,6 +172,8 @@ pub struct ProgramContext {
     /// This is just used to figure out whether a given type member function
     /// was declared public.
     pub_member_fn_names: HashMap<TypeKey, HashSet<String>>,
+    /// Maps struct type key to the set of public field names on that struct type.
+    pub_struct_field_names: HashMap<TypeKey, HashSet<String>>,
     /// Maps type keys to the modules in which the types are declared.
     type_declaration_mods: HashMap<TypeKey, String>,
 
@@ -211,6 +213,7 @@ impl ProgramContext {
             pointer_type_keys: Default::default(),
             type_member_fn_sigs: Default::default(),
             pub_member_fn_names: Default::default(),
+            pub_struct_field_names: Default::default(),
             type_declaration_mods: Default::default(),
             warnings: Default::default(),
             errors: Default::default(),
@@ -284,7 +287,7 @@ impl ProgramContext {
             .stack
             .back_mut()
             .unwrap()
-            .insert_type_key(typ.clone(), key);
+            .insert_type_key(typ, key);
     }
 
     /// Emits an error and returns false if there already exists a type with the
@@ -432,6 +435,9 @@ impl ProgramContext {
 
         // Create an additional mapping to the new type key to avoid type duplication, if necessary.
         if let Some(name) = maybe_type_name {
+            // Make sure the type is resolvable in the current scope.
+            self.insert_type_key(Type::new_unresolved(name.as_str()), type_key);
+
             if is_struct {
                 self.cur_mod_ctx_mut()
                     .struct_type_keys
@@ -920,6 +926,34 @@ impl ProgramContext {
         }
     }
 
+    /// Records the given struct field as public in the program context.
+    pub fn mark_struct_field_pub(&mut self, type_key: TypeKey, field_name: &str) {
+        match self.pub_struct_field_names.get_mut(&type_key) {
+            Some(set) => {
+                set.insert(field_name.to_string());
+            }
+            None => {
+                self.pub_struct_field_names
+                    .insert(type_key, HashSet::from([field_name.to_string()]));
+            }
+        }
+    }
+
+    /// Returns true if the field with the given name on the given struct type is
+    /// accessible from the current module. This will be trie if the type is defined
+    /// in this module or the field was declared public.
+    pub fn struct_field_is_accessible(&self, type_key: TypeKey, field_name: &str) -> bool {
+        self.type_declared_in_cur_mod(type_key) || self.struct_field_is_pub(type_key, field_name)
+    }
+
+    /// Returns true if the field with the given name on the given struct type is public.
+    fn struct_field_is_pub(&self, type_key: TypeKey, field_name: &str) -> bool {
+        match self.pub_struct_field_names.get(&type_key) {
+            Some(map) => map.contains(field_name),
+            None => false,
+        }
+    }
+
     /// Returns true if the member function is accessible from the current module.
     /// This will be true if the type is defined in this module or the function was
     /// declared public.
@@ -939,7 +973,7 @@ impl ProgramContext {
     }
 
     /// Returns true if the given type member function is public.
-    pub fn member_fn_is_pub(&self, type_key: TypeKey, fn_name: &str) -> bool {
+    fn member_fn_is_pub(&self, type_key: TypeKey, fn_name: &str) -> bool {
         match self.pub_member_fn_names.get(&type_key) {
             Some(set) => set.contains(fn_name),
             None => false,
