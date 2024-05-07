@@ -445,6 +445,10 @@ impl ProgramContext {
             } else if is_enum {
                 self.cur_mod_ctx_mut().enum_type_keys.insert(name, type_key);
             }
+
+            // Record the module in which the type was defined.
+            self.type_declaration_mods
+                .insert(type_key, self.cur_mod_path.clone());
         } else if let Some(tuple_type) = maybe_tuple_type {
             self.tuple_type_keys.insert(tuple_type, type_key);
         } else if let Some(ptr_type) = maybe_ptr_type {
@@ -452,10 +456,6 @@ impl ProgramContext {
         } else if let Some(array_type) = maybe_array_type {
             self.array_type_keys.insert(array_type, type_key);
         }
-
-        // Record the module in which the type was defined.
-        self.type_declaration_mods
-            .insert(type_key, self.cur_mod_path.clone());
 
         type_key
     }
@@ -943,7 +943,17 @@ impl ProgramContext {
     /// accessible from the current module. This will be trie if the type is defined
     /// in this module or the field was declared public.
     pub fn struct_field_is_accessible(&self, type_key: TypeKey, field_name: &str) -> bool {
-        self.type_declared_in_cur_mod(type_key) || self.struct_field_is_pub(type_key, field_name)
+        // The struct field is considered accessible by default if the type is
+        // just an inline type (i.e. not a named type declared separately).
+        let is_anon = self
+            .must_get_type(type_key)
+            .to_struct_type()
+            .name
+            .is_empty();
+
+        is_anon
+            || self.type_declared_in_cur_mod(type_key)
+            || self.struct_field_is_pub(type_key, field_name)
     }
 
     /// Returns true if the field with the given name on the given struct type is public.
@@ -963,13 +973,10 @@ impl ProgramContext {
 
     /// Returns true if the given type was declared in the current module.
     pub fn type_declared_in_cur_mod(&self, type_key: TypeKey) -> bool {
-        let is_primitive = self
-            .primitive_type_keys
-            .values()
-            .find(|&&tk| tk == type_key)
-            .is_some();
-
-        !is_primitive && self.type_declaration_mods.get(&type_key).unwrap() == &self.cur_mod_path
+        match self.type_declaration_mods.get(&type_key) {
+            Some(mod_path) => mod_path == &self.cur_mod_path,
+            None => false,
+        }
     }
 
     /// Returns true if the given type member function is public.

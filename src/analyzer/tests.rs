@@ -1624,9 +1624,19 @@ mod tests {
     }
 
     #[test]
-    fn illegal_impl() {
-        let result = analyze(r#"impl int {}"#);
-        check_result(result, Some(ErrorKind::IllegalImpl));
+    fn illegal_impls() {
+        for code in [
+            r#"impl int {}"#,
+            r#"impl str {}"#,
+            r#"impl {} {}"#,
+            r#"impl {bool, int} {}"#,
+            r#"impl [] {}"#,
+            r#"impl [int; 3] {}"#,
+            r#"impl *u8 {}"#,
+        ] {
+            let result = analyze(code);
+            check_result(result, Some(ErrorKind::IllegalImpl));
+        }
     }
 
     #[test]
