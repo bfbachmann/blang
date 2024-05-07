@@ -1630,6 +1630,24 @@ mod tests {
     }
 
     #[test]
+    fn invalid_use_of_member_fn() {
+        let result = analyze(
+            r#"
+            struct Thing {}
+            impl Thing {
+                fn bing() {}
+            }
+            
+            fn test() {
+                // This is illegal becauase `bing` is not a method.
+                Thing{}.bing()
+            }
+        "#,
+        );
+        check_result(result, Some(ErrorKind::UndefMember));
+    }
+
+    #[test]
     fn private_member_access() {
         let mods = HashMap::from([
             (

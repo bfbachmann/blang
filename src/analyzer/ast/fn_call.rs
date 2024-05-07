@@ -71,7 +71,7 @@ impl AFnCall {
             Some(_) => match &fn_expr.kind {
                 AExprKind::MemberAccess(access) => match &access.base_expr.kind {
                     AExprKind::Symbol(symbol) if symbol.is_type => None,
-                    _ => Some(access.base_expr.clone()),
+                    _ => Some(&access.base_expr),
                 },
                 _ => None,
             },
@@ -79,7 +79,7 @@ impl AFnCall {
         };
 
         // Make sure the call has the right number of arguments (making sure to add 1 to the actual
-        // argument count if there is an implicit `self` argument.
+        // argument count if there is an implicit `self` argument).
         let expected_args = fn_type.args.len();
         let actual_args = match &maybe_self {
             Some(_) => call.args.len() + 1,
@@ -118,7 +118,7 @@ impl AFnCall {
                 // Advance the iterator through the arguments on the function type to skip the implicit
                 // `self` arg.
                 fn_type_args_iter.next();
-                vec![self_arg]
+                vec![self_arg.clone()]
             }
             None => vec![],
         };

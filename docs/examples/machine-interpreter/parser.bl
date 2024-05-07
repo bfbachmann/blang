@@ -103,8 +103,8 @@ impl Program {
     }
 
     /// Frees heap memory associated with this program.
-    pub fn free(prog: Program) {
-        free(prog.instructions as *u8)
+    pub fn free(self) {
+        free(self.instructions as *u8)
     }
 }
 

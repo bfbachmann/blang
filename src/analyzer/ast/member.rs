@@ -37,15 +37,17 @@ impl AMemberAccess {
         // Abort early if the expression failed analysis.
         let base_type = ctx.must_get_type(base_expr.type_key);
         let base_type_string = base_type.display(ctx);
+
+        let placeholder = AMemberAccess {
+            base_expr: base_expr.clone(),
+            member_name: access.member_name.clone(),
+            member_type_key: ctx.unknown_type_key(),
+            is_method: false,
+            start_pos: access.start_pos().clone(),
+            end_pos: access.end_pos().clone(),
+        };
         if base_type.is_unknown() {
-            return AMemberAccess {
-                base_expr,
-                member_name: access.member_name.clone(),
-                member_type_key: ctx.unknown_type_key(),
-                is_method: false,
-                start_pos: access.start_pos().clone(),
-                end_pos: access.end_pos().clone(),
-            };
+            return placeholder;
         }
 
         // Check if the member access is accessing a field on a struct type.
@@ -81,6 +83,11 @@ impl AMemberAccess {
                 match ctx.get_member_fn(base_expr.type_key, access.member_name.as_str()) {
                     Some(member_fn_sig) => {
                         is_method = true;
+                        let called_via_type = base_expr.kind.is_type();
+                        let takes_self = member_fn_sig
+                            .args
+                            .first()
+                            .is_some_and(|arg| arg.name == "self");
                         let member_type_key = member_fn_sig.type_key;
 
                         // Only allow access to the member if it is public or local
@@ -94,6 +101,34 @@ impl AMemberAccess {
                                 format_code!("{} is not public", access).as_str(),
                                 access,
                             ))
+                        }
+
+                        // If the base expression is a value rather than a type,
+                        // we need to make sure the member function being accessed
+                        // takes `self` as its first argument.
+                        if !called_via_type && !takes_self {
+                            ctx.insert_err(
+                                AnalyzeError::new(
+                                    ErrorKind::UndefMember,
+                                    format_code!("{} is not a method", access.member_name).as_str(),
+                                    access,
+                                )
+                                .with_help(
+                                    format_code!(
+                                        "Consider accessing this function via its type ({}), \
+                                        or add {} as the first argument to make it a method.",
+                                        format!(
+                                            "{}.{}",
+                                            ctx.display_type_for_key(base_expr.type_key),
+                                            access.member_name
+                                        ),
+                                        "self"
+                                    )
+                                    .as_str(),
+                                ),
+                            );
+
+                            return placeholder;
                         }
 
                         member_type_key
