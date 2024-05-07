@@ -1,4 +1,3 @@
-
 use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Locatable, Position};
@@ -53,6 +52,8 @@ impl VariableAssignment {
     ///     <target> *= <expr>
     ///     <target> /= <expr>
     ///     <target> %= <expr>
+    ///     <target> and= <expr>
+    ///     <target> or= <expr>
     ///
     /// where
     ///  - `target` is the target that is being assigned to (see `Expression::from`)
@@ -74,6 +75,8 @@ impl VariableAssignment {
                 TokenKind::AsteriskEqual,
                 TokenKind::ForwardSlashEqual,
                 TokenKind::PercentEqual,
+                TokenKind::LogicalAndEqual,
+                TokenKind::LogicalOrEqual,
             ],
         )?
         .kind;
@@ -91,6 +94,8 @@ impl VariableAssignment {
                     TokenKind::AsteriskEqual => Operator::Multiply,
                     TokenKind::ForwardSlashEqual => Operator::Divide,
                     TokenKind::PercentEqual => Operator::Modulo,
+                    TokenKind::LogicalAndEqual => Operator::LogicalAnd,
+                    TokenKind::LogicalOrEqual => Operator::LogicalOr,
                     _ => unreachable!(),
                 };
 

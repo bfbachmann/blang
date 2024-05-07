@@ -128,6 +128,19 @@ impl Module {
         false
     }
 
+    /// Returns true if the next token is one of the given kinds.
+    pub fn next_token_is_one_of(tokens: &Stream<Token>, kinds: &Vec<TokenKind>) -> bool {
+        if let Some(token) = tokens.peek_next() {
+            for kind in kinds {
+                if &token.kind == kind {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
     /// Checks if the first token is the given kind and, if so, pops the token and returns
     /// it.
     pub fn parse_optional(tokens: &mut Stream<Token>, expected: TokenKind) -> Option<&Token> {

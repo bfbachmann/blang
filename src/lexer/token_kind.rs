@@ -43,6 +43,10 @@ pub enum TokenKind {
     LogicalAnd,
     #[token("or")]
     LogicalOr,
+    #[token("and=")]
+    LogicalAndEqual,
+    #[token("or=")]
+    LogicalOrEqual,
 
     // Unary operators
     #[token("!")]
@@ -205,6 +209,8 @@ impl TokenKind {
             TokenKind::PercentEqual => "%=".to_string(),
             TokenKind::LogicalAnd => "and".to_string(),
             TokenKind::LogicalOr => "or".to_string(),
+            TokenKind::LogicalAndEqual => "and=".to_string(),
+            TokenKind::LogicalOrEqual => "or=".to_string(),
             TokenKind::LogicalNot => "!".to_string(),
             TokenKind::Equal => "=".to_string(),
             TokenKind::EqualTo => "==".to_string(),

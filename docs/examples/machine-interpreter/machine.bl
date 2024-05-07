@@ -54,7 +54,7 @@ impl Machine {
     pub fn exec_prog(machine: *mut Machine): ExecResult {
         for machine^.pc = 0,
             machine^.pc < Program.len(machine^.prog),
-            machine^.pc = machine^.pc + 1
+            machine^.pc += 1
         {
             let inst_ptr = Program.inst_at(machine^.prog, machine^.pc)
             let result = Machine.exec_inst(machine, inst_ptr)
@@ -126,7 +126,7 @@ impl Machine {
             return ExecResult.new_err("add destination address out of bounds")
         }
 
-        machine^.memory.(dst_addr) = machine^.memory.(src_addr) + machine^.memory.(dst_addr)
+        machine^.memory.(dst_addr) += machine^.memory.(src_addr)
         return ExecResult.new_ok()
     }
 

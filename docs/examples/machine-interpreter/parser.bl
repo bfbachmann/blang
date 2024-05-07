@@ -87,7 +87,7 @@ impl Program {
 
         let inst_ptr = Program.inst_ptr_mut(prog, prog^.len)
         inst_ptr^ = inst
-        prog^.len = prog^.len + 1
+        prog^.len += 1
     }
 
     /// Returns a `*mut` to the instruction at the given index.
@@ -198,7 +198,7 @@ impl Parser {
         }
 
         // Increment instruction counter
-        parser^.inst_count = parser^.inst_count + 1
+        parser^.inst_count += 1
 
         // Try parse an instruction
         {

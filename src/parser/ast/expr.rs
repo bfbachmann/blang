@@ -556,6 +556,8 @@ fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
         // Parenthesized expressions.
         TokenKind::LeftParen => {
             tokens.next();
+            // TODO: Set the expression start and end positions to match
+            // parenthesis.
             let expr = parse_expr(tokens)?;
             Module::parse_expecting(tokens, TokenKind::RightParen)?;
             expr

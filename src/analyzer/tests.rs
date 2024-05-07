@@ -1658,6 +1658,31 @@ mod tests {
     }
 
     #[test]
+    fn inc_assign_to_field() {
+        let result = analyze(
+            r#"
+            struct Thing {
+                value: int
+                b: bool
+            }
+            fn test() {
+                let mut thing = Thing{value: 1, b: false}
+                thing.value += 1
+                thing.value -= 3
+                thing.value *= 9
+                thing.value /= 6
+                thing.value %= 2
+
+
+                thing.b and= false
+                thing.b or= true
+            }
+        "#,
+        );
+        check_result(result, None);
+    }
+
+    #[test]
     fn private_member_access() {
         let mods = HashMap::from([
             (

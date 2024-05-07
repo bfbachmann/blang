@@ -218,21 +218,6 @@ impl Statement {
                 Ok(Statement::VariableDeclaration(var_decl))
             }
 
-            // If the first two tokens are "<identifier> <assignment_operator>",
-            // then it must be a variable assignment.
-            (
-                TokenKind::Identifier(_),
-                TokenKind::Equal
-                | TokenKind::PlusEqual
-                | TokenKind::MinusEqual
-                | TokenKind::AsteriskEqual
-                | TokenKind::ForwardSlashEqual
-                | TokenKind::PercentEqual,
-            ) => {
-                let assign = VariableAssignment::from(tokens)?;
-                Ok(Statement::VariableAssignment(assign))
-            }
-
             // If the next tokens are `extern` or `pub extern`, it's an
             // external function declaration.
             (TokenKind::Extern, _) | (TokenKind::Pub, TokenKind::Extern) => {
@@ -349,19 +334,32 @@ impl Statement {
 
             // At this point the statement should be an assignment or a function call.
             (_, _) => {
-                // Parse the expression.
                 let start_pos = Module::current_position(tokens);
+                let cursor = tokens.cursor();
+
+                // Parse the expression.
                 let expr = Expression::from(tokens)?;
 
-                // If the next token is `=`, then this is an assignment.
-                if Module::parse_optional(tokens, TokenKind::Equal).is_some() {
-                    // Parse the expression being assigned to the member and return the variable
+                // Check if this is an assignment.
+                if Module::next_token_is_one_of(
+                    tokens,
+                    &vec![
+                        TokenKind::Equal,
+                        TokenKind::PlusEqual,
+                        TokenKind::MinusEqual,
+                        TokenKind::ForwardSlashEqual,
+                        TokenKind::AsteriskEqual,
+                        TokenKind::PercentEqual,
+                        TokenKind::LogicalAndEqual,
+                        TokenKind::LogicalOrEqual,
+                    ],
+                ) {
+                    // Parse the expression being assigned and return the variable
                     // assignment.
-                    let value = Expression::from(tokens)?;
-                    let start_pos = expr.start_pos().clone();
-                    return Ok(Statement::VariableAssignment(VariableAssignment::new(
-                        expr, value, start_pos,
-                    )));
+                    tokens.set_cursor(cursor);
+                    return Ok(Statement::VariableAssignment(VariableAssignment::from(
+                        tokens,
+                    )?));
                 }
 
                 // It's not an assignment, so it should be a function call.

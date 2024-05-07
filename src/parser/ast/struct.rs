@@ -233,7 +233,7 @@ impl StructInit {
                     ..
                 }) => {
                     // Set the end position of this struct initialization in the source file.
-                    end_pos = Module::current_position(tokens);
+                    end_pos = Module::prev_position(tokens);
                     break;
                 }
 

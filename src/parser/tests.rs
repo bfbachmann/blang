@@ -561,7 +561,7 @@ mod tests {
                         start_pos: Position::new(3, 23),
                         end_pos: Position::new(3, 24),
                     }),
-                    Position::new(3, 14),
+                    Position::new(3, 13),
                 ))
             ]
         )
