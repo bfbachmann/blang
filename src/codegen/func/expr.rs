@@ -656,6 +656,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         op: &Operator,
         right_expr: &AExpr,
     ) -> BasicValueEnum<'ctx> {
+        // Logical operations need to be short-circuit correctly, so we'll handle
+        // them separately.
+        if op.is_logical() {
+            return self.gen_logical_op(left_expr, op, right_expr);
+        }
+
         let ll_lhs = self.gen_expr(left_expr);
         let ll_rhs = self.gen_expr(right_expr);
 
@@ -682,9 +688,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
         } else if op.is_comparator() {
             self.gen_cmp(ll_lhs, left_expr.type_key, op, ll_rhs, signed)
-                .as_basic_value_enum()
-        } else if op.is_logical() {
-            self.gen_logical_op(ll_lhs, op, ll_rhs)
                 .as_basic_value_enum()
         } else {
             panic!("unsupported operator {op}")
@@ -874,22 +877,51 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         };
     }
 
-    /// Compiles a logical (boolean) operation expression.
+    /// Compiles a logical (boolean) operation expression. These operations
+    /// short-circuit the same way they would in C. In other words:
+    ///  - for logical and, the right expression is only evaluated if the left
+    ///    is true
+    ///  - for logical or, the right expression is only evaluated if the left is
+    ///    false.
     fn gen_logical_op(
-        &self,
-        ll_lhs: BasicValueEnum<'ctx>,
+        &mut self,
+        left_expr: &AExpr,
         op: &Operator,
-        ll_rhs: BasicValueEnum<'ctx>,
-    ) -> IntValue<'ctx> {
-        // Expect both operands to be of type bool.
-        let lhs = self.get_bool(ll_lhs);
-        let rhs = self.get_bool(ll_rhs);
+        right_expr: &AExpr,
+    ) -> BasicValueEnum<'ctx> {
+        let right_block = self.append_block(format!("logical_{}_rhs", op).as_str());
+        let end_block = self.append_block(format!("logical_{}_end", op).as_str());
 
-        match op {
-            Operator::LogicalAnd => self.builder.build_and(lhs, rhs, "logical_and"),
-            Operator::LogicalOr => self.builder.build_or(lhs, rhs, "logical_or"),
-            other => panic!("unexpected logical operator {other}"),
+        // Generate code for the left expression.
+        let ll_lhs = self.gen_expr(left_expr);
+        let ll_lhs = self.get_int(ll_lhs);
+        let left_block = self.cur_block.unwrap();
+
+        // Either short-circuit or compute the right expression based on the
+        // left value.
+        if op == &Operator::LogicalAnd {
+            self.builder
+                .build_conditional_branch(ll_lhs, right_block, end_block);
+        } else {
+            self.builder
+                .build_conditional_branch(ll_lhs, end_block, right_block);
         }
+
+        // Generate code for the right expression.
+        self.set_current_block(right_block);
+        let ll_rhs = self.gen_expr(right_expr);
+        let ll_rhs = self.get_int(ll_rhs);
+        self.builder.build_unconditional_branch(end_block);
+
+        // Generate code that computes the result of the logical operation
+        // based on the results from the two branches.
+        self.set_current_block(end_block);
+        let ll_phi = self
+            .builder
+            .build_phi(self.ctx.bool_type(), "logical_op_result");
+        ll_phi.add_incoming(&[(&ll_lhs, left_block)]);
+        ll_phi.add_incoming(&[(&ll_rhs, right_block)]);
+        ll_phi.as_basic_value()
     }
 
     /// Compiles a comparison operation expression.
