@@ -731,7 +731,7 @@ impl AExpr {
                                         ctx.insert_err(
                                             AnalyzeError::new(
                                                 ErrorKind::InvalidMutRef,
-                                                format_code!("cannot get mutable pointer to constant value {}", symbol)
+                                                format_code!("cannot get mutating pointer to constant value {}", symbol)
                                                 .as_str(),
                                                 &expr,
                                             )
@@ -740,11 +740,15 @@ impl AExpr {
                                                 .as_str(),
                                             ),
                                         );
-                                    } else if !scoped_symbol.is_mut {
+                                    } else if !scoped_symbol.is_mut
+                                        && !ctx
+                                            .must_get_type(scoped_symbol.type_key)
+                                            .is_mut_pointer()
+                                    {
                                         ctx.insert_err(
                                             AnalyzeError::new(
                                                 ErrorKind::InvalidMutRef,
-                                                format_code!("cannot get mutable pointer to immutable value {}", symbol)
+                                                format_code!("cannot get mutating pointer to immutable value {}", symbol)
                                                 .as_str(),
                                                 &expr,
                                             )

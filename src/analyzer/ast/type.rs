@@ -357,7 +357,7 @@ impl AType {
         matches!(self, AType::Pointer(_))
     }
 
-    /// Returns true if this is a mutable pointer type.
+    /// Returns true if this is a mutating pointer type.
     pub fn is_mut_pointer(&self) -> bool {
         matches!(self, AType::Pointer(APointerType { is_mut: true, .. }))
     }

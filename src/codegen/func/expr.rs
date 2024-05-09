@@ -606,6 +606,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 AExprKind::Symbol(symbol) if !symbol.is_const => {
                     self.get_var_ptr(symbol).as_basic_value_enum()
                 }
+
+                AExprKind::MemberAccess(_) => self.get_ptr_to(operand_expr).as_basic_value_enum(),
+
                 _ => {
                     let ll_operand_val = self.gen_expr(operand_expr);
                     let ll_ptr = self.stack_alloc("referenced_val_ptr", operand_expr.type_key);

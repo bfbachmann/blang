@@ -165,15 +165,6 @@ fn define_fn(ctx: &mut ProgramContext, func: &Function) {
     analyze_fn_sig(ctx, &func.signature);
 
     if func.signature.name == "main" {
-        // Make sure main has no args or return.
-        if func.signature.args.len() != 0 {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::InvalidMain,
-                format_code!("function {} cannot have arguments", "main").as_str(),
-                &func.signature,
-            ));
-        }
-
         if func.signature.maybe_ret_type.is_some() {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::InvalidMain,
