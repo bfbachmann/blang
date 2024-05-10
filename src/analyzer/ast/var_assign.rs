@@ -116,11 +116,7 @@ fn check_mutablility(ctx: &mut ProgramContext, assign: &VariableAssignment, targ
                     let pointee_type = ctx.must_get_type(pointer_type.pointee_type_key);
                     ctx.insert_err(AnalyzeError::new(
                         ErrorKind::ImmutableAssignment,
-                        format_code!(
-                            "cannot assign to immutable variable {}",
-                            target_expr.display(ctx)
-                        )
-                        .as_str(),
+                        "cannot assign via pointer to immutable data",
                         assign,
                     ).with_detail(
                         format_code!(
