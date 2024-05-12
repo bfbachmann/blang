@@ -6,6 +6,7 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::format_code;
+use crate::lexer::pos::Locatable;
 use crate::parser::ast::op::Operator;
 use crate::parser::ast::var_assign::VariableAssignment;
 
@@ -33,7 +34,7 @@ impl AVarAssign {
         // it must be writing to memory via a `*mut _`). We skip this check if the target
         // expression already failed analysis.
         if !ctx.must_get_type(target.type_key).is_unknown() {
-            check_mutablility(ctx, assign, &target);
+            check_mutable(ctx, assign, &target);
         }
 
         // Analyze the expression representing the value assigned to the variable.
@@ -56,7 +57,7 @@ impl AVarAssign {
 /// Checks if the given `target_expr` can be assigned to and inserts an error into the program context
 /// if not. Only mutable variables (and their members/elements) and dereferenced `*mut _` pointers can be
 /// assigned to.
-fn check_mutablility(ctx: &mut ProgramContext, assign: &VariableAssignment, target_expr: &AExpr) {
+fn check_mutable<T: Locatable>(ctx: &mut ProgramContext, loc: &T, target_expr: &AExpr) {
     match &target_expr.kind {
         // We're just assigning to a variable. Make sure it's mutable.
         AExprKind::Symbol(symbol) => {
@@ -68,7 +69,7 @@ fn check_mutablility(ctx: &mut ProgramContext, assign: &VariableAssignment, targ
                         ErrorKind::UndefSymbol,
                         format_code!("cannot assign to undefined variable {}", &symbol.name)
                             .as_str(),
-                        assign,
+                        loc,
                     ));
 
                     return;
@@ -81,7 +82,7 @@ fn check_mutablility(ctx: &mut ProgramContext, assign: &VariableAssignment, targ
                         ErrorKind::ImmutableAssignment,
                         format_code!("cannot assign to constant {}", target_expr.display(ctx))
                             .as_str(),
-                        assign,
+                        loc,
                     )
                     .with_help(
                         format_code!(
@@ -100,7 +101,7 @@ fn check_mutablility(ctx: &mut ProgramContext, assign: &VariableAssignment, targ
                             target_expr.display(ctx)
                         )
                         .as_str(),
-                        assign,
+                        loc,
                     )
                     .with_help(
                         format_code!("Consider declaring {} as mutable.", &symbol.name).as_str(),
@@ -117,7 +118,7 @@ fn check_mutablility(ctx: &mut ProgramContext, assign: &VariableAssignment, targ
                     ctx.insert_err(AnalyzeError::new(
                         ErrorKind::ImmutableAssignment,
                         "cannot assign via pointer to immutable data",
-                        assign,
+                        loc,
                     ).with_detail(
                         format_code!(
                             "Cannot assign via a pointer of type {} that points to an immutable value.",
@@ -135,17 +136,17 @@ fn check_mutablility(ctx: &mut ProgramContext, assign: &VariableAssignment, targ
         }
 
         // We're assigning to a field on a struct or tuple. Make sure the base variable is mutable.
-        AExprKind::MemberAccess(access) => check_mutablility(ctx, assign, &access.base_expr),
+        AExprKind::MemberAccess(access) => check_mutable(ctx, loc, &access.base_expr),
 
         // We're assigning to a slot in an array. Make sure the array is mutable.
-        AExprKind::Index(index) => check_mutablility(ctx, assign, &index.collection_expr),
+        AExprKind::Index(index) => check_mutable(ctx, loc, &index.collection_expr),
 
         // Cannot assign to other types of expressions because they're not variables.
         other => {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::InvalidAssignmentTarget,
                 format_code!("cannot assign to non-variable {}", other.display(ctx)).as_str(),
-                assign,
+                loc,
             ));
         }
     }

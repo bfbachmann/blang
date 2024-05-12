@@ -26,18 +26,18 @@ fn main() {
 
     // Read instructions from the file.
     let mut parser = Parser.new(prog_data, bytes_read)
-    let prog = Parser.parse_prog(&mut parser)
+    let prog = parser.parse_prog()
 
     // Execute instructions.
     let mut machine = Machine.new(&prog)
-    let result = Machine.exec_prog(&mut machine)
+    let result = machine.exec_prog()
     assert(result.status ~~ ExecStatus::Ok, result.msg)
 
     // For debugging purposes, sum the machine memory and use it as
     // the exit code.
     let mut sum = 0
     for let mut i = 0uint, i < 10, i += 1 {
-        sum += Machine.memory_at(&machine, i)
+        sum += machine.memory_at(i)
     }
     
     free(prog_data)

@@ -1683,6 +1683,52 @@ mod tests {
     }
 
     #[test]
+    fn illegal_implicit_ref_on_method_call() {
+        let result = analyze(
+            r#"
+            struct Thing {
+                value: int
+            }
+            
+            impl Thing {
+                fn set_value(*mut self, value: int) {
+                    self^.value = value
+                }
+            }
+            
+            fn main() {
+                let thing = Thing{value: 1}
+                thing.set_value(2)
+            }
+        "#,
+        );
+        check_result(result, Some(ErrorKind::InvalidMutRef));
+    }
+
+    #[test]
+    fn illegal_method_call_via_immutable_ref() {
+        let result = analyze(
+            r#"
+            struct Thing {
+                value: int
+            }
+
+            impl Thing {
+                fn set_value(*mut self, value: int) {
+                    self^.value = value
+                }
+            }
+
+            fn main() {
+                let thing = &Thing{value: 1}
+                thing.set_value(2)
+            }
+        "#,
+        );
+        check_result(result, Some(ErrorKind::InvalidMutRef));
+    }
+
+    #[test]
     fn private_member_access() {
         let mods = HashMap::from([
             (

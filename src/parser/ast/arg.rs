@@ -5,8 +5,9 @@ use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
+use crate::parser::ast::pointer::PointerType;
 use crate::parser::ast::r#type::Type;
-use crate::parser::error::ParseResult;
+use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::module::Module;
 
 /// Represents a function argument declaration.
@@ -65,7 +66,9 @@ impl Argument {
     ///     <arg_name>: <arg_type>
     ///     mut <arg_name>: <arg_type>
     ///     self
+    ///     *self
     ///     mut self
+    ///     *mut self
     ///
     /// where
     ///  - `arg_type` is the type of the argument
@@ -73,6 +76,34 @@ impl Argument {
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Get the argument starting position in the source code.
         let start_pos = Module::current_position(tokens);
+
+        // Handle the special cases of `*self` and `*mut self`.
+        if Module::parse_optional(tokens, TokenKind::Asterisk).is_some() {
+            let is_mut = Module::parse_optional(tokens, TokenKind::Mut).is_some();
+            let name = Module::parse_identifier(tokens)?;
+            if name != "self" {
+                return Err(ParseError::new_with_token(
+                    ErrorKind::ExpectedIdent,
+                    format_code!("expected {}, but found {}", "self", name).as_str(),
+                    tokens.prev().unwrap().clone(),
+                ));
+            }
+
+            let end_pos = Module::prev_position(tokens);
+
+            return Ok(Argument::new(
+                name.as_str(),
+                Type::Pointer(Box::new(PointerType::new(
+                    Type::new_unresolved("Self"),
+                    is_mut,
+                    start_pos.clone(),
+                    end_pos.clone(),
+                ))),
+                is_mut,
+                start_pos,
+                end_pos,
+            ));
+        }
 
         // The argument can optionally be declared as mutable, so check for "mut".
         let is_mut = Module::parse_optional(tokens, TokenKind::Mut).is_some();

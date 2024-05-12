@@ -337,6 +337,21 @@ impl fmt::Display for AExpr {
 locatable_impl!(AExpr);
 
 impl AExpr {
+    /// Creates a new expression.
+    pub fn new(
+        kind: AExprKind,
+        type_key: TypeKey,
+        start_pos: Position,
+        end_pos: Position,
+    ) -> AExpr {
+        AExpr {
+            kind,
+            type_key,
+            start_pos,
+            end_pos,
+        }
+    }
+
     /// Performs semantic analysis on the given expression and returns a type-rich version of it.
     /// `maybe_expected_type_key` is the optional type key of the expected type that this expression
     /// should have.
@@ -721,48 +736,8 @@ impl AExpr {
                         let operand_expr =
                             AExpr::from(ctx, *right_expr.clone(), None, false, false, false);
 
-                        // Make sure the operand is mutable if it comes from a variable. If it generates
-                        // some brand-new value, then it can trivially be considered mutable.
-                        if let Some(symbol) = &operand_expr.get_base_symbol() {
-                            // TODO: also check foreign symbols?
-                            match ctx.get_scoped_symbol(None, symbol.name.as_str()) {
-                                Some(scoped_symbol) => {
-                                    if scoped_symbol.is_const {
-                                        ctx.insert_err(
-                                            AnalyzeError::new(
-                                                ErrorKind::InvalidMutRef,
-                                                format_code!("cannot get mutating pointer to constant value {}", symbol)
-                                                .as_str(),
-                                                &expr,
-                                            )
-                                            .with_help(
-                                                format_code!("Consider declaring {} as a mutable local variable.", symbol)
-                                                .as_str(),
-                                            ),
-                                        );
-                                    } else if !scoped_symbol.is_mut
-                                        && !ctx
-                                            .must_get_type(scoped_symbol.type_key)
-                                            .is_mut_pointer()
-                                    {
-                                        ctx.insert_err(
-                                            AnalyzeError::new(
-                                                ErrorKind::InvalidMutRef,
-                                                format_code!("cannot get mutating pointer to immutable value {}", symbol)
-                                                .as_str(),
-                                                &expr,
-                                            )
-                                            .with_help(
-                                                format_code!("Consider declaring {} as mutable.", symbol)
-                                                .as_str(),
-                                            ),
-                                        );
-                                    }
-                                }
-
-                                _ => {}
-                            };
-                        }
+                        // Make sure we're allowed to take a `&mut` to this operand.
+                        operand_expr.check_referencable_as_mut(ctx, &expr);
 
                         let a_ptr_type = APointerType::new(operand_expr.type_key, true);
                         let type_key = ctx.insert_type(AType::Pointer(a_ptr_type));
@@ -995,6 +970,49 @@ impl AExpr {
         }
 
         self
+    }
+
+    /// Checks that this expression represents a value can be referenced as mutable
+    /// (i.e. we can take a `&mut` to it). Inserts an error into the program context if not.
+    pub fn check_referencable_as_mut<T: Locatable>(&self, ctx: &mut ProgramContext, loc: &T) {
+        // Make sure the expression is mutable if it comes from a variable. If it generates
+        // some brand-new value, then it can trivially be considered mutable.
+        let symbol = match self.get_base_symbol() {
+            Some(symbol) => symbol,
+            None => return,
+        };
+
+        let scoped_symbol = match ctx.get_scoped_symbol(None, symbol.name.as_str()) {
+            Some(scoped_symbol) => scoped_symbol,
+            None => return,
+        };
+
+        if scoped_symbol.is_const {
+            ctx.insert_err(
+                AnalyzeError::new(
+                    ErrorKind::InvalidMutRef,
+                    format_code!("cannot get mutating pointer to constant value {}", symbol)
+                        .as_str(),
+                    loc,
+                )
+                .with_help(
+                    format_code!("Consider declaring {} as a mutable local variable.", symbol)
+                        .as_str(),
+                ),
+            );
+        } else if !scoped_symbol.is_mut
+            && !ctx.must_get_type(scoped_symbol.type_key).is_mut_pointer()
+        {
+            ctx.insert_err(
+                AnalyzeError::new(
+                    ErrorKind::InvalidMutRef,
+                    format_code!("cannot get mutating pointer to immutable value {}", symbol)
+                        .as_str(),
+                    loc,
+                )
+                .with_help(format_code!("Consider declaring {} as mutable.", symbol).as_str()),
+            );
+        }
     }
 
     /// Tries to coerce this expression to the target type. If coercion is successful, returns

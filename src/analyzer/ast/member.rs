@@ -8,6 +8,7 @@ use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::{Locatable, Position};
 use crate::locatable_impl;
 use crate::parser::ast::member::MemberAccess;
+use crate::parser::ast::op::Operator;
 
 /// Represents access to a member or field on a type or an instance of a type.
 #[derive(Debug, Clone)]
@@ -32,7 +33,7 @@ impl AMemberAccess {
     /// Performs semantic analysis on the given member access expression.
     pub fn from(ctx: &mut ProgramContext, access: &MemberAccess) -> AMemberAccess {
         // Analyze the expression whose member is being accessed.
-        let base_expr = AExpr::from(ctx, access.expr.clone(), None, false, true, false);
+        let mut base_expr = AExpr::from(ctx, access.expr.clone(), None, false, true, false);
 
         // Abort early if the expression failed analysis.
         let base_type = ctx.must_get_type(base_expr.type_key);
@@ -50,63 +51,68 @@ impl AMemberAccess {
             return placeholder;
         }
 
-        // Check if the member access is accessing a field on a struct type.
-        let maybe_field_type_key = match base_type {
+        // Check if the member access is accessing a field on a struct type or
+        // a member function or method on a type.
+        let (maybe_field_type_key, base_type_key, base_expr_is_ptr) = match base_type {
             // Only match struct field types if the base expression is not a type.
             // If it is a type, then we should only be trying to resolve member
             // functions on it.
             AType::Struct(struct_type) if !base_expr.kind.is_type() => {
-                struct_type.get_field_type_key(access.member_name.as_str())
-            }
-            _ => None,
-        };
+                let maybe_field_type_key =
+                    struct_type.get_field_type_key(access.member_name.as_str());
 
-        // Only allow access to the struct field if the struct type is
-        // local to this module or if the field is public.
-        if maybe_field_type_key.is_some()
-            && !ctx.struct_field_is_accessible(base_expr.type_key, access.member_name.as_str())
-        {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::UseOfPrivateValue,
-                format_code!("{} is not public", access).as_str(),
-                access,
-            ));
-        }
+                // Only allow access to the struct field if the struct type is
+                // local to this module or if the field is public.
+                if maybe_field_type_key.is_some()
+                    && !ctx
+                        .struct_field_is_accessible(base_expr.type_key, access.member_name.as_str())
+                {
+                    ctx.insert_err(AnalyzeError::new(
+                        ErrorKind::UseOfPrivateValue,
+                        format_code!("{} is not public", access).as_str(),
+                        access,
+                    ));
+                }
+
+                (maybe_field_type_key, base_expr.type_key, false)
+            }
+
+            // For pointer types, we'll try to use the pointee type to resolve methods
+            // or member functions.
+            AType::Pointer(ptr_type) => (None, ptr_type.pointee_type_key, true),
+
+            _ => (None, base_expr.type_key, false),
+        };
 
         // If we failed to find a field on this type with a matching name, check for a member
         // function with a matching name.
-        let mut is_method = false;
-        let member_type_key = match maybe_field_type_key {
-            Some(type_key) => type_key,
+        let (member_type_key, is_method) = if let Some(tk) = maybe_field_type_key {
+            (tk, false)
+        } else {
+            match ctx.get_member_fn(base_type_key, access.member_name.as_str()) {
+                Some(member_fn_sig) => {
+                    let called_via_type = base_expr.kind.is_type();
+                    let (takes_self, maybe_self_type_key) = match member_fn_sig.args.first() {
+                        Some(arg) => (arg.name == "self", Some(arg.type_key)),
+                        None => (false, None),
+                    };
+                    let member_type_key = member_fn_sig.type_key;
 
-            None => {
-                match ctx.get_member_fn(base_expr.type_key, access.member_name.as_str()) {
-                    Some(member_fn_sig) => {
-                        is_method = true;
-                        let called_via_type = base_expr.kind.is_type();
-                        let takes_self = member_fn_sig
-                            .args
-                            .first()
-                            .is_some_and(|arg| arg.name == "self");
-                        let member_type_key = member_fn_sig.type_key;
+                    // Only allow access to the member if it is public or local
+                    // to the current module.
+                    if !ctx.member_fn_is_accessible(base_type_key, access.member_name.as_str()) {
+                        ctx.insert_err(AnalyzeError::new(
+                            ErrorKind::UseOfPrivateValue,
+                            format_code!("{} is not public", access).as_str(),
+                            access,
+                        ))
+                    }
 
-                        // Only allow access to the member if it is public or local
-                        // to the current module.
-                        if !ctx.member_fn_is_accessible(
-                            base_expr.type_key,
-                            access.member_name.as_str(),
-                        ) {
-                            ctx.insert_err(AnalyzeError::new(
-                                ErrorKind::UseOfPrivateValue,
-                                format_code!("{} is not public", access).as_str(),
-                                access,
-                            ))
-                        }
-
-                        // If the base expression is a value rather than a type,
-                        // we need to make sure the member function being accessed
-                        // takes `self` as its first argument.
-                        if !called_via_type && !takes_self {
+                    // If the base expression is a value rather than a type,
+                    // we need to make sure the member function being accessed
+                    // takes `self` as its first argument.
+                    if !called_via_type {
+                        if !takes_self {
                             ctx.insert_err(
                                 AnalyzeError::new(
                                     ErrorKind::UndefMember,
@@ -119,7 +125,7 @@ impl AMemberAccess {
                                         or add {} as the first argument to make it a method.",
                                         format!(
                                             "{}.{}",
-                                            ctx.display_type_for_key(base_expr.type_key),
+                                            ctx.display_type_for_key(base_type_key),
                                             access.member_name
                                         ),
                                         "self"
@@ -131,24 +137,56 @@ impl AMemberAccess {
                             return placeholder;
                         }
 
-                        member_type_key
+                        // At this point we know it's a valid method call on a
+                        // concrete value. If the value is not a pointer, but the
+                        // method requires a pointer, then we need to implicitly
+                        // take a reference to the value.
+                        let self_arg_type_key = maybe_self_type_key.unwrap();
+                        let self_arg_type = ctx.must_get_type(self_arg_type_key);
+                        if !base_expr_is_ptr && self_arg_type.is_pointer() {
+                            let op = match self_arg_type.is_mut_pointer() {
+                                true => {
+                                    // Record an error if we're not allowed to get a
+                                    // `&mut` to the base expression.
+                                    base_expr.check_referencable_as_mut(ctx, &base_expr);
+                                    Operator::MutReference
+                                }
+                                false => Operator::Reference,
+                            };
+
+                            let start_pos = base_expr.start_pos().clone();
+                            let end_pos = base_expr.end_pos().clone();
+                            base_expr = AExpr::new(
+                                AExprKind::UnaryOperation(op, Box::new(base_expr)),
+                                self_arg_type_key,
+                                start_pos,
+                                end_pos,
+                            );
+                        } else if self_arg_type.is_mut_pointer() {
+                            // Record an error here because we're trying to call
+                            // a method that requires `*mut T` with only a `*T`.
+                            base_expr.check_referencable_as_mut(ctx, &base_expr);
+                        }
                     }
 
-                    None => {
-                        // Error and return a placeholder value since we couldn't
-                        // locate the member being accessed.
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::UndefMember,
-                            format_code!(
-                                "type {} has no member {}",
-                                base_type_string,
-                                access.member_name
-                            )
-                            .as_str(),
-                            access,
-                        ));
-                        ctx.unknown_type_key()
-                    }
+                    (member_type_key, true)
+                }
+
+                None => {
+                    // Error and return a placeholder value since we couldn't
+                    // locate the member being accessed.
+                    ctx.insert_err(AnalyzeError::new(
+                        ErrorKind::UndefMember,
+                        format_code!(
+                            "type {} has no member {}",
+                            base_type_string,
+                            access.member_name
+                        )
+                        .as_str(),
+                        access,
+                    ));
+
+                    (ctx.unknown_type_key(), false)
                 }
             }
         };

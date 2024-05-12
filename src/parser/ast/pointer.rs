@@ -29,6 +29,21 @@ impl Display for PointerType {
 locatable_impl!(PointerType);
 
 impl PointerType {
+    /// Creates a new pointer type.
+    pub fn new(
+        pointee_type: Type,
+        is_mut: bool,
+        start_pos: Position,
+        end_pos: Position,
+    ) -> PointerType {
+        PointerType {
+            pointee_type,
+            is_mut,
+            start_pos,
+            end_pos,
+        }
+    }
+
     /// Parses a pointer type from the token stream. Expects token sequences of the form
     ///
     ///     &type>

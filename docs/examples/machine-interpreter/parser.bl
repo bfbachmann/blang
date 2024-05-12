@@ -60,46 +60,46 @@ impl Program {
     }
 
     /// Returns the number of instructions in the program.
-    pub fn len(prog: *Program): uint {
-        return prog^.len
+    pub fn len(*self): uint {
+        return self^.len
     }
 
     /// Increases the amount of heap memory allocated to store this program's
     /// instructions.
-    fn grow(prog: *mut Program) {
-        let mut new_cap = prog^.cap * 2
+    fn grow(*mut self) {
+        let mut new_cap = self^.cap * 2
         if new_cap == 0 {
             new_cap = 128
         }
 
-        prog^.instructions = realloc(
-            prog^.instructions as *u8,
+        self^.instructions = realloc(
+            self^.instructions as *u8,
             sizeof Instruction * new_cap,
         ) as *mut Instruction
-        prog^.cap = new_cap
+        self^.cap = new_cap
     }
 
     /// Adds the given instruction to the program.
-    fn push_inst(prog: *mut Program, inst: Instruction) {
-        if prog^.len == prog^.cap {
-            Program.grow(prog)
+    fn push_inst(*mut self, inst: Instruction) {
+        if self^.len == self^.cap {
+            self.grow()
         }
 
-        let inst_ptr = Program.inst_ptr_mut(prog, prog^.len)
+        let inst_ptr = self.inst_ptr_mut(self^.len)
         inst_ptr^ = inst
-        prog^.len += 1
+        self^.len += 1
     }
 
     /// Returns a `*mut` to the instruction at the given index.
-    fn inst_ptr_mut(prog: *mut Program, index: uint): *mut Instruction {
-        assert(index < prog^.cap, "instruction index out of bounds")
-        return prog^.instructions + (index * sizeof Instruction) as *Instruction
+    fn inst_ptr_mut(*mut self, index: uint): *mut Instruction {
+        assert(index < self^.cap, "instruction index out of bounds")
+        return self^.instructions + (index * sizeof Instruction) as *Instruction
     }
 
     /// Returns a pointer to the instruction at the given index.
-    pub fn inst_at(prog: *Program, index: uint): *Instruction {
-        assert(index < prog^.len, "instruction index out of bounds")
-        return prog^.instructions + (index * sizeof Instruction) as *Instruction
+    pub fn inst_at(*self, index: uint): *Instruction {
+        assert(index < self^.len, "instruction index out of bounds")
+        return self^.instructions + (index * sizeof Instruction) as *Instruction
     }
 
     /// Frees heap memory associated with this program.
@@ -172,50 +172,50 @@ impl Parser {
 
     /// Parses the program stored in the parser and returns the result. This function
     /// will abort with an error message if the program is syntactically invalid.
-    pub fn parse_prog(parser: *mut Parser): Program {
+    pub fn parse_prog(*mut self): Program {
         let mut prog = Program.new()
         loop {
-            let result = Parser.try_parse_inst(parser)
+            let result = self.try_parse_inst()
             assert(result.status !~ ParseStatus::Err, result.msg)
     
             if result.status ~~ ParseStatus::Done {
                 return prog
             }
     
-            Program.push_inst(&mut prog, result.inst)
+            prog.push_inst(result.inst)
         }
     }
 
     /// Tries to parse an instruction from the current position in the program
     /// buffer and returns the result.
-    fn try_parse_inst(parser: *mut Parser): ParseResult {
+    fn try_parse_inst(*mut self): ParseResult {
         // Remove all leading whitespace
-        Parser.parse_spaces(parser)
+        self.parse_spaces()
 
         // Check if we're at the end of the buffer
-        if parser^.cursor >= parser^.buf_len {
+        if self^.cursor >= self^.buf_len {
             return ParseResult.new_done()
         }
 
         // Increment instruction counter
-        parser^.inst_count += 1
+        self^.inst_count += 1
 
         // Try parse an instruction
         {
-            if Parser.try_parse(parser, "store") {
-                return Parser.try_parse_store_operands(parser)
+            if self.try_parse("store") {
+                return self.try_parse_store_operands()
             }
 
-            if Parser.try_parse(parser, "copy") {
-                return Parser.try_parse_copy_operands(parser)
+            if self.try_parse("copy") {
+                return self.try_parse_copy_operands()
             }
 
-            if Parser.try_parse(parser, "add") {
-                return Parser.try_parse_add_operands(parser)
+            if self.try_parse("add") {
+                return self.try_parse_add_operands()
             }
 
-            if Parser.try_parse(parser, "jumpif0") {
-                return Parser.try_parse_jump_operands(parser)
+            if self.try_parse("jumpif0") {
+                return self.try_parse_jump_operands()
             }
         }
 
@@ -224,19 +224,19 @@ impl Parser {
 
     /// Tries to parse store instruction operands from the current location in the
     /// program buffer and returns the result.
-    fn try_parse_store_operands(parser: *mut Parser): ParseResult {
-        Parser.parse_spaces(parser)
+    fn try_parse_store_operands(*mut self): ParseResult {
+        self.parse_spaces()
 
         // Parse first operand
-        let value_result = Parser.try_parse_int(parser)
+        let value_result = self.try_parse_int()
         if !value_result.(1) {
             return ParseResult.new_err("invalid integer value in first 'store' operand")
         }
         
-        Parser.parse_spaces(parser)
+        self.parse_spaces()
         
         // Parse second operand
-        let addr_result = Parser.try_parse_addr(parser)
+        let addr_result = self.try_parse_addr()
         if !addr_result.(1) {
             return ParseResult.new_err("invalid address in second 'store' operand")
         }
@@ -249,19 +249,19 @@ impl Parser {
 
     /// Tries to parse copy instruction operands from the current location in the
     /// program buffer and returns the result.
-    fn try_parse_copy_operands(parser: *mut Parser): ParseResult {
-        Parser.parse_spaces(parser)
+    fn try_parse_copy_operands(*mut self): ParseResult {
+        self.parse_spaces()
 
         // Parse first operand
-        let src_addr_result = Parser.try_parse_addr(parser)
+        let src_addr_result = self.try_parse_addr()
         if !src_addr_result.(1) {
             return ParseResult.new_err("invalid address in first 'copy' operand")
         }
         
-        Parser.parse_spaces(parser)
+        self.parse_spaces()
         
         // Parse second operand
-        let dst_addr_result = Parser.try_parse_addr(parser)
+        let dst_addr_result = self.try_parse_addr()
         if !dst_addr_result.(1) {
             return ParseResult.new_err("invalid address in second 'copy' operand")
         }
@@ -274,19 +274,19 @@ impl Parser {
 
     /// Tries to parse add instruction operands from the current location in the
     /// program buffer and returns the result.
-    fn try_parse_add_operands(parser: *mut Parser): ParseResult {
-        Parser.parse_spaces(parser)
+    fn try_parse_add_operands(*mut self): ParseResult {
+        self.parse_spaces()
 
         // Parse first operand
-        let src_addr_result = Parser.try_parse_addr(parser)
+        let src_addr_result = self.try_parse_addr()
         if !src_addr_result.(1) {
             return ParseResult.new_err("invalid address in first 'add' operand")
         }
         
-        Parser.parse_spaces(parser)
+        self.parse_spaces()
         
         // Parse second operand
-        let dst_addr_result = Parser.try_parse_addr(parser)
+        let dst_addr_result = self.try_parse_addr()
         if !dst_addr_result.(1) {
             return ParseResult.new_err("invalid address in second 'add' operand")
         }
@@ -299,19 +299,19 @@ impl Parser {
 
     /// Tries to parse jumpif0 instruction operands from the current location in the
     /// program buffer and returns the result.
-    fn try_parse_jump_operands(parser: *mut Parser): ParseResult {
-        Parser.parse_spaces(parser)
+    fn try_parse_jump_operands(*mut self): ParseResult {
+        self.parse_spaces()
 
         // Parse first operand
-        let src_addr_result = Parser.try_parse_addr(parser)
+        let src_addr_result = self.try_parse_addr()
         if !src_addr_result.(1) {
             return ParseResult.new_err("invalid address in first 'jumpif0' operand")
         }
         
-        Parser.parse_spaces(parser)
+        self.parse_spaces()
         
         // Parse second operand
-        let dst_addr_result = Parser.try_parse_addr(parser)
+        let dst_addr_result = self.try_parse_addr()
         if !dst_addr_result.(1) {
             return ParseResult.new_err("invalid address in second 'jumpif0' operand")
         }
@@ -325,12 +325,12 @@ impl Parser {
     /// Tries to parse an address from the current location in the
     /// program buffer and returns the result with `true` if successful, and
     /// `false` otherwise.
-    fn try_parse_addr(parser: *mut Parser): {int, bool} {
-        if !Parser.try_parse(parser, "#") {
+    fn try_parse_addr(*mut self): {int, bool} {
+        if !self.try_parse("#") {
             return {0, false}
         }
 
-        let result = Parser.try_parse_int(parser)
+        let result = self.try_parse_int()
 
         // Make sure the address is not a negative number
         if result.(0) < 0 {
@@ -342,27 +342,27 @@ impl Parser {
 
     /// Tries to parse an integer from the current location in the program buffer
     /// and returns the result with `true` if successful, and `false` otherwise.
-    fn try_parse_int(parser: *mut Parser): {int, bool} {
-        let mut end_ptr = Parser.buf_at_cursor(parser)
+    fn try_parse_int(*mut self): {int, bool} {
+        let mut end_ptr = self.buf_at_cursor()
         let value = strtol(end_ptr, &mut end_ptr, 10)
-        let num_chars = end_ptr as int - Parser.buf_at_cursor(parser) as int
-        Parser.move_cursor(parser, num_chars)
+        let num_chars = end_ptr as int - self.buf_at_cursor() as int
+        self.move_cursor(num_chars)
         return {value, num_chars > 0}
     }
 
     /// Parses all spaces at the current location in the program buffer.
-    fn parse_spaces(parser: *mut Parser) {
-        while Parser.try_parse(parser, " ")
-            or Parser.try_parse(parser, "\t")
-            or Parser.try_parse(parser, "\n")
+    fn parse_spaces(*mut self) {
+        while self.try_parse(" ")
+            or self.try_parse("\t")
+            or self.try_parse("\n")
         {}
     }
 
     /// Tries to parse the given `str` from the current location in the buffer
     /// and returns `true` if successful.
-    fn try_parse(parser: *mut Parser, s: str): bool {
-        if Parser.buf_starts_with(parser, s) {
-            Parser.move_cursor(parser, s.len() as int)
+    fn try_parse(*mut self, s: str): bool {
+        if self.buf_starts_with(s) {
+            self.move_cursor(s.len() as int)
             return true
         }
 
@@ -370,26 +370,26 @@ impl Parser {
     }
 
     /// Moves the parser's cursor in the buffer by the given offset.
-    fn move_cursor(parser: *mut Parser, offset: int) {
-        let new_cursor = (parser^.cursor as int + offset) as uint
+    fn move_cursor(*mut self, offset: int) {
+        let new_cursor = (self^.cursor as int + offset) as uint
 
         // Make sure not to overrun the buffer
-        if new_cursor >= parser^.buf_len {
-            parser^.cursor = parser^.buf_len
+        if new_cursor >= self^.buf_len {
+            self^.cursor = self^.buf_len
             return
         }
 
-        parser^.cursor = new_cursor
+        self^.cursor = new_cursor
     }
 
     /// Returns a pointer to the parser's current position in the program buffer.
-    fn buf_at_cursor(parser: *Parser): *u8 {
-        return parser^.buf.(parser^.cursor as int)
+    fn buf_at_cursor(*self): *u8 {
+        return self^.buf.(self^.cursor as int)
     }
 
     /// Returns `true` if the program buffer starting at the parser's current position
     /// contains `s`.
-    fn buf_starts_with(parser: *Parser, s: str): bool {
-        return strncmp(Parser.buf_at_cursor(parser), s as *u8, s.len()) == 0
+    fn buf_starts_with(*self, s: str): bool {
+        return strncmp(self.buf_at_cursor(), s as *u8, s.len()) == 0
     }
 }
