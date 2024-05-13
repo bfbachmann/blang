@@ -18,9 +18,13 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::{Locatable, Position};
+use crate::parser::ast::array::ArrayInit;
 use crate::parser::ast::expr::Expression;
+use crate::parser::ast::func::Function;
+use crate::parser::ast::func_call::FuncCall;
 use crate::parser::ast::op::Operator;
 use crate::parser::ast::r#type::Type;
+use crate::parser::ast::tuple::TupleInit;
 use crate::parser::ast::unresolved::UnresolvedType;
 use crate::{format_code, locatable_impl};
 
@@ -374,534 +378,14 @@ impl AExpr {
         let start_pos = expr.start_pos().clone();
         let end_pos = expr.end_pos().clone();
 
-        let mut result = match &expr {
-            Expression::TypeCast(expr, target_type) => {
-                let left_expr = AExpr::from(ctx, *expr.clone(), None, false, false, false);
-                let target_type_key = ctx.resolve_type(target_type);
-                let left_type = ctx.must_get_type(left_expr.type_key);
-                let a_target_type = ctx.must_get_type(target_type_key);
-
-                // Skip the check if the left expression already failed analysis.
-                if !left_type.is_unknown() && !is_valid_type_cast(left_type, a_target_type) {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::InvalidTypeCast,
-                        format_code!(
-                            "cannot cast value of type {} to type {}",
-                            left_type.display(ctx),
-                            a_target_type.display(ctx)
-                        )
-                        .as_str(),
-                        &left_expr,
-                    ));
-
-                    AExpr::new_zero_value(ctx, target_type.clone())
-                } else {
-                    AExpr {
-                        kind: AExprKind::TypeCast(Box::new(left_expr), target_type_key),
-                        type_key: target_type_key,
-                        start_pos,
-                        end_pos,
-                    }
-                }
-            }
-
-            Expression::Symbol(ref symbol) => {
-                let a_symbol = ASymbol::from(ctx, symbol, true, allow_type, None);
-                AExpr {
-                    type_key: a_symbol.type_key,
-                    kind: AExprKind::Symbol(a_symbol),
-                    start_pos,
-                    end_pos,
-                }
-            }
-
-            Expression::BoolLiteral(b) => AExpr {
-                kind: AExprKind::BoolLiteral(b.value),
-                type_key: ctx.bool_type_key(),
-                start_pos,
-                end_pos,
-            },
-
-            Expression::I8Literal(i) => AExpr {
-                kind: AExprKind::I8Literal(i.value),
-                type_key: ctx.i8_type_key(),
-                start_pos,
-                end_pos,
-            },
-
-            Expression::U8Literal(i) => AExpr {
-                kind: AExprKind::U8Literal(i.value),
-                type_key: ctx.u8_type_key(),
-                start_pos,
-                end_pos,
-            },
-
-            Expression::I32Literal(i) => AExpr {
-                kind: AExprKind::I32Literal(i.value),
-                type_key: ctx.i32_type_key(),
-                start_pos,
-                end_pos,
-            },
-
-            Expression::U32Literal(i) => AExpr {
-                kind: AExprKind::U32Literal(i.value),
-                type_key: ctx.u32_type_key(),
-                start_pos,
-                end_pos,
-            },
-
-            Expression::F32Literal(i) => AExpr {
-                kind: AExprKind::F32Literal(i.value),
-                type_key: ctx.f32_type_key(),
-                start_pos,
-                end_pos,
-            },
-
-            Expression::I64Literal(i) => AExpr {
-                kind: AExprKind::I64Literal(i.value),
-                type_key: ctx.i64_type_key(),
-                start_pos,
-                end_pos,
-            },
-
-            Expression::U64Literal(i) => AExpr {
-                kind: AExprKind::U64Literal(i.value),
-                type_key: ctx.u64_type_key(),
-                start_pos,
-                end_pos,
-            },
-
-            Expression::F64Literal(i) => AExpr {
-                kind: AExprKind::F64Literal(i.value, i.has_suffix),
-                type_key: ctx.f64_type_key(),
-                start_pos,
-                end_pos,
-            },
-
-            Expression::IntLiteral(i) => AExpr {
-                kind: AExprKind::IntLiteral(i.value, i.has_suffix),
-                type_key: ctx.int_type_key(),
-                start_pos,
-                end_pos,
-            },
-
-            Expression::UintLiteral(i) => AExpr {
-                kind: AExprKind::UintLiteral(i.value),
-                type_key: ctx.uint_type_key(),
-                start_pos,
-                end_pos,
-            },
-
-            Expression::StrLiteral(s) => AExpr {
-                kind: AExprKind::StrLiteral(s.value.clone()),
-                type_key: ctx.str_type_key(),
-                start_pos,
-                end_pos,
-            },
-
-            Expression::StructInit(struct_init) => {
-                let a_init = AStructInit::from(ctx, &struct_init);
-                let type_key = a_init.type_key;
-                AExpr {
-                    kind: AExprKind::StructInit(a_init),
-                    type_key,
-                    start_pos,
-                    end_pos,
-                }
-            }
-
-            Expression::EnumInit(enum_init) => {
-                let a_init = AEnumVariantInit::from(ctx, &enum_init);
-                let type_key = a_init.type_key;
-                AExpr {
-                    kind: AExprKind::EnumInit(a_init),
-                    type_key,
-                    start_pos,
-                    end_pos,
-                }
-            }
-
-            Expression::TupleInit(tuple_init) => {
-                let maybe_expected_field_type_keys = match maybe_expected_type_key {
-                    Some(tk) => {
-                        if let AType::Tuple(tuple_type) = ctx.must_get_type(tk) {
-                            let mut field_type_keys = Vec::with_capacity(tuple_type.fields.len());
-                            for i in 0..tuple_type.fields.len() {
-                                field_type_keys
-                                    .insert(i, tuple_type.get_field_type_key(i).unwrap());
-                            }
-
-                            Some(field_type_keys)
-                        } else {
-                            None
-                        }
-                    }
-                    None => None,
-                };
-
-                let a_init = ATupleInit::from(ctx, &tuple_init, maybe_expected_field_type_keys);
-                let type_key = a_init.type_key;
-                AExpr {
-                    kind: AExprKind::TupleInit(a_init),
-                    type_key,
-                    start_pos,
-                    end_pos,
-                }
-            }
-
-            Expression::ArrayInit(array_init) => {
-                let maybe_element_type_key = match maybe_expected_type_key {
-                    Some(tk) => {
-                        if let AType::Array(array_type) = ctx.must_get_type(tk) {
-                            array_type.maybe_element_type_key
-                        } else {
-                            None
-                        }
-                    }
-                    None => None,
-                };
-
-                let a_init = AArrayInit::from(ctx, &array_init, maybe_element_type_key);
-                let type_key = a_init.type_key;
-                AExpr {
-                    kind: AExprKind::ArrayInit(a_init),
-                    type_key,
-                    start_pos,
-                    end_pos,
-                }
-            }
-
-            Expression::SizeOf(sizeof) => {
-                let type_key = ctx.resolve_type(&sizeof.typ);
-                AExpr {
-                    kind: AExprKind::Sizeof(type_key),
-                    type_key: ctx.uint_type_key(),
-                    start_pos,
-                    end_pos,
-                }
-            }
-
-            Expression::FunctionCall(fn_call) => {
-                // Analyze the function call and ensure it has a return type.
-                let a_call = AFnCall::from(ctx, fn_call);
-                match a_call.maybe_ret_type_key.clone() {
-                    Some(type_key) => AExpr {
-                        kind: AExprKind::FunctionCall(Box::new(a_call)),
-                        type_key,
-                        start_pos,
-                        end_pos,
-                    },
-
-                    _ => {
-                        // The function does not have a return value. Record the error and return some
-                        // zero-value instead.
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::ExpectedReturnValue,
-                            format_code!(
-                                "{} has no return value, but is called in an expression",
-                                a_call.display(ctx),
-                            )
-                            .as_str(),
-                            fn_call.as_ref(),
-                        ));
-
-                        AExpr::new_zero_value(
-                            ctx,
-                            Type::Unresolved(UnresolvedType::unresolved_none()),
-                        )
-                    }
-                }
-            }
-
-            Expression::Index(index) => {
-                let a_index = AIndex::from(ctx, index);
-                AExpr {
-                    type_key: a_index.result_type_key,
-                    kind: AExprKind::Index(Box::new(a_index)),
-                    start_pos,
-                    end_pos,
-                }
-            }
-
-            Expression::MemberAccess(member_access) => {
-                let access = AMemberAccess::from(ctx, member_access);
-                AExpr {
-                    type_key: access.member_type_key,
-                    kind: AExprKind::MemberAccess(Box::new(access)),
-                    start_pos,
-                    end_pos,
-                }
-            }
-
-            Expression::AnonFunction(anon_fn) => {
-                // Give the anonymous function a unique name based on the order in which it appears
-                // inside the current scope.
-                let mut sig = anon_fn.signature.clone();
-                sig.name = ctx.new_anon_fn_name();
-
-                let a_closure = AClosure::from(
-                    ctx,
-                    &anon_fn.body,
-                    ScopeKind::FnBody(sig.name.clone()),
-                    sig.args.clone(),
-                    sig.maybe_ret_type.clone(),
-                );
-
-                // Make sure the function return conditions are satisfied by the closure.
-                if let Some(ret_type) = &sig.maybe_ret_type {
-                    let a_ret_type = ctx.resolve_type(&ret_type);
-                    check_closure_returns(
-                        ctx,
-                        &a_closure,
-                        a_ret_type,
-                        &ScopeKind::FnBody(sig.name.clone()),
-                    );
-                }
-
-                let a_fn = AFn {
-                    signature: AFnSig::from(ctx, &sig),
-                    body: a_closure,
-                };
-                let type_key = a_fn.signature.type_key;
-
-                AExpr {
-                    start_pos,
-                    end_pos,
-                    kind: AExprKind::AnonFunction(Box::new(a_fn)),
-                    type_key,
-                }
-            }
-
-            Expression::Lambda(_) => {
-                todo!();
-            }
-
-            Expression::UnaryOperation(ref op, ref right_expr) => {
-                match op {
-                    Operator::LogicalNot => {
-                        let a_expr = AExpr::from(
-                            ctx,
-                            *right_expr.clone(),
-                            Some(ctx.bool_type_key()),
-                            false,
-                            false,
-                            false,
-                        );
-
-                        // Make sure the expression has type bool.
-                        if !ctx.must_get_type(a_expr.type_key).is_bool() {
-                            ctx.insert_err(AnalyzeError::new(
-                                ErrorKind::MismatchedTypes,
-                                format_code!(
-                                    "unary operator {} cannot be applied to value of type {}",
-                                    "!",
-                                    a_expr.display(ctx),
-                                )
-                                .as_str(),
-                                &expr,
-                            ));
-
-                            AExpr::new_zero_value(ctx, Type::new_unresolved("bool"))
-                        } else {
-                            AExpr {
-                                type_key: a_expr.type_key,
-                                kind: AExprKind::UnaryOperation(
-                                    Operator::LogicalNot,
-                                    Box::new(a_expr),
-                                ),
-                                start_pos,
-                                end_pos,
-                            }
-                        }
-                    }
-
-                    Operator::Reference => {
-                        let operand_expr =
-                            AExpr::from(ctx, *right_expr.clone(), None, false, false, false);
-                        let a_ptr_type = APointerType::new(operand_expr.type_key, false);
-                        let type_key = ctx.insert_type(AType::Pointer(a_ptr_type));
-
-                        AExpr {
-                            type_key,
-                            kind: AExprKind::UnaryOperation(
-                                Operator::Reference,
-                                Box::new(operand_expr),
-                            ),
-                            start_pos,
-                            end_pos,
-                        }
-                    }
-
-                    Operator::MutReference => {
-                        let operand_expr =
-                            AExpr::from(ctx, *right_expr.clone(), None, false, false, false);
-
-                        // Make sure we're allowed to take a `&mut` to this operand.
-                        operand_expr.check_referencable_as_mut(ctx, &expr);
-
-                        let a_ptr_type = APointerType::new(operand_expr.type_key, true);
-                        let type_key = ctx.insert_type(AType::Pointer(a_ptr_type));
-
-                        AExpr {
-                            type_key,
-                            kind: AExprKind::UnaryOperation(
-                                Operator::MutReference,
-                                Box::new(operand_expr),
-                            ),
-                            start_pos,
-                            end_pos,
-                        }
-                    }
-
-                    Operator::Defererence => {
-                        let operand_expr =
-                            AExpr::from(ctx, *right_expr.clone(), None, false, false, false);
-                        let operand_expr_type = ctx.must_get_type(operand_expr.type_key);
-
-                        // Make sure the operand expression is of a pointer type.
-                        match operand_expr_type {
-                            AType::Pointer(ptr_type) => AExpr {
-                                type_key: ptr_type.pointee_type_key,
-                                kind: AExprKind::UnaryOperation(
-                                    Operator::Defererence,
-                                    Box::new(operand_expr),
-                                ),
-                                start_pos,
-                                end_pos,
-                            },
-
-                            other => {
-                                // Don't display a redundant error if the operand expression already
-                                // failed analysis.
-                                if !other.is_unknown() {
-                                    ctx.insert_err(AnalyzeError::new(
-                                        ErrorKind::MismatchedTypes,
-                                        format_code!(
-                                            "cannot dereference value of type {}",
-                                            other.display(ctx)
-                                        )
-                                        .as_str(),
-                                        &expr,
-                                    ));
-                                }
-
-                                AExpr::new_null_ptr(ctx)
-                            }
-                        }
-                    }
-
-                    Operator::Subtract => {
-                        let operand_expr =
-                            AExpr::from(ctx, *right_expr.clone(), None, false, false, false);
-                        let operand_expr_type = ctx.must_get_type(operand_expr.type_key);
-
-                        // Make sure the operand expression is of a signed numeric type since we'll
-                        // have to flip its sign.
-                        if operand_expr_type.is_numeric() && operand_expr_type.is_signed() {
-                            AExpr {
-                                type_key: operand_expr.type_key,
-                                kind: AExprKind::UnaryOperation(
-                                    Operator::Subtract,
-                                    Box::new(operand_expr),
-                                ),
-                                start_pos,
-                                end_pos,
-                            }
-                        } else {
-                            ctx.insert_err(AnalyzeError::new(
-                                ErrorKind::MismatchedTypes,
-                                format!(
-                                    "cannot negate value of {} type {}",
-                                    match operand_expr_type.is_numeric() {
-                                        true => "unsigned",
-                                        false => "non-numeric",
-                                    },
-                                    format_code!(operand_expr_type)
-                                )
-                                .as_str(),
-                                &expr,
-                            ));
-
-                            AExpr::new_zero_value(ctx, Type::new_unresolved("<unknown>"))
-                        }
-                    }
-
-                    _ => {
-                        panic!("unexpected unary operator {}", op)
-                    }
-                }
-            }
-
-            Expression::BinaryOperation(ref left_expr, ref op, ref right_expr) => {
-                let maybe_expected_operand_tk = match maybe_expected_type_key {
-                    Some(tk) => get_expected_operand_type_key(ctx, op, tk),
-                    None => None,
-                };
-
-                let a_left = AExpr::from(
-                    ctx,
-                    *left_expr.clone(),
-                    maybe_expected_operand_tk,
-                    false,
-                    false,
-                    false,
-                );
-
-                // If there is no expected operand type, we should try to coerce the right
-                // expression to the type of the left expression.
-                let expected_tk = maybe_expected_operand_tk.unwrap_or(a_left.type_key);
-                let a_right = AExpr::from(
-                    ctx,
-                    *right_expr.clone(),
-                    Some(expected_tk),
-                    false,
-                    false,
-                    true,
-                );
-
-                // If we couldn't resolve both of the operand types, we'll skip any further
-                // type checks by returning early.
-                let left_type = ctx.must_get_type(a_left.type_key);
-                let right_type = ctx.must_get_type(a_right.type_key);
-                if left_type.is_unknown() || right_type.is_unknown() {
-                    return AExpr {
-                        kind: AExprKind::BinaryOperation(
-                            Box::new(a_left.clone()),
-                            op.clone(),
-                            Box::new(a_right),
-                        ),
-                        type_key: get_result_type(ctx, op, None),
-                        start_pos,
-                        end_pos,
-                    };
-                }
-
-                // Check that the operands are compatible with the operator and one another.
-                let (maybe_operand_type_key, errors) =
-                    match check_operand_types(ctx, &a_left, op, &a_right) {
-                        Ok(maybe_type_key) => (maybe_type_key, vec![]),
-                        Err(errs) => (None, errs),
-                    };
-
-                // Add any errors we collected to the program context. We're doing it this way
-                // instead of adding errors to the program context immediately to avoid borrowing
-                // issues.
-                for err in errors {
-                    ctx.insert_err(err);
-                }
-
-                AExpr {
-                    kind: AExprKind::BinaryOperation(
-                        Box::new(a_left.clone()),
-                        op.clone(),
-                        Box::new(a_right),
-                    ),
-                    type_key: get_result_type(ctx, op, maybe_operand_type_key),
-                    start_pos,
-                    end_pos,
-                }
-            }
-        };
+        let mut result = analyze_expr(
+            ctx,
+            expr.clone(),
+            maybe_expected_type_key,
+            allow_type,
+            start_pos,
+            end_pos,
+        );
 
         // Try to (safely) coerce the expression to the right type (this may involve template
         // rendering).
@@ -1544,6 +1028,585 @@ fn get_expected_operand_type_key(
 
         // If this happens, the something is badly broken.
         other => panic!("unexpected operator {}", other),
+    }
+}
+
+fn analyze_type_cast(
+    ctx: &mut ProgramContext,
+    expr: Expression,
+    target_type: Type,
+    start_pos: Position,
+    end_pos: Position,
+) -> AExpr {
+    let left_expr = AExpr::from(ctx, expr, None, false, false, false);
+    let target_type_key = ctx.resolve_type(&target_type);
+    let left_type = ctx.must_get_type(left_expr.type_key);
+    let a_target_type = ctx.must_get_type(target_type_key);
+
+    // Skip the check if the left expression already failed analysis.
+    if !left_type.is_unknown() && !is_valid_type_cast(left_type, a_target_type) {
+        ctx.insert_err(AnalyzeError::new(
+            ErrorKind::InvalidTypeCast,
+            format_code!(
+                "cannot cast value of type {} to type {}",
+                left_type.display(ctx),
+                a_target_type.display(ctx)
+            )
+            .as_str(),
+            &left_expr,
+        ));
+
+        AExpr::new_zero_value(ctx, target_type)
+    } else {
+        AExpr {
+            kind: AExprKind::TypeCast(Box::new(left_expr), target_type_key),
+            type_key: target_type_key,
+            start_pos,
+            end_pos,
+        }
+    }
+}
+
+fn analyze_tuple_init(
+    ctx: &mut ProgramContext,
+    tuple_init: TupleInit,
+    maybe_expected_type_key: Option<TypeKey>,
+    start_pos: Position,
+    end_pos: Position,
+) -> AExpr {
+    let maybe_expected_field_type_keys = match maybe_expected_type_key {
+        Some(tk) => {
+            if let AType::Tuple(tuple_type) = ctx.must_get_type(tk) {
+                let mut field_type_keys = Vec::with_capacity(tuple_type.fields.len());
+                for i in 0..tuple_type.fields.len() {
+                    field_type_keys.insert(i, tuple_type.get_field_type_key(i).unwrap());
+                }
+
+                Some(field_type_keys)
+            } else {
+                None
+            }
+        }
+        None => None,
+    };
+
+    let a_init = ATupleInit::from(ctx, &tuple_init, maybe_expected_field_type_keys);
+    let type_key = a_init.type_key;
+    AExpr {
+        kind: AExprKind::TupleInit(a_init),
+        type_key,
+        start_pos,
+        end_pos,
+    }
+}
+
+fn analyze_array_init(
+    ctx: &mut ProgramContext,
+    array_init: ArrayInit,
+    maybe_expected_type_key: Option<TypeKey>,
+    start_pos: Position,
+    end_pos: Position,
+) -> AExpr {
+    let maybe_element_type_key = match maybe_expected_type_key {
+        Some(tk) => {
+            if let AType::Array(array_type) = ctx.must_get_type(tk) {
+                array_type.maybe_element_type_key
+            } else {
+                None
+            }
+        }
+        None => None,
+    };
+
+    let a_init = AArrayInit::from(ctx, &array_init, maybe_element_type_key);
+    let type_key = a_init.type_key;
+    AExpr {
+        kind: AExprKind::ArrayInit(a_init),
+        type_key,
+        start_pos,
+        end_pos,
+    }
+}
+
+fn analyze_fn_call(
+    ctx: &mut ProgramContext,
+    fn_call: FuncCall,
+    start_pos: Position,
+    end_pos: Position,
+) -> AExpr {
+    let a_call = AFnCall::from(ctx, &fn_call);
+    match a_call.maybe_ret_type_key.clone() {
+        Some(type_key) => AExpr {
+            kind: AExprKind::FunctionCall(Box::new(a_call)),
+            type_key,
+            start_pos,
+            end_pos,
+        },
+
+        _ => {
+            // The function does not have a return value. Record the error and return some
+            // zero-value instead.
+            ctx.insert_err(AnalyzeError::new(
+                ErrorKind::ExpectedReturnValue,
+                format_code!(
+                    "{} has no return value, but is called in an expression",
+                    a_call.display(ctx),
+                )
+                .as_str(),
+                &fn_call,
+            ));
+
+            AExpr::new_zero_value(ctx, Type::Unresolved(UnresolvedType::unresolved_none()))
+        }
+    }
+}
+
+fn analyze_anon_fn(
+    ctx: &mut ProgramContext,
+    anon_fn: Function,
+    start_pos: Position,
+    end_pos: Position,
+) -> AExpr {
+    // Give the anonymous function a unique name based on the order in which it appears
+    // inside the current scope.
+    let mut sig = anon_fn.signature.clone();
+    sig.name = ctx.new_anon_fn_name();
+
+    let a_closure = AClosure::from(
+        ctx,
+        &anon_fn.body,
+        ScopeKind::FnBody(sig.name.clone()),
+        sig.args.clone(),
+        sig.maybe_ret_type.clone(),
+    );
+
+    // Make sure the function return conditions are satisfied by the closure.
+    if let Some(ret_type) = &sig.maybe_ret_type {
+        let a_ret_type = ctx.resolve_type(&ret_type);
+        check_closure_returns(
+            ctx,
+            &a_closure,
+            a_ret_type,
+            &ScopeKind::FnBody(sig.name.clone()),
+        );
+    }
+
+    let a_fn = AFn {
+        signature: AFnSig::from(ctx, &sig),
+        body: a_closure,
+    };
+    let type_key = a_fn.signature.type_key;
+
+    AExpr {
+        start_pos,
+        end_pos,
+        kind: AExprKind::AnonFunction(Box::new(a_fn)),
+        type_key,
+    }
+}
+
+fn analyze_unary_op(
+    ctx: &mut ProgramContext,
+    op: &Operator,
+    expr: &Expression,
+    right_expr: &Expression,
+    start_pos: Position,
+    end_pos: Position,
+) -> AExpr {
+    match op {
+        Operator::LogicalNot => {
+            let a_expr = AExpr::from(
+                ctx,
+                right_expr.clone(),
+                Some(ctx.bool_type_key()),
+                false,
+                false,
+                false,
+            );
+
+            // Make sure the expression has type bool.
+            if !ctx.must_get_type(a_expr.type_key).is_bool() {
+                ctx.insert_err(AnalyzeError::new(
+                    ErrorKind::MismatchedTypes,
+                    format_code!(
+                        "unary operator {} cannot be applied to value of type {}",
+                        "!",
+                        a_expr.display(ctx),
+                    )
+                    .as_str(),
+                    expr,
+                ));
+
+                AExpr::new_zero_value(ctx, Type::new_unresolved("bool"))
+            } else {
+                AExpr {
+                    type_key: a_expr.type_key,
+                    kind: AExprKind::UnaryOperation(Operator::LogicalNot, Box::new(a_expr)),
+                    start_pos,
+                    end_pos,
+                }
+            }
+        }
+
+        Operator::Reference => {
+            let operand_expr = AExpr::from(ctx, right_expr.clone(), None, false, false, false);
+            let a_ptr_type = APointerType::new(operand_expr.type_key, false);
+            let type_key = ctx.insert_type(AType::Pointer(a_ptr_type));
+
+            AExpr {
+                type_key,
+                kind: AExprKind::UnaryOperation(Operator::Reference, Box::new(operand_expr)),
+                start_pos,
+                end_pos,
+            }
+        }
+
+        Operator::MutReference => {
+            let operand_expr = AExpr::from(ctx, right_expr.clone(), None, false, false, false);
+
+            // Make sure we're allowed to take a `&mut` to this operand.
+            operand_expr.check_referencable_as_mut(ctx, expr);
+
+            let a_ptr_type = APointerType::new(operand_expr.type_key, true);
+            let type_key = ctx.insert_type(AType::Pointer(a_ptr_type));
+
+            AExpr {
+                type_key,
+                kind: AExprKind::UnaryOperation(Operator::MutReference, Box::new(operand_expr)),
+                start_pos,
+                end_pos,
+            }
+        }
+
+        Operator::Defererence => {
+            let operand_expr = AExpr::from(ctx, right_expr.clone(), None, false, false, false);
+            let operand_expr_type = ctx.must_get_type(operand_expr.type_key);
+
+            // Make sure the operand expression is of a pointer type.
+            match operand_expr_type {
+                AType::Pointer(ptr_type) => AExpr {
+                    type_key: ptr_type.pointee_type_key,
+                    kind: AExprKind::UnaryOperation(Operator::Defererence, Box::new(operand_expr)),
+                    start_pos,
+                    end_pos,
+                },
+
+                other => {
+                    // Don't display a redundant error if the operand expression already
+                    // failed analysis.
+                    if !other.is_unknown() {
+                        ctx.insert_err(AnalyzeError::new(
+                            ErrorKind::MismatchedTypes,
+                            format_code!("cannot dereference value of type {}", other.display(ctx))
+                                .as_str(),
+                            expr,
+                        ));
+                    }
+
+                    AExpr::new_null_ptr(ctx)
+                }
+            }
+        }
+
+        Operator::Subtract => {
+            let operand_expr = AExpr::from(ctx, right_expr.clone(), None, false, false, false);
+            let operand_expr_type = ctx.must_get_type(operand_expr.type_key);
+
+            // Make sure the operand expression is of a signed numeric type since we'll
+            // have to flip its sign.
+            if operand_expr_type.is_numeric() && operand_expr_type.is_signed() {
+                AExpr {
+                    type_key: operand_expr.type_key,
+                    kind: AExprKind::UnaryOperation(Operator::Subtract, Box::new(operand_expr)),
+                    start_pos,
+                    end_pos,
+                }
+            } else {
+                ctx.insert_err(AnalyzeError::new(
+                    ErrorKind::MismatchedTypes,
+                    format!(
+                        "cannot negate value of {} type {}",
+                        match operand_expr_type.is_numeric() {
+                            true => "unsigned",
+                            false => "non-numeric",
+                        },
+                        format_code!(operand_expr_type)
+                    )
+                    .as_str(),
+                    expr,
+                ));
+
+                AExpr::new_zero_value(ctx, Type::new_unresolved("<unknown>"))
+            }
+        }
+
+        _ => {
+            panic!("unexpected unary operator {}", op)
+        }
+    }
+}
+
+fn analyze_binary_op(
+    ctx: &mut ProgramContext,
+    op: Operator,
+    left_expr: Expression,
+    right_expr: Expression,
+    maybe_expected_type_key: Option<TypeKey>,
+    start_pos: Position,
+    end_pos: Position,
+) -> AExpr {
+    let maybe_expected_operand_tk = match maybe_expected_type_key {
+        Some(tk) => get_expected_operand_type_key(ctx, &op, tk),
+        None => None,
+    };
+
+    let a_left = AExpr::from(
+        ctx,
+        left_expr,
+        maybe_expected_operand_tk,
+        false,
+        false,
+        false,
+    );
+
+    // If there is no expected operand type, we should try to coerce the right
+    // expression to the type of the left expression.
+    let expected_tk = maybe_expected_operand_tk.unwrap_or(a_left.type_key);
+    let a_right = AExpr::from(ctx, right_expr, Some(expected_tk), false, false, true);
+
+    // If we couldn't resolve both of the operand types, we'll skip any further
+    // type checks by returning early.
+    let left_type = ctx.must_get_type(a_left.type_key);
+    let right_type = ctx.must_get_type(a_right.type_key);
+    if left_type.is_unknown() || right_type.is_unknown() {
+        return AExpr {
+            kind: AExprKind::BinaryOperation(
+                Box::new(a_left.clone()),
+                op.clone(),
+                Box::new(a_right),
+            ),
+            type_key: get_result_type(ctx, &op, None),
+            start_pos,
+            end_pos,
+        };
+    }
+
+    // Check that the operands are compatible with the operator and one another.
+    let (maybe_operand_type_key, errors) = match check_operand_types(ctx, &a_left, &op, &a_right) {
+        Ok(maybe_type_key) => (maybe_type_key, vec![]),
+        Err(errs) => (None, errs),
+    };
+
+    // Add any errors we collected to the program context. We're doing it this way
+    // instead of adding errors to the program context immediately to avoid borrowing
+    // issues.
+    for err in errors {
+        ctx.insert_err(err);
+    }
+
+    AExpr {
+        kind: AExprKind::BinaryOperation(Box::new(a_left.clone()), op.clone(), Box::new(a_right)),
+        type_key: get_result_type(ctx, &op, maybe_operand_type_key),
+        start_pos,
+        end_pos,
+    }
+}
+
+fn analyze_expr(
+    ctx: &mut ProgramContext,
+    expr: Expression,
+    maybe_expected_type_key: Option<TypeKey>,
+    allow_type: bool,
+    start_pos: Position,
+    end_pos: Position,
+) -> AExpr {
+    match expr {
+        Expression::TypeCast(expr, target_type) => {
+            analyze_type_cast(ctx, *expr, target_type, start_pos, end_pos)
+        }
+
+        Expression::Symbol(symbol) => {
+            let a_symbol = ASymbol::from(ctx, &symbol, true, allow_type, None);
+            AExpr {
+                type_key: a_symbol.type_key,
+                kind: AExprKind::Symbol(a_symbol),
+                start_pos,
+                end_pos,
+            }
+        }
+
+        Expression::BoolLiteral(b) => AExpr {
+            kind: AExprKind::BoolLiteral(b.value),
+            type_key: ctx.bool_type_key(),
+            start_pos,
+            end_pos,
+        },
+
+        Expression::I8Literal(i) => AExpr {
+            kind: AExprKind::I8Literal(i.value),
+            type_key: ctx.i8_type_key(),
+            start_pos,
+            end_pos,
+        },
+
+        Expression::U8Literal(i) => AExpr {
+            kind: AExprKind::U8Literal(i.value),
+            type_key: ctx.u8_type_key(),
+            start_pos,
+            end_pos,
+        },
+
+        Expression::I32Literal(i) => AExpr {
+            kind: AExprKind::I32Literal(i.value),
+            type_key: ctx.i32_type_key(),
+            start_pos,
+            end_pos,
+        },
+
+        Expression::U32Literal(i) => AExpr {
+            kind: AExprKind::U32Literal(i.value),
+            type_key: ctx.u32_type_key(),
+            start_pos,
+            end_pos,
+        },
+
+        Expression::F32Literal(i) => AExpr {
+            kind: AExprKind::F32Literal(i.value),
+            type_key: ctx.f32_type_key(),
+            start_pos,
+            end_pos,
+        },
+
+        Expression::I64Literal(i) => AExpr {
+            kind: AExprKind::I64Literal(i.value),
+            type_key: ctx.i64_type_key(),
+            start_pos,
+            end_pos,
+        },
+
+        Expression::U64Literal(i) => AExpr {
+            kind: AExprKind::U64Literal(i.value),
+            type_key: ctx.u64_type_key(),
+            start_pos,
+            end_pos,
+        },
+
+        Expression::F64Literal(i) => AExpr {
+            kind: AExprKind::F64Literal(i.value, i.has_suffix),
+            type_key: ctx.f64_type_key(),
+            start_pos,
+            end_pos,
+        },
+
+        Expression::IntLiteral(i) => AExpr {
+            kind: AExprKind::IntLiteral(i.value, i.has_suffix),
+            type_key: ctx.int_type_key(),
+            start_pos,
+            end_pos,
+        },
+
+        Expression::UintLiteral(i) => AExpr {
+            kind: AExprKind::UintLiteral(i.value),
+            type_key: ctx.uint_type_key(),
+            start_pos,
+            end_pos,
+        },
+
+        Expression::StrLiteral(s) => AExpr {
+            kind: AExprKind::StrLiteral(s.value.clone()),
+            type_key: ctx.str_type_key(),
+            start_pos,
+            end_pos,
+        },
+
+        Expression::StructInit(struct_init) => {
+            let a_init = AStructInit::from(ctx, &struct_init);
+            let type_key = a_init.type_key;
+            AExpr {
+                kind: AExprKind::StructInit(a_init),
+                type_key,
+                start_pos,
+                end_pos,
+            }
+        }
+
+        Expression::EnumInit(enum_init) => {
+            let a_init = AEnumVariantInit::from(ctx, &enum_init);
+            let type_key = a_init.type_key;
+            AExpr {
+                kind: AExprKind::EnumInit(a_init),
+                type_key,
+                start_pos,
+                end_pos,
+            }
+        }
+
+        Expression::TupleInit(tuple_init) => {
+            analyze_tuple_init(ctx, tuple_init, maybe_expected_type_key, start_pos, end_pos)
+        }
+
+        Expression::ArrayInit(array_init) => analyze_array_init(
+            ctx,
+            *array_init,
+            maybe_expected_type_key,
+            start_pos,
+            end_pos,
+        ),
+
+        Expression::SizeOf(sizeof) => {
+            let type_key = ctx.resolve_type(&sizeof.typ);
+            AExpr {
+                kind: AExprKind::Sizeof(type_key),
+                type_key: ctx.uint_type_key(),
+                start_pos,
+                end_pos,
+            }
+        }
+
+        Expression::FunctionCall(fn_call) => {
+            // Analyze the function call and ensure it has a return type.
+            analyze_fn_call(ctx, *fn_call, start_pos, end_pos)
+        }
+
+        Expression::Index(index) => {
+            let a_index = AIndex::from(ctx, &index);
+            AExpr {
+                type_key: a_index.result_type_key,
+                kind: AExprKind::Index(Box::new(a_index)),
+                start_pos,
+                end_pos,
+            }
+        }
+
+        Expression::MemberAccess(member_access) => {
+            let access = AMemberAccess::from(ctx, &member_access);
+            AExpr {
+                type_key: access.member_type_key,
+                kind: AExprKind::MemberAccess(Box::new(access)),
+                start_pos,
+                end_pos,
+            }
+        }
+
+        Expression::AnonFunction(anon_fn) => analyze_anon_fn(ctx, *anon_fn, start_pos, end_pos),
+
+        Expression::Lambda(_) => {
+            todo!();
+        }
+
+        Expression::UnaryOperation(ref op, ref right_expr) => {
+            analyze_unary_op(ctx, op, &expr, right_expr, start_pos, end_pos)
+        }
+
+        Expression::BinaryOperation(left_expr, op, right_expr) => analyze_binary_op(
+            ctx,
+            op,
+            *left_expr,
+            *right_expr,
+            maybe_expected_type_key,
+            start_pos,
+            end_pos,
+        ),
     }
 }
 
