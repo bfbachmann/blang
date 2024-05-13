@@ -23,7 +23,9 @@ use crate::parser::ast::expr::Expression;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::func_call::FuncCall;
 use crate::parser::ast::op::Operator;
+use crate::parser::ast::pointer::PointerType;
 use crate::parser::ast::r#type::Type;
+use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::tuple::TupleInit;
 use crate::parser::ast::unresolved::UnresolvedType;
 use crate::{format_code, locatable_impl};
@@ -643,18 +645,20 @@ impl AExpr {
         }
     }
 
-    /// Returns a new expression with value null. The null value for the rawptr type is just 0u64
-    /// type cast to a rawptr.
-    pub fn new_null_ptr(ctx: &ProgramContext) -> AExpr {
+    /// Returns a new expression with value null. The null value for pointer types is just 0u64
+    /// type cast to that type.
+    pub fn new_null_ptr(ctx: &ProgramContext, maybe_type_key: Option<TypeKey>) -> AExpr {
+        let type_key = maybe_type_key.unwrap_or(ctx.unknown_type_key());
+
         AExpr {
             kind: AExprKind::TypeCast(
                 Box::new(AExpr::new_with_default_pos(
                     AExprKind::UintLiteral(0),
                     ctx.uint_type_key(),
                 )),
-                ctx.unknown_type_key(),
+                type_key,
             ),
-            type_key: ctx.unknown_type_key(),
+            type_key,
             start_pos: Position::default(),
             end_pos: Position::default(),
         }
@@ -736,7 +740,7 @@ impl AExpr {
                     "int" => AExprKind::IntLiteral(0, false),
                     "uint" => AExprKind::UintLiteral(0),
                     "str" => AExprKind::StrLiteral("".to_string()),
-                    "rawptr" => AExpr::new_null_ptr(ctx).kind,
+                    "rawptr" => AExpr::new_null_ptr(ctx, None).kind,
                     _ => AExprKind::Unknown,
                 };
 
@@ -748,7 +752,7 @@ impl AExpr {
                 }
             }
 
-            Type::Pointer(_) => AExpr::new_null_ptr(ctx),
+            Type::Pointer(_) => AExpr::new_null_ptr(ctx, None),
         }
     }
 
@@ -1303,7 +1307,7 @@ fn analyze_unary_op(
                         ));
                     }
 
-                    AExpr::new_null_ptr(ctx)
+                    AExpr::new_null_ptr(ctx, None)
                 }
             }
         }
@@ -1412,6 +1416,33 @@ fn analyze_binary_op(
     }
 }
 
+fn analyze_symbol(
+    ctx: &mut ProgramContext,
+    symbol: Symbol,
+    allow_type: bool,
+    maybe_expected_type_key: Option<TypeKey>,
+    start_pos: Position,
+    end_pos: Position,
+) -> AExpr {
+    // Check for the `null` intrinsic.
+    if symbol.name == "null" && symbol.maybe_mod_name.is_none() {
+        // If it's not clear what pointer type we need, default to `*u8`.
+        let u8_ptr_type_key = ctx.resolve_type(&Type::Pointer(Box::new(
+            PointerType::new_with_default_pos(Type::new_unresolved("u8"), false),
+        )));
+        let type_key = maybe_expected_type_key.unwrap_or(u8_ptr_type_key);
+        return AExpr::new_null_ptr(ctx, Some(type_key));
+    }
+
+    let a_symbol = ASymbol::from(ctx, &symbol, true, allow_type, None);
+    AExpr {
+        type_key: a_symbol.type_key,
+        kind: AExprKind::Symbol(a_symbol),
+        start_pos,
+        end_pos,
+    }
+}
+
 fn analyze_expr(
     ctx: &mut ProgramContext,
     expr: Expression,
@@ -1425,15 +1456,14 @@ fn analyze_expr(
             analyze_type_cast(ctx, *expr, target_type, start_pos, end_pos)
         }
 
-        Expression::Symbol(symbol) => {
-            let a_symbol = ASymbol::from(ctx, &symbol, true, allow_type, None);
-            AExpr {
-                type_key: a_symbol.type_key,
-                kind: AExprKind::Symbol(a_symbol),
-                start_pos,
-                end_pos,
-            }
-        }
+        Expression::Symbol(symbol) => analyze_symbol(
+            ctx,
+            symbol,
+            allow_type,
+            maybe_expected_type_key,
+            start_pos,
+            end_pos,
+        ),
 
         Expression::BoolLiteral(b) => AExpr {
             kind: AExprKind::BoolLiteral(b.value),

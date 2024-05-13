@@ -9,7 +9,7 @@ pub fn panic(msg: str) {
     write(stderr, "\n" as *u8, 1)
 
     const max_frames: uint = 512
-    let frame_buf = &mut [0 as *u8; max_frames] as *mut *u8
+    let frame_buf = &mut [null; max_frames] as *mut *u8
     let num_frames = backtrace(frame_buf, max_frames)
     backtrace_symbols_fd(frame_buf, num_frames, stderr)
     exit(1)

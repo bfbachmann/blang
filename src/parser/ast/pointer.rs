@@ -44,6 +44,16 @@ impl PointerType {
         }
     }
 
+    /// Creates a new pointer type with default start and end positions.
+    pub fn new_with_default_pos(pointee_type: Type, is_mut: bool) -> PointerType {
+        PointerType {
+            pointee_type,
+            is_mut,
+            start_pos: Position::default(),
+            end_pos: Position::default(),
+        }
+    }
+
     /// Parses a pointer type from the token stream. Expects token sequences of the form
     ///
     ///     &type>
