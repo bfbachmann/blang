@@ -272,12 +272,12 @@ impl User {
         return User.new(new_username, self .age)
     }
 
-    fn is_senior(self): bool {
-        return self.age
+    fn is_senior(*self): bool {
+        return self^.age
     }
 }
 
-fn apply_discounts(user: User) {
+fn apply_discounts(user: *User) {
     // This is what a method call looks like.
     if user.is_senior() {
         // ...
