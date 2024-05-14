@@ -1,0 +1,155 @@
+use {exit}: "std/libc/proc.bl"
+use {malloc, free}: "std/libc/mem.bl"
+use {panic}: "std/backtrace/panic.bl"
+
+/// A node in a linked list.
+struct Node {
+    value: int
+    next: *mut Node
+}
+
+impl Node {
+    /// Heap-allocates a new node and returns the pointer.
+    fn new(value: int, next: *mut Node): *mut Node {
+        let ptr = malloc(sizeof Node) as *mut Node
+        ptr^.value = value
+        ptr^.next = next
+        return ptr
+    }
+
+    /// Returns true if this node has a next node.
+    fn has_next(*self): bool {
+        return self^.next != null
+    }
+
+    /// Returns the last node in this list.
+    fn tail(*mut self): *mut Node {
+        for
+            let mut head = self,
+            head.has_next(),
+            head = head^.next
+        {}
+        return head
+    }
+
+    /// Splices the linked list starting at `node` into the location at `index` in this list.
+    /// Returns true if and only if the index was in-bounds.
+    fn insert(*mut self, node: *mut Node, index: uint): bool {
+        let mut target = self
+        if index > 0 {
+            target = self.node_at(index - 1)
+        }
+        if target == null {
+            return false
+        }
+
+        // Append our tail to the new node's tail.
+        node.tail()^.next = target^.next
+
+        // Make our tail the new node.
+        target^.next = node
+
+        return true
+    }
+
+    /// Removes the node from the list at the given index and returns it. Returns null
+    /// if the index is out of bounds.
+    fn remove(*mut self, index: uint): *mut Node {
+        let mut target = self
+        if index > 0 {
+            target = self.node_at(index - 1)
+        }
+        if target == null or !target.has_next() {
+            return null
+        }
+
+        let to_remove = target^.next
+        target^.next = to_remove^.next
+        return to_remove
+    }
+
+    /// Returns the node at `index` if it is in-bounds. Otherwise,
+    /// returns null.
+    fn node_at(*mut self, mut index: uint): *mut Node {
+        for let mut head = self, index > 0, index -= 1 {
+            if head == null {
+                return null
+            }
+
+            head = head^.next
+        }
+
+        return head
+    }
+
+    /// Return true and the index of the first node containing the
+    /// target value, or false and zero if no such value exists in
+    /// the list.
+    fn index_of(*self, target: int): {bool, uint} {
+        let mut i: uint = 0
+        for
+            let mut head = self,
+            head != null,
+            head = head^.next
+        {
+            if head^.value == target {
+                return {true, i}
+            }
+
+            i += 1
+        }
+
+        return {false, 0}
+    }
+
+    /// Frees the heap memory associated with this node and all its children.
+    fn free(*mut self) {
+        let mut head = self
+
+        loop {
+            if head == null {
+                return
+            }
+
+            let next = head^.next
+            free(head as *u8)
+            head = next
+        }
+    }
+}
+
+fn main() {
+    // Create a linked list containing values 9 down to 0.
+    let mut head: *mut Node = null
+    for let mut i = 0, i < 10, i += 1 {
+        head = Node.new(i, head)
+    }
+
+    // Insert [20, -48] into index 4 of the list.
+    head.insert(Node.new(20, Node.new(-48, null)), 4)
+
+    // Make sure values were inserted correctly.
+    assert(head.node_at(4)^.value == 20, "node 4 is wrong\0")
+    assert(head.node_at(5)^.value == -48, "node 5 is wrong\0")
+
+    // Remove the inserted values.
+    assert(head.remove(5)^.value == -48, "removed node 5 is wrong\0")
+    assert(head.remove(4)^.value == 20, "removed node 4 is wrong\0")
+
+    // Make sure all values are in the right place.
+    for let mut i = 0, i < 10, i += 1 {
+        assert(head.node_at(i as uint)^.value == 9 - i, "wrong value left in list\0")
+    }
+
+    // Free the list.
+    head.free()
+
+    exit(0)
+}
+
+/// Panics with the given message if `cond` is false.
+fn assert(cond: bool, msg: str) {
+    if !cond {
+        panic(msg)
+    }
+}
