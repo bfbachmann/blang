@@ -132,6 +132,14 @@ fn main() {
     assert(head.node_at(4)^.value == 20, "node 4 is wrong\0")
     assert(head.node_at(5)^.value == -48, "node 5 is wrong\0")
 
+    // Check that we can determine the index of the inserted values.
+    let result_20 = head.index_of(20)
+    assert(result_20.(0), "index of value 20 not found\0")
+    assert(result_20.(1) == 4, "index of value 20 is wrong\0")
+    let result_48 = head.index_of(-48)
+    assert(result_48.(0), "index of value -48 not found\0")
+    assert(result_48.(1) == 5, "index of value -48 is wrong\0")
+
     // Remove the inserted values.
     assert(head.remove(5)^.value == -48, "removed node 5 is wrong\0")
     assert(head.remove(4)^.value == 20, "removed node 4 is wrong\0")
