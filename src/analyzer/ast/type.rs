@@ -143,7 +143,12 @@ impl AType {
             }
 
             Type::Pointer(ptr_type) => {
-                return AType::Pointer(APointerType::from(ctx, ptr_type));
+                let a_ptr_type = APointerType::from(ctx, ptr_type);
+                if a_ptr_type.pointee_type_key == ctx.unknown_type_key() {
+                    return AType::Unknown("<unknown>".to_string());
+                }
+
+                return AType::Pointer(a_ptr_type);
             }
         }
     }

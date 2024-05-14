@@ -501,6 +501,10 @@ impl ProgramContext {
         }
 
         let a_type = AType::from(self, &typ);
+        if a_type.is_unknown() {
+            return self.unknown_type_key();
+        }
+
         let key = self.insert_type(a_type);
         self.insert_type_key(typ.clone(), key);
 
