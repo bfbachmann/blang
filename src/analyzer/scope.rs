@@ -11,18 +11,16 @@ pub struct ScopedSymbol {
     pub name: String,
     pub type_key: TypeKey,
     pub is_mut: bool,
-    pub is_arg: bool,
     pub is_const: bool,
 }
 
 impl ScopedSymbol {
     /// Creates a new symbol with the given type key.
-    pub fn new(name: &str, type_key: TypeKey, is_mut: bool, is_arg: bool) -> Self {
+    pub fn new(name: &str, type_key: TypeKey, is_mut: bool) -> Self {
         ScopedSymbol {
             name: name.to_string(),
             type_key,
             is_mut,
-            is_arg,
             is_const: false,
         }
     }
@@ -33,7 +31,6 @@ impl ScopedSymbol {
             name: name.to_string(),
             type_key,
             is_mut: false,
-            is_arg: false,
             is_const: true,
         }
     }
@@ -82,12 +79,11 @@ impl Scope {
     /// Creates a new scope with `args` defined as symbols in the scope and return type set to
     /// `maybe_ret_type_key`.
     pub fn new(kind: ScopeKind, args: Vec<AArg>, maybe_ret_type_key: Option<TypeKey>) -> Scope {
-        let mut symbols = HashMap::new();
-        symbols.reserve(args.len());
+        let mut symbols = HashMap::with_capacity(args.len());
         for arg in args {
             symbols.insert(
                 arg.name.clone(),
-                ScopedSymbol::new(arg.name.as_str(), arg.type_key, arg.is_mut, true),
+                ScopedSymbol::new(arg.name.as_str(), arg.type_key, arg.is_mut),
             );
         }
 

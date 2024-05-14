@@ -1729,6 +1729,18 @@ mod tests {
     }
 
     #[test]
+    fn illegal_assign_to_intrinsic() {
+        let result = analyze(
+            r#"
+            fn main() {
+                null = 2
+            }
+        "#,
+        );
+        check_result(result, Some(ErrorKind::InvalidAssignmentTarget));
+    }
+
+    #[test]
     fn private_member_access() {
         let mods = HashMap::from([
             (

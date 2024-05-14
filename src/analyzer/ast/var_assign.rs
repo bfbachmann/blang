@@ -32,16 +32,21 @@ impl AVarAssign {
 
         // Check that we can actually assign to the target (it must be a mutable variable, or
         // it must be writing to memory via a `*mut _`). We skip this check if the target
-        // expression already failed analysis.
-        if !ctx.must_get_type(target.type_key).is_unknown() {
-            check_mutable(ctx, assign, &target);
-        }
+        // expression already failed analysis. If the target turns out not to be
+        // assignable, we'll skip type checks for the assigned expression to avoid
+        // redundant errors.
+        let maybe_expected_right_type_key = match !ctx.must_get_type(target.type_key).is_unknown()
+            && check_assignable(ctx, assign, &target)
+        {
+            true => Some(target.type_key),
+            false => None,
+        };
 
         // Analyze the expression representing the value assigned to the variable.
         let a_expr = AExpr::from(
             ctx,
             assign.value.clone(),
-            Some(target.type_key),
+            maybe_expected_right_type_key,
             false,
             false,
             false,
@@ -56,11 +61,21 @@ impl AVarAssign {
 
 /// Checks if the given `target_expr` can be assigned to and inserts an error into the program context
 /// if not. Only mutable variables (and their members/elements) and dereferenced `*mut _` pointers can be
-/// assigned to.
-fn check_mutable<T: Locatable>(ctx: &mut ProgramContext, loc: &T, target_expr: &AExpr) {
+/// assigned to. Returns true if the target is assignable and false otherwise.
+fn check_assignable<T: Locatable>(ctx: &mut ProgramContext, loc: &T, target_expr: &AExpr) -> bool {
     match &target_expr.kind {
         // We're just assigning to a variable. Make sure it's mutable.
         AExprKind::Symbol(symbol) => {
+            if symbol.is_null_intrinsic() {
+                ctx.insert_err(AnalyzeError::new(
+                    ErrorKind::InvalidAssignmentTarget,
+                    format_code!("cannot assign to intrinsic {}", &symbol.name).as_str(),
+                    loc,
+                ));
+
+                return false;
+            }
+
             let var = match ctx.get_scoped_symbol(None, symbol.name.as_str()) {
                 Some(v) => v,
                 None => {
@@ -72,7 +87,7 @@ fn check_mutable<T: Locatable>(ctx: &mut ProgramContext, loc: &T, target_expr: &
                         loc,
                     ));
 
-                    return;
+                    return false;
                 }
             };
 
@@ -92,6 +107,8 @@ fn check_mutable<T: Locatable>(ctx: &mut ProgramContext, loc: &T, target_expr: &
                         .as_str(),
                     ),
                 );
+
+                return false;
             } else if !var.is_mut {
                 ctx.insert_err(
                     AnalyzeError::new(
@@ -107,7 +124,11 @@ fn check_mutable<T: Locatable>(ctx: &mut ProgramContext, loc: &T, target_expr: &
                         format_code!("Consider declaring {} as mutable.", &symbol.name).as_str(),
                     ),
                 );
+
+                return false;
             }
+
+            true
         }
 
         // We're assigning to a value via a pointer. Make sure the pointer is `*mut`.
@@ -131,15 +152,19 @@ fn check_mutable<T: Locatable>(ctx: &mut ProgramContext, loc: &T, target_expr: &
                             format!("*mut {}", pointee_type.display(ctx)),
                         ).as_str()
                     ));
+
+                    return false;
                 }
             }
+
+            true
         }
 
         // We're assigning to a field on a struct or tuple. Make sure the base variable is mutable.
-        AExprKind::MemberAccess(access) => check_mutable(ctx, loc, &access.base_expr),
+        AExprKind::MemberAccess(access) => check_assignable(ctx, loc, &access.base_expr),
 
         // We're assigning to a slot in an array. Make sure the array is mutable.
-        AExprKind::Index(index) => check_mutable(ctx, loc, &index.collection_expr),
+        AExprKind::Index(index) => check_assignable(ctx, loc, &index.collection_expr),
 
         // Cannot assign to other types of expressions because they're not variables.
         other => {
@@ -148,6 +173,8 @@ fn check_mutable<T: Locatable>(ctx: &mut ProgramContext, loc: &T, target_expr: &
                 format_code!("cannot assign to non-variable {}", other.display(ctx)).as_str(),
                 loc,
             ));
+
+            false
         }
     }
 }

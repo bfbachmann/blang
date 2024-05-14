@@ -289,6 +289,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Extracts the value of the given symbol that must represent a constant or the accesses of
     /// some field or subfield on a constant.
     fn const_extract_value(&mut self, symbol: &ASymbol) -> BasicValueEnum<'ctx> {
+        // Check if this constant represents an intrinsic value.
+        if let Some(ll_intrinsic) = self.maybe_get_intrinsic(symbol) {
+            return ll_intrinsic;
+        }
+
         let const_value = &self.must_get_const(symbol.name.as_str()).value.clone();
         self.gen_const_expr(const_value)
     }

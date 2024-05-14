@@ -23,7 +23,6 @@ use crate::parser::ast::expr::Expression;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::func_call::FuncCall;
 use crate::parser::ast::op::Operator;
-use crate::parser::ast::pointer::PointerType;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::tuple::TupleInit;
@@ -620,13 +619,24 @@ impl AExpr {
             }
 
             AExprKind::Symbol(symbol) => {
+                // Always coerce `null` to any pointer type.
+                if symbol.is_null_intrinsic() && target_type.is_pointer() {
+                    self.type_key = target_type_key;
+                    self.kind = AExprKind::Symbol(ASymbol::new_null(
+                        ctx,
+                        Some(target_type_key),
+                        symbol.start_pos().clone(),
+                        symbol.end_pos().clone(),
+                    ));
+                    return self;
+                }
+
                 match ctx.must_get_type(symbol.type_key) {
-                    // Only continue if the symbol refers to a templated function.
-                    AType::Function(sig) if sig.is_templated() => {}
+                    AType::Function(sig) if sig.is_templated() => {
+                        todo!()
+                    }
                     _ => return self,
                 };
-
-                todo!()
             }
 
             _ => {}
@@ -647,20 +657,18 @@ impl AExpr {
 
     /// Returns a new expression with value null. The null value for pointer types is just 0u64
     /// type cast to that type.
-    pub fn new_null_ptr(ctx: &ProgramContext, maybe_type_key: Option<TypeKey>) -> AExpr {
-        let type_key = maybe_type_key.unwrap_or(ctx.unknown_type_key());
-
+    pub fn new_null_ptr(ctx: &mut ProgramContext, maybe_type_key: Option<TypeKey>) -> AExpr {
+        let null_symbol = ASymbol::new_null(
+            ctx,
+            maybe_type_key,
+            Position::default(),
+            Position::default(),
+        );
         AExpr {
-            kind: AExprKind::TypeCast(
-                Box::new(AExpr::new_with_default_pos(
-                    AExprKind::UintLiteral(0),
-                    ctx.uint_type_key(),
-                )),
-                type_key,
-            ),
-            type_key,
-            start_pos: Position::default(),
-            end_pos: Position::default(),
+            type_key: null_symbol.type_key,
+            kind: AExprKind::Symbol(null_symbol),
+            start_pos: Default::default(),
+            end_pos: Default::default(),
         }
     }
 
@@ -1420,20 +1428,9 @@ fn analyze_symbol(
     ctx: &mut ProgramContext,
     symbol: Symbol,
     allow_type: bool,
-    maybe_expected_type_key: Option<TypeKey>,
     start_pos: Position,
     end_pos: Position,
 ) -> AExpr {
-    // Check for the `null` intrinsic.
-    if symbol.name == "null" && symbol.maybe_mod_name.is_none() {
-        // If it's not clear what pointer type we need, default to `*u8`.
-        let u8_ptr_type_key = ctx.resolve_type(&Type::Pointer(Box::new(
-            PointerType::new_with_default_pos(Type::new_unresolved("u8"), false),
-        )));
-        let type_key = maybe_expected_type_key.unwrap_or(u8_ptr_type_key);
-        return AExpr::new_null_ptr(ctx, Some(type_key));
-    }
-
     let a_symbol = ASymbol::from(ctx, &symbol, true, allow_type, None);
     AExpr {
         type_key: a_symbol.type_key,
@@ -1456,14 +1453,7 @@ fn analyze_expr(
             analyze_type_cast(ctx, *expr, target_type, start_pos, end_pos)
         }
 
-        Expression::Symbol(symbol) => analyze_symbol(
-            ctx,
-            symbol,
-            allow_type,
-            maybe_expected_type_key,
-            start_pos,
-            end_pos,
-        ),
+        Expression::Symbol(symbol) => analyze_symbol(ctx, symbol, allow_type, start_pos, end_pos),
 
         Expression::BoolLiteral(b) => AExpr {
             kind: AExprKind::BoolLiteral(b.value),
@@ -1718,7 +1708,7 @@ mod tests {
     #[test]
     fn analyze_var() {
         let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
-        ctx.insert_symbol(ScopedSymbol::new("myvar", ctx.str_type_key(), false, false));
+        ctx.insert_symbol(ScopedSymbol::new("myvar", ctx.str_type_key(), false));
         let result = AExpr::from(
             &mut ctx,
             Expression::Symbol(Symbol::new_with_default_pos("myvar")),

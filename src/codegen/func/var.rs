@@ -111,6 +111,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Gets a variable (or member) and returns its value.
     pub(crate) fn get_var_value(&mut self, var: &ASymbol) -> BasicValueEnum<'ctx> {
+        // Check if the symbol actually represents an intrinsic.
+        if let Some(ll_intrinsic) = self.maybe_get_intrinsic(var) {
+            return ll_intrinsic;
+        }
+
         // Get a pointer to the variable or member.
         let ll_var_ptr = self.get_var_ptr(var);
 
@@ -121,6 +126,22 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         } else {
             self.load_if_basic(ll_var_ptr, var.type_key, var.name.as_str())
         }
+    }
+
+    /// If `symbol` represents an intrinsic value, returns the corresponding LLVM
+    /// value for that intrinsic. Otherwise, returns `None`.
+    pub(crate) fn maybe_get_intrinsic(&mut self, symbol: &ASymbol) -> Option<BasicValueEnum<'ctx>> {
+        if symbol.is_null_intrinsic() {
+            let ll_type = self.type_converter.get_basic_type(symbol.type_key);
+            return Some(
+                ll_type
+                    .into_pointer_type()
+                    .const_null()
+                    .as_basic_value_enum(),
+            );
+        }
+
+        None
     }
 
     /// Gets a pointer to a variable or function given its name.

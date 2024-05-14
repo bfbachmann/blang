@@ -6,6 +6,8 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopedSymbol;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::{Locatable, Position};
+use crate::parser::ast::pointer::PointerType;
+use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Symbol;
 use crate::{format_code, locatable_impl};
 
@@ -74,6 +76,11 @@ impl ASymbol {
     ) -> Self {
         let mut var_name = symbol.name.as_str();
 
+        // Check for intrinsic symbols like `null`.
+        if let Some(intrinsic) = maybe_get_intrinsic(ctx, symbol) {
+            return intrinsic;
+        }
+
         // Return early if the mod name is invalid.
         if let Some(mod_name) = symbol.maybe_mod_name.as_ref() {
             if !ctx.check_mod_name(mod_name, symbol) {
@@ -84,8 +91,7 @@ impl ASymbol {
         // Find the type key for the symbol.
         // Return a placeholder value if we failed to resolve the symbol type key.
         // TODO: Refactor
-        let (mut maybe_type_key, maybe_symbol) =
-            ASymbol::get_type_key_for_symbol(ctx, symbol, include_fns);
+        let (mut maybe_type_key, maybe_symbol) = get_type_key_for_symbol(ctx, symbol, include_fns);
 
         let mut is_method = false;
         if maybe_type_key.is_none() && include_fns {
@@ -174,41 +180,91 @@ impl ASymbol {
         }
     }
 
-    /// Attempts to find the type key of a symbol. Additionally, if `symbol`
-    /// can be resolved to an actual variable, the variable will be returned.
-    fn get_type_key_for_symbol(
-        ctx: &mut ProgramContext,
-        symbol: &Symbol,
-        include_fns: bool,
-    ) -> (Option<TypeKey>, Option<ScopedSymbol>) {
-        let maybe_mod_name = symbol.maybe_mod_name.as_ref();
-        let name = symbol.name.as_str();
-
-        // Search for a variable with the given name. Variables take precedence over functions.
-        if let Some(scoped_symbol) = ctx.get_scoped_symbol(maybe_mod_name, name) {
-            return (Some(scoped_symbol.type_key), Some(scoped_symbol.clone()));
-        }
-
-        // Check if the symbol refers to a constant that has not yet been analyzed.
-        if let Some(const_) = ctx.get_unchecked_const(name) {
-            let a_const = AConst::from(ctx, &const_.clone());
-            let symbol = ctx.get_scoped_symbol(None, a_const.name.as_str()).unwrap();
-            return (Some(symbol.type_key), Some(symbol.clone()));
-        }
-
-        if include_fns {
-            // Search for a function with the given name. Functions take precedence over extern
-            // functions.
-            if let Some(func) = ctx.get_fn(maybe_mod_name, ctx.mangle_name(name).as_str()) {
-                return (Some(func.signature.type_key), None);
-            };
-
-            // Search for an extern function with the given name.
-            if let Some(fn_sig) = ctx.get_defined_fn_sig(maybe_mod_name, name) {
-                return (Some(fn_sig.type_key), None);
-            }
-        }
-
-        (None, None)
+    /// Returns true if this symbol represents the `null` intrinsic value.
+    pub fn is_null_intrinsic(&self) -> bool {
+        self.name == "null" && !self.is_method && self.is_const && !self.is_var
     }
+
+    /// Creates a new symbol representing the `null` intrinsic.
+    pub fn new_null(
+        ctx: &mut ProgramContext,
+        maybe_type_key: Option<TypeKey>,
+        start_pos: Position,
+        end_pos: Position,
+    ) -> ASymbol {
+        // Use type `*mut u8` for the null symbol by default. In most cases, its
+        // type will be coerced to the appropriate pointer type anyway.
+        let type_key = match maybe_type_key {
+            Some(tk) => tk,
+            None => ctx.resolve_type(&Type::Pointer(Box::new(PointerType::new_with_default_pos(
+                Type::new_unresolved("u8"),
+                true,
+            )))),
+        };
+
+        ASymbol {
+            name: "null".to_string(),
+            type_key,
+            is_type: false,
+            is_const: true,
+            is_var: false,
+            is_method: false,
+            start_pos,
+            end_pos,
+        }
+    }
+}
+
+/// Attempts to find the type key of a symbol. Additionally, if `symbol`
+/// can be resolved to an actual variable, the variable will be returned.
+fn get_type_key_for_symbol(
+    ctx: &mut ProgramContext,
+    symbol: &Symbol,
+    include_fns: bool,
+) -> (Option<TypeKey>, Option<ScopedSymbol>) {
+    let maybe_mod_name = symbol.maybe_mod_name.as_ref();
+    let name = symbol.name.as_str();
+
+    // Search for a variable with the given name. Variables take precedence over functions.
+    if let Some(scoped_symbol) = ctx.get_scoped_symbol(maybe_mod_name, name) {
+        return (Some(scoped_symbol.type_key), Some(scoped_symbol.clone()));
+    }
+
+    // Check if the symbol refers to a constant that has not yet been analyzed.
+    if let Some(const_) = ctx.get_unchecked_const(name) {
+        let a_const = AConst::from(ctx, &const_.clone());
+        let symbol = ctx.get_scoped_symbol(None, a_const.name.as_str()).unwrap();
+        return (Some(symbol.type_key), Some(symbol.clone()));
+    }
+
+    if include_fns {
+        // Search for a function with the given name. Functions take precedence over extern
+        // functions.
+        if let Some(func) = ctx.get_fn(maybe_mod_name, ctx.mangle_name(name).as_str()) {
+            return (Some(func.signature.type_key), None);
+        };
+
+        // Search for an extern function with the given name.
+        if let Some(fn_sig) = ctx.get_defined_fn_sig(maybe_mod_name, name) {
+            return (Some(fn_sig.type_key), None);
+        }
+    }
+
+    (None, None)
+}
+
+/// Tries to locate an intrinsic that matches the given symbol and returns it
+/// if one exists.
+fn maybe_get_intrinsic(ctx: &mut ProgramContext, symbol: &Symbol) -> Option<ASymbol> {
+    // Check for the `null` intrinsic.
+    if symbol.maybe_mod_name.is_none() && symbol.name == "null" {
+        return Some(ASymbol::new_null(
+            ctx,
+            None,
+            symbol.start_pos().clone(),
+            symbol.end_pos().clone(),
+        ));
+    }
+
+    None
 }

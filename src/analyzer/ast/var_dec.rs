@@ -55,7 +55,6 @@ impl AVarDecl {
             var_decl.name.as_str(),
             rich_expr.type_key,
             var_decl.is_mut,
-            false,
         ));
 
         AVarDecl {
