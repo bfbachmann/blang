@@ -1544,7 +1544,7 @@ impl CFGAnalyzer<'_> {
             self.ctx.insert_err(
                 AnalyzeError::new(
                     ErrorKind::UseOfMovedValue,
-                    format_code!("cannot use {} because it was already moved", move_path).as_str(),
+                    format_code!("cannot use moved value {}", move_path).as_str(),
                     &span,
                 )
                 .with_detail(
