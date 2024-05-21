@@ -1,4 +1,6 @@
-use crate::lexer::pos::{Locatable, Position};
+use std::hash::{Hash, Hasher};
+
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -7,23 +9,20 @@ use crate::parser::ast::statement::Statement;
 use crate::parser::error::ParseResult;
 use crate::parser::module::Module;
 use crate::{locatable_impl, util};
-use std::hash::{Hash, Hasher};
 
 /// Represents a closure, which is just a series of statements with their own scope.
 #[derive(Debug, Clone, Eq)]
 pub struct Closure {
     pub statements: Vec<Statement>,
     pub result: Option<Expression>,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl PartialEq for Closure {
     fn eq(&self, other: &Self) -> bool {
         util::vecs_eq(&self.statements, &other.statements)
             && self.result == other.result
-            && self.start_pos == other.start_pos
-            && self.end_pos == other.end_pos
+            && self.span == other.span
     }
 }
 
@@ -38,17 +37,11 @@ locatable_impl!(Closure);
 
 impl Closure {
     /// Creates a new closure.
-    pub fn new(
-        statements: Vec<Statement>,
-        result: Option<Expression>,
-        start_pos: Position,
-        end_pos: Position,
-    ) -> Self {
+    pub fn new(statements: Vec<Statement>, result: Option<Expression>, span: Span) -> Self {
         Closure {
             statements,
             result,
-            start_pos,
-            end_pos,
+            span,
         }
     }
 
@@ -61,7 +54,9 @@ impl Closure {
     /// - the semicolon is optional
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Record the closure starting position.
-        let start_pos = Module::parse_expecting(tokens, TokenKind::LeftBrace)?.start;
+        let start_pos = Module::parse_expecting(tokens, TokenKind::LeftBrace)?
+            .span
+            .start_pos;
         let end_pos: Position;
 
         // The following nodes should be statements separated by an optional ";".
@@ -77,7 +72,7 @@ impl Closure {
                     let end_token = tokens.next().unwrap();
 
                     // Record the closure ending position.
-                    end_pos = end_token.end;
+                    end_pos = end_token.span.end_pos;
                     break;
                 }
 
@@ -101,6 +96,6 @@ impl Closure {
         // If the last statement is an expression, we use it as the return type.
         // TODO
 
-        Ok(Closure::new(statements, None, start_pos, end_pos))
+        Ok(Closure::new(statements, None, Span { start_pos, end_pos }))
     }
 }

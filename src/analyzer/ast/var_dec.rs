@@ -71,7 +71,6 @@ mod tests {
     use crate::analyzer::ast::var_dec::AVarDecl;
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
     use crate::analyzer::prog_context::ProgramContext;
-    use crate::lexer::pos::Position;
     use crate::parser::ast::bool_lit::BoolLit;
     use crate::parser::ast::expr::Expression;
     use crate::parser::ast::r#type::Type;
@@ -86,8 +85,7 @@ mod tests {
             false,
             "my_var".to_string(),
             Expression::StrLiteral(StrLit::new_with_default_pos("bingo")),
-            Position::default(),
-            Position::default(),
+            Default::default(),
         );
         let result = AVarDecl::from(&mut ctx, &var_decl);
         assert!(ctx.errors().is_empty());
@@ -112,8 +110,7 @@ mod tests {
             false,
             "my_var".to_string(),
             Expression::BoolLiteral(BoolLit::new_with_default_pos(true)),
-            Position::default(),
-            Position::default(),
+            Default::default(),
         );
 
         let result = AVarDecl::from(&mut ctx, &new_var_decl);
@@ -140,7 +137,6 @@ mod tests {
             false,
             "my_string".to_string(),
             Expression::StrLiteral(StrLit::new_with_default_pos("bingo")),
-            Position::default(),
             Default::default(),
         );
         AVarDecl::from(&mut ctx, &var_decl);

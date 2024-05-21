@@ -1,6 +1,6 @@
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -11,12 +11,11 @@ use crate::parser::module::Module;
 use crate::{locatable_impl, util};
 
 /// Represents the implementation of a series of member functions on a type.
-#[derive(Debug, Eq)]
+#[derive(Clone, Debug, Eq)]
 pub struct Impl {
     pub typ: Type,
     pub member_fns: Vec<Function>,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl PartialEq for Impl {
@@ -29,17 +28,6 @@ impl Hash for Impl {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.typ.hash(state);
         self.member_fns.hash(state);
-    }
-}
-
-impl Clone for Impl {
-    fn clone(&self) -> Self {
-        Impl {
-            typ: self.typ.clone(),
-            member_fns: self.member_fns.iter().map(|s| s.clone()).collect(),
-            start_pos: self.start_pos.clone(),
-            end_pos: self.end_pos.clone(),
-        }
     }
 }
 
@@ -72,7 +60,7 @@ impl Impl {
         let mut member_fns = vec![];
         loop {
             if let Some(token) = Module::parse_optional(tokens, TokenKind::RightBrace) {
-                end_pos = token.end;
+                end_pos = token.span.end_pos;
                 break;
             }
 
@@ -82,8 +70,7 @@ impl Impl {
         Ok(Impl {
             typ,
             member_fns,
-            start_pos,
-            end_pos,
+            span: Span { start_pos, end_pos },
         })
     }
 }

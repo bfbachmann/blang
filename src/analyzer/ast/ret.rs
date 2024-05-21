@@ -4,7 +4,7 @@ use std::fmt::Formatter;
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::parser::ast::ret::Ret;
 use crate::{format_code, locatable_impl, util};
 
@@ -12,8 +12,7 @@ use crate::{format_code, locatable_impl, util};
 #[derive(Clone, Debug)]
 pub struct ARet {
     pub val: Option<AExpr>,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl fmt::Display for ARet {
@@ -36,8 +35,7 @@ locatable_impl!(ARet);
 
 impl ARet {
     pub fn from(ctx: &mut ProgramContext, ret: &Ret) -> Self {
-        let start_pos = ret.start_pos().clone();
-        let end_pos = ret.start_pos().clone();
+        let span = ret.span().clone();
 
         // Make sure we are inside a function body. If not, record the error and return a dummy
         // value.
@@ -48,11 +46,7 @@ impl ARet {
                 ret,
             ));
 
-            return ARet {
-                val: None,
-                start_pos,
-                end_pos,
-            };
+            return ARet { val: None, span };
         }
 
         match &ret.value {
@@ -80,8 +74,7 @@ impl ARet {
 
                 ARet {
                     val: Some(a_expr),
-                    start_pos,
-                    end_pos,
+                    span,
                 }
             }
             None => {
@@ -101,11 +94,7 @@ impl ARet {
                     None => {}
                 };
 
-                ARet {
-                    val: None,
-                    start_pos,
-                    end_pos,
-                }
+                ARet { val: None, span }
             }
         }
     }

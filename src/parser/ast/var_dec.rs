@@ -1,4 +1,6 @@
-use crate::lexer::pos::{Locatable, Position};
+use std::hash::{Hash, Hasher};
+
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -7,7 +9,6 @@ use crate::parser::ast::expr::Expression;
 use crate::parser::ast::r#type::Type;
 use crate::parser::error::ParseResult;
 use crate::parser::module::Module;
-use std::hash::{Hash, Hasher};
 
 /// Represents a variable declaration. Each variable declaration must have a valid type, a name,
 /// and some value as the result of an expression.
@@ -17,8 +18,7 @@ pub struct VariableDeclaration {
     pub is_mut: bool,
     pub name: String,
     pub value: Expression,
-    pub start_pos: Position,
-    pub end_pos: Position,
+    pub span: Span,
 }
 
 impl Hash for VariableDeclaration {
@@ -38,16 +38,14 @@ impl VariableDeclaration {
         is_mut: bool,
         name: String,
         value: Expression,
-        start_pos: Position,
-        end_pos: Position,
+        span: Span,
     ) -> Self {
         VariableDeclaration {
             maybe_type: typ,
             is_mut,
             name,
             value,
-            start_pos,
-            end_pos,
+            span,
         }
     }
 
@@ -89,8 +87,10 @@ impl VariableDeclaration {
             is_mut,
             name,
             value,
-            start_token.start,
-            end_pos,
+            Span {
+                start_pos: start_token.span.start_pos,
+                end_pos,
+            },
         ))
     }
 }

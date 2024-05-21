@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -173,6 +173,37 @@ impl Locatable for Expression {
             Expression::Index(idx) => idx.end_pos(),
             Expression::MemberAccess(m) => m.end_pos(),
             Expression::TypeCast(_, target_type) => target_type.end_pos(),
+        }
+    }
+
+    fn span(&self) -> &Span {
+        match self {
+            Expression::Symbol(sym) => sym.span(),
+            Expression::BoolLiteral(bool_lit) => bool_lit.span(),
+            Expression::I8Literal(i) => i.span(),
+            Expression::U8Literal(i) => i.span(),
+            Expression::I32Literal(i) => i.span(),
+            Expression::U32Literal(i) => i.span(),
+            Expression::F32Literal(i) => i.span(),
+            Expression::I64Literal(i) => i.span(),
+            Expression::U64Literal(i) => i.span(),
+            Expression::F64Literal(i) => i.span(),
+            Expression::IntLiteral(i) => i.span(),
+            Expression::UintLiteral(i) => i.span(),
+            Expression::StrLiteral(string_lit) => string_lit.span(),
+            Expression::FunctionCall(fn_call) => fn_call.span(),
+            Expression::AnonFunction(func) => func.span(),
+            Expression::Lambda(func) => func.span(),
+            Expression::UnaryOperation(_, expr) => expr.span(),
+            Expression::StructInit(struct_init) => struct_init.span(),
+            Expression::EnumInit(enum_init) => enum_init.span(),
+            Expression::TupleInit(tuple_init) => tuple_init.span(),
+            Expression::ArrayInit(array_init) => array_init.span(),
+            Expression::BinaryOperation(_, _, right) => right.span(),
+            Expression::SizeOf(so) => so.span(),
+            Expression::Index(idx) => idx.span(),
+            Expression::MemberAccess(m) => m.span(),
+            Expression::TypeCast(_, target_type) => target_type.span(),
         }
     }
 }
@@ -368,8 +399,7 @@ fn parse_from_rpn(rpn_queue: &mut VecDeque<OutNode>) -> ParseResult<Expression> 
                 ErrorKind::UnexpectedEOF,
                 "unexpected end of expression",
                 None,
-                Position::default(),
-                Position::default(),
+                Default::default(),
             ))
         }
     }
@@ -407,19 +437,19 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
             //      let mut a = my_variable
             //      (a) = 10
             //
-            TokenKind::LeftParen if token.start.line == expr.end_pos().line => {
+            TokenKind::LeftParen if token.span.start_pos.line == expr.end_pos().line => {
                 tokens.next();
 
                 // Collect call arguments.
                 let mut args = vec![];
                 loop {
-                    if let Some(Token { end, .. }) =
+                    if let Some(Token { span, .. }) =
                         Module::parse_optional(tokens, TokenKind::RightParen)
                     {
                         expr = Expression::FunctionCall(Box::new(FuncCall::new(
                             expr,
                             args,
-                            end.clone(),
+                            span.end_pos,
                         )));
                         break;
                     }
@@ -429,7 +459,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
 
                     if let Token {
                         kind: TokenKind::RightParen,
-                        end,
+                        span,
                         ..
                     } = Module::parse_expecting_any(
                         tokens,
@@ -438,7 +468,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                         expr = Expression::FunctionCall(Box::new(FuncCall::new(
                             expr,
                             args,
-                            end.clone(),
+                            span.end_pos,
                         )));
                         break;
                     };
@@ -456,12 +486,11 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
             TokenKind::Dot => {
                 tokens.next();
 
-                let (member_name, _, end_pos) = match tokens.next() {
+                let (member_name, end_pos) = match tokens.next() {
                     Some(Token {
                         kind: TokenKind::Identifier(name),
-                        start,
-                        end,
-                    }) => (name.clone(), start.clone(), end.clone()),
+                        span,
+                    }) => (name.clone(), span.end_pos),
 
                     Some(other) => {
                         return Err(ParseError::new_with_token(
@@ -476,8 +505,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                             ErrorKind::UnexpectedEOF,
                             "expected identifier, but found EOF",
                             None,
-                            Position::default(),
-                            Position::default(),
+                            Default::default(),
                         ))
                     }
                 };
@@ -486,8 +514,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                 expr = Expression::MemberAccess(Box::new(MemberAccess::new(
                     expr,
                     member_name,
-                    start_pos,
-                    end_pos,
+                    Span { start_pos, end_pos },
                 )));
             }
 
@@ -521,8 +548,7 @@ fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                 ErrorKind::UnexpectedEOF,
                 "expected expression, but found EOF",
                 None,
-                Position::default(),
-                Position::default(),
+                Default::default(),
             ))
         }
     };
@@ -612,7 +638,7 @@ fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
 #[cfg(test)]
 mod tests {
     use crate::lexer::lex::lex;
-    use crate::lexer::pos::Position;
+    use crate::lexer::pos::{Position, Span};
     use crate::lexer::stream::Stream;
     use crate::lexer::token::Token;
     use crate::lexer::token_kind::TokenKind;
@@ -637,8 +663,10 @@ mod tests {
             Expression::Symbol(Symbol {
                 maybe_mod_name: None,
                 name: "my_var".to_string(),
-                start_pos: Position::new(1, 1),
-                end_pos: Position::new(1, 7),
+                span: Span {
+                    start_pos: Position::new(1, 1),
+                    end_pos: Position::new(1, 7),
+                },
             })
         );
     }
@@ -647,14 +675,22 @@ mod tests {
     fn parse_basic_bool_literal() {
         assert_eq!(
             parse("true").unwrap(),
-            Expression::BoolLiteral(BoolLit::new(true, Position::new(1, 1), Position::new(1, 5)))
+            Expression::BoolLiteral(BoolLit::new(
+                true,
+                Span {
+                    start_pos: Position::new(1, 1),
+                    end_pos: Position::new(1, 5)
+                }
+            ))
         );
         assert_eq!(
             parse("false").unwrap(),
             Expression::BoolLiteral(BoolLit::new(
                 false,
-                Position::new(1, 1),
-                Position::new(1, 6)
+                Span {
+                    start_pos: Position::new(1, 1),
+                    end_pos: Position::new(1, 6)
+                },
             ))
         );
     }
@@ -665,8 +701,10 @@ mod tests {
             Expression::IntLiteral(IntLit {
                 value: 123,
                 has_suffix: false,
-                start_pos: Position::new(1, 1),
-                end_pos: Position::new(1, 4),
+                span: Span {
+                    start_pos: Position::new(1, 1),
+                    end_pos: Position::new(1, 4),
+                },
             })
         );
     }
@@ -677,8 +715,10 @@ mod tests {
             parse(r#""this is my \"String\"""#).unwrap(),
             Expression::StrLiteral(StrLit {
                 value: r#"this is my "String""#.to_string(),
-                start_pos: Position::new(1, 1),
-                end_pos: Position::new(1, 24),
+                span: Span {
+                    start_pos: Position::new(1, 1),
+                    end_pos: Position::new(1, 24),
+                },
             })
         );
     }
@@ -690,8 +730,10 @@ mod tests {
             Expression::FunctionCall(Box::new(FuncCall::new(
                 Expression::Symbol(Symbol::new(
                     "call",
-                    Position::new(1, 1),
-                    Position::new(1, 5)
+                    Span {
+                        start_pos: Position::new(1, 1),
+                        end_pos: Position::new(1, 5)
+                    },
                 )),
                 vec![
                     Expression::BinaryOperation(
@@ -699,30 +741,38 @@ mod tests {
                             Box::new(Expression::IntLiteral(IntLit {
                                 value: 3,
                                 has_suffix: false,
-                                start_pos: Position::new(1, 6),
-                                end_pos: Position::new(1, 7),
+                                span: Span {
+                                    start_pos: Position::new(1, 6),
+                                    end_pos: Position::new(1, 7),
+                                },
                             })),
                             Operator::Multiply,
                             Box::new(Expression::IntLiteral(IntLit {
                                 value: 2,
                                 has_suffix: false,
-                                start_pos: Position::new(1, 10),
-                                end_pos: Position::new(1, 11),
+                                span: Span {
+                                    start_pos: Position::new(1, 10),
+                                    end_pos: Position::new(1, 11),
+                                },
                             }))
                         )),
                         Operator::Subtract,
                         Box::new(Expression::IntLiteral(IntLit {
                             value: 2,
                             has_suffix: false,
-                            start_pos: Position::new(1, 14),
-                            end_pos: Position::new(1, 15),
+                            span: Span {
+                                start_pos: Position::new(1, 14),
+                                end_pos: Position::new(1, 15),
+                            },
                         }))
                     ),
                     Expression::FunctionCall(Box::new(FuncCall::new(
                         Expression::Symbol(Symbol::new(
                             "other",
-                            Position::new(1, 17),
-                            Position::new(1, 22)
+                            Span {
+                                start_pos: Position::new(1, 17),
+                                end_pos: Position::new(1, 22)
+                            }
                         )),
                         vec![
                             Expression::UnaryOperation(
@@ -730,31 +780,39 @@ mod tests {
                                 Box::new(Expression::Symbol(Symbol {
                                     maybe_mod_name: None,
                                     name: "thing".to_string(),
-                                    start_pos: Position::new(1, 24),
-                                    end_pos: Position::new(1, 29),
+                                    span: Span {
+                                        start_pos: Position::new(1, 24),
+                                        end_pos: Position::new(1, 29),
+                                    },
                                 }))
                             ),
                             Expression::BinaryOperation(
                                 Box::new(Expression::IntLiteral(IntLit {
                                     value: 1,
                                     has_suffix: false,
-                                    start_pos: Position::new(1, 31),
-                                    end_pos: Position::new(1, 32),
+                                    span: Span {
+                                        start_pos: Position::new(1, 31),
+                                        end_pos: Position::new(1, 32),
+                                    },
                                 })),
                                 Operator::GreaterThan,
                                 Box::new(Expression::BinaryOperation(
                                     Box::new(Expression::Symbol(Symbol {
                                         maybe_mod_name: None,
                                         name: "var".to_string(),
-                                        start_pos: Position::new(1, 35),
-                                        end_pos: Position::new(1, 38),
+                                        span: Span {
+                                            start_pos: Position::new(1, 35),
+                                            end_pos: Position::new(1, 38),
+                                        },
                                     })),
                                     Operator::Modulo,
                                     Box::new(Expression::IntLiteral(IntLit {
                                         value: 2,
                                         has_suffix: false,
-                                        start_pos: Position::new(1, 41),
-                                        end_pos: Position::new(1, 42),
+                                        span: Span {
+                                            start_pos: Position::new(1, 41),
+                                            end_pos: Position::new(1, 42),
+                                        },
                                     }))
                                 ))
                             )
@@ -778,31 +836,39 @@ mod tests {
                             Box::new(Expression::IntLiteral(IntLit {
                                 value: 3,
                                 has_suffix: false,
-                                start_pos: Position::new(1, 2),
-                                end_pos: Position::new(1, 3),
+                                span: Span {
+                                    start_pos: Position::new(1, 2),
+                                    end_pos: Position::new(1, 3),
+                                },
                             })),
                             Operator::Add,
                             Box::new(Expression::IntLiteral(IntLit {
                                 value: 6,
                                 has_suffix: false,
-                                start_pos: Position::new(1, 6),
-                                end_pos: Position::new(1, 7),
+                                span: Span {
+                                    start_pos: Position::new(1, 6),
+                                    end_pos: Position::new(1, 7),
+                                },
                             }))
                         )),
                         Operator::Divide,
                         Box::new(Expression::IntLiteral(IntLit {
                             value: 3,
                             has_suffix: false,
-                            start_pos: Position::new(1, 11),
-                            end_pos: Position::new(1, 12),
+                            span: Span {
+                                start_pos: Position::new(1, 11),
+                                end_pos: Position::new(1, 12),
+                            },
                         }))
                     )),
                     Operator::Subtract,
                     Box::new(Expression::IntLiteral(IntLit {
                         value: 5,
                         has_suffix: false,
-                        start_pos: Position::new(1, 15),
-                        end_pos: Position::new(1, 16),
+                        span: Span {
+                            start_pos: Position::new(1, 15),
+                            end_pos: Position::new(1, 16),
+                        },
                     }))
                 )),
                 Operator::Add,
@@ -810,15 +876,19 @@ mod tests {
                     Box::new(Expression::IntLiteral(IntLit {
                         value: 298,
                         has_suffix: false,
-                        start_pos: Position::new(1, 19),
-                        end_pos: Position::new(1, 22),
+                        span: Span {
+                            start_pos: Position::new(1, 19),
+                            end_pos: Position::new(1, 22),
+                        },
                     })),
                     Operator::Multiply,
                     Box::new(Expression::IntLiteral(IntLit {
                         value: 3,
                         has_suffix: false,
-                        start_pos: Position::new(1, 25),
-                        end_pos: Position::new(1, 26),
+                        span: Span {
+                            start_pos: Position::new(1, 25),
+                            end_pos: Position::new(1, 26),
+                        },
                     }))
                 ))
             )
@@ -837,23 +907,29 @@ mod tests {
                             Box::new(Expression::Symbol(Symbol {
                                 maybe_mod_name: None,
                                 name: "var".to_string(),
-                                start_pos: Position::new(1, 2),
-                                end_pos: Position::new(1, 5),
+                                span: Span {
+                                    start_pos: Position::new(1, 2),
+                                    end_pos: Position::new(1, 5),
+                                },
                             })),
                             Operator::Subtract,
                             Box::new(Expression::IntLiteral(IntLit {
                                 value: 3,
                                 has_suffix: false,
-                                start_pos: Position::new(1, 8),
-                                end_pos: Position::new(1, 9)
+                                span: Span {
+                                    start_pos: Position::new(1, 8),
+                                    end_pos: Position::new(1, 9)
+                                },
                             })),
                         )),
                         Operator::Divide,
                         Box::new(Expression::IntLiteral(IntLit {
                             value: 4,
                             has_suffix: false,
-                            start_pos: Position::new(1, 13),
-                            end_pos: Position::new(1, 14)
+                            span: Span {
+                                start_pos: Position::new(1, 13),
+                                end_pos: Position::new(1, 14)
+                            },
                         })),
                     )),
                     Operator::Multiply,
@@ -861,13 +937,17 @@ mod tests {
                         Box::new(Expression::FunctionCall(Box::new(FuncCall::new(
                             Expression::Symbol(Symbol::new(
                                 "call",
-                                Position::new(2, 2),
-                                Position::new(2, 6)
+                                Span {
+                                    start_pos: Position::new(2, 2),
+                                    end_pos: Position::new(2, 6)
+                                }
                             )),
                             vec![Expression::BoolLiteral(BoolLit {
                                 value: true,
-                                start_pos: Position::new(2, 7),
-                                end_pos: Position::new(2, 11)
+                                span: Span {
+                                    start_pos: Position::new(2, 7),
+                                    end_pos: Position::new(2, 11)
+                                },
                             })],
                             Position::new(2, 12)
                         )))),
@@ -875,8 +955,10 @@ mod tests {
                         Box::new(Expression::IntLiteral(IntLit {
                             value: 2,
                             has_suffix: false,
-                            start_pos: Position::new(2, 15),
-                            end_pos: Position::new(2, 16)
+                            span: Span {
+                                start_pos: Position::new(2, 15),
+                                end_pos: Position::new(2, 16)
+                            },
                         })),
                     )),
                 )),
@@ -884,8 +966,10 @@ mod tests {
                 Box::new(Expression::IntLiteral(IntLit {
                     value: 5,
                     has_suffix: false,
-                    start_pos: Position::new(3, 1),
-                    end_pos: Position::new(3, 2)
+                    span: Span {
+                        start_pos: Position::new(3, 1),
+                        end_pos: Position::new(3, 2)
+                    },
                 })),
             )
         );
@@ -901,11 +985,15 @@ mod tests {
                 message: _,
                 token: Some(Token {
                     kind: TokenKind::Colon,
-                    start: Position { line: 1, col: 15 },
-                    end: Position { line: 1, col: 16 },
+                    span: Span {
+                        start_pos: Position { line: 1, col: 15 },
+                        end_pos: Position { line: 1, col: 16 },
+                    }
                 }),
-                start_pos: Position { line: 1, col: 15 },
-                end_pos: Position { line: 1, col: 16 },
+                span: Span {
+                    start_pos: Position { line: 1, col: 15 },
+                    end_pos: Position { line: 1, col: 16 },
+                },
             })
         ));
     }
@@ -922,8 +1010,10 @@ mod tests {
                         Box::new(Expression::IntLiteral(IntLit {
                             value: 8,
                             has_suffix: false,
-                            start_pos: Position::new(1, 2),
-                            end_pos: Position::new(1, 3),
+                            span: Span {
+                                start_pos: Position::new(1, 2),
+                                end_pos: Position::new(1, 3),
+                            },
                         })),
                     )),
                     Operator::Subtract,
@@ -935,32 +1025,40 @@ mod tests {
                                     Box::new(Expression::IntLiteral(IntLit {
                                         value: 100,
                                         has_suffix: false,
-                                        start_pos: Position::new(1, 8),
-                                        end_pos: Position::new(1, 11),
+                                        span: Span {
+                                            start_pos: Position::new(1, 8),
+                                            end_pos: Position::new(1, 11),
+                                        },
                                     }))
                                 )),
                                 Operator::Add,
                                 Box::new(Expression::IntLiteral(IntLit {
                                     value: 2,
                                     has_suffix: false,
-                                    start_pos: Position::new(1, 14),
-                                    end_pos: Position::new(1, 15)
+                                    span: Span {
+                                        start_pos: Position::new(1, 14),
+                                        end_pos: Position::new(1, 15)
+                                    },
                                 })),
                             )),
                             Operator::Multiply,
                             Box::new(Expression::IntLiteral(IntLit {
                                 value: 4,
                                 has_suffix: false,
-                                start_pos: Position::new(1, 19),
-                                end_pos: Position::new(1, 20)
+                                span: Span {
+                                    start_pos: Position::new(1, 19),
+                                    end_pos: Position::new(1, 20)
+                                },
                             })),
                         )),
                         Operator::Divide,
                         Box::new(Expression::IntLiteral(IntLit {
                             value: 2,
                             has_suffix: false,
-                            start_pos: Position::new(1, 23),
-                            end_pos: Position::new(1, 24)
+                            span: Span {
+                                start_pos: Position::new(1, 23),
+                                end_pos: Position::new(1, 24)
+                            },
                         })),
                     )),
                 )),
@@ -968,8 +1066,10 @@ mod tests {
                 Box::new(Expression::IntLiteral(IntLit {
                     value: 8,
                     has_suffix: false,
-                    start_pos: Position::new(1, 27),
-                    end_pos: Position::new(1, 28)
+                    span: Span {
+                        start_pos: Position::new(1, 27),
+                        end_pos: Position::new(1, 28)
+                    },
                 })),
             )
         );
@@ -985,8 +1085,10 @@ mod tests {
                 Box::new(Expression::IntLiteral(IntLit {
                     value: 8,
                     has_suffix: false,
-                    start_pos: Position::new(1, 2),
-                    end_pos: Position::new(1, 3),
+                    span: Span {
+                        start_pos: Position::new(1, 2),
+                        end_pos: Position::new(1, 3),
+                    },
                 })),
             )
         );
@@ -999,8 +1101,10 @@ mod tests {
                 Box::new(Expression::Symbol(Symbol {
                     maybe_mod_name: None,
                     name: "x".to_string(),
-                    start_pos: Position::new(1, 2),
-                    end_pos: Position::new(1, 3),
+                    span: Span {
+                        start_pos: Position::new(1, 2),
+                        end_pos: Position::new(1, 3),
+                    },
                 })),
             )
         );
@@ -1011,7 +1115,13 @@ mod tests {
             Expression::UnaryOperation(
                 Operator::Subtract,
                 Box::new(Expression::FunctionCall(Box::new(FuncCall::new(
-                    Expression::Symbol(Symbol::new("f", Position::new(1, 2), Position::new(1, 3))),
+                    Expression::Symbol(Symbol::new(
+                        "f",
+                        Span {
+                            start_pos: Position::new(1, 2),
+                            end_pos: Position::new(1, 3)
+                        }
+                    )),
                     vec![],
                     Position::new(1, 5),
                 ))))
@@ -1052,23 +1162,29 @@ mod tests {
                     Box::new(Expression::IntLiteral(IntLit {
                         value: 1,
                         has_suffix: false,
-                        start_pos: Position::new(1, 4),
-                        end_pos: Position::new(1, 5)
+                        span: Span {
+                            start_pos: Position::new(1, 4),
+                            end_pos: Position::new(1, 5)
+                        },
                     })),
                     Operator::GreaterThan,
                     Box::new(Expression::IntLiteral(IntLit {
                         value: 0,
                         has_suffix: false,
-                        start_pos: Position::new(1, 6),
-                        end_pos: Position::new(1, 7)
+                        span: Span {
+                            start_pos: Position::new(1, 6),
+                            end_pos: Position::new(1, 7)
+                        },
                     })),
                 )),
                 Operator::Add,
                 Box::new(Expression::IntLiteral(IntLit {
                     value: 1,
                     has_suffix: false,
-                    start_pos: Position::new(1, 9),
-                    end_pos: Position::new(1, 10)
+                    span: Span {
+                        start_pos: Position::new(1, 9),
+                        end_pos: Position::new(1, 10)
+                    },
                 })),
             )
         )
@@ -1105,8 +1221,10 @@ mod tests {
                                     Box::new(Expression::Symbol(Symbol {
                                         maybe_mod_name: None,
                                         name: "v".to_string(),
-                                        start_pos: Position { line: 1, col: 5 },
-                                        end_pos: Position { line: 1, col: 6 },
+                                        span: Span {
+                                            start_pos: Position { line: 1, col: 5 },
+                                            end_pos: Position { line: 1, col: 6 },
+                                        },
                                     }))
                                 )),
                                 Operator::Subtract,
@@ -1115,8 +1233,10 @@ mod tests {
                                     Box::new(Expression::Symbol(Symbol {
                                         maybe_mod_name: None,
                                         name: "a".to_string(),
-                                        start_pos: Position { line: 1, col: 8 },
-                                        end_pos: Position { line: 1, col: 9 },
+                                        span: Span {
+                                            start_pos: Position { line: 1, col: 8 },
+                                            end_pos: Position { line: 1, col: 9 },
+                                        },
                                     }))
                                 )),
                             )),
@@ -1126,8 +1246,10 @@ mod tests {
                     Box::new(Expression::IntLiteral(IntLit {
                         value: 2,
                         has_suffix: false,
-                        start_pos: Position { line: 1, col: 11 },
-                        end_pos: Position { line: 1, col: 12 },
+                        span: Span {
+                            start_pos: Position { line: 1, col: 11 },
+                            end_pos: Position { line: 1, col: 12 },
+                        },
                     })),
                 )),
                 Operator::Subtract,
@@ -1139,8 +1261,10 @@ mod tests {
                             Box::new(Expression::IntLiteral(IntLit {
                                 value: 100,
                                 has_suffix: false,
-                                start_pos: Position { line: 1, col: 16 },
-                                end_pos: Position { line: 1, col: 19 },
+                                span: Span {
+                                    start_pos: Position { line: 1, col: 16 },
+                                    end_pos: Position { line: 1, col: 19 },
+                                },
                             })),
                         )),
                         Operator::Subtract,
@@ -1150,17 +1274,23 @@ mod tests {
                                 fn_expr: Expression::Symbol(Symbol {
                                     maybe_mod_name: None,
                                     name: "call".to_string(),
-                                    start_pos: Position { line: 1, col: 23 },
-                                    end_pos: Position { line: 1, col: 27 },
+                                    span: Span {
+                                        start_pos: Position { line: 1, col: 23 },
+                                        end_pos: Position { line: 1, col: 27 },
+                                    },
                                 },),
                                 args: vec![Expression::IntLiteral(IntLit {
                                     value: 1,
                                     has_suffix: false,
-                                    start_pos: Position { line: 1, col: 28 },
-                                    end_pos: Position { line: 1, col: 29 },
+                                    span: Span {
+                                        start_pos: Position { line: 1, col: 28 },
+                                        end_pos: Position { line: 1, col: 29 },
+                                    },
                                 })],
-                                start_pos: Position { line: 1, col: 23 },
-                                end_pos: Position { line: 1, col: 30 },
+                                span: Span {
+                                    start_pos: Position { line: 1, col: 23 },
+                                    end_pos: Position { line: 1, col: 30 },
+                                },
                             }))),
                         )),
                     ))
@@ -1182,8 +1312,10 @@ mod tests {
                         Box::new(Expression::Symbol(Symbol {
                             maybe_mod_name: None,
                             name: "b".to_string(),
-                            start_pos: Position::new(1, 4),
-                            end_pos: Position::new(1, 5),
+                            span: Span {
+                                start_pos: Position::new(1, 4),
+                                end_pos: Position::new(1, 5),
+                            },
                         })),
                     )),
                     Operator::Subtract,
@@ -1192,8 +1324,10 @@ mod tests {
                         Box::new(Expression::IntLiteral(IntLit {
                             value: 100,
                             has_suffix: false,
-                            start_pos: Position::new(1, 8),
-                            end_pos: Position::new(1, 11),
+                            span: Span {
+                                start_pos: Position::new(1, 8),
+                                end_pos: Position::new(1, 11),
+                            },
                         })),
                     )),
                 )),
@@ -1214,8 +1348,10 @@ mod tests {
             result,
             Expression::StrLiteral(StrLit {
                 value: string.replace('"', ""),
-                start_pos: Position::new(1, 1),
-                end_pos: Position::new(6, 9),
+                span: Span {
+                    start_pos: Position::new(1, 1),
+                    end_pos: Position::new(6, 9),
+                },
             })
         )
     }

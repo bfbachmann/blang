@@ -2,7 +2,7 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -19,8 +19,7 @@ pub struct StructField {
     pub name: String,
     pub typ: Type,
     pub is_pub: bool,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl PartialEq for StructField {
@@ -44,8 +43,7 @@ pub struct StructType {
     pub name: String,
     pub fields: Vec<StructField>,
     pub is_pub: bool,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl Hash for StructType {
@@ -124,7 +122,7 @@ impl StructType {
             {
                 // Record the position of the last token in the struct type declaration.
                 let end_token = tokens.next().unwrap();
-                end_pos = end_token.end;
+                end_pos = end_token.span.end_pos;
                 break;
             }
 
@@ -154,8 +152,10 @@ impl StructType {
                 name: field_name,
                 typ: field_type,
                 is_pub,
-                start_pos: field_start_pos,
-                end_pos: field_end_pos,
+                span: Span {
+                    start_pos: field_start_pos,
+                    end_pos: field_end_pos,
+                },
             });
         }
 
@@ -166,8 +166,7 @@ impl StructType {
             name,
             fields,
             is_pub,
-            start_pos,
-            end_pos,
+            span: Span { start_pos, end_pos },
         })
     }
 }
@@ -180,8 +179,7 @@ pub struct StructInit {
     pub typ: Type,
     /// Maps struct field name to the value assigned to it.
     pub field_values: Vec<(String, Expression)>,
-    pub start_pos: Position,
-    pub end_pos: Position,
+    pub span: Span,
 }
 
 impl Display for StructInit {
@@ -256,8 +254,7 @@ impl StructInit {
                         ErrorKind::UnexpectedEndOfExpr,
                         "expected struct field assignment or }",
                         Some(other.clone()),
-                        other.start,
-                        other.end,
+                        other.span,
                     ))
                 }
 
@@ -266,8 +263,7 @@ impl StructInit {
                         ErrorKind::UnexpectedEOF,
                         "expected struct field assignment or }, but found EOF",
                         None,
-                        Position::default(),
-                        Position::default(),
+                        Default::default(),
                     ))
                 }
             }
@@ -276,8 +272,7 @@ impl StructInit {
         Ok(StructInit {
             typ: struct_type,
             field_values,
-            start_pos,
-            end_pos,
+            span: Span { start_pos, end_pos },
         })
     }
 }

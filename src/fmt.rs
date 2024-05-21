@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use colored::{control, Colorize};
 
-use crate::lexer::pos::Position;
+use crate::lexer::pos::Span;
 
 /// Prints an error message and exits with code 1.
 #[macro_export]
@@ -64,8 +64,7 @@ pub fn display_err(
     detail: Option<&String>,
     help: Option<&String>,
     path: &str,
-    start: &Position,
-    end: &Position,
+    span: &Span,
     is_warning: bool,
 ) {
     if is_warning {
@@ -74,9 +73,9 @@ pub fn display_err(
         errorln!("{}", msg.bold());
     }
 
-    print_source(path, start, end);
+    print_source(path, span);
 
-    let width = end.line.to_string().len();
+    let width = span.end_pos.line.to_string().len();
     if let Some(detail_msg) = detail {
         println!("{}{}", " ".repeat(width), "|".blue().bold());
         println!(
@@ -116,20 +115,22 @@ pub fn format_file_loc(path: &str, line: Option<usize>, col: Option<usize>) -> S
 
 /// Pretty-prints source code between the lines in given positions in the given file.
 /// Highlights the region between `start_pos` and `end_pos` in red.
-pub fn print_source(file_path: &str, start_pos: &Position, end_pos: &Position) {
+pub fn print_source(file_path: &str, span: &Span) {
     if control::SHOULD_COLORIZE.should_colorize() {
-        print_source_color(file_path, start_pos, end_pos);
+        print_source_color(file_path, span);
     } else {
-        print_source_no_color(file_path, start_pos, end_pos);
+        print_source_no_color(file_path, span);
     }
 }
 
 /// Pretty-prints source code between the lines in given positions in the given file.
 /// Highlights the region between `start_pos` and `end_pos` in red.
-fn print_source_color(file_path: &str, start_pos: &Position, end_pos: &Position) {
+fn print_source_color(file_path: &str, span: &Span) {
     let file = File::open(file_path).unwrap();
     let reader = BufReader::new(file);
-    let width = end_pos.line.to_string().len();
+    let width = span.end_pos.line.to_string().len();
+    let start_pos = &span.start_pos;
+    let end_pos = &span.end_pos;
 
     println!(
         "{}{}",
@@ -202,9 +203,11 @@ fn print_source_color(file_path: &str, start_pos: &Position, end_pos: &Position)
 
 /// Pretty-prints source code between the lines in given positions in the given file.
 /// Underlines or annotates code between the given positions.
-fn print_source_no_color(file_path: &str, start_pos: &Position, end_pos: &Position) {
+fn print_source_no_color(file_path: &str, span: &Span) {
     let file = File::open(file_path).unwrap();
     let reader = BufReader::new(file);
+    let start_pos = &span.start_pos;
+    let end_pos = &span.end_pos;
     let width = end_pos.line.to_string().len();
 
     println!(

@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -23,8 +23,7 @@ pub struct Symbol {
     /// in the symbol name and will be available via this field.
     pub maybe_mod_name: Option<String>,
     pub name: String,
-    pub start_pos: Position,
-    pub end_pos: Position,
+    pub span: Span,
 }
 
 impl Display for Symbol {
@@ -52,12 +51,11 @@ locatable_impl!(Symbol);
 impl Symbol {
     /// Creates a new symbol.
     #[cfg(test)]
-    pub fn new(name: &str, start_pos: Position, end_pos: Position) -> Self {
+    pub fn new(name: &str, span: Span) -> Self {
         Symbol {
             maybe_mod_name: None,
             name: name.to_string(),
-            start_pos,
-            end_pos,
+            span,
         }
     }
 
@@ -67,8 +65,7 @@ impl Symbol {
         Symbol {
             maybe_mod_name: Some(mod_name.to_string()),
             name: name.to_string(),
-            start_pos: Position::default(),
-            end_pos: Position::default(),
+            span: Default::default(),
         }
     }
 
@@ -78,8 +75,7 @@ impl Symbol {
         Symbol {
             maybe_mod_name: None,
             name: name.to_string(),
-            start_pos: Position::default(),
-            end_pos: Position::default(),
+            span: Default::default(),
         }
     }
 
@@ -110,8 +106,10 @@ impl Symbol {
         Ok(Symbol {
             maybe_mod_name,
             name,
-            start_pos,
-            end_pos: Module::prev_position(tokens),
+            span: Span {
+                start_pos,
+                end_pos: Module::prev_position(tokens),
+            },
         })
     }
 }

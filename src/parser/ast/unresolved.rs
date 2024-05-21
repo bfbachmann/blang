@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::locatable_impl;
 
 /// Represents a user-defined type that has not yet been resolved (i.e. is not primitive).
@@ -9,8 +9,7 @@ use crate::locatable_impl;
 pub struct UnresolvedType {
     pub maybe_mod_name: Option<String>,
     pub name: String,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl PartialEq for UnresolvedType {
@@ -45,27 +44,20 @@ locatable_impl!(UnresolvedType);
 impl UnresolvedType {
     /// Creates a new unresolved type with the given type name.
     #[cfg(test)]
-    pub fn new(name: &str, start_pos: Position, end_pos: Position) -> Self {
+    pub fn new(name: &str, span: Span) -> Self {
         UnresolvedType {
             maybe_mod_name: None,
             name: name.to_string(),
-            start_pos,
-            end_pos,
+            span,
         }
     }
 
     /// Creates a new unresolved type with a module name.
-    pub fn new_with_mod(
-        maybe_mod_name: Option<String>,
-        name: &str,
-        start_pos: Position,
-        end_pos: Position,
-    ) -> UnresolvedType {
+    pub fn new_with_mod(maybe_mod_name: Option<String>, name: &str, span: Span) -> UnresolvedType {
         UnresolvedType {
             maybe_mod_name,
             name: name.to_string(),
-            start_pos,
-            end_pos,
+            span,
         }
     }
 
@@ -74,8 +66,7 @@ impl UnresolvedType {
         UnresolvedType {
             maybe_mod_name: None,
             name: name.to_string(),
-            start_pos: Position::default(),
-            end_pos: Position::default(),
+            span: Default::default(),
         }
     }
 
@@ -84,8 +75,7 @@ impl UnresolvedType {
         UnresolvedType {
             maybe_mod_name: None,
             name: "<none>".to_string(),
-            start_pos: Position::default(),
-            end_pos: Position::default(),
+            span: Default::default(),
         }
     }
 }

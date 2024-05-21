@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
 
@@ -10,8 +10,7 @@ use crate::parser::ast::expr::Expression;
 pub struct FuncCall {
     pub fn_expr: Expression,
     pub args: Vec<Expression>,
-    pub(crate) start_pos: Position,
-    pub(crate) end_pos: Position,
+    pub(crate) span: Span,
 }
 
 locatable_impl!(FuncCall);
@@ -49,8 +48,10 @@ impl PartialEq for FuncCall {
 impl FuncCall {
     pub fn new(fn_expr: Expression, args: Vec<Expression>, end_pos: Position) -> FuncCall {
         FuncCall {
-            start_pos: fn_expr.start_pos().clone(),
-            end_pos,
+            span: Span {
+                start_pos: fn_expr.start_pos().clone(),
+                end_pos,
+            },
             fn_expr,
             args,
         }
@@ -61,8 +62,7 @@ impl FuncCall {
         FuncCall {
             fn_expr,
             args,
-            start_pos: Position::default(),
-            end_pos: Position::default(),
+            span: Default::default(),
         }
     }
 }

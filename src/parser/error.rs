@@ -1,7 +1,7 @@
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::token::Token;
 use crate::locatable_impl;
 
@@ -46,8 +46,7 @@ pub struct ParseError {
     pub kind: ErrorKind,
     pub message: String,
     pub token: Option<Token>,
-    pub start_pos: Position,
-    pub end_pos: Position,
+    pub span: Span,
 }
 
 impl Display for ParseError {
@@ -60,31 +59,22 @@ impl Display for ParseError {
 }
 
 impl ParseError {
-    pub fn new(
-        kind: ErrorKind,
-        message: &str,
-        token: Option<Token>,
-        start_pos: Position,
-        end_pos: Position,
-    ) -> Self {
+    pub fn new(kind: ErrorKind, message: &str, token: Option<Token>, span: Span) -> Self {
         ParseError {
             kind,
             message: message.to_string(),
             token,
-            start_pos,
-            end_pos,
+            span,
         }
     }
 
     pub fn new_with_token(kind: ErrorKind, message: &str, token: Token) -> Self {
-        let start_pos = token.start.clone();
-        let end_pos = token.end.clone();
+        let span = token.span;
         ParseError {
             kind,
             message: message.to_string(),
             token: Some(token),
-            start_pos,
-            end_pos,
+            span,
         }
     }
 }

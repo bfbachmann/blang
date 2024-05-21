@@ -5,7 +5,7 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::locatable_impl;
 use crate::parser::ast::member::MemberAccess;
 use crate::parser::ast::op::Operator;
@@ -17,8 +17,7 @@ pub struct AMemberAccess {
     pub member_name: String,
     pub member_type_key: TypeKey,
     pub is_method: bool,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 locatable_impl!(AMemberAccess);
@@ -44,8 +43,7 @@ impl AMemberAccess {
             member_name: access.member_name.clone(),
             member_type_key: ctx.unknown_type_key(),
             is_method: false,
-            start_pos: access.start_pos().clone(),
-            end_pos: access.end_pos().clone(),
+            span: access.span().clone(),
         };
         if base_type.is_unknown() {
             return placeholder;
@@ -154,13 +152,11 @@ impl AMemberAccess {
                                 false => Operator::Reference,
                             };
 
-                            let start_pos = base_expr.start_pos().clone();
-                            let end_pos = base_expr.end_pos().clone();
+                            let span = base_expr.span().clone();
                             base_expr = AExpr::new(
                                 AExprKind::UnaryOperation(op, Box::new(base_expr)),
                                 self_arg_type_key,
-                                start_pos,
-                                end_pos,
+                                span,
                             );
                         } else if self_arg_type.is_mut_pointer() {
                             // Record an error here because we're trying to call
@@ -196,8 +192,7 @@ impl AMemberAccess {
             member_name: access.member_name.clone(),
             member_type_key,
             is_method,
-            start_pos: access.start_pos().clone(),
-            end_pos: access.end_pos().clone(),
+            span: access.span().clone(),
         }
     }
 

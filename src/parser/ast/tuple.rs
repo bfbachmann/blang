@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -12,11 +12,10 @@ use crate::parser::module::Module;
 use crate::{locatable_impl, util};
 
 /// Represents tuple type declaration.
-#[derive(Debug, Eq)]
+#[derive(Debug, Clone, Eq)]
 pub struct TupleType {
     pub field_types: Vec<Type>,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 locatable_impl!(TupleType);
@@ -47,16 +46,6 @@ impl Display for TupleType {
     }
 }
 
-impl Clone for TupleType {
-    fn clone(&self) -> Self {
-        TupleType {
-            field_types: self.field_types.iter().map(|t| t.clone()).collect(),
-            start_pos: self.start_pos.clone(),
-            end_pos: self.end_pos.clone(),
-        }
-    }
-}
-
 impl PartialEq for TupleType {
     fn eq(&self, other: &Self) -> bool {
         util::vecs_eq(&self.field_types, &other.field_types)
@@ -68,8 +57,7 @@ impl TupleType {
     pub fn new_with_default_pos(types: Vec<Type>) -> Self {
         TupleType {
             field_types: types,
-            start_pos: Position::default(),
-            end_pos: Position::default(),
+            span: Default::default(),
         }
     }
 
@@ -110,7 +98,7 @@ impl TupleType {
                     ..
                 }) => {
                     // Record the ending position of this statement.
-                    end_pos = tokens.next().unwrap().end;
+                    end_pos = tokens.next().unwrap().span.end_pos;
                     break;
                 }
 
@@ -128,7 +116,7 @@ impl TupleType {
                         vec![TokenKind::Comma, TokenKind::RightBrace],
                     )? {
                         // Record the ending position of this statement.
-                        end_pos = token.end;
+                        end_pos = token.span.end_pos;
                         break;
                     }
                 }
@@ -137,18 +125,16 @@ impl TupleType {
 
         Ok(TupleType {
             field_types: types,
-            start_pos,
-            end_pos,
+            span: Span { start_pos, end_pos },
         })
     }
 }
 
 /// Represents tuple initialization.
-#[derive(Debug, Eq)]
+#[derive(Debug, Eq, Clone)]
 pub struct TupleInit {
     pub values: Vec<Expression>,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 locatable_impl!(TupleInit);
@@ -168,16 +154,6 @@ impl Display for TupleInit {
         write!(f, "}}")?;
 
         Ok(())
-    }
-}
-
-impl Clone for TupleInit {
-    fn clone(&self) -> Self {
-        TupleInit {
-            values: self.values.iter().map(|v| v.clone()).collect(),
-            start_pos: self.start_pos.clone(),
-            end_pos: self.end_pos.clone(),
-        }
     }
 }
 
@@ -231,7 +207,7 @@ impl TupleInit {
                     ..
                 }) => {
                     // Record the ending position of this statement.
-                    end_pos = tokens.next().unwrap().end;
+                    end_pos = tokens.next().unwrap().span.end_pos;
                     break;
                 }
 
@@ -249,7 +225,7 @@ impl TupleInit {
                         vec![TokenKind::Comma, TokenKind::RightBrace],
                     )? {
                         // Record the ending position of this statement.
-                        end_pos = token.end;
+                        end_pos = token.span.end_pos;
                         break;
                     }
                 }
@@ -258,8 +234,7 @@ impl TupleInit {
 
         Ok(TupleInit {
             values,
-            start_pos,
-            end_pos,
+            span: Span { start_pos, end_pos },
         })
     }
 }

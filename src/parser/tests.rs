@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::lexer::lex::lex;
-    use crate::lexer::pos::Position;
+    use crate::lexer::pos::{Position, Span};
     use crate::lexer::stream::Stream;
     use crate::lexer::token::Token;
     use crate::lexer::token_kind::TokenKind;
@@ -97,11 +97,15 @@ mod tests {
                         Expression::IntLiteral(IntLit {
                             value: 123,
                             has_suffix: false,
-                            start_pos: Position::new(1, 14),
-                            end_pos: Position::new(1, 17),
+                            span: Span {
+                                start_pos: Position::new(1, 14),
+                                end_pos: Position::new(1, 17),
+                            }
                         }),
-                        Position::new(1, 1),
-                        Position::new(1, 17),
+                        Span {
+                            start_pos: Position::new(1, 1),
+                            end_pos: Position::new(1, 17),
+                        }
                     )),
                     Statement::VariableDeclaration(VariableDeclaration::new(
                         None,
@@ -110,11 +114,15 @@ mod tests {
                         Expression::IntLiteral(IntLit {
                             value: 1231,
                             has_suffix: false,
-                            start_pos: Position::new(1, 26),
-                            end_pos: Position::new(1, 30),
+                            span: Span {
+                                start_pos: Position::new(1, 26),
+                                end_pos: Position::new(1, 30),
+                            }
                         }),
-                        Position::new(1, 18),
-                        Position::new(1, 30),
+                        Span {
+                            start_pos: Position::new(1, 18),
+                            end_pos: Position::new(1, 30),
+                        }
                     ))
                 ]
             }
@@ -135,32 +143,44 @@ mod tests {
                             "arg1",
                             Type::Unresolved(UnresolvedType::new(
                                 "str",
-                                Position::new(1, 16),
-                                Position::new(1, 19)
+                                Span {
+                                    start_pos: Position::new(1, 16),
+                                    end_pos: Position::new(1, 19)
+                                }
                             )),
                             false,
-                            Position::new(1, 10),
-                            Position::new(1, 19)
+                            Span {
+                                start_pos: Position::new(1, 10),
+                                end_pos: Position::new(1, 19)
+                            }
                         ),
                         Argument::new(
                             "arg2",
                             Type::Unresolved(UnresolvedType::new(
                                 "i64",
-                                Position::new(1, 27),
-                                Position::new(1, 30)
+                                Span {
+                                    start_pos: Position::new(1, 27),
+                                    end_pos: Position::new(1, 30)
+                                }
                             )),
                             false,
-                            Position::new(1, 21),
-                            Position::new(1, 30)
+                            Span {
+                                start_pos: Position::new(1, 21),
+                                end_pos: Position::new(1, 30)
+                            }
                         )
                     ],
                     Some(Type::Unresolved(UnresolvedType::new(
                         "str",
-                        Position::new(1, 33),
-                        Position::new(1, 36)
+                        Span {
+                            start_pos: Position::new(1, 33),
+                            end_pos: Position::new(1, 36)
+                        }
                     ))),
-                    Position::new(1, 1),
-                    Position::new(1, 31),
+                    Span {
+                        start_pos: Position::new(1, 1),
+                        end_pos: Position::new(1, 31),
+                    }
                 ),
                 Closure::new(
                     vec![Statement::VariableDeclaration(VariableDeclaration::new(
@@ -169,15 +189,21 @@ mod tests {
                         "s".to_string(),
                         Expression::StrLiteral(StrLit {
                             value: "hello world!".to_string(),
-                            start_pos: Position::new(1, 47),
-                            end_pos: Position::new(1, 61),
+                            span: Span {
+                                start_pos: Position::new(1, 47),
+                                end_pos: Position::new(1, 61),
+                            }
                         }),
-                        Position::new(1, 39),
-                        Position::new(1, 61),
+                        Span {
+                            start_pos: Position::new(1, 39),
+                            end_pos: Position::new(1, 61),
+                        }
                     ))],
                     None,
-                    Position::new(1, 37),
-                    Position::new(1, 64),
+                    Span {
+                        start_pos: Position::new(1, 37),
+                        end_pos: Position::new(1, 64),
+                    }
                 ),
                 false
             )
@@ -199,47 +225,65 @@ mod tests {
                                         "",
                                         Type::Unresolved(UnresolvedType::new(
                                             "str",
-                                            Position::new(1, 18),
-                                            Position::new(1, 21)
+                                            Span {
+                                                start_pos: Position::new(1, 18),
+                                                end_pos: Position::new(1, 21)
+                                            }
                                         )),
                                         false,
-                                        Position::new(1, 18),
-                                        Position::new(1, 21)
+                                        Span {
+                                            start_pos: Position::new(1, 18),
+                                            end_pos: Position::new(1, 21)
+                                        }
                                     ),
                                     Argument::new(
                                         "",
                                         Type::Unresolved(UnresolvedType::new(
                                             "i64",
-                                            Position::new(1, 23),
-                                            Position::new(1, 26)
+                                            Span {
+                                                start_pos: Position::new(1, 23),
+                                                end_pos: Position::new(1, 26)
+                                            }
                                         )),
                                         false,
-                                        Position::new(1, 23),
-                                        Position::new(1, 26)
+                                        Span {
+                                            start_pos: Position::new(1, 23),
+                                            end_pos: Position::new(1, 26)
+                                        }
                                     )
                                 ],
                                 Some(Type::Unresolved(UnresolvedType::new(
                                     "bool",
-                                    Position::new(1, 29),
-                                    Position::new(1, 33)
+                                    Span {
+                                        start_pos: Position::new(1, 29),
+                                        end_pos: Position::new(1, 33)
+                                    }
                                 ))),
-                                Position::new(1, 14),
-                                Position::new(1, 33),
+                                Span {
+                                    start_pos: Position::new(1, 14),
+                                    end_pos: Position::new(1, 33),
+                                }
                             ))),
                             false,
-                            Position::new(1, 11),
-                            Position::new(1, 33),
+                            Span {
+                                start_pos: Position::new(1, 11),
+                                end_pos: Position::new(1, 33),
+                            }
                         ),
                         Argument::new(
                             "i",
                             Type::Unresolved(UnresolvedType::new(
                                 "i64",
-                                Position::new(1, 38),
-                                Position::new(1, 41)
+                                Span {
+                                    start_pos: Position::new(1, 38),
+                                    end_pos: Position::new(1, 41)
+                                }
                             )),
                             false,
-                            Position::new(1, 35),
-                            Position::new(1, 41)
+                            Span {
+                                start_pos: Position::new(1, 35),
+                                end_pos: Position::new(1, 41)
+                            }
                         )
                     ],
                     Some(Type::Function(Box::new(FunctionSignature::new_anon(
@@ -247,25 +291,42 @@ mod tests {
                             "",
                             Type::Unresolved(UnresolvedType::new(
                                 "bool",
-                                Position::new(1, 48),
-                                Position::new(1, 52)
+                                Span {
+                                    start_pos: Position::new(1, 48),
+                                    end_pos: Position::new(1, 52)
+                                }
                             )),
                             false,
-                            Position::new(1, 48),
-                            Position::new(1, 52)
+                            Span {
+                                start_pos: Position::new(1, 48),
+                                end_pos: Position::new(1, 52)
+                            }
                         )],
                         Some(Type::Unresolved(UnresolvedType::new(
                             "str",
-                            Position::new(1, 55),
-                            Position::new(1, 58)
+                            Span {
+                                start_pos: Position::new(1, 55),
+                                end_pos: Position::new(1, 58)
+                            }
                         ))),
-                        Position::new(1, 44),
-                        Position::new(1, 58),
+                        Span {
+                            start_pos: Position::new(1, 44),
+                            end_pos: Position::new(1, 58),
+                        }
                     )))),
-                    Position::new(1, 1),
-                    Position::new(1, 58),
+                    Span {
+                        start_pos: Position::new(1, 1),
+                        end_pos: Position::new(1, 58),
+                    }
                 ),
-                Closure::new(vec![], None, Position::new(1, 59), Position::new(1, 61)),
+                Closure::new(
+                    vec![],
+                    None,
+                    Span {
+                        start_pos: Position::new(1, 59),
+                        end_pos: Position::new(1, 61)
+                    }
+                ),
                 false
             )
         );
@@ -280,24 +341,32 @@ mod tests {
             Expression::FunctionCall(Box::new(FuncCall::new(
                 Expression::Symbol(Symbol::new(
                     "do_thing",
-                    Position::new(1, 1),
-                    Position::new(1, 9)
+                    Span {
+                        start_pos: Position::new(1, 1),
+                        end_pos: Position::new(1, 9),
+                    },
                 )),
                 vec![
                     Expression::StrLiteral(StrLit {
                         value: "one".to_string(),
-                        start_pos: Position::new(1, 10),
-                        end_pos: Position::new(1, 15),
+                        span: Span {
+                            start_pos: Position::new(1, 10),
+                            end_pos: Position::new(1, 15),
+                        }
                     }),
                     Expression::StrLiteral(StrLit {
                         value: "two".to_string(),
-                        start_pos: Position::new(1, 17),
-                        end_pos: Position::new(1, 22),
+                        span: Span {
+                            start_pos: Position::new(1, 17),
+                            end_pos: Position::new(1, 22),
+                        }
                     }),
                     Expression::BoolLiteral(BoolLit {
                         value: true,
-                        start_pos: Position::new(1, 24),
-                        end_pos: Position::new(1, 28),
+                        span: Span {
+                            start_pos: Position::new(1, 24),
+                            end_pos: Position::new(1, 28),
+                        },
                     }),
                 ],
                 Position::new(1, 29),
@@ -317,11 +386,15 @@ mod tests {
                 message: _,
                 token: Some(Token {
                     kind: TokenKind::Comma,
-                    start: Position { line: 1, col: 14 },
-                    end: Position { line: 1, col: 15 },
+                    span: Span {
+                        start_pos: Position { line: 1, col: 14 },
+                        end_pos: Position { line: 1, col: 15 },
+                    }
                 }),
-                start_pos: Position { line: 1, col: 14 },
-                end_pos: Position { line: 1, col: 15 },
+                span: Span {
+                    start_pos: Position { line: 1, col: 14 },
+                    end_pos: Position { line: 1, col: 15 },
+                }
             })
         ));
     }
@@ -338,11 +411,15 @@ mod tests {
                 message: _,
                 token: Some(Token {
                     kind: TokenKind::RightParen,
-                    start: Position { line: 1, col: 15 },
-                    end: Position { line: 1, col: 16 },
+                    span: Span {
+                        start_pos: Position { line: 1, col: 15 },
+                        end_pos: Position { line: 1, col: 16 },
+                    }
                 }),
-                start_pos: Position { line: 1, col: 15 },
-                end_pos: Position { line: 1, col: 16 },
+                span: Span {
+                    start_pos: Position { line: 1, col: 15 },
+                    end_pos: Position { line: 1, col: 16 },
+                }
             })
         ));
     }
@@ -375,11 +452,15 @@ mod tests {
                 message: _,
                 token: Some(Token {
                     kind: TokenKind::LogicalAnd,
-                    start: Position { line: 1, col: 4 },
-                    end: Position { line: 1, col: 7 },
+                    span: Span {
+                        start_pos: Position { line: 1, col: 4 },
+                        end_pos: Position { line: 1, col: 7 },
+                    }
                 }),
-                start_pos: Position { line: 1, col: 4 },
-                end_pos: Position { line: 1, col: 7 },
+                span: Span {
+                    start_pos: Position { line: 1, col: 4 },
+                    end_pos: Position { line: 1, col: 7 },
+                }
             })
         ));
     }
@@ -407,16 +488,22 @@ mod tests {
                             "s",
                             Type::Unresolved(UnresolvedType::new(
                                 "str",
-                                Position::new(1, 15),
-                                Position::new(1, 18)
+                                Span {
+                                    start_pos: Position::new(1, 15),
+                                    end_pos: Position::new(1, 18)
+                                }
                             )),
                             false,
-                            Position::new(1, 12),
-                            Position::new(1, 18)
+                            Span {
+                                start_pos: Position::new(1, 12),
+                                end_pos: Position::new(1, 18)
+                            }
                         )],
                         None,
-                        Position::new(1, 1),
-                        Position::new(1, 19)
+                        Span {
+                            start_pos: Position::new(1, 1),
+                            end_pos: Position::new(1, 19)
+                        }
                     ),
                     Closure::new(
                         vec![
@@ -425,46 +512,62 @@ mod tests {
                                     Box::new(Expression::Symbol(Symbol {
                                         maybe_mod_name: None,
                                         name: "s".to_string(),
-                                        start_pos: Position::new(2, 16),
-                                        end_pos: Position::new(2, 17),
+                                        span: Span {
+                                            start_pos: Position::new(2, 16),
+                                            end_pos: Position::new(2, 17),
+                                        },
                                     })),
                                     Operator::EqualTo,
                                     Box::new(Expression::StrLiteral(StrLit {
                                         value: "dog".to_string(),
-                                        start_pos: Position::new(2, 21),
-                                        end_pos: Position::new(2, 26),
+                                        span: Span {
+                                            start_pos: Position::new(2, 21),
+                                            end_pos: Position::new(2, 26),
+                                        }
                                     })),
                                 )),
                                 Closure::new(
                                     vec![Statement::Return(Ret::new(
                                         None,
-                                        Position::new(3, 17),
-                                        Position::new(3, 23)
+                                        Span {
+                                            start_pos: Position::new(3, 17),
+                                            end_pos: Position::new(3, 23)
+                                        },
                                     ))],
                                     None,
-                                    Position::new(2, 27),
-                                    Position::new(4, 14)
+                                    Span {
+                                        start_pos: Position::new(2, 27),
+                                        end_pos: Position::new(4, 14)
+                                    },
                                 ),
-                                Position::new(2, 16),
-                                Position::new(4, 14),
+                                Span {
+                                    start_pos: Position::new(2, 16),
+                                    end_pos: Position::new(4, 14),
+                                }
                             )])),
                             Statement::FunctionCall(FuncCall::new(
                                 Expression::Symbol(Symbol::new(
                                     "print",
-                                    Position::new(6, 13),
-                                    Position::new(6, 18)
+                                    Span {
+                                        start_pos: Position::new(6, 13),
+                                        end_pos: Position::new(6, 18)
+                                    },
                                 )),
                                 vec![Expression::StrLiteral(StrLit {
                                     value: "not dog".to_string(),
-                                    start_pos: Position::new(6, 19),
-                                    end_pos: Position::new(6, 28),
+                                    span: Span {
+                                        start_pos: Position::new(6, 19),
+                                        end_pos: Position::new(6, 28),
+                                    }
                                 })],
                                 Position::new(6, 29),
                             ))
                         ],
                         None,
-                        Position::new(1, 20),
-                        Position::new(7, 10),
+                        Span {
+                            start_pos: Position::new(1, 20),
+                            end_pos: Position::new(7, 10),
+                        },
                     ),
                     false
                 ))]
@@ -542,24 +645,32 @@ mod tests {
                     value: Expression::Symbol(Symbol {
                         maybe_mod_name: None,
                         name: "thing".to_string(),
-                        start_pos: Position::new(2, 21),
-                        end_pos: Position::new(2, 26),
+                        span: Span {
+                            start_pos: Position::new(2, 21),
+                            end_pos: Position::new(2, 26),
+                        }
                     }),
-                    start_pos: Position::new(2, 13),
-                    end_pos: Position::new(2, 26),
+                    span: Span {
+                        start_pos: Position::new(2, 13),
+                        end_pos: Position::new(2, 26),
+                    },
                 }),
                 Statement::VariableAssignment(VariableAssignment::new(
                     Expression::Symbol(Symbol {
                         maybe_mod_name: None,
                         name: "thing".to_string(),
-                        start_pos: Position::new(3, 14),
-                        end_pos: Position::new(3, 19),
+                        span: Span {
+                            start_pos: Position::new(3, 14),
+                            end_pos: Position::new(3, 19),
+                        },
                     }),
                     Expression::IntLiteral(IntLit {
                         value: 2,
                         has_suffix: false,
-                        start_pos: Position::new(3, 23),
-                        end_pos: Position::new(3, 24),
+                        span: Span {
+                            start_pos: Position::new(3, 23),
+                            end_pos: Position::new(3, 24),
+                        }
                     }),
                     Position::new(3, 13),
                 ))

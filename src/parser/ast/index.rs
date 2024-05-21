@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
 
@@ -9,8 +9,7 @@ use crate::parser::ast::expr::Expression;
 pub struct Index {
     pub collection_expr: Expression,
     pub index_expr: Expression,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 locatable_impl!(Index);
@@ -37,8 +36,10 @@ impl PartialEq for Index {
 impl Index {
     pub fn new(collection_expr: Expression, index_expr: Expression) -> Index {
         Index {
-            start_pos: collection_expr.start_pos().clone(),
-            end_pos: collection_expr.end_pos().clone(),
+            span: Span {
+                start_pos: collection_expr.start_pos().clone(),
+                end_pos: collection_expr.end_pos().clone(),
+            },
             collection_expr,
             index_expr,
         }

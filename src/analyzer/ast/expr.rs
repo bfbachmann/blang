@@ -17,7 +17,7 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
 use crate::analyzer::type_store::TypeKey;
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::parser::ast::array::ArrayInit;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::func::Function;
@@ -320,8 +320,7 @@ impl AExprKind {
 pub struct AExpr {
     pub kind: AExprKind,
     pub type_key: TypeKey,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl fmt::Display for AExpr {
@@ -334,17 +333,11 @@ locatable_impl!(AExpr);
 
 impl AExpr {
     /// Creates a new expression.
-    pub fn new(
-        kind: AExprKind,
-        type_key: TypeKey,
-        start_pos: Position,
-        end_pos: Position,
-    ) -> AExpr {
+    pub fn new(kind: AExprKind, type_key: TypeKey, span: Span) -> AExpr {
         AExpr {
             kind,
             type_key,
-            start_pos,
-            end_pos,
+            span,
         }
     }
 
@@ -367,16 +360,15 @@ impl AExpr {
         allow_type: bool,
         ignore_mutability: bool,
     ) -> AExpr {
-        let start_pos = expr.start_pos().clone();
-        let end_pos = expr.end_pos().clone();
-
         let mut result = analyze_expr(
             ctx,
             expr.clone(),
             maybe_expected_type_key,
             allow_type,
-            start_pos,
-            end_pos,
+            Span {
+                start_pos: expr.start_pos().clone(),
+                end_pos: expr.end_pos().clone(),
+            },
         );
 
         // Try to (safely) coerce the expression to the right type (this may involve template
@@ -616,8 +608,7 @@ impl AExpr {
                     self.kind = AExprKind::Symbol(ASymbol::new_null(
                         ctx,
                         Some(target_type_key),
-                        symbol.start_pos().clone(),
-                        symbol.end_pos().clone(),
+                        symbol.span().clone(),
                     ));
                     return self;
                 }
@@ -641,33 +632,25 @@ impl AExpr {
         AExpr {
             kind,
             type_key,
-            start_pos: Position::default(),
-            end_pos: Position::default(),
+            span: Default::default(),
         }
     }
 
     /// Returns a new expression with value null. The null value for pointer types is just 0u64
     /// type cast to that type.
     pub fn new_null_ptr(ctx: &mut ProgramContext, maybe_type_key: Option<TypeKey>) -> AExpr {
-        let null_symbol = ASymbol::new_null(
-            ctx,
-            maybe_type_key,
-            Position::default(),
-            Position::default(),
-        );
+        let null_symbol = ASymbol::new_null(ctx, maybe_type_key, Default::default());
         AExpr {
             type_key: null_symbol.type_key,
             kind: AExprKind::Symbol(null_symbol),
-            start_pos: Default::default(),
-            end_pos: Default::default(),
+            span: Default::default(),
         }
     }
 
     /// Creates a new zero-valued expression of the given type.
     pub fn new_zero_value(ctx: &mut ProgramContext, typ: Type) -> Self {
         let type_key = ctx.resolve_type(&typ);
-        let start_pos = typ.start_pos().clone();
-        let end_pos = typ.end_pos().clone();
+        let span = typ.span().clone();
 
         match typ {
             Type::Struct(_) => AExpr {
@@ -676,8 +659,7 @@ impl AExpr {
                     field_values: Default::default(),
                 }),
                 type_key,
-                start_pos,
-                end_pos,
+                span,
             },
 
             Type::Enum(_) => AExpr {
@@ -691,22 +673,19 @@ impl AExpr {
                     maybe_value: None,
                 }),
                 type_key,
-                start_pos,
-                end_pos,
+                span,
             },
 
             Type::Tuple(_) => AExpr {
                 kind: AExprKind::TupleInit(ATupleInit::new_empty(ctx)),
                 type_key,
-                start_pos,
-                end_pos,
+                span,
             },
 
             Type::Array(_) => AExpr {
                 kind: AExprKind::ArrayInit(AArrayInit::new_empty(ctx)),
                 type_key,
-                start_pos,
-                end_pos,
+                span,
             },
 
             Type::Function(_) => AExpr {
@@ -723,8 +702,7 @@ impl AExpr {
                     body: AClosure::new_empty(),
                 })),
                 type_key,
-                start_pos,
-                end_pos,
+                span,
             },
 
             Type::Unresolved(unresolved_type) => {
@@ -746,8 +724,7 @@ impl AExpr {
                 AExpr {
                     kind,
                     type_key,
-                    start_pos,
-                    end_pos,
+                    span,
                 }
             }
 
@@ -1038,8 +1015,7 @@ fn analyze_type_cast(
     ctx: &mut ProgramContext,
     expr: Expression,
     target_type: Type,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 ) -> AExpr {
     let left_expr = AExpr::from(ctx, expr, None, false, false, false);
     let target_type_key = ctx.resolve_type(&target_type);
@@ -1064,8 +1040,7 @@ fn analyze_type_cast(
         AExpr {
             kind: AExprKind::TypeCast(Box::new(left_expr), target_type_key),
             type_key: target_type_key,
-            start_pos,
-            end_pos,
+            span,
         }
     }
 }
@@ -1074,8 +1049,7 @@ fn analyze_tuple_init(
     ctx: &mut ProgramContext,
     tuple_init: TupleInit,
     maybe_expected_type_key: Option<TypeKey>,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 ) -> AExpr {
     let maybe_expected_field_type_keys = match maybe_expected_type_key {
         Some(tk) => {
@@ -1098,8 +1072,7 @@ fn analyze_tuple_init(
     AExpr {
         kind: AExprKind::TupleInit(a_init),
         type_key,
-        start_pos,
-        end_pos,
+        span,
     }
 }
 
@@ -1107,8 +1080,7 @@ fn analyze_array_init(
     ctx: &mut ProgramContext,
     array_init: ArrayInit,
     maybe_expected_type_key: Option<TypeKey>,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 ) -> AExpr {
     let maybe_element_type_key = match maybe_expected_type_key {
         Some(tk) => {
@@ -1126,24 +1098,17 @@ fn analyze_array_init(
     AExpr {
         kind: AExprKind::ArrayInit(a_init),
         type_key,
-        start_pos,
-        end_pos,
+        span,
     }
 }
 
-fn analyze_fn_call(
-    ctx: &mut ProgramContext,
-    fn_call: FuncCall,
-    start_pos: Position,
-    end_pos: Position,
-) -> AExpr {
+fn analyze_fn_call(ctx: &mut ProgramContext, fn_call: FuncCall, span: Span) -> AExpr {
     let a_call = AFnCall::from(ctx, &fn_call);
     match a_call.maybe_ret_type_key.clone() {
         Some(type_key) => AExpr {
             kind: AExprKind::FunctionCall(Box::new(a_call)),
             type_key,
-            start_pos,
-            end_pos,
+            span,
         },
 
         _ => {
@@ -1164,12 +1129,7 @@ fn analyze_fn_call(
     }
 }
 
-fn analyze_anon_fn(
-    ctx: &mut ProgramContext,
-    anon_fn: Function,
-    start_pos: Position,
-    end_pos: Position,
-) -> AExpr {
+fn analyze_anon_fn(ctx: &mut ProgramContext, anon_fn: Function, span: Span) -> AExpr {
     // Give the anonymous function a unique name based on the order in which it appears
     // inside the current scope.
     let mut sig = anon_fn.signature.clone();
@@ -1201,8 +1161,7 @@ fn analyze_anon_fn(
     let type_key = a_fn.signature.type_key;
 
     AExpr {
-        start_pos,
-        end_pos,
+        span,
         kind: AExprKind::AnonFunction(Box::new(a_fn)),
         type_key,
     }
@@ -1213,8 +1172,7 @@ fn analyze_unary_op(
     op: &Operator,
     expr: &Expression,
     right_expr: &Expression,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 ) -> AExpr {
     match op {
         Operator::LogicalNot => {
@@ -1245,8 +1203,7 @@ fn analyze_unary_op(
                 AExpr {
                     type_key: a_expr.type_key,
                     kind: AExprKind::UnaryOperation(Operator::LogicalNot, Box::new(a_expr)),
-                    start_pos,
-                    end_pos,
+                    span,
                 }
             }
         }
@@ -1259,8 +1216,7 @@ fn analyze_unary_op(
             AExpr {
                 type_key,
                 kind: AExprKind::UnaryOperation(Operator::Reference, Box::new(operand_expr)),
-                start_pos,
-                end_pos,
+                span,
             }
         }
 
@@ -1276,8 +1232,7 @@ fn analyze_unary_op(
             AExpr {
                 type_key,
                 kind: AExprKind::UnaryOperation(Operator::MutReference, Box::new(operand_expr)),
-                start_pos,
-                end_pos,
+                span,
             }
         }
 
@@ -1290,8 +1245,7 @@ fn analyze_unary_op(
                 AType::Pointer(ptr_type) => AExpr {
                     type_key: ptr_type.pointee_type_key,
                     kind: AExprKind::UnaryOperation(Operator::Defererence, Box::new(operand_expr)),
-                    start_pos,
-                    end_pos,
+                    span,
                 },
 
                 other => {
@@ -1321,8 +1275,7 @@ fn analyze_unary_op(
                 AExpr {
                     type_key: operand_expr.type_key,
                     kind: AExprKind::UnaryOperation(Operator::Subtract, Box::new(operand_expr)),
-                    start_pos,
-                    end_pos,
+                    span,
                 }
             } else {
                 ctx.insert_err(AnalyzeError::new(
@@ -1355,8 +1308,7 @@ fn analyze_binary_op(
     left_expr: Expression,
     right_expr: Expression,
     maybe_expected_type_key: Option<TypeKey>,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 ) -> AExpr {
     let maybe_expected_operand_tk = match maybe_expected_type_key {
         Some(tk) => get_expected_operand_type_key(ctx, &op, tk),
@@ -1389,8 +1341,7 @@ fn analyze_binary_op(
                 Box::new(a_right),
             ),
             type_key: get_result_type(ctx, &op, None),
-            start_pos,
-            end_pos,
+            span,
         };
     }
 
@@ -1410,24 +1361,16 @@ fn analyze_binary_op(
     AExpr {
         kind: AExprKind::BinaryOperation(Box::new(a_left.clone()), op.clone(), Box::new(a_right)),
         type_key: get_result_type(ctx, &op, maybe_operand_type_key),
-        start_pos,
-        end_pos,
+        span,
     }
 }
 
-fn analyze_symbol(
-    ctx: &mut ProgramContext,
-    symbol: Symbol,
-    allow_type: bool,
-    start_pos: Position,
-    end_pos: Position,
-) -> AExpr {
+fn analyze_symbol(ctx: &mut ProgramContext, symbol: Symbol, allow_type: bool, span: Span) -> AExpr {
     let a_symbol = ASymbol::from(ctx, &symbol, true, allow_type, None);
     AExpr {
         type_key: a_symbol.type_key,
         kind: AExprKind::Symbol(a_symbol),
-        start_pos,
-        end_pos,
+        span,
     }
 }
 
@@ -1436,98 +1379,83 @@ fn analyze_expr(
     expr: Expression,
     maybe_expected_type_key: Option<TypeKey>,
     allow_type: bool,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 ) -> AExpr {
     match expr {
-        Expression::TypeCast(expr, target_type) => {
-            analyze_type_cast(ctx, *expr, target_type, start_pos, end_pos)
-        }
+        Expression::TypeCast(expr, target_type) => analyze_type_cast(ctx, *expr, target_type, span),
 
-        Expression::Symbol(symbol) => analyze_symbol(ctx, symbol, allow_type, start_pos, end_pos),
+        Expression::Symbol(symbol) => analyze_symbol(ctx, symbol, allow_type, span),
 
         Expression::BoolLiteral(b) => AExpr {
             kind: AExprKind::BoolLiteral(b.value),
             type_key: ctx.bool_type_key(),
-            start_pos,
-            end_pos,
+            span,
         },
 
         Expression::I8Literal(i) => AExpr {
             kind: AExprKind::I8Literal(i.value),
             type_key: ctx.i8_type_key(),
-            start_pos,
-            end_pos,
+            span,
         },
 
         Expression::U8Literal(i) => AExpr {
             kind: AExprKind::U8Literal(i.value),
             type_key: ctx.u8_type_key(),
-            start_pos,
-            end_pos,
+            span,
         },
 
         Expression::I32Literal(i) => AExpr {
             kind: AExprKind::I32Literal(i.value),
             type_key: ctx.i32_type_key(),
-            start_pos,
-            end_pos,
+            span,
         },
 
         Expression::U32Literal(i) => AExpr {
             kind: AExprKind::U32Literal(i.value),
             type_key: ctx.u32_type_key(),
-            start_pos,
-            end_pos,
+            span,
         },
 
         Expression::F32Literal(i) => AExpr {
             kind: AExprKind::F32Literal(i.value),
             type_key: ctx.f32_type_key(),
-            start_pos,
-            end_pos,
+            span,
         },
 
         Expression::I64Literal(i) => AExpr {
             kind: AExprKind::I64Literal(i.value),
             type_key: ctx.i64_type_key(),
-            start_pos,
-            end_pos,
+            span,
         },
 
         Expression::U64Literal(i) => AExpr {
             kind: AExprKind::U64Literal(i.value),
             type_key: ctx.u64_type_key(),
-            start_pos,
-            end_pos,
+            span,
         },
 
         Expression::F64Literal(i) => AExpr {
             kind: AExprKind::F64Literal(i.value, i.has_suffix),
             type_key: ctx.f64_type_key(),
-            start_pos,
-            end_pos,
+            span,
         },
 
         Expression::IntLiteral(i) => AExpr {
             kind: AExprKind::IntLiteral(i.value, i.has_suffix),
             type_key: ctx.int_type_key(),
-            start_pos,
-            end_pos,
+            span,
         },
 
         Expression::UintLiteral(i) => AExpr {
             kind: AExprKind::UintLiteral(i.value),
             type_key: ctx.uint_type_key(),
-            start_pos,
-            end_pos,
+            span,
         },
 
         Expression::StrLiteral(s) => AExpr {
             kind: AExprKind::StrLiteral(s.value.clone()),
             type_key: ctx.str_type_key(),
-            start_pos,
-            end_pos,
+            span,
         },
 
         Expression::StructInit(struct_init) => {
@@ -1536,8 +1464,7 @@ fn analyze_expr(
             AExpr {
                 kind: AExprKind::StructInit(a_init),
                 type_key,
-                start_pos,
-                end_pos,
+                span,
             }
         }
 
@@ -1547,36 +1474,30 @@ fn analyze_expr(
             AExpr {
                 kind: AExprKind::EnumInit(a_init),
                 type_key,
-                start_pos,
-                end_pos,
+                span,
             }
         }
 
         Expression::TupleInit(tuple_init) => {
-            analyze_tuple_init(ctx, tuple_init, maybe_expected_type_key, start_pos, end_pos)
+            analyze_tuple_init(ctx, tuple_init, maybe_expected_type_key, span)
         }
 
-        Expression::ArrayInit(array_init) => analyze_array_init(
-            ctx,
-            *array_init,
-            maybe_expected_type_key,
-            start_pos,
-            end_pos,
-        ),
+        Expression::ArrayInit(array_init) => {
+            analyze_array_init(ctx, *array_init, maybe_expected_type_key, span)
+        }
 
         Expression::SizeOf(sizeof) => {
             let type_key = ctx.resolve_type(&sizeof.typ);
             AExpr {
                 kind: AExprKind::Sizeof(type_key),
                 type_key: ctx.uint_type_key(),
-                start_pos,
-                end_pos,
+                span,
             }
         }
 
         Expression::FunctionCall(fn_call) => {
             // Analyze the function call and ensure it has a return type.
-            analyze_fn_call(ctx, *fn_call, start_pos, end_pos)
+            analyze_fn_call(ctx, *fn_call, span)
         }
 
         Expression::Index(index) => {
@@ -1584,8 +1505,7 @@ fn analyze_expr(
             AExpr {
                 type_key: a_index.result_type_key,
                 kind: AExprKind::Index(Box::new(a_index)),
-                start_pos,
-                end_pos,
+                span,
             }
         }
 
@@ -1594,19 +1514,18 @@ fn analyze_expr(
             AExpr {
                 type_key: access.member_type_key,
                 kind: AExprKind::MemberAccess(Box::new(access)),
-                start_pos,
-                end_pos,
+                span,
             }
         }
 
-        Expression::AnonFunction(anon_fn) => analyze_anon_fn(ctx, *anon_fn, start_pos, end_pos),
+        Expression::AnonFunction(anon_fn) => analyze_anon_fn(ctx, *anon_fn, span),
 
         Expression::Lambda(_) => {
             todo!();
         }
 
         Expression::UnaryOperation(ref op, ref right_expr) => {
-            analyze_unary_op(ctx, op, &expr, right_expr, start_pos, end_pos)
+            analyze_unary_op(ctx, op, &expr, right_expr, span)
         }
 
         Expression::BinaryOperation(left_expr, op, right_expr) => analyze_binary_op(
@@ -1615,8 +1534,7 @@ fn analyze_expr(
             *left_expr,
             *right_expr,
             maybe_expected_type_key,
-            start_pos,
-            end_pos,
+            span,
         ),
     }
 }
@@ -1633,7 +1551,6 @@ mod tests {
     use crate::analyzer::error::{AnalyzeError, ErrorKind};
     use crate::analyzer::prog_context::ProgramContext;
     use crate::analyzer::scope::ScopedSymbol;
-    use crate::lexer::pos::Position;
     use crate::parser::ast::arg::Argument;
     use crate::parser::ast::bool_lit::BoolLit;
     use crate::parser::ast::expr::Expression;
@@ -1656,8 +1573,7 @@ mod tests {
             AExpr {
                 kind: AExprKind::I64Literal(1),
                 type_key: ctx.i64_type_key(),
-                start_pos: Position::default(),
-                end_pos: Position::default(),
+                span: Default::default(),
             }
         );
     }
@@ -1673,8 +1589,7 @@ mod tests {
             AExpr {
                 kind: AExprKind::BoolLiteral(false),
                 type_key: ctx.bool_type_key(),
-                start_pos: Position::default(),
-                end_pos: Position::default(),
+                span: Default::default(),
             },
         );
     }
@@ -1690,8 +1605,7 @@ mod tests {
             AExpr {
                 kind: AExprKind::StrLiteral(String::from("test")),
                 type_key: ctx.str_type_key(),
-                start_pos: Position::default(),
-                end_pos: Position::default(),
+                span: Default::default(),
             }
         );
     }
@@ -1716,8 +1630,7 @@ mod tests {
                     ASymbol::new_with_default_pos("myvar", ctx.str_type_key(),)
                 ),
                 type_key: ctx.str_type_key(),
-                start_pos: Position::default(),
-                end_pos: Position::default(),
+                span: Default::default(),
             }
         );
     }
@@ -1741,8 +1654,7 @@ mod tests {
                     ctx.unknown_type_key(),
                 )),
                 type_key: ctx.unknown_type_key(),
-                start_pos: Position::default(),
-                end_pos: Position::default(),
+                span: Default::default(),
             }
         );
         assert!(matches!(
@@ -1817,14 +1729,12 @@ mod tests {
                     args: vec![AExpr {
                         kind: AExprKind::BoolLiteral(true),
                         type_key: ctx.bool_type_key(),
-                        start_pos: Position::default(),
-                        end_pos: Position::default(),
+                        span: Default::default(),
                     }],
                     maybe_ret_type_key: Some(ctx.str_type_key()),
                 })),
                 type_key: ctx.str_type_key(),
-                start_pos: Position::default(),
-                end_pos: Position::default(),
+                span: Default::default(),
             },
         );
     }
@@ -1882,8 +1792,7 @@ mod tests {
                     AExpr {
                         kind: AExprKind::I64Literal(1),
                         type_key: ctx.i64_type_key(),
-                        start_pos: Position::default(),
-                        end_pos: Position::default(),
+                        span: Default::default(),
                     }
                 );
                 assert_eq!(
@@ -1891,8 +1800,7 @@ mod tests {
                     AExpr {
                         kind: AExprKind::Unknown,
                         type_key: ctx.none_type_key(),
-                        start_pos: Position::default(),
-                        end_pos: Position::default(),
+                        span: Default::default(),
                     }
                 );
                 assert_eq!(type_key, ctx.int_type_key())
@@ -1982,8 +1890,7 @@ mod tests {
                     maybe_ret_type_key: Some(ctx.unknown_type_key()),
                 })),
                 type_key: ctx.unknown_type_key(),
-                start_pos: Position::default(),
-                end_pos: Position::default(),
+                span: Default::default(),
             }
         );
 
@@ -2080,8 +1987,7 @@ mod tests {
                     args: vec![AExpr {
                         kind: AExprKind::I64Literal(1),
                         type_key: ctx.i64_type_key(),
-                        start_pos: Position::default(),
-                        end_pos: Position::default(),
+                        span: Default::default(),
                     }],
                     maybe_ret_type_key: Some(ctx.bool_type_key()),
                 })),
@@ -2125,20 +2031,17 @@ mod tests {
                     Box::new(AExpr {
                         kind: AExprKind::I64Literal(1),
                         type_key: ctx.i64_type_key(),
-                        start_pos: Position::default(),
-                        end_pos: Position::default(),
+                        span: Default::default(),
                     }),
                     Operator::Add,
                     Box::new(AExpr {
                         kind: AExprKind::StrLiteral("asdf".to_string()),
                         type_key: ctx.str_type_key(),
-                        start_pos: Position::default(),
-                        end_pos: Position::default(),
+                        span: Default::default(),
                     })
                 ),
                 type_key: ctx.int_type_key(),
-                start_pos: Position::default(),
-                end_pos: Position::default(),
+                span: Default::default(),
             }
         );
 
@@ -2175,20 +2078,17 @@ mod tests {
                     Box::new(AExpr {
                         kind: AExprKind::StrLiteral("asdf".to_string()),
                         type_key: ctx.str_type_key(),
-                        start_pos: Position::default(),
-                        end_pos: Position::default(),
+                        span: Default::default(),
                     }),
                     Operator::Add,
                     Box::new(AExpr {
                         kind: AExprKind::I64Literal(1),
                         type_key: ctx.i64_type_key(),
-                        start_pos: Position::default(),
-                        end_pos: Position::default(),
+                        span: Default::default(),
                     })
                 ),
                 type_key: ctx.int_type_key(),
-                start_pos: Position::default(),
-                end_pos: Position::default(),
+                span: Default::default(),
             }
         );
 
@@ -2225,8 +2125,7 @@ mod tests {
             AExpr {
                 kind: AExprKind::BoolLiteral(false),
                 type_key: ctx.bool_type_key(),
-                start_pos: Position::default(),
-                end_pos: Position::default(),
+                span: Default::default(),
             }
         );
 
@@ -2263,8 +2162,7 @@ mod tests {
             AExpr {
                 kind: AExprKind::BoolLiteral(false),
                 type_key: ctx.bool_type_key(),
-                start_pos: Position::default(),
-                end_pos: Position::default(),
+                span: Default::default(),
             }
         );
 

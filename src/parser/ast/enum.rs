@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -12,12 +12,11 @@ use crate::parser::module::Module;
 use crate::{locatable_impl, util};
 
 /// A variant of an enumerated type.
-#[derive(Debug, Eq)]
+#[derive(Clone, Debug, Eq)]
 pub struct EnumTypeVariant {
     pub name: String,
     pub maybe_type: Option<Type>,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl PartialEq for EnumTypeVariant {
@@ -32,20 +31,6 @@ impl Hash for EnumTypeVariant {
 
         if let Some(typ) = &self.maybe_type {
             typ.hash(state);
-        }
-    }
-}
-
-impl Clone for EnumTypeVariant {
-    fn clone(&self) -> Self {
-        EnumTypeVariant {
-            name: self.name.clone(),
-            maybe_type: match &self.maybe_type {
-                Some(t) => Some(t.clone()),
-                None => None,
-            },
-            start_pos: self.start_pos.clone(),
-            end_pos: self.end_pos.clone(),
         }
     }
 }
@@ -83,7 +68,7 @@ impl EnumTypeVariant {
                 // Parse `<type>)`.
                 let typ = Type::from(tokens)?;
                 let token = Module::parse_expecting(tokens, TokenKind::RightParen)?;
-                (Some(typ), token.end)
+                (Some(typ), token.span.end_pos)
             }
             None => {
                 let mut end_pos = start_pos.clone();
@@ -95,8 +80,7 @@ impl EnumTypeVariant {
         Ok(EnumTypeVariant {
             name,
             maybe_type: typ,
-            start_pos,
-            end_pos,
+            span: Span { start_pos, end_pos },
         })
     }
 }
@@ -107,8 +91,7 @@ pub struct EnumType {
     pub name: String,
     pub variants: Vec<EnumTypeVariant>,
     pub is_pub: bool,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl PartialEq for EnumType {
@@ -170,7 +153,7 @@ impl EnumType {
         let mut variants = vec![];
         let end_pos = loop {
             if let Some(token) = Module::parse_optional(tokens, TokenKind::RightBrace) {
-                break token.end.clone();
+                break token.span.end_pos;
             }
 
             variants.push(EnumTypeVariant::from(tokens)?);
@@ -183,8 +166,7 @@ impl EnumType {
             name,
             variants,
             is_pub,
-            start_pos,
-            end_pos,
+            span: Span { start_pos, end_pos },
         })
     }
 }
@@ -195,8 +177,7 @@ pub struct EnumVariantInit {
     pub enum_type: Type,
     pub variant_name: String,
     pub maybe_value: Option<Box<Expression>>,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl PartialEq for EnumVariantInit {
@@ -253,7 +234,7 @@ impl EnumVariantInit {
 
         // In case there is no value in this initialization, compute the end position now.
         let mut end_pos = match tokens.peek_next() {
-            Some(t) => t.end.clone(),
+            Some(t) => t.span.end_pos,
             None => Position::default(),
         };
         let variant_name = Module::parse_identifier(tokens)?;
@@ -262,7 +243,9 @@ impl EnumVariantInit {
         let maybe_value = match Module::parse_optional(tokens, TokenKind::LeftParen) {
             Some(_) => {
                 let expr = Expression::from(tokens)?;
-                end_pos = Module::parse_expecting(tokens, TokenKind::RightParen)?.end;
+                end_pos = Module::parse_expecting(tokens, TokenKind::RightParen)?
+                    .span
+                    .end_pos;
                 Some(Box::new(expr))
             }
             None => None,
@@ -272,8 +255,7 @@ impl EnumVariantInit {
             enum_type,
             variant_name,
             maybe_value,
-            start_pos,
-            end_pos,
+            span: Span { start_pos, end_pos },
         })
     }
 }

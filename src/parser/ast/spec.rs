@@ -1,7 +1,7 @@
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::Locatable;
 use crate::lexer::pos::Position;
+use crate::lexer::pos::{Locatable, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -15,8 +15,7 @@ use crate::{locatable_impl, util};
 pub struct Spec {
     pub name: String,
     pub fn_sigs: Vec<FunctionSignature>,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl Hash for Spec {
@@ -46,7 +45,9 @@ impl Spec {
     ///  - `fn_sig` is a function signature in the spec (see `FunctionSignature::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Parse `spec` and get this spec declaration starting position.
-        let start_pos = Module::parse_expecting(tokens, TokenKind::Spec)?.start;
+        let start_pos = Module::parse_expecting(tokens, TokenKind::Spec)?
+            .span
+            .start_pos;
 
         // Parse the spec name and left brace.
         let name = Module::parse_identifier(tokens)?;
@@ -56,7 +57,7 @@ impl Spec {
         let mut fn_sigs = vec![];
         let end_pos = loop {
             if let Some(token) = Module::parse_optional(tokens, TokenKind::RightBrace) {
-                break token.end;
+                break token.span.end_pos;
             }
 
             fn_sigs.push(FunctionSignature::from(tokens)?);
@@ -65,8 +66,7 @@ impl Spec {
         Ok(Spec {
             name,
             fn_sigs,
-            start_pos,
-            end_pos,
+            span: Span { start_pos, end_pos },
         })
     }
 }

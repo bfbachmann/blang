@@ -61,8 +61,7 @@ impl Module {
                     ErrorKind::UnexpectedEOF,
                     format_code!(r#"expected {}, but found EOF"#, expected).as_str(),
                     None,
-                    Position::default(),
-                    Position::default(),
+                    Default::default(),
                 ))
             }
             Some(token) => {
@@ -95,8 +94,7 @@ impl Module {
                     )
                     .as_str(),
                     None,
-                    Position::default(),
-                    Position::default(),
+                    Default::default(),
                 ))
             }
             Some(token) => {
@@ -165,8 +163,7 @@ impl Module {
                     ErrorKind::UnexpectedEOF,
                     "expected identifier, but found EOF",
                     None,
-                    Position::default(),
-                    Position::default(),
+                    Default::default(),
                 ))
             }
             Some(other) => {
@@ -182,9 +179,9 @@ impl Module {
     /// Returns the current position in the file based on the head of the token deque.
     pub fn current_position(tokens: &Stream<Token>) -> Position {
         match tokens.peek_next() {
-            Some(Token { kind: _, start, .. }) => Position {
-                line: start.line,
-                col: start.col,
+            Some(Token { kind: _, span, .. }) => Position {
+                line: span.start_pos.line,
+                col: span.start_pos.col,
             },
             None => Position::new(0, 0),
         }
@@ -193,9 +190,9 @@ impl Module {
     /// Returns the end position of the previous token in the stream.
     pub fn prev_position(tokens: &Stream<Token>) -> Position {
         match tokens.prev() {
-            Some(Token { kind: _, end, .. }) => Position {
-                line: end.line,
-                col: end.col,
+            Some(Token { kind: _, span, .. }) => Position {
+                line: span.end_pos.line,
+                col: span.end_pos.col,
             },
             None => Position::new(0, 0),
         }

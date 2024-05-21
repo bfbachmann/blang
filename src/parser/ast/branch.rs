@@ -1,13 +1,11 @@
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
-
 use crate::locatable_impl;
 use crate::parser::ast::closure::Closure;
 use crate::parser::ast::expr::Expression;
-
 use crate::parser::error::ParseResult;
 use crate::parser::module::Module;
 
@@ -17,8 +15,7 @@ use crate::parser::module::Module;
 pub struct Branch {
     pub condition: Option<Expression>,
     pub body: Closure,
-    pub start_pos: Position,
-    pub end_pos: Position,
+    pub span: Span,
 }
 
 impl Hash for Branch {
@@ -32,17 +29,11 @@ locatable_impl!(Branch);
 
 impl Branch {
     /// Creates a new branch.
-    pub fn new(
-        condition: Option<Expression>,
-        body: Closure,
-        start_pos: Position,
-        end_pos: Position,
-    ) -> Self {
+    pub fn new(condition: Option<Expression>, body: Closure, span: Span) -> Self {
         Branch {
             condition,
             body,
-            start_pos,
-            end_pos,
+            span,
         }
     }
 
@@ -72,6 +63,6 @@ impl Branch {
         let body = Closure::from(tokens)?;
         let end_pos = body.end_pos().clone();
 
-        Ok(Branch::new(cond_expr, body, start_pos, end_pos))
+        Ok(Branch::new(cond_expr, body, Span { start_pos, end_pos }))
     }
 }

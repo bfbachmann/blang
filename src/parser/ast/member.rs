@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
 
@@ -11,8 +11,7 @@ use crate::parser::ast::expr::Expression;
 pub struct MemberAccess {
     pub expr: Expression,
     pub member_name: String,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 locatable_impl!(MemberAccess);
@@ -32,17 +31,11 @@ impl Display for MemberAccess {
 
 impl MemberAccess {
     /// Creates a new member access expression.
-    pub fn new(
-        expr: Expression,
-        member_name: String,
-        start_pos: Position,
-        end_pos: Position,
-    ) -> MemberAccess {
+    pub fn new(expr: Expression, member_name: String, span: Span) -> MemberAccess {
         MemberAccess {
             expr,
             member_name,
-            start_pos,
-            end_pos,
+            span,
         }
     }
 }

@@ -2,7 +2,7 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -15,8 +15,7 @@ use crate::{locatable_impl, util};
 #[derive(Debug, Clone, Eq)]
 pub struct Conditional {
     pub branches: Vec<Branch>,
-    pub start_pos: Position,
-    pub end_pos: Position,
+    pub span: Span,
 }
 
 impl Hash for Conditional {
@@ -34,9 +33,7 @@ impl fmt::Display for Conditional {
 
 impl PartialEq for Conditional {
     fn eq(&self, other: &Self) -> bool {
-        util::vecs_eq(&self.branches, &other.branches)
-            && self.start_pos == other.start_pos
-            && self.end_pos == other.end_pos
+        util::vecs_eq(&self.branches, &other.branches) && self.span == other.span
     }
 }
 
@@ -56,8 +53,7 @@ impl Conditional {
         let end_pos = branches.last().unwrap().body.end_pos().clone();
         Conditional {
             branches,
-            start_pos,
-            end_pos,
+            span: Span { start_pos, end_pos },
         }
     }
 

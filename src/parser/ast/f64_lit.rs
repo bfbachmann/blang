@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -17,8 +17,7 @@ pub struct F64Lit {
     /// For example, this would be true for the literal `123.0f64` and false for
     /// `123.0`.
     pub has_suffix: bool,
-    pub start_pos: Position,
-    pub end_pos: Position,
+    pub span: Span,
 }
 
 impl Eq for F64Lit {
@@ -43,27 +42,23 @@ impl F64Lit {
         match tokens.next() {
             Some(&Token {
                 kind: TokenKind::F64Literal((value, has_suffix)),
-                start,
-                end,
+                span,
             }) => Ok(F64Lit {
                 value,
                 has_suffix,
-                start_pos: start,
-                end_pos: end,
+                span,
             }),
             Some(other) => Err(ParseError::new(
                 ErrorKind::UnexpectedToken,
                 format_code!("expected {} literal, but found {}", "f64", other).as_str(),
                 Some(other.clone()),
-                other.start,
-                other.end,
+                other.span,
             )),
             None => Err(ParseError::new(
                 ErrorKind::UnexpectedEOF,
                 "expected f64 literal, but found EOF",
                 None,
-                Position::default(),
-                Position::default(),
+                Default::default(),
             )),
         }
     }

@@ -5,7 +5,7 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::locatable_impl;
 use crate::parser::ast::index::Index;
 use crate::parser::ast::r#type::Type;
@@ -19,8 +19,7 @@ pub struct AIndex {
     pub collection_expr: AExpr,
     pub index_expr: AExpr,
     pub result_type_key: TypeKey,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 locatable_impl!(AIndex);
@@ -49,8 +48,7 @@ impl AIndex {
             collection_expr: collection_expr.clone(),
             index_expr: AExpr::new_zero_value(ctx, Type::new_unresolved("uint")),
             result_type_key: ctx.unknown_type_key(),
-            start_pos: index.start_pos().clone(),
-            end_pos: index.end_pos().clone(),
+            span: index.span().clone(),
         };
 
         // The collection expression must be of an array, tuple, or pointer type.
@@ -177,8 +175,7 @@ impl AIndex {
             collection_expr,
             index_expr,
             result_type_key,
-            start_pos: index.start_pos().clone(),
-            end_pos: index.end_pos().clone(),
+            span: index.span().clone(),
         }
     }
 

@@ -1,8 +1,8 @@
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 
-use crate::lexer::pos::Locatable;
 use crate::lexer::pos::Position;
+use crate::lexer::pos::{Locatable, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -18,8 +18,7 @@ use crate::parser::module::Module;
 pub struct ArrayType {
     pub maybe_element_type: Option<Type>,
     pub length_expr: Expression,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 locatable_impl!(ArrayType);
@@ -45,28 +44,33 @@ impl ArrayType {
     /// - `length` is a constant expression yielding the length of the array (see
     ///   `Expression::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<ArrayType> {
-        let start_pos = Module::parse_expecting(tokens, TokenKind::LeftBracket)?.start;
+        let start_pos = Module::parse_expecting(tokens, TokenKind::LeftBracket)?
+            .span
+            .start_pos;
 
         // The array type may be empty.
         if let Some(token) = Module::parse_optional(tokens, TokenKind::RightBracket) {
             return Ok(ArrayType {
                 maybe_element_type: None,
                 length_expr: Expression::UintLiteral(UintLit::new_with_default_pos(0)),
-                start_pos,
-                end_pos: token.end.clone(),
+                span: Span {
+                    start_pos,
+                    end_pos: token.span.end_pos.clone(),
+                },
             });
         }
 
         let element_type = Type::from(tokens)?;
         Module::parse_expecting(tokens, TokenKind::SemiColon)?;
         let length_expr = Expression::from(tokens)?;
-        let end_pos = Module::parse_expecting(tokens, TokenKind::RightBracket)?.end;
+        let end_pos = Module::parse_expecting(tokens, TokenKind::RightBracket)?
+            .span
+            .end_pos;
 
         Ok(ArrayType {
             maybe_element_type: Some(element_type),
             length_expr,
-            start_pos,
-            end_pos,
+            span: Span { start_pos, end_pos },
         })
     }
 }
@@ -76,8 +80,7 @@ impl ArrayType {
 pub struct ArrayInit {
     pub values: Vec<Expression>,
     pub maybe_repeat_expr: Option<Expression>,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 locatable_impl!(ArrayInit);
@@ -107,8 +110,7 @@ impl ArrayInit {
         ArrayInit {
             values: vec![],
             maybe_repeat_expr: None,
-            start_pos: Default::default(),
-            end_pos: Default::default(),
+            span: Default::default(),
         }
     }
 
@@ -123,15 +125,19 @@ impl ArrayInit {
     /// - `repeat_count` is a constant expression representing the number of times to repeat the
     ///   expression prior in the array.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<ArrayInit> {
-        let start_pos = Module::parse_expecting(tokens, TokenKind::LeftBracket)?.start;
+        let start_pos = Module::parse_expecting(tokens, TokenKind::LeftBracket)?
+            .span
+            .start_pos;
 
         // Handle the case of an empty array.
-        if let Some(Token { end, .. }) = Module::parse_optional(tokens, TokenKind::RightBracket) {
+        if let Some(Token { span, .. }) = Module::parse_optional(tokens, TokenKind::RightBracket) {
             return Ok(ArrayInit {
                 values: vec![],
                 maybe_repeat_expr: None,
-                start_pos,
-                end_pos: end.clone(),
+                span: Span {
+                    start_pos,
+                    end_pos: span.end_pos,
+                },
             });
         }
 
@@ -162,18 +168,18 @@ impl ArrayInit {
                 ) {
                     Ok(Token {
                         kind: TokenKind::RightBracket,
-                        end,
+                        span,
                         ..
-                    }) => break end.clone(),
+                    }) => break span.end_pos,
 
                     Ok(Token {
                         kind: TokenKind::Comma,
-                        end,
+                        span,
                         ..
                     }) => {
                         // Handle the trailing comma.
                         if Module::parse_optional(tokens, TokenKind::RightBracket).is_some() {
-                            break end.clone();
+                            break span.end_pos;
                         }
                     }
 
@@ -185,18 +191,18 @@ impl ArrayInit {
 
             Ok(Token {
                 kind: TokenKind::RightBracket,
-                end,
+                span,
                 ..
             }) => {
                 // Nothing to do here. It's the end of the array.
-                end
+                span.end_pos
             }
 
             Ok(_) => {
                 maybe_repeat_expr = Some(Expression::from(tokens)?);
                 Module::parse_expecting(tokens, TokenKind::RightBracket)?
-                    .end
-                    .clone()
+                    .span
+                    .end_pos
             }
 
             Err(err) => return Err(err),
@@ -205,8 +211,7 @@ impl ArrayInit {
         Ok(ArrayInit {
             values,
             maybe_repeat_expr,
-            start_pos,
-            end_pos,
+            span: Span { start_pos, end_pos },
         })
     }
 }

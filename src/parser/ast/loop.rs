@@ -1,10 +1,10 @@
-
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::locatable_impl;
 use crate::parser::ast::closure::Closure;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::statement::Statement;
@@ -18,22 +18,14 @@ pub struct Loop {
     pub maybe_cond: Option<Expression>,
     pub maybe_update: Option<Statement>,
     pub body: Closure,
-    start_pos: Position,
+    span: Span,
 }
+
+locatable_impl!(Loop);
 
 impl Hash for Loop {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.body.hash(state);
-    }
-}
-
-impl Locatable for Loop {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        self.body.end_pos()
     }
 }
 
@@ -80,8 +72,11 @@ fn parse_loop(tokens: &mut Stream<Token>) -> ParseResult<Loop> {
         maybe_init: None,
         maybe_cond: None,
         maybe_update: None,
+        span: Span {
+            start_pos,
+            end_pos: body.end_pos().clone(),
+        },
         body,
-        start_pos,
     })
 }
 
@@ -102,8 +97,11 @@ fn parse_while(tokens: &mut Stream<Token>) -> ParseResult<Loop> {
         maybe_init: None,
         maybe_cond,
         maybe_update: None,
+        span: Span {
+            start_pos,
+            end_pos: body.end_pos().clone(),
+        },
         body,
-        start_pos,
     })
 }
 
@@ -147,7 +145,10 @@ fn parse_for(tokens: &mut Stream<Token>) -> ParseResult<Loop> {
         maybe_init,
         maybe_cond,
         maybe_update,
+        span: Span {
+            start_pos,
+            end_pos: body.end_pos().clone(),
+        },
         body,
-        start_pos,
     })
 }

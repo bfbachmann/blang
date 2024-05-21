@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -18,8 +18,7 @@ pub struct Const {
     pub maybe_type: Option<Type>,
     pub value: Expression,
     pub is_pub: bool,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl Hash for Const {
@@ -66,7 +65,9 @@ impl Const {
     ///  - `pub` is optional.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         let is_pub = Module::parse_optional(tokens, TokenKind::Pub).is_some();
-        let start_pos = Module::parse_expecting(tokens, TokenKind::Const)?.start;
+        let start_pos = Module::parse_expecting(tokens, TokenKind::Const)?
+            .span
+            .start_pos;
         let name = Module::parse_identifier(tokens)?;
 
         // Parse the optional `: <type>`.
@@ -87,8 +88,7 @@ impl Const {
             maybe_type: typ,
             value,
             is_pub,
-            start_pos,
-            end_pos,
+            span: Span { start_pos, end_pos },
         })
     }
 }

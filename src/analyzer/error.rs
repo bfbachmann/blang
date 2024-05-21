@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Span};
 
 pub type AnalyzeResult<T> = Result<T, AnalyzeError>;
 
@@ -118,8 +118,7 @@ pub struct AnalyzeError {
     pub message: String,
     pub detail: Option<String>,
     pub help: Option<String>,
-    pub start_pos: Position,
-    pub end_pos: Position,
+    pub span: Span,
 }
 
 impl fmt::Display for AnalyzeError {
@@ -135,8 +134,7 @@ impl AnalyzeError {
             message: message.to_string(),
             detail: None,
             help: None,
-            start_pos: loc.start_pos().clone(),
-            end_pos: loc.end_pos().clone(),
+            span: loc.span().clone(),
         }
     }
 
@@ -146,8 +144,7 @@ impl AnalyzeError {
             message: self.message,
             detail: Some(detail.to_string()),
             help: self.help,
-            start_pos: self.start_pos,
-            end_pos: self.end_pos,
+            span: self.span,
         }
     }
 
@@ -157,8 +154,7 @@ impl AnalyzeError {
             message: self.message,
             detail: self.detail,
             help: Some(help.to_string()),
-            start_pos: self.start_pos,
-            end_pos: self.end_pos,
+            span: self.span,
         }
     }
 }

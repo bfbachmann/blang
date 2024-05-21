@@ -2,8 +2,8 @@ use std::default::Default;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::Locatable;
 use crate::lexer::pos::Position;
+use crate::lexer::pos::{Locatable, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -15,8 +15,7 @@ use crate::parser::module::Module;
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct ModulePath {
     pub raw: String,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl Hash for ModulePath {
@@ -71,8 +70,7 @@ impl ModulePath {
                     match fs::metadata(full_path) {
                         Ok(_) => Ok(ModulePath {
                             raw: path.to_string(),
-                            start_pos: token.start.clone(),
-                            end_pos: token.end.clone(),
+                            span: token.span,
                         }),
 
                         Err(_) => Err(ParseError::new_with_token(
@@ -86,8 +84,7 @@ impl ModulePath {
                 #[cfg(test)]
                 Ok(ModulePath {
                     raw: path.to_string(),
-                    start_pos: token.start.clone(),
-                    end_pos: token.end.clone(),
+                    span: token.span,
                 })
             }
 
@@ -101,8 +98,7 @@ impl ModulePath {
                 ErrorKind::InvalidModPath,
                 "expected module path, but found EOF",
                 None,
-                Position::default(),
-                Position::default(),
+                Default::default(),
             )),
         }
     }
@@ -114,8 +110,7 @@ pub struct UsedModule {
     pub path: ModulePath,
     pub maybe_alias: Option<String>,
     pub identifiers: Vec<String>,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl Hash for UsedModule {
@@ -167,7 +162,9 @@ impl UsedModule {
     /// - `name` is an identifier used to name the module being used
     /// - `ident` is any identifier to import from the given path.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<UsedModule> {
-        let start_pos = Module::parse_expecting(tokens, TokenKind::Use)?.start;
+        let start_pos = Module::parse_expecting(tokens, TokenKind::Use)?
+            .span
+            .start_pos;
 
         // Parse the optional module alias.
         let maybe_alias = match tokens.peek_next() {
@@ -211,8 +208,7 @@ impl UsedModule {
                 ErrorKind::UnexpectedToken,
                 format_code!("expected identifier or {}, but found EOF", "{").as_str(),
                 None,
-                Position::default(),
-                Position::default(),
+                Default::default(),
             ));
         }
 
@@ -221,11 +217,13 @@ impl UsedModule {
         let path = ModulePath::from(tokens)?;
 
         Ok(UsedModule {
-            end_pos: path.end_pos().clone(),
+            span: Span {
+                start_pos,
+                end_pos: path.end_pos().clone(),
+            },
             path,
             maybe_alias,
             identifiers,
-            start_pos,
         })
     }
 }

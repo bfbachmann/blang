@@ -28,6 +28,7 @@ impl Position {
 pub trait Locatable {
     fn start_pos(&self) -> &Position;
     fn end_pos(&self) -> &Position;
+    fn span(&self) -> &Span;
 }
 
 /// Implements the `Locatable` trait for any type that has `start_pos` and `end_pos` fields.
@@ -36,21 +37,37 @@ macro_rules! locatable_impl {
     ($t:ident) => {
         impl Locatable for $t {
             fn start_pos(&self) -> &Position {
-                &self.start_pos
+                &self.span.start_pos
             }
 
             fn end_pos(&self) -> &Position {
-                &self.end_pos
+                &self.span.end_pos
+            }
+
+            fn span(&self) -> &Span {
+                &self.span
             }
         }
     };
 }
 
 /// Represents a fragment of code in a file.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Default)]
 pub struct Span {
     pub start_pos: Position,
     pub end_pos: Position,
 }
 
-locatable_impl!(Span);
+impl Locatable for Span {
+    fn start_pos(&self) -> &Position {
+        &self.start_pos
+    }
+
+    fn end_pos(&self) -> &Position {
+        &self.end_pos
+    }
+
+    fn span(&self) -> &Span {
+        self
+    }
+}

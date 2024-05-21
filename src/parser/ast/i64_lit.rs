@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -13,8 +13,7 @@ use crate::parser::error::{ErrorKind, ParseError};
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct I64Lit {
     pub value: i64,
-    pub start_pos: Position,
-    pub end_pos: Position,
+    pub span: Span,
 }
 
 impl Hash for I64Lit {
@@ -36,8 +35,7 @@ impl I64Lit {
     pub fn new_with_default_pos(i: i64) -> I64Lit {
         I64Lit {
             value: i,
-            start_pos: Default::default(),
-            end_pos: Default::default(),
+            span: Default::default(),
         }
     }
 
@@ -46,26 +44,19 @@ impl I64Lit {
         match tokens.next() {
             Some(&Token {
                 kind: TokenKind::I64Literal(value),
-                start,
-                end,
-            }) => Ok(I64Lit {
-                value,
-                start_pos: start,
-                end_pos: end,
-            }),
+                span,
+            }) => Ok(I64Lit { value, span }),
             Some(other) => Err(ParseError::new(
                 ErrorKind::UnexpectedToken,
                 format_code!("expected {} literal, but found {}", "i64", other).as_str(),
                 Some(other.clone()),
-                other.start,
-                other.end,
+                other.span,
             )),
             None => Err(ParseError::new(
                 ErrorKind::UnexpectedEOF,
                 "expected i64 literal, but found EOF",
                 None,
-                Position::default(),
-                Position::default(),
+                Default::default(),
             )),
         }
     }

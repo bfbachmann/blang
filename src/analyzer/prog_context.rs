@@ -325,12 +325,12 @@ impl ProgramContext {
 
     /// Inserts an error into the program context.
     pub fn insert_err(&mut self, err: AnalyzeError) {
-        self.errors.insert(err.start_pos.clone(), err);
+        self.errors.insert(err.span.start_pos, err);
     }
 
     /// Inserts a warning into the program context.
     pub fn insert_warn(&mut self, warn: AnalyzeWarning) {
-        self.warnings.insert(warn.start_pos.clone(), warn);
+        self.warnings.insert(warn.span.start_pos, warn);
     }
 
     /// If the given result is an error, consumes and stores the error, returning None. Otherwise,

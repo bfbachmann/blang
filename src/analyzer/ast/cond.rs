@@ -6,7 +6,7 @@ use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
 use crate::analyzer::type_store::TypeKey;
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::parser::ast::cond::Conditional;
 use crate::{locatable_impl, util};
 
@@ -15,8 +15,7 @@ use crate::{locatable_impl, util};
 pub struct ABranch {
     pub cond: Option<AExpr>,
     pub body: AClosure,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl PartialEq for ABranch {
@@ -32,6 +31,7 @@ locatable_impl!(ABranch);
 pub struct ACond {
     pub branches: Vec<ABranch>,
     pub ret_type_key: Option<TypeKey>,
+    span: Span,
 }
 
 impl fmt::Display for ACond {
@@ -48,15 +48,7 @@ impl PartialEq for ACond {
     }
 }
 
-impl Locatable for ACond {
-    fn start_pos(&self) -> &Position {
-        self.branches.first().unwrap().start_pos()
-    }
-
-    fn end_pos(&self) -> &Position {
-        self.branches.last().unwrap().end_pos()
-    }
-}
+locatable_impl!(ACond);
 
 impl ACond {
     /// Performs semantic analysis on the given conditional and returns a type-rich version of it.
@@ -87,8 +79,10 @@ impl ACond {
             rich_branches.push(ABranch {
                 cond: rich_expr,
                 body: rich_closure,
-                start_pos: branch.start_pos,
-                end_pos: branch.end_pos,
+                span: Span {
+                    start_pos: branch.span.start_pos,
+                    end_pos: branch.span.end_pos,
+                },
             });
         }
 
@@ -105,6 +99,10 @@ impl ACond {
         }
 
         ACond {
+            span: Span {
+                start_pos: rich_branches.first().unwrap().start_pos().clone(),
+                end_pos: rich_branches.last().unwrap().end_pos().clone(),
+            },
             branches: rich_branches,
             ret_type_key: ret_type,
         }

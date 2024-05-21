@@ -1,7 +1,7 @@
 use std::fmt;
 use std::hash::Hash;
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -95,6 +95,18 @@ impl Locatable for Type {
             Type::Unresolved(unresolved) => unresolved.end_pos(),
         }
     }
+
+    fn span(&self) -> &Span {
+        match self {
+            Type::Struct(struct_type) => struct_type.span(),
+            Type::Enum(enum_type) => enum_type.span(),
+            Type::Tuple(tuple_type) => tuple_type.span(),
+            Type::Function(fn_sig) => fn_sig.span(),
+            Type::Pointer(t) => t.span(),
+            Type::Array(a) => a.span(),
+            Type::Unresolved(unresolved) => unresolved.span(),
+        }
+    }
 }
 
 impl Type {
@@ -143,8 +155,7 @@ impl Type {
                 Ok(Type::Unresolved(UnresolvedType::new_with_mod(
                     symbol.maybe_mod_name,
                     symbol.name.as_str(),
-                    symbol.start_pos,
-                    symbol.end_pos,
+                    symbol.span,
                 )))
             }
         }

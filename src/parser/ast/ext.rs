@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -15,8 +15,7 @@ use crate::parser::module::Module;
 pub struct Extern {
     pub fn_sig: FunctionSignature,
     pub is_pub: bool,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl Hash for Extern {
@@ -62,8 +61,7 @@ impl Extern {
         Ok(Extern {
             fn_sig,
             is_pub,
-            start_pos,
-            end_pos,
+            span: Span { start_pos, end_pos },
         })
     }
 }

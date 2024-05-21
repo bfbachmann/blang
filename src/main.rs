@@ -256,8 +256,7 @@ fn parse_source_files(input_path: &str) -> Result<Vec<Module>, String> {
                     None,
                     None,
                     input_path,
-                    &err.start_pos,
-                    &err.end_pos,
+                    &err.span,
                     false,
                 );
 
@@ -281,15 +280,7 @@ fn parse_source_files(input_path: &str) -> Result<Vec<Module>, String> {
 
             Err(err) => {
                 parse_error_count += 1;
-                display_err(
-                    err.message.as_str(),
-                    None,
-                    None,
-                    path,
-                    err.start_pos(),
-                    err.end_pos(),
-                    false,
-                )
+                display_err(err.message.as_str(), None, None, path, err.span(), false)
             }
         };
     }
@@ -357,8 +348,7 @@ fn analyze(
                 None,
                 None,
                 path.as_str(),
-                &warn.start_pos,
-                &warn.end_pos,
+                &warn.span,
                 true,
             );
         }
@@ -373,8 +363,7 @@ fn analyze(
                 err.detail.as_ref(),
                 err.help.as_ref(),
                 path.as_str(),
-                &err.start_pos,
-                &err.end_pos,
+                &err.span,
                 false,
             );
         }

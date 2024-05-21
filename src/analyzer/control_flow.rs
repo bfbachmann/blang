@@ -214,8 +214,7 @@ struct MBorrow {
 #[derive(Debug, Clone)]
 struct MMove {
     value_path: String,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 locatable_impl!(MMove);
@@ -1041,8 +1040,7 @@ impl CFGAnalyzer<'_> {
             self.insert_statement(MStatement {
                 kind: MStatementKind::Move(MMove {
                     value_path: symbol.name.clone(),
-                    start_pos: symbol.start_pos().clone(),
-                    end_pos: symbol.end_pos().clone(),
+                    span: symbol.span().clone(),
                 }),
             })
             .unwrap()
@@ -1340,8 +1338,7 @@ impl CFGAnalyzer<'_> {
                     .insert_statement(MStatement {
                         kind: MStatementKind::Move(MMove {
                             value_path: path,
-                            start_pos: expr.start_pos().clone(),
-                            end_pos: expr.end_pos().clone(),
+                            span: expr.span().clone(),
                         }),
                     })
                     .unwrap();
@@ -1539,7 +1536,7 @@ impl CFGAnalyzer<'_> {
         for (span, (move_path, conflicting_moves)) in move_errs {
             let conflicting_move_locs: Vec<Position> = conflicting_moves
                 .into_iter()
-                .map(|mv| mv.start_pos)
+                .map(|mv| mv.span.start_pos)
                 .collect();
             self.ctx.insert_err(
                 AnalyzeError::new(

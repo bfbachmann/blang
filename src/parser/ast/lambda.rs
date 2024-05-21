@@ -1,4 +1,4 @@
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -15,8 +15,7 @@ pub struct LambdaArg {
     pub name: String,
     pub maybe_type: Option<Type>,
     pub is_mut: bool,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 locatable_impl!(LambdaArg);
@@ -26,8 +25,7 @@ locatable_impl!(LambdaArg);
 pub struct LambdaDecl {
     pub args: Vec<LambdaArg>,
     pub expr: Expression,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 locatable_impl!(LambdaDecl);
@@ -43,7 +41,9 @@ impl LambdaDecl {
     /// - `arg_type` is the optional argument type (see `Type::from`)
     /// - `expr` is the expression returned by the lambda function (see `Expression::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let start_pos = Module::parse_expecting(tokens, TokenKind::DollarSign)?.start;
+        let start_pos = Module::parse_expecting(tokens, TokenKind::DollarSign)?
+            .span
+            .start_pos;
         Module::parse_expecting(tokens, TokenKind::LeftParen)?;
 
         // Parse lambda arguments.
@@ -61,8 +61,10 @@ impl LambdaDecl {
                 name,
                 maybe_type,
                 is_mut,
-                start_pos,
-                end_pos: Module::prev_position(tokens),
+                span: Span {
+                    start_pos,
+                    end_pos: Module::prev_position(tokens),
+                },
             });
 
             // The next token should either be `,` or `)`.
@@ -81,8 +83,7 @@ impl LambdaDecl {
         Ok(LambdaDecl {
             args,
             expr,
-            start_pos,
-            end_pos,
+            span: Span { start_pos, end_pos },
         })
     }
 }

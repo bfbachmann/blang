@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -13,8 +13,7 @@ use crate::parser::error::{ErrorKind, ParseError};
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct U8Lit {
     pub value: u8,
-    pub start_pos: Position,
-    pub end_pos: Position,
+    pub span: Span,
 }
 
 impl Display for U8Lit {
@@ -37,26 +36,19 @@ impl U8Lit {
         match tokens.next() {
             Some(&Token {
                 kind: TokenKind::U8Literal(value),
-                start,
-                end,
-            }) => Ok(U8Lit {
-                value,
-                start_pos: start,
-                end_pos: end,
-            }),
+                span,
+            }) => Ok(U8Lit { value, span }),
             Some(other) => Err(ParseError::new(
                 ErrorKind::UnexpectedToken,
                 format_code!("expected {} literal, but found {}", "u8", other).as_str(),
                 Some(other.clone()),
-                other.start,
-                other.end,
+                other.span,
             )),
             None => Err(ParseError::new(
                 ErrorKind::UnexpectedEOF,
                 "expected u8 literal, but found EOF",
                 None,
-                Position::default(),
-                Position::default(),
+                Default::default(),
             )),
         }
     }

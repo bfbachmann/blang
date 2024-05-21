@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -17,8 +17,7 @@ pub struct IntLit {
     /// For example, this would be true for the literal `123int` and false for
     /// `123`.
     pub has_suffix: bool,
-    pub start_pos: Position,
-    pub end_pos: Position,
+    pub span: Span,
 }
 
 impl Hash for IntLit {
@@ -41,27 +40,23 @@ impl IntLit {
         match tokens.next() {
             Some(&Token {
                 kind: TokenKind::IntLiteral((value, has_suffix)),
-                start,
-                end,
+                span,
             }) => Ok(IntLit {
                 value,
                 has_suffix,
-                start_pos: start,
-                end_pos: end,
+                span,
             }),
             Some(other) => Err(ParseError::new(
                 ErrorKind::UnexpectedToken,
                 format_code!("expected {} literal, but found {}", "int", other).as_str(),
                 Some(other.clone()),
-                other.start,
-                other.end,
+                other.span,
             )),
             None => Err(ParseError::new(
                 ErrorKind::UnexpectedEOF,
                 "expected int literal, but found EOF",
                 None,
-                Position::default(),
-                Position::default(),
+                Default::default(),
             )),
         }
     }

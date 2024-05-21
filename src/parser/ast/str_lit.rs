@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -13,8 +13,7 @@ use crate::parser::error::{ErrorKind, ParseError};
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct StrLit {
     pub value: String,
-    pub start_pos: Position,
-    pub end_pos: Position,
+    pub span: Span,
 }
 
 impl Hash for StrLit {
@@ -37,8 +36,7 @@ impl StrLit {
     pub fn new_with_default_pos(value: &str) -> Self {
         StrLit {
             value: value.to_string(),
-            start_pos: Position::default(),
-            end_pos: Position::default(),
+            span: Default::default(),
         }
     }
 
@@ -47,12 +45,10 @@ impl StrLit {
         match tokens.next() {
             Some(&Token {
                 kind: TokenKind::StrLiteral(ref value),
-                start,
-                end,
+                span,
             }) => Ok(StrLit {
                 value: value.to_string(),
-                start_pos: start,
-                end_pos: end,
+                span,
             }),
             Some(other) => Err(ParseError::new_with_token(
                 ErrorKind::ExpectedBasicExpr,
@@ -63,8 +59,7 @@ impl StrLit {
                 ErrorKind::UnexpectedEOF,
                 "expected boolean literal, but found EOF",
                 None,
-                Position::default(),
-                Position::default(),
+                Default::default(),
             )),
         }
     }

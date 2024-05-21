@@ -2,7 +2,7 @@ use flamer::flame;
 use logos::Logos;
 
 use crate::lexer::error::{LexError, LexResult};
-use crate::lexer::pos::Position;
+use crate::lexer::pos::{Position, Span};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 
@@ -69,8 +69,10 @@ pub fn lex(source_code: &str) -> LexResult<Vec<Token>> {
                 _ => {
                     tokens.push(Token {
                         kind,
-                        start: token_start,
-                        end: token_end,
+                        span: Span {
+                            start_pos: token_start,
+                            end_pos: token_end,
+                        },
                     });
                 }
             },
@@ -78,8 +80,10 @@ pub fn lex(source_code: &str) -> LexResult<Vec<Token>> {
             Err(e) => {
                 return Err(LexError {
                     message: format!("{} {}", e, format_code!(lexer.slice())),
-                    start_pos: token_start,
-                    end_pos: Position::default(),
+                    span: Span {
+                        start_pos: token_start,
+                        end_pos: Default::default(),
+                    },
                 })
             }
         }

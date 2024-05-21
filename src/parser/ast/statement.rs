@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -168,6 +168,28 @@ impl Locatable for Statement {
             Statement::SpecDeclaration(t) => t.end_pos(),
         }
     }
+
+    fn span(&self) -> &Span {
+        match self {
+            Statement::VariableDeclaration(var_dec) => var_dec.span(),
+            Statement::VariableAssignment(var_assign) => var_assign.span(),
+            Statement::FunctionDeclaration(func) => func.span(),
+            Statement::Closure(closure) => closure.span(),
+            Statement::FunctionCall(call) => call.span(),
+            Statement::Conditional(cond) => cond.span(),
+            Statement::Loop(l) => l.span(),
+            Statement::Break(br) => br.span(),
+            Statement::Continue(cont) => cont.span(),
+            Statement::Return(ret) => ret.span(),
+            Statement::StructDeclaration(s) => s.span(),
+            Statement::EnumDeclaration(e) => e.span(),
+            Statement::ExternFn(e) => e.span(),
+            Statement::Const(c) => c.span(),
+            Statement::Use(u) => u.span(),
+            Statement::Impl(i) => i.span(),
+            Statement::SpecDeclaration(t) => t.span(),
+        }
+    }
 }
 
 impl Statement {
@@ -194,8 +216,7 @@ impl Statement {
                     ErrorKind::UnexpectedEOF,
                     "expected statement, but found EOF",
                     None,
-                    Position::default(),
-                    Position::default(),
+                    Default::default(),
                 ))
             }
             (None, Some(&ref token)) | (Some(&ref token), None) => {
@@ -203,8 +224,7 @@ impl Statement {
                     ErrorKind::ExpectedStatement,
                     format_code!("expected statement, but found {}", token).as_str(),
                     Some(token.clone()),
-                    token.start.clone(),
-                    token.end.clone(),
+                    token.span,
                 ))
             }
             _ => {}
@@ -282,8 +302,7 @@ impl Statement {
             // If the first token is `return`, it must be a return statement.
             (TokenKind::Return, _) => {
                 let ret_token = tokens.next().unwrap();
-                let ret_token_start = ret_token.start.clone();
-                let ret_token_end = ret_token.end.clone();
+                let ret_token_span = ret_token.span;
 
                 // If the next token is `}` or is on the following line, it's an empty return.
                 // Otherwise, we expect an expression.
@@ -293,24 +312,24 @@ impl Statement {
                         ..
                     }) => true,
 
-                    Some(Token { end, .. }) if end.line > ret_token_end.line => true,
+                    Some(Token { span, .. }) if span.end_pos.line > ret_token_span.end_pos.line => {
+                        true
+                    }
 
                     _ => false,
                 };
 
                 if no_ret_val {
-                    return Ok(Statement::Return(Ret::new(
-                        None,
-                        ret_token_start,
-                        ret_token_end,
-                    )));
+                    return Ok(Statement::Return(Ret::new(None, ret_token_span)));
                 }
 
                 let expr = Expression::from(tokens)?;
                 Ok(Statement::Return(Ret::new(
                     Some(expr.clone()),
-                    ret_token_start,
-                    *expr.end_pos(),
+                    Span {
+                        start_pos: ret_token_span.start_pos,
+                        end_pos: *expr.end_pos(),
+                    },
                 )))
             }
 
@@ -369,8 +388,10 @@ impl Statement {
                         ErrorKind::ExpectedStatement,
                         "expected statement, but found expression",
                         None,
-                        start_pos,
-                        Module::prev_position(tokens),
+                        Span {
+                            start_pos,
+                            end_pos: Module::prev_position(tokens),
+                        },
                     )),
                 }
             }

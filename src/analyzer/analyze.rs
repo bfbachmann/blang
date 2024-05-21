@@ -144,7 +144,7 @@ pub fn analyze_module(
     // Append the import cycle errors to the module analysis errors.
     let mut errs = std::mem::take(&mut ctx.errors);
     for cycle_err in import_cycle_errs {
-        errs.insert(cycle_err.start_pos.clone(), cycle_err);
+        errs.insert(cycle_err.span.start_pos, cycle_err);
     }
 
     analyzed_mods.insert(

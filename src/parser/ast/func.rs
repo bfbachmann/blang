@@ -1,10 +1,11 @@
 use std::fmt;
 use std::hash::Hash;
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::locatable_impl;
 use crate::parser::ast::arg::Argument;
 use crate::parser::ast::closure::Closure;
 use crate::parser::ast::func_sig::FunctionSignature;
@@ -22,6 +23,7 @@ pub struct Function {
     pub signature: FunctionSignature,
     pub body: Closure,
     pub is_pub: bool,
+    span: Span,
 }
 
 impl fmt::Display for Function {
@@ -30,19 +32,15 @@ impl fmt::Display for Function {
     }
 }
 
-impl Locatable for Function {
-    fn start_pos(&self) -> &Position {
-        &self.signature.start_pos()
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.body.end_pos()
-    }
-}
+locatable_impl!(Function);
 
 impl Function {
     pub fn new(signature: FunctionSignature, body: Closure, is_pub: bool) -> Self {
         Function {
+            span: Span {
+                start_pos: signature.start_pos().clone(),
+                end_pos: body.end_pos().clone(),
+            },
             signature,
             body,
             is_pub,
@@ -105,8 +103,7 @@ impl Function {
 
         // Convert lambda arguments.
         for arg in lambda.args {
-            let start_pos = arg.start_pos().clone();
-            let end_pos = arg.end_pos().clone();
+            let span = arg.span().clone();
 
             let typ = match arg.maybe_type {
                 Some(typ) => typ,
@@ -119,13 +116,7 @@ impl Function {
                 }
             };
 
-            args.push(Argument::new(
-                arg.name.as_str(),
-                typ,
-                arg.is_mut,
-                start_pos,
-                end_pos,
-            ))
+            args.push(Argument::new(arg.name.as_str(), typ, arg.is_mut, span))
         }
 
         // Convert lambda return type.
@@ -136,28 +127,18 @@ impl Function {
         let ret_type = Type::new_unresolved(ret_type_name);
 
         // Convert the lambda expression to a function body containing only a return statement.
-        let ret_start = lambda.expr.start_pos();
-        let ret_end = lambda.expr.end_pos();
-        let return_statement = Statement::Return(Ret::new(
-            Some(lambda.expr.clone()),
-            ret_start.clone(),
-            ret_end.clone(),
-        ));
+        let ret_span = lambda.expr.span().clone();
+        let return_statement = Statement::Return(Ret::new(Some(lambda.expr.clone()), ret_span));
 
-        let signature =
-            FunctionSignature::new_tmpl("", args, Some(ret_type), tmpl_params, start_pos, end_pos);
-
-        let body = Closure::new(
-            vec![return_statement],
-            None,
-            ret_start.clone(),
-            ret_end.clone(),
+        let signature = FunctionSignature::new_tmpl(
+            "",
+            args,
+            Some(ret_type),
+            tmpl_params,
+            Span { start_pos, end_pos },
         );
 
-        Function {
-            signature,
-            body,
-            is_pub: false,
-        }
+        let body = Closure::new(vec![return_statement], None, ret_span);
+        Function::new(signature, body, false)
     }
 }

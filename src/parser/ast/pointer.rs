@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -16,8 +16,7 @@ pub struct PointerType {
     pub pointee_type: Type,
     /// Indicates whether the value being pointed to can be mutated via the pointer.
     pub is_mut: bool,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl Display for PointerType {
@@ -30,17 +29,11 @@ locatable_impl!(PointerType);
 
 impl PointerType {
     /// Creates a new pointer type.
-    pub fn new(
-        pointee_type: Type,
-        is_mut: bool,
-        start_pos: Position,
-        end_pos: Position,
-    ) -> PointerType {
+    pub fn new(pointee_type: Type, is_mut: bool, span: Span) -> PointerType {
         PointerType {
             pointee_type,
             is_mut,
-            start_pos,
-            end_pos,
+            span,
         }
     }
 
@@ -49,8 +42,7 @@ impl PointerType {
         PointerType {
             pointee_type,
             is_mut,
-            start_pos: Position::default(),
-            end_pos: Position::default(),
+            span: Default::default(),
         }
     }
 
@@ -63,13 +55,15 @@ impl PointerType {
     ///  - `type` is any type (see `Type::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<PointerType> {
         let start_pos = Module::parse_expecting(tokens, TokenKind::Asterisk)?
-            .start
-            .clone();
+            .span
+            .start_pos;
         let is_mut = Module::parse_optional(tokens, TokenKind::Mut).is_some();
         let pointee_type = Type::from(tokens)?;
         Ok(PointerType {
-            start_pos,
-            end_pos: pointee_type.end_pos().clone(),
+            span: Span {
+                start_pos,
+                end_pos: pointee_type.end_pos().clone(),
+            },
             pointee_type,
             is_mut,
         })

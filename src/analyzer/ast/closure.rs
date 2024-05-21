@@ -9,7 +9,7 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::{Scope, ScopeKind};
 use crate::analyzer::type_store::TypeKey;
 use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::parser::ast::arg::Argument;
 use crate::parser::ast::closure::Closure;
 use crate::parser::ast::cont::Continue;
@@ -25,8 +25,7 @@ pub struct AClosure {
     pub has_break: bool,
     pub has_continue: bool,
     pub has_return: bool,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 locatable_impl!(AClosure);
@@ -53,8 +52,7 @@ impl AClosure {
             has_break: false,
             has_continue: false,
             has_return: false,
-            start_pos: Position::default(),
-            end_pos: Position::default(),
+            span: Default::default(),
         }
     }
 
@@ -149,8 +147,7 @@ impl AClosure {
             has_break,
             has_continue,
             has_return,
-            start_pos,
-            end_pos,
+            span: Span { start_pos, end_pos },
         }
     }
 }

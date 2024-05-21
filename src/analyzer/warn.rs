@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Span};
 
 /// Represents a kind of warning emitted by the semantic analyzer.
 #[derive(Debug, PartialEq, Clone)]
@@ -21,8 +21,7 @@ impl Display for WarnKind {
 pub struct AnalyzeWarning {
     pub kind: WarnKind,
     pub message: String,
-    pub start_pos: Position,
-    pub end_pos: Position,
+    pub span: Span,
 }
 
 impl Display for AnalyzeWarning {
@@ -37,8 +36,7 @@ impl AnalyzeWarning {
         AnalyzeWarning {
             kind,
             message: message.to_string(),
-            start_pos: loc.start_pos().clone(),
-            end_pos: loc.end_pos().clone(),
+            span: *loc.span(),
         }
     }
 }

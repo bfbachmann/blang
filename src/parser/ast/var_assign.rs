@@ -1,9 +1,10 @@
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::op::Operator;
 use crate::parser::error::ParseResult;
@@ -14,18 +15,10 @@ use crate::parser::module::Module;
 pub struct VariableAssignment {
     pub target: Expression,
     pub value: Expression,
-    start_pos: Position,
+    span: Span,
 }
 
-impl Locatable for VariableAssignment {
-    fn start_pos(&self) -> &Position {
-        &self.start_pos
-    }
-
-    fn end_pos(&self) -> &Position {
-        &self.value.end_pos()
-    }
-}
+locatable_impl!(VariableAssignment);
 
 impl Hash for VariableAssignment {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -38,9 +31,12 @@ impl VariableAssignment {
     /// Creates a new variable assignment.
     pub fn new(target: Expression, value: Expression, start_pos: Position) -> Self {
         VariableAssignment {
+            span: Span {
+                start_pos,
+                end_pos: value.end_pos().clone(),
+            },
             target,
             value,
-            start_pos,
         }
     }
 

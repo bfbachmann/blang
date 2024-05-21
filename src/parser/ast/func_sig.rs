@@ -1,7 +1,7 @@
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -22,8 +22,7 @@ pub struct FunctionSignature {
     /// Function template parameters will be Some if this is a templated function (a function with
     /// generics).
     pub tmpl_params: Option<TmplParams>,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl Hash for FunctionSignature {
@@ -87,26 +86,18 @@ impl FunctionSignature {
             tmpl_params: None,
             args,
             maybe_ret_type: return_type,
-            start_pos: Position::default(),
-            end_pos: Position::default(),
+            span: Default::default(),
         }
     }
 
     /// Creates a new function signature for a named function.
-    pub fn new(
-        name: &str,
-        args: Vec<Argument>,
-        return_type: Option<Type>,
-        start_pos: Position,
-        end_pos: Position,
-    ) -> Self {
+    pub fn new(name: &str, args: Vec<Argument>, return_type: Option<Type>, span: Span) -> Self {
         FunctionSignature {
             name: name.to_string(),
             tmpl_params: None,
             args,
             maybe_ret_type: return_type,
-            start_pos,
-            end_pos,
+            span,
         }
     }
 
@@ -116,33 +107,25 @@ impl FunctionSignature {
         args: Vec<Argument>,
         return_type: Option<Type>,
         tmpl_params: TmplParams,
-        start_pos: Position,
-        end_pos: Position,
+        span: Span,
     ) -> Self {
         FunctionSignature {
             name: name.to_string(),
             tmpl_params: Some(tmpl_params),
             args,
             maybe_ret_type: return_type,
-            start_pos,
-            end_pos,
+            span,
         }
     }
 
     /// Creates a new function signature for an anonymous function.
-    pub fn new_anon(
-        args: Vec<Argument>,
-        return_type: Option<Type>,
-        start_pos: Position,
-        end_pos: Position,
-    ) -> Self {
+    pub fn new_anon(args: Vec<Argument>, return_type: Option<Type>, span: Span) -> Self {
         FunctionSignature {
             name: "".to_string(),
             tmpl_params: None,
             args,
             maybe_ret_type: return_type,
-            start_pos,
-            end_pos,
+            span,
         }
     }
 
@@ -161,7 +144,9 @@ impl FunctionSignature {
     ///  - `return_type` is the type of the optional return type
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Record the function signature starting position.
-        let start_pos = Module::parse_expecting(tokens, TokenKind::Fn)?.start;
+        let start_pos = Module::parse_expecting(tokens, TokenKind::Fn)?
+            .span
+            .start_pos;
 
         // Parse the rest of the function signature.
         let mut sig = FunctionSignature::from_name_args_and_return(tokens)?;
@@ -175,7 +160,7 @@ impl FunctionSignature {
             None => None,
         };
 
-        sig.start_pos = start_pos;
+        sig.span.start_pos = start_pos;
         sig.tmpl_params = tmpl_params;
 
         Ok(sig)
@@ -190,12 +175,16 @@ impl FunctionSignature {
         // The next tokens should represent function arguments and optional return type.
         let fn_sig = FunctionSignature::from_args_and_return(tokens, true)?;
 
+        let span = Span {
+            start_pos,
+            end_pos: fn_sig.end_pos().clone(),
+        };
+
         Ok(FunctionSignature::new(
             fn_name.as_str(),
             fn_sig.args,
             fn_sig.maybe_ret_type,
-            start_pos,
-            fn_sig.end_pos,
+            span,
         ))
     }
 
@@ -222,7 +211,7 @@ impl FunctionSignature {
 
         // The next tokens should represent function arguments followed by the return type.
         let mut fn_sig = FunctionSignature::from_args_and_return(tokens, named)?;
-        fn_sig.start_pos = start_pos;
+        fn_sig.span.start_pos = start_pos;
         Ok(fn_sig)
     }
 
@@ -264,9 +253,12 @@ impl FunctionSignature {
         Ok(FunctionSignature::new_anon(
             args,
             maybe_ret_type,
-            // We can leave the start position as default here because it will be set by the caller.
-            Position::default(),
-            end_pos,
+            Span {
+                // We can leave the start position as default here because it will
+                // be set by the caller.
+                start_pos: Position::default(),
+                end_pos,
+            },
         ))
     }
 
@@ -306,7 +298,7 @@ impl FunctionSignature {
                     },
                 ) => {
                     // We're done assembling arguments. Record the ending position of the arguments.
-                    end_pos = token.end;
+                    end_pos = token.span.end_pos;
                     break;
                 }
 
@@ -332,8 +324,10 @@ impl FunctionSignature {
                         .as_str(),
                         None,
                         // TODO: These positions are technically wrong.
-                        start_pos,
-                        start_pos.clone(),
+                        Span {
+                            start_pos,
+                            end_pos: start_pos,
+                        },
                     ));
                 }
             };
@@ -351,7 +345,7 @@ impl FunctionSignature {
                     ..
                 } => {
                     // We're done parsing args. Record the position of the `)`.
-                    end_pos = token.end;
+                    end_pos = token.span.end_pos;
                     break;
                 }
                 _ => unreachable!(),

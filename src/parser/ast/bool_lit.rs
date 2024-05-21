@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -13,8 +13,7 @@ use crate::parser::error::{ErrorKind, ParseError};
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct BoolLit {
     pub value: bool,
-    pub start_pos: Position,
-    pub end_pos: Position,
+    pub span: Span,
 }
 
 impl Display for BoolLit {
@@ -37,19 +36,14 @@ impl BoolLit {
     pub fn new_with_default_pos(value: bool) -> Self {
         BoolLit {
             value,
-            start_pos: Position::default(),
-            end_pos: Position::default(),
+            span: Default::default(),
         }
     }
 
     /// Creates a new boolean literal.
     #[cfg(test)]
-    pub fn new(value: bool, start_pos: Position, end_pos: Position) -> Self {
-        BoolLit {
-            value,
-            start_pos,
-            end_pos,
-        }
+    pub fn new(value: bool, span: Span) -> Self {
+        BoolLit { value, span }
     }
 
     /// Attempts to parse a boolean literal from the given token sequence.
@@ -57,12 +51,10 @@ impl BoolLit {
         match tokens.next() {
             Some(Token {
                 kind: TokenKind::BoolLiteral(value),
-                start,
-                end,
+                span,
             }) => Ok(BoolLit {
                 value: *value,
-                start_pos: start.clone(),
-                end_pos: end.clone(),
+                span: span.clone(),
             }),
             Some(other) => Err(ParseError::new_with_token(
                 ErrorKind::ExpectedBasicExpr,
@@ -73,8 +65,7 @@ impl BoolLit {
                 ErrorKind::UnexpectedEOF,
                 "expected boolean literal, but found EOF",
                 None,
-                Position::default(),
-                Position::default(),
+                Default::default(),
             )),
         }
     }

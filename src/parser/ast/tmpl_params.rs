@@ -1,6 +1,6 @@
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -19,8 +19,7 @@ pub struct TmplParam {
     pub required_specs: Vec<Type>,
     /// The type that this template parameter is an alias for.
     pub aliased_type: Option<Type>,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl Hash for TmplParam {
@@ -58,9 +57,9 @@ impl TmplParam {
     /// specs can satisfy the parameter's requirements.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Find the start position and (maybe) the end position of this template param.
-        let (start_pos, end_pos) = match tokens.peek_next() {
-            Some(token) => (token.start, token.end),
-            None => (Position::default(), Position::default()),
+        let span = match tokens.peek_next() {
+            Some(token) => token.span,
+            None => Default::default(),
         };
 
         // Parse the template param name.
@@ -68,8 +67,7 @@ impl TmplParam {
             name: Module::parse_identifier(tokens)?,
             required_specs: vec![],
             aliased_type: None,
-            start_pos,
-            end_pos,
+            span,
         };
 
         // Parse the type or spec requirements based on whether the next token is `=`, `:`, or
@@ -102,7 +100,8 @@ impl TmplParam {
                 }
 
                 // Fix the end position since we found parameter requirements.
-                tmpl_param.end_pos = tmpl_param.required_specs.last().unwrap().end_pos().clone();
+                tmpl_param.span.end_pos =
+                    tmpl_param.required_specs.last().unwrap().end_pos().clone();
             }
 
             _ => {}
@@ -117,8 +116,7 @@ impl TmplParam {
             name: name.to_string(),
             required_specs: vec![],
             aliased_type: None,
-            start_pos: Default::default(),
-            end_pos: Default::default(),
+            span: Default::default(),
         }
     }
 }
@@ -130,8 +128,7 @@ locatable_impl!(TmplParam);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TmplParams {
     pub params: Vec<TmplParam>,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl Hash for TmplParams {
@@ -153,7 +150,9 @@ impl TmplParams {
     ///  - `tmpl_param` is a template parameter (see `TmplParam::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Parse `with [`.
-        let start_pos = Module::parse_expecting(tokens, TokenKind::With)?.start;
+        let start_pos = Module::parse_expecting(tokens, TokenKind::With)?
+            .span
+            .start_pos;
         Module::parse_expecting(tokens, TokenKind::LeftBracket)?;
 
         // Parse all template params and the closing bracket.
@@ -169,16 +168,16 @@ impl TmplParams {
             )? {
                 Token {
                     kind: TokenKind::RightBracket,
-                    end,
+                    span,
                     ..
                 } => {
-                    break end;
+                    break span.end_pos;
                 }
 
                 _ => {
                     // Allow trailing commas.
                     if let Some(token) = Module::parse_optional(tokens, TokenKind::RightBracket) {
-                        break token.end.clone();
+                        break token.span.end_pos;
                     }
                 }
             };
@@ -186,8 +185,7 @@ impl TmplParams {
 
         Ok(TmplParams {
             params: tmpl_params,
-            start_pos,
-            end_pos,
+            span: Span { start_pos, end_pos },
         })
     }
 
@@ -195,8 +193,7 @@ impl TmplParams {
     pub fn new_with_default_pos() -> Self {
         TmplParams {
             params: vec![],
-            start_pos: Default::default(),
-            end_pos: Default::default(),
+            span: Default::default(),
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::lexer::pos::Position;
+use crate::lexer::pos::Span;
 
 pub type LexResult<T> = Result<T, LexError>;
 
@@ -6,6 +6,5 @@ pub type LexResult<T> = Result<T, LexError>;
 #[derive(Debug, PartialEq)]
 pub struct LexError {
     pub message: String,
-    pub start_pos: Position,
-    pub end_pos: Position,
+    pub span: Span,
 }

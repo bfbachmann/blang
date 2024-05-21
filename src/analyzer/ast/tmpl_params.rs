@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::tmpl_params::{TmplParam, TmplParams};
 use crate::parser::ast::unresolved::UnresolvedType;
@@ -22,8 +22,7 @@ pub struct ATmplParam {
     pub name: String,
     pub required_spec_names: Vec<String>,
     pub aliased_type_key: Option<TypeKey>,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl Display for ATmplParam {
@@ -57,8 +56,7 @@ impl ATmplParam {
                 name: tmpl_param.name.clone(),
                 required_spec_names: vec![],
                 aliased_type_key,
-                start_pos: tmpl_param.start_pos().clone(),
-                end_pos: tmpl_param.end_pos().clone(),
+                span: tmpl_param.span().clone(),
             };
         }
 
@@ -93,8 +91,7 @@ impl ATmplParam {
             name: tmpl_param.name.clone(),
             required_spec_names,
             aliased_type_key: None,
-            start_pos: tmpl_param.start_pos().clone(),
-            end_pos: tmpl_param.end_pos().clone(),
+            span: tmpl_param.span().clone(),
         }
     }
 }

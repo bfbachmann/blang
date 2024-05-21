@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -16,8 +16,7 @@ pub struct Argument {
     pub name: String,
     pub typ: Type,
     pub is_mut: bool,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 impl fmt::Display for Argument {
@@ -34,19 +33,12 @@ locatable_impl!(Argument);
 
 impl Argument {
     /// Creates a new function argument.
-    pub fn new(
-        name: &str,
-        typ: Type,
-        is_mut: bool,
-        start_pos: Position,
-        end_pos: Position,
-    ) -> Self {
+    pub fn new(name: &str, typ: Type, is_mut: bool, span: Span) -> Self {
         Argument {
             name: name.to_string(),
             typ,
             is_mut,
-            start_pos,
-            end_pos,
+            span,
         }
     }
 
@@ -56,8 +48,7 @@ impl Argument {
             name: name.to_string(),
             typ,
             is_mut,
-            start_pos: Position::default(),
-            end_pos: Position::default(),
+            span: Default::default(),
         }
     }
 
@@ -96,12 +87,10 @@ impl Argument {
                 Type::Pointer(Box::new(PointerType::new(
                     Type::new_unresolved("Self"),
                     is_mut,
-                    start_pos.clone(),
-                    end_pos.clone(),
+                    Span { start_pos, end_pos },
                 ))),
                 is_mut,
-                start_pos,
-                end_pos,
+                Span { start_pos, end_pos },
             ));
         }
 
@@ -120,8 +109,7 @@ impl Argument {
                 name.as_str(),
                 Type::new_unresolved("Self"),
                 is_mut,
-                start_pos,
-                end_pos,
+                Span { start_pos, end_pos },
             ));
         }
 
@@ -138,8 +126,7 @@ impl Argument {
             name.as_str(),
             arg_type,
             is_mut,
-            start_pos,
-            end_pos,
+            Span { start_pos, end_pos },
         ))
     }
 
@@ -163,6 +150,11 @@ impl Argument {
         // Get the argument ending position in the source code.
         let end_pos = arg_type.end_pos().clone();
 
-        Ok(Argument::new("", arg_type, is_mut, start_pos, end_pos))
+        Ok(Argument::new(
+            "",
+            arg_type,
+            is_mut,
+            Span { start_pos, end_pos },
+        ))
     }
 }

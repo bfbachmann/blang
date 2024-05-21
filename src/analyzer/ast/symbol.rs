@@ -5,7 +5,7 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopedSymbol;
 use crate::analyzer::type_store::TypeKey;
-use crate::lexer::pos::{Locatable, Position};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::parser::ast::pointer::PointerType;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Symbol;
@@ -29,8 +29,7 @@ pub struct ASymbol {
     /// This will be true if this symbol refers to a method (either on a type or an instance of
     /// a type).
     pub is_method: bool,
-    start_pos: Position,
-    end_pos: Position,
+    span: Span,
 }
 
 locatable_impl!(ASymbol);
@@ -57,8 +56,7 @@ impl ASymbol {
             is_const: true,
             is_var: false,
             is_method: false,
-            start_pos: Position::default(),
-            end_pos: Position::default(),
+            span: Default::default(),
         }
     }
 
@@ -175,8 +173,7 @@ impl ASymbol {
             is_const,
             is_var,
             is_method,
-            start_pos: symbol.start_pos().clone(),
-            end_pos: symbol.end_pos().clone(),
+            span: symbol.span,
         }
     }
 
@@ -189,8 +186,7 @@ impl ASymbol {
     pub fn new_null(
         ctx: &mut ProgramContext,
         maybe_type_key: Option<TypeKey>,
-        start_pos: Position,
-        end_pos: Position,
+        span: Span,
     ) -> ASymbol {
         // Use type `*mut u8` for the null symbol by default. In most cases, its
         // type will be coerced to the appropriate pointer type anyway.
@@ -209,8 +205,7 @@ impl ASymbol {
             is_const: true,
             is_var: false,
             is_method: false,
-            start_pos,
-            end_pos,
+            span,
         }
     }
 }
@@ -258,12 +253,7 @@ fn get_type_key_for_symbol(
 fn maybe_get_intrinsic(ctx: &mut ProgramContext, symbol: &Symbol) -> Option<ASymbol> {
     // Check for the `null` intrinsic.
     if symbol.maybe_mod_name.is_none() && symbol.name == "null" {
-        return Some(ASymbol::new_null(
-            ctx,
-            None,
-            symbol.start_pos().clone(),
-            symbol.end_pos().clone(),
-        ));
+        return Some(ASymbol::new_null(ctx, None, symbol.span));
     }
 
     None
