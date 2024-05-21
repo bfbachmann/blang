@@ -91,7 +91,7 @@ impl Module {
                     format!(
                         r#"expected {}{}, but found EOF"#,
                         if expected.len() > 1 { "one of " } else { "" },
-                        fmt::format_vec(&expected, ", ")
+                        fmt::format_code_vec(&expected, ", ")
                     )
                     .as_str(),
                     None,
@@ -108,7 +108,7 @@ impl Module {
                         format!(
                             r#"expected {}{}, but found {}"#,
                             if expected.len() > 1 { "one of " } else { "" },
-                            fmt::format_vec(&expected, ", "),
+                            fmt::format_code_vec(&expected, ", "),
                             format_code!("{}", token),
                         )
                         .as_str(),

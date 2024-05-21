@@ -45,3 +45,12 @@ macro_rules! locatable_impl {
         }
     };
 }
+
+/// Represents a fragment of code in a file.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash)]
+pub struct Span {
+    pub start_pos: Position,
+    pub end_pos: Position,
+}
+
+locatable_impl!(Span);

@@ -23,8 +23,8 @@ use crate::analyzer::ast::var_assign::AVarAssign;
 use crate::analyzer::ast::var_dec::AVarDecl;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::fmt::format_vec;
-use crate::lexer::pos::{Locatable, Position};
+use crate::fmt::{format_code_vec, vec_to_string};
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::locatable_impl;
 use crate::parser::ast::op::Operator;
 
@@ -345,7 +345,7 @@ impl Debug for Block {
 // This is just here to help with debugging.
 impl Display for Block {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let preds = format_vec(&self.predecessor_block_ids, ", ");
+        let preds = format_code_vec(&self.predecessor_block_ids, ", ");
         writeln!(f, "(preds: {preds})")?;
 
         for (i, statement) in self.statements.iter().enumerate() {
@@ -472,7 +472,7 @@ impl CFGAnalyzer<'_> {
         // over the entire function graph, doing DFS from each node to find
         // any cycles that begin and end with that node.
         let cycles: Vec<Vec<usize>> = analyzer
-            .bfs(|block_id| analyzer.find_cycle(vec![block_id]))
+            .traverse(|block_id| analyzer.find_cycle(vec![block_id]))
             .into_iter()
             .filter_map(|v| v)
             .collect();
@@ -572,7 +572,7 @@ impl CFGAnalyzer<'_> {
 
     /// Traverses the control-flow graph breadth-first, calling
     /// `visitor` with each block's ID and accumulating the results it returns.
-    fn bfs<T, R>(&self, visitor: T) -> Vec<R>
+    fn traverse<T, R>(&self, visitor: T) -> Vec<R>
     where
         T: Fn(usize) -> R,
     {
@@ -1469,6 +1469,20 @@ impl CFGAnalyzer<'_> {
     fn check_use<T: Locatable>(&mut self, start_block_id: usize, value_path: &str, loc: &T) {
         let mut blocks_tracked = HashSet::from([start_block_id]);
         let mut blocks_to_search = VecDeque::from([start_block_id]);
+        let mut move_errs: HashMap<Span, (String, Vec<MMove>)> = HashMap::new();
+
+        fn insert_move_err(
+            move_errs: &mut HashMap<Span, (String, Vec<MMove>)>,
+            move_pos: Span,
+            move_path: String,
+            conflicting_move: MMove,
+        ) {
+            if let Some((_, errs)) = move_errs.get_mut(&move_pos) {
+                errs.push(conflicting_move);
+            } else {
+                move_errs.insert(move_pos, (move_path, vec![conflicting_move]));
+            }
+        }
 
         'next_block: while let Some(block_id) = blocks_to_search.pop_front() {
             let block = self.get_block(block_id);
@@ -1479,35 +1493,16 @@ impl CFGAnalyzer<'_> {
                     MStatementKind::Move(mv)
                         if moves_conflict(mv.value_path.as_str(), value_path) =>
                     {
-                        self.ctx.insert_err(
-                            AnalyzeError::new(
-                                ErrorKind::UseOfMovedValue,
-                                format_code!(
-                                    "cannot use {} because it was already moved",
-                                    value_path
-                                )
-                                .as_str(),
-                                loc,
-                            )
-                            .with_detail(
-                                format!(
-                                    "The conflicting move of {} occurs at {}.",
-                                    format_code!(mv.value_path),
-                                    mv.start_pos(),
-                                )
-                                .as_str(),
-                            )
-                            .with_help(
-                                format!(
-                                    "Consider copying or borrowing {} at {} instead \
-                                of moving it.",
-                                    format_code!(mv.value_path),
-                                    mv.start_pos(),
-                                )
-                                .as_str(),
-                            ),
+                        insert_move_err(
+                            &mut move_errs,
+                            Span {
+                                start_pos: loc.start_pos().clone(),
+                                end_pos: loc.end_pos().clone(),
+                            },
+                            value_path.to_string(),
+                            mv.clone(),
                         );
-                        return;
+                        continue 'next_block;
                     }
 
                     // Check if this is where the variable was declared. If so,
@@ -1538,6 +1533,34 @@ impl CFGAnalyzer<'_> {
                     blocks_tracked.insert(*pred_block_id);
                 }
             }
+        }
+
+        // Gather move conflict errors before adding them to the program context.
+        for (span, (move_path, conflicting_moves)) in move_errs {
+            let conflicting_move_locs: Vec<Position> = conflicting_moves
+                .into_iter()
+                .map(|mv| mv.start_pos)
+                .collect();
+            self.ctx.insert_err(
+                AnalyzeError::new(
+                    ErrorKind::UseOfMovedValue,
+                    format_code!("cannot use {} because it was already moved", move_path).as_str(),
+                    &span,
+                )
+                .with_detail(
+                    format!(
+                        "{} was already moved at: {}.",
+                        format_code!(move_path),
+                        vec_to_string(&conflicting_move_locs, ", ").as_str()
+                    )
+                    .as_str(),
+                )
+                .with_help(
+                    "Consider borrowing or copying the value at each location \
+                     where there is a move conflict, or replace the moved value \
+                     with a new value immediately after moving it.",
+                ),
+            );
         }
     }
 

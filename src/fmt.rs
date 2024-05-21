@@ -299,13 +299,14 @@ fn print_source_no_color(file_path: &str, start_pos: &Position, end_pos: &Positi
 ///
 ///     A -> B -> C
 pub fn hierarchy_to_string(hierarchy: &Vec<String>) -> String {
-    return format_vec(hierarchy, " -> ");
+    return format_code_vec(hierarchy, " -> ");
 }
 
-/// Formats the given vector by placing `sep` between its elements.
+/// Formats the given vector by placing `sep` between its elements, and rendering
+/// each element as code using `format_code!`.
 /// For example, if `sep` is ",", and `vec` is `[1, 2, 3]`, then this function
-/// would return the string `"1, 2, 3"`.
-pub fn format_vec<T: Display>(vec: &Vec<T>, sep: &str) -> String {
+/// would return the string "`1`, `2`, `3`".
+pub fn format_code_vec<T: Display>(vec: &Vec<T>, sep: &str) -> String {
     let mut s = String::from("");
     for (i, val) in vec.iter().enumerate() {
         if i == 0 {
@@ -313,6 +314,27 @@ pub fn format_vec<T: Display>(vec: &Vec<T>, sep: &str) -> String {
         } else {
             s.push_str(
                 format!("{}{}", sep, format_code!("{}", val))
+                    .to_string()
+                    .as_str(),
+            )
+        }
+    }
+
+    s.to_string()
+}
+
+/// Formats the given vector by placing `sep` between its elements, and rendering
+/// each element as a string.
+/// For example, if `sep` is ",", and `vec` is `[1, 2, 3]`, then this function
+/// would return the string "1, 2, 3".
+pub fn vec_to_string<T: Display>(vec: &Vec<T>, sep: &str) -> String {
+    let mut s = String::from("");
+    for (i, val) in vec.iter().enumerate() {
+        if i == 0 {
+            s.push_str(format!("{val}").to_string().as_str());
+        } else {
+            s.push_str(
+                format!("{}{}", sep, format!("{}", val))
                     .to_string()
                     .as_str(),
             )
