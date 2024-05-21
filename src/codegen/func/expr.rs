@@ -429,23 +429,24 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         );
 
         // Assign values to initialized struct fields.
-        for (i, field) in struct_type.fields.iter().enumerate() {
-            if let Some(field_val) = struct_init.field_values.get(field.name.as_str()) {
-                // Get a pointer to the struct field we're initializing.
-                let ll_field_ptr = self
-                    .builder
-                    .build_struct_gep(
-                        ll_struct_type,
-                        ll_struct_ptr,
-                        i as u32,
-                        format!("{}.{}_ptr", struct_type.name, field.name).as_str(),
-                    )
-                    .unwrap();
+        for (field_name, field_value) in &struct_init.field_values {
+            let field_index = struct_type.get_field_index(field_name.as_str()).unwrap();
+            let field_type_key = struct_type.get_field_type_key(field_name).unwrap();
 
-                // Compile the expression and copy its value to the struct field pointer.
-                let ll_field_val = self.gen_expr(field_val);
-                self.copy_value(ll_field_val, ll_field_ptr, field.type_key);
-            }
+            // Get a pointer to the struct field we're initializing.
+            let ll_field_ptr = self
+                .builder
+                .build_struct_gep(
+                    ll_struct_type,
+                    ll_struct_ptr,
+                    field_index as u32,
+                    format!("{}.{}_ptr", struct_type.name, field_name).as_str(),
+                )
+                .unwrap();
+
+            // Compile the expression and copy its value to the struct field pointer.
+            let ll_field_val = self.gen_expr(field_value);
+            self.copy_value(ll_field_val, ll_field_ptr, field_type_key);
         }
 
         ll_struct_ptr.as_basic_value_enum()

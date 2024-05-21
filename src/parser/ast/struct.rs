@@ -6,12 +6,12 @@ use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::r#type::Type;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::module::Module;
-use crate::{locatable_impl, util};
 
 /// Represents a field in a struct with a type and a name.
 #[derive(Debug, Clone, Eq)]
@@ -67,7 +67,20 @@ impl Display for StructType {
 
 impl PartialEq for StructType {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && util::vecs_eq(&self.fields, &other.fields)
+        if self.name != other.name
+            || self.fields.len() != other.fields.len()
+            || self.is_pub != other.is_pub
+        {
+            return false;
+        }
+
+        for field in &self.fields {
+            if other.fields.iter().find(|f| f == &field).is_none() {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
@@ -159,9 +172,6 @@ impl StructType {
             });
         }
 
-        // Make sure to sort the fields by name so two equivalent struct types with different field
-        // orders still look the same.
-        fields.sort_by(|f1, f2| f1.name.cmp(&f2.name));
         Ok(StructType {
             name,
             fields,

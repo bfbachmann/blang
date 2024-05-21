@@ -1122,7 +1122,7 @@ impl CFGAnalyzer<'_> {
 
     // Analyzes struct initialization.
     fn analyze_struct_init(&mut self, struct_init: &AStructInit) -> MValue {
-        for field_val in struct_init.field_values.values() {
+        for (_, field_val) in &struct_init.field_values {
             self.analyze_expr(field_val, UseKind::Move);
         }
 

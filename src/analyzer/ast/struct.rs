@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 
@@ -138,17 +138,6 @@ impl AStructType {
             });
         }
 
-        // Now sort struct fields by size. The fields should already be sorted alphabetically, so
-        // ties in their size are broken by lexicographical order. This is done to save memory by
-        // reducing the need for padding between struct fields in memory.
-        fields.sort_by(|f1, f2| {
-            let type1 = ctx.must_get_type(f1.type_key);
-            let type2 = ctx.must_get_type(f2.type_key);
-            type2
-                .min_size_bytes(&ctx.type_store)
-                .cmp(&type1.min_size_bytes(&ctx.type_store))
-        });
-
         let a_struct = AStructType {
             name: struct_type.name.clone(),
             fields,
@@ -203,8 +192,7 @@ impl AStructType {
 #[derive(Debug, Clone)]
 pub struct AStructInit {
     pub type_key: TypeKey,
-    /// Maps struct field names to their values.
-    pub field_values: HashMap<String, AExpr>,
+    pub field_values: Vec<(String, AExpr)>,
 }
 
 impl Display for AStructInit {
@@ -241,7 +229,8 @@ impl AStructInit {
 
         // Analyze struct field assignments and collect errors.
         let mut errors = vec![];
-        let mut field_values: HashMap<String, AExpr> = HashMap::new();
+        let mut field_values: Vec<(String, AExpr)> = vec![];
+        let mut used_field_names = HashSet::new();
         for (field_name, field_value) in &struct_init.field_values {
             // Get the struct field type, or error if the struct type has no such field.
             let field_type = match struct_type.get_field_type_key(field_name.as_str()) {
@@ -285,7 +274,9 @@ impl AStructInit {
             );
 
             // Insert the analyzed struct field value, making sure that it was not already assigned.
-            if field_values.insert(field_name.to_string(), expr).is_some() {
+            if used_field_names.insert(field_name.clone()) {
+                field_values.push((field_name.to_string(), expr));
+            } else {
                 errors.push(AnalyzeError::new(
                     ErrorKind::DuplicateStructField,
                     format_code!("struct field {} is already assigned", &field_name).as_str(),
@@ -296,7 +287,11 @@ impl AStructInit {
 
         // Make sure all struct fields were assigned.
         for field in &struct_type.fields {
-            if !field_values.contains_key(field.name.as_str()) {
+            if field_values
+                .iter()
+                .find(|(name, _)| name == &field.name)
+                .is_none()
+            {
                 errors.push(AnalyzeError::new(
                     ErrorKind::StructFieldNotInitialized,
                     format_code!(
@@ -325,5 +320,16 @@ impl AStructInit {
     /// Returns the human-readable version of this struct initialization.
     pub fn display(&self, ctx: &ProgramContext) -> String {
         format!("{} {{ ... }}", ctx.display_type_for_key(self.type_key))
+    }
+
+    /// Returns the value assigned to the field with the given name. Panics if
+    /// no such field exists.
+    pub fn must_get_field_value(&self, name: &str) -> &AExpr {
+        let (_, value) = self
+            .field_values
+            .iter()
+            .find(|(field_name, _)| field_name == name)
+            .unwrap();
+        value
     }
 }

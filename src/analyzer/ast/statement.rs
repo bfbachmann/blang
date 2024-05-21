@@ -488,17 +488,13 @@ mod tests {
         let result = analyze_statement(raw, &mut ctx);
         assert!(ctx.errors().is_empty());
 
-        // Make sure the struct fields are all present and in the right order (from largest field
-        // to smallest with ties broken by lexicographical order).
+        // Make sure the struct fields are all present and in the right order.
+        // They should appear in the order in which they're declared.
         assert_eq!(
             result,
             AStatement::StructTypeDeclaration(AStructType {
                 name: "MyStruct".to_string(),
                 fields: vec![
-                    AField {
-                        name: "message".to_string(),
-                        type_key: ctx.str_type_key(),
-                    },
                     AField {
                         name: "counter".to_string(),
                         type_key: ctx.i64_type_key(),
@@ -506,6 +502,10 @@ mod tests {
                     AField {
                         name: "is_even".to_string(),
                         type_key: ctx.bool_type_key(),
+                    },
+                    AField {
+                        name: "message".to_string(),
+                        type_key: ctx.str_type_key(),
                     },
                 ],
             })

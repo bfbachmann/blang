@@ -231,9 +231,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
                 for field in &struct_type.fields {
                     ll_field_values.push(
-                        self.gen_const_expr(
-                            struct_init.field_values.get(field.name.as_str()).unwrap(),
-                        ),
+                        self.gen_const_expr(struct_init.must_get_field_value(field.name.as_str())),
                     )
                 }
 

@@ -45,15 +45,6 @@ impl ATupleType {
             })
         }
 
-        // Sort fields in order of decreasing size to save memory by reducing the need for padding.
-        fields.sort_by(|f1, f2| {
-            let type1 = ctx.must_get_type(f1.type_key);
-            let type2 = ctx.must_get_type(f2.type_key);
-            type2
-                .min_size_bytes(&ctx.type_store)
-                .cmp(&type1.min_size_bytes(&ctx.type_store))
-        });
-
         ATupleType { fields }
     }
 
@@ -69,9 +60,7 @@ impl ATupleType {
     }
 
     /// Returns the index of the field with the given name. Note that the name in this case will
-    /// always actually be a positive integer because tuple fields are accessed by index. The trick
-    /// here is that tuple fields are reordered to save memory, but the user will still refer to
-    /// them by index in the order that they specified the tuple type in their program.
+    /// always actually be a positive integer because tuple fields are accessed by index.
     pub fn get_field_index(&self, name: &str) -> usize {
         for (i, field) in self.fields.iter().enumerate() {
             if field.name == name.to_string() {
@@ -181,15 +170,6 @@ impl ATupleInit {
                 val,
             ));
         }
-
-        // Sort fields in order of decreasing size to save memory by reducing the need for padding.
-        field_values.sort_by(|f1, f2| {
-            let type1 = ctx.must_get_type(f1.0.type_key);
-            let type2 = ctx.must_get_type(f2.0.type_key);
-            type2
-                .min_size_bytes(&ctx.type_store)
-                .cmp(&type1.min_size_bytes(&ctx.type_store))
-        });
 
         let mut fields = vec![];
         let mut values = vec![];
