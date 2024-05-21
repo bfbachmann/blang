@@ -358,7 +358,7 @@ impl AType {
     }
 
     /// Returns true if this is a pointer type.
-    pub fn is_pointer(&self) -> bool {
+    pub fn is_ptr(&self) -> bool {
         matches!(self, AType::Pointer(_))
     }
 

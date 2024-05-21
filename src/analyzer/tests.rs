@@ -1166,16 +1166,30 @@ mod tests {
     }
 
     #[test]
+    fn legal_move_out_of_array() {
+        let result = analyze(
+            r#"
+                fn main() {
+                    let array = [[true]]
+                    let legal = array.(0)
+                }
+            "#,
+        );
+        check_result(result, None);
+    }
+
+    #[test]
     fn illegal_move_out_of_array() {
         let result = analyze(
             r#"
-            fn main() {
-                let array = [[true]]
-                let illegal = array.(0)
-            }
-        "#,
+                fn main() {
+                    let array = [[true]]
+                    let legal = array.(0)
+                    let illegal = array.(0)
+                }
+            "#,
         );
-        check_result(result, Some(ErrorKind::IllegalMove));
+        check_result(result, Some(ErrorKind::UseOfMovedValue));
     }
 
     #[test]
@@ -1358,13 +1372,13 @@ mod tests {
     fn legal_ptr_deref_with_member_access() {
         let result = analyze(
             r#"
-            struct State {i: i64}
-
-            fn main() {
-                let state_ptr = &State{i: 0}
-                let i = state_ptr^.i
-            }
-        "#,
+                struct State {i: i64}
+    
+                fn main() {
+                    let state_ptr = &State{i: 0}
+                    let i = state_ptr^.i
+                }
+            "#,
         );
         check_result(result, None);
     }
@@ -1508,12 +1522,48 @@ mod tests {
     }
 
     #[test]
-    fn illegal_repeated_move_in_array_init() {
+    fn legal_repeated_move_in_array_init() {
         let result = analyze(
             r#"
                 struct Test {}
                 fn main() {
                     let a = [Test{}; 2]
+                }
+            "#,
+        );
+        check_result(result, None);
+    }
+
+    #[test]
+    fn legal_move_before_reassign_in_array_init() {
+        let result = analyze(
+            r#"
+                struct Test {
+                    inner: {}
+                }
+
+                fn main() {
+                    let mut t = Test{inner: {}}
+                    loop {
+                        take(t.inner)
+                        t.inner = {}
+                    }
+                }
+
+                fn take(inner: {}) {}
+            "#,
+        );
+        check_result(result, None);
+    }
+
+    #[test]
+    fn illegal_repeated_move_in_array_init() {
+        let result = analyze(
+            r#"
+                struct Test {}
+                fn main() {
+                    let t = Test{}
+                    let a = [t; 2]
                 }
             "#,
         );

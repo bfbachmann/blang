@@ -143,7 +143,7 @@ impl AMemberAccess {
                         // take a reference to the value.
                         let self_arg_type_key = maybe_self_type_key.unwrap();
                         let self_arg_type = ctx.must_get_type(self_arg_type_key);
-                        if !base_expr_is_ptr && self_arg_type.is_pointer() {
+                        if !base_expr_is_ptr && self_arg_type.is_ptr() {
                             let op = match self_arg_type.is_mut_pointer() {
                                 true => {
                                     // Record an error if we're not allowed to get a

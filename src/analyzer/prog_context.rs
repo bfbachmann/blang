@@ -312,11 +312,6 @@ impl ProgramContext {
         return true;
     }
 
-    /// Returns a reference to the type store.
-    pub fn type_store(&self) -> &TypeStore {
-        &self.type_store
-    }
-
     /// Returns a mapping from error start position to the error that occurred there.
     pub fn errors(&self) -> &HashMap<Position, AnalyzeError> {
         &self.errors

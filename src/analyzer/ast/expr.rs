@@ -313,15 +313,6 @@ impl AExprKind {
             }
         }
     }
-
-    /// Returns true if this expression represents a variable or a simple member access on that variable.
-    pub fn is_variable(&self) -> bool {
-        match &self {
-            AExprKind::Symbol(_) => true,
-            AExprKind::MemberAccess(access) => access.base_expr.kind.is_variable(),
-            _ => false,
-        }
-    }
 }
 
 /// Represents a semantically valid and type-rich expression.
@@ -620,7 +611,7 @@ impl AExpr {
 
             AExprKind::Symbol(symbol) => {
                 // Always coerce `null` to any pointer type.
-                if symbol.is_null_intrinsic() && target_type.is_pointer() {
+                if symbol.is_null_intrinsic() && target_type.is_ptr() {
                     self.type_key = target_type_key;
                     self.kind = AExprKind::Symbol(ASymbol::new_null(
                         ctx,
@@ -922,7 +913,7 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
         | Operator::Subtract
         | Operator::Multiply
         | Operator::Divide
-        | Operator::Modulo => operand_type.is_numeric() || operand_type.is_pointer(),
+        | Operator::Modulo => operand_type.is_numeric() || operand_type.is_ptr(),
 
         // Logical operators only work on bools.
         Operator::LogicalAnd | Operator::LogicalOr => operand_type == &AType::Bool,
@@ -930,7 +921,7 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
         // Equality operators work on most primitive types.
         Operator::EqualTo | Operator::NotEqualTo => {
             operand_type.is_numeric()
-                || operand_type.is_pointer()
+                || operand_type.is_ptr()
                 || matches!(operand_type, AType::Bool | AType::Str)
         }
 
@@ -941,7 +932,7 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
         Operator::GreaterThan
         | Operator::LessThan
         | Operator::GreaterThanOrEqual
-        | Operator::LessThanOrEqual => operand_type.is_numeric() || operand_type.is_pointer(),
+        | Operator::LessThanOrEqual => operand_type.is_numeric() || operand_type.is_ptr(),
 
         // If this happens, something is badly broken.
         other => panic!("unexpected operator {}", other),

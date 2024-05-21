@@ -6,8 +6,8 @@ use target_lexicon::Triple;
 
 use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::module::AModule;
+use crate::analyzer::control_flow::analyze_module_fns;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::move_check::MoveChecker;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeStore;
 use crate::analyzer::warn::AnalyzeWarning;
@@ -137,10 +137,8 @@ pub fn analyze_module(
     // passed. We only do this if analysis returned zero errors because otherwise the move
     // checker could raise superfluous errors.
     if ctx.errors().is_empty() {
-        let errors = MoveChecker::check_module(&analyzed_module, ctx.type_store());
-        for err in errors {
-            ctx.insert_err(err);
-        }
+        // Do control and data flow analysis.
+        analyze_module_fns(ctx, &analyzed_module);
     }
 
     // Append the import cycle errors to the module analysis errors.
