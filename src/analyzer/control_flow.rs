@@ -394,7 +394,7 @@ impl MScope {
 }
 
 /// Stores information about control flow and data flow within a function.
-pub struct CFGAnalyzer<'a> {
+struct CFGAnalyzer<'a> {
     ctx: &'a mut ProgramContext,
     blocks: Vec<Block>,
     cur_block_id: usize,
@@ -420,42 +420,38 @@ impl Display for CFGAnalyzer<'_> {
 }
 
 impl CFGAnalyzer<'_> {
-    /// Creates a new CFG analyzer. This analyzer should only be used once
-    /// per function.
-    fn new(ctx: &mut ProgramContext) -> CFGAnalyzer {
-        CFGAnalyzer {
+    /// Analyzes the control and data flow of `func`. In particular, this will
+    /// check for use-after-move violations inside the function.
+    fn analyze_fn(ctx: &mut ProgramContext, func: &AFn) {
+        let mut analyzer = CFGAnalyzer {
             ctx,
             blocks: vec![Block::new(), Block::new()],
             cur_block_id: 0,
             stack: vec![MScope::new()],
             return_values: Default::default(),
-        }
-    }
+        };
 
-    /// Analyzes the control and data flow of `func`. In particular, this will
-    /// check for use-after-move violations inside the function.
-    fn analyze_fn(&mut self, func: &AFn) {
-        self.analyze_statements(&func.body.statements);
+        analyzer.analyze_statements(&func.body.statements);
 
         // Jump to the end block from the current block if it does not have
         // a terminator.
-        if !self.cur_block_has_terminator() {
-            self.insert_statement(MStatement {
+        if !analyzer.cur_block_has_terminator() {
+            analyzer.insert_statement(MStatement {
                 kind: MStatementKind::Branch(MBranch {
-                    target_block_id: self.end_block_id(),
+                    target_block_id: analyzer.end_block_id(),
                 }),
             });
         }
 
-        self.switch_to_block(self.end_block_id());
+        analyzer.switch_to_block(analyzer.end_block_id());
 
         // If there are return values for this function, insert them into a
         // phi node and use that as the return value.
-        let maybe_ret_val = if !self.return_values.is_empty() {
-            let ret_val = self
+        let maybe_ret_val = if !analyzer.return_values.is_empty() {
+            let ret_val = analyzer
                 .insert_statement(MStatement {
                     kind: MStatementKind::Phi(MPhi {
-                        values: self.return_values.clone(),
+                        values: analyzer.return_values.clone(),
                     }),
                 })
                 .unwrap();
@@ -465,7 +461,7 @@ impl CFGAnalyzer<'_> {
             None
         };
 
-        self.insert_statement(MStatement {
+        analyzer.insert_statement(MStatement {
             kind: MStatementKind::Return(MReturn {
                 maybe_value: maybe_ret_val,
             }),
@@ -475,21 +471,21 @@ impl CFGAnalyzer<'_> {
         // we can check loops for duplicate moves. We do this by doing a BFS
         // over the entire function graph, doing DFS from each node to find
         // any cycles that begin and end with that node.
-        let cycles: Vec<Vec<usize>> = self
-            .bfs(|block_id| self.find_cycle(vec![block_id]))
+        let cycles: Vec<Vec<usize>> = analyzer
+            .bfs(|block_id| analyzer.find_cycle(vec![block_id]))
             .into_iter()
             .filter_map(|v| v)
             .collect();
 
         for cycle in cycles {
-            let illegal_moves: Vec<MMove> = self
+            let illegal_moves: Vec<MMove> = analyzer
                 .get_duplicated_moves_in_cycle(cycle)
                 .into_values()
                 .into_iter()
                 .flatten()
                 .collect();
             for illegal_move in illegal_moves {
-                self.ctx.insert_err(
+                analyzer.ctx.insert_err(
                     AnalyzeError::new(
                         ErrorKind::UseOfMovedValue,
                         format_code!(
@@ -518,6 +514,9 @@ impl CFGAnalyzer<'_> {
                 );
             }
         }
+
+        // Uncomment to view CFG debug info.
+        // print!("___ {} ___\n{analyzer}", module.path);
     }
 
     /// Checks the given cycle (a list of block IDs that forms a loop) for moves
@@ -1011,8 +1010,7 @@ impl CFGAnalyzer<'_> {
         });
 
         // Analyze the nested function.
-        let mut analyzer = CFGAnalyzer::new(self.ctx);
-        analyzer.analyze_fn(fn_decl);
+        CFGAnalyzer::analyze_fn(self.ctx, fn_decl);
     }
 
     /// Analyzes a variable declaration.
@@ -1201,8 +1199,7 @@ impl CFGAnalyzer<'_> {
 
     /// Analyzes an anonymous function.
     fn analyze_anon_fn(&mut self, func: &AFn) -> MValue {
-        let mut analyzer = CFGAnalyzer::new(self.ctx);
-        analyzer.analyze_fn(func);
+        CFGAnalyzer::analyze_fn(self.ctx, func);
         MValue::new_immediate()
     }
 
@@ -1618,11 +1615,7 @@ fn move_is_from_var(var_name: &str, move_path: &str) -> bool {
 pub fn analyze_module_fns(ctx: &mut ProgramContext, module: &AModule) {
     for statement in &module.statements {
         if let AStatement::FunctionDeclaration(func) = statement {
-            let mut analyzer = CFGAnalyzer::new(ctx);
-            analyzer.analyze_fn(func);
-
-            // Uncomment to view CFG debug info.
-            // print!("___ {} ___\n{analyzer}", module.path);
+            CFGAnalyzer::analyze_fn(ctx, func);
         }
     }
 }
