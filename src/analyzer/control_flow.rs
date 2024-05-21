@@ -1556,9 +1556,9 @@ impl CFGAnalyzer<'_> {
                     .as_str(),
                 )
                 .with_help(
-                    "Consider borrowing or copying the value at each location \
-                     where there is a move conflict, or replace the moved value \
-                     with a new value immediately after moving it.",
+                    "Consider borrowing or copying the value at each of the \
+                     reported locations where it was moved, or replace the moved \
+                     values immediately after moving them.",
                 ),
             );
         }
