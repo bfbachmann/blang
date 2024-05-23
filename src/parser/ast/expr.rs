@@ -10,6 +10,7 @@ use crate::parser::ast::array::ArrayInit;
 use crate::parser::ast::bool_lit::BoolLit;
 use crate::parser::ast::f32_lit::F32Lit;
 use crate::parser::ast::f64_lit::F64Lit;
+use crate::parser::ast::from::From;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::func_call::FuncCall;
 use crate::parser::ast::i32_lit::I32Lit;
@@ -68,6 +69,9 @@ pub enum Expression {
     UnaryOperation(Operator, Box<Expression>),
     BinaryOperation(Box<Expression>, Operator, Box<Expression>),
     TypeCast(Box<Expression>, Type),
+
+    // Statements as expressions.
+    From(From),
 }
 
 impl Display for Expression {
@@ -109,6 +113,9 @@ impl Display for Expression {
             Expression::TypeCast(expr, target_type) => {
                 write!(f, "{} as {}", expr, target_type)
             }
+            Expression::From(from) => {
+                write!(f, "from {}", from.statement)
+            }
         }
     }
 }
@@ -142,6 +149,7 @@ impl Locatable for Expression {
             Expression::Index(idx) => idx.start_pos(),
             Expression::MemberAccess(m) => m.start_pos(),
             Expression::TypeCast(expr, _) => expr.start_pos(),
+            Expression::From(from) => from.start_pos(),
         }
     }
 
@@ -173,6 +181,7 @@ impl Locatable for Expression {
             Expression::Index(idx) => idx.end_pos(),
             Expression::MemberAccess(m) => m.end_pos(),
             Expression::TypeCast(_, target_type) => target_type.end_pos(),
+            Expression::From(from) => from.end_pos(),
         }
     }
 
@@ -204,6 +213,7 @@ impl Locatable for Expression {
             Expression::Index(idx) => idx.span(),
             Expression::MemberAccess(m) => m.span(),
             Expression::TypeCast(_, target_type) => target_type.span(),
+            Expression::From(from) => from.span(),
         }
     }
 }
@@ -537,6 +547,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
 ///     <enum_init>
 ///     <literal>
 ///     <symbol>
+///     <do>
 ///
 /// where
 /// `comp` is a composite expression (see `parse_expr`).
@@ -622,6 +633,9 @@ fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                 _ => Expression::Symbol(symbol),
             }
         }
+
+        // A `from` expression.
+        TokenKind::From => Expression::From(From::from(tokens)?),
 
         other => {
             return Err(ParseError::new_with_token(

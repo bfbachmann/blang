@@ -1,4 +1,7 @@
+use std::collections::HashMap;
+
 use inkwell::basic_block::BasicBlock;
+use inkwell::values::BasicValueEnum;
 
 /// Stores information about a loop that is being compiled.
 pub struct LoopContext<'ctx> {
@@ -21,6 +24,24 @@ impl<'ctx> LoopContext<'ctx> {
             guarantees_return: false,
             guarantees_terminator: false,
             contains_return: false,
+        }
+    }
+}
+
+/// Stores information about a `from` expression that is being compiled.
+pub struct FromContext<'ctx> {
+    pub end_block: BasicBlock<'ctx>,
+    /// Maps basic block to the value that was yielded from that block.
+    pub yielded_vales: HashMap<BasicBlock<'ctx>, BasicValueEnum<'ctx>>,
+    pub guarantees_return: bool,
+}
+
+impl<'ctx> FromContext<'ctx> {
+    pub fn new(end_block: BasicBlock<'ctx>) -> Self {
+        FromContext {
+            end_block,
+            yielded_vales: Default::default(),
+            guarantees_return: false,
         }
     }
 }
@@ -71,6 +92,7 @@ impl BranchContext {
 /// Stores information about the current closure or statement being compiled.
 pub enum CompilationContext<'ctx> {
     Loop(LoopContext<'ctx>),
+    From(FromContext<'ctx>),
     Branch(BranchContext),
     Func(FnContext),
     Statement(StatementContext),
@@ -81,6 +103,13 @@ impl<'ctx> CompilationContext<'ctx> {
         match self {
             CompilationContext::Loop(ctx) => ctx,
             _ => panic!("cannot cast context to LoopContext"),
+        }
+    }
+
+    pub fn to_from(self) -> FromContext<'ctx> {
+        match self {
+            CompilationContext::From(ctx) => ctx,
+            _ => panic!("cannot cast context to DoContext"),
         }
     }
 

@@ -42,7 +42,7 @@ impl ARet {
         if !ctx.is_in_fn() {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::UnexpectedReturn,
-                "cannot return from outside function body",
+                format_code!("cannot {} from outside function body", "return").as_str(),
                 ret,
             ));
 
@@ -64,7 +64,11 @@ impl ARet {
                     None => {
                         ctx.insert_err(AnalyzeError::new(
                             ErrorKind::MismatchedTypes,
-                            "cannot return value from function with no return type",
+                            format_code!(
+                                "cannot {} value from function with no return type",
+                                "return"
+                            )
+                            .as_str(),
                             expr,
                         ));
 

@@ -15,6 +15,7 @@ use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::r#enum::AEnumVariantInit;
 use crate::analyzer::ast::r#loop::ALoop;
 use crate::analyzer::ast::r#struct::AStructInit;
+use crate::analyzer::ast::r#yield::AYield;
 use crate::analyzer::ast::ret::ARet;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::ast::symbol::ASymbol;
@@ -319,7 +320,7 @@ impl Display for MStatementKind {
                 write!(f, "call {}(", call.func)?;
 
                 for arg in &call.args {
-                    write!(f, "{}", arg)?;
+                    write!(f, "{}, ", arg)?;
                 }
 
                 write!(f, ")")
@@ -368,8 +369,13 @@ impl Block {
 struct MScope {
     variables: HashMap<String, MValue>,
     is_loop: bool,
-    maybe_loop_end_block_id: Option<usize>,
-    loop_update_block_id: usize,
+    is_from: bool,
+    /// Represents the end block ID for loops and `from` statements.
+    maybe_end_block_id: Option<usize>,
+    /// Represents the update block ID for loops.
+    update_block_id: usize,
+    /// Maps block ID to the yield value that comes from that block.
+    yield_values: HashMap<usize, MValue>,
 }
 
 impl MScope {
@@ -377,8 +383,10 @@ impl MScope {
         MScope {
             variables: Default::default(),
             is_loop: false,
-            maybe_loop_end_block_id: None,
-            loop_update_block_id: 0,
+            is_from: false,
+            maybe_end_block_id: None,
+            update_block_id: 0,
+            yield_values: Default::default(),
         }
     }
 
@@ -386,8 +394,21 @@ impl MScope {
         MScope {
             variables: Default::default(),
             is_loop: true,
-            loop_update_block_id: loop_cond_block_id,
-            maybe_loop_end_block_id,
+            update_block_id: loop_cond_block_id,
+            maybe_end_block_id: maybe_loop_end_block_id,
+            is_from: false,
+            yield_values: Default::default(),
+        }
+    }
+
+    fn new_from() -> MScope {
+        MScope {
+            variables: Default::default(),
+            is_loop: false,
+            is_from: true,
+            maybe_end_block_id: None,
+            update_block_id: 0,
+            yield_values: Default::default(),
         }
     }
 }
@@ -713,13 +734,6 @@ impl CFGAnalyzer<'_> {
             // code.
             let is_last = i + 1 == statements.len();
             if self.cur_block_has_terminator() && !is_last {
-                // TODO: Use correct statement location in dead code warning.
-                // self.ctx.insert_warn(AnalyzeWarning::new(
-                //     WarnKind::UnreachableCode,
-                //     "unreachable code",
-                //     &statement,
-                // ));
-
                 break;
             }
         }
@@ -755,6 +769,7 @@ impl CFGAnalyzer<'_> {
             AStatement::Conditional(cond) => {
                 self.analyze_cond(cond);
             }
+
             AStatement::Loop(loop_) => self.analyze_loop(loop_),
 
             AStatement::Break => self.analyze_break(),
@@ -762,6 +777,8 @@ impl CFGAnalyzer<'_> {
             AStatement::Continue => self.analyze_continue(),
 
             AStatement::Return(ret) => self.analyze_return(ret),
+
+            AStatement::Yield(yld) => self.analyze_yield(yld),
 
             // These statements don't affect control flow.
             AStatement::StructTypeDeclaration(_)
@@ -781,7 +798,6 @@ impl CFGAnalyzer<'_> {
         // Return early if the loop init statement branches away from the loop,
         // thereby making the rest of the loop code unreachable.
         if self.cur_block_has_terminator() {
-            // TODO: Insert dead code warning.
             return;
         }
 
@@ -846,7 +862,7 @@ impl CFGAnalyzer<'_> {
         }
 
         // Jump to the end block now that the loop is done.
-        if let Some(end_block_id) = self.stack.pop().unwrap().maybe_loop_end_block_id {
+        if let Some(end_block_id) = self.stack.pop().unwrap().maybe_end_block_id {
             self.switch_to_block(end_block_id);
         }
     }
@@ -855,25 +871,34 @@ impl CFGAnalyzer<'_> {
     /// loop does not yet have an end block, this will create one and return it.
     /// Panics if we're not inside a loop.
     fn get_loop_end_block_id(&mut self) -> usize {
-        let end_block_id = match self
-            .get_cur_loop_scope_mut()
-            .maybe_loop_end_block_id
-            .clone()
-        {
+        let end_block_id = match self.get_cur_loop_scope_mut().maybe_end_block_id {
             Some(end_block_id) => end_block_id,
             None => self.new_block(),
         };
 
-        self.get_cur_loop_scope_mut().maybe_loop_end_block_id = Some(end_block_id);
+        self.get_cur_loop_scope_mut().maybe_end_block_id = Some(end_block_id);
+        end_block_id
+    }
+
+    /// Looks for the ID of the end block of the current `from` statement. If the
+    /// current `from` statement does not yet have an end block, this will create
+    /// one and return it. Panics if we're not inside a `from` statement.
+    fn get_from_end_block_id(&mut self) -> usize {
+        let end_block_id = match &self.get_cur_from_scope_mut().maybe_end_block_id {
+            Some(end_block_id) => *end_block_id,
+            None => self.new_block(),
+        };
+
+        self.get_cur_from_scope_mut().maybe_end_block_id = Some(end_block_id);
         end_block_id
     }
 
     /// Looks for the ID of the current loop's update block (i.e. the block to
     /// jump to when we encounter a `continue` statement in the loop).
     /// Panics if we're not in side a loop.
-    fn get_loop_update_block_id(&mut self) -> usize {
+    fn get_update_block_id(&mut self) -> usize {
         let scope = self.get_cur_loop_scope_mut();
-        scope.loop_update_block_id
+        scope.update_block_id
     }
 
     /// Return a mutable reference to the current loop scope. Panics if we're
@@ -886,6 +911,18 @@ impl CFGAnalyzer<'_> {
         }
 
         panic!("not inside a loop")
+    }
+
+    /// Return a mutable reference to the current `from` scope. Panics if we're
+    /// not inside a `from`.
+    fn get_cur_from_scope_mut(&mut self) -> &mut MScope {
+        for scope in self.stack.iter_mut().rev() {
+            if scope.is_from {
+                return scope;
+            }
+        }
+
+        panic!("not inside a from expression")
     }
 
     /// Adds a break to the current loop in the control flow graph.
@@ -901,7 +938,7 @@ impl CFGAnalyzer<'_> {
     /// Adds a jump back to the beginning to the current loop in the control
     /// flow graph.
     fn analyze_continue(&mut self) {
-        let update_block_id = self.get_loop_update_block_id();
+        let update_block_id = self.get_update_block_id();
         self.insert_statement(MStatement {
             kind: MStatementKind::Branch(MBranch {
                 target_block_id: update_block_id,
@@ -922,6 +959,20 @@ impl CFGAnalyzer<'_> {
             kind: MStatementKind::Branch(MBranch {
                 target_block_id: self.end_block_id(),
             }),
+        });
+    }
+
+    /// Analyzes a yield statement. A yield is graphed as a jump to the current
+    /// `from` closure's end block.
+    fn analyze_yield(&mut self, yld: &AYield) {
+        let block_id = self.cur_block_id;
+        let val = self.analyze_expr(&yld.value, UseKind::Move);
+        let scope = self.get_cur_from_scope_mut();
+        scope.yield_values.insert(block_id, val);
+        let target_block_id = self.get_from_end_block_id();
+
+        self.insert_statement(MStatement {
+            kind: MStatementKind::Branch(MBranch { target_block_id }),
         });
     }
 
@@ -1384,8 +1435,28 @@ impl CFGAnalyzer<'_> {
 
             AExprKind::AnonFunction(func) => self.analyze_anon_fn(func),
 
+            AExprKind::From(statement) => self.analyze_from(statement),
+
             AExprKind::Unknown => unreachable!(),
         }
+    }
+
+    fn analyze_from(&mut self, statement: &AStatement) -> MValue {
+        // Analyze the `from` statement.
+        self.stack.push(MScope::new_from());
+        self.analyze_statement(statement);
+
+        // Continue on the `from` end block. The result should be a phi of the
+        // yielded values from statements analyzed above.
+        let scope = self.stack.pop().unwrap();
+        self.switch_to_block(scope.maybe_end_block_id.unwrap());
+
+        self.insert_statement(MStatement {
+            kind: MStatementKind::Phi(MPhi {
+                values: scope.yield_values,
+            }),
+        })
+        .unwrap()
     }
 
     /// Analyzes a variable assignment.

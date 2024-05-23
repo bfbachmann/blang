@@ -154,6 +154,8 @@ pub enum TokenKind {
     Use,
     #[token("from")]
     From,
+    #[token("yield")]
+    Yield,
 
     // Delimiters
     #[token("{")]
@@ -291,6 +293,7 @@ impl TokenKind {
             TokenKind::Deref => "^".to_string(),
             TokenKind::Use => "use".to_string(),
             TokenKind::From => "from".to_string(),
+            TokenKind::Yield => "yield".to_string(),
         }
     }
 }

@@ -10,6 +10,7 @@ use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#impl::AImpl;
 use crate::analyzer::ast::r#loop::ALoop;
 use crate::analyzer::ast::r#struct::AStructType;
+use crate::analyzer::ast::r#yield::AYield;
 use crate::analyzer::ast::ret::ARet;
 use crate::analyzer::ast::var_assign::AVarAssign;
 use crate::analyzer::ast::var_dec::AVarDecl;
@@ -31,6 +32,7 @@ pub enum AStatement {
     Break,
     Continue,
     Return(ARet),
+    Yield(AYield),
     StructTypeDeclaration(AStructType),
     EnumTypeDeclaration(AEnumType),
     /// An external function declaration.
@@ -52,6 +54,7 @@ impl fmt::Display for AStatement {
             AStatement::Break => write!(f, "break"),
             AStatement::Continue => write!(f, "continue"),
             AStatement::Return(v) => write!(f, "{}", v),
+            AStatement::Yield(v) => write!(f, "{}", v),
             AStatement::StructTypeDeclaration(s) => write!(f, "{}", s),
             AStatement::EnumTypeDeclaration(e) => write!(f, "{}", e),
             AStatement::ExternFn(e) => {
@@ -120,6 +123,8 @@ impl AStatement {
                 let a_ret = ARet::from(ctx, ret);
                 AStatement::Return(a_ret)
             }
+
+            Statement::Yield(yld) => AStatement::Yield(AYield::from(ctx, yld)),
 
             Statement::StructDeclaration(s) => {
                 AStatement::StructTypeDeclaration(AStructType::from(ctx, &s, false))

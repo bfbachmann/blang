@@ -11,10 +11,9 @@ use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, Point
 
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::r#const::AConst;
-
 use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::codegen::context::{
-    BranchContext, CompilationContext, FnContext, LoopContext, StatementContext,
+    BranchContext, CompilationContext, FnContext, FromContext, LoopContext, StatementContext,
 };
 use crate::codegen::convert::TypeConverter;
 use crate::codegen::error::{CodeGenError, CompileResult, ErrorKind};
@@ -115,6 +114,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         self.stack.push(CompilationContext::Loop(loop_ctx));
     }
 
+    /// Creates a new `from` context and pushes it onto the stack.
+    fn push_from_ctx(&mut self) {
+        let end_block = self.append_block("from_end");
+        self.stack
+            .push(CompilationContext::From(FromContext::new(end_block)));
+    }
+
     /// Creates a new function context and pushes it onto the stack.
     fn push_fn_ctx(&mut self) {
         self.stack.push(CompilationContext::Func(FnContext::new()));
@@ -144,6 +150,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 ctx.guarantees_return = guarantees_return;
                 ctx.guarantees_terminator = guarantees_return || ctx.guarantees_terminator;
             }
+            CompilationContext::From(ctx) => {
+                ctx.guarantees_return = guarantees_return;
+            }
             CompilationContext::Func(ctx) => {
                 ctx.guarantees_return = guarantees_return;
             }
@@ -170,6 +179,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             CompilationContext::Loop(ctx) => {
                 ctx.guarantees_terminator = guarantees_term;
             }
+            CompilationContext::From(_) => {
+                // Nothing to do here. Do expressions always guarantee a
+                // terminator.
+            }
             CompilationContext::Func(ctx) => {
                 if guarantees_term {
                     ctx.guarantees_return = true;
@@ -187,6 +200,17 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         panic!("call to get_loop_ctx occurred outside of loop");
+    }
+
+    /// Returns a reference to the nearest `from` context in the stack.
+    fn get_from_ctx(&mut self) -> &mut FromContext<'ctx> {
+        for ctx in self.stack.iter_mut().rev() {
+            if let CompilationContext::From(from_ctx) = ctx {
+                return from_ctx;
+            }
+        }
+
+        panic!("call to get_from_ctx occurred outside of do expression");
     }
 
     /// Returns the existing loop end block from the current loop context, if one exists. Otherwise,

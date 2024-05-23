@@ -50,12 +50,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 // Pop the branch context now that we're done compiling the branch.
                 let ctx = self.pop_ctx().to_branch();
 
+                let has_terminator = self.current_block_has_terminator();
                 all_branches_return = all_branches_return && ctx.guarantees_return;
-                all_branches_terminate = all_branches_terminate && ctx.guarantees_terminator;
+                all_branches_terminate = all_branches_terminate && has_terminator;
 
                 // If this branch does not end in an unconditional return, we need to complete
                 // the corresponding "then" block with an unconditional jump to the "end" block.
-                if !ctx.guarantees_terminator {
+                if !has_terminator {
                     if end_block.is_none() {
                         end_block = Some(self.append_block("cond_end"));
                     }
@@ -70,12 +71,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 self.push_branch_ctx();
                 self.gen_closure(&branch.body)?;
                 let ctx = self.pop_ctx().to_branch();
+                let has_terminator = self.current_block_has_terminator();
                 all_branches_return = all_branches_return && ctx.guarantees_return;
-                all_branches_terminate = all_branches_terminate && ctx.guarantees_terminator;
+                all_branches_terminate = all_branches_terminate && has_terminator;
 
                 // If this branch does not end in an unconditional return, we need to complete
                 // the current block with an unconditional jump to the "end" block.
-                if !ctx.guarantees_terminator {
+                if !has_terminator {
                     if end_block.is_none() {
                         end_block = Some(self.append_block("cond_end"));
                     }

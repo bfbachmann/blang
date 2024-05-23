@@ -2,7 +2,7 @@ use std::fmt;
 use std::fmt::Formatter;
 
 use crate::analyzer::ast::array::AArrayInit;
-use crate::analyzer::ast::closure::{check_closure_returns, AClosure};
+use crate::analyzer::ast::closure::{check_closure_returns, check_closure_yields, AClosure};
 use crate::analyzer::ast::fn_call::AFnCall;
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::index::AIndex;
@@ -11,15 +11,17 @@ use crate::analyzer::ast::pointer::APointerType;
 use crate::analyzer::ast::r#enum::{AEnumTypeVariant, AEnumVariantInit};
 use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::AType;
+use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::ast::tuple::ATupleInit;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::scope::ScopeKind;
+use crate::analyzer::scope::{Scope, ScopeKind};
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::{Locatable, Position, Span};
 use crate::parser::ast::array::ArrayInit;
 use crate::parser::ast::expr::Expression;
+use crate::parser::ast::from::From;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::func_call::FuncCall;
 use crate::parser::ast::op::Operator;
@@ -57,6 +59,7 @@ pub enum AExprKind {
     BinaryOperation(Box<AExpr>, Operator, Box<AExpr>),
     TypeCast(Box<AExpr>, TypeKey),
     Sizeof(TypeKey),
+    From(Box<AStatement>),
     Unknown,
 }
 
@@ -114,6 +117,9 @@ impl fmt::Display for AExprKind {
             AExprKind::Sizeof(type_key) => {
                 write!(f, "sizeof {}", type_key)
             }
+            AExprKind::From(statement) => {
+                write!(f, "from {}", statement)
+            }
             AExprKind::Unknown => {
                 write!(f, "<unknown>")
             }
@@ -144,6 +150,7 @@ impl PartialEq for AExprKind {
                 l1 == l2 && o1 == o2 && r1 == r2
             }
             (AExprKind::Sizeof(tk1), AExprKind::Sizeof(tk2)) => tk1 == tk2,
+            (AExprKind::From(s1), AExprKind::From(s2)) => s1 == s2,
             (AExprKind::Unknown, AExprKind::Unknown) => true,
             (_, _) => false,
         }
@@ -247,6 +254,11 @@ impl AExprKind {
 
             // `sizeof` expressions always yield a constant value.
             AExprKind::Sizeof(_) => true,
+
+            // `from` expressions are never considered constant. Maybe this should
+            // be reconsidered in the future, since they could actually be constant
+            // in some cases.
+            AExprKind::From(_) => false,
         }
     }
 
@@ -307,6 +319,9 @@ impl AExprKind {
             }
             AExprKind::MemberAccess(access) => {
                 format!("{}.{}", access.base_expr.display(ctx), access.member_name)
+            }
+            AExprKind::From(statement) => {
+                format!("from {}", statement)
             }
             AExprKind::Unknown => {
                 format!("<unknown>")
@@ -1144,14 +1159,8 @@ fn analyze_anon_fn(ctx: &mut ProgramContext, anon_fn: Function, span: Span) -> A
     );
 
     // Make sure the function return conditions are satisfied by the closure.
-    if let Some(ret_type) = &sig.maybe_ret_type {
-        let a_ret_type = ctx.resolve_type(&ret_type);
-        check_closure_returns(
-            ctx,
-            &a_closure,
-            a_ret_type,
-            &ScopeKind::FnBody(sig.name.clone()),
-        );
+    if sig.maybe_ret_type.is_some() {
+        check_closure_returns(ctx, &a_closure, &ScopeKind::FnBody(sig.name.clone()));
     }
 
     let a_fn = AFn {
@@ -1374,6 +1383,39 @@ fn analyze_symbol(ctx: &mut ProgramContext, symbol: Symbol, allow_type: bool, sp
     }
 }
 
+fn analyze_from(
+    ctx: &mut ProgramContext,
+    from: &From,
+    maybe_expected_type_key: Option<TypeKey>,
+) -> AExpr {
+    ctx.push_scope(Scope::new(
+        ScopeKind::FromBody,
+        vec![],
+        maybe_expected_type_key,
+    ));
+    let statement = AStatement::from(ctx, &from.statement);
+
+    // Determined the yielded type key based on the type key that was set on
+    // the `from` block scope. This will be the expected yield type key if one
+    // was specified, or it will be a value determined based on the type of
+    // the first value `yielded` from the statement. It could also be `None`
+    // in the case where the statement does not contain a `yield`.
+    let type_key = match ctx.pop_scope().yield_type_key() {
+        Some(tk) => tk,
+        None => ctx.unknown_type_key(),
+    };
+
+    // Make sure all possible branches of the statement yield a value.
+    let mut closure = AClosure::new(vec![statement], from.statement.span().clone());
+    check_closure_yields(ctx, &closure, &ScopeKind::FromBody);
+
+    AExpr {
+        type_key,
+        kind: AExprKind::From(Box::new(closure.statements.remove(0))),
+        span: from.span().clone(),
+    }
+}
+
 fn analyze_expr(
     ctx: &mut ProgramContext,
     expr: Expression,
@@ -1536,6 +1578,8 @@ fn analyze_expr(
             maybe_expected_type_key,
             span,
         ),
+
+        Expression::From(from) => analyze_from(ctx, &from, maybe_expected_type_key),
     }
 }
 

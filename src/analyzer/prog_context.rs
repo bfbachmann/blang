@@ -31,6 +31,8 @@ struct ModuleContext {
     /// Tracks the indices of function body scopes so we can locate them easily when searching the
     /// stack.
     fn_scope_indices: Vec<usize>,
+    /// Tracks the indices of `from` scopes so we can locate them easily when searching the stack.
+    from_scope_indices: Vec<usize>,
     /// Tracks the indices of loop body scopes so we can locate them easily when searching the
     /// stack.
     loop_scope_indices: Vec<usize>,
@@ -81,6 +83,7 @@ impl ModuleContext {
         ModuleContext {
             stack: VecDeque::from([Scope::new(ScopeKind::InlineClosure, vec![], None)]),
             fn_scope_indices: vec![],
+            from_scope_indices: vec![],
             loop_scope_indices: vec![],
             cur_self_type_key: None,
             imported_mod_paths: Default::default(),
@@ -605,6 +608,7 @@ impl ProgramContext {
         match &scope.kind {
             ScopeKind::FnBody(_) => mod_ctx.fn_scope_indices.push(mod_ctx.stack.len()),
             ScopeKind::LoopBody => mod_ctx.loop_scope_indices.push(mod_ctx.stack.len()),
+            ScopeKind::FromBody => mod_ctx.from_scope_indices.push(mod_ctx.stack.len()),
             _ => {}
         }
 
@@ -1047,6 +1051,11 @@ impl ProgramContext {
         !self.cur_mod_ctx().fn_scope_indices.is_empty()
     }
 
+    /// Returns true if the current scope is a `from` body or exists inside a `from` body.
+    pub fn is_in_from_block(&self) -> bool {
+        !self.cur_mod_ctx().from_scope_indices.is_empty()
+    }
+
     /// Returns a new name for a nested function with the given name. The new name will contain
     /// all the names of the functions within which this function is nested.
     pub fn mangle_name(&self, name: &str) -> String {
@@ -1155,6 +1164,35 @@ impl ProgramContext {
         let mod_ctx = self.cur_mod_ctx();
         let fn_scope_index = *mod_ctx.fn_scope_indices.last().unwrap();
         mod_ctx.stack.get(fn_scope_index).unwrap().ret_type_key()
+    }
+
+    /// Returns the expected yield type key for the current from body scope, or
+    /// `None` if there isn't one.
+    pub fn get_cur_expected_yield_type_key(&self) -> Option<TypeKey> {
+        let mod_ctx = self.cur_mod_ctx();
+        let from_scope_index = *mod_ctx.from_scope_indices.last().unwrap();
+        mod_ctx
+            .stack
+            .get(from_scope_index)
+            .unwrap()
+            .yield_type_key()
+    }
+
+    /// Sets the expected yield type key for the current do body scope. Panics
+    /// if we're not in a `from` scope or the existing `from` scope already has
+    /// a yield type key set.
+    pub fn set_cur_expected_yield_type_key(&mut self, type_key: TypeKey) {
+        let mod_ctx = self.cur_mod_ctx_mut();
+        let from_scope_index = *mod_ctx.from_scope_indices.last().unwrap();
+        assert!(
+            mod_ctx
+                .stack
+                .get_mut(from_scope_index)
+                .unwrap()
+                .set_yield_type_key(Some(type_key))
+                .is_none(),
+            "existing yield type key was overwritten"
+        );
     }
 
     /// Returns a string containing the human-readable version of the type corresponding to the

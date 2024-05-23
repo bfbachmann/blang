@@ -1,3 +1,6 @@
+use inkwell::values::BasicValue;
+
+use crate::analyzer::ast::r#yield::AYield;
 use crate::analyzer::ast::ret::ARet;
 use crate::analyzer::ast::statement::AStatement;
 use crate::codegen::error::CompileResult;
@@ -47,6 +50,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AStatement::Return(ret) => {
                 self.gen_return(ret);
             }
+            AStatement::Yield(yld) => {
+                self.gen_yield(yld);
+            }
             AStatement::Const(const_decl) => {
                 self.local_consts
                     .insert(const_decl.name.clone(), const_decl.clone());
@@ -94,5 +100,35 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 self.builder.build_return(None);
             }
         }
+    }
+
+    /// Compiles a yield statement.
+    fn gen_yield(&mut self, yld: &AYield) {
+        // Compile the yielded value expression.
+        let mut result = self.gen_expr(&yld.value);
+
+        // If the result is a composite value, we need to make sure we're
+        // yielding it as a pointer. It may currently be a constant, in
+        // which case we must stack-allocate it, so we can yield a pointer to it.
+        // Otherwise, we could run into cases were values of the same type are
+        // being yielded from the same `from` expression both as pointers and
+        // immediate aggregate values, which would cause LLVM to error because
+        // of the type inconsistency in the phi node that receives yielded results.
+        let is_composite_type = self.type_store.must_get(yld.value.type_key).is_composite();
+        let is_const = !result.is_pointer_value();
+        if is_composite_type && is_const {
+            let ll_ptr = self.stack_alloc("yielded_value", yld.value.type_key);
+            self.copy_value(result, ll_ptr, yld.value.type_key);
+            result = ll_ptr.as_basic_value_enum();
+        }
+
+        // Append the yielded value to the `from` context so we can use it in the
+        // phi node at the `from` end block and build a branch to the end block.
+        let ll_block = self.cur_block.unwrap();
+        let ctx = self.get_from_ctx();
+        ctx.yielded_vales.insert(ll_block, result);
+
+        let ll_end_block = ctx.end_block;
+        self.builder.build_unconditional_branch(ll_end_block);
     }
 }

@@ -18,6 +18,7 @@ use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#loop::Loop;
 use crate::parser::ast::r#struct::StructType;
 use crate::parser::ast::r#use::UsedModule;
+use crate::parser::ast::r#yield::Yield;
 use crate::parser::ast::ret::Ret;
 use crate::parser::ast::spec::Spec;
 use crate::parser::ast::var_assign::VariableAssignment;
@@ -39,6 +40,7 @@ pub enum Statement {
     Break(Break),
     Continue(Continue),
     Return(Ret),
+    Yield(Yield),
     StructDeclaration(StructType),
     EnumDeclaration(EnumType),
     ExternFn(Extern),
@@ -89,6 +91,9 @@ impl fmt::Display for Statement {
                     write!(f, "return")
                 }
             }
+            Statement::Yield(yld) => {
+                write!(f, "yield {}", yld.value)
+            }
             Statement::StructDeclaration(s) => {
                 write!(f, "{}", s)
             }
@@ -137,6 +142,7 @@ impl Locatable for Statement {
             Statement::Break(br) => br.start_pos(),
             Statement::Continue(cont) => cont.start_pos(),
             Statement::Return(ret) => ret.start_pos(),
+            Statement::Yield(yld) => yld.start_pos(),
             Statement::StructDeclaration(s) => s.start_pos(),
             Statement::EnumDeclaration(e) => e.start_pos(),
             Statement::ExternFn(e) => e.start_pos(),
@@ -159,6 +165,7 @@ impl Locatable for Statement {
             Statement::Break(br) => br.end_pos(),
             Statement::Continue(cont) => cont.end_pos(),
             Statement::Return(ret) => ret.end_pos(),
+            Statement::Yield(yld) => yld.end_pos(),
             Statement::StructDeclaration(s) => s.end_pos(),
             Statement::EnumDeclaration(e) => e.end_pos(),
             Statement::ExternFn(e) => e.end_pos(),
@@ -181,6 +188,7 @@ impl Locatable for Statement {
             Statement::Break(br) => br.span(),
             Statement::Continue(cont) => cont.span(),
             Statement::Return(ret) => ret.span(),
+            Statement::Yield(yld) => yld.span(),
             Statement::StructDeclaration(s) => s.span(),
             Statement::EnumDeclaration(e) => e.span(),
             Statement::ExternFn(e) => e.span(),
@@ -330,6 +338,18 @@ impl Statement {
                         start_pos: ret_token_span.start_pos,
                         end_pos: *expr.end_pos(),
                     },
+                )))
+            }
+
+            // If the first token is `yield`, it must be a yield statement.
+            (TokenKind::Yield, _) => {
+                let yield_token = tokens.next().unwrap();
+                let start_pos = yield_token.span.start_pos;
+                let expr = Expression::from(tokens)?;
+                let end_pos = *expr.end_pos();
+                Ok(Statement::Yield(Yield::new(
+                    expr,
+                    Span { start_pos, end_pos },
                 )))
             }
 

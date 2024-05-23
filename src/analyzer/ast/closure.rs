@@ -22,9 +22,6 @@ use crate::{format_code, locatable_impl, util};
 pub struct AClosure {
     pub statements: Vec<AStatement>,
     pub ret_type_key: Option<TypeKey>,
-    pub has_break: bool,
-    pub has_continue: bool,
-    pub has_return: bool,
     span: Span,
 }
 
@@ -49,10 +46,16 @@ impl AClosure {
         AClosure {
             statements: vec![],
             ret_type_key: None,
-            has_break: false,
-            has_continue: false,
-            has_return: false,
             span: Default::default(),
+        }
+    }
+
+    /// Creates a new closure with the given statements and span.
+    pub fn new(statements: Vec<AStatement>, span: Span) -> AClosure {
+        AClosure {
+            statements,
+            ret_type_key: None,
+            span,
         }
     }
 
@@ -96,73 +99,63 @@ impl AClosure {
         // Analyze all the statements in the closure and record return type.
         let mut a_statements = vec![];
         let num_statements = closure.statements.len();
-        let mut has_break = false;
-        let mut has_continue = false;
-        let mut has_return = false;
         for (i, statement) in closure.statements.iter().enumerate() {
             // Analyze the statement.
             let a_statement = AStatement::from(ctx, statement);
 
             // Check if the statement is a break, continue, or return, so we can mark this closure
             // as containing such statements.
-            match &a_statement {
-                AStatement::Break => {
-                    has_break = true;
-                }
-                AStatement::Continue => {
-                    has_continue = true;
-                }
-                AStatement::Return(_) => {
-                    has_return = true;
-                }
-                _ => {}
-            };
+            let has_terminator = matches!(
+                a_statement,
+                AStatement::Break
+                    | AStatement::Continue
+                    | AStatement::Return(_)
+                    | AStatement::Yield(_)
+            );
 
             // If this statement jumps away from this closure but there are still more statements
             // following the jump inside this closure, issue a warning that those statements will
             // never be executed.
-            if has_break || has_continue || has_return {
-                if i + 1 != num_statements {
-                    ctx.insert_warn(AnalyzeWarning::new(
-                        WarnKind::UnreachableCode,
-                        format_code!("statements following {} will never be executed", statement)
-                            .as_str(),
-                        statement,
-                    ));
-                    a_statements.push(a_statement);
-                    break;
-                }
+            let is_last = i + 1 == num_statements;
+            if has_terminator && !is_last {
+                ctx.insert_warn(AnalyzeWarning::new(
+                    WarnKind::UnreachableCode,
+                    format_code!(
+                        "statements following {} will never be executed",
+                        match a_statement {
+                            AStatement::Continue => "continue",
+                            AStatement::Break => "break",
+                            AStatement::Yield(_) => "yield",
+                            AStatement::Return(_) => "return",
+                            _ => unreachable!(),
+                        }
+                    )
+                    .as_str(),
+                    statement,
+                ));
+                a_statements.push(a_statement);
+                break;
             }
 
             a_statements.push(a_statement);
         }
-
-        // TODO: handle closure result.
 
         ctx.pop_scope();
 
         AClosure {
             statements: a_statements,
             ret_type_key: expected_ret_type_key,
-            has_break,
-            has_continue,
-            has_return,
             span: Span { start_pos, end_pos },
         }
     }
 }
 
-/// Checks that the given closure returns the given type. If there is an error, it will be added
+/// Checks that the given closure returns. If there is an error, it will be added
 /// to the program context.
-pub fn check_closure_returns(
-    ctx: &mut ProgramContext,
-    closure: &AClosure,
-    expected_ret_type_key: TypeKey,
-    kind: &ScopeKind,
-) {
-    // Given that there is an expected return type, one of the following return conditions must
-    // be satisfied by the final statement in the closure.
-    //  1. It is a return statement returning a value of the right type.
+pub fn check_closure_returns(ctx: &mut ProgramContext, closure: &AClosure, kind: &ScopeKind) {
+    // One of the following return conditions must be satisfied by the final
+    // statement in the closure.
+    //  1. It is a return statement.
     //  2. It is an exhaustive conditional where each branch closure satisfies these return
     //     conditions.
     //  3. It is a loop that contains a return anywhere that satisfies these return conditions
@@ -172,7 +165,10 @@ pub fn check_closure_returns(
     match kind {
         // If this closure is a function body, branch body, or inline closure, we need to ensure
         // that the final statement satisfies the return conditions.
-        ScopeKind::FnBody(_) | ScopeKind::BranchBody | ScopeKind::InlineClosure => {
+        ScopeKind::FnBody(_)
+        | ScopeKind::BranchBody
+        | ScopeKind::FromBody
+        | ScopeKind::InlineClosure => {
             match closure.statements.last() {
                 // If it's a return, we're done checking. We don't need to validate the return
                 // itself because return statements are validated in `ARet::from`.
@@ -180,27 +176,17 @@ pub fn check_closure_returns(
 
                 // If it's a conditional, make sure it is exhaustive and recurse on each branch.
                 Some(AStatement::Conditional(cond)) => {
-                    check_cond_returns(ctx, &cond, expected_ret_type_key);
+                    check_cond_returns(ctx, &cond);
                 }
 
                 // If it's a loop, recurse on the loop body.
                 Some(AStatement::Loop(loop_)) => {
-                    check_closure_returns(
-                        ctx,
-                        &loop_.body,
-                        expected_ret_type_key,
-                        &ScopeKind::LoopBody,
-                    );
+                    check_closure_returns(ctx, &loop_.body, &ScopeKind::LoopBody);
                 }
 
                 // If it's an inline closure, recurse on the closure.
                 Some(AStatement::Closure(closure)) => {
-                    check_closure_returns(
-                        ctx,
-                        &closure,
-                        expected_ret_type_key,
-                        &ScopeKind::InlineClosure,
-                    );
+                    check_closure_returns(ctx, &closure, &ScopeKind::InlineClosure);
                 }
 
                 _ => {
@@ -299,6 +285,137 @@ fn closure_has_any_return(closure: &AClosure) -> bool {
     false
 }
 
+/// Returns true if the closure contains a yield at any level.
+fn closure_has_any_yield(closure: &AClosure) -> bool {
+    for statement in &closure.statements {
+        match statement {
+            AStatement::Yield(_) => {
+                return true;
+            }
+            AStatement::Conditional(cond) => {
+                if cond_has_any_return(cond) {
+                    return true;
+                }
+            }
+            AStatement::Loop(loop_) => {
+                if closure_has_any_yield(&loop_.body) {
+                    return true;
+                }
+            }
+            AStatement::Closure(closure) => {
+                if closure_has_any_yield(closure) {
+                    return true;
+                }
+            }
+            _ => {}
+        };
+    }
+
+    false
+}
+
+/// Checks that the given closure yields. If there is an error, it will be added
+/// to the program context.
+pub fn check_closure_yields(ctx: &mut ProgramContext, closure: &AClosure, kind: &ScopeKind) {
+    // One of the following yield conditions must be satisfied by the final
+    // statement in the closure.
+    //  1. It is a yield statement.
+    //  2. It is an exhaustive conditional where each branch closure satisfies these yield
+    //     conditions.
+    //  3. It is a loop that contains a yield anywhere that satisfies these yield conditions
+    //     and has no breaks.
+    //  4. It is an inline closure with a final statement that that satisfies these yield
+    //     conditions.
+    match kind {
+        // If this closure is a function body, branch body, or inline closure, we need to ensure
+        // that the final statement satisfies the yield conditions.
+        ScopeKind::FnBody(_)
+        | ScopeKind::BranchBody
+        | ScopeKind::FromBody
+        | ScopeKind::InlineClosure => {
+            match closure.statements.last() {
+                // If it's a yield, we're done checking. We don't need to validate the yield
+                // itself because yield statements are validated in `AYield::from`.
+                Some(AStatement::Yield(_)) => {}
+
+                // If it's a conditional, make sure it is exhaustive and recurse on each branch.
+                Some(AStatement::Conditional(cond)) => {
+                    check_cond_yields(ctx, &cond);
+                }
+
+                // If it's a loop, recurse on the loop body.
+                Some(AStatement::Loop(loop_)) => {
+                    check_closure_yields(ctx, &loop_.body, &ScopeKind::LoopBody);
+                }
+
+                // If it's an inline closure, recurse on the closure.
+                Some(AStatement::Closure(closure)) => {
+                    check_closure_yields(ctx, &closure, &ScopeKind::InlineClosure);
+                }
+
+                _ => {
+                    ctx.insert_err(AnalyzeError::new(
+                        ErrorKind::MissingYield,
+                        format_code!("missing {}", "yield").as_str(),
+                        closure,
+                    ));
+                }
+            };
+        }
+
+        // If this closure is a loop, we need to check that it contains a yield anywhere
+        // that satisfies the yield conditions, and that it has no breaks.
+        ScopeKind::LoopBody => {
+            let mut contains_yield = false;
+            for statement in &closure.statements {
+                match statement {
+                    AStatement::Break => {
+                        ctx.insert_err(
+                            AnalyzeError::new(
+                                ErrorKind::MissingYield,
+                                format_code!("missing {}", "yield").as_str(),
+                                closure,
+                            )
+                            .with_detail(
+                                "The last statement in this closure is a loop that contains \
+                                break statements.",
+                            ),
+                        );
+                    }
+                    AStatement::Yield(_) => {
+                        contains_yield = true;
+                    }
+                    AStatement::Conditional(cond) => {
+                        if cond_has_any_yield(cond) {
+                            contains_yield = true;
+                        }
+                    }
+                    AStatement::Loop(loop_) => {
+                        if closure_has_any_yield(&loop_.body) {
+                            contains_yield = true;
+                        }
+                    }
+                    AStatement::Closure(closure) => {
+                        if closure_has_any_yield(closure) {
+                            contains_yield = true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            if !contains_yield {
+                ctx.insert_err(
+                    AnalyzeError::new(ErrorKind::MissingYield, "missing yield statement", closure)
+                        .with_detail(
+                            "The last statement in this closure is a loop that does not yield.",
+                        ),
+                );
+            }
+        }
+    };
+}
+
 /// Returns true if the conditional contains a return at any level.
 fn cond_has_any_return(cond: &ACond) -> bool {
     for branch in &cond.branches {
@@ -310,9 +427,20 @@ fn cond_has_any_return(cond: &ACond) -> bool {
     false
 }
 
+/// Returns true if the conditional contains a yield at any level.
+fn cond_has_any_yield(cond: &ACond) -> bool {
+    for branch in &cond.branches {
+        if closure_has_any_yield(&branch.body) {
+            return true;
+        }
+    }
+
+    false
+}
+
 /// Checks that the given conditional is exhaustive and that each branch satisfies return
 /// conditions.
-fn check_cond_returns(ctx: &mut ProgramContext, cond: &ACond, expected: TypeKey) {
+fn check_cond_returns(ctx: &mut ProgramContext, cond: &ACond) {
     if !cond.is_exhaustive() {
         ctx.insert_err(
             AnalyzeError::new(ErrorKind::MissingReturn, "missing return statement", cond)
@@ -324,7 +452,25 @@ fn check_cond_returns(ctx: &mut ProgramContext, cond: &ACond, expected: TypeKey)
     }
 
     for branch in &cond.branches {
-        check_closure_returns(ctx, &branch.body, expected, &ScopeKind::BranchBody);
+        check_closure_returns(ctx, &branch.body, &ScopeKind::BranchBody);
+    }
+}
+
+/// Checks that the given conditional is exhaustive and that each branch satisfies yield
+/// conditions.
+fn check_cond_yields(ctx: &mut ProgramContext, cond: &ACond) {
+    if !cond.is_exhaustive() {
+        ctx.insert_err(
+            AnalyzeError::new(ErrorKind::MissingYield, "missing yield statement", cond)
+                .with_detail(
+                    "The last statement in this closure is a conditional that is not exhaustive",
+                ),
+        );
+        return;
+    }
+
+    for branch in &cond.branches {
+        check_closure_yields(ctx, &branch.body, &ScopeKind::BranchBody);
     }
 }
 

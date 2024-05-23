@@ -187,12 +187,12 @@ mod tests {
                 f: fn(A),
             }
 
-            fn do(a: A) {}
+            fn do_thing(a: A) {}
 
             fn new_a(count: i64): A {
                 return A {
                     count: count,
-                    f: do,
+                    f: do_thing,
                 }
             }
             "#,

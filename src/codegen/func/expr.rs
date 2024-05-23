@@ -12,6 +12,7 @@ use crate::analyzer::ast::member::AMemberAccess;
 use crate::analyzer::ast::r#enum::AEnumVariantInit;
 use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::AType;
+use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::ast::tuple::ATupleInit;
 use crate::analyzer::type_store::TypeKey;
 use crate::parser::ast::op::Operator;
@@ -78,14 +79,46 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             AExprKind::MemberAccess(access) => self.gen_member_access(access),
 
+            AExprKind::From(statement) => self.gen_from(statement, expr.type_key),
+
             AExprKind::Unknown => {
                 panic!("encountered unknown expression");
             }
         }
+    }
 
-        // Dereference the result if it's a pointer.
-        // let expr_type = self.type_store.must_get(expr.type_key);
-        // self.maybe_deref(result, expr_type)
+    /// Generates code for a `from` expression.
+    fn gen_from(
+        &mut self,
+        statement: &AStatement,
+        result_type_key: TypeKey,
+    ) -> BasicValueEnum<'ctx> {
+        // Compile the statements in the `from` expression.
+        self.push_from_ctx();
+        self.gen_statement(statement).expect("should succeed");
+
+        // Switch to the `from` end block and generate a phi that takes the values
+        // that were yielded from incoming blocks in the `from` statement.
+        let ctx = self.pop_ctx().to_from();
+        self.set_current_block(ctx.end_block);
+
+        let mut ll_result_type = self.type_converter.get_basic_type(result_type_key);
+        if self.type_store.must_get(result_type_key).is_composite() {
+            // For composite types, we'll always expect yielded values to be
+            // passed by reference. When we generate yield statements, we'll be
+            // sure to stack-allocate composite values and yield pointers to them
+            // if they're not already stack allocated.
+            ll_result_type = ll_result_type
+                .ptr_type(AddressSpace::default())
+                .as_basic_type_enum();
+        }
+
+        let ll_phi = self.builder.build_phi(ll_result_type, "from_result");
+        for (ll_block, ll_value) in ctx.yielded_vales {
+            ll_phi.add_incoming(&[(&ll_value, ll_block)]);
+        }
+
+        ll_phi.as_basic_value()
     }
 
     /// Generates code for a function or anonymous function that was declared inside

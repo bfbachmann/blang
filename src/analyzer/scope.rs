@@ -44,6 +44,7 @@ pub enum ScopeKind {
     InlineClosure,
     BranchBody,
     LoopBody,
+    FromBody,
 }
 
 impl fmt::Display for ScopeKind {
@@ -53,6 +54,7 @@ impl fmt::Display for ScopeKind {
             ScopeKind::InlineClosure => write!(f, "inline closure"),
             ScopeKind::BranchBody => write!(f, "branch body"),
             ScopeKind::LoopBody => write!(f, "loop body"),
+            ScopeKind::FromBody => write!(f, "do body"),
         }
     }
 }
@@ -70,6 +72,9 @@ pub struct Scope {
     /// Represents the expected return type for the current scope. This should only ever be `Some`
     /// for scopes with kind `FnBody`.
     maybe_ret_type_key: Option<TypeKey>,
+    /// Represents the expected yield type for the current scope. This should only ever be `Some`
+    /// for scopes with kind `DoBody`.
+    maybe_yield_type_key: Option<TypeKey>,
     /// Tracks the number of anonymous functions that were defined directly inside this scope.
     /// This is used to give each anonymous function a unique mangled name within this scope.
     anon_fn_count: usize,
@@ -92,6 +97,7 @@ impl Scope {
             symbols,
             type_keys: Default::default(),
             maybe_ret_type_key,
+            maybe_yield_type_key: None,
             anon_fn_count: 0,
         }
     }
@@ -102,6 +108,14 @@ impl Scope {
             Some(k) => Some(*k),
             None => None,
         }
+    }
+
+    /// Sets the scope's yield type key to `maybe_yield_type_key` and returns the
+    /// existing one.
+    pub fn set_yield_type_key(&mut self, maybe_yield_type_key: Option<TypeKey>) -> Option<TypeKey> {
+        let old = self.maybe_yield_type_key;
+        self.maybe_yield_type_key = maybe_yield_type_key;
+        old
     }
 
     /// Inserts a mapping from `typ` to `key` into the scope so `typ` can be resolved faster inside
@@ -126,6 +140,12 @@ impl Scope {
     /// should have expected return types.
     pub fn ret_type_key(&self) -> Option<TypeKey> {
         self.maybe_ret_type_key
+    }
+
+    /// Returns the expected yield type for this scope, if one exists. Only `from` scopes
+    /// should have expected return types.
+    pub fn yield_type_key(&self) -> Option<TypeKey> {
+        self.maybe_yield_type_key
     }
 
     /// Returns the current number of anonymous functions inside this scope and increments

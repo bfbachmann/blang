@@ -1791,6 +1791,59 @@ mod tests {
     }
 
     #[test]
+    fn inconsistent_yield_type() {
+        let result = analyze(
+            r#"
+                fn main() {
+                    let result = from if true {
+                        yield 1
+                    } elsif false {
+                        yield "bing"
+                    } else {
+                        yield 3
+                    }
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
+
+    #[test]
+    fn wrong_yield_type() {
+        let result = analyze(
+            r#"
+                fn main() {
+                    let result: bool = from if true {
+                        yield 1
+                    } else {
+                        yield 3
+                    }
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
+
+    #[test]
+    fn missing_yield() {
+        let result = analyze(
+            r#"
+                fn main() {
+                    let result = from {
+                        if false {
+                            yield 1
+                        }
+    
+                        return
+                    }
+    
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MissingYield));
+    }
+
+    #[test]
     fn private_member_access() {
         let mods = HashMap::from([
             (

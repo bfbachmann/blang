@@ -23,3 +23,4 @@ pub mod tuple;
 pub mod r#type;
 pub mod var_assign;
 pub mod var_dec;
+pub mod r#yield;

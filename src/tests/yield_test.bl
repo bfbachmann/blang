@@ -1,0 +1,23 @@
+use {exit}: "std/libc/proc.bl"
+
+use {assert}: "src/tests/test_utils.bl"
+
+fn main() {
+    let x = from if false {
+        yield 1
+    } else {
+        yield 2
+    }
+
+    let y = from {
+        let mut sum = 0
+        for let mut i = 0, i < 3, i += 1 {
+            sum += i
+        }
+        yield sum
+    }
+
+    assert(x + y == 5, "expected 5")
+
+    exit(0)
+}

@@ -282,12 +282,10 @@ impl AFn {
         );
 
         // Make sure the function return conditions are satisfied by the closure.
-        if let Some(ret_type) = &func.signature.maybe_ret_type {
-            let a_ret_type = ctx.resolve_type(&ret_type);
+        if func.signature.maybe_ret_type.is_some() {
             check_closure_returns(
                 ctx,
                 &a_closure,
-                a_ret_type,
                 &ScopeKind::FnBody(func.signature.name.clone()),
             );
         }
