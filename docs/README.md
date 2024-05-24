@@ -169,7 +169,7 @@ const my_tuple = { "this", "is my tuple", 123 / 23 - 1 }
 Statements can be used as expressions using `from` and `yield`.
 
 ```
-fn greet(is_morning: bool): str {
+fn greet(is_morning: bool) {
     let msg = from if is_morning {
         yield "Good morning!"
     } else {
