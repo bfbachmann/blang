@@ -22,6 +22,7 @@ The language and compiler are still very young, so they still lack some critical
     * [Function Declarations & Calls: `fn`](#function-declarations--calls-fn)
     * [Variable Declarations: `let`](#variable-declarations-let)
     * [Constant Declarations: `const`](#constant-declarations-const)
+    * [Statements as Expressions: `from`, `yield`](#statements-as-expressions-from-yield)
     * [Structures: `struct`](#structures-struct)
     * [Enumerations: `enum`](#enumerations-enum)
     * [Tuples: `{...}`](#tuples-)
@@ -162,6 +163,26 @@ Any expression composed exclusively of constant values can be declared as a cons
 ```
 const my_tuple = { "this", "is my tuple", 123 / 23 - 1 }
 ```
+
+### Statements as Expressions: `from`, `yield`
+
+Statements can be used as expressions using `from` and `yield`.
+
+```
+fn greet(is_morning: bool): str {
+    let msg = from if is_morning {
+        yield "Good morning!"
+    } else {
+        yield "Hi!"
+    }
+    
+    say(msg)
+}
+```
+
+`from` can be used to extract values from unconditional loops (i.e. `loop`, but not `for` or `while`), exhaustive
+conditionals, and closures. The `yield` statement works much like a `return`, only it passes the yielded value out of
+the parent `from` block instead of returning it from a function.
 
 ### Structures: `struct`
 
