@@ -1897,6 +1897,18 @@ mod tests {
     }
 
     #[test]
+    fn yield_outside_from() {
+        let result = analyze(
+            r#"
+                fn thing() {
+                    yield 1
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::UnexpectedYield));
+    }
+
+    #[test]
     fn private_member_access() {
         let mods = HashMap::from([
             (

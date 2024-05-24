@@ -627,6 +627,9 @@ impl ProgramContext {
             ScopeKind::LoopBody => {
                 mod_ctx.loop_scope_indices.pop();
             }
+            ScopeKind::FromBody => {
+                mod_ctx.from_scope_indices.pop();
+            }
             _ => {}
         };
 

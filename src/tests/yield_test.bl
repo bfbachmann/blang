@@ -3,30 +3,47 @@ use {exit}: "std/libc/proc.bl"
 use {assert}: "src/tests/test_utils.bl"
 
 fn main() {
+    // Check conditional yields.
     let x = from if false {
         yield 1
     } else {
         yield 2
     }
+    assert(x == 2, "expected 2\0")
 
-    let mut y = from {
+    // Check closure yields.
+    let y = from {
         let mut sum = 0
         for let mut i = 0, i < 3, i += 1 {
             sum += i
         }
         yield sum
     }
+    assert(y == 3, "expected 3\0")
 
+    // Check loop yields.
+    let mut value = 1
     let z = from loop {
-        if y % 4 != 0 {
-            y += 1
+        if value % 4 != 0 {
+            value += 1
             continue
         }
 
-        yield y
+        yield value
     }
+    assert(z == 4, "expected 4\0")
 
-    assert(x + z == 6, "expected 6")
+    // Check nested yields.
+    let nested = from {
+        yield from {
+            yield from if true {
+                yield 5
+            } else {
+                yield 6
+            }
+        }
+    }
+    assert(nested == 5, "expected 5\0")
 
     exit(0)
 }
