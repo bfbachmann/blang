@@ -9,7 +9,7 @@ fn main() {
         yield 2
     }
 
-    let y = from {
+    let mut y = from {
         let mut sum = 0
         for let mut i = 0, i < 3, i += 1 {
             sum += i
@@ -17,7 +17,16 @@ fn main() {
         yield sum
     }
 
-    assert(x + y == 5, "expected 5")
+    let z = from loop {
+        if y % 4 != 0 {
+            y += 1
+            continue
+        }
+
+        yield y
+    }
+
+    assert(x + z == 6, "expected 6")
 
     exit(0)
 }
