@@ -1825,7 +1825,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_yield() {
+    fn missing_yield_in_cond() {
         let result = analyze(
             r#"
                 fn main() {
@@ -1836,11 +1836,64 @@ mod tests {
     
                         return
                     }
-    
                 }
             "#,
         );
         check_result(result, Some(ErrorKind::MissingYield));
+    }
+
+    #[test]
+    fn missing_yield_in_loop() {
+        let result = analyze(
+            r#"
+                fn main() {
+                    let result = from loop {
+                        if false {
+                            yield 1
+                        }
+
+                        if true {
+                            break
+                        }
+                    }
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MissingYield));
+    }
+
+    #[test]
+    fn missing_return_in_loop() {
+        let result = analyze(
+            r#"
+                fn thing(): int {
+                    loop {
+                        if false {
+                            return 1
+                        }
+
+                        if true {
+                            break
+                        }
+                    }
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MissingReturn));
+    }
+
+    #[test]
+    fn missing_return_in_for_loop() {
+        let result = analyze(
+            r#"
+                fn thing(): int {
+                    for let mut i = 0, i < 10, i += 1 {
+                        return 1
+                    }
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MissingReturn));
     }
 
     #[test]

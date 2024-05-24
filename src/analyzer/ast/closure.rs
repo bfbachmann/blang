@@ -3,6 +3,7 @@ use std::fmt::Formatter;
 
 use crate::analyzer::ast::arg::AArg;
 use crate::analyzer::ast::cond::ACond;
+use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
@@ -150,8 +151,8 @@ impl AClosure {
     }
 }
 
-/// Checks that the given closure returns. If there is an error, it will be added
-/// to the program context.
+/// Checks that the given closure is guaranteed to return (or run forever). If
+/// there is an error, it will be added to the program context.
 pub fn check_closure_returns(ctx: &mut ProgramContext, closure: &AClosure, kind: &ScopeKind) {
     // One of the following return conditions must be satisfied by the final
     // statement in the closure.
@@ -181,6 +182,19 @@ pub fn check_closure_returns(ctx: &mut ProgramContext, closure: &AClosure, kind:
 
                 // If it's a loop, recurse on the loop body.
                 Some(AStatement::Loop(loop_)) => {
+                    if loop_.maybe_cond.is_some() {
+                        ctx.insert_err(
+                            AnalyzeError::new(
+                                ErrorKind::MissingReturn,
+                                format_code!("missing {}", "return").as_str(),
+                                closure,
+                            )
+                            .with_detail(
+                                "The last statement in this closure is a loop that is not guaranteed to return.",
+                            ),
+                        );
+                    }
+
                     check_closure_returns(ctx, &loop_.body, &ScopeKind::LoopBody);
                 }
 
@@ -192,7 +206,7 @@ pub fn check_closure_returns(ctx: &mut ProgramContext, closure: &AClosure, kind:
                 _ => {
                     ctx.insert_err(AnalyzeError::new(
                         ErrorKind::MissingReturn,
-                        "missing return statement",
+                        format_code!("missing {}", "return").as_str(),
                         closure,
                     ));
                 }
@@ -202,53 +216,15 @@ pub fn check_closure_returns(ctx: &mut ProgramContext, closure: &AClosure, kind:
         // If this closure is a loop, we need to check that it contains a return anywhere
         // that satisfies the return conditions, and that it has no breaks.
         ScopeKind::LoopBody => {
-            let mut contains_return = false;
-            for statement in &closure.statements {
-                match statement {
-                    AStatement::Break => {
-                        ctx.insert_err(
-                            AnalyzeError::new(
-                                ErrorKind::MissingReturn,
-                                "missing return statement",
-                                closure,
-                            )
-                            .with_detail(
-                                "The last statement in this closure is a loop that contains \
-                                break statements.",
-                            ),
-                        );
-                    }
-                    AStatement::Return(_) => {
-                        contains_return = true;
-                    }
-                    AStatement::Conditional(cond) => {
-                        if cond_has_any_return(cond) {
-                            contains_return = true;
-                        }
-                    }
-                    AStatement::Loop(loop_) => {
-                        if closure_has_any_return(&loop_.body) {
-                            contains_return = true;
-                        }
-                    }
-                    AStatement::Closure(closure) => {
-                        if closure_has_any_return(closure) {
-                            contains_return = true;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            if !contains_return {
+            if closure_has_any_break(closure) || !closure_has_any_return(closure) {
                 ctx.insert_err(
                     AnalyzeError::new(
                         ErrorKind::MissingReturn,
-                        "missing return statement",
+                        format_code!("missing {}", "return").as_str(),
                         closure,
                     )
                     .with_detail(
-                        "The last statement in this closure is a loop that does not return.",
+                        "The last statement in this closure is a loop that is not guaranteed to return.",
                     ),
                 );
             }
@@ -258,60 +234,401 @@ pub fn check_closure_returns(ctx: &mut ProgramContext, closure: &AClosure, kind:
 
 /// Returns true if the closure contains a return at any level.
 fn closure_has_any_return(closure: &AClosure) -> bool {
+    search_closure(closure, &|statement| {
+        matches!(statement, AStatement::Return(_))
+    })
+}
+
+/// Returns true if the closure contains a yield at any level.
+fn closure_has_any_yield(closure: &AClosure) -> bool {
+    search_closure(closure, &|statement| {
+        matches!(statement, AStatement::Yield(_))
+    })
+}
+
+/// Searches a closure recursively for a statement that causes `is_match` to
+/// return `true`. Returns true if a match was found and false otherwise.
+fn search_closure(closure: &AClosure, is_match: &impl Fn(&AStatement) -> bool) -> bool {
     for statement in &closure.statements {
-        match statement {
-            AStatement::Return(_) => {
-                return true;
-            }
-            AStatement::Conditional(cond) => {
-                if cond_has_any_return(cond) {
-                    return true;
-                }
-            }
-            AStatement::Loop(loop_) => {
-                if closure_has_any_return(&loop_.body) {
-                    return true;
-                }
-            }
-            AStatement::Closure(closure) => {
-                if closure_has_any_return(closure) {
-                    return true;
-                }
-            }
-            _ => {}
-        };
+        if search_statement(statement, is_match) {
+            return true;
+        }
     }
 
     false
 }
 
-/// Returns true if the closure contains a yield at any level.
-fn closure_has_any_yield(closure: &AClosure) -> bool {
+/// Recursively searches `closure` for an expression that satisfies `is_match`.
+fn search_closure_for_expr(closure: &AClosure, is_match: &impl Fn(&AExpr) -> bool) -> bool {
     for statement in &closure.statements {
-        match statement {
-            AStatement::Yield(_) => {
-                return true;
-            }
-            AStatement::Conditional(cond) => {
-                if cond_has_any_return(cond) {
-                    return true;
-                }
-            }
-            AStatement::Loop(loop_) => {
-                if closure_has_any_yield(&loop_.body) {
-                    return true;
-                }
-            }
-            AStatement::Closure(closure) => {
-                if closure_has_any_yield(closure) {
-                    return true;
-                }
-            }
-            _ => {}
-        };
+        if search_statement_for_expr(statement, is_match) {
+            return true;
+        }
     }
 
     false
+}
+
+/// Recursively searches `expr` for a statement that satisfies `is_match`.
+fn search_expr_for_statement(expr: &AExpr, is_match: &impl Fn(&AStatement) -> bool) -> bool {
+    match &expr.kind {
+        AExprKind::MemberAccess(access) => search_expr_for_statement(&access.base_expr, is_match),
+
+        AExprKind::StructInit(struct_init) => {
+            for (_, val) in &struct_init.field_values {
+                if search_expr_for_statement(val, is_match) {
+                    return true;
+                }
+            }
+
+            false
+        }
+
+        AExprKind::EnumInit(enum_init) => enum_init
+            .maybe_value
+            .as_ref()
+            .is_some_and(|val| search_expr_for_statement(val, is_match)),
+
+        AExprKind::TupleInit(tuple_init) => {
+            for value in &tuple_init.values {
+                if search_expr_for_statement(value, is_match) {
+                    return true;
+                }
+            }
+
+            false
+        }
+
+        AExprKind::ArrayInit(array_init) => {
+            for value in &array_init.values {
+                if search_expr_for_statement(value, is_match) {
+                    return true;
+                }
+            }
+
+            false
+        }
+
+        AExprKind::Index(index) => {
+            search_expr_for_statement(&index.index_expr, is_match)
+                || search_expr_for_statement(&index.collection_expr, is_match)
+        }
+
+        AExprKind::FunctionCall(call) => {
+            for arg in &call.args {
+                if search_expr_for_statement(arg, is_match) {
+                    return true;
+                }
+            }
+
+            false
+        }
+
+        AExprKind::UnaryOperation(_, operand) => search_expr_for_statement(operand, is_match),
+
+        AExprKind::BinaryOperation(left, _, right) => {
+            search_expr_for_statement(left, is_match) || search_expr_for_statement(right, is_match)
+        }
+
+        AExprKind::TypeCast(val, _) => search_expr_for_statement(val, is_match),
+
+        AExprKind::From(statement) => search_statement(statement, is_match),
+
+        // These expressions can't contain statements.
+        AExprKind::Symbol(_)
+        | AExprKind::BoolLiteral(_)
+        | AExprKind::I8Literal(_)
+        | AExprKind::U8Literal(_)
+        | AExprKind::I32Literal(_)
+        | AExprKind::U32Literal(_)
+        | AExprKind::F32Literal(_)
+        | AExprKind::I64Literal(_)
+        | AExprKind::U64Literal(_)
+        | AExprKind::F64Literal(_, _)
+        | AExprKind::IntLiteral(_, _)
+        | AExprKind::UintLiteral(_)
+        | AExprKind::StrLiteral(_)
+        | AExprKind::AnonFunction(_)
+        | AExprKind::Sizeof(_)
+        | AExprKind::Unknown => false,
+    }
+}
+
+/// Recursively searches `expr` for an expression that satisfies `is_match`.
+fn search_expr(expr: &AExpr, is_match: &impl Fn(&AExpr) -> bool) -> bool {
+    if is_match(expr) {
+        return true;
+    }
+
+    match &expr.kind {
+        AExprKind::MemberAccess(access) => search_expr(&access.base_expr, is_match),
+
+        AExprKind::StructInit(struct_init) => {
+            for (_, value) in &struct_init.field_values {
+                if search_expr(value, is_match) {
+                    return true;
+                }
+            }
+
+            false
+        }
+
+        AExprKind::EnumInit(enum_init) => enum_init
+            .maybe_value
+            .as_ref()
+            .is_some_and(|val| search_expr(val, is_match)),
+
+        AExprKind::TupleInit(tuple_init) => {
+            for value in &tuple_init.values {
+                if search_expr(value, is_match) {
+                    return true;
+                }
+            }
+
+            false
+        }
+
+        AExprKind::ArrayInit(array_init) => {
+            for value in &array_init.values {
+                if search_expr(value, is_match) {
+                    return true;
+                }
+            }
+
+            false
+        }
+
+        AExprKind::Index(index) => {
+            search_expr(&index.index_expr, is_match)
+                || search_expr(&index.collection_expr, is_match)
+        }
+
+        AExprKind::FunctionCall(call) => {
+            if search_expr(&call.fn_expr, is_match) {
+                return true;
+            }
+
+            for arg in &call.args {
+                if search_expr(arg, is_match) {
+                    return true;
+                }
+            }
+
+            false
+        }
+
+        AExprKind::UnaryOperation(_, operand) => search_expr(operand, is_match),
+
+        AExprKind::BinaryOperation(left, _, right) => {
+            search_expr(left, is_match) || search_expr(right, is_match)
+        }
+
+        AExprKind::TypeCast(expr, _) => search_expr(expr, is_match),
+
+        AExprKind::From(statement) => search_statement_for_expr(statement, is_match),
+
+        // These expressions don't contain other expressions.
+        AExprKind::Sizeof(_)
+        | AExprKind::Symbol(_)
+        | AExprKind::BoolLiteral(_)
+        | AExprKind::I8Literal(_)
+        | AExprKind::U8Literal(_)
+        | AExprKind::I32Literal(_)
+        | AExprKind::U32Literal(_)
+        | AExprKind::F32Literal(_)
+        | AExprKind::I64Literal(_)
+        | AExprKind::U64Literal(_)
+        | AExprKind::F64Literal(_, _)
+        | AExprKind::IntLiteral(_, _)
+        | AExprKind::UintLiteral(_)
+        | AExprKind::StrLiteral(_)
+        | AExprKind::AnonFunction(_)
+        | AExprKind::Unknown => false,
+    }
+}
+
+/// Recursively searches `statement` for a statement that satisfies `is_match`.
+fn search_statement(statement: &AStatement, is_match: &impl Fn(&AStatement) -> bool) -> bool {
+    if is_match(statement) {
+        return true;
+    }
+
+    match statement {
+        AStatement::Closure(closure) => search_closure(closure, is_match),
+
+        AStatement::Conditional(cond) => {
+            for branch in &cond.branches {
+                if let Some(cond) = &branch.cond {
+                    if search_expr(cond, &|expr| search_expr_for_statement(expr, is_match)) {
+                        return true;
+                    }
+                }
+
+                if search_closure(&branch.body, is_match) {
+                    return true;
+                }
+            }
+
+            false
+        }
+
+        AStatement::Loop(loop_) => {
+            if let Some(init) = &loop_.maybe_init {
+                if is_match(init) {
+                    return true;
+                }
+            }
+
+            if let Some(cond) = &loop_.maybe_cond {
+                if search_expr_for_statement(cond, is_match) {
+                    return true;
+                }
+            }
+
+            if search_closure(&loop_.body, is_match) {
+                return true;
+            }
+
+            if let Some(update) = &loop_.maybe_update {
+                if search_statement(update, is_match) {
+                    return true;
+                }
+            }
+
+            false
+        }
+
+        AStatement::VariableDeclaration(var_decl) => {
+            search_expr_for_statement(&var_decl.val, is_match)
+        }
+
+        AStatement::VariableAssignment(assign) => {
+            search_expr_for_statement(&assign.target, is_match)
+                || search_expr_for_statement(&assign.val, is_match)
+        }
+
+        AStatement::FunctionCall(call) => {
+            if search_expr_for_statement(&call.fn_expr, is_match) {
+                return true;
+            }
+
+            for arg in &call.args {
+                if search_expr_for_statement(arg, is_match) {
+                    return true;
+                }
+            }
+
+            false
+        }
+
+        AStatement::Return(ret) => ret
+            .val
+            .as_ref()
+            .is_some_and(|val| search_expr_for_statement(val, is_match)),
+
+        AStatement::Yield(yld) => search_expr_for_statement(&yld.value, is_match),
+
+        // These statements don't contain other statements.
+        AStatement::Continue
+        | AStatement::Break
+        | AStatement::FunctionDeclaration(_)
+        | AStatement::StructTypeDeclaration(_)
+        | AStatement::EnumTypeDeclaration(_)
+        | AStatement::ExternFn(_)
+        | AStatement::Const(_)
+        | AStatement::Impl(_) => false,
+    }
+}
+
+/// Recursively searches `statement` for an expression that satisfies `is_match`.
+fn search_statement_for_expr(statement: &AStatement, is_match: &impl Fn(&AExpr) -> bool) -> bool {
+    match statement {
+        AStatement::VariableDeclaration(var_decl) => search_expr(&var_decl.val, is_match),
+
+        AStatement::VariableAssignment(assign) => {
+            search_expr(&assign.target, is_match) || search_expr(&assign.val, is_match)
+        }
+
+        AStatement::Closure(closure) => search_closure_for_expr(closure, is_match),
+
+        AStatement::FunctionCall(call) => {
+            if search_expr(&call.fn_expr, is_match) {
+                return true;
+            }
+
+            for arg in &call.args {
+                if search_expr(arg, is_match) {
+                    return true;
+                }
+            }
+
+            false
+        }
+
+        AStatement::Conditional(cond) => {
+            for branch in &cond.branches {
+                if let Some(expr) = &branch.cond {
+                    if search_expr(expr, is_match) {
+                        return true;
+                    }
+                }
+
+                if search_closure_for_expr(&branch.body, is_match) {
+                    return true;
+                }
+            }
+
+            false
+        }
+        AStatement::Loop(loop_) => {
+            if let Some(init) = &loop_.maybe_init {
+                if search_statement_for_expr(init, is_match) {
+                    return true;
+                }
+            }
+
+            if let Some(cond) = &loop_.maybe_cond {
+                if search_expr(cond, is_match) {
+                    return true;
+                }
+            }
+
+            if let Some(update) = &loop_.maybe_update {
+                if search_statement_for_expr(update, is_match) {
+                    return true;
+                }
+            }
+
+            search_closure_for_expr(&loop_.body, is_match)
+        }
+
+        AStatement::Return(ret) => ret
+            .val
+            .as_ref()
+            .is_some_and(|val| search_expr(val, is_match)),
+
+        AStatement::Yield(yld) => search_expr(&yld.value, is_match),
+
+        AStatement::Break
+        | AStatement::Continue
+        | AStatement::FunctionDeclaration(_)
+        | AStatement::StructTypeDeclaration(_)
+        | AStatement::EnumTypeDeclaration(_)
+        | AStatement::ExternFn(_)
+        | AStatement::Const(_)
+        | AStatement::Impl(_) => false,
+    }
+}
+
+/// Returns true if the closure contains a break at any level.
+fn closure_has_any_break(closure: &AClosure) -> bool {
+    search_closure(closure, &|statement| match statement {
+        AStatement::Break => true,
+        // Loops with conditions implicitly contain break statements because
+        // the loop will be broken if the condition is ever false.
+        AStatement::Loop(loop_) => loop_.maybe_cond.is_some(),
+        _ => false,
+    })
 }
 
 /// Checks that the given closure yields. If there is an error, it will be added
@@ -345,6 +662,19 @@ pub fn check_closure_yields(ctx: &mut ProgramContext, closure: &AClosure, kind: 
 
                 // If it's a loop, recurse on the loop body.
                 Some(AStatement::Loop(loop_)) => {
+                    if loop_.maybe_cond.is_some() {
+                        ctx.insert_err(
+                            AnalyzeError::new(
+                                ErrorKind::MissingYield,
+                                format_code!("missing {}", "yield").as_str(),
+                                closure,
+                            )
+                            .with_detail(
+                                "The last statement in this closure is a loop that is not guaranteed to yield.",
+                            ),
+                        );
+                    }
+
                     check_closure_yields(ctx, &loop_.body, &ScopeKind::LoopBody);
                 }
 
@@ -366,76 +696,20 @@ pub fn check_closure_yields(ctx: &mut ProgramContext, closure: &AClosure, kind: 
         // If this closure is a loop, we need to check that it contains a yield anywhere
         // that satisfies the yield conditions, and that it has no breaks.
         ScopeKind::LoopBody => {
-            let mut contains_yield = false;
-            for statement in &closure.statements {
-                match statement {
-                    AStatement::Break => {
-                        ctx.insert_err(
-                            AnalyzeError::new(
-                                ErrorKind::MissingYield,
-                                format_code!("missing {}", "yield").as_str(),
-                                closure,
-                            )
-                            .with_detail(
-                                "The last statement in this closure is a loop that contains \
-                                break statements.",
-                            ),
-                        );
-                    }
-                    AStatement::Yield(_) => {
-                        contains_yield = true;
-                    }
-                    AStatement::Conditional(cond) => {
-                        if cond_has_any_yield(cond) {
-                            contains_yield = true;
-                        }
-                    }
-                    AStatement::Loop(loop_) => {
-                        if closure_has_any_yield(&loop_.body) {
-                            contains_yield = true;
-                        }
-                    }
-                    AStatement::Closure(closure) => {
-                        if closure_has_any_yield(closure) {
-                            contains_yield = true;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            if !contains_yield {
+            if closure_has_any_break(closure) || !closure_has_any_yield(closure) {
                 ctx.insert_err(
-                    AnalyzeError::new(ErrorKind::MissingYield, "missing yield statement", closure)
-                        .with_detail(
-                            "The last statement in this closure is a loop that does not yield.",
-                        ),
+                    AnalyzeError::new(
+                        ErrorKind::MissingYield,
+                        format_code!("missing {}", "yield").as_str(),
+                        closure,
+                    )
+                    .with_detail(
+                        "The last statement in this closure is a loop that is not guaranteed to yield.",
+                    ),
                 );
             }
         }
     };
-}
-
-/// Returns true if the conditional contains a return at any level.
-fn cond_has_any_return(cond: &ACond) -> bool {
-    for branch in &cond.branches {
-        if closure_has_any_return(&branch.body) {
-            return true;
-        }
-    }
-
-    false
-}
-
-/// Returns true if the conditional contains a yield at any level.
-fn cond_has_any_yield(cond: &ACond) -> bool {
-    for branch in &cond.branches {
-        if closure_has_any_yield(&branch.body) {
-            return true;
-        }
-    }
-
-    false
 }
 
 /// Checks that the given conditional is exhaustive and that each branch satisfies return
@@ -443,10 +717,14 @@ fn cond_has_any_yield(cond: &ACond) -> bool {
 fn check_cond_returns(ctx: &mut ProgramContext, cond: &ACond) {
     if !cond.is_exhaustive() {
         ctx.insert_err(
-            AnalyzeError::new(ErrorKind::MissingReturn, "missing return statement", cond)
-                .with_detail(
-                    "The last statement in this closure is a conditional that is not exhaustive",
-                ),
+            AnalyzeError::new(
+                ErrorKind::MissingReturn,
+                format_code!("missing {}", "return").as_str(),
+                cond,
+            )
+            .with_detail(
+                "The last statement in this closure is a conditional that is not exhaustive",
+            ),
         );
         return;
     }
@@ -461,10 +739,14 @@ fn check_cond_returns(ctx: &mut ProgramContext, cond: &ACond) {
 fn check_cond_yields(ctx: &mut ProgramContext, cond: &ACond) {
     if !cond.is_exhaustive() {
         ctx.insert_err(
-            AnalyzeError::new(ErrorKind::MissingYield, "missing yield statement", cond)
-                .with_detail(
-                    "The last statement in this closure is a conditional that is not exhaustive",
-                ),
+            AnalyzeError::new(
+                ErrorKind::MissingYield,
+                format_code!("missing {}", "yield").as_str(),
+                cond,
+            )
+            .with_detail(
+                "The last statement in this closure is a conditional that is not exhaustive",
+            ),
         );
         return;
     }
