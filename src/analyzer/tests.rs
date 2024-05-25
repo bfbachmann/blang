@@ -1909,6 +1909,18 @@ mod tests {
     }
 
     #[test]
+    fn superfluous_type_cast() {
+        let result = analyze(
+            r#"
+                fn thing() {
+                    let x: int = 1 as int
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::SuperfluousTypeCast));
+    }
+
+    #[test]
     fn private_member_access() {
         let mods = HashMap::from([
             (

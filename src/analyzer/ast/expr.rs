@@ -1038,6 +1038,8 @@ fn analyze_type_cast(
     let a_target_type = ctx.must_get_type(target_type_key);
 
     // Skip the check if the left expression already failed analysis.
+    // Also make sure the type keys are actually different. If not, this is a
+    // superfluous type cast.
     if !left_type.is_unknown() && !is_valid_type_cast(left_type, a_target_type) {
         ctx.insert_err(AnalyzeError::new(
             ErrorKind::InvalidTypeCast,
@@ -1048,6 +1050,19 @@ fn analyze_type_cast(
             )
             .as_str(),
             &left_expr,
+        ));
+
+        AExpr::new_zero_value(ctx, target_type)
+    } else if left_expr.type_key == target_type_key {
+        ctx.insert_err(AnalyzeError::new(
+            ErrorKind::SuperfluousTypeCast,
+            format_code!(
+                "{} already has type {}",
+                left_expr.display(ctx),
+                ctx.display_type_for_key(target_type_key)
+            )
+            .as_str(),
+            &span,
         ));
 
         AExpr::new_zero_value(ctx, target_type)
