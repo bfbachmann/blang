@@ -99,7 +99,7 @@ impl Program {
     /// Returns a pointer to the instruction at the given index.
     pub fn inst_at(*self, index: uint): *Instruction {
         assert(index < self^.len, "instruction index out of bounds")
-        return self^.instructions + (index * sizeof Instruction) as *Instruction
+        return self^.instructions.(index as int)
     }
 
     /// Frees heap memory associated with this program.
