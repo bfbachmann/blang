@@ -22,8 +22,7 @@ use crate::{format_code, locatable_impl};
 pub struct AParam {
     pub name: String,
     pub poly_type_key: TypeKey,
-    pub maybe_generic_type_key: Option<TypeKey>,
-    pub maybe_const_type_key: Option<TypeKey>,
+    pub generic_type_key: TypeKey,
     span: Span,
 }
 
@@ -31,22 +30,14 @@ impl Hash for AParam {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state);
         self.poly_type_key.hash(state);
-        self.maybe_generic_type_key.hash(state);
-        self.maybe_const_type_key.hash(state);
+        self.generic_type_key.hash(state);
     }
 }
 
 impl Display for AParam {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name)?;
-
-        if let Some(type_key) = &self.maybe_const_type_key {
-            write!(f, ": const {}", type_key)?;
-        } else {
-            write!(f, ": {}", self.maybe_generic_type_key.unwrap())?;
-        }
-
-        Ok(())
+        write!(f, ": {}", self.generic_type_key)
     }
 }
 
@@ -58,16 +49,6 @@ impl AParam {
     /// apply. It will be used to disambiguate parameters that have the same
     /// name and constraints but apply to different types.
     fn from(ctx: &mut ProgramContext, param: &Param, poly_type_key: TypeKey) -> Self {
-        if let Some(const_type) = &param.const_type {
-            return AParam {
-                name: param.name.clone(),
-                maybe_generic_type_key: None,
-                maybe_const_type_key: Some(ctx.resolve_type(const_type)),
-                poly_type_key,
-                span: param.span().clone(),
-            };
-        }
-
         let mut required_spec_type_keys = vec![];
         for required_spec in &param.required_specs {
             // Make sure the spec exists.
@@ -114,8 +95,7 @@ impl AParam {
 
         AParam {
             name: param.name.clone(),
-            maybe_generic_type_key: Some(generic_type_key),
-            maybe_const_type_key: None,
+            generic_type_key,
             poly_type_key,
             span: param.span().clone(),
         }
@@ -125,19 +105,17 @@ impl AParam {
     pub fn display(&self, ctx: &ProgramContext) -> String {
         let mut s = self.name.clone();
 
-        if let Some(generic_tk) = &self.maybe_generic_type_key {
-            for (i, spec_type_key) in ctx
-                .must_get_type(*generic_tk)
-                .to_generic_type()
-                .spec_type_keys
-                .iter()
-                .enumerate()
-            {
-                if i == 0 {
-                    s += format!(": {}", ctx.display_type_for_key(*spec_type_key)).as_str();
-                } else {
-                    s += format!(" + {}", ctx.display_type_for_key(*spec_type_key)).as_str();
-                }
+        for (i, spec_type_key) in ctx
+            .must_get_type(self.generic_type_key)
+            .to_generic_type()
+            .spec_type_keys
+            .iter()
+            .enumerate()
+        {
+            if i == 0 {
+                s += format!(": {}", ctx.display_type_for_key(*spec_type_key)).as_str();
+            } else {
+                s += format!(" + {}", ctx.display_type_for_key(*spec_type_key)).as_str();
             }
         }
 

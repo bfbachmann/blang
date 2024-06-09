@@ -115,9 +115,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
             let mut new_func = func.clone();
             let mut replacement_tks = vec![];
             for param in &new_func.signature.params.as_ref().unwrap().params {
-                if let Some(generic_tk) = &param.maybe_generic_type_key {
-                    replacement_tks.push(mapping.get(generic_tk).unwrap());
-                }
+                replacement_tks.push(mapping.get(&param.generic_type_key).unwrap());
             }
 
             new_func.signature.mangled_name +=
@@ -271,9 +269,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                 let mut mono_fn_sig = poly_type.to_fn_sig().clone();
                 let mut replacement_tks = vec![];
                 for param in &mono_fn_sig.params.as_ref().unwrap().params {
-                    if let Some(generic_tk) = &param.maybe_generic_type_key {
-                        replacement_tks.push(mapping.get(generic_tk).unwrap());
-                    }
+                    replacement_tks.push(mapping.get(&param.generic_type_key).unwrap());
                 }
 
                 mono_fn_sig.mangled_name +=

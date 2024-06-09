@@ -1,6 +1,5 @@
 use std::fmt::{Display, Formatter};
 
-use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::params::AParam;
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::r#type::AType;
@@ -10,7 +9,6 @@ use crate::analyzer::scope::ScopedSymbol;
 use crate::analyzer::type_store::TypeKey;
 use crate::fmt::format_code_vec;
 use crate::lexer::pos::{Locatable, Position, Span};
-use crate::parser::ast::expr::Expression;
 use crate::parser::ast::pointer::PointerType;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Symbol;
@@ -24,7 +22,7 @@ pub struct ASymbol {
     pub type_key: TypeKey,
     /// The type key for the symbol's polymorphic type before it was monomorphized.
     pub poly_type_key: TypeKey,
-    pub maybe_param_values: Option<Vec<AExpr>>,
+    pub maybe_param_tks: Option<Vec<TypeKey>>,
     /// This will be set to true if the name of this symbol matches a type name and no variable
     /// names. If this is the case, the `var_type_key` field will hold the ID of the matching type.
     pub is_type: bool,
@@ -61,7 +59,7 @@ impl ASymbol {
             name: name.to_string(),
             type_key,
             poly_type_key: type_key,
-            maybe_param_values: None,
+            maybe_param_tks: None,
             is_type: false,
             is_const: true,
             is_var: false,
@@ -177,14 +175,14 @@ impl ASymbol {
 
         // Analyze any generic parameters on this symbol and use them to monomorphize
         // the generic type, if it is generic.
-        let (var_type_key, poly_type_key, maybe_param_values) =
+        let (var_type_key, poly_type_key, maybe_param_tks) =
             match analyze_params(ctx, symbol, var_type_key) {
-                Ok(param_values) if !param_values.is_empty() => {
+                Ok(param_tks) if !param_tks.is_empty() => {
                     // Monomorphize the type using the provided parameter values.
                     (
-                        ctx.monomorphize_type(var_type_key, &param_values),
+                        ctx.monomorphize_type(var_type_key, &param_tks),
                         var_type_key,
-                        Some(param_values),
+                        Some(param_tks),
                     )
                 }
                 _ => (var_type_key, var_type_key, None),
@@ -194,7 +192,7 @@ impl ASymbol {
             name: var_name,
             type_key: var_type_key,
             poly_type_key,
-            maybe_param_values,
+            maybe_param_tks,
             is_type,
             is_const,
             is_var,
@@ -228,7 +226,7 @@ impl ASymbol {
             name: "null".to_string(),
             type_key,
             poly_type_key: type_key,
-            maybe_param_values: None,
+            maybe_param_tks: None,
             is_type: false,
             is_const: true,
             is_var: false,
@@ -293,10 +291,10 @@ fn analyze_params(
     ctx: &mut ProgramContext,
     symbol: &Symbol,
     var_type_key: TypeKey,
-) -> Result<Vec<AExpr>, ()> {
+) -> Result<Vec<TypeKey>, ()> {
     let typ = ctx.must_get_type(var_type_key);
     let type_display = typ.display(ctx);
-    let mut param_values = vec![];
+    let mut param_types = vec![];
     let mut param_errs = vec![];
 
     // If the symbol refers to a generic type or function, we need to make sure that
@@ -332,15 +330,15 @@ fn analyze_params(
         }
 
         // Make sure parameter values are of the right types.
-        for (passed_param, expected_param) in symbol
+        for (passed_param_type, expected_param) in symbol
             .params
             .clone()
             .into_iter()
             .zip(type_params.params.clone().into_iter())
         {
-            match analyze_param(ctx, passed_param, expected_param, &type_display) {
+            match analyze_param(ctx, passed_param_type, expected_param, &type_display) {
                 Ok(param_value) => {
-                    param_values.push(param_value);
+                    param_types.push(param_value);
                 }
                 Err(e) => {
                     param_errs.push(e);
@@ -361,7 +359,7 @@ fn analyze_params(
     }
 
     let result = match param_errs.is_empty() {
-        true => Ok(param_values),
+        true => Ok(param_types),
         false => Err(()),
     };
 
@@ -376,75 +374,29 @@ fn analyze_params(
 /// parameter constraints.
 fn analyze_param(
     ctx: &mut ProgramContext,
-    passed_param: Expression,
+    passed_type: Type,
     expected_param: AParam,
     type_display: &String,
-) -> AnalyzeResult<AExpr> {
-    let (expect_type, expected_type_key) = match expected_param.maybe_generic_type_key {
-        Some(_) => (true, None),
-        None => (false, expected_param.maybe_const_type_key),
-    };
-
-    let param_value = AExpr::from(
-        ctx,
-        passed_param.clone(),
-        expected_type_key,
-        expect_type,
-        false,
-    );
+) -> AnalyzeResult<TypeKey> {
+    let param_type_key = ctx.resolve_type(&passed_type);
+    let passed_param_type = ctx.must_get_type(param_type_key);
 
     // Skip further validation if the param value already failed analysis.
-    let passed_param_type = ctx.must_get_type(param_value.type_key);
     if passed_param_type.is_unknown() {
-        return Ok(param_value);
-    }
-
-    // If the param is expected to be a constant, then check that it is.
-    if !expect_type && !param_value.kind.is_const() {
-        return Err(AnalyzeError::new(
-            ErrorKind::ExpectedConstExpr,
-            "expected constant expression",
-            &passed_param,
-        )
-        .with_detail(
-            format_code!(
-                "Parameter {} on {} requires a constant.",
-                expected_param.display(ctx),
-                type_display
-            )
-            .as_str(),
-        ));
-    }
-
-    // At this point we know that the param is expected to be a type.
-    if !param_value.kind.is_type() {
-        return Err(AnalyzeError::new(
-            ErrorKind::MismatchedTypes,
-            "expected type, but found expression",
-            &passed_param,
-        )
-        .with_detail(
-            format_code!(
-                "Expected a type in place of parameter {} on {}, but \
-                found an expression.",
-                expected_param.name,
-                type_display
-            )
-            .as_str(),
-        ));
+        return Ok(param_type_key);
     }
 
     // Make sure the type passed as the parameter is not a spec.
     if passed_param_type.is_spec() {
         return Err(AnalyzeError::new(
             ErrorKind::MismatchedTypes,
-            "expected type, but found spec",
-            &passed_param,
+            "expected concrete or generic type, but found spec",
+            &passed_type,
         )
         .with_detail(
             format_code!(
-                "Expected a type in place of parameter {} on {}, but \
-                found spec {}.",
+                "Expected a concrete or generic type in place of parameter {} on \
+                {}, but found spec {}.",
                 expected_param.name,
                 type_display,
                 passed_param_type.to_spec_type().name,
@@ -455,20 +407,18 @@ fn analyze_param(
 
     // Make sure that the type passed as the parameter value implements
     // the required specs.
-    let missing_spec_type_keys = ctx.get_missing_spec_impls(
-        param_value.type_key,
-        expected_param.maybe_generic_type_key.unwrap(),
-    );
+    let missing_spec_type_keys =
+        ctx.get_missing_spec_impls(param_type_key, expected_param.generic_type_key);
     let missing_spec_names: Vec<String> = missing_spec_type_keys
         .into_iter()
         .map(|tk| ctx.display_type_for_key(tk))
         .collect();
     if !missing_spec_names.is_empty() {
-        let param_type_display = ctx.display_type_for_key(param_value.type_key);
+        let param_type_display = ctx.display_type_for_key(param_type_key);
         return Err(AnalyzeError::new(
             ErrorKind::SpecNotSatisfied,
-            format_code!("type {} violates parameter constraints", param_type_display,).as_str(),
-            &passed_param,
+            format_code!("type {} violates parameter constraints", param_type_display).as_str(),
+            &passed_type,
         )
         .with_detail(
             format!(
@@ -483,5 +433,5 @@ fn analyze_param(
         ));
     }
 
-    Ok(param_value)
+    Ok(param_type_key)
 }

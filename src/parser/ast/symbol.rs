@@ -7,7 +7,7 @@ use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
-use crate::parser::ast::expr::Expression;
+use crate::parser::ast::r#type::Type;
 use crate::parser::error::ParseResult;
 use crate::parser::module::Module;
 
@@ -25,8 +25,7 @@ pub struct Symbol {
     /// in the symbol name and will be available via this field.
     pub maybe_mod_name: Option<String>,
     pub name: String,
-    /// Parameters are compile-time values - either generic types or constants.
-    pub params: Vec<Expression>,
+    pub params: Vec<Type>,
     pub span: Span,
 }
 
@@ -124,7 +123,7 @@ impl Symbol {
         let mut params = vec![];
         if Module::parse_optional(tokens, TokenKind::LeftBracket).is_some() {
             while !Module::next_token_is(tokens, &TokenKind::RightBracket) {
-                params.push(Expression::from(tokens)?);
+                params.push(Type::from(tokens)?);
                 if Module::parse_optional(tokens, TokenKind::Comma).is_none() {
                     Module::parse_expecting(tokens, TokenKind::RightBracket)?;
                     break;

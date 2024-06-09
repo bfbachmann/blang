@@ -103,10 +103,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Computes the full symbol name based on generic parameters applied to
     /// the symbol.
     pub(crate) fn get_full_symbol_name(&self, symbol: &ASymbol) -> String {
-        if let Some(param_values) = &symbol.maybe_param_values {
-            let param_value_tks = param_values
+        if let Some(param_tks) = &symbol.maybe_param_tks {
+            let param_value_tks = param_tks
                 .iter()
-                .map(|v| self.type_converter.map_type_key(v.type_key))
+                .map(|tk| self.type_converter.map_type_key(*tk))
                 .collect();
             format!("{}[{}]", symbol.name, vec_to_string(&param_value_tks, ","))
         } else {

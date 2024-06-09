@@ -11,6 +11,7 @@ spec Default {
     fn default(): Self
 }
 
+// Test functions with params that have multiple spec constraints.
 fn get_default_str[T: Default + ToStr](): str {
     return get_str[T](T.default())
 }
@@ -33,6 +34,7 @@ impl Thing: Default + ToStr {
     }
 }
 
+// Test functions with params that have no constraints.
 fn heap[T](t: T): *mut T {
     let ptr = heap_alloc[T]()
     ptr^ = t
@@ -47,12 +49,23 @@ fn heap_free[T](t: *T) {
     free(t as *u8)
 }
 
+// Test functions that have argument types that contain the function params.
+fn apply[T](f: fn (T): T, t: T): T {
+    return f(t)
+}
+
+fn double(s: int): int {
+    return s * 2
+}
+
 fn main() {
     assert(get_default_str[Thing]() == "default\0", "expected \"default\"\0")
 
     let thing_ptr = heap[Thing](Thing{s: "bing bong!\0"})
     assert(thing_ptr^.s == "bing bong!\0", "expected \"bing bong!\"\0")
     heap_free[Thing](thing_ptr)
+
+   assert(apply[int](double, -7) == -14, "expected -14\0")
 
     exit(0)
 }

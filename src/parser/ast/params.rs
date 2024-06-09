@@ -5,22 +5,18 @@ use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
-use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::error::ParseResult;
 use crate::parser::module::Module;
 
 /// Represents a generic compile-time parameter. A parameter has a name and has
-/// either a set of associated specs that any type used in its place must
-/// implement, or a type that constants used in place of the parameter must match.
+/// a set of associated specs that any type used in its place must implement.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Param {
     /// The name given to the parameter.
     pub name: String,
     /// The specs that this parameter requires.
     pub required_specs: Vec<Symbol>,
-    /// The type of the constant that this parameter requires.
-    pub const_type: Option<Type>,
     span: Span,
 }
 
@@ -31,10 +27,6 @@ impl Hash for Param {
         for spec in &self.required_specs {
             spec.hash(state);
         }
-
-        if let Some(typ) = &self.const_type {
-            typ.hash(state);
-        }
     }
 }
 
@@ -42,19 +34,15 @@ impl Param {
     /// Parses a parameter. Expects token sequences of the forms
     ///
     ///     <name>: <spec> + ...
-    ///     <name>: const <type>
     ///
     /// where
     ///  - `name` is an identifier representing the parameter name
-    ///  - `type` is the type of the constant parameter (see `Type::from`)
     ///  - `spec` is any spec that a type satisfying the requirements must implement. Note that the
     ///    specs are being parsed as types, because specs and types are represented the same way.
     ///    The set of specs may be empty.
     ///
     /// In the first example, one or more specs are provided. Only types that implement all of these
     /// specs can satisfy the parameter's requirements.
-    /// In the second example, a constant is provided. Only constant values of that type may be used
-    /// in place of the corresponding parameter.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // Find the start position and (maybe) the end position of this param.
         let span = match tokens.peek_next() {
@@ -66,26 +54,19 @@ impl Param {
         let mut param = Param {
             name: Module::parse_identifier(tokens)?,
             required_specs: vec![],
-            const_type: None,
             span,
         };
 
-        // Parse the optional `: <spec> + ...` or `: const <type>`.
+        // Parse the optional `: <spec> + ...`.
         if Module::parse_optional(tokens, TokenKind::Colon).is_some() {
-            if Module::parse_optional(tokens, TokenKind::Const).is_some() {
-                let typ = Type::from(tokens)?;
-                param.span.end_pos = typ.span().end_pos().clone();
-                param.const_type = Some(typ);
-            } else {
-                loop {
-                    let spec = Symbol::from(tokens)?;
-                    param.required_specs.push(spec);
+            loop {
+                let spec = Symbol::from(tokens)?;
+                param.required_specs.push(spec);
 
-                    // Stop parsing specs if the next token is not a `+`.
-                    if Module::parse_optional(tokens, TokenKind::Plus).is_none() {
-                        param.span.end_pos = param.required_specs.last().unwrap().span.end_pos;
-                        break;
-                    }
+                // Stop parsing specs if the next token is not a `+`.
+                if Module::parse_optional(tokens, TokenKind::Plus).is_none() {
+                    param.span.end_pos = param.required_specs.last().unwrap().span.end_pos;
+                    break;
                 }
             }
         }
@@ -98,7 +79,6 @@ impl Param {
         Param {
             name: name.to_string(),
             required_specs: vec![],
-            const_type: None,
             span: Default::default(),
         }
     }
@@ -107,7 +87,7 @@ impl Param {
 locatable_impl!(Param);
 
 /// Represents generic parameters. A set of generic parameters is just a set of
-/// generic types, or constants.
+/// types.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Params {
     pub params: Vec<Param>,

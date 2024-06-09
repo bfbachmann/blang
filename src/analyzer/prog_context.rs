@@ -626,7 +626,7 @@ impl ProgramContext {
 
                 // Check if the type refers to a generic parameter.
                 if let Some(param) = self.get_param(unresolved_type.name.as_str()) {
-                    return param.maybe_generic_type_key.unwrap();
+                    return param.generic_type_key;
                 }
 
                 if let Some(key) = self.primitive_type_keys.get(unresolved_type.name.as_str()) {
@@ -671,9 +671,7 @@ impl ProgramContext {
 
             // Look for a generic param with a matching name.
             if let Some(param) = self.get_param(name) {
-                if let Some(tk) = param.maybe_generic_type_key {
-                    return Some(tk);
-                }
+                return Some(param.generic_type_key);
             }
         }
 
@@ -684,9 +682,9 @@ impl ProgramContext {
 
     /// Converts the given type from a polymorphic (parameterized) type into a
     /// monomorph by substituting type keys for generic types with those from
-    /// the provided parameter values. Returns the type key for the monomorphized
+    /// the provided parameter types. Returns the type key for the monomorphized
     /// type.
-    pub fn monomorphize_type(&mut self, type_key: TypeKey, param_values: &Vec<AExpr>) -> TypeKey {
+    pub fn monomorphize_type(&mut self, type_key: TypeKey, param_tks: &Vec<TypeKey>) -> TypeKey {
         let poly_type = self.must_get_type(type_key);
         let defined_params = poly_type.params();
         if defined_params.is_none() {
@@ -702,22 +700,13 @@ impl ProgramContext {
             replaced_params: vec![],
         };
         let mut type_mappings: HashMap<TypeKey, TypeKey> = HashMap::new();
-        for (param, param_value) in defined_params
-            .unwrap()
-            .params
-            .iter()
-            .zip(param_values.iter())
-        {
-            if param.maybe_generic_type_key.is_none() {
-                continue;
-            }
-
+        for (param, param_tk) in defined_params.unwrap().params.iter().zip(param_tks.iter()) {
             mono.replaced_params.push(ReplacedParam {
-                param_type_key: param.maybe_generic_type_key.unwrap(),
-                replacement_type_key: param_value.type_key,
+                param_type_key: param.generic_type_key,
+                replacement_type_key: *param_tk,
             });
 
-            type_mappings.insert(param.maybe_generic_type_key.unwrap(), param_value.type_key);
+            type_mappings.insert(param.generic_type_key, *param_tk);
         }
 
         // Check if the type has already been monomorphized. If so, return the

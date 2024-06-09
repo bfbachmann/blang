@@ -198,13 +198,11 @@ impl AFnSig {
         self.mangled_name += "[";
         if let Some(params) = &self.params {
             for (i, param) in params.params.iter().enumerate() {
-                if let Some(generic_tk) = &param.maybe_generic_type_key {
-                    if let Some(mono_tk) = type_mappings.get(generic_tk) {
-                        if i == 0 {
-                            self.mangled_name += format!("{}", mono_tk).as_str();
-                        } else {
-                            self.mangled_name += format!(",{}", mono_tk).as_str();
-                        }
+                if let Some(mono_tk) = type_mappings.get(&param.generic_type_key) {
+                    if i == 0 {
+                        self.mangled_name += format!("{}", mono_tk).as_str();
+                    } else {
+                        self.mangled_name += format!(",{}", mono_tk).as_str();
                     }
                 }
             }

@@ -103,13 +103,11 @@ impl AType {
 
                 // Check if this is a generic type parameter.
                 if let Some(param) = ctx.get_param(type_name) {
-                    if let Some(generic_type_key) = param.maybe_generic_type_key {
-                        return AType::Generic(
-                            ctx.must_get_type(generic_type_key)
-                                .to_generic_type()
-                                .clone(),
-                        );
-                    }
+                    return AType::Generic(
+                        ctx.must_get_type(param.generic_type_key)
+                            .to_generic_type()
+                            .clone(),
+                    );
                 }
 
                 // If the type has already been analyzed, just return it.
