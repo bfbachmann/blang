@@ -301,8 +301,8 @@ impl Statement {
                 Ok(Statement::Impl(impl_))
             }
 
-            // If the first token is `spec`, it's a spec declaration.
-            (TokenKind::Spec, _) => {
+            // If the next tokens are `spec` or `pub spec`, it must be a spec declaration.
+            (TokenKind::Spec, _) | (TokenKind::Pub, TokenKind::Spec) => {
                 let spec_ = Spec::from(tokens)?;
                 Ok(Statement::SpecDeclaration(spec_))
             }

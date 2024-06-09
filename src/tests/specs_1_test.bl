@@ -1,0 +1,22 @@
+use {exit}: "std/libc/proc.bl"
+
+use {assert}: "src/tests/test_utils.bl"
+use {Test}: "src/tests/specs_2.bl"
+
+struct Thing {}
+
+// Make sure we can implement the imported spec.
+impl Thing: Test {
+    fn test(): int {
+        return 784
+    }
+}
+
+fn call_test[T: Test](): int {
+    return T.test()
+}
+
+fn main() {
+    assert(call_test[Thing]() == 784, "expected 784\0")
+    exit(0)
+}

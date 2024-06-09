@@ -763,6 +763,7 @@ impl ProgramContext {
     }
 
     /// Returns the type key for the analyzer-internal `<none>` type.
+    #[cfg(test)]
     pub fn none_type_key(&self) -> TypeKey {
         *self.primitive_type_keys.get("<none>").unwrap()
     }

@@ -15,6 +15,7 @@ use crate::{locatable_impl, util};
 pub struct Spec {
     pub name: String,
     pub fn_sigs: Vec<FunctionSignature>,
+    pub is_pub: bool,
     span: Span,
 }
 
@@ -36,14 +37,17 @@ locatable_impl!(Spec);
 impl Spec {
     /// Parses a spec declaration. Expects token sequences of the form
     ///
-    ///     spec <name> {
+    ///     pub spec <name> {
     ///         <fn_sig>...
     ///     }
     ///
     /// where
     ///  - `name` is an identifier representing the name of the spec
-    ///  - `fn_sig` is a function signature in the spec (see `FunctionSignature::from`).
+    ///  - `fn_sig` is a function signature in the spec (see `FunctionSignature::from`)
+    ///  - the `pub` keyword is optional.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+        let is_pub = Module::parse_optional(tokens, TokenKind::Pub).is_some();
+
         // Parse `spec` and get this spec declaration starting position.
         let start_pos = Module::parse_expecting(tokens, TokenKind::Spec)?
             .span
@@ -66,6 +70,7 @@ impl Spec {
         Ok(Spec {
             name,
             fn_sigs,
+            is_pub,
             span: Span { start_pos, end_pos },
         })
     }

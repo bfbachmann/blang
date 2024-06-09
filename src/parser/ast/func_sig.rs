@@ -89,6 +89,7 @@ impl FunctionSignature {
     }
 
     /// Creates a new function signature for a named function.
+    #[cfg(test)]
     pub fn new(name: &str, args: Vec<Argument>, return_type: Option<Type>, span: Span) -> Self {
         FunctionSignature {
             name: name.to_string(),

@@ -49,6 +49,11 @@ impl ASpecType {
         // Add the new spec to the program context so we can reference it by name later.
         ctx.insert_type(AType::Spec(spec_type.clone()));
 
+        // Record the type name as public in the current module if necessary.
+        if spec.is_pub {
+            ctx.insert_pub_type_name(spec.name.as_str());
+        }
+
         spec_type
     }
 }

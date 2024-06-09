@@ -1,4 +1,5 @@
 use crate::analyzer::ast::func::AFn;
+use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
@@ -78,17 +79,28 @@ impl AImpl {
         // Check that this `impl` actually implements all the specs it claims to.
         let mut spec_impl_errs = vec![];
         for spec in &impl_.specs {
-            let a_spec = ctx.get_spec_type(spec.maybe_mod_name.as_ref(), &spec.name);
-            if a_spec.is_none() {
-                spec_impl_errs.push(AnalyzeError::new(
-                    ErrorKind::UndefSpec,
-                    format_code!("spec {} is not defined", spec).as_str(),
-                    spec,
-                ));
-                continue;
-            }
+            // Find the spec being referred to.
+            let a_spec = {
+                let spec_type =
+                    match ctx.get_type_key_by_type_name(spec.maybe_mod_name.as_ref(), &spec.name) {
+                        Some(tk) => match ctx.must_get_type(tk) {
+                            AType::Spec(spec_type) => Some(spec_type),
+                            _ => None,
+                        },
+                        _ => None,
+                    };
 
-            let a_spec = a_spec.unwrap();
+                if spec_type.is_none() {
+                    spec_impl_errs.push(AnalyzeError::new(
+                        ErrorKind::UndefSpec,
+                        format_code!("spec {} is not defined", spec).as_str(),
+                        spec,
+                    ));
+                    continue;
+                }
+
+                spec_type.unwrap()
+            };
 
             // Collect the names of all the functions that aren't implemented
             // from this spec.
