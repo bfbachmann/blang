@@ -442,7 +442,8 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
             // it is on the same line as the end of the expression. In other words,
             // if the `(` is on a new line, it won't be considered part of this
             // expression. This solves the problem of finding the end of an
-            // expression the is followed by a statement that starts with `(` like
+            // expression when the is followed by a statement that starts with
+            // `(` like
             //
             //      let mut a = my_variable
             //      (a) = 10
@@ -547,7 +548,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
 ///     <enum_init>
 ///     <literal>
 ///     <symbol>
-///     <do>
+///     <from>
 ///
 /// where
 /// `comp` is a composite expression (see `parse_expr`).
@@ -677,6 +678,7 @@ mod tests {
             Expression::Symbol(Symbol {
                 maybe_mod_name: None,
                 name: "my_var".to_string(),
+                params: vec![],
                 span: Span {
                     start_pos: Position::new(1, 1),
                     end_pos: Position::new(1, 7),
@@ -794,6 +796,7 @@ mod tests {
                                 Box::new(Expression::Symbol(Symbol {
                                     maybe_mod_name: None,
                                     name: "thing".to_string(),
+                                    params: vec![],
                                     span: Span {
                                         start_pos: Position::new(1, 24),
                                         end_pos: Position::new(1, 29),
@@ -814,6 +817,7 @@ mod tests {
                                     Box::new(Expression::Symbol(Symbol {
                                         maybe_mod_name: None,
                                         name: "var".to_string(),
+                                        params: vec![],
                                         span: Span {
                                             start_pos: Position::new(1, 35),
                                             end_pos: Position::new(1, 38),
@@ -921,6 +925,7 @@ mod tests {
                             Box::new(Expression::Symbol(Symbol {
                                 maybe_mod_name: None,
                                 name: "var".to_string(),
+                                params: vec![],
                                 span: Span {
                                     start_pos: Position::new(1, 2),
                                     end_pos: Position::new(1, 5),
@@ -1115,6 +1120,7 @@ mod tests {
                 Box::new(Expression::Symbol(Symbol {
                     maybe_mod_name: None,
                     name: "x".to_string(),
+                    params: vec![],
                     span: Span {
                         start_pos: Position::new(1, 2),
                         end_pos: Position::new(1, 3),
@@ -1235,6 +1241,7 @@ mod tests {
                                     Box::new(Expression::Symbol(Symbol {
                                         maybe_mod_name: None,
                                         name: "v".to_string(),
+                                        params: vec![],
                                         span: Span {
                                             start_pos: Position { line: 1, col: 5 },
                                             end_pos: Position { line: 1, col: 6 },
@@ -1247,6 +1254,7 @@ mod tests {
                                     Box::new(Expression::Symbol(Symbol {
                                         maybe_mod_name: None,
                                         name: "a".to_string(),
+                                        params: vec![],
                                         span: Span {
                                             start_pos: Position { line: 1, col: 8 },
                                             end_pos: Position { line: 1, col: 9 },
@@ -1288,6 +1296,7 @@ mod tests {
                                 fn_expr: Expression::Symbol(Symbol {
                                     maybe_mod_name: None,
                                     name: "call".to_string(),
+                                    params: vec![],
                                     span: Span {
                                         start_pos: Position { line: 1, col: 23 },
                                         end_pos: Position { line: 1, col: 27 },
@@ -1326,6 +1335,7 @@ mod tests {
                         Box::new(Expression::Symbol(Symbol {
                             maybe_mod_name: None,
                             name: "b".to_string(),
+                            params: vec![],
                             span: Span {
                                 start_pos: Position::new(1, 4),
                                 end_pos: Position::new(1, 5),

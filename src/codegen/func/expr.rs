@@ -103,7 +103,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         self.set_current_block(ctx.end_block);
 
         let mut ll_result_type = self.type_converter.get_basic_type(result_type_key);
-        if self.type_store.must_get(result_type_key).is_composite() {
+        if self
+            .type_converter
+            .must_get_type(result_type_key)
+            .is_composite()
+        {
             // For composite types, we'll always expect yielded values to be
             // passed by reference. When we generate yield statements, we'll be
             // sure to stack-allocate composite values and yield pointers to them
@@ -125,7 +129,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// another function.
     pub(crate) fn gen_nested_fn(&mut self, func: &AFn) -> BasicValueEnum<'ctx> {
         // Generate the function in the LLVM module.
-        let ll_result = FnCodeGen::compile(
+        let ll_result = FnCodeGen::generate(
             self.ctx,
             self.builder,
             self.fpm,
@@ -154,7 +158,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // then it must be a method that is being used as a variable rather than being
         // called directly.
         if access.is_method {
-            let fn_sig = self.type_store.must_get(access.member_type_key).to_fn_sig();
+            let fn_sig = self
+                .type_converter
+                .must_get_type(access.member_type_key)
+                .to_fn_sig();
             return self
                 .module
                 .get_function(fn_sig.mangled_name.as_str())
@@ -223,7 +230,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // Generate code that retrieves the value from the collection at the
         // specified index.
-        let collection_type = self.type_store.must_get(index.collection_expr.type_key);
+        let collection_type = self
+            .type_converter
+            .must_get_type(index.collection_expr.type_key);
         match collection_type {
             AType::Tuple(_) => self.get_member_value(
                 ll_collection_val,
@@ -487,15 +496,48 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Compiles a function call, returning the result if one exists.
     pub(crate) fn gen_call(&mut self, call: &AFnCall) -> Option<BasicValueEnum<'ctx>> {
-        // Look up the function signature and convert it to the corresponding LLVM function type.
         let fn_sig = self.type_store.must_get(call.fn_expr.type_key).to_fn_sig();
-        let ll_fn_type = self.type_converter.get_fn_type(fn_sig.type_key);
-        let mut args: Vec<BasicMetadataValueEnum> = vec![];
+
+        // Check if this is a call to an intrinsic function or method. If so, we'll use
+        // whatever result the custom intrinsic code generator returned.
+        if let Some(result) = self.maybe_gen_intrinsic_call(call, fn_sig) {
+            return Some(result);
+        }
+
+        let (mangled_name, ll_fn_type) = {
+            if let Some(impl_tk) = fn_sig.maybe_impl_type_key {
+                if self.type_store.must_get(impl_tk).is_generic() {
+                    // This is a function on a generic type. We need to look up the
+                    // actual function by figuring out what the corresponding concrete
+                    // type it.
+                    let concrete_tk = self.type_converter.map_type_key(impl_tk);
+                    let concrete_type = self.type_store.must_get(concrete_tk);
+                    let concrete_fn_name = format!("{}.{}", concrete_type.name(), fn_sig.name);
+                    let ll_fn_type = self
+                        .module
+                        .get_function(concrete_fn_name.as_str())
+                        .unwrap()
+                        .get_type();
+                    (concrete_fn_name, ll_fn_type)
+                } else {
+                    (
+                        fn_sig.mangled_name.clone(),
+                        self.type_converter.get_fn_type(fn_sig.type_key),
+                    )
+                }
+            } else {
+                (
+                    fn_sig.mangled_name.clone(),
+                    self.type_converter.get_fn_type(fn_sig.type_key),
+                )
+            }
+        };
 
         // Check if we're short one argument. If so, it means the function signature expects
         // the return value to be written to the address pointed to by the first argument, so we
         // need to add that argument. This should only be the case for functions that return
         // structured types.
+        let mut args: Vec<BasicMetadataValueEnum> = vec![];
         if ll_fn_type.count_param_types() == call.args.len() as u32 + 1 {
             let ptr = self.stack_alloc("ret_val_ptr", call.maybe_ret_type_key.unwrap());
             args.push(ptr.into());
@@ -503,27 +545,21 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // Compile call args.
         for (i, arg) in call.args.iter().enumerate() {
-            let arg_type = self.type_store.must_get(arg.type_key);
+            let arg_tk = self.type_converter.map_type_key(arg.type_key);
+            let arg_type = self.type_store.must_get(arg_tk);
             let ll_arg_val = self.gen_expr(arg);
 
             // Make sure we write constant values that are supposed to be passed as pointers to
             // the stack and use their pointers as the arguments rather than the constant values
             // themselves.
             if !ll_arg_val.is_pointer_value() && arg_type.is_composite() {
-                let ll_arg_ptr =
-                    self.stack_alloc(format!("arg_{}_literal", i).as_str(), arg.type_key);
+                let ll_arg_ptr = self.stack_alloc(format!("arg_{}_literal", i).as_str(), arg_tk);
 
-                self.copy_value(ll_arg_val, ll_arg_ptr, arg.type_key);
+                self.copy_value(ll_arg_val, ll_arg_ptr, arg_tk);
                 args.push(ll_arg_ptr.into());
             } else {
                 args.push(ll_arg_val.into());
             }
-        }
-
-        // Check if this is a call to an intrinsic function or method. If so, we'll use
-        // whatever result the custom intrinsic code generator returned.
-        if let Some(result) = self.maybe_gen_intrinsic_call(call, fn_sig) {
-            return Some(result);
         }
 
         // Compile the function call and return the result.
@@ -532,16 +568,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 if self.is_var_module_fn(&symbol) || symbol.is_method {
                     // The function is being called directly, so we can just look it up by name in
                     // the module and compile this as a direct call.
-                    let ll_fn = self
-                        .module
-                        .get_function(fn_sig.mangled_name.as_str())
-                        .expect(
-                            format!(
-                                "failed to locate function {} in module",
-                                fn_sig.mangled_name
-                            )
-                            .as_str(),
-                        );
+                    let fn_name = self.get_full_symbol_name(symbol);
+                    let ll_fn = self.module.get_function(fn_name.as_str()).expect(
+                        format!("failed to locate function {} in module", fn_name).as_str(),
+                    );
                     self.builder
                         .build_call(ll_fn, args.as_slice(), symbol.name.as_str())
                         .try_as_basic_value()
@@ -554,23 +584,16 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                             ll_fn_type,
                             ll_fn_ptr,
                             args.as_slice(),
-                            fn_sig.mangled_name.as_str(),
+                            mangled_name.as_str(),
                         )
                         .try_as_basic_value()
                 }
             }
 
             AExprKind::MemberAccess(access) if access.is_method => {
-                let ll_fn = self
-                    .module
-                    .get_function(fn_sig.mangled_name.as_str())
-                    .expect(
-                        format!(
-                            "failed to locate function {} in module",
-                            fn_sig.mangled_name
-                        )
-                        .as_str(),
-                    );
+                let ll_fn = self.module.get_function(mangled_name.as_str()).expect(
+                    format!("failed to locate function {} in module", mangled_name).as_str(),
+                );
                 self.builder
                     .build_call(ll_fn, args.as_slice(), access.member_name.as_str())
                     .try_as_basic_value()
@@ -583,7 +606,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                         ll_fn_type,
                         ll_fn_ptr,
                         args.as_slice(),
-                        fn_sig.mangled_name.as_str(),
+                        mangled_name.as_str(),
                     )
                     .try_as_basic_value()
             }
@@ -705,7 +728,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let ll_rhs = self.gen_expr(right_expr);
 
         // Determine whether the operation should be signed or unsigned based on the operand types.
-        let signed = self.type_store.must_get(left_expr.type_key).is_signed();
+        let signed = self
+            .type_converter
+            .must_get_type(left_expr.type_key)
+            .is_signed();
 
         if op.is_arithmetic() {
             let result = self
@@ -817,8 +843,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let dst_is_signed = dst_type.is_signed();
         let src_is_float = src_type.is_float();
         let dst_is_float = dst_type.is_float();
-        let src_size = src_type.min_size_bytes(&self.type_store);
-        let dst_size = dst_type.min_size_bytes(&self.type_store);
+        let src_size = src_type.min_size_bytes(self.type_store);
+        let dst_size = dst_type.min_size_bytes(self.type_store);
         let name = format!("as_{}", dst_type.name());
 
         return match (src_is_float, dst_is_float, dst_is_signed) {

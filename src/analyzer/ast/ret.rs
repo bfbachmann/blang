@@ -53,14 +53,9 @@ impl ARet {
             Some(expr) => {
                 // We're returning a value. Make sure the value is of the expected type.
                 let a_expr = match ctx.get_cur_expected_ret_type_key() {
-                    Some(expected_type_key) => AExpr::from(
-                        ctx,
-                        expr.clone(),
-                        Some(expected_type_key),
-                        false,
-                        false,
-                        false,
-                    ),
+                    Some(expected_type_key) => {
+                        AExpr::from(ctx, expr.clone(), Some(expected_type_key), false, false)
+                    }
                     None => {
                         ctx.insert_err(AnalyzeError::new(
                             ErrorKind::MismatchedTypes,
@@ -72,7 +67,7 @@ impl ARet {
                             expr,
                         ));
 
-                        AExpr::from(ctx, expr.clone(), None, false, false, false)
+                        AExpr::from(ctx, expr.clone(), None, false, false)
                     }
                 };
 

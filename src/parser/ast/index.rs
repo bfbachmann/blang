@@ -9,7 +9,7 @@ use crate::parser::ast::expr::Expression;
 pub struct Index {
     pub collection_expr: Expression,
     pub index_expr: Expression,
-    span: Span,
+    pub span: Span,
 }
 
 locatable_impl!(Index);

@@ -1,19 +1,23 @@
 use std::cmp::max;
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
 use crate::analyzer::ast::array::AArrayType;
 use crate::analyzer::ast::func::AFnSig;
+use crate::analyzer::ast::generic::AGenericType;
+use crate::analyzer::ast::params::AParams;
 use crate::analyzer::ast::pointer::APointerType;
 use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#struct::AStructType;
+use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::ast::tuple::ATupleType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::type_store::TypeStore;
+use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::parser::ast::r#type::Type;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AType {
     // Primitive types.
     Bool,
@@ -37,6 +41,13 @@ pub enum AType {
     Function(Box<AFnSig>),
     Pointer(APointerType),
 
+    /// Represents a type specification (a set of things one can do with a type,
+    /// but not an actual concrete type).
+    Spec(ASpecType),
+
+    /// Represents a generic (parameterized) type.
+    Generic(AGenericType),
+
     /// Represents a type that did not pass semantic analysis and thus was never properly resolved.
     Unknown(String),
 }
@@ -58,10 +69,12 @@ impl Display for AType {
             AType::Uint => write!(f, "uint"),
             AType::Struct(s) => write!(f, "{}", s),
             AType::Enum(e) => write!(f, "{}", e),
+            AType::Spec(s) => write!(f, "{}", s),
             AType::Tuple(t) => write!(f, "{}", t),
             AType::Array(a) => write!(f, "{}", a),
             AType::Function(func) => write!(f, "{}", func),
             AType::Pointer(typ) => write!(f, "{}", typ),
+            AType::Generic(g) => write!(f, "{}", g),
             AType::Unknown(name) => write!(f, "{}", name),
         }
     }
@@ -80,12 +93,23 @@ impl AType {
                     if !ctx.check_mod_name(mod_name, typ) {
                         return AType::Unknown("<unknown>".to_string());
                     }
-                };
+                }
 
                 // Check if the type has already been marked as invalid. If so, we should avoid
                 // trying to resolve it and simply return the unknown type.
                 if ctx.is_name_of_invalid_type(type_name) {
                     return AType::Unknown(type_name.to_string());
+                }
+
+                // Check if this is a generic type parameter.
+                if let Some(param) = ctx.get_param(type_name) {
+                    if let Some(generic_type_key) = param.maybe_generic_type_key {
+                        return AType::Generic(
+                            ctx.must_get_type(generic_type_key)
+                                .to_generic_type()
+                                .clone(),
+                        );
+                    }
                 }
 
                 // If the type has already been analyzed, just return it.
@@ -94,6 +118,9 @@ impl AType {
                 }
                 if let Some(enum_type) = ctx.get_enum_type(maybe_mod_name, type_name) {
                     return AType::Enum(enum_type.clone());
+                }
+                if let Some(spec_type) = ctx.get_spec_type(maybe_mod_name, type_name) {
+                    return AType::Spec(spec_type.clone());
                 }
                 if let Some(fn_sig) = ctx.get_defined_fn_sig(maybe_mod_name, type_name) {
                     return AType::from_fn_sig(fn_sig.clone());
@@ -192,8 +219,10 @@ impl AType {
             AType::Str => "str",
             AType::Struct(t) => t.name.as_str(),
             AType::Enum(t) => t.name.as_str(),
+            AType::Spec(t) => t.name.as_str(),
             AType::Tuple(_) | AType::Pointer(_) | AType::Array(_) => "",
             AType::Function(t) => t.name.as_str(),
+            AType::Generic(g) => g.name.as_str(),
             AType::Unknown(name) => name.as_str(),
         }
     }
@@ -219,7 +248,56 @@ impl AType {
                 let same_pointee_types = p1_pointee_type.is_same_as(ctx, p2_pointee_type, false);
                 same_pointee_types && (ignore_mutability || p1.is_mut == p2.is_mut)
             }
-            (a, b) => a == b,
+            (a, b) => {
+                let a = match ctx.get_cur_self_type_key() {
+                    Some(tk) if a.is_unknown() && a.name() == "Self" => ctx.must_get_type(tk),
+                    _ => a,
+                };
+
+                let b = match ctx.get_cur_self_type_key() {
+                    Some(tk) if b.is_unknown() && b.name() == "Self" => ctx.must_get_type(tk),
+                    _ => b,
+                };
+
+                a == b
+            }
+        }
+    }
+
+    /// Converts this type from a polymorphic (parameterized) type into a monomorph
+    /// by substituting type keys for generic types with those from the provided
+    /// parameter values.
+    pub fn monomorphize(
+        mut self,
+        ctx: &mut ProgramContext,
+        type_mappings: &HashMap<TypeKey, TypeKey>,
+    ) -> TypeKey {
+        match &mut self {
+            AType::Function(fn_sig) => fn_sig.monomorphize(ctx, type_mappings),
+            AType::Struct(struct_type) => struct_type.monomorphize(ctx, type_mappings),
+            AType::Enum(enum_type) => enum_type.monomorphize(ctx, type_mappings),
+            AType::Tuple(_) => todo!(),
+            AType::Array(_) => todo!(),
+            AType::Pointer(ptr_type) => ptr_type.monomorphize(ctx, type_mappings),
+
+            // These types cannot be polymorphic.
+            AType::Bool
+            | AType::U8
+            | AType::I8
+            | AType::U32
+            | AType::I32
+            | AType::F32
+            | AType::I64
+            | AType::U64
+            | AType::F64
+            | AType::Int
+            | AType::Uint
+            | AType::Str
+            | AType::Spec(_)
+            | AType::Generic(_)
+            | AType::Unknown(_) => {
+                panic!("cannot monomorphize type {self}")
+            }
         }
     }
 
@@ -268,6 +346,8 @@ impl AType {
             | AType::Str
             | AType::Function(_)
             | AType::Pointer(_)
+            | AType::Generic(_)
+            | AType::Spec(_)
             | AType::Unknown(_) => false,
 
             AType::Struct(s) => {
@@ -332,7 +412,8 @@ impl AType {
 
     /// Returns true only if this type is moved on assignment or when passed as an argument.
     pub fn requires_move(&self) -> bool {
-        self.is_composite()
+        // TODO: Return false if the type implements auto-copy.
+        self.is_composite() || self.is_generic()
     }
 
     /// Returns true if this type is unknown.
@@ -382,6 +463,11 @@ impl AType {
         matches!(self, AType::Tuple(_))
     }
 
+    /// Returns true if this is a spec type.
+    pub fn is_spec(&self) -> bool {
+        matches!(self, AType::Spec(_))
+    }
+
     /// Returns true if arithmetic operations on this type should be signed. Otherwise, this type
     /// either doesn't support arithmetic operations, or requires unsigned operations.
     pub fn is_signed(&self) -> bool {
@@ -395,10 +481,12 @@ impl AType {
             | AType::Uint
             | AType::Struct(_)
             | AType::Enum(_)
+            | AType::Spec(_)
             | AType::Tuple(_)
             | AType::Array(_)
             | AType::Function(_)
             | AType::Pointer(_)
+            | AType::Generic(_)
             | AType::Unknown(_) => false,
         }
     }
@@ -473,7 +561,7 @@ impl AType {
                 None => 0,
             },
 
-            AType::Unknown(_) => 0,
+            AType::Spec(_) | AType::Generic(_) | AType::Unknown(_) => 0,
         }
     }
 
@@ -508,7 +596,25 @@ impl AType {
     pub fn to_enum_type(&self) -> &AEnumType {
         match self {
             AType::Enum(enum_type) => enum_type,
-            _ => panic!("type {} is not am enum", self),
+            _ => panic!("type {} is not an enum", self),
+        }
+    }
+
+    /// Returns the spec type corresponding to this type. Panics if this type is not a
+    /// spec type.
+    pub fn to_spec_type(&self) -> &ASpecType {
+        match self {
+            AType::Spec(spec_type) => spec_type,
+            _ => panic!("type {} is not a spec", self),
+        }
+    }
+
+    /// Returns the generic type corresponding to this type. Panics if this type is not a
+    /// generic type.
+    pub fn to_generic_type(&self) -> &AGenericType {
+        match self {
+            AType::Generic(generic_type) => generic_type,
+            _ => panic!("type {} is not a generic", self),
         }
     }
 
@@ -529,12 +635,9 @@ impl AType {
         }
     }
 
-    /// Returns true if the type is templated.
-    pub fn is_templated(&self) -> bool {
-        match self {
-            AType::Function(sig) => sig.is_templated(),
-            _ => false,
-        }
+    /// Returns true if the type is generic.
+    pub fn is_generic(&self) -> bool {
+        matches!(self, AType::Generic(_))
     }
 
     /// Returns true if the type is `bool`.
@@ -561,11 +664,21 @@ impl AType {
             }
             AType::Struct(s) => format!("{}", s.display(ctx)),
             AType::Enum(e) => format!("{}", e.display(ctx)),
+            AType::Spec(s) => s.name.clone(),
             AType::Tuple(t) => format!("{}", t.display(ctx)),
             AType::Array(a) => format!("{}", a.display(ctx)),
-            AType::Function(func) => format!("{}", func.display(ctx, true)),
+            AType::Function(func) => format!("{}", func.display(ctx)),
             AType::Pointer(t) => format!("{}", t.display(ctx)),
+            AType::Generic(t) => t.name.clone(),
             AType::Unknown(name) => format!("{}", name),
+        }
+    }
+
+    /// Returns generic parameters defined for this type.
+    pub fn params(&self) -> Option<&AParams> {
+        match self {
+            AType::Function(fn_sig) => fn_sig.params.as_ref(),
+            _ => None,
         }
     }
 }

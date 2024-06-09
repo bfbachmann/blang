@@ -1,5 +1,5 @@
 use crate::analyzer::ast::func::{analyze_fn_sig, AFnSig};
-use crate::analyzer::ast::spec::ASpec;
+use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
@@ -29,6 +29,7 @@ impl AModule {
         // First pass: define types and functions in the module without analyzing them yet.
         define_consts(ctx, module);
         define_types(ctx, module);
+        define_specs(ctx, module);
         define_fns(ctx, module);
 
         // Second pass: fully analyze all program statements.
@@ -41,16 +42,13 @@ impl AModule {
                 | Statement::StructDeclaration(_)
                 | Statement::EnumDeclaration(_)
                 | Statement::Impl(_) => {
-                    // Only include the statement in the output AST if it's not templated.
                     let statement = AStatement::from(ctx, &statement);
-                    if !statement.is_templated() {
-                        analyzed_statements.push(statement);
-                    }
+                    analyzed_statements.push(statement);
                 }
 
                 Statement::SpecDeclaration(_) => {
                     // We can safely skip specs here because they'll be full analyzed in
-                    // `define_fns`.
+                    // `analyze_specs`.
                 }
 
                 Statement::Use(_) => {
@@ -99,14 +97,14 @@ fn define_types(ctx: &mut ProgramContext, module: &Module) {
     // Second pass: Check for type containment cycles.
     let mut results = vec![];
     {
-        let extern_structs = ctx.unchecked_struct_types();
-        for struct_type in extern_structs {
+        let unchecked_structs = ctx.unchecked_struct_types();
+        for struct_type in unchecked_structs {
             let result = check_struct_containment(ctx, struct_type, &mut vec![]);
             results.push((result, struct_type.name.clone()));
         }
 
-        let extern_enums = ctx.unchecked_enum_types();
-        for enum_type in extern_enums {
+        let unchecked_enums = ctx.unchecked_enum_types();
+        for enum_type in unchecked_enums {
             let result = check_enum_containment(ctx, enum_type, &mut vec![]);
             results.push((result, enum_type.name.clone()));
         }
@@ -134,6 +132,18 @@ fn define_consts(ctx: &mut ProgramContext, module: &Module) {
     }
 }
 
+/// Analyzes all specs declared in the module.
+fn define_specs(ctx: &mut ProgramContext, module: &Module) {
+    for statement in &module.statements {
+        match statement {
+            Statement::SpecDeclaration(spec) => {
+                define_spec(ctx, spec);
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Analyzes all top-level function signatures (this includes those inside specs) and defines them
 /// in the program context so they can be referenced later. This will not perform any analysis of
 /// function bodies.
@@ -150,10 +160,6 @@ fn define_fns(ctx: &mut ProgramContext, module: &Module) {
 
             Statement::Impl(impl_) => {
                 define_impl(ctx, impl_);
-            }
-
-            Statement::SpecDeclaration(spec) => {
-                define_spec(ctx, spec);
             }
 
             _ => {}
@@ -176,10 +182,10 @@ fn define_fn(ctx: &mut ProgramContext, func: &Function) {
 }
 
 fn define_extern_fn(ctx: &mut ProgramContext, ext: &Extern) {
-    if ext.fn_sig.tmpl_params.is_some() {
+    if ext.fn_sig.params.is_some() {
         ctx.insert_err(AnalyzeError::new(
             ErrorKind::InvalidExtern,
-            "external functions cannot be templated",
+            "external functions cannot be generic",
             &ext.fn_sig,
         ));
         return;
@@ -218,7 +224,7 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::DuplicateFunction,
                 format_code!(
-                    "function {} was already defined for type {}",
+                    "function {} is already defined for type {}",
                     member_fn.signature.name,
                     ctx.display_type_for_key(impl_type_key),
                 )
@@ -231,12 +237,43 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     }
 
     ctx.set_cur_self_type_key(None);
+
+    // Regardless of errors, we'll mark this `impl` as implementing all the
+    // specs it claims it does. This is just to prevent redundant error
+    // messages when the corresponding type gets used.
+    for spec in &impl_.specs {
+        // Try to find the analyzed spec type. It might not be there if it has not
+        // yet been analyzed.
+        if let Some(spec_type_key) =
+            ctx.get_type_key_by_type_name(spec.maybe_mod_name.as_ref(), spec.name.as_str())
+        {
+            ctx.insert_spec_impl(impl_type_key, spec_type_key);
+            continue;
+        }
+
+        // Try to find the un-analyzed spec type and analyze it.
+        if spec.maybe_mod_name.is_none() {
+            if let Some(unchecked_spec) = ctx.get_unchecked_spec(spec.name.as_str()) {
+                ASpecType::from(ctx, &unchecked_spec.clone());
+                let spec_type_key = ctx
+                    .get_type_key_by_type_name(None, spec.name.as_str())
+                    .unwrap();
+                ctx.insert_spec_impl(impl_type_key, spec_type_key);
+                continue;
+            }
+        }
+
+        ctx.insert_err(AnalyzeError::new(
+            ErrorKind::UndefSpec,
+            format_code!("spec {} not defined", spec.name).as_str(),
+            spec,
+        ));
+    }
 }
 
 fn define_spec(ctx: &mut ProgramContext, spec: &Spec) {
     // Make sure this spec name is not a duplicate.
-    if ctx.get_spec(spec.name.as_str()).is_some() {
-        // Record the error and return a placeholder value.
+    if ctx.get_spec_type(None, spec.name.as_str()).is_some() {
         ctx.insert_err(AnalyzeError::new(
             ErrorKind::DuplicateSpec,
             format_code!("another spec named {} already exists", spec.name).as_str(),
@@ -246,8 +283,6 @@ fn define_spec(ctx: &mut ProgramContext, spec: &Spec) {
         return;
     }
 
-    // Analyze the spec and add it to the program context so we can retrieve and render
-    // it later.
-    let a_spec = ASpec::from(ctx, spec);
-    ctx.insert_spec(a_spec);
+    // Analyze the spec and add it to the program context so we can retrieve it later.
+    ASpecType::from(ctx, spec);
 }

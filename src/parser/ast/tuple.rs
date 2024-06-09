@@ -134,7 +134,7 @@ impl TupleType {
 #[derive(Debug, Eq, Clone)]
 pub struct TupleInit {
     pub values: Vec<Expression>,
-    span: Span,
+    pub span: Span,
 }
 
 locatable_impl!(TupleInit);

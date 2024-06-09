@@ -1,53 +1,54 @@
+use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
+
 use crate::analyzer::ast::func::AFnSig;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::type_store::TypeKey;
 use crate::parser::ast::spec::Spec;
 
-/// Represents a semantically valid spec declaration.
+/// Represents a set of functions that are associated with a type (i.e. a set
+/// of things one can do with a type).
 #[derive(PartialEq, Clone, Debug)]
-pub struct ASpec {
+pub struct ASpecType {
     pub name: String,
-    pub fn_sigs: Vec<AFnSig>,
+    /// Maps member function name to the function type key.
+    pub member_fn_type_keys: HashMap<String, TypeKey>,
 }
 
-impl ASpec {
+impl Display for ASpecType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "spec {} {{ ... }}", self.name)
+    }
+}
+
+impl ASpecType {
     /// Performs semantic analysis on the given spec.
-    pub fn from(ctx: &mut ProgramContext, spec: &Spec) -> ASpec {
-        // Make sure this spec name is not a duplicate.
-        if ctx.get_spec(spec.name.as_str()).is_some() {
-            // Record the error and return a placeholder value.
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::DuplicateSpec,
-                format_code!("another spec named {} already exists", spec.name).as_str(),
-                spec,
-            ));
-
-            return ASpec {
-                name: spec.name.clone(),
-                fn_sigs: vec![],
-            };
-        }
-
+    pub fn from(ctx: &mut ProgramContext, spec: &Spec) -> ASpecType {
         // Set the unknown type "Self" as the current type of "self" so it can be resolved when
         // we analyzed methods in this spec.
-        ctx.set_cur_self_type_key(Some(ctx.this_type_key()));
+        ctx.set_cur_self_type_key(Some(ctx.self_type_key()));
 
         // Analyze all the function signatures in the spec.
         let mut fn_sigs = vec![];
+        let mut member_fn_type_keys = HashMap::new();
         for fn_sig in &spec.fn_sigs {
-            fn_sigs.push(AFnSig::from(ctx, fn_sig));
+            let a_fn_sig = AFnSig::from(ctx, fn_sig);
+            member_fn_type_keys.insert(a_fn_sig.name.clone(), a_fn_sig.type_key);
+            fn_sigs.push(a_fn_sig);
         }
 
         // Unset the "Self" type now that we're done analyzing the spec.
         ctx.set_cur_self_type_key(None);
 
-        let a_spec = ASpec {
+        let spec_type = ASpecType {
             name: spec.name.clone(),
-            fn_sigs,
+            member_fn_type_keys,
         };
 
         // Add the new spec to the program context so we can reference it by name later.
-        ctx.insert_spec(a_spec.clone());
-        a_spec
+        ctx.insert_type(AType::Spec(spec_type.clone()));
+
+        spec_type
     }
 }

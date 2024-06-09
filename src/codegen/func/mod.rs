@@ -47,7 +47,7 @@ pub struct FnCodeGen<'a, 'ctx> {
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Generates code for the given function.
-    pub fn compile(
+    pub fn generate(
         context: &'ctx Context,
         builder: &'a Builder<'ctx>,
         fpm: &'a PassManager<FunctionValue<'ctx>>,
@@ -377,7 +377,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             return;
         }
 
-        let typ = self.type_store.must_get(type_key);
+        let typ = self
+            .type_store
+            .must_get(self.type_converter.map_type_key(type_key));
         if typ.is_composite() {
             // Copy the value from the source pointer to the destination pointer.
             let ll_type_size = self
@@ -524,6 +526,12 @@ pub fn gen_fn_sig<'a, 'ctx>(
     type_converter: &'a mut TypeConverter<'ctx>,
     sig: &AFnSig,
 ) {
+    assert!(
+        !sig.is_parameterized(),
+        "unexpected generic function {}",
+        sig
+    );
+
     // Define the function in the module using the fully-qualified function name.
     let fn_type = type_converter.get_fn_type(sig.type_key);
     let fn_val = module.add_function(sig.mangled_name.as_str(), fn_type, None);

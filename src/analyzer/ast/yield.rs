@@ -60,7 +60,6 @@ impl AYield {
                 Some(expected_type_key),
                 false,
                 false,
-                false,
             ),
 
             None => {
@@ -69,7 +68,7 @@ impl AYield {
                 // the assumption that it's the first yield in the current
                 // `from` block, and all other yields should be of the same
                 // type.
-                let a_expr = AExpr::from(ctx, yld.value.clone(), None, false, false, false);
+                let a_expr = AExpr::from(ctx, yld.value.clone(), None, false, false);
                 if a_expr.type_key != ctx.unknown_type_key() {
                     ctx.set_cur_expected_yield_type_key(a_expr.type_key);
                 }

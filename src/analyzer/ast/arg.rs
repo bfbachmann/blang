@@ -1,12 +1,13 @@
 use std::fmt;
 use std::fmt::Formatter;
+use std::hash::{Hash, Hasher};
 
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::parser::ast::arg::Argument;
 
 /// Represents a semantically valid function argument.
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct AArg {
     pub name: String,
     pub type_key: TypeKey,
@@ -23,6 +24,14 @@ impl fmt::Display for AArg {
     }
 }
 
+impl Hash for AArg {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.type_key.hash(state);
+        self.is_mut.hash(state);
+    }
+}
+
 impl AArg {
     /// Performs semantic analysis on the argument and returns an analyzed version of it.
     pub fn from(ctx: &mut ProgramContext, arg: &Argument) -> Self {
@@ -34,10 +43,9 @@ impl AArg {
     }
 
     /// Returns a string containing a human-readable version of the argument.
-    /// If `as_type` is true, the argument will be displayed as a type (without the name).
-    pub fn display(&self, ctx: &ProgramContext, as_type: bool) -> String {
+    pub fn display(&self, ctx: &ProgramContext) -> String {
         let type_display = ctx.display_type_for_key(self.type_key);
-        match self.name.is_empty() || as_type {
+        match self.name.is_empty() {
             true => format!("{}", type_display).to_string(),
             false => format!("{}: {}", self.name, type_display).to_string(),
         }

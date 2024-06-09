@@ -244,7 +244,7 @@ fn main() {
     let new_values = values
 
     // This line would cause a use-after-move compile error.
-    let msg = values.0  // error: cannot use `values.0` because `values` was already moved
+    let msg = values.(0)  // error: cannot use `values.(0)` because `values` was already moved
 }
 ```
 

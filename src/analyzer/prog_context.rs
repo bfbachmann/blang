@@ -1,13 +1,16 @@
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::hash::Hash;
 
 use crate::analyzer::ast::array::AArrayType;
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::func::{AFn, AFnSig};
+use crate::analyzer::ast::generic::AGenericType;
+use crate::analyzer::ast::params::{AParam, AParams};
 use crate::analyzer::ast::pointer::APointerType;
 use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::ast::spec::ASpec;
+use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::ast::tuple::ATupleType;
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
@@ -22,6 +25,21 @@ use crate::parser::ast::r#type::Type;
 use crate::parser::ast::spec::Spec;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::module::Module;
+
+#[derive(Debug, Hash, Clone, PartialEq, Eq)]
+pub struct ReplacedParam {
+    pub param_type_key: TypeKey,
+    pub replacement_type_key: TypeKey,
+}
+
+/// Represents a polymorphic type that was monomorphized, and the set of
+/// parameters that were used to monomorphize it.
+#[derive(Debug, Hash, Clone, PartialEq, Eq)]
+pub struct Monomorphization {
+    pub poly_type_key: TypeKey,
+    pub mono_type_key: TypeKey,
+    pub replaced_params: Vec<ReplacedParam>,
+}
 
 /// Stores information about code in a given module.
 struct ModuleContext {
@@ -45,10 +63,13 @@ struct ModuleContext {
     /// this map would contain the mapping `"my_mod": "my_project/my_mod.bl"`.
     imported_mod_paths: HashMap<String, String>,
 
-    // TODO: document
+    /// The names of public constants defined in this module.
     pub_const_names: HashSet<String>,
+    /// The names of public functions defined in this module.
     pub_fn_names: HashSet<String>,
+    /// The names of public types defined in this module.
     pub_type_names: HashSet<String>,
+    /// The names of public type member functions in this module.
     pub_type_member_fn_names: HashMap<TypeKey, String>,
 
     /// Contains the names of all types that have been marked as "invalid" by the analyzer. At the
@@ -69,10 +90,10 @@ struct ModuleContext {
     funcs: HashMap<String, AFn>,
     /// Maps constant names to their values.
     const_values: HashMap<String, AExpr>,
-    /// Maps spec names to analyzed specs.
-    specs: HashMap<String, ASpec>,
     /// Maps struct type name to struct type key.
     struct_type_keys: HashMap<String, TypeKey>,
+    /// Maps spec type name to spec type key.
+    spec_type_keys: HashMap<String, TypeKey>,
     /// Maps enum type name to enum type key.
     enum_type_keys: HashMap<String, TypeKey>,
 }
@@ -99,8 +120,8 @@ impl ModuleContext {
             defined_fn_sigs: Default::default(),
             funcs: Default::default(),
             const_values: Default::default(),
-            specs: Default::default(),
             struct_type_keys: Default::default(),
+            spec_type_keys: Default::default(),
             enum_type_keys: Default::default(),
         }
     }
@@ -153,6 +174,8 @@ impl ModuleContext {
 pub struct ProgramContext {
     /// Stores all types that are successfully analyzed during semantic analysis.
     pub type_store: TypeStore,
+    /// Maps polymorphic type keys to their monomorphizations.
+    pub monomorphized_types: HashMap<TypeKey, HashSet<Monomorphization>>,
     /// Maps primitive type names to their type keys.
     primitive_type_keys: HashMap<String, TypeKey>,
 
@@ -168,6 +191,10 @@ pub struct ProgramContext {
     array_type_keys: HashMap<AArrayType, TypeKey>,
     /// Maps pointer type to pointer type key.
     pointer_type_keys: HashMap<APointerType, TypeKey>,
+    /// Maps generic type to generic type key.
+    generic_type_keys: HashMap<AGenericType, TypeKey>,
+    /// Maps function types to their type keys.
+    fn_type_keys: HashMap<AFnSig, TypeKey>,
     /// Maps type keys to mappings from their member function names to their member function
     /// signatures.
     type_member_fn_sigs: HashMap<TypeKey, HashMap<String, AFnSig>>,
@@ -179,6 +206,11 @@ pub struct ProgramContext {
     pub_struct_field_names: HashMap<TypeKey, HashSet<String>>,
     /// Maps type keys to the modules in which the types are declared.
     type_declaration_mods: HashMap<TypeKey, String>,
+    /// Maps type key to the set of specs implemented by that type.
+    spec_impls: HashMap<TypeKey, HashSet<TypeKey>>,
+    /// Represents a stack of parameters that are relevant when analyzing parameterized
+    /// functions and types.
+    params: Vec<AParams>,
 
     /// Collects warnings emitted by the analyzer during analysis.
     pub warnings: HashMap<Position, AnalyzeWarning>,
@@ -214,10 +246,15 @@ impl ProgramContext {
             tuple_type_keys: Default::default(),
             array_type_keys: Default::default(),
             pointer_type_keys: Default::default(),
+            generic_type_keys: Default::default(),
+            fn_type_keys: Default::default(),
             type_member_fn_sigs: Default::default(),
             pub_member_fn_names: Default::default(),
             pub_struct_field_names: Default::default(),
             type_declaration_mods: Default::default(),
+            spec_impls: Default::default(),
+            params: vec![],
+            monomorphized_types: Default::default(),
             warnings: Default::default(),
             errors: Default::default(),
         }
@@ -315,6 +352,32 @@ impl ProgramContext {
         return true;
     }
 
+    /// Checks that the given type implements the set of specs on the given
+    /// generic type. Returns type keys for specs not implemented by the type.
+    pub fn get_missing_spec_impls(
+        &self,
+        type_key: TypeKey,
+        generic_type_key: TypeKey,
+    ) -> Vec<TypeKey> {
+        let mut missing_spec_type_keys = vec![];
+        let spec_type_keys = &self
+            .must_get_type(generic_type_key)
+            .to_generic_type()
+            .spec_type_keys;
+
+        for spec_type_key in spec_type_keys {
+            let type_implements_spec = self
+                .spec_impls
+                .get(&type_key)
+                .is_some_and(|spec_set| spec_set.contains(spec_type_key));
+            if !type_implements_spec {
+                missing_spec_type_keys.push(*spec_type_key);
+            }
+        }
+
+        missing_spec_type_keys
+    }
+
     /// Returns a mapping from error start position to the error that occurred there.
     pub fn errors(&self) -> &HashMap<Position, AnalyzeError> {
         &self.errors
@@ -348,114 +411,190 @@ impl ProgramContext {
         }
     }
 
-    /// Inserts the given analyzed type into the program context. This function will also handle
-    /// tracking struct and enum types by name. If another matching struct, enum, or tuple type
-    /// already exists in the current module, `typ` will not be inserted and the type key for the
-    /// existing type will be returned.
-    pub fn insert_type(&mut self, typ: AType) -> TypeKey {
-        // First, we'll check if this type already exists so we can avoid duplicating it if so.
-        // TODO: refactor.
-        let (
-            maybe_type_name,
-            is_struct,
-            is_enum,
-            maybe_tuple_type,
-            maybe_ptr_type,
-            maybe_array_type,
-        ) = match &typ {
-            AType::Struct(struct_type) => {
-                let maybe_name = match struct_type.name.is_empty() {
-                    true => None,
-                    false => {
-                        if let Some(tk) = self
-                            .cur_mod_ctx()
-                            .struct_type_keys
-                            .get(struct_type.name.as_str())
-                        {
-                            return *tk;
-                        }
+    /// Tries to locate the type key associated with the given type and returns it
+    /// if found.
+    fn get_existing_type_key(&self, typ: &AType) -> Option<TypeKey> {
+        match &typ {
+            AType::Bool => return Some(self.bool_type_key()),
+            AType::U8 => return Some(self.u8_type_key()),
+            AType::I8 => return Some(self.i8_type_key()),
+            AType::U32 => return Some(self.u32_type_key()),
+            AType::I32 => return Some(self.i32_type_key()),
+            AType::F32 => return Some(self.f32_type_key()),
+            AType::I64 => return Some(self.i64_type_key()),
+            AType::U64 => return Some(self.u64_type_key()),
+            AType::F64 => return Some(self.f64_type_key()),
+            AType::Int => return Some(self.int_type_key()),
+            AType::Uint => return Some(self.uint_type_key()),
+            AType::Str => return Some(self.str_type_key()),
 
-                        Some(struct_type.name.clone())
-                    }
-                };
-
-                (maybe_name, true, false, None, None, None)
+            AType::Struct(struct_type) if !struct_type.name.is_empty() => {
+                if let Some(tk) = self
+                    .cur_mod_ctx()
+                    .struct_type_keys
+                    .get(struct_type.name.as_str())
+                {
+                    return Some(*tk);
+                }
             }
 
-            AType::Enum(enum_type) => {
-                let maybe_name = match enum_type.name.is_empty() {
-                    true => None,
-                    false => {
-                        if let Some(tk) = self
-                            .cur_mod_ctx()
-                            .enum_type_keys
-                            .get(enum_type.name.as_str())
-                        {
-                            return *tk;
-                        }
-
-                        Some(enum_type.name.clone())
-                    }
-                };
-
-                (maybe_name, false, true, None, None, None)
+            AType::Enum(enum_type) if !enum_type.name.is_empty() => {
+                if let Some(tk) = self
+                    .cur_mod_ctx()
+                    .enum_type_keys
+                    .get(enum_type.name.as_str())
+                {
+                    return Some(*tk);
+                }
             }
 
             AType::Tuple(tuple_type) => {
                 if let Some(existing_tuple_tk) = self.tuple_type_keys.get(tuple_type) {
-                    return *existing_tuple_tk;
+                    return Some(*existing_tuple_tk);
                 }
-
-                (None, false, false, Some(tuple_type.clone()), None, None)
             }
 
             AType::Array(array_type) => {
                 if let Some(existing_array_tk) = self.array_type_keys.get(array_type) {
-                    return *existing_array_tk;
+                    return Some(*existing_array_tk);
                 }
+            }
 
-                (None, false, false, None, None, Some(array_type.clone()))
+            AType::Function(fn_type) => {
+                if let Some(existing_fn_tk) = self.fn_type_keys.get(fn_type.as_ref()) {
+                    return Some(*existing_fn_tk);
+                }
             }
 
             AType::Pointer(ptr_type) => {
                 if let Some(existing_ptr_tk) = self.pointer_type_keys.get(ptr_type) {
-                    return *existing_ptr_tk;
+                    return Some(*existing_ptr_tk);
                 }
-
-                (None, false, false, None, Some(ptr_type.clone()), None)
             }
 
-            _ => (None, false, false, None, None, None),
-        };
+            AType::Spec(spec_type) => {
+                if let Some(tk) = self
+                    .cur_mod_ctx()
+                    .spec_type_keys
+                    .get(spec_type.name.as_str())
+                {
+                    return Some(*tk);
+                }
+            }
 
+            AType::Generic(generic_type) => {
+                if let Some(tk) = self.generic_type_keys.get(generic_type) {
+                    return Some(*tk);
+                }
+            }
+
+            _ => {}
+        }
+
+        None
+    }
+
+    /// Inserts the given analyzed type into the program context. This function will also handle
+    /// tracking named types. The type will be inserted regardless of whether there is
+    /// already a matching type in the type store.
+    pub fn force_insert_type(&mut self, typ: AType) -> TypeKey {
         // Store the newly analyzed type.
         let type_key = self.type_store.insert(typ);
 
         // Create an additional mapping to the new type key to avoid type duplication, if necessary.
-        if let Some(name) = maybe_type_name {
-            // Make sure the type is resolvable in the current scope.
-            self.insert_type_key(Type::new_unresolved(name.as_str()), type_key);
-
-            if is_struct {
+        let typ = self.must_get_type(type_key);
+        let maybe_type_name = match typ {
+            AType::Struct(struct_type) => {
+                let name = struct_type.name.clone();
                 self.cur_mod_ctx_mut()
                     .struct_type_keys
-                    .insert(name, type_key);
-            } else if is_enum {
-                self.cur_mod_ctx_mut().enum_type_keys.insert(name, type_key);
+                    .insert(name.clone(), type_key);
+                Some(name.clone())
             }
+
+            AType::Enum(enum_type) => {
+                let name = enum_type.name.clone();
+                self.cur_mod_ctx_mut()
+                    .enum_type_keys
+                    .insert(name.clone(), type_key);
+                Some(name.clone())
+            }
+
+            AType::Spec(spec_type) => {
+                let name = spec_type.name.clone();
+                self.cur_mod_ctx_mut()
+                    .spec_type_keys
+                    .insert(name.clone(), type_key);
+                Some(name)
+            }
+
+            AType::Generic(generic_type) => {
+                self.generic_type_keys
+                    .insert(generic_type.clone(), type_key);
+                None
+            }
+
+            AType::Function(fn_sig) => {
+                self.fn_type_keys.insert(*fn_sig.clone(), type_key);
+                None
+            }
+
+            AType::Tuple(tuple_type) => {
+                self.tuple_type_keys.insert(tuple_type.clone(), type_key);
+                None
+            }
+
+            AType::Array(array_type) => {
+                self.array_type_keys.insert(array_type.clone(), type_key);
+                None
+            }
+
+            AType::Pointer(ptr_type) => {
+                self.pointer_type_keys.insert(ptr_type.clone(), type_key);
+                None
+            }
+
+            _ => None,
+        };
+
+        // Make sure the type is resolvable in the current scope if it has a name.
+        if let Some(name) = maybe_type_name {
+            self.insert_type_key(Type::new_unresolved(name.as_str()), type_key);
 
             // Record the module in which the type was defined.
             self.type_declaration_mods
                 .insert(type_key, self.cur_mod_path.clone());
-        } else if let Some(tuple_type) = maybe_tuple_type {
-            self.tuple_type_keys.insert(tuple_type, type_key);
-        } else if let Some(ptr_type) = maybe_ptr_type {
-            self.pointer_type_keys.insert(ptr_type, type_key);
-        } else if let Some(array_type) = maybe_array_type {
-            self.array_type_keys.insert(array_type, type_key);
         }
 
         type_key
+    }
+
+    /// Inserts the given analyzed type into the program context. This function will also handle
+    /// tracking named types. If another matching type already exists in the current module,
+    /// `typ` will not be inserted and the type key for the existing type will be returned.
+    pub fn insert_type(&mut self, typ: AType) -> TypeKey {
+        // Check if we've already inserted this type. This just prevents us
+        // from storing duplicate types in the type store.
+        if let Some(existing_tk) = self.get_existing_type_key(&typ) {
+            return existing_tk;
+        }
+
+        self.force_insert_type(typ)
+    }
+
+    /// Records the mapping from `type_key` to the `spec_type_key` for the spec
+    /// that is implemented by that type. Essentially, this records a record
+    /// of the fact that a type implements a spec. Returns true if a record
+    /// was newly inserted, and false otherwise (if one already existed).
+    pub fn insert_spec_impl(&mut self, type_key: TypeKey, spec_type_key: TypeKey) -> bool {
+        match self.spec_impls.get_mut(&type_key) {
+            Some(spec_set) => spec_set.insert(spec_type_key),
+            None => {
+                self.spec_impls
+                    .insert(type_key, HashSet::from([spec_type_key]));
+                true
+            }
+        }
     }
 
     /// Tries to map the given un-analyzed type to a type key and return that type key. If there is
@@ -485,6 +624,11 @@ impl ProgramContext {
                     };
                 }
 
+                // Check if the type refers to a generic parameter.
+                if let Some(param) = self.get_param(unresolved_type.name.as_str()) {
+                    return param.maybe_generic_type_key.unwrap();
+                }
+
                 if let Some(key) = self.primitive_type_keys.get(unresolved_type.name.as_str()) {
                     return *key;
                 }
@@ -503,8 +647,13 @@ impl ProgramContext {
             return self.unknown_type_key();
         }
 
+        let is_generic = a_type.is_generic();
         let key = self.insert_type(a_type);
-        self.insert_type_key(typ.clone(), key);
+
+        // Only record the type mapping for non-generic types.
+        if !is_generic {
+            self.insert_type_key(typ.clone(), key);
+        }
 
         key
     }
@@ -519,11 +668,93 @@ impl ProgramContext {
             if let Some(tk) = self.primitive_type_keys.get(name) {
                 return Some(*tk);
             }
+
+            // Look for a generic param with a matching name.
+            if let Some(param) = self.get_param(name) {
+                if let Some(tk) = param.maybe_generic_type_key {
+                    return Some(tk);
+                }
+            }
         }
 
         let mod_ctx = self.get_mod_ctx(maybe_mod_name);
         let typ = Type::new_unresolved(name);
         mod_ctx.search_stack(|scope| scope.get_type_key(&typ))
+    }
+
+    /// Converts the given type from a polymorphic (parameterized) type into a
+    /// monomorph by substituting type keys for generic types with those from
+    /// the provided parameter values. Returns the type key for the monomorphized
+    /// type.
+    pub fn monomorphize_type(&mut self, type_key: TypeKey, param_values: &Vec<AExpr>) -> TypeKey {
+        let poly_type = self.must_get_type(type_key);
+        let defined_params = poly_type.params();
+        if defined_params.is_none() {
+            // The type is not parameterized, so there's nothing to do.
+            return type_key;
+        }
+
+        // Generate a monomorphization for this type. We'll use this to track
+        // the fact that this type has been monomorphized.
+        let mut mono = Monomorphization {
+            poly_type_key: type_key,
+            mono_type_key: 0,
+            replaced_params: vec![],
+        };
+        let mut type_mappings: HashMap<TypeKey, TypeKey> = HashMap::new();
+        for (param, param_value) in defined_params
+            .unwrap()
+            .params
+            .iter()
+            .zip(param_values.iter())
+        {
+            if param.maybe_generic_type_key.is_none() {
+                continue;
+            }
+
+            mono.replaced_params.push(ReplacedParam {
+                param_type_key: param.maybe_generic_type_key.unwrap(),
+                replacement_type_key: param_value.type_key,
+            });
+
+            type_mappings.insert(param.maybe_generic_type_key.unwrap(), param_value.type_key);
+        }
+
+        // Check if the type has already been monomorphized. If so, return the
+        // existing monomorphic type's key.
+        if let Some(monos) = self.monomorphized_types.get(&type_key) {
+            if let Some(existing_mono) = monos.get(&mono) {
+                return existing_mono.mono_type_key;
+            }
+        }
+
+        // Monomorphize the type.
+        mono.mono_type_key = poly_type.clone().monomorphize(self, &type_mappings);
+        let mono_type_key = mono.mono_type_key;
+
+        // We don't need to monomorphize every method on every impl for this
+        // type, as those will be monomorphized individually if/when they're used.
+        // Regardless, we must still mark this new monomorphic type as
+        // implementing the specs it claims to implement.
+        if let Some(spec_impl_tks) = self.spec_impls.get(&type_key) {
+            for spec_impl_tk in spec_impl_tks.clone() {
+                self.insert_spec_impl(mono.mono_type_key, spec_impl_tk);
+            }
+        };
+
+        // Insert the monomorphization so we know we need to generate code
+        // for it during codegen.
+        match self.monomorphized_types.get_mut(&type_key) {
+            Some(set) => {
+                set.insert(mono);
+            }
+            None => {
+                self.monomorphized_types
+                    .insert(type_key, HashSet::from([mono]));
+            }
+        };
+
+        mono_type_key
     }
 
     /// Returns the type key for the analyzer-internal `<unknown>` type.
@@ -532,7 +763,6 @@ impl ProgramContext {
     }
 
     /// Returns the type key for the analyzer-internal `<none>` type.
-    #[cfg(test)]
     pub fn none_type_key(&self) -> TypeKey {
         *self.primitive_type_keys.get("<none>").unwrap()
     }
@@ -597,8 +827,8 @@ impl ProgramContext {
         *self.primitive_type_keys.get("str").unwrap()
     }
 
-    /// Returns the type key for the special `This` type.
-    pub fn this_type_key(&self) -> TypeKey {
+    /// Returns the type key for the special `Self` type.
+    pub fn self_type_key(&self) -> TypeKey {
         *self.primitive_type_keys.get("Self").unwrap()
     }
 
@@ -907,7 +1137,7 @@ impl ProgramContext {
     }
 
     /// Returns the type key associated with the current `impl` or `spec` type being analyzed.
-    pub fn get_cur_self_type_key(&mut self) -> Option<TypeKey> {
+    pub fn get_cur_self_type_key(&self) -> Option<TypeKey> {
         self.cur_mod_ctx().cur_self_type_key
     }
 
@@ -987,6 +1217,11 @@ impl ProgramContext {
 
     /// Returns true if the given type member function is public.
     fn member_fn_is_pub(&self, type_key: TypeKey, fn_name: &str) -> bool {
+        // Generic types always have public member fns.
+        if self.must_get_type(type_key).is_generic() {
+            return true;
+        }
+
         match self.pub_member_fn_names.get(&type_key) {
             Some(set) => set.contains(fn_name),
             None => false,
@@ -1018,7 +1253,7 @@ impl ProgramContext {
         self.cur_mod_ctx().unchecked_enum_types.get(name)
     }
 
-    /// Tries to locate and return the spec with the given name.
+    /// Returns the un-analyzed spec with the given name.
     pub fn get_unchecked_spec(&self, name: &str) -> Option<&Spec> {
         self.cur_mod_ctx().unchecked_specs.get(name)
     }
@@ -1026,17 +1261,6 @@ impl ProgramContext {
     /// Tries to locate and return the un-analyzed constant with the given name.
     pub fn get_unchecked_const(&self, name: &str) -> Option<&Const> {
         self.cur_mod_ctx().unchecked_consts.get(name)
-    }
-
-    /// Inserts `spec` into the program context.
-    pub fn insert_spec(&mut self, spec: ASpec) {
-        self.cur_mod_ctx_mut().specs.insert(spec.name.clone(), spec);
-    }
-
-    /// Tries to locate and return the spec with the given name in the current
-    /// module context.
-    pub fn get_spec(&self, name: &str) -> Option<&ASpec> {
-        self.cur_mod_ctx().specs.get(name)
     }
 
     /// Returns all unchecked struct types in the current module context.
@@ -1061,13 +1285,13 @@ impl ProgramContext {
 
     /// Returns a new name for a nested function with the given name. The new name will contain
     /// all the names of the functions within which this function is nested.
-    pub fn mangle_name(&self, name: &str) -> String {
+    pub fn mangle_fn_name(&self, name: &str) -> String {
         let mod_ctx = self.cur_mod_ctx();
-
         if mod_ctx.fn_scope_indices.is_empty() {
             return name.to_string();
         }
 
+        // Get a path to the function based on the current scope.
         let mut path = "".to_string();
         for i in &self.cur_mod_ctx().fn_scope_indices {
             let fn_name = match &mod_ctx.stack.get(*i).unwrap().kind {
@@ -1123,9 +1347,8 @@ impl ProgramContext {
     }
 
     /// Adds the given function to the program context, so it can be looked up by full name in the
-    /// future. This function should only be used for adding non-templated (non-generic) functions.
+    /// future.
     pub fn insert_fn(&mut self, func: AFn) {
-        assert!(!func.signature.is_templated());
         self.cur_mod_ctx_mut()
             .funcs
             .insert(func.signature.mangled_name.clone(), func);
@@ -1136,6 +1359,29 @@ impl ProgramContext {
     pub fn get_fn(&self, maybe_mod_name: Option<&String>, name: &str) -> Option<&AFn> {
         let mod_ctx = self.get_mod_ctx(maybe_mod_name);
         mod_ctx.funcs.get(name)
+    }
+
+    /// Pushes `params` onto the parameter stack.
+    pub fn push_params(&mut self, params: AParams) {
+        self.params.push(params);
+    }
+
+    /// Pops the params at the top of the parameter stack.
+    pub fn pop_params(&mut self) -> Option<AParams> {
+        self.params.pop()
+    }
+
+    /// Returns the current module's params.
+    pub fn cur_params(&self) -> Option<&AParams> {
+        self.params.last()
+    }
+
+    /// Returns the parameter with the given name, if one exists.
+    pub fn get_param(&self, name: &str) -> Option<&AParam> {
+        match self.cur_params() {
+            Some(params) => params.get(name),
+            None => None,
+        }
     }
 
     /// Returns the struct type with the given name in the given module.
@@ -1152,11 +1398,21 @@ impl ProgramContext {
         None
     }
 
-    /// Returns the struct type with the given name in the given module.
+    /// Returns the enum type with the given name in the given module.
     pub fn get_enum_type(&self, maybe_mod_name: Option<&String>, name: &str) -> Option<&AEnumType> {
         let mod_ctx = self.get_mod_ctx(maybe_mod_name);
         if let Some(tk) = mod_ctx.struct_type_keys.get(name) {
             return Some(self.must_get_type(*tk).to_enum_type());
+        }
+
+        None
+    }
+
+    /// Returns the spec type with the given name in the given module.
+    pub fn get_spec_type(&self, maybe_mod_name: Option<&String>, name: &str) -> Option<&ASpecType> {
+        let mod_ctx = self.get_mod_ctx(maybe_mod_name);
+        if let Some(tk) = mod_ctx.spec_type_keys.get(name) {
+            return Some(self.must_get_type(*tk).to_spec_type());
         }
 
         None

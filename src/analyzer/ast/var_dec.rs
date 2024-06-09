@@ -35,14 +35,7 @@ impl AVarDecl {
         // Check the expression being assigned to this new variable. Note that it's okay for
         // the variable name to collide with that of another variable. In this case, the old
         // variable will simply be replaced with this one in the current scope.
-        let rich_expr = AExpr::from(
-            ctx,
-            var_decl.value.clone(),
-            maybe_declared_tk,
-            false,
-            false,
-            false,
-        );
+        let rich_expr = AExpr::from(ctx, var_decl.value.clone(), maybe_declared_tk, false, false);
 
         // If the type is not specified, it will be inferred from the assigned expression.
         let type_key = match maybe_declared_tk {

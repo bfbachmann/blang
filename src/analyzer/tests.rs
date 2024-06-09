@@ -848,21 +848,17 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "generics")]
-    fn function_template_with_invalid_spec() {
+    fn generic_fn_with_invalid_spec() {
         let result = analyze(
             r#"
-            fn test(t: T)
-            with [T: Thing]
-            {}
+            fn test[T: Thing](t: T) {}
             "#,
         );
         check_result(result, Some(ErrorKind::UndefSpec));
     }
 
     #[test]
-    #[cfg(feature = "generics")]
-    fn function_template_with_unsatisfied_spec() {
+    fn generic_fn_with_unsatisfied_spec() {
         let result = analyze(
             r#"
             spec Thing {
@@ -871,13 +867,11 @@ mod tests {
 
             struct Doer {}
 
-            fn test(t: T)
-            with [T: Thing]
-            {}
+            fn test[T: Thing](t: T) {}
 
             fn main() {
                 let doer = Doer{}
-                test(doer)
+                test[Doer](doer)
             }
             "#,
         );
@@ -885,19 +879,13 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "generics")]
-    fn function_template_with_unmatched_required_type() {
+    fn generic_fn_with_mismatched_shared_generic_types() {
         let result = analyze(
             r#"
-            struct Doer {}
-
-            fn test(t: T)
-            with [T = Doer]
-            {}
+            fn do_nothing[T](a: T, b: T) {}
 
             fn main() {
-                let doer = 1
-                test(doer)
+                do_nothing[int](1, "test")
             }
             "#,
         );
@@ -905,35 +893,18 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "generics")]
-    fn function_template_with_mismatched_shared_templated_types() {
+    fn unresolved_params() {
         let result = analyze(
             r#"
-            fn do_nothing(a: T, b: T) with [T] {}
-
-            fn main() {
-                do_nothing(1, "test")
-            }
-            "#,
-        );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
-    }
-
-    #[test]
-    #[cfg(feature = "generics")]
-    fn unresolved_tmpl_params() {
-        let result = analyze(
-            r#"
-            fn test(a: A, b: B): C with [A, B, C] {
-                return a + b
-            }
+            fn test[A, B](a: A, b: B) {}
 
             fn main() {
                 test(1, 2)
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::UnresolvedTmplParams));
+        dbg!(&result);
+        check_result(result, Some(ErrorKind::UnresolvedParams));
     }
 
     #[test]
@@ -962,9 +933,8 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "generics")]
-    fn invalid_tmpl_extern_fn() {
-        let result = analyze(r#"extern fn free(rawptr: T) with [T]"#);
+    fn invalid_generic_extern_fn() {
+        let result = analyze(r#"extern fn free[T](rawptr: T)"#);
         check_result(result, Some(ErrorKind::InvalidExtern));
     }
 

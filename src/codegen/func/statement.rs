@@ -25,9 +25,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 self.assign_var(assign);
             }
             AStatement::FunctionDeclaration(func) => {
-                // Declare and compile the new function.
-                gen_fn_sig(self.ctx, self.module, self.type_converter, &func.signature);
-                self.gen_nested_fn(func);
+                if !func.signature.is_parameterized() {
+                    // Declare and compile the new function.
+                    gen_fn_sig(self.ctx, self.module, self.type_converter, &func.signature);
+                    self.gen_nested_fn(func);
+                }
             }
             AStatement::Closure(closure) => {
                 self.gen_closure(closure)?;
@@ -82,11 +84,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
                 // If the value being returned is some structured type, we need to copy it to the
                 // memory pointed to by the first argument and return void.
-                let expr_type = self.type_store.must_get(expr.type_key);
+                let ret_type_key = self.type_converter.map_type_key(expr.type_key);
+                let expr_type = self.type_store.must_get(ret_type_key);
                 if expr_type.is_composite() {
                     // Copy the return value into the pointer from the first function argument.
                     let ll_ret_ptr = self.fn_value.unwrap().get_first_param().unwrap();
-                    self.copy_value(result, ll_ret_ptr.into_pointer_value(), expr.type_key);
+                    self.copy_value(result, ll_ret_ptr.into_pointer_value(), ret_type_key);
 
                     // Return void.
                     self.builder.build_return(None);
@@ -114,7 +117,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // being yielded from the same `from` expression both as pointers and
         // immediate aggregate values, which would cause LLVM to error because
         // of the type inconsistency in the phi node that receives yielded results.
-        let is_composite_type = self.type_store.must_get(yld.value.type_key).is_composite();
+        let is_composite_type = self
+            .type_converter
+            .must_get_type(yld.value.type_key)
+            .is_composite();
         let is_const = !result.is_pointer_value();
         if is_composite_type && is_const {
             let ll_ptr = self.stack_alloc("yielded_value", yld.value.type_key);

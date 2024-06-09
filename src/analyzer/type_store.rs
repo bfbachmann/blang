@@ -1,3 +1,4 @@
+
 use crate::analyzer::ast::r#type::AType;
 
 /// A key that is associated with an analyzed type inside the type store. This is actually just an

@@ -6,6 +6,7 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::r#type::Type;
+use crate::parser::ast::symbol::Symbol;
 use crate::parser::error::ParseResult;
 use crate::parser::module::Module;
 use crate::{locatable_impl, util};
@@ -14,6 +15,8 @@ use crate::{locatable_impl, util};
 #[derive(Clone, Debug, Eq)]
 pub struct Impl {
     pub typ: Type,
+    /// The specs being implemented for the type.
+    pub specs: Vec<Symbol>,
     pub member_fns: Vec<Function>,
     span: Span,
 }
@@ -35,15 +38,20 @@ locatable_impl!(Impl);
 
 impl Impl {
     /// Parses an implementation (a set of member functions) for a type. Expects token sequences
-    /// of the form
+    /// of the forms
     ///
     ///     impl <type> {
     ///         <member_fn>...
     ///     }
     ///
+    ///     impl <type>: <spec> + ... {
+    ///         <member_fn>...
+    ///     }
+    ///
     /// where
     ///  - `type` is the type for which member functions are being implemented
-    ///  - `member_fn` is one of a series of member functions in the implementation.
+    ///  - `member_fn` is one of a series of member functions in the implementation
+    ///  - `spec` is the optional symbol representing a spec this `impl` implements.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         let start_pos = Module::current_position(tokens);
         let end_pos;
@@ -53,6 +61,21 @@ impl Impl {
 
         // The next tokens should form a type.
         let typ = Type::from(tokens)?;
+
+        // Check for an optional specs.
+        let specs = if Module::parse_optional(tokens, TokenKind::Colon).is_some() {
+            let mut specs = vec![];
+            loop {
+                specs.push(Symbol::from(tokens)?);
+                if Module::parse_optional(tokens, TokenKind::Plus).is_none() {
+                    break;
+                }
+            }
+
+            specs
+        } else {
+            vec![]
+        };
 
         // The remaining tokens should be `{` followed by a set of function signatures and a `}`.
         Module::parse_expecting(tokens, TokenKind::LeftBrace)?;
@@ -69,6 +92,7 @@ impl Impl {
 
         Ok(Impl {
             typ,
+            specs,
             member_fns,
             span: Span { start_pos, end_pos },
         })

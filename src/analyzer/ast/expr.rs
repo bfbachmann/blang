@@ -359,9 +359,6 @@ impl AExpr {
     /// Performs semantic analysis on the given expression and returns a type-rich version of it.
     /// `maybe_expected_type_key` is the optional type key of the expected type that this expression
     /// should have.
-    /// If `allow_templated_result` is false, this function will check that the resulting expression
-    /// type is not templated and record an error if it is. Otherwise, templated result types will
-    /// be allowed.
     /// If `allow_type` is true and the expression is a symbol, the symbol may refer to a type instead
     /// of a value. Otherwise, if the expression is a symbol that refers to a type, an error will be
     /// raised.
@@ -371,11 +368,10 @@ impl AExpr {
         ctx: &mut ProgramContext,
         expr: Expression,
         maybe_expected_type_key: Option<TypeKey>,
-        allow_templated_result: bool,
         allow_type: bool,
         ignore_mutability: bool,
     ) -> AExpr {
-        let mut result = analyze_expr(
+        let result = analyze_expr(
             ctx,
             expr.clone(),
             maybe_expected_type_key,
@@ -386,24 +382,9 @@ impl AExpr {
             },
         );
 
-        // Try to (safely) coerce the expression to the right type (this may involve template
+        // Try to (safely) coerce the expression to the right type (this may involve generic
         // rendering).
-        result =
-            result.coerce_and_check_types(ctx, maybe_expected_type_key, &expr, ignore_mutability);
-
-        if !allow_templated_result {
-            // Make sure the resulting type is not still templated. If it is, coercion/rendering failed.
-            let actual_type = ctx.must_get_type(result.type_key);
-            if actual_type.is_templated() {
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::UnresolvedTmplParams,
-                    format_code!("failed to resolve template parameters for {}", expr).as_str(),
-                    &expr,
-                ));
-            }
-        }
-
-        result
+        result.coerce_and_check_types(ctx, maybe_expected_type_key, &expr, ignore_mutability)
     }
 
     /// Returns a string containing the human-readable version of this expression.
@@ -629,7 +610,7 @@ impl AExpr {
                 }
 
                 match ctx.must_get_type(symbol.type_key) {
-                    AType::Function(sig) if sig.is_templated() => {
+                    AType::Function(sig) if sig.is_parameterized() => {
                         todo!()
                     }
                     _ => return self,
@@ -712,7 +693,7 @@ impl AExpr {
                         maybe_ret_type_key: None,
                         type_key,
                         maybe_impl_type_key: None,
-                        tmpl_params: None,
+                        params: None,
                     },
                     body: AClosure::new_empty(),
                 })),
@@ -1032,7 +1013,7 @@ fn analyze_type_cast(
     target_type: Type,
     span: Span,
 ) -> AExpr {
-    let left_expr = AExpr::from(ctx, expr, None, false, false, false);
+    let left_expr = AExpr::from(ctx, expr, None, false, false);
     let target_type_key = ctx.resolve_type(&target_type);
     let left_type = ctx.must_get_type(left_expr.type_key);
     let a_target_type = ctx.must_get_type(target_type_key);
@@ -1206,7 +1187,6 @@ fn analyze_unary_op(
                 Some(ctx.bool_type_key()),
                 false,
                 false,
-                false,
             );
 
             // Make sure the expression has type bool.
@@ -1233,7 +1213,7 @@ fn analyze_unary_op(
         }
 
         Operator::Reference => {
-            let operand_expr = AExpr::from(ctx, right_expr.clone(), None, false, false, false);
+            let operand_expr = AExpr::from(ctx, right_expr.clone(), None, false, false);
             let a_ptr_type = APointerType::new(operand_expr.type_key, false);
             let type_key = ctx.insert_type(AType::Pointer(a_ptr_type));
 
@@ -1245,7 +1225,7 @@ fn analyze_unary_op(
         }
 
         Operator::MutReference => {
-            let operand_expr = AExpr::from(ctx, right_expr.clone(), None, false, false, false);
+            let operand_expr = AExpr::from(ctx, right_expr.clone(), None, false, false);
 
             // Make sure we're allowed to take a `&mut` to this operand.
             operand_expr.check_referencable_as_mut(ctx, expr);
@@ -1261,7 +1241,7 @@ fn analyze_unary_op(
         }
 
         Operator::Defererence => {
-            let operand_expr = AExpr::from(ctx, right_expr.clone(), None, false, false, false);
+            let operand_expr = AExpr::from(ctx, right_expr.clone(), None, false, false);
             let operand_expr_type = ctx.must_get_type(operand_expr.type_key);
 
             // Make sure the operand expression is of a pointer type.
@@ -1290,7 +1270,7 @@ fn analyze_unary_op(
         }
 
         Operator::Subtract => {
-            let operand_expr = AExpr::from(ctx, right_expr.clone(), None, false, false, false);
+            let operand_expr = AExpr::from(ctx, right_expr.clone(), None, false, false);
             let operand_expr_type = ctx.must_get_type(operand_expr.type_key);
 
             // Make sure the operand expression is of a signed numeric type since we'll
@@ -1339,19 +1319,12 @@ fn analyze_binary_op(
         None => None,
     };
 
-    let a_left = AExpr::from(
-        ctx,
-        left_expr,
-        maybe_expected_operand_tk,
-        false,
-        false,
-        false,
-    );
+    let a_left = AExpr::from(ctx, left_expr, maybe_expected_operand_tk, false, false);
 
     // If there is no expected operand type, we should try to coerce the right
     // expression to the type of the left expression.
     let expected_tk = maybe_expected_operand_tk.unwrap_or(a_left.type_key);
-    let a_right = AExpr::from(ctx, right_expr, Some(expected_tk), false, false, true);
+    let a_right = AExpr::from(ctx, right_expr, Some(expected_tk), false, true);
 
     // If we couldn't resolve both of the operand types, we'll skip any further
     // type checks by returning early.
@@ -1625,7 +1598,7 @@ mod tests {
     fn analyze_i64_literal() {
         let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
         let expr = Expression::I64Literal(I64Lit::new_with_default_pos(1));
-        let result = AExpr::from(&mut ctx, expr, None, false, false, false);
+        let result = AExpr::from(&mut ctx, expr, None, false, false);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
@@ -1641,7 +1614,7 @@ mod tests {
     fn analyze_bool_literal() {
         let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
         let expr = Expression::BoolLiteral(BoolLit::new_with_default_pos(false));
-        let result = AExpr::from(&mut ctx, expr, None, false, false, false);
+        let result = AExpr::from(&mut ctx, expr, None, false, false);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
@@ -1657,7 +1630,7 @@ mod tests {
     fn analyze_string_literal() {
         let mut ctx = ProgramContext::new_with_host_ptr_width("test", vec!["test"]);
         let expr = Expression::StrLiteral(StrLit::new_with_default_pos("test"));
-        let result = AExpr::from(&mut ctx, expr, None, false, false, false);
+        let result = AExpr::from(&mut ctx, expr, None, false, false);
         assert!(ctx.errors().is_empty());
         assert_eq!(
             result,
@@ -1677,7 +1650,6 @@ mod tests {
             &mut ctx,
             Expression::Symbol(Symbol::new_with_default_pos("myvar")),
             None,
-            false,
             false,
             false,
         );
@@ -1701,7 +1673,6 @@ mod tests {
             &mut ctx,
             Expression::Symbol(Symbol::new_with_default_pos("myvar")),
             None,
-            false,
             false,
             false,
         );
@@ -1754,7 +1725,7 @@ mod tests {
                 maybe_ret_type_key: Some(ctx.str_type_key()),
                 type_key: fn_type_key,
                 maybe_impl_type_key: None,
-                tmpl_params: None,
+                params: None,
             },
             body: AClosure::new_empty(),
         };
@@ -1770,7 +1741,7 @@ mod tests {
             vec![Expression::BoolLiteral(BoolLit::new_with_default_pos(true))],
         );
         let call_expr = Expression::FunctionCall(Box::new(fn_call.clone()));
-        let result = AExpr::from(&mut ctx, call_expr, None, false, false, false);
+        let result = AExpr::from(&mut ctx, call_expr, None, false, false);
 
         // Check that analysis succeeded.
         assert!(ctx.errors().is_empty());
@@ -1811,7 +1782,7 @@ mod tests {
                 maybe_ret_type_key: None,
                 type_key: fn_type_key,
                 maybe_impl_type_key: None,
-                tmpl_params: None,
+                params: None,
             },
             body: AClosure::new_empty(),
         };
@@ -1835,7 +1806,6 @@ mod tests {
                 ))),
             ),
             None,
-            false,
             false,
             false,
         );
@@ -1911,7 +1881,7 @@ mod tests {
                 maybe_ret_type_key: Some(ctx.bool_type_key()),
                 type_key: fn_type_key,
                 maybe_impl_type_key: None,
-                tmpl_params: None,
+                params: None,
             },
             body: AClosure::new_empty(),
         };
@@ -1929,7 +1899,6 @@ mod tests {
                 vec![Expression::BoolLiteral(BoolLit::new_with_default_pos(true))],
             ))),
             None,
-            false,
             false,
             false,
         );
@@ -2009,7 +1978,7 @@ mod tests {
                 maybe_ret_type_key: Some(ctx.bool_type_key()),
                 type_key: ctx.resolve_type(&Type::Function(Box::new(fn_sig))),
                 maybe_impl_type_key: None,
-                tmpl_params: None,
+                params: None,
             },
             body: AClosure::new_empty(),
         };
@@ -2027,7 +1996,6 @@ mod tests {
                 vec![Expression::I64Literal(I64Lit::new_with_default_pos(1))],
             ))),
             None,
-            false,
             false,
             false,
         );
@@ -2080,7 +2048,6 @@ mod tests {
             None,
             false,
             false,
-            false,
         );
 
         assert_eq!(
@@ -2125,7 +2092,6 @@ mod tests {
                 Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
             ),
             None,
-            false,
             false,
             false,
         );
@@ -2176,7 +2142,6 @@ mod tests {
             None,
             false,
             false,
-            false,
         );
 
         assert_eq!(
@@ -2211,7 +2176,6 @@ mod tests {
                 Box::new(Expression::StrLiteral(StrLit::new_with_default_pos("s"))),
             ),
             None,
-            false,
             false,
             false,
         );

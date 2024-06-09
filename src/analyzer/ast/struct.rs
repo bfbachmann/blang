@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 
@@ -28,6 +28,13 @@ impl AField {
     /// Returns a string containing the human-readable version of this struct field.
     pub fn display(&self, ctx: &ProgramContext) -> String {
         format!("{}: {}", self.name, ctx.display_type_for_key(self.type_key))
+    }
+
+    /// Converts this field type from a polymorphic (parameterized) type into a
+    /// monomorph by substituting type keys for generic types with those from the
+    /// provided parameter values.
+    pub fn monomorphize(&mut self, type_mappings: &HashMap<TypeKey, TypeKey>) {
+        self.type_key = *type_mappings.get(&self.type_key).unwrap_or(&self.type_key);
     }
 }
 
@@ -172,6 +179,23 @@ impl AStructType {
         None
     }
 
+    /// Converts this struct type from a polymorphic (parameterized) type into a
+    /// monomorph by substituting type keys for generic types with those from the
+    /// provided parameter values.
+    pub fn monomorphize(
+        &mut self,
+        _: &mut ProgramContext,
+        type_mappings: &HashMap<TypeKey, TypeKey>,
+    ) -> TypeKey {
+        for field in &mut self.fields {
+            field.monomorphize(type_mappings);
+        }
+
+        // TODO: Probably need to insert this new type into the program context
+        // here and do something with the type key it returns.
+        todo!()
+    }
+
     /// Returns a string containing the human-readable representation of the struct type.
     pub fn display(&self, ctx: &ProgramContext) -> String {
         if self.name == "" {
@@ -264,14 +288,7 @@ impl AStructInit {
             }
 
             // Analyze the value being assigned to the struct field.
-            let expr = AExpr::from(
-                ctx,
-                field_value.clone(),
-                Some(field_type),
-                false,
-                false,
-                false,
-            );
+            let expr = AExpr::from(ctx, field_value.clone(), Some(field_type), false, false);
 
             // Insert the analyzed struct field value, making sure that it was not already assigned.
             if used_field_names.insert(field_name.clone()) {

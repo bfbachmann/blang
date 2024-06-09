@@ -54,7 +54,6 @@ impl ALoop {
                 Some(ctx.bool_type_key()),
                 false,
                 false,
-                false,
             )),
             _ => None,
         };

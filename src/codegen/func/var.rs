@@ -5,6 +5,7 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::ast::var_assign::AVarAssign;
 use crate::analyzer::type_store::TypeKey;
+use crate::fmt::vec_to_string;
 use crate::parser::ast::op::Operator;
 
 use super::FnCodeGen;
@@ -41,7 +42,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Returns a pointer to the address in which the given value is stored.
     pub(crate) fn get_ptr_to(&mut self, value: &AExpr) -> PointerValue<'ctx> {
         match &value.kind {
-            AExprKind::Symbol(symbol) => self.get_var_ptr_by_name(symbol.name.as_str()),
+            AExprKind::Symbol(symbol) => self.get_var_ptr(symbol),
 
             AExprKind::MemberAccess(access) => {
                 let ll_base_ptr = self.get_ptr_to(&access.base_expr);
@@ -55,7 +56,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AExprKind::Index(index) => {
                 let ll_collection_ptr = self.get_ptr_to(&index.collection_expr);
                 let ll_index_val = self.gen_expr(&index.index_expr);
-                let collection_type = self.type_store.must_get(index.collection_expr.type_key);
+                let collection_type = self
+                    .type_converter
+                    .must_get_type(index.collection_expr.type_key);
 
                 if collection_type.is_tuple() {
                     // Handle tuple indexing the same way we handle struct member access
@@ -97,16 +100,32 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
     }
 
+    /// Computes the full symbol name based on generic parameters applied to
+    /// the symbol.
+    pub(crate) fn get_full_symbol_name(&self, symbol: &ASymbol) -> String {
+        if let Some(param_values) = &symbol.maybe_param_values {
+            let param_value_tks = param_values
+                .iter()
+                .map(|v| self.type_converter.map_type_key(v.type_key))
+                .collect();
+            format!("{}[{}]", symbol.name, vec_to_string(&param_value_tks, ","))
+        } else {
+            symbol.name.clone()
+        }
+    }
+
     /// Gets a pointer to the given variable or member.
-    pub(crate) fn get_var_ptr(&mut self, var: &ASymbol) -> PointerValue<'ctx> {
-        self.get_var_ptr_by_name(var.name.as_str())
+    pub(crate) fn get_var_ptr(&mut self, symbol: &ASymbol) -> PointerValue<'ctx> {
+        self.get_var_ptr_by_name(self.get_full_symbol_name(symbol).as_str())
     }
 
     /// Returns true if `var` refers directly to a function in this module. Note that this function
     /// will return false if `var` is has a function type, but refers to a local variable rather
     /// than a function defined within this module.
-    pub(crate) fn is_var_module_fn(&self, var: &ASymbol) -> bool {
-        self.module.get_function(var.name.as_str()).is_some()
+    pub(crate) fn is_var_module_fn(&self, symbol: &ASymbol) -> bool {
+        self.module
+            .get_function(self.get_full_symbol_name(symbol).as_str())
+            .is_some()
     }
 
     /// Gets a variable (or member) and returns its value.

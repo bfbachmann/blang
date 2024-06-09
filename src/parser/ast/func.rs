@@ -10,10 +10,10 @@ use crate::parser::ast::arg::Argument;
 use crate::parser::ast::closure::Closure;
 use crate::parser::ast::func_sig::FunctionSignature;
 use crate::parser::ast::lambda::LambdaDecl;
+use crate::parser::ast::params::{Param, Params};
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::ret::Ret;
 use crate::parser::ast::statement::Statement;
-use crate::parser::ast::tmpl_params::{TmplParam, TmplParams};
 use crate::parser::error::ParseResult;
 use crate::parser::module::Module;
 
@@ -23,7 +23,7 @@ pub struct Function {
     pub signature: FunctionSignature,
     pub body: Closure,
     pub is_pub: bool,
-    span: Span,
+    pub span: Span,
 }
 
 impl fmt::Display for Function {
@@ -98,7 +98,7 @@ impl Function {
     pub fn from_lambda(lambda: LambdaDecl) -> Self {
         let start_pos = lambda.start_pos().clone();
         let end_pos = lambda.end_pos().clone();
-        let mut tmpl_params = TmplParams::new_with_default_pos();
+        let mut params = Params::new_with_default_pos();
         let mut args = vec![];
 
         // Convert lambda arguments.
@@ -109,9 +109,9 @@ impl Function {
                 Some(typ) => typ,
                 None => {
                     let type_name = format!("{}Type", arg.name);
-                    tmpl_params
+                    params
                         .params
-                        .push(TmplParam::new_with_default_pos(type_name.as_str()));
+                        .push(Param::new_with_default_pos(type_name.as_str()));
                     Type::new_unresolved(type_name.as_str())
                 }
             };
@@ -121,20 +121,20 @@ impl Function {
 
         // Convert lambda return type.
         let ret_type_name = "R";
-        tmpl_params
+        params
             .params
-            .push(TmplParam::new_with_default_pos(ret_type_name));
+            .push(Param::new_with_default_pos(ret_type_name));
         let ret_type = Type::new_unresolved(ret_type_name);
 
         // Convert the lambda expression to a function body containing only a return statement.
         let ret_span = lambda.expr.span().clone();
         let return_statement = Statement::Return(Ret::new(Some(lambda.expr.clone()), ret_span));
 
-        let signature = FunctionSignature::new_tmpl(
+        let signature = FunctionSignature::new_parameterized(
             "",
             args,
             Some(ret_type),
-            tmpl_params,
+            params,
             Span { start_pos, end_pos },
         );
 

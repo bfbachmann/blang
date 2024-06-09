@@ -34,14 +34,7 @@ impl AIndex {
     /// Performs semantic analysis on an index expression.
     pub fn from(ctx: &mut ProgramContext, index: &Index) -> AIndex {
         // Analyze the value being indexed.
-        let collection_expr = AExpr::from(
-            ctx,
-            index.collection_expr.clone(),
-            None,
-            false,
-            false,
-            false,
-        );
+        let collection_expr = AExpr::from(ctx, index.collection_expr.clone(), None, false, false);
 
         // This value will serve as a placeholder for when we error.
         let placeholder = AIndex {
@@ -106,7 +99,6 @@ impl AIndex {
                 Some(ctx.uint_type_key()),
                 false,
                 false,
-                false,
             );
 
             // If the index expression is constant, we can perform
@@ -165,7 +157,6 @@ impl AIndex {
                 ctx,
                 index.index_expr.clone(),
                 Some(ctx.int_type_key()),
-                false,
                 false,
                 false,
             )

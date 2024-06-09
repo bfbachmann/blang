@@ -5,6 +5,7 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
+use crate::fmt::format_code_vec;
 use crate::lexer::pos::{Locatable, Position, Span};
 use crate::locatable_impl;
 use crate::parser::ast::member::MemberAccess;
@@ -32,12 +33,11 @@ impl AMemberAccess {
     /// Performs semantic analysis on the given member access expression.
     pub fn from(ctx: &mut ProgramContext, access: &MemberAccess) -> AMemberAccess {
         // Analyze the expression whose member is being accessed.
-        let mut base_expr = AExpr::from(ctx, access.expr.clone(), None, false, true, false);
-
-        // Abort early if the expression failed analysis.
+        let mut base_expr = AExpr::from(ctx, access.base_expr.clone(), None, true, false);
         let base_type = ctx.must_get_type(base_expr.type_key);
         let base_type_string = base_type.display(ctx);
 
+        // Abort early if the expression failed analysis.
         let placeholder = AMemberAccess {
             base_expr: base_expr.clone(),
             member_name: access.member_name.clone(),
@@ -78,6 +78,89 @@ impl AMemberAccess {
             // For pointer types, we'll try to use the pointee type to resolve methods
             // or member functions.
             AType::Pointer(ptr_type) => (None, ptr_type.pointee_type_key, true),
+
+            // If the base expression type is generic, it means we're accessing a
+            // method defined via a generic constraint (spec).
+            AType::Generic(generic_type) => {
+                // We need to locate the member function by searching the spec
+                // constraints for this generic type.
+                let mut matching_fns = vec![];
+                let mut matching_specs_names = vec![];
+                'next_spec: for spec_tk in &generic_type.spec_type_keys {
+                    let spec = ctx.must_get_type(*spec_tk).to_spec_type();
+                    for (fn_name, fn_tk) in &spec.member_fn_type_keys {
+                        if fn_name == access.member_name.as_str() {
+                            let fn_type = ctx.must_get_type(*fn_tk).to_fn_sig();
+                            matching_fns.push(fn_type);
+                            matching_specs_names.push(spec.name.as_str());
+                            continue 'next_spec;
+                        }
+                    }
+                }
+
+                // There may be multiple specs that have functions with matching names,
+                // or none at all.
+                match matching_fns.len() {
+                    0 => {
+                        ctx.insert_err(AnalyzeError::new(
+                            ErrorKind::UndefMember,
+                            format_code!(
+                                "type {} has no member {}",
+                                base_type_string,
+                                access.member_name
+                            )
+                            .as_str(),
+                            access,
+                        ));
+
+                        return placeholder;
+                    }
+
+                    1 => {
+                        // We found a matching member function. We just need to
+                        // change any `Self` type keys into type keys that match
+                        // the base generic type the function is being called on.
+                        let mut fn_sig = matching_fns[0].clone();
+                        fn_sig.replace_type_and_define(
+                            ctx,
+                            ctx.self_type_key(),
+                            base_expr.type_key,
+                        );
+                        (None, base_expr.type_key, false)
+                    }
+
+                    _ => {
+                        ctx.insert_err(
+                            AnalyzeError::new(
+                                ErrorKind::AmbiguousAccess,
+                                "ambiguous member access",
+                                access,
+                            )
+                            .with_detail(
+                                format!(
+                                    "{} is ambiguous because all of the following \
+                                    specs used in constraints for generic type {} contain \
+                                    functions named {}: {}.",
+                                    format_code!(access),
+                                    format_code!(generic_type.name),
+                                    format_code!(access.member_name),
+                                    format_code_vec(&matching_specs_names, ", "),
+                                )
+                                .as_str(),
+                            )
+                            .with_help(
+                                format_code!(
+                                    "Consider calling the function via its type like this: {}.",
+                                    format!("{}.{}", matching_specs_names[0], access.member_name)
+                                )
+                                .as_str(),
+                            ),
+                        );
+
+                        return placeholder;
+                    }
+                }
+            }
 
             _ => (None, base_expr.type_key, false),
         };

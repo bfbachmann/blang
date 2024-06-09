@@ -512,6 +512,7 @@ mod tests {
                                     Box::new(Expression::Symbol(Symbol {
                                         maybe_mod_name: None,
                                         name: "s".to_string(),
+                                        params: vec![],
                                         span: Span {
                                             start_pos: Position::new(2, 16),
                                             end_pos: Position::new(2, 17),
@@ -645,6 +646,7 @@ mod tests {
                     value: Expression::Symbol(Symbol {
                         maybe_mod_name: None,
                         name: "thing".to_string(),
+                        params: vec![],
                         span: Span {
                             start_pos: Position::new(2, 21),
                             end_pos: Position::new(2, 26),
@@ -659,6 +661,7 @@ mod tests {
                     Expression::Symbol(Symbol {
                         maybe_mod_name: None,
                         name: "thing".to_string(),
+                        params: vec![],
                         span: Span {
                             start_pos: Position::new(3, 14),
                             end_pos: Position::new(3, 19),

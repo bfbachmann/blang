@@ -19,12 +19,7 @@ mod tests {
             &Triple::from_str(init_target(None).unwrap().as_str().to_str().unwrap()).unwrap(),
         );
         generate(
-            analysis
-                .analyzed_modules
-                .into_iter()
-                .map(|a| a.module)
-                .collect(),
-            analysis.type_store,
+            analysis,
             &init_target(None).unwrap(),
             OutputFormat::Object,
             Path::new("/dev/null"),
@@ -264,8 +259,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "generics")]
-    fn function_template_using_specs() {
+    fn function_generic_using_specs() {
         assert_compiles(
             r#"
             extern fn write(fd: i64, msg: str, len: i64): i64
@@ -278,29 +272,27 @@ mod tests {
                 msg: str
             }
 
-            impl PrintTask {
+            impl PrintTask: Task {
                 fn run(self): bool {
                     write(1, self.msg, 100)
                     return true
                 }
             }
 
-            fn run_task(task: T): bool
-            with [T: Task] {
+            fn run_task[T: Task](task: T): bool {
                 return task.run()
             }
 
             fn main() {
                 let task = PrintTask{msg: "hello world"}
-                run_task(task)
+                run_task[PrintTask](task)
             }
         "#,
         )
     }
 
     #[test]
-    #[cfg(feature = "generics")]
-    fn templated_methods() {
+    fn functions_as_values() {
         assert_compiles(
             r#"
             extern fn exit(code: i64)
@@ -317,9 +309,7 @@ mod tests {
             }
 
             impl Calculator {
-                fn new(f: CalcFn): Calculator
-                with [CalcFn = fn (i64, i64): i64]
-                {
+                fn new(f: fn (i64, i64): i64): Calculator {
                     return Calculator{
                         calc_fn: f
                         accumulator: 0
@@ -332,11 +322,9 @@ mod tests {
                     return self
                 }
 
-                fn with_calc_fn(mut self, f: CalcFn): Calculator
-                with [CalcFn = fn (i64, i64): i64]
-                {
+                fn with_calc_fn(mut self, f: fn (i64, i64): i64): Calculator {
                     self.calc_fn = f
-                    return this
+                    return self
                 }
             }
 
@@ -366,57 +354,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "generics")]
-    fn nested_tmpl_params() {
-        assert_compiles(
-            r#"
-            fn apply(f: F, arg: T): T
-            with [
-                T,
-                F = fn (T): T,
-            ] {
-                return f(arg)
-            }
-
-            fn double(v: i64): i64 {
-                return v * 2
-            }
-
-            fn main() {
-                let result: i64 = apply(double, 1)
-            }
-        "#,
-        )
-    }
-
-    #[test]
-    #[cfg(feature = "generics")]
-    fn tmpl_param_type_remap() {
-        assert_compiles(
-            r#"
-            impl i64 {
-                fn zero(): i64 {
-                    return 0
-                }
-            }
-
-            spec Zero {
-                fn zero(): i64
-            }
-
-            fn is_zero_value(v: T): bool
-            with [T: Zero] {
-                return v == T.zero()
-            }
-
-            fn main() {
-                is_zero_value(0)
-            }
-        "#,
-        )
-    }
-
-    #[test]
     fn valid_type_cast() {
         assert_compiles(
             r#"
@@ -430,146 +367,60 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "generics")]
-    fn templated_return_types() {
+    fn generic_return_types() {
         assert_compiles(
             r#"
-            // Any type that has an associated default member function implments the
-            // Default spec.
             spec Default {
-                fn default(): T with [T]
+                fn default(): Self
             }
 
-            // Returns the default value any type that implements the Default spec.
-            fn default(): T with [T: Default] {
+            fn default[T: Default](): T {
                 return T.default()
             }
 
-            impl i64 {
-                fn default(): i64 {
-                    return 0
-                }
+            struct Thing {
+                value: int
             }
 
-            impl u64 {
-                fn default(): u64 {
-                    return 0
+            impl Thing: Default {
+                fn default(): Thing {
+                    return Thing{value: 0}
                 }
             }
 
             struct MyStruct {
-                i: i64
-                u: u64
+                thing: Thing
             }
 
-            impl MyStruct {
+            impl MyStruct: Default {
                 fn default(): MyStruct {
                     return MyStruct{
-                        i: default()
-                        u: default()
+                        thing: default[Thing]()
                     }
                 }
             }
 
             fn main() {
-                let my_struct: MyStruct = default()
+                let my_struct = default[MyStruct]()
             }
             "#,
         )
     }
 
     #[test]
-    #[cfg(feature = "generics")]
-    fn tmpl_fn_used_as_var() {
+    fn param_fn_used_as_var() {
         assert_compiles(
             r#"
-            fn test(t: T): T
-            with [T] {
-                return t
+            fn apply[T](f: fn (T): T, arg: T): T {
+                return f(arg)
             }
 
-            fn apply(f: F, t: T): T
-            with [T, F = fn (T): T] {
-                return f(t)
+            fn double(v: i64): i64 {
+                return v * 2
             }
 
             fn main() {
-                let result: i64 = test(1)
-                let t: fn (u64): u64 = test
-                let result = apply(t, 234u64)
-            }
-            "#,
-        )
-    }
-
-    #[test]
-    #[cfg(feature = "generics")]
-    fn lambda_as_variable() {
-        assert_compiles(
-            r#"
-            fn max(a: T, b: T): T
-            with [T] {
-                if a > b {
-                    return a
-                }
-                return b
-            }
-
-            fn main() {
-                let f1: fn (i64, i64): i64 = max
-                let f2: fn (u64, u64): u64 = max
-
-                let result1 = f1(-3, 4)
-                let result2 = f2(12, 642)
-            }
-            "#,
-        )
-    }
-
-    #[test]
-    #[cfg(feature = "generics")]
-    fn lambda_as_argument() {
-        assert_compiles(
-            r#"
-            fn select(selector: F, a: T, b: T): T
-            with [T, F = fn (T, T): T] {
-                return selector(a, b)
-            }
-
-            fn main() {
-                let result = select($(a, b) b, "not this", "this")
-            }
-            "#,
-        )
-    }
-
-    #[test]
-    #[cfg(feature = "generics")]
-    fn tmpl_fn_with_only_fn_arg() {
-        assert_compiles(
-            r#"
-            fn do(f: fn (T): T) with [T] {}
-
-            fn main() {
-                let f: fn (str): str = $(a) a
-                do(f)
-            }
-            "#,
-        )
-    }
-
-    #[test]
-    #[cfg(feature = "generics")]
-    fn lambda_with_fn_arg_as_variable() {
-        assert_compiles(
-            r#"
-            fn apply(f: fn (T): T, t: T): T
-            with [T] {
-                return f(t)
-            }
-
-            fn main() {
-                let a: fn (fn (str): str, str): str = apply
+                let result: i64 = apply[i64](double, 1)
             }
             "#,
         )

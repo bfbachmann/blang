@@ -1,16 +1,18 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
+use crate::fmt::vec_to_string;
 use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
+use crate::parser::ast::expr::Expression;
 use crate::parser::error::ParseResult;
 use crate::parser::module::Module;
 
-/// Represents a a named value. These can be variables, variable member accesses, functions,
-/// constants, or types.
+/// Represents a named value. These can be variables, variable member accesses, functions,
+/// constants, or types. The value can also optionally include parameters (generics).
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Symbol {
     /// Some symbols will be accessed from other imported modules. For example:
@@ -23,19 +25,27 @@ pub struct Symbol {
     /// in the symbol name and will be available via this field.
     pub maybe_mod_name: Option<String>,
     pub name: String,
+    /// Parameters are compile-time values - either generic types or constants.
+    pub params: Vec<Expression>,
     pub span: Span,
 }
 
 impl Display for Symbol {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let params = format!("[{}]", vec_to_string(&self.params, ", "));
+
         write!(
             f,
-            "{}{}",
+            "{}{}{}",
             match &self.maybe_mod_name {
                 Some(name) => format!("@{}.", name),
                 None => "".to_string(),
             },
-            self.name
+            self.name,
+            match self.params.is_empty() {
+                true => "",
+                false => params.as_str(),
+            }
         )
     }
 }
@@ -55,6 +65,7 @@ impl Symbol {
         Symbol {
             maybe_mod_name: None,
             name: name.to_string(),
+            params: vec![],
             span,
         }
     }
@@ -65,6 +76,7 @@ impl Symbol {
         Symbol {
             maybe_mod_name: Some(mod_name.to_string()),
             name: name.to_string(),
+            params: vec![],
             span: Default::default(),
         }
     }
@@ -75,6 +87,7 @@ impl Symbol {
         Symbol {
             maybe_mod_name: None,
             name: name.to_string(),
+            params: vec![],
             span: Default::default(),
         }
     }
@@ -83,11 +96,15 @@ impl Symbol {
     /// sequences of the forms:
     ///
     ///     <ident>
+    ///     <ident>[<param>, ...]
     ///     @<mod_name>.<ident>
+    ///     @<mod_name>.<ident>[<param>, ...]
     ///
     /// where
     /// - `ident` is an identifier
-    /// - `mod_name` is an identifier that represents the module the symbol comes from.
+    /// - `mod_name` is an identifier that represents the module the symbol comes from
+    /// - `param` is an expression representing a compile-time parameter (either a
+    ///   generic type or a constant.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Symbol> {
         let start_pos = Module::current_position(tokens);
 
@@ -103,9 +120,22 @@ impl Symbol {
         // Parse the symbol name.
         let name = Module::parse_identifier(tokens)?;
 
+        // Parse optional parameters.
+        let mut params = vec![];
+        if Module::parse_optional(tokens, TokenKind::LeftBracket).is_some() {
+            while !Module::next_token_is(tokens, &TokenKind::RightBracket) {
+                params.push(Expression::from(tokens)?);
+                if Module::parse_optional(tokens, TokenKind::Comma).is_none() {
+                    Module::parse_expecting(tokens, TokenKind::RightBracket)?;
+                    break;
+                }
+            }
+        }
+
         Ok(Symbol {
             maybe_mod_name,
             name,
+            params,
             span: Span {
                 start_pos,
                 end_pos: Module::prev_position(tokens),

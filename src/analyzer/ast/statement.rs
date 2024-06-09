@@ -174,15 +174,6 @@ impl AStatement {
             }
         }
     }
-
-    /// Returns true if this statement is a templated statement (and therefore should not actually
-    /// be included in the AST that results from semantic analysis).
-    pub fn is_templated(&self) -> bool {
-        match self {
-            AStatement::FunctionDeclaration(func) => func.signature.is_templated(),
-            _ => false,
-        }
-    }
 }
 
 #[cfg(test)]

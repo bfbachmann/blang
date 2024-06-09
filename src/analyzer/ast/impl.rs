@@ -2,6 +2,7 @@ use crate::analyzer::ast::func::AFn;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
+use crate::fmt::format_code_vec;
 use crate::parser::ast::r#impl::Impl;
 use crate::{format_code, util};
 
@@ -19,6 +20,8 @@ impl PartialEq for AImpl {
 }
 
 impl AImpl {
+    /// Performs semantic analysis on an `impl` block and returns the analyzed
+    /// result.
     pub fn from(ctx: &mut ProgramContext, impl_: &Impl) -> AImpl {
         // Make sure the `impl` block is not being defined inside a function.
         if ctx.is_in_fn() {
@@ -69,10 +72,59 @@ impl AImpl {
                 ctx.mark_member_fn_pub(type_key, mem_fn.signature.name.as_str());
             }
 
-            // Only add the member function if it's not templated.
-            if !a_fn.signature.is_templated() {
-                member_fns.push(a_fn);
+            member_fns.push(a_fn);
+        }
+
+        // Check that this `impl` actually implements all the specs it claims to.
+        let mut spec_impl_errs = vec![];
+        for spec in &impl_.specs {
+            let a_spec = ctx.get_spec_type(spec.maybe_mod_name.as_ref(), &spec.name);
+            if a_spec.is_none() {
+                spec_impl_errs.push(AnalyzeError::new(
+                    ErrorKind::UndefSpec,
+                    format_code!("spec {} is not defined", spec).as_str(),
+                    spec,
+                ));
+                continue;
             }
+
+            let a_spec = a_spec.unwrap();
+
+            // Collect the names of all the functions that aren't implemented
+            // from this spec.
+            let mut missing_fn_names = vec![];
+            'next_fn: for fn_type_key in a_spec.member_fn_type_keys.values() {
+                let spec_fn_sig = ctx.must_get_type(*fn_type_key).to_fn_sig();
+                for member_fn in &member_fns {
+                    if member_fn.signature.is_same_as(ctx, &spec_fn_sig) {
+                        continue 'next_fn;
+                    }
+                }
+
+                missing_fn_names.push(spec_fn_sig.name.clone());
+            }
+
+            if !missing_fn_names.is_empty() {
+                spec_impl_errs.push(
+                    AnalyzeError::new(
+                        ErrorKind::SpecNotImplemented,
+                        format_code!("spec {} not implemented", spec).as_str(),
+                        spec,
+                    )
+                    .with_detail(
+                        format!(
+                            "Missing adequate implementations for the following functions from spec {}: {}.",
+                            format_code!(spec),
+                            format_code_vec(&missing_fn_names, ", "),
+                        )
+                        .as_str(),
+                    ),
+                )
+            }
+        }
+
+        for err in spec_impl_errs {
+            ctx.insert_err(err);
         }
 
         ctx.set_cur_self_type_key(None);

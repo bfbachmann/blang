@@ -13,7 +13,7 @@ use crate::parser::module::Module;
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct From {
     pub statement: Box<Statement>,
-    span: Span,
+    pub span: Span,
 }
 
 locatable_impl!(From);

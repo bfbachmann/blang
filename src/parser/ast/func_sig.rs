@@ -6,22 +6,20 @@ use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::arg::Argument;
+use crate::parser::ast::params::Params;
 use crate::parser::ast::r#type::Type;
-use crate::parser::ast::tmpl_params::TmplParams;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::module::Module;
 use crate::{locatable_impl, util};
 
-/// Represents the name, arguments, and return type of a function. Anonymous functions have empty
-/// names.
+/// Represents the name, arguments, and return type of a function. Anonymous functions
+/// have empty names.
 #[derive(Debug, Clone, Eq)]
 pub struct FunctionSignature {
     pub name: String,
     pub args: Vec<Argument>,
     pub maybe_ret_type: Option<Type>,
-    /// Function template parameters will be Some if this is a templated function (a function with
-    /// generics).
-    pub tmpl_params: Option<TmplParams>,
+    pub params: Option<Params>,
     span: Span,
 }
 
@@ -37,8 +35,8 @@ impl Hash for FunctionSignature {
             typ.hash(state);
         }
 
-        if let Some(tmpl_params) = &self.tmpl_params {
-            tmpl_params.hash(state);
+        if let Some(params) = &self.params {
+            params.hash(state);
         }
     }
 }
@@ -68,7 +66,7 @@ impl PartialEq for FunctionSignature {
         self.name == other.name
             && util::vecs_eq(&self.args, &other.args)
             && self.maybe_ret_type == other.maybe_ret_type
-            && util::opts_eq(&self.tmpl_params, &other.tmpl_params)
+            && util::opts_eq(&self.params, &other.params)
     }
 }
 
@@ -83,7 +81,7 @@ impl FunctionSignature {
     ) -> Self {
         FunctionSignature {
             name: name.to_string(),
-            tmpl_params: None,
+            params: None,
             args,
             maybe_ret_type: return_type,
             span: Default::default(),
@@ -94,24 +92,24 @@ impl FunctionSignature {
     pub fn new(name: &str, args: Vec<Argument>, return_type: Option<Type>, span: Span) -> Self {
         FunctionSignature {
             name: name.to_string(),
-            tmpl_params: None,
+            params: None,
             args,
             maybe_ret_type: return_type,
             span,
         }
     }
 
-    /// Creates a new templated function signature for a named function.
-    pub fn new_tmpl(
+    /// Creates a new parameterized function signature for a named function.
+    pub fn new_parameterized(
         name: &str,
         args: Vec<Argument>,
         return_type: Option<Type>,
-        tmpl_params: TmplParams,
+        params: Params,
         span: Span,
     ) -> Self {
         FunctionSignature {
             name: name.to_string(),
-            tmpl_params: Some(tmpl_params),
+            params: Some(params),
             args,
             maybe_ret_type: return_type,
             span,
@@ -122,7 +120,7 @@ impl FunctionSignature {
     pub fn new_anon(args: Vec<Argument>, return_type: Option<Type>, span: Span) -> Self {
         FunctionSignature {
             name: "".to_string(),
-            tmpl_params: None,
+            params: None,
             args,
             maybe_ret_type: return_type,
             span,
@@ -131,13 +129,12 @@ impl FunctionSignature {
 
     /// Parses function signatures. Expects token sequences of the forms
     ///
-    ///      fn <fn_name>(<arg_name>: <arg_type>, ...): <return_type>
-    ///      fn <fn_name>(<arg_name>: <arg_type>, ...)
-    ///      fn <fn_name>(<arg_name>: <arg_type>, ...): <return_type> with <tmpl_params>
-    ///      fn <fn_name>(<arg_name>: <arg_type>, ...) with <tmpl_params>
+    ///      fn <fn_name><params>(<arg_name>: <arg_type>, ...): <return_type>
+    ///      fn <fn_name><params>(<arg_name>: <arg_type>, ...)
+    ///      fn <fn_name><params>(<arg_name>: <arg_type>, ...): <return_type>
     ///
     /// where
-    ///  - `tmpl_params` are optional template parameters (see `TmplParams::from`)
+    ///  - `params` are optional generic parameters (see `Params::from`)
     ///  - `fn_name` is an identifier representing the name of the function
     ///  - `arg_type` is the type of the argument
     ///  - `arg_name` is an identifier representing the argument name
@@ -148,44 +145,27 @@ impl FunctionSignature {
             .span
             .start_pos;
 
-        // Parse the rest of the function signature.
-        let mut sig = FunctionSignature::from_name_args_and_return(tokens)?;
-
-        // Parse the optional template parameters.
-        let tmpl_params = match Module::parse_optional(tokens, TokenKind::With) {
-            Some(_) => {
-                tokens.rewind(1);
-                Some(TmplParams::from(tokens)?)
-            }
-            None => None,
-        };
-
-        sig.span.start_pos = start_pos;
-        sig.tmpl_params = tmpl_params;
-
-        Ok(sig)
-    }
-
-    /// Parses the name, arguments, and return type of a function signature. Expects token
-    /// sequences of the same forms as `from`, only without the leading `fn` token.
-    pub fn from_name_args_and_return(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let start_pos = Module::current_position(tokens);
         let fn_name = Module::parse_identifier(tokens)?;
+
+        // Parse the optional generic parameters.
+        let params = match Module::next_token_is(tokens, &TokenKind::LeftBracket) {
+            true => Some(Params::from(tokens)?),
+            false => None,
+        };
 
         // The next tokens should represent function arguments and optional return type.
         let fn_sig = FunctionSignature::from_args_and_return(tokens, true)?;
 
-        let span = Span {
-            start_pos,
-            end_pos: fn_sig.end_pos().clone(),
-        };
-
-        Ok(FunctionSignature::new(
-            fn_name.as_str(),
-            fn_sig.args,
-            fn_sig.maybe_ret_type,
-            span,
-        ))
+        Ok(FunctionSignature {
+            name: fn_name,
+            args: fn_sig.args,
+            maybe_ret_type: fn_sig.maybe_ret_type,
+            params,
+            span: Span {
+                start_pos,
+                end_pos: fn_sig.span.end_pos,
+            },
+        })
     }
 
     /// Parses anonymous function signatures. If `named` is true, expects token sequences of the

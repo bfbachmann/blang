@@ -536,7 +536,7 @@ impl CFGAnalyzer<'_> {
         }
 
         // Uncomment to view CFG debug info.
-        // print!("___ {} ___\n{analyzer}", module.path);
+        // print!("___{}___\n{analyzer}", func.signature.name);
     }
 
     /// Checks the given cycle (a list of block IDs that forms a loop) for moves

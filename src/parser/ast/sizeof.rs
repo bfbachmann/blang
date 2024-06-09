@@ -16,7 +16,7 @@ use crate::parser::module::Module;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SizeOf {
     pub typ: Type,
-    span: Span,
+    pub span: Span,
 }
 
 impl Display for SizeOf {

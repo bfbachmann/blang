@@ -80,7 +80,7 @@ impl ArrayType {
 pub struct ArrayInit {
     pub values: Vec<Expression>,
     pub maybe_repeat_expr: Option<Expression>,
-    span: Span,
+    pub span: Span,
 }
 
 locatable_impl!(ArrayInit);

@@ -177,7 +177,7 @@ pub struct EnumVariantInit {
     pub enum_type: Type,
     pub variant_name: String,
     pub maybe_value: Option<Box<Expression>>,
-    span: Span,
+    pub span: Span,
 }
 
 impl PartialEq for EnumVariantInit {

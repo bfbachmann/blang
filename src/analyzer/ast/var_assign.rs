@@ -28,7 +28,7 @@ impl AVarAssign {
     /// of it.
     pub fn from(ctx: &mut ProgramContext, assign: &VariableAssignment) -> Self {
         // Analyze the expression representing the target value of the assignment.
-        let target = AExpr::from(ctx, assign.target.clone(), None, false, false, false);
+        let target = AExpr::from(ctx, assign.target.clone(), None, false, false);
 
         // Check that we can actually assign to the target (it must be a mutable variable, or
         // it must be writing to memory via a `*mut _`). We skip this check if the target
@@ -47,7 +47,6 @@ impl AVarAssign {
             ctx,
             assign.value.clone(),
             maybe_expected_right_type_key,
-            false,
             false,
             false,
         );

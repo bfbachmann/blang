@@ -41,6 +41,15 @@ impl Display for AEnumTypeVariant {
 }
 
 impl AEnumTypeVariant {
+    /// Converts this variant from a polymorphic (parameterized) type into a
+    /// monomorph by substituting type keys for generic types with those from the
+    /// provided parameter values.
+    pub fn monomorphize(&mut self, type_mappings: &HashMap<TypeKey, TypeKey>) {
+        if let Some(tk) = &mut self.maybe_type_key {
+            *tk = *type_mappings.get(&tk).unwrap_or(tk);
+        }
+    }
+
     /// Returns a string containing the human-readable version of this enum variant.
     pub fn display(&self, ctx: &ProgramContext) -> String {
         let mut s = format!("{}", self.name);
@@ -197,6 +206,23 @@ impl AEnumType {
         a_enum
     }
 
+    /// Converts this enum type from a polymorphic (parameterized) type into a
+    /// monomorph by substituting type keys for generic types with those from the
+    /// provided parameter values.
+    pub fn monomorphize(
+        &mut self,
+        _: &mut ProgramContext,
+        type_mappings: &HashMap<TypeKey, TypeKey>,
+    ) -> TypeKey {
+        for (_, variant) in &mut self.variants {
+            variant.monomorphize(type_mappings);
+        }
+
+        // TODO: Probably need to insert this new type into the program context
+        // here and do something with the type key it returns.
+        todo!()
+    }
+
     /// Returns a string containing the human-readable version of this enum type.
     pub fn display(&self, ctx: &ProgramContext) -> String {
         let mut s = format!("{} {} {{", TokenKind::Enum, self.name);
@@ -340,7 +366,6 @@ impl AEnumVariantInit {
                     ctx,
                     value.as_ref().clone(),
                     variant.maybe_type_key,
-                    false,
                     false,
                     false,
                 )))

@@ -1,0 +1,57 @@
+use {exit}: "std/libc/proc.bl"
+
+use {assert}: "src/tests/test_utils.bl"
+
+spec ToStr {
+    fn to_str(*self): str
+}
+
+spec Default {
+    fn default(): Self
+}
+
+fn get_default_str[T: Default + ToStr](): str {
+    return get_str[T](T.default())
+}
+
+fn get_str[T: ToStr](t: T): str {
+    return t.to_str()
+}
+
+struct Thing {
+    s: str
+}
+
+impl Thing: Default + ToStr {
+    fn default(): Thing {
+        return Thing{s: "default\0"}
+    }
+
+    fn to_str(*self): str {
+        return self^.s
+    }
+}
+
+fn heap[T](t: T): *mut T {
+    let ptr = heap_alloc[T]()
+    ptr^ = t
+    return ptr
+}
+
+fn heap_alloc[T](): *mut T {
+    return malloc(sizeof T) as *mut T
+}
+
+fn heap_free[T](t: *T) {
+    free(t as *u8)
+}
+
+fn main() {
+    assert(get_default_str[Thing]() == "default\0", "expected \"default\"\0")
+
+    let thing_ptr = heap[Thing](Thing{msg: "bing bong!\0"})
+    assert(thing_ptr^.s == "bing bong!\0", "expected \"bing bong!\"\0")
+    heap_free[Thing](thing_ptr)
+
+    exit(0)
+}

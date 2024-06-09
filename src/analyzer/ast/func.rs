@@ -1,11 +1,12 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fmt::Formatter;
+use std::hash::{Hash, Hasher};
 
 use crate::analyzer::ast::arg::AArg;
 use crate::analyzer::ast::closure::{check_closure_returns, AClosure};
+use crate::analyzer::ast::params::AParams;
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::ast::tmpl_params::ATmplParams;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
@@ -15,7 +16,7 @@ use crate::parser::ast::func_sig::FunctionSignature;
 use crate::util;
 
 /// Represents a semantically valid function signature.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct AFnSig {
     pub name: String,
     /// The mangled name is the full name of the function that may include information about
@@ -29,22 +30,35 @@ pub struct AFnSig {
     pub type_key: TypeKey,
     /// The type key of the parent type if this is a member function.
     pub maybe_impl_type_key: Option<TypeKey>,
-    /// Optional template parameters (generics) for this function.
-    pub tmpl_params: Option<ATmplParams>,
+    /// Optional parameters (generics) for this function.
+    pub params: Option<AParams>,
+}
+
+impl Hash for AFnSig {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.mangled_name.hash(state);
+        self.args.hash(state);
+        self.maybe_ret_type_key.hash(state);
+        self.maybe_impl_type_key.hash(state);
+        self.params.hash(state);
+    }
 }
 
 impl PartialEq for AFnSig {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
+            && self.mangled_name == other.mangled_name
             && util::vecs_eq(&self.args, &other.args)
             && util::opts_eq(&self.maybe_ret_type_key, &other.maybe_ret_type_key)
-            && util::opts_eq(&self.tmpl_params, &other.tmpl_params)
+            && self.maybe_impl_type_key == other.maybe_impl_type_key
+            && util::opts_eq(&self.params, &other.params)
     }
 }
 
 impl fmt::Display for AFnSig {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "fn {}(", self.name)?;
+        write!(f, "fn {}(", self.mangled_name)?;
 
         for (i, arg) in self.args.iter().enumerate() {
             write!(f, "{}", arg)?;
@@ -66,14 +80,42 @@ impl AFnSig {
     /// Analyzes a function signature and returns a semantically valid, type-rich function
     /// signature.
     pub fn from(ctx: &mut ProgramContext, sig: &FunctionSignature) -> Self {
-        // If the function has template parameters, we need to analyze them first.
-        let tmpl_params = match &sig.tmpl_params {
-            Some(params) => Some(ATmplParams::from(ctx, params)),
+        let maybe_impl_type_key = ctx.get_cur_self_type_key();
+        let mangled_name = Self::get_mangled_name(ctx, maybe_impl_type_key, sig.name.as_str());
+
+        // Create a mostly-empty function type and insert it into the program context.
+        // We'll fill in the details later, we just need a type key for it now.
+        let mut a_fn_sig = AFnSig {
+            name: sig.name.to_string(),
+            mangled_name,
+            args: vec![],
+            maybe_ret_type_key: None,
+            type_key: ctx.unknown_type_key(),
+            maybe_impl_type_key,
+            params: None,
+        };
+        a_fn_sig.type_key = ctx.force_insert_type(AType::from_fn_sig(a_fn_sig.clone()));
+        if a_fn_sig.name == "get_default_str" {
+            println!(
+                "force inserted {} -> {}",
+                a_fn_sig.type_key,
+                a_fn_sig.display(ctx)
+            );
+        }
+
+        // If the function has generic parameters, we need to analyze them first
+        // and store them in the program context. We'll need them when analyzing
+        // argument types.
+        a_fn_sig.params = match &sig.params {
+            Some(params) => {
+                let a_params = AParams::from(ctx, params, a_fn_sig.type_key);
+                ctx.push_params(a_params.clone());
+                Some(a_params)
+            }
             None => None,
         };
 
         // Analyze the arguments.
-        let mut args = vec![];
         let mut arg_names = HashSet::new();
         for arg in &sig.args {
             // Make sure the argument name wasn't already used if it's not empty.
@@ -97,37 +139,30 @@ impl AFnSig {
             }
 
             let a_arg = AArg::from(ctx, &arg);
-            args.push(a_arg);
+            a_fn_sig.args.push(a_arg);
         }
 
         // Analyze the return type.
-        let return_type = match &sig.maybe_ret_type {
+        a_fn_sig.maybe_ret_type_key = match &sig.maybe_ret_type {
             Some(typ) => Some(ctx.resolve_type(typ)),
             None => None,
         };
 
-        let maybe_impl_type_key = ctx.get_cur_self_type_key();
-        let mut a_fn_sig = AFnSig {
-            name: sig.name.to_string(),
-            mangled_name: Self::get_mangled_name(ctx, maybe_impl_type_key, sig.name.as_str()),
-            args,
-            maybe_ret_type_key: return_type,
-            type_key: 0, // This will be replaced below after we insert it into the program context.
-            maybe_impl_type_key,
-            tmpl_params,
-        };
-
-        // Add the function as a resolved type to the program context. This is done because
-        // functions can be used as variables and therefore need types.
-        a_fn_sig.type_key = ctx.insert_type(AType::from_fn_sig(a_fn_sig.clone()));
+        // Replace the type now that it has been fully analyzed.
         ctx.replace_type(a_fn_sig.type_key, AType::from_fn_sig(a_fn_sig.clone()));
+
+        // We can clear the params from the program context now that we're
+        // done analyzing this signature.
+        if a_fn_sig.params.is_some() {
+            ctx.pop_params();
+        }
 
         a_fn_sig
     }
 
     /// Returns the fully qualified name of this function. If it's a regular function, this will
     /// just be the function name. If it's a member function, it will be `<type>.<fn_name>`.
-    /// If it's a templated function, argument types and the return type will be appended to the
+    /// If it's a generic function, argument types and the return type will be appended to the
     /// function name.
     fn get_mangled_name(
         ctx: &ProgramContext,
@@ -137,15 +172,53 @@ impl AFnSig {
         match maybe_impl_type_key {
             Some(type_key) => {
                 let impl_type = ctx.must_get_type(type_key);
-                format!("{}.{}", impl_type.name(), fn_name)
+                format!("{}.{}", impl_type.name(), ctx.mangle_fn_name(fn_name))
             }
-            None => ctx.mangle_name(fn_name),
+            None => ctx.mangle_fn_name(fn_name),
         }
     }
 
-    /// Returns true if this function signature has template parameters.
-    pub fn is_templated(&self) -> bool {
-        self.tmpl_params.is_some()
+    /// Returns true if this function signature has generic parameters.
+    pub fn is_parameterized(&self) -> bool {
+        self.params.is_some()
+    }
+
+    /// Converts this function signature from a polymorphic (parameterized) type
+    /// into a monomorph by substituting type keys for generic types with those
+    /// from the provided parameter values.
+    pub fn monomorphize(
+        &mut self,
+        ctx: &mut ProgramContext,
+        type_mappings: &HashMap<TypeKey, TypeKey>,
+    ) -> TypeKey {
+        self.replace_type_keys(ctx, type_mappings);
+
+        // Add monomorphized types to the name to disambiguate it from other
+        // monomorphized instances of this function.
+        self.mangled_name += "[";
+        if let Some(params) = &self.params {
+            for (i, param) in params.params.iter().enumerate() {
+                if let Some(generic_tk) = &param.maybe_generic_type_key {
+                    if let Some(mono_tk) = type_mappings.get(generic_tk) {
+                        if i == 0 {
+                            self.mangled_name += format!("{}", mono_tk).as_str();
+                        } else {
+                            self.mangled_name += format!(",{}", mono_tk).as_str();
+                        }
+                    }
+                }
+            }
+        }
+        self.mangled_name += "]";
+
+        // Remove parameters from the signature now that they're no longer relevant.
+        self.params = None;
+
+        // Define the new type in the program context.
+        let new_fn_type_key = ctx.insert_type(AType::Function(Box::new(self.clone())));
+        self.type_key = new_fn_type_key;
+        ctx.replace_type(new_fn_type_key, AType::Function(Box::new(self.clone())));
+        new_fn_type_key
     }
 
     /// Returns true if `other` has arguments of the same type in the same order and the
@@ -156,56 +229,116 @@ impl AFnSig {
         }
 
         for (this_arg, other_arg) in self.args.iter().zip(other.args.iter()) {
-            // Skip the more complex arg type check if the type keys already match.
-            if this_arg.type_key == other_arg.type_key {
-                continue;
-            }
-
-            let this_type = ctx.must_get_type(this_arg.type_key);
-            let other_type = ctx.must_get_type(other_arg.type_key);
-            if !this_type.is_same_as(ctx, other_type, false) {
+            if this_arg.type_key != other_arg.type_key && {
+                let this_type = ctx.must_get_type(this_arg.type_key);
+                let other_type = ctx.must_get_type(other_arg.type_key);
+                !this_type.is_same_as(ctx, other_type, false)
+            } {
                 return false;
             }
         }
 
-        // Skip the more complex return type check if the return type keys already match.
-        if util::opts_eq(&self.maybe_ret_type_key, &other.maybe_ret_type_key) {
-            return true;
+        match (self.maybe_ret_type_key, other.maybe_ret_type_key) {
+            (None, None) => true,
+            (Some(this_ret_tk), Some(other_ret_tk)) => {
+                this_ret_tk == other_ret_tk || {
+                    let this_ret_type = ctx.must_get_type(this_ret_tk);
+                    let other_ret_type = ctx.must_get_type(other_ret_tk);
+                    this_ret_type.is_same_as(ctx, other_ret_type, false)
+                }
+            }
+            _ => false,
         }
-
-        let this_ret_type = match &self.maybe_ret_type_key {
-            Some(tk) => Some(ctx.must_get_type(*tk)),
-            None => None,
-        };
-
-        let other_ret_type = match &other.maybe_ret_type_key {
-            Some(tk) => Some(ctx.must_get_type(*tk)),
-            None => None,
-        };
-
-        util::opts_eq(&this_ret_type, &other_ret_type)
     }
 
-    /// Returns a string containing the human-readable version of this function signature.
-    /// If `as_type` is true, the function signature will be displayed as a type (without the name
-    /// and arg names).
-    pub fn display(&self, ctx: &ProgramContext, as_type: bool) -> String {
-        let name = if as_type { "" } else { self.name.as_str() };
-        let mut s = format!("fn {}(", name);
+    /// Updates this function signature by replacing any instances of the
+    /// `target_type_key`  type inside it with `replacement_type_key`. Also
+    /// records the new function signature as a new type in the program context.
+    pub fn replace_type_and_define(
+        &mut self,
+        ctx: &mut ProgramContext,
+        target_type_key: TypeKey,
+        replacement_type_key: TypeKey,
+    ) {
+        // Do the type replacements.
+        self.replace_type_keys(
+            ctx,
+            &HashMap::from([(target_type_key, replacement_type_key)]),
+        );
 
-        for (i, arg) in self.args.iter().enumerate() {
-            s += format!("{}", arg.display(ctx, as_type)).as_str();
+        // Re-mangle the name based on the updated type info.
+        self.mangled_name =
+            Self::get_mangled_name(ctx, self.maybe_impl_type_key, self.name.as_str());
 
-            if i != self.args.len() - 1 {
-                s += format!(", ").as_str();
+        // Define the new type in the program context.
+        let new_fn_type_key = ctx.insert_type(AType::Function(Box::new(self.clone())));
+        self.type_key = new_fn_type_key;
+        ctx.replace_type(new_fn_type_key, AType::Function(Box::new(self.clone())));
+    }
+
+    /// Updates this function signature by recursively replacing any type keys
+    /// inside it based on `type_mappings` that maps target type key to replacement
+    /// type key.
+    fn replace_type_keys(
+        &mut self,
+        ctx: &mut ProgramContext,
+        type_mappings: &HashMap<TypeKey, TypeKey>,
+    ) {
+        fn maybe_replace_tks(
+            ctx: &mut ProgramContext,
+            tk: &mut TypeKey,
+            type_mappings: &HashMap<TypeKey, TypeKey>,
+        ) {
+            if let Some(replacement_tk) = type_mappings.get(tk) {
+                *tk = *replacement_tk;
+                return;
+            }
+
+            let typ = ctx.must_get_type(*tk);
+            if typ.is_composite() || typ.is_ptr() || typ.is_fn() {
+                *tk = typ.clone().monomorphize(ctx, type_mappings);
             }
         }
 
-        if let Some(tk) = &self.maybe_ret_type_key {
-            s + format!("): {}", ctx.must_get_type(*tk).display(ctx)).as_str()
-        } else {
-            s + format!(")").as_str()
+        for arg in &mut self.args {
+            maybe_replace_tks(ctx, &mut arg.type_key, type_mappings);
         }
+
+        if let Some(ret_type_key) = &mut self.maybe_ret_type_key {
+            maybe_replace_tks(ctx, ret_type_key, type_mappings);
+        }
+
+        if let Some(impl_type_key) = &mut self.maybe_impl_type_key {
+            maybe_replace_tks(ctx, impl_type_key, type_mappings);
+        }
+    }
+
+    /// Returns a string containing the human-readable version of this function signature.
+    pub fn display(&self, ctx: &ProgramContext) -> String {
+        let name = self.name.as_str();
+        let mut s = format!("fn {}", name);
+
+        if let Some(params) = &self.params {
+            s += params.display(ctx).as_str();
+        }
+
+        s += "(";
+
+        for (i, arg) in self.args.iter().enumerate() {
+            if i == 0 {
+                s += format!("{}", arg.display(ctx)).as_str();
+            } else {
+                s += format!(", {}", arg.display(ctx)).as_str();
+            }
+        }
+
+        s += ")";
+
+        if let Some(tk) = &self.maybe_ret_type_key {
+            s += format!(": {}", ctx.must_get_type(*tk).display(ctx)).as_str();
+        }
+
+        s
     }
 }
 
@@ -225,7 +358,7 @@ pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) {
     {
         ctx.insert_err(AnalyzeError::new(
             ErrorKind::DuplicateFunction,
-            format_code!("{} was already defined", sig.name).as_str(),
+            format_code!("{} is already defined", sig.name).as_str(),
             sig,
         ));
     } else {
@@ -249,7 +382,14 @@ impl fmt::Display for AFn {
 impl AFn {
     /// Performs semantic analysis on the given function and returns an analyzed version of it.
     pub fn from(ctx: &mut ProgramContext, func: &Function) -> Self {
-        let signature = AFnSig::from(ctx, &func.signature);
+        // If the function signature has already been analyzed, there is no need
+        // to re-analyze it. This will be the case for regular functions defined
+        // at the top level of the module. It will not be the case for nested
+        // functions and methods.
+        let signature = match ctx.get_defined_fn_sig(None, func.signature.name.as_str()) {
+            Some(sig) if ctx.get_cur_self_type_key().is_none() => sig.clone(),
+            _ => AFnSig::from(ctx, &func.signature),
+        };
 
         // Make sure there isn't already another function by the same name. There are already
         // checks for regular function name collisions in `analyze_fn_sig`, but those
@@ -257,19 +397,16 @@ impl AFn {
         if ctx.get_fn(None, signature.mangled_name.as_str()).is_some() {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::DuplicateFunction,
-                format_code!("{} was already defined", &signature.name).as_str(),
+                format_code!("{} is already defined", &signature.name).as_str(),
                 &func.signature,
             ));
         }
 
-        // Templated functions will be rendered and analyzed when we analyze statements or
-        // expressions where they're used. This way, we can use information from the context in
-        // which they're used to render and check templated values.
-        if func.signature.tmpl_params.is_some() {
-            return AFn {
-                signature,
-                body: AClosure::new_empty(),
-            };
+        // Before we analyze the function body, we'll define the function
+        // signature parameters in the program context so they can be resolved
+        // during function body analysis.
+        if let Some(params) = &signature.params {
+            ctx.push_params(params.clone());
         }
 
         // Analyze the function body.
@@ -299,6 +436,12 @@ impl AFn {
             }
         }
 
+        // Remove the function signature params now that we're done analyzing
+        // the function.
+        if signature.params.is_some() {
+            ctx.pop_params();
+        }
+
         AFn {
             signature,
             body: a_closure,
@@ -307,6 +450,6 @@ impl AFn {
 
     /// Returns the human-readable version fo this function.
     pub fn display(&self, ctx: &ProgramContext) -> String {
-        format!("{} {{...}}", self.signature.display(ctx, false))
+        format!("{} {{ ... }}", self.signature.display(ctx))
     }
 }

@@ -443,12 +443,7 @@ fn compile(
     // Compile the program.
     let generate_start = Instant::now();
     if let Err(e) = generate(
-        prog_analysis
-            .analyzed_modules
-            .into_iter()
-            .map(|s| s.module)
-            .collect(),
-        prog_analysis.type_store,
+        prog_analysis,
         &target_triple,
         output_format,
         dst.as_path(),
@@ -507,12 +502,7 @@ fn run(src_path: &str, target_triple: &TargetTriple) {
 
     // Compile the program.
     if let Err(e) = generate(
-        prog_analysis
-            .analyzed_modules
-            .into_iter()
-            .map(|s| s.module)
-            .collect(),
-        prog_analysis.type_store,
+        prog_analysis,
         target_triple,
         OutputFormat::Executable,
         dst.as_path(),

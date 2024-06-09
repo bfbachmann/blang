@@ -51,7 +51,6 @@ impl AArrayType {
             Some(ctx.uint_type_key()),
             false,
             false,
-            false,
         );
 
         // Try to evaluate the length expression as a constant `uint`. We'll skip this step if the
@@ -173,7 +172,6 @@ impl AArrayInit {
                 maybe_expected_element_type_key,
                 false,
                 false,
-                false,
             );
             contained_values.push(expr);
         }
@@ -223,7 +221,6 @@ impl AArrayInit {
                     ctx,
                     repeat_expr.clone(),
                     Some(ctx.uint_type_key()),
-                    false,
                     false,
                     false,
                 );

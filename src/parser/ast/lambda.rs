@@ -9,7 +9,7 @@ use crate::parser::error::ParseResult;
 use crate::parser::module::Module;
 
 /// Represents a lambda function argument declaration. Lambda arguments may or may not have defined
-/// types. Arguments without types will be treated as templated (generic) arguments.
+/// types. Arguments without types will be treated as generic arguments.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LambdaArg {
     pub name: String,
