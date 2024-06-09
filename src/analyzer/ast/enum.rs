@@ -44,10 +44,29 @@ impl AEnumTypeVariant {
     /// Converts this variant from a polymorphic (parameterized) type into a
     /// monomorph by substituting type keys for generic types with those from the
     /// provided parameter values.
-    pub fn monomorphize(&mut self, type_mappings: &HashMap<TypeKey, TypeKey>) {
-        if let Some(tk) = &mut self.maybe_type_key {
-            *tk = *type_mappings.get(&tk).unwrap_or(tk);
+    pub fn monomorphize(
+        &mut self,
+        ctx: &mut ProgramContext,
+        type_mappings: &HashMap<TypeKey, TypeKey>,
+    ) -> bool {
+        if self.maybe_type_key.is_none() {
+            return false;
         }
+
+        let variant_tk = self.maybe_type_key.unwrap();
+
+        if let Some(replacement_tk) = type_mappings.get(&variant_tk) {
+            self.maybe_type_key = Some(*replacement_tk);
+            return true;
+        }
+
+        let variant_type = ctx.must_get_type(variant_tk);
+        if let Some(replacement_tk) = variant_type.clone().monomorphize(ctx, type_mappings) {
+            self.maybe_type_key = Some(replacement_tk);
+            return true;
+        }
+
+        false
     }
 
     /// Returns a string containing the human-readable version of this enum variant.
@@ -211,16 +230,20 @@ impl AEnumType {
     /// provided parameter values.
     pub fn monomorphize(
         &mut self,
-        _: &mut ProgramContext,
+        ctx: &mut ProgramContext,
         type_mappings: &HashMap<TypeKey, TypeKey>,
-    ) -> TypeKey {
+    ) -> Option<TypeKey> {
+        let mut replaced_tks = false;
+
         for (_, variant) in &mut self.variants {
-            variant.monomorphize(type_mappings);
+            replaced_tks = replaced_tks || variant.monomorphize(ctx, type_mappings);
         }
 
-        // TODO: Probably need to insert this new type into the program context
-        // here and do something with the type key it returns.
-        todo!()
+        if replaced_tks {
+            return Some(ctx.insert_type(AType::Enum(self.clone())));
+        }
+
+        None
     }
 
     /// Returns a string containing the human-readable version of this enum type.

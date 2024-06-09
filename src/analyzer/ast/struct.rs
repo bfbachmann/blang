@@ -29,13 +29,6 @@ impl AField {
     pub fn display(&self, ctx: &ProgramContext) -> String {
         format!("{}: {}", self.name, ctx.display_type_for_key(self.type_key))
     }
-
-    /// Converts this field type from a polymorphic (parameterized) type into a
-    /// monomorph by substituting type keys for generic types with those from the
-    /// provided parameter values.
-    pub fn monomorphize(&mut self, type_mappings: &HashMap<TypeKey, TypeKey>) {
-        self.type_key = *type_mappings.get(&self.type_key).unwrap_or(&self.type_key);
-    }
 }
 
 /// Represents a semantically valid and type-rich structure.
@@ -184,16 +177,29 @@ impl AStructType {
     /// provided parameter values.
     pub fn monomorphize(
         &mut self,
-        _: &mut ProgramContext,
+        ctx: &mut ProgramContext,
         type_mappings: &HashMap<TypeKey, TypeKey>,
-    ) -> TypeKey {
+    ) -> Option<TypeKey> {
+        let mut replaced_tks = false;
+
         for field in &mut self.fields {
-            field.monomorphize(type_mappings);
+            if let Some(replacement_tk) = type_mappings.get(&field.type_key) {
+                field.type_key = *replacement_tk;
+                replaced_tks = true;
+            }
+
+            let field_type = ctx.must_get_type(field.type_key);
+            if let Some(replacement_tk) = field_type.clone().monomorphize(ctx, type_mappings) {
+                field.type_key = replacement_tk;
+                replaced_tks = true;
+            }
         }
 
-        // TODO: Probably need to insert this new type into the program context
-        // here and do something with the type key it returns.
-        todo!()
+        if replaced_tks {
+            return Some(ctx.insert_type(AType::Struct(self.clone())));
+        }
+
+        None
     }
 
     /// Returns a string containing the human-readable representation of the struct type.

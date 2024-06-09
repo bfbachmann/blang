@@ -277,38 +277,52 @@ impl AFnSig {
     /// Updates this function signature by recursively replacing any type keys
     /// inside it based on `type_mappings` that maps target type key to replacement
     /// type key.
+    /// Returns true if the type was changed at all.
     fn replace_type_keys(
         &mut self,
         ctx: &mut ProgramContext,
         type_mappings: &HashMap<TypeKey, TypeKey>,
-    ) {
-        fn maybe_replace_tks(
+    ) -> bool {
+        fn maybe_replace_tk(
             ctx: &mut ProgramContext,
             tk: &mut TypeKey,
             type_mappings: &HashMap<TypeKey, TypeKey>,
-        ) {
+        ) -> bool {
             if let Some(replacement_tk) = type_mappings.get(tk) {
                 *tk = *replacement_tk;
-                return;
+                return true;
             }
 
             let typ = ctx.must_get_type(*tk);
-            if typ.is_composite() || typ.is_ptr() || typ.is_fn() {
-                *tk = typ.clone().monomorphize(ctx, type_mappings);
+            if let Some(replacement_tk) = typ.clone().monomorphize(ctx, type_mappings) {
+                *tk = replacement_tk;
+                return true;
+            }
+
+            false
+        }
+
+        let mut replaced_tks = false;
+
+        for arg in &mut self.args {
+            if maybe_replace_tk(ctx, &mut arg.type_key, type_mappings) {
+                replaced_tks = true;
             }
         }
 
-        for arg in &mut self.args {
-            maybe_replace_tks(ctx, &mut arg.type_key, type_mappings);
-        }
-
         if let Some(ret_type_key) = &mut self.maybe_ret_type_key {
-            maybe_replace_tks(ctx, ret_type_key, type_mappings);
+            if maybe_replace_tk(ctx, ret_type_key, type_mappings) {
+                replaced_tks = true;
+            }
         }
 
         if let Some(impl_type_key) = &mut self.maybe_impl_type_key {
-            maybe_replace_tks(ctx, impl_type_key, type_mappings);
+            if maybe_replace_tk(ctx, impl_type_key, type_mappings) {
+                replaced_tks = true;
+            }
         }
+
+        replaced_tks
     }
 
     /// Returns a string containing the human-readable version of this function signature.

@@ -269,16 +269,16 @@ impl AType {
         mut self,
         ctx: &mut ProgramContext,
         type_mappings: &HashMap<TypeKey, TypeKey>,
-    ) -> TypeKey {
+    ) -> Option<TypeKey> {
         match &mut self {
-            AType::Function(fn_sig) => fn_sig.monomorphize(ctx, type_mappings),
+            AType::Function(fn_sig) => Some(fn_sig.monomorphize(ctx, type_mappings)),
             AType::Struct(struct_type) => struct_type.monomorphize(ctx, type_mappings),
             AType::Enum(enum_type) => enum_type.monomorphize(ctx, type_mappings),
-            AType::Tuple(_) => todo!(),
-            AType::Array(_) => todo!(),
+            AType::Tuple(tuple_type) => tuple_type.monomorphize(ctx, type_mappings),
+            AType::Array(array_type) => array_type.monomorphize(ctx, type_mappings),
             AType::Pointer(ptr_type) => ptr_type.monomorphize(ctx, type_mappings),
 
-            // These types cannot be polymorphic.
+            // These types cannot be polymorphic and therefore can't be monomorphized.
             AType::Bool
             | AType::U8
             | AType::I8
@@ -293,9 +293,7 @@ impl AType {
             | AType::Str
             | AType::Spec(_)
             | AType::Generic(_)
-            | AType::Unknown(_) => {
-                panic!("cannot monomorphize type {self}")
-            }
+            | AType::Unknown(_) => None,
         }
     }
 

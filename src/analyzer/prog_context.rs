@@ -718,7 +718,12 @@ impl ProgramContext {
         }
 
         // Monomorphize the type.
-        mono.mono_type_key = poly_type.clone().monomorphize(self, &type_mappings);
+        mono.mono_type_key = match poly_type.clone().monomorphize(self, &type_mappings) {
+            Some(replacement_tk) => replacement_tk,
+            // It turns out the type doesn't need monomorphization.
+            None => return type_key,
+        };
+
         let mono_type_key = mono.mono_type_key;
 
         // We don't need to monomorphize every method on every impl for this

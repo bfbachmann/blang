@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
 use crate::analyzer::ast::expr::AExpr;
@@ -82,6 +83,34 @@ impl AArrayType {
             maybe_element_type_key,
             len,
         }
+    }
+
+    /// Converts this array type from a polymorphic (parameterized) type into a
+    /// monomorph by substituting type keys for generic types with those from the
+    /// provided parameter values.
+    pub fn monomorphize(
+        &mut self,
+        ctx: &mut ProgramContext,
+        type_mappings: &HashMap<TypeKey, TypeKey>,
+    ) -> Option<TypeKey> {
+        // There is nothing to do if the array has no elements.
+        if self.maybe_element_type_key.is_none() {
+            return None;
+        }
+
+        let elem_tk = self.maybe_element_type_key.unwrap();
+        if let Some(replacement_tk) = type_mappings.get(&elem_tk) {
+            self.maybe_element_type_key = Some(*replacement_tk);
+            return Some(ctx.insert_type(AType::Array(self.clone())));
+        }
+
+        let elem_type = ctx.must_get_type(elem_tk);
+        if let Some(replacement_tk) = elem_type.clone().monomorphize(ctx, type_mappings) {
+            self.maybe_element_type_key = Some(replacement_tk);
+            return Some(ctx.insert_type(AType::Array(self.clone())));
+        }
+
+        None
     }
 
     /// Return the human-readable version of the array type.
