@@ -161,6 +161,18 @@ mod tests {
     }
 
     #[test]
+    fn invalid_main_defs() {
+        for code in [
+            r#"fn main(a: int) {}"#,
+            r#"fn main(): int { return 0 }"#,
+            r#"fn main[T]() {}"#,
+        ] {
+            let result = analyze(code);
+            check_result(result, Some(ErrorKind::InvalidMain));
+        }
+    }
+
+    #[test]
     fn big_program() {
         let raw = r#"
             fn main() {

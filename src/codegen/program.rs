@@ -4,6 +4,7 @@ use std::path::Path;
 use std::process::Command;
 
 use flamer::flame;
+use inkwell::attributes::AttributeLoc;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
@@ -11,12 +12,12 @@ use inkwell::passes::PassManager;
 use inkwell::targets::{
     CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetTriple,
 };
-use inkwell::values::FunctionValue;
+use inkwell::values::{BasicMetadataValueEnum, BasicValue, FunctionValue};
 use inkwell::OptimizationLevel;
 use target_lexicon::Triple;
 
 use crate::analyzer::analyze::ProgramAnalysis;
-use crate::analyzer::ast::func::AFn;
+use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::module::AModule;
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::statement::AStatement;
@@ -35,6 +36,7 @@ pub struct ProgramCodeGen<'a, 'ctx> {
     fpm: &'a PassManager<FunctionValue<'ctx>>,
     module: &'a Module<'ctx>,
     program: &'a AModule,
+    maybe_main_fn_name: Option<String>,
     monomorphized_types: &'a HashMap<TypeKey, HashSet<Monomorphization>>,
     type_store: &'a TypeStore,
     type_converter: TypeConverter<'ctx>,
@@ -83,6 +85,23 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                     panic!("unexpected top-level statement {other}");
                 }
             }
+        }
+
+        // If a main function was defined, generate a wrapping main that calls it.
+        // This is necessary because the defined main function will not have the name
+        // "main", but rather something like "my_project/my_module/main.bl::main`,
+        // so the linker won't locate it as the entrypoint. Generating our own
+        // wrapping main also gives us the opportunity to initialize things at
+        // runtime, like a GC.
+        if let Some(main_fn_name) = &self.maybe_main_fn_name {
+            let ll_main_fn = self.module.get_function(main_fn_name).unwrap();
+            let ll_wrapper_fn =
+                self.module
+                    .add_function("main", self.ctx.void_type().fn_type(&[], false), None);
+            let ll_entry_block = self.ctx.append_basic_block(ll_wrapper_fn, "entry");
+            self.builder.position_at_end(ll_entry_block);
+            self.builder.build_call(ll_main_fn, &[], "main");
+            self.builder.build_return(None);
         }
 
         if let Err(e) = self.module.verify() {
@@ -223,12 +242,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                 }
 
                 AStatement::ExternFn(fn_sig) => {
-                    let ll_fn_type = self.type_converter.get_fn_type(fn_sig.type_key);
-                    self.module.add_function(
-                        fn_sig.name.as_str(),
-                        ll_fn_type,
-                        Some(Linkage::External),
-                    );
+                    self.gen_extern_fn(fn_sig);
                 }
 
                 AStatement::FunctionDeclaration(func) if !func.signature.is_parameterized() => {
@@ -288,6 +302,46 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                 self.type_converter.pop_type_mapping();
             }
         }
+    }
+
+    /// Generates an extern function. Extern functions are generated as two functions:
+    /// 1. A function with a mangled name that calls 2 and returns its result.
+    /// 2. A function with the original unmangled name that is defined without body
+    ///    that will be linked externally by the linker.
+    fn gen_extern_fn(&mut self, fn_sig: &AFnSig) {
+        // Generate the external function definition.
+        let ll_fn_type = self.type_converter.get_fn_type(fn_sig.type_key);
+        let ll_extern_fn =
+            self.module
+                .add_function(fn_sig.name.as_str(), ll_fn_type, Some(Linkage::External));
+
+        // Generate the internal function that calls the external one. We'll tell
+        // LLVM to always inline this function.
+        let ll_internal_fn =
+            self.module
+                .add_function(fn_sig.mangled_name.as_str(), ll_fn_type, None);
+        ll_internal_fn.add_attribute(
+            AttributeLoc::Function,
+            self.ctx.create_string_attribute("alwaysinline", ""),
+        );
+
+        let ll_entry_block = self.ctx.append_basic_block(ll_internal_fn, "entry");
+        self.builder.position_at_end(ll_entry_block);
+        let ll_args: Vec<BasicMetadataValueEnum> = ll_internal_fn
+            .get_params()
+            .iter()
+            .map(|param| param.as_basic_value_enum().into())
+            .collect();
+        let ll_ret_val = self
+            .builder
+            .build_call(ll_extern_fn, ll_args.as_slice(), "extern_call")
+            .try_as_basic_value()
+            .left();
+        let ll_ret_val: Option<&dyn BasicValue> = match ll_ret_val.as_ref() {
+            Some(ret_val) => Some(ret_val),
+            None => None,
+        };
+        self.builder.build_return(ll_ret_val);
     }
 }
 
@@ -371,6 +425,7 @@ pub fn generate(
         fpm: &fpm,
         module: &module,
         program: &a_module,
+        maybe_main_fn_name: program_analysis.maybe_main_fn_mangled_name,
         monomorphized_types: &program_analysis.monomorphized_types,
         type_store: &program_analysis.type_store,
         type_converter: TypeConverter::new(&ctx, &program_analysis.type_store),

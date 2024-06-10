@@ -171,11 +171,27 @@ fn define_fn(ctx: &mut ProgramContext, func: &Function) {
     analyze_fn_sig(ctx, &func.signature);
 
     if func.signature.name == "main" {
-        if func.signature.maybe_ret_type.is_some() {
+        if let Some(params) = &func.signature.params {
+            ctx.insert_err(AnalyzeError::new(
+                ErrorKind::InvalidMain,
+                format_code!("function {} cannot have parameters", "main").as_str(),
+                params,
+            ));
+        }
+
+        if !func.signature.args.is_empty() {
+            ctx.insert_err(AnalyzeError::new(
+                ErrorKind::InvalidMain,
+                format_code!("function {} cannot take arguments", "main").as_str(),
+                func.signature.args.get(0).unwrap(),
+            ));
+        }
+
+        if let Some(ret_type) = &func.signature.maybe_ret_type {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::InvalidMain,
                 format_code!("function {} cannot have a return type", "main").as_str(),
-                &func.signature,
+                ret_type,
             ));
         }
     }

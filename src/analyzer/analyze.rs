@@ -56,6 +56,7 @@ pub struct ProgramAnalysis {
     pub type_store: TypeStore,
     pub analyzed_modules: Vec<AnalyzedModule>,
     pub monomorphized_types: HashMap<TypeKey, HashSet<Monomorphization>>,
+    pub maybe_main_fn_mangled_name: Option<String>,
 }
 
 /// Analyzes all the given modules.
@@ -78,10 +79,18 @@ pub fn analyze_modules(modules: Vec<Module>, target_triple: &Triple) -> ProgramA
     define_intrinsics(&mut ctx);
     analyze_module(&mut ctx, &mods, &mut analyzed_mods, &vec![], &root_mod_path);
 
+    // Try to find the name of the main function in the root module.
+    let maybe_main_fn_mangled_name =
+        match ctx.get_fn(None, ctx.mangle_fn_name(None, None, "main").as_str()) {
+            Some(main_fn) => Some(main_fn.signature.mangled_name.clone()),
+            None => None,
+        };
+
     ProgramAnalysis {
         type_store: ctx.type_store,
         analyzed_modules: analyzed_mods.into_values().collect(),
         monomorphized_types: ctx.monomorphized_types,
+        maybe_main_fn_mangled_name,
     }
 }
 

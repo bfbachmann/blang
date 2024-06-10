@@ -13,7 +13,7 @@ mod tests {
 
     fn assert_compiles(code: &str) {
         let tokens = lex(code).expect("should not error");
-        let module = Module::from("", &mut Stream::from(tokens)).expect("should not error");
+        let module = Module::from("test", &mut Stream::from(tokens)).expect("should not error");
         let analysis = analyze_modules(
             vec![module],
             &Triple::from_str(init_target(None).unwrap().as_str().to_str().unwrap()).unwrap(),

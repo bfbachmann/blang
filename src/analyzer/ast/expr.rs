@@ -1716,7 +1716,7 @@ mod tests {
         let a_fn = AFn {
             signature: AFnSig {
                 name: "do_thing".to_string(),
-                mangled_name: "do_thing".to_string(),
+                mangled_name: "test::do_thing".to_string(),
                 args: vec![AArg {
                     name: "first".to_string(),
                     type_key: ctx.bool_type_key(),
@@ -1751,7 +1751,7 @@ mod tests {
                 kind: AExprKind::FunctionCall(Box::new(AFnCall {
                     fn_expr: AExpr::new_with_default_pos(
                         AExprKind::Symbol(ASymbol::new_with_default_pos(
-                            "do_thing",
+                            "test::do_thing",
                             a_fn.signature.type_key,
                         )),
                         a_fn.signature.type_key,
@@ -1777,7 +1777,7 @@ mod tests {
         let a_fn = AFn {
             signature: AFnSig {
                 name: "do_thing".to_string(),
-                mangled_name: "do_thing".to_string(),
+                mangled_name: "test::do_thing".to_string(),
                 args: vec![],
                 maybe_ret_type_key: None,
                 type_key: fn_type_key,
@@ -1865,7 +1865,7 @@ mod tests {
         let a_fn = AFn {
             signature: AFnSig {
                 name: "do_thing".to_string(),
-                mangled_name: "do_thing".to_string(),
+                mangled_name: "test::do_thing".to_string(),
                 args: vec![
                     AArg {
                         name: "arg1".to_string(),
@@ -1909,7 +1909,7 @@ mod tests {
                 kind: AExprKind::FunctionCall(Box::new(AFnCall {
                     fn_expr: AExpr::new_with_default_pos(
                         AExprKind::Symbol(ASymbol::new_with_default_pos(
-                            "do_thing",
+                            "test::do_thing",
                             a_fn.signature.type_key,
                         )),
                         fn_type_key
@@ -1928,7 +1928,7 @@ mod tests {
                     call.fn_expr,
                     AExpr::new_with_default_pos(
                         AExprKind::Symbol(ASymbol::new_with_default_pos(
-                            "do_thing",
+                            "test::do_thing",
                             a_fn.signature.type_key,
                         )),
                         a_fn.signature.type_key,
@@ -1969,7 +1969,7 @@ mod tests {
         let a_fn = AFn {
             signature: AFnSig {
                 name: "do_thing".to_string(),
-                mangled_name: "do_thing".to_string(),
+                mangled_name: "test::do_thing".to_string(),
                 args: vec![AArg {
                     name: "arg".to_string(),
                     type_key: ctx.bool_type_key(),
@@ -2006,7 +2006,7 @@ mod tests {
                 AExprKind::FunctionCall(Box::new(AFnCall {
                     fn_expr: AExpr::new_with_default_pos(
                         AExprKind::Symbol(ASymbol::new_with_default_pos(
-                            "do_thing",
+                            "test::do_thing",
                             a_fn.signature.type_key,
                         )),
                         a_fn.signature.type_key,

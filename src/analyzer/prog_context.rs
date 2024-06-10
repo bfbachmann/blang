@@ -1135,7 +1135,7 @@ impl ProgramContext {
                         )
                 } else {
                     let scoped_symbol =
-                        ScopedSymbol::new_const(a_symbol.name.as_str(), a_symbol.type_key);
+                        ScopedSymbol::new_const(symbol.name.as_str(), a_symbol.type_key);
                     self.insert_symbol(scoped_symbol);
                 }
             }
@@ -1289,25 +1289,50 @@ impl ProgramContext {
         !self.cur_mod_ctx().from_scope_indices.is_empty()
     }
 
-    /// Returns a new name for a nested function with the given name. The new name will contain
-    /// all the names of the functions within which this function is nested.
-    pub fn mangle_fn_name(&self, name: &str) -> String {
+    /// Returns a function name mangled to the following form.
+    ///
+    ///     <mod_path>::<type_prefix><fn_path><name>
+    ///
+    /// where
+    ///  - `mod_path` is the full path of the module in which the function is
+    ///    defined (determined by `maybe_mod_name`)
+    ///  - `type_prefix` has the form `<type>.` if there is an impl type on
+    ///    the function (determined by `maybe_impl_type_key`), or is empty
+    ///  - `fn_path` has the form `<f1>.<f2>...` where each item in the sequence
+    ///    is the name of a function inside which the next function is nested
+    ///  - `<name>` is the name of the function.
+    pub fn mangle_fn_name(
+        &self,
+        maybe_mod_name: Option<&String>,
+        maybe_impl_type_key: Option<TypeKey>,
+        name: &str,
+    ) -> String {
         let mod_ctx = self.cur_mod_ctx();
+        let mod_path = match maybe_mod_name {
+            Some(name) => mod_ctx.imported_mod_paths.get(name).unwrap(),
+            None => self.cur_mod_path.as_str(),
+        };
+
+        let type_prefix = match maybe_impl_type_key {
+            Some(type_key) => format!("{}.", self.must_get_type(type_key).name()),
+            None => "".to_string(),
+        };
+
         if mod_ctx.fn_scope_indices.is_empty() {
-            return name.to_string();
+            return format!("{mod_path}::{type_prefix}{name}");
         }
 
         // Get a path to the function based on the current scope.
-        let mut path = "".to_string();
-        for i in &self.cur_mod_ctx().fn_scope_indices {
+        let mut fn_path = "".to_string();
+        for i in &mod_ctx.fn_scope_indices {
             let fn_name = match &mod_ctx.stack.get(*i).unwrap().kind {
                 ScopeKind::FnBody(name) => name.as_str(),
                 _ => unreachable!(),
             };
-            path = path + fn_name + "::";
+            fn_path = fn_path + fn_name + "::";
         }
 
-        path + name
+        format!("{mod_path}::{type_prefix}{fn_path}{name}")
     }
 
     /// Returns a new name for an anonymous function created inside the current scope. This

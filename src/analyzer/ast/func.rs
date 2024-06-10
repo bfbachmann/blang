@@ -20,9 +20,7 @@ use crate::util;
 pub struct AFnSig {
     pub name: String,
     /// The mangled name is the full name of the function that may include information about
-    /// it's impl and argument types to disambiguate it from other methods with the same name.
-    /// If it's a regular function, this will just be the function name. If it's a member
-    /// function, it will be `<type>.<fn_name>`.
+    /// it to disambiguate it from other functions with the same name.
     pub mangled_name: String,
     pub args: Vec<AArg>,
     pub maybe_ret_type_key: Option<TypeKey>,
@@ -81,7 +79,7 @@ impl AFnSig {
     /// signature.
     pub fn from(ctx: &mut ProgramContext, sig: &FunctionSignature) -> Self {
         let maybe_impl_type_key = ctx.get_cur_self_type_key();
-        let mangled_name = Self::get_mangled_name(ctx, maybe_impl_type_key, sig.name.as_str());
+        let mangled_name = ctx.mangle_fn_name(None, maybe_impl_type_key, sig.name.as_str());
 
         // Create a mostly-empty function type and insert it into the program context.
         // We'll fill in the details later, we just need a type key for it now.
@@ -158,24 +156,6 @@ impl AFnSig {
         }
 
         a_fn_sig
-    }
-
-    /// Returns the fully qualified name of this function. If it's a regular function, this will
-    /// just be the function name. If it's a member function, it will be `<type>.<fn_name>`.
-    /// If it's a generic function, argument types and the return type will be appended to the
-    /// function name.
-    fn get_mangled_name(
-        ctx: &ProgramContext,
-        maybe_impl_type_key: Option<TypeKey>,
-        fn_name: &str,
-    ) -> String {
-        match maybe_impl_type_key {
-            Some(type_key) => {
-                let impl_type = ctx.must_get_type(type_key);
-                format!("{}.{}", impl_type.name(), ctx.mangle_fn_name(fn_name))
-            }
-            None => ctx.mangle_fn_name(fn_name),
-        }
     }
 
     /// Returns true if this function signature has generic parameters.
@@ -265,8 +245,7 @@ impl AFnSig {
         );
 
         // Re-mangle the name based on the updated type info.
-        self.mangled_name =
-            Self::get_mangled_name(ctx, self.maybe_impl_type_key, self.name.as_str());
+        self.mangled_name = ctx.mangle_fn_name(None, self.maybe_impl_type_key, self.name.as_str());
 
         // Define the new type in the program context.
         let new_fn_type_key = ctx.insert_type(AType::Function(Box::new(self.clone())));

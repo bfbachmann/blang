@@ -1,5 +1,7 @@
 # Blang
 
+**It's not "Bee-lang", it's "Blang", like "Clang".**
+
 _A simple, statically typed, ahead-of-time compiled toy programming language written in Rust._
 
 ## Playground

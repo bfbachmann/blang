@@ -261,7 +261,10 @@ fn get_type_key_for_symbol(
     if include_fns {
         // Search for a function with the given name. Functions take precedence over extern
         // functions.
-        if let Some(func) = ctx.get_fn(maybe_mod_name, ctx.mangle_fn_name(name).as_str()) {
+        if let Some(func) = ctx.get_fn(
+            maybe_mod_name,
+            ctx.mangle_fn_name(None, None, name).as_str(),
+        ) {
             return (Some(func.signature.type_key), None);
         };
 

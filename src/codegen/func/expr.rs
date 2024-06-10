@@ -2,6 +2,7 @@ use inkwell::intrinsics::Intrinsic;
 use inkwell::types::{BasicType, BasicTypeEnum};
 use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, FloatValue, IntValue};
 use inkwell::{AddressSpace, FloatPredicate, IntPredicate};
+use regex::{Captures, Regex};
 
 use crate::analyzer::ast::array::AArrayInit;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
@@ -509,10 +510,22 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 if self.type_store.must_get(impl_tk).is_generic() {
                     // This is a function on a generic type. We need to look up the
                     // actual function by figuring out what the corresponding concrete
-                    // type it.
+                    // type.
                     let concrete_tk = self.type_converter.map_type_key(impl_tk);
                     let concrete_type = self.type_store.must_get(concrete_tk);
-                    let concrete_fn_name = format!("{}.{}", concrete_type.name(), fn_sig.name);
+
+                    // TODO: Fix demangling hack.
+                    let re = Regex::new(r"(?P<prefix>[^:]*::)([^\.]*)(?P<suffix>.*)").unwrap();
+                    let concrete_fn_name = re
+                        .replace(fn_sig.mangled_name.as_str(), |caps: &Captures| {
+                            format!(
+                                "{}{}{}",
+                                &caps["prefix"],
+                                concrete_type.name(),
+                                &caps["suffix"]
+                            )
+                        })
+                        .into_owned();
                     let ll_fn_type = self
                         .module
                         .get_function(concrete_fn_name.as_str())
@@ -1214,7 +1227,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         call: &AFnCall,
         fn_sig: &AFnSig,
     ) -> Option<BasicValueEnum<'ctx>> {
-        if fn_sig.mangled_name == "str.len" {
+        if fn_sig.mangled_name.ends_with("str.len") {
             let ll_str_value = self.gen_expr(call.args.first().unwrap());
             let ll_str_len = if ll_str_value.is_pointer_value() {
                 self.builder
