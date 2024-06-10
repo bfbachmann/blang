@@ -23,7 +23,6 @@ use crate::parser::ast::r#enum::EnumType;
 use crate::parser::ast::r#struct::StructType;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::spec::Spec;
-use crate::parser::ast::symbol::Symbol;
 use crate::parser::module::Module;
 
 #[derive(Debug, Hash, Clone, PartialEq, Eq)]
@@ -1050,33 +1049,45 @@ impl ProgramContext {
 
             // Resolve any imported identifiers from the module and add mappings
             // for each to the program context.
-            for ident in &used_mod.identifiers {
-                let symbol = Symbol::new_with_mod(ident.as_str(), mod_name.as_str());
+            for symbol in &used_mod.identifiers {
+                // Set the symbol's module name so it gets resolved from the right
+                // module.
+                let mut symbol = symbol.clone();
+                symbol.maybe_mod_name = Some(mod_name.clone());
                 let a_symbol = ASymbol::from(self, &symbol, true, true, None);
+
+                // Record an error and skip the symbol if its type could not be
+                // resolved.
+                if a_symbol.type_key == self.unknown_type_key() {
+                    self.insert_err(AnalyzeError::new(
+                        ErrorKind::UndefSymbol,
+                        format_code!(
+                            "{} is not defined in module {}",
+                            symbol.name,
+                            used_mod.path.raw
+                        )
+                        .as_str(),
+                        &symbol,
+                    ));
+                    continue;
+                }
 
                 // Record an error if the symbol was not declared public.
                 let mod_ctx = self.get_mod_ctx(Some(&mod_name));
                 let is_pub = if a_symbol.is_const {
-                    mod_ctx.pub_const_names.contains(ident)
+                    mod_ctx.pub_const_names.contains(symbol.name.as_str())
                 } else if a_symbol.is_type {
-                    mod_ctx.pub_type_names.contains(ident)
+                    mod_ctx.pub_type_names.contains(symbol.name.as_str())
                 } else {
-                    mod_ctx.pub_fn_names.contains(ident)
+                    mod_ctx.pub_fn_names.contains(symbol.name.as_str())
                 };
 
                 if !is_pub {
-                    // TODO: The location here is the entire import. It should
-                    // just be that of the invalid symbol.
                     self.insert_err(AnalyzeError::new(
                         ErrorKind::UseOfPrivateValue,
                         format_code!("{} is not public", a_symbol).as_str(),
-                        used_mod,
+                        &symbol,
                     ));
-                }
-
-                // Skip the symbol if its type could not be resolved.
-                if a_symbol.type_key == self.unknown_type_key() {
-                    continue;
                 }
 
                 // Define the symbol in the program context.

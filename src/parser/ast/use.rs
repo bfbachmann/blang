@@ -8,6 +8,7 @@ use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
+use crate::parser::ast::symbol::Symbol;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::module::Module;
 
@@ -109,7 +110,7 @@ impl ModulePath {
 pub struct UsedModule {
     pub path: ModulePath,
     pub maybe_alias: Option<String>,
-    pub identifiers: Vec<String>,
+    pub identifiers: Vec<Symbol>,
     span: Span,
 }
 
@@ -182,9 +183,9 @@ impl UsedModule {
 
         // Parse the optional identifiers being imported from the module.
         let identifiers = if Module::parse_optional(tokens, TokenKind::LeftBrace).is_some() {
-            let mut idents = vec![Module::parse_identifier(tokens)?];
+            let mut idents = vec![Symbol::from_identifier(tokens)?];
             while Module::parse_optional(tokens, TokenKind::Comma).is_some() {
-                idents.push(Module::parse_identifier(tokens)?);
+                idents.push(Symbol::from_identifier(tokens)?);
             }
 
             Module::parse_expecting(tokens, TokenKind::RightBrace)?;

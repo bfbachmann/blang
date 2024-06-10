@@ -59,24 +59,12 @@ locatable_impl!(Symbol);
 
 impl Symbol {
     /// Creates a new symbol.
-    #[cfg(test)]
     pub fn new(name: &str, span: Span) -> Self {
         Symbol {
             maybe_mod_name: None,
             name: name.to_string(),
             params: vec![],
             span,
-        }
-    }
-
-    /// Creates a new symbol with the given name and mod name, and with default
-    /// start and end positions.
-    pub fn new_with_mod(name: &str, mod_name: &str) -> Symbol {
-        Symbol {
-            maybe_mod_name: Some(mod_name.to_string()),
-            name: name.to_string(),
-            params: vec![],
-            span: Default::default(),
         }
     }
 
@@ -89,6 +77,19 @@ impl Symbol {
             params: vec![],
             span: Default::default(),
         }
+    }
+
+    /// Attempts to parse a symbol from a single identifier.
+    pub fn from_identifier(tokens: &mut Stream<Token>) -> ParseResult<Symbol> {
+        let start_pos = Module::current_position(tokens);
+        let ident = Module::parse_identifier(tokens)?;
+        Ok(Symbol::new(
+            ident.as_str(),
+            Span {
+                start_pos,
+                end_pos: Module::prev_position(tokens),
+            },
+        ))
     }
 
     /// Attempts to parse a symbol from the given token sequence. Expects token
