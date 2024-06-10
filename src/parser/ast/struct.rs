@@ -9,6 +9,7 @@ use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::r#type::Type;
+use crate::parser::ast::symbol::Symbol;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::module::Module;
@@ -188,7 +189,7 @@ pub struct StructInit {
     /// struct types defined inline).
     pub typ: Type,
     /// Maps struct field name to the value assigned to it.
-    pub field_values: Vec<(String, Expression)>,
+    pub field_values: Vec<(Symbol, Expression)>,
     pub span: Span,
 }
 
@@ -246,11 +247,12 @@ impl StructInit {
                 }
 
                 Some(&Token {
-                    kind: TokenKind::Identifier(ref field_name),
+                    kind: TokenKind::Identifier(_),
                     ..
                 }) => {
                     // Parse `:` followed by the field value and record the field.
-                    let field_name = field_name.clone();
+                    tokens.rewind(1);
+                    let field_name = Symbol::from_identifier(tokens)?;
                     Module::parse_expecting(tokens, TokenKind::Colon)?;
                     let value = Expression::from(tokens)?;
                     field_values.push((field_name, value));

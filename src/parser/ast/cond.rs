@@ -26,7 +26,6 @@ impl Hash for Conditional {
 
 impl fmt::Display for Conditional {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        // TODO
         write!(f, "if ...",)
     }
 }

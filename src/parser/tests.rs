@@ -199,7 +199,6 @@ mod tests {
                             end_pos: Position::new(1, 61),
                         }
                     ))],
-                    None,
                     Span {
                         start_pos: Position::new(1, 37),
                         end_pos: Position::new(1, 64),
@@ -321,7 +320,6 @@ mod tests {
                 ),
                 Closure::new(
                     vec![],
-                    None,
                     Span {
                         start_pos: Position::new(1, 59),
                         end_pos: Position::new(1, 61)
@@ -535,7 +533,6 @@ mod tests {
                                             end_pos: Position::new(3, 23)
                                         },
                                     ))],
-                                    None,
                                     Span {
                                         start_pos: Position::new(2, 27),
                                         end_pos: Position::new(4, 14)
@@ -564,7 +561,6 @@ mod tests {
                                 Position::new(6, 29),
                             ))
                         ],
-                        None,
                         Span {
                             start_pos: Position::new(1, 20),
                             end_pos: Position::new(7, 10),

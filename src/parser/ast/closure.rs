@@ -4,7 +4,6 @@ use crate::lexer::pos::{Locatable, Position, Span};
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
-use crate::parser::ast::expr::Expression;
 use crate::parser::ast::statement::Statement;
 use crate::parser::error::ParseResult;
 use crate::parser::module::Module;
@@ -14,22 +13,18 @@ use crate::{locatable_impl, util};
 #[derive(Debug, Clone, Eq)]
 pub struct Closure {
     pub statements: Vec<Statement>,
-    pub result: Option<Expression>,
     span: Span,
 }
 
 impl PartialEq for Closure {
     fn eq(&self, other: &Self) -> bool {
-        util::vecs_eq(&self.statements, &other.statements)
-            && self.result == other.result
-            && self.span == other.span
+        util::vecs_eq(&self.statements, &other.statements) && self.span == other.span
     }
 }
 
 impl Hash for Closure {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.statements.hash(state);
-        self.result.hash(state);
     }
 }
 
@@ -37,12 +32,8 @@ locatable_impl!(Closure);
 
 impl Closure {
     /// Creates a new closure.
-    pub fn new(statements: Vec<Statement>, result: Option<Expression>, span: Span) -> Self {
-        Closure {
-            statements,
-            result,
-            span,
-        }
+    pub fn new(statements: Vec<Statement>, span: Span) -> Self {
+        Closure { statements, span }
     }
 
     /// Parses closures. Expects token sequences of the form
@@ -93,9 +84,6 @@ impl Closure {
             };
         }
 
-        // If the last statement is an expression, we use it as the return type.
-        // TODO
-
-        Ok(Closure::new(statements, None, Span { start_pos, end_pos }))
+        Ok(Closure::new(statements, Span { start_pos, end_pos }))
     }
 }

@@ -7,6 +7,7 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
+use crate::fmt::format_code_vec;
 use crate::parser::ast::r#struct::{StructInit, StructType};
 use crate::parser::ast::r#type::Type;
 use crate::{format_code, util};
@@ -79,7 +80,6 @@ impl AStructType {
             // Check if the struct type is already defined in the program context. This will be the
             // case if we've already analyzed it in the process of analyzing another type that
             // contains this type.
-            // todo
             if let Some(a_struct) = ctx.get_struct_type(None, struct_type.name.as_str()) {
                 return a_struct.clone();
             }
@@ -261,9 +261,11 @@ impl AStructInit {
         let mut errors = vec![];
         let mut field_values: Vec<(String, AExpr)> = vec![];
         let mut used_field_names = HashSet::new();
-        for (field_name, field_value) in &struct_init.field_values {
+        for (field_name_symbol, field_value) in &struct_init.field_values {
+            let field_name = field_name_symbol.name.as_str();
+
             // Get the struct field type, or error if the struct type has no such field.
-            let field_type = match struct_type.get_field_type_key(field_name.as_str()) {
+            let field_type = match struct_type.get_field_type_key(field_name) {
                 Some(typ) => typ,
                 None => {
                     errors.push(AnalyzeError::new(
@@ -274,8 +276,7 @@ impl AStructInit {
                             field_name
                         )
                         .as_str(),
-                        // TODO: This should be the location of the bad field.
-                        field_value,
+                        field_name_symbol,
                     ));
 
                     // Skip this struct field since it's invalid.
@@ -289,7 +290,7 @@ impl AStructInit {
                 errors.push(AnalyzeError::new(
                     ErrorKind::UseOfPrivateValue,
                     format_code!("{} is not public", field_name).as_str(),
-                    field_value,
+                    field_name_symbol,
                 ));
             }
 
@@ -297,35 +298,48 @@ impl AStructInit {
             let expr = AExpr::from(ctx, field_value.clone(), Some(field_type), false, false);
 
             // Insert the analyzed struct field value, making sure that it was not already assigned.
-            if used_field_names.insert(field_name.clone()) {
+            if used_field_names.insert(field_name.to_string()) {
                 field_values.push((field_name.to_string(), expr));
             } else {
                 errors.push(AnalyzeError::new(
                     ErrorKind::DuplicateStructField,
-                    format_code!("struct field {} is already assigned", &field_name).as_str(),
-                    field_value,
+                    format_code!("struct field {} is already assigned", field_name).as_str(),
+                    field_name_symbol,
                 ));
             }
         }
 
         // Make sure all struct fields were assigned.
+        let mut uninit_field_names = vec![];
         for field in &struct_type.fields {
             if field_values
                 .iter()
                 .find(|(name, _)| name == &field.name)
                 .is_none()
             {
-                errors.push(AnalyzeError::new(
-                    ErrorKind::StructFieldNotInitialized,
-                    format_code!(
-                        "field {} on struct type {} is uninitialized",
-                        field.name,
-                        struct_type.display(ctx),
-                    )
-                    .as_str(),
-                    struct_init,
-                ));
+                uninit_field_names.push(field.name.as_str());
             }
+        }
+
+        if !uninit_field_names.is_empty() {
+            errors.push(AnalyzeError::new(
+                ErrorKind::StructFieldNotInitialized,
+                format!(
+                    "{} {} on struct type {} {} uninitialized",
+                    match uninit_field_names.len() {
+                        1 => "field",
+                        _ => "fields",
+                    },
+                    format_code_vec(&uninit_field_names, ", "),
+                    format_code!(struct_type.display(ctx)),
+                    match uninit_field_names.len() {
+                        1 => "is",
+                        _ => "are",
+                    },
+                )
+                .as_str(),
+                struct_init,
+            ));
         }
 
         // Move all analysis errors into the program context. We're not adding them immediately

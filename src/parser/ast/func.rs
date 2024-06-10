@@ -138,7 +138,7 @@ impl Function {
             Span { start_pos, end_pos },
         );
 
-        let body = Closure::new(vec![return_statement], None, ret_span);
+        let body = Closure::new(vec![return_statement], ret_span);
         Function::new(signature, body, false)
     }
 }
