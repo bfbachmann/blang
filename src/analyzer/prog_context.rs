@@ -441,7 +441,7 @@ impl ProgramContext {
                 if let Some(tk) = self
                     .cur_mod_ctx()
                     .enum_type_keys
-                    .get(enum_type.name.as_str())
+                    .get(enum_type.mangled_name.as_str())
                 {
                     return Some(*tk);
                 }
@@ -514,9 +514,10 @@ impl ProgramContext {
 
             AType::Enum(enum_type) => {
                 let name = enum_type.name.clone();
+                let mangled_name = enum_type.mangled_name.clone();
                 self.cur_mod_ctx_mut()
                     .enum_type_keys
-                    .insert(name.clone(), type_key);
+                    .insert(mangled_name.clone(), type_key);
                 Some(name.clone())
             }
 
@@ -1113,10 +1114,10 @@ impl ProgramContext {
                         }
 
                         AType::Enum(enum_type) => {
-                            let name = enum_type.name.clone();
+                            let mangled_name = enum_type.mangled_name.clone();
                             self.cur_mod_ctx_mut()
                                 .enum_type_keys
-                                .insert(name, a_symbol.type_key);
+                                .insert(mangled_name, a_symbol.type_key);
                         }
 
                         AType::Pointer(ptr_type) => {
@@ -1301,19 +1302,19 @@ impl ProgramContext {
         !self.cur_mod_ctx().from_scope_indices.is_empty()
     }
 
-    /// Returns a function name mangled to the following form.
+    /// Returns a name mangled to the following form.
     ///
-    ///     <mod_path>::<type_prefix><fn_path><name>
+    ///     <mod_path>::<type_prefix><path><name>
     ///
     /// where
-    ///  - `mod_path` is the full path of the module in which the function is
+    ///  - `mod_path` is the full path of the module in which the symbol is
     ///    defined (determined by `maybe_mod_name`)
     ///  - `type_prefix` has the form `<type>.` if there is an impl type on
     ///    the function (determined by `maybe_impl_type_key`), or is empty
-    ///  - `fn_path` has the form `<f1>.<f2>...` where each item in the sequence
+    ///  - `path` has the form `<f1>.<f2>...` where each item in the sequence
     ///    is the name of a function inside which the next function is nested
-    ///  - `<name>` is the name of the function.
-    pub fn mangle_fn_name(
+    ///  - `<name>` is the name of the symbol.
+    pub fn mangle_name(
         &self,
         maybe_mod_name: Option<&String>,
         maybe_impl_type_key: Option<TypeKey>,
@@ -1434,7 +1435,7 @@ impl ProgramContext {
         name: &str,
     ) -> Option<&AStructType> {
         let mod_ctx = self.get_mod_ctx(maybe_mod_name);
-        let mangled_name = self.mangle_fn_name(maybe_mod_name, None, name);
+        let mangled_name = self.mangle_name(maybe_mod_name, None, name);
         if let Some(tk) = mod_ctx.struct_type_keys.get(mangled_name.as_str()) {
             return Some(self.must_get_type(*tk).to_struct_type());
         }

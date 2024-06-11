@@ -79,7 +79,7 @@ impl AFnSig {
     /// signature.
     pub fn from(ctx: &mut ProgramContext, sig: &FunctionSignature) -> Self {
         let maybe_impl_type_key = ctx.get_cur_self_type_key();
-        let mangled_name = ctx.mangle_fn_name(None, maybe_impl_type_key, sig.name.as_str());
+        let mangled_name = ctx.mangle_name(None, maybe_impl_type_key, sig.name.as_str());
 
         // Create a mostly-empty function type and insert it into the program context.
         // We'll fill in the details later, we just need a type key for it now.
@@ -245,7 +245,7 @@ impl AFnSig {
         );
 
         // Re-mangle the name based on the updated type info.
-        self.mangled_name = ctx.mangle_fn_name(None, self.maybe_impl_type_key, self.name.as_str());
+        self.mangled_name = ctx.mangle_name(None, self.maybe_impl_type_key, self.name.as_str());
 
         // Define the new type in the program context.
         let new_fn_type_key = ctx.insert_type(AType::Function(Box::new(self.clone())));

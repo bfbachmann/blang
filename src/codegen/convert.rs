@@ -304,13 +304,14 @@ impl<'ctx> TypeConverter<'ctx> {
     /// Converts the given `enum_type` to an LLVM `StructType`.
     fn enum_to_struct_type(&self, enum_type: &AEnumType) -> StructType<'ctx> {
         // If the corresponding LLVM struct type already exists, just return it.
-        if let Some(ll_struct_type) = self.ctx.get_struct_type(enum_type.name.as_str()) {
+        if let Some(ll_struct_type) = self.ctx.get_struct_type(enum_type.mangled_name.as_str()) {
             return ll_struct_type;
         }
 
         // Create the struct type with two fields. The first stores the enum variant number and the
         // second stores the enum variant value, if any.
-        self.ctx.struct_type(
+        let ll_enum_type = self.ctx.opaque_struct_type(enum_type.mangled_name.as_str());
+        ll_enum_type.set_body(
             &[
                 self.ctx.i8_type().as_basic_type_enum(),
                 self.ctx
@@ -319,7 +320,9 @@ impl<'ctx> TypeConverter<'ctx> {
                     .as_basic_type_enum(),
             ],
             false,
-        )
+        );
+
+        ll_enum_type
     }
 
     /// Gets the LLVM "any" type that corresponds to the given type.

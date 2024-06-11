@@ -82,26 +82,19 @@ impl AEnumTypeVariant {
 }
 
 /// Represents a semantically valid enum type declaration.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AEnumType {
     pub name: String,
+    pub mangled_name: String,
     pub variants: HashMap<String, AEnumTypeVariant>,
     pub max_variant_size_bytes: u32,
 }
 
 impl PartialEq for AEnumType {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && util::hashmaps_eq(&self.variants, &other.variants)
-    }
-}
-
-impl Clone for AEnumType {
-    fn clone(&self) -> Self {
-        AEnumType {
-            name: self.name.clone(),
-            variants: self.variants.clone(),
-            max_variant_size_bytes: self.max_variant_size_bytes,
-        }
+        self.name == other.name
+            && self.mangled_name == other.mangled_name
+            && util::hashmaps_eq(&self.variants, &other.variants)
     }
 }
 
@@ -127,8 +120,10 @@ impl AEnumType {
         // type to the program context. This way, if any of the variant types make use of this enum
         // type, we won't get into an infinitely recursive type resolution cycle. When we're done
         // analyzing this type, the mapping will be updated in the program context.
+        let mangled_name = ctx.mangle_name(None, None, enum_type.name.as_str());
         let type_key = ctx.insert_type(AType::Enum(AEnumType {
             name: enum_type.name.clone(),
+            mangled_name: mangled_name.clone(),
             variants: HashMap::new(),
             max_variant_size_bytes: 0,
         }));
@@ -183,6 +178,7 @@ impl AEnumType {
 
         let a_enum = AEnumType {
             name: enum_type.name.clone(),
+            mangled_name,
             variants,
             max_variant_size_bytes: largest_variant_size_bytes,
         };
