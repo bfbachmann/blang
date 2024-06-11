@@ -490,6 +490,7 @@ mod tests {
             result,
             AStatement::StructTypeDeclaration(AStructType {
                 name: "MyStruct".to_string(),
+                mangled_name: "test::MyStruct".to_string(),
                 fields: vec![
                     AField {
                         name: "counter".to_string(),

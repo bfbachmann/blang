@@ -263,14 +263,16 @@ impl<'ctx> TypeConverter<'ctx> {
     /// Converts the given `struct_type` to an LLVM `StructType`.
     fn to_struct_type(&self, struct_type: &AStructType) -> StructType<'ctx> {
         // If the struct type already exists, just return it.
-        if let Some(ll_struct_type) = self.ctx.get_struct_type(struct_type.name.as_str()) {
+        if let Some(ll_struct_type) = self.ctx.get_struct_type(struct_type.mangled_name.as_str()) {
             return ll_struct_type;
         }
 
         // If the struct type has a name (i.e. it is not an inline type declaration), define it with
         // its type name. Otherwise, we just define a new struct type in-line.
         if !struct_type.name.is_empty() {
-            let ll_struct_type = self.ctx.opaque_struct_type(struct_type.name.as_str());
+            let ll_struct_type = self
+                .ctx
+                .opaque_struct_type(struct_type.mangled_name.as_str());
 
             // Assemble the struct field types. It's important that we do this after creating
             // the opaque struct type to prevent infinite recursion on type conversion.

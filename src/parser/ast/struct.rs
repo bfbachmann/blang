@@ -211,13 +211,13 @@ locatable_impl!(StructInit);
 impl StructInit {
     /// Parses struct initialization. Expects token sequences of the form
     ///
-    ///     <name> {
+    ///     <type> {
     ///         <field>: <value>,
     ///         ...
     ///     }
     ///
     /// where
-    ///  - `name` is the struct type name
+    ///  - `type` is the struct type
     ///  - `field` is the struct field name
     ///  - `value` is the value being assigned to the field
     ///

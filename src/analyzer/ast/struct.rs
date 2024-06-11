@@ -36,6 +36,7 @@ impl AField {
 #[derive(Clone, Debug)]
 pub struct AStructType {
     pub name: String,
+    pub mangled_name: String,
     pub fields: Vec<AField>,
 }
 
@@ -57,7 +58,9 @@ impl Display for AStructType {
 
 impl PartialEq for AStructType {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && util::vecs_eq(&self.fields, &other.fields)
+        self.name == other.name
+            && self.mangled_name == other.mangled_name
+            && util::vecs_eq(&self.fields, &other.fields)
     }
 }
 
@@ -100,8 +103,10 @@ impl AStructType {
         // type to the program context. This way, if any of the field types make use of this struct
         // type, we won't get into an infinitely recursive type resolution cycle. When we're done
         // analyzing this struct type, the mapping will be updated in the program context.
+        let mangled_name = ctx.mangle_fn_name(None, None, struct_type.name.as_str());
         let type_key = ctx.insert_type(AType::Struct(AStructType {
             name: struct_type.name.clone(),
+            mangled_name: mangled_name.clone(),
             fields: vec![],
         }));
 
@@ -140,6 +145,7 @@ impl AStructType {
 
         let a_struct = AStructType {
             name: struct_type.name.clone(),
+            mangled_name,
             fields,
         };
 

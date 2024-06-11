@@ -431,7 +431,7 @@ impl ProgramContext {
                 if let Some(tk) = self
                     .cur_mod_ctx()
                     .struct_type_keys
-                    .get(struct_type.name.as_str())
+                    .get(struct_type.mangled_name.as_str())
                 {
                     return Some(*tk);
                 }
@@ -505,10 +505,11 @@ impl ProgramContext {
         let maybe_type_name = match typ {
             AType::Struct(struct_type) => {
                 let name = struct_type.name.clone();
+                let mangled_name = struct_type.mangled_name.clone();
                 self.cur_mod_ctx_mut()
                     .struct_type_keys
-                    .insert(name.clone(), type_key);
-                Some(name.clone())
+                    .insert(mangled_name.clone(), type_key);
+                Some(name)
             }
 
             AType::Enum(enum_type) => {
@@ -601,7 +602,18 @@ impl ProgramContext {
     /// type store and returns the resulting type key.
     pub fn resolve_type(&mut self, typ: &Type) -> TypeKey {
         if let Type::Unresolved(unresolved_type) = typ {
-            if unresolved_type.maybe_mod_name.is_none() {
+            if let Some(mod_name) = &unresolved_type.maybe_mod_name {
+                // Make sure the module name is valid before looking up the type
+                // in the corresponding module.
+                if self.check_mod_name(mod_name, typ) {
+                    if let Some(tk) = self.get_type_key_by_type_name(
+                        unresolved_type.maybe_mod_name.as_ref(),
+                        unresolved_type.name.as_str(),
+                    ) {
+                        return tk;
+                    }
+                }
+            } else {
                 if unresolved_type.name == "Self" {
                     return match self.get_cur_self_type_key() {
                         Some(tk) => tk,
@@ -1094,10 +1106,10 @@ impl ProgramContext {
                 if a_symbol.is_type {
                     match self.type_store.must_get(a_symbol.type_key) {
                         AType::Struct(struct_type) => {
-                            let name = struct_type.name.clone();
+                            let mangled_name = struct_type.mangled_name.clone();
                             self.cur_mod_ctx_mut()
                                 .struct_type_keys
-                                .insert(name, a_symbol.type_key);
+                                .insert(mangled_name, a_symbol.type_key);
                         }
 
                         AType::Enum(enum_type) => {
@@ -1422,7 +1434,8 @@ impl ProgramContext {
         name: &str,
     ) -> Option<&AStructType> {
         let mod_ctx = self.get_mod_ctx(maybe_mod_name);
-        if let Some(tk) = mod_ctx.struct_type_keys.get(name) {
+        let mangled_name = self.mangle_fn_name(maybe_mod_name, None, name);
+        if let Some(tk) = mod_ctx.struct_type_keys.get(mangled_name.as_str()) {
             return Some(self.must_get_type(*tk).to_struct_type());
         }
 
@@ -1432,7 +1445,7 @@ impl ProgramContext {
     /// Returns the enum type with the given name in the given module.
     pub fn get_enum_type(&self, maybe_mod_name: Option<&String>, name: &str) -> Option<&AEnumType> {
         let mod_ctx = self.get_mod_ctx(maybe_mod_name);
-        if let Some(tk) = mod_ctx.struct_type_keys.get(name) {
+        if let Some(tk) = mod_ctx.enum_type_keys.get(name) {
             return Some(self.must_get_type(*tk).to_enum_type());
         }
 
