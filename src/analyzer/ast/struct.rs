@@ -3,9 +3,10 @@ use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 
 use crate::analyzer::ast::expr::AExpr;
+use crate::analyzer::ast::params::AParams;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::prog_context::{mangle_param_names, ProgramContext};
 use crate::analyzer::type_store::TypeKey;
 use crate::fmt::format_code_vec;
 use crate::parser::ast::r#struct::{StructInit, StructType};
@@ -37,6 +38,7 @@ impl AField {
 pub struct AStructType {
     pub name: String,
     pub mangled_name: String,
+    pub params: Option<AParams>,
     pub fields: Vec<AField>,
 }
 
@@ -60,6 +62,7 @@ impl PartialEq for AStructType {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && self.mangled_name == other.mangled_name
+            && self.params == other.params
             && util::vecs_eq(&self.fields, &other.fields)
     }
 }
@@ -86,7 +89,7 @@ impl AStructType {
             if let Some(a_struct) = ctx.get_struct_type(None, struct_type.name.as_str()) {
                 return a_struct.clone();
             }
-        } else if anon && !struct_type.name.is_empty() {
+        } else if !struct_type.name.is_empty() {
             ctx.insert_err(
                 AnalyzeError::new(
                     ErrorKind::UnexpectedTypeName,
@@ -103,12 +106,23 @@ impl AStructType {
         // type to the program context. This way, if any of the field types make use of this struct
         // type, we won't get into an infinitely recursive type resolution cycle. When we're done
         // analyzing this struct type, the mapping will be updated in the program context.
-        let mangled_name = ctx.mangle_name(None, None, struct_type.name.as_str());
+        let mangled_name = ctx.mangle_name(None, None, struct_type.name.as_str(), true);
         let type_key = ctx.insert_type(AType::Struct(AStructType {
             name: struct_type.name.clone(),
             mangled_name: mangled_name.clone(),
+            params: None,
             fields: vec![],
         }));
+
+        // Analyze generic params, if any and push them to the program context.
+        let maybe_params = match &struct_type.maybe_params {
+            Some(params) => {
+                let params = AParams::from(ctx, params, type_key);
+                ctx.push_params(params.clone());
+                Some(params)
+            }
+            None => None,
+        };
 
         // Analyze the struct fields.
         let mut fields = vec![];
@@ -143,9 +157,15 @@ impl AStructType {
             });
         }
 
+        // If necessary, pop generic parameters now that we're done analyzing the type.
+        if maybe_params.is_some() {
+            ctx.pop_params();
+        }
+
         let a_struct = AStructType {
             name: struct_type.name.clone(),
             mangled_name,
+            params: maybe_params,
             fields,
         };
 
@@ -192,6 +212,7 @@ impl AStructType {
             if let Some(replacement_tk) = type_mappings.get(&field.type_key) {
                 field.type_key = *replacement_tk;
                 replaced_tks = true;
+                continue;
             }
 
             let field_type = ctx.must_get_type(field.type_key);
@@ -202,6 +223,23 @@ impl AStructType {
         }
 
         if replaced_tks {
+            // Add monomorphized types to the name to disambiguate it from other
+            // monomorphized instances of this function.
+            if let Some(params) = &self.params {
+                self.mangled_name += mangle_param_names(params, type_mappings).as_str();
+            } else {
+                for (target_tk, replacement_tk) in type_mappings {
+                    self.mangled_name = self.mangled_name.replace(
+                        format!("{target_tk}").as_str(),
+                        format!("{replacement_tk}").as_str(),
+                    );
+                }
+            }
+
+            // Remove parameters from the signature now that they're no longer relevant.
+            self.params = None;
+
+            // Define the new type in the program context.
             return Some(ctx.insert_type(AType::Struct(self.clone())));
         }
 
@@ -247,19 +285,35 @@ impl AStructInit {
     /// Performs semantic analysis on struct initialization.
     pub fn from(ctx: &mut ProgramContext, struct_init: &StructInit) -> Self {
         // Resolve the struct type.
-        let type_key = ctx.resolve_type(&struct_init.typ);
+        let type_key = ctx.resolve_type(&Type::Unresolved(struct_init.typ.clone()));
         let struct_type = match ctx.must_get_type(type_key) {
-            AType::Struct(s) => s.clone(),
-            AType::Unknown(type_name) => {
+            AType::Unknown(_) => {
                 // The struct type has already failed semantic analysis, so we should avoid
                 // analyzing its initialization and just return some zero-value placeholder instead.
                 return AStructInit {
-                    type_key: ctx.resolve_type(&Type::new_unresolved(type_name.as_str())),
+                    type_key,
                     field_values: Default::default(),
                 };
             }
+
+            AType::Struct(s) => s.clone(),
+
             other => {
-                panic!("found invalid struct type {}", other);
+                // This is not a struct type. Record the error and return a placeholder value.
+                ctx.insert_err(AnalyzeError::new(
+                    ErrorKind::TypeIsNotStruct,
+                    format_code!(
+                        "type {} is not a struct, but is being used like one",
+                        other.display(ctx)
+                    )
+                    .as_str(),
+                    struct_init,
+                ));
+
+                return AStructInit {
+                    type_key,
+                    field_values: Default::default(),
+                };
             }
         };
 
@@ -271,8 +325,8 @@ impl AStructInit {
             let field_name = field_name_symbol.name.as_str();
 
             // Get the struct field type, or error if the struct type has no such field.
-            let field_type = match struct_type.get_field_type_key(field_name) {
-                Some(typ) => typ,
+            let field_tk = match struct_type.get_field_type_key(field_name) {
+                Some(tk) => tk,
                 None => {
                     errors.push(AnalyzeError::new(
                         ErrorKind::UndefStructField,
@@ -301,7 +355,7 @@ impl AStructInit {
             }
 
             // Analyze the value being assigned to the struct field.
-            let expr = AExpr::from(ctx, field_value.clone(), Some(field_type), false, false);
+            let expr = AExpr::from(ctx, field_value.clone(), Some(field_tk), false, false);
 
             // Insert the analyzed struct field value, making sure that it was not already assigned.
             if used_field_names.insert(field_name.to_string()) {

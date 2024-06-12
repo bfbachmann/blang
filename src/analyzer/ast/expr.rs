@@ -323,9 +323,7 @@ impl AExprKind {
             AExprKind::From(statement) => {
                 format!("from {}", statement)
             }
-            AExprKind::Unknown => {
-                format!("<unknown>")
-            }
+            AExprKind::Unknown => "<unknown>".to_string(),
         }
     }
 }

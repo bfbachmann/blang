@@ -17,6 +17,7 @@ use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::scope::{Scope, ScopeKind, ScopedSymbol};
 use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::analyzer::warn::AnalyzeWarning;
+use crate::fmt::format_code_vec;
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::ast::r#const::Const;
 use crate::parser::ast::r#enum::EnumType;
@@ -602,7 +603,7 @@ impl ProgramContext {
     /// no existing mapping for `typ`, performs semantic analysis on `typ`, inserts it into the
     /// type store and returns the resulting type key.
     pub fn resolve_type(&mut self, typ: &Type) -> TypeKey {
-        if let Type::Unresolved(unresolved_type) = typ {
+        let maybe_param_types: Option<&Vec<Type>> = if let Type::Unresolved(unresolved_type) = typ {
             if let Some(mod_name) = &unresolved_type.maybe_mod_name {
                 // Make sure the module name is valid before looking up the type
                 // in the corresponding module.
@@ -645,13 +646,25 @@ impl ProgramContext {
                     return *key;
                 }
             }
+
+            match unresolved_type.params.is_empty() {
+                true => None,
+                false => Some(&unresolved_type.params),
+            }
+        } else {
+            None
         };
 
-        if let Some(key) = self
-            .cur_mod_ctx()
-            .search_stack(|scope| scope.get_type_key(&typ))
-        {
-            return key;
+        // Only try to resolve the type by searching the stack if there are
+        // no parameters on it. Otherwise, we'll need to re-resolve it with
+        // the provided parameters.
+        if maybe_param_types.is_none() {
+            if let Some(key) = self
+                .cur_mod_ctx()
+                .search_stack(|scope| scope.get_type_key(&typ))
+            {
+                return key;
+            };
         }
 
         let a_type = AType::from(self, &typ);
@@ -660,11 +673,23 @@ impl ProgramContext {
         }
 
         let is_generic = a_type.is_generic();
+        let is_polymorphic = a_type.params().is_some();
         let key = self.insert_type(a_type);
 
         // Only record the type mapping for non-generic types.
         if !is_generic {
             self.insert_type_key(typ.clone(), key);
+        }
+
+        // If parameters were provided, we need to monomorphize the type.
+        if let Some(param_types) = maybe_param_types {
+            return self.monomorphize_type(key, param_types, typ);
+        } else if is_polymorphic {
+            self.insert_err(AnalyzeError::new(
+                ErrorKind::UnresolvedParams,
+                "expected generic parameters",
+                typ,
+            ));
         }
 
         key
@@ -696,11 +721,52 @@ impl ProgramContext {
     /// monomorph by substituting type keys for generic types with those from
     /// the provided parameter types. Returns the type key for the monomorphized
     /// type.
-    pub fn monomorphize_type(&mut self, type_key: TypeKey, param_tks: &Vec<TypeKey>) -> TypeKey {
-        let poly_type = self.must_get_type(type_key);
-        let defined_params = poly_type.params();
-        if defined_params.is_none() {
-            // The type is not parameterized, so there's nothing to do.
+    pub fn monomorphize_type<T: Locatable>(
+        &mut self,
+        type_key: TypeKey,
+        param_types: &Vec<Type>,
+        loc: &T,
+    ) -> TypeKey {
+        // Look up the type and make sure it's actually polymorphic.
+        let poly_type = self.must_get_type(type_key).clone();
+        let defined_params = match poly_type.params() {
+            Some(params) => &params.params,
+
+            // The type is not polymorphic.
+            None => {
+                self.insert_err(
+                    AnalyzeError::new(
+                        ErrorKind::UnexpectedParams,
+                        "unexpected generic parameters",
+                        loc,
+                    )
+                    .with_detail(
+                        format_code!("Type {} is not polymorphic.", poly_type.display(self))
+                            .as_str(),
+                    ),
+                );
+                return type_key;
+            }
+        };
+
+        // Make sure the right number of params were provided.
+        let expected_num_params = defined_params.len();
+        let passed_num_params = param_types.len();
+        if expected_num_params != passed_num_params {
+            self.insert_err(AnalyzeError::new(
+                ErrorKind::WrongNumberOfParams,
+                format!(
+                    "expected {} generic parameter{}, but found {}",
+                    expected_num_params,
+                    match expected_num_params > 1 {
+                        true => "s",
+                        false => "",
+                    },
+                    passed_num_params
+                )
+                .as_str(),
+                loc,
+            ));
             return type_key;
         }
 
@@ -712,13 +778,22 @@ impl ProgramContext {
             replaced_params: vec![],
         };
         let mut type_mappings: HashMap<TypeKey, TypeKey> = HashMap::new();
-        for (param, param_tk) in defined_params.unwrap().params.iter().zip(param_tks.iter()) {
-            mono.replaced_params.push(ReplacedParam {
-                param_type_key: param.generic_type_key,
-                replacement_type_key: *param_tk,
-            });
+        let type_display = poly_type.display(self);
+        for (param, param_type) in defined_params.iter().zip(param_types.iter()) {
+            match self.check_param(param_type, param, &type_display) {
+                Ok(param_tk) => {
+                    mono.replaced_params.push(ReplacedParam {
+                        param_type_key: param.generic_type_key,
+                        replacement_type_key: param_tk,
+                    });
 
-            type_mappings.insert(param.generic_type_key, *param_tk);
+                    type_mappings.insert(param.generic_type_key, param_tk);
+                }
+
+                Err(e) => {
+                    self.insert_err(e);
+                }
+            }
         }
 
         // Check if the type has already been monomorphized. If so, return the
@@ -730,7 +805,7 @@ impl ProgramContext {
         }
 
         // Monomorphize the type.
-        mono.mono_type_key = match poly_type.clone().monomorphize(self, &type_mappings) {
+        mono.mono_type_key = match poly_type.monomorphize(self, &type_mappings) {
             Some(replacement_tk) => replacement_tk,
             // It turns out the type doesn't need monomorphization.
             None => return type_key,
@@ -761,6 +836,72 @@ impl ProgramContext {
         };
 
         mono_type_key
+    }
+
+    /// Analyzed a passed parameter type and checks that it matches the expected
+    /// parameter constraints.
+    fn check_param(
+        &mut self,
+        passed_type: &Type,
+        expected_param: &AParam,
+        type_display: &String,
+    ) -> AnalyzeResult<TypeKey> {
+        let param_type_key = self.resolve_type(passed_type);
+        let passed_param_type = self.must_get_type(param_type_key);
+
+        // Skip further validation if the param value already failed analysis.
+        if passed_param_type.is_unknown() {
+            return Ok(param_type_key);
+        }
+
+        // Make sure the type passed as the parameter is not a spec.
+        if passed_param_type.is_spec() {
+            return Err(AnalyzeError::new(
+                ErrorKind::MismatchedTypes,
+                "expected concrete or generic type, but found spec",
+                passed_type,
+            )
+            .with_detail(
+                format_code!(
+                    "Expected a concrete or generic type in place of parameter {} on \
+                    {}, but found spec {}.",
+                    expected_param.name,
+                    type_display,
+                    passed_param_type.to_spec_type().name,
+                )
+                .as_str(),
+            ));
+        }
+
+        // Make sure that the type passed as the parameter value implements
+        // the required specs.
+        let missing_spec_type_keys =
+            self.get_missing_spec_impls(param_type_key, expected_param.generic_type_key);
+        let missing_spec_names: Vec<String> = missing_spec_type_keys
+            .into_iter()
+            .map(|tk| self.display_type_for_key(tk))
+            .collect();
+        if !missing_spec_names.is_empty() {
+            let param_type_display = self.display_type_for_key(param_type_key);
+            return Err(AnalyzeError::new(
+                ErrorKind::SpecNotSatisfied,
+                format_code!("type {} violates parameter constraints", param_type_display).as_str(),
+                passed_type,
+            )
+            .with_detail(
+                format!(
+                    "Type {} does not implement the following specs required \
+                by parameter {} on {}: {}",
+                    format_code!(param_type_display),
+                    format_code!(expected_param.name),
+                    format_code!(type_display),
+                    format_code_vec(&missing_spec_names, ", ")
+                )
+                .as_str(),
+            ));
+        }
+
+        Ok(param_type_key)
     }
 
     /// Returns the type key for the analyzer-internal `<unknown>` type.
@@ -1313,12 +1454,16 @@ impl ProgramContext {
     ///    the function (determined by `maybe_impl_type_key`), or is empty
     ///  - `path` has the form `<f1>.<f2>...` where each item in the sequence
     ///    is the name of a function inside which the next function is nested
+    ///    (this only applies if `include_fn_path` is `true`)
     ///  - `<name>` is the name of the symbol.
+    ///
+    /// If `include_path` is false, `path` will not be included.
     pub fn mangle_name(
         &self,
         maybe_mod_name: Option<&String>,
         maybe_impl_type_key: Option<TypeKey>,
         name: &str,
+        include_path: bool,
     ) -> String {
         let mod_ctx = self.cur_mod_ctx();
         let mod_path = match maybe_mod_name {
@@ -1331,7 +1476,7 @@ impl ProgramContext {
             None => "".to_string(),
         };
 
-        if mod_ctx.fn_scope_indices.is_empty() {
+        if mod_ctx.fn_scope_indices.is_empty() || !include_path {
             return format!("{mod_path}::{type_prefix}{name}");
         }
 
@@ -1435,7 +1580,7 @@ impl ProgramContext {
         name: &str,
     ) -> Option<&AStructType> {
         let mod_ctx = self.get_mod_ctx(maybe_mod_name);
-        let mangled_name = self.mangle_name(maybe_mod_name, None, name);
+        let mangled_name = self.mangle_name(maybe_mod_name, None, name, false);
         if let Some(tk) = mod_ctx.struct_type_keys.get(mangled_name.as_str()) {
             return Some(self.must_get_type(*tk).to_struct_type());
         }
@@ -1517,4 +1662,19 @@ impl ProgramContext {
     pub fn get_const_value(&self, name: &str) -> Option<&AExpr> {
         self.cur_mod_ctx().const_values.get(name)
     }
+}
+
+/// Mangles generic parameter types.
+pub fn mangle_param_names(params: &AParams, type_mappings: &HashMap<TypeKey, TypeKey>) -> String {
+    let mut mangled_name = "[".to_string();
+    for (i, param) in params.params.iter().enumerate() {
+        if let Some(mono_tk) = type_mappings.get(&param.generic_type_key) {
+            if i == 0 {
+                mangled_name += format!("{}", mono_tk).as_str();
+            } else {
+                mangled_name += format!(",{}", mono_tk).as_str();
+            }
+        }
+    }
+    mangled_name + "]"
 }

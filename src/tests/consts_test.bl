@@ -2,8 +2,13 @@ use {exit}: "std/libc/proc.bl"
 
 use {assert, null}: "src/tests/test_utils.bl"
 
+struct Thing {
+    i: i64
+    b: bool
+}
+
 const some_int = -50
-const some_struct = struct{i: i64, b: bool}{
+const some_struct = Thing {
     i: 987
     b: false
 }

@@ -5,6 +5,7 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::fmt::format_code_vec;
 use crate::parser::ast::r#impl::Impl;
+use crate::parser::ast::r#type::Type;
 use crate::{format_code, util};
 
 /// Represents a semantically valid `impl` block that declares member functions for a type.
@@ -39,7 +40,7 @@ impl AImpl {
         }
 
         // Get the type key of the type for this impl.
-        let type_key = ctx.resolve_type(&impl_.typ);
+        let type_key = ctx.resolve_type(&Type::Unresolved(impl_.typ.clone()));
 
         // Record an error and return early if the type was not defined in this module.
         if !ctx.type_declared_in_cur_mod(type_key) {

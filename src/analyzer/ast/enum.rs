@@ -10,6 +10,7 @@ use crate::analyzer::type_store::TypeKey;
 use crate::fmt::hierarchy_to_string;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::r#enum::{EnumType, EnumVariantInit};
+use crate::parser::ast::r#type::Type;
 use crate::{format_code, util};
 
 /// Represents a semantically valid enum type variant declaration.
@@ -120,7 +121,7 @@ impl AEnumType {
         // type to the program context. This way, if any of the variant types make use of this enum
         // type, we won't get into an infinitely recursive type resolution cycle. When we're done
         // analyzing this type, the mapping will be updated in the program context.
-        let mangled_name = ctx.mangle_name(None, None, enum_type.name.as_str());
+        let mangled_name = ctx.mangle_name(None, None, enum_type.name.as_str(), true);
         let type_key = ctx.insert_type(AType::Enum(AEnumType {
             name: enum_type.name.clone(),
             mangled_name: mangled_name.clone(),
@@ -305,9 +306,24 @@ impl AEnumVariantInit {
     /// Performs semantic analysis on enum variant initialization.
     pub fn from(ctx: &mut ProgramContext, enum_init: &EnumVariantInit) -> Self {
         // Make sure the enum type exists.
-        let enum_type_key = ctx.resolve_type(&enum_init.enum_type);
+        let enum_type_key = ctx.resolve_type(&Type::Unresolved(enum_init.typ.clone()));
         let enum_type = match ctx.must_get_type(enum_type_key) {
+            AType::Unknown(_) => {
+                // The enum type has already failed semantic analysis, so we should avoid
+                // analyzing its initialization and just return some zero-value placeholder instead.
+                return AEnumVariantInit {
+                    type_key: enum_type_key,
+                    variant: AEnumTypeVariant {
+                        number: 0,
+                        name: "".to_string(),
+                        maybe_type_key: None,
+                    },
+                    maybe_value: None,
+                };
+            }
+
             AType::Enum(enum_type) => enum_type,
+
             other => {
                 // This is not an enum type. Record the error and return a placeholder value.
                 ctx.insert_err(AnalyzeError::new(

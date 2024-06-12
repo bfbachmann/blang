@@ -245,14 +245,16 @@ mod tests {
                 age: i64,
             }
 
+            struct Thing {
+                something: bool
+                another: Person
+            }
+
             struct Inner {
                 count: i64,
                 msg: str,
                 get_person: fn (str): Person,
-                inline_struct_field: struct {
-                    something: bool,
-                    another: Person,
-                },
+                thing: Thing,
             }
 
             struct Outer {
@@ -275,10 +277,7 @@ mod tests {
                         count: 1,
                         msg: "test",
                         get_person: get_person,
-                        inline_struct_field: struct {
-                            something: bool,
-                            another: Person,
-                        } {
+                        thing: Thing {
                             something: true,
                             another: get_person(""),
                         }
@@ -915,7 +914,6 @@ mod tests {
             }
             "#,
         );
-        dbg!(&result);
         check_result(result, Some(ErrorKind::UnresolvedParams));
     }
 
@@ -1443,7 +1441,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_nested_fn_use() {
+    fn invalid_use_of_fn_from_another_scope() {
         let result = analyze(
             r#"
                 fn one() {
@@ -1459,7 +1457,23 @@ mod tests {
     }
 
     #[test]
-    fn valid_struck_use_in_loop() {
+    fn invalid_use_of_type_from_another_scope() {
+        let result = analyze(
+            r#"
+                fn one() {
+                    struct Thing {}
+                }
+
+                fn two() {
+                    let t = Thing {}
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::UndefType));
+    }
+
+    #[test]
+    fn valid_struct_use_in_loop() {
         let result = analyze(
             r#"
                 struct S { arr: [int; 1] }
@@ -1657,15 +1671,7 @@ mod tests {
 
     #[test]
     fn illegal_impls() {
-        for code in [
-            r#"impl int {}"#,
-            r#"impl str {}"#,
-            r#"impl {} {}"#,
-            r#"impl {bool, int} {}"#,
-            r#"impl [] {}"#,
-            r#"impl [int; 3] {}"#,
-            r#"impl *u8 {}"#,
-        ] {
+        for code in [r#"impl int {}"#, r#"impl str {}"#] {
             let result = analyze(code);
             check_result(result, Some(ErrorKind::IllegalImpl));
         }

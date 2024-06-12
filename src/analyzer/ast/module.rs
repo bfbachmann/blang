@@ -7,6 +7,7 @@ use crate::analyzer::type_containment::{check_enum_containment, check_struct_con
 use crate::parser::ast::ext::Extern;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::r#impl::Impl;
+use crate::parser::ast::r#type::Type;
 use crate::parser::ast::spec::Spec;
 use crate::parser::ast::statement::Statement;
 use crate::parser::module::Module;
@@ -218,7 +219,7 @@ fn define_extern_fn(ctx: &mut ProgramContext, ext: &Extern) {
 fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     // Set the current impl type key on the program context so we can access it when
     // resolving type `Self`.
-    let impl_type_key = ctx.resolve_type(&impl_.typ);
+    let impl_type_key = ctx.resolve_type(&Type::Unresolved(impl_.typ.clone()));
 
     // Skip the impl if it's illegal.
     if !ctx.type_declared_in_cur_mod(impl_type_key) {

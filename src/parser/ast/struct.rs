@@ -8,8 +8,10 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
+use crate::parser::ast::params::Params;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Symbol;
+use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::module::Module;
@@ -42,6 +44,7 @@ locatable_impl!(StructField);
 #[derive(Debug, Clone, Eq)]
 pub struct StructType {
     pub name: String,
+    pub maybe_params: Option<Params>,
     pub fields: Vec<StructField>,
     pub is_pub: bool,
     span: Span,
@@ -75,6 +78,10 @@ impl PartialEq for StructType {
             return false;
         }
 
+        if self.maybe_params != other.maybe_params {
+            return false;
+        }
+
         for field in &self.fields {
             if other.fields.iter().find(|f| f == &field).is_none() {
                 return false;
@@ -90,13 +97,14 @@ locatable_impl!(StructType);
 impl StructType {
     /// Parses a struct declaration. Expects token sequences of the form
     ///
-    ///     pub struct <name> {
+    ///     pub struct <name><params> {
     ///         <field>: <type>,
     ///         ...
     ///     }
     ///
     /// where
     ///  - `name` is the struct type name (optional)
+    ///  - `params` are generic parameters (optional)
     ///  - `type` is the struct field type
     ///  - `field` is the struct field name
     ///  - `pub` is optional
@@ -121,6 +129,12 @@ impl StructType {
         {
             name = Module::parse_identifier(tokens)?;
         }
+
+        // Parse optional generic parameters.
+        let maybe_params = match Module::next_token_is(tokens, &TokenKind::LeftBracket) {
+            true => Some(Params::from(tokens)?),
+            false => None,
+        };
 
         // The next token should be `{`.
         Module::parse_expecting(tokens, TokenKind::LeftBrace)?;
@@ -175,6 +189,7 @@ impl StructType {
 
         Ok(StructType {
             name,
+            maybe_params,
             fields,
             is_pub,
             span: Span { start_pos, end_pos },
@@ -185,9 +200,7 @@ impl StructType {
 /// Represents struct initialization.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructInit {
-    /// Type should only ever be `Type::Unresolved` (for named struct types) or `Type::Struct` (for
-    /// struct types defined inline).
-    pub typ: Type,
+    pub typ: UnresolvedType,
     /// Maps struct field name to the value assigned to it.
     pub field_values: Vec<(Symbol, Expression)>,
     pub span: Span,
@@ -217,7 +230,7 @@ impl StructInit {
     ///     }
     ///
     /// where
-    ///  - `type` is the struct type
+    ///  - `type` is the unresolved struct type
     ///  - `field` is the struct field name
     ///  - `value` is the value being assigned to the field
     ///
@@ -227,8 +240,8 @@ impl StructInit {
         let start_pos = Module::current_position(tokens);
         let end_pos: Position;
 
-        // Parse the struct type (either by name or inline declaration).
-        let struct_type = Type::from(tokens)?;
+        // Parse the struct type symbol.
+        let typ = UnresolvedType::from_symbol(Symbol::from(tokens)?);
 
         // Parse `{`.
         Module::parse_expecting(tokens, TokenKind::LeftBrace)?;
@@ -282,7 +295,7 @@ impl StructInit {
         }
 
         Ok(StructInit {
-            typ: struct_type,
+            typ,
             field_values,
             span: Span { start_pos, end_pos },
         })

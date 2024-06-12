@@ -1,20 +1,26 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
+use crate::fmt::vec_to_string;
 use crate::lexer::pos::{Locatable, Position, Span};
 use crate::locatable_impl;
+use crate::parser::ast::r#type::Type;
+use crate::parser::ast::symbol::Symbol;
 
 /// Represents a user-defined type that has not yet been resolved (i.e. is not primitive).
 #[derive(Debug, Clone, Eq)]
 pub struct UnresolvedType {
     pub maybe_mod_name: Option<String>,
     pub name: String,
+    pub params: Vec<Type>,
     span: Span,
 }
 
 impl PartialEq for UnresolvedType {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.maybe_mod_name == other.maybe_mod_name
+        self.name == other.name
+            && self.maybe_mod_name == other.maybe_mod_name
+            && self.params == other.params
     }
 }
 
@@ -22,6 +28,7 @@ impl Hash for UnresolvedType {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state);
         self.maybe_mod_name.hash(state);
+        self.params.hash(state);
     }
 }
 
@@ -29,12 +36,16 @@ impl Display for UnresolvedType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}{}",
+            "{}{}{}",
             match &self.maybe_mod_name {
                 Some(mod_name) => format!("@{mod_name}."),
                 None => "".to_string(),
             },
-            self.name
+            self.name,
+            match self.params.len() {
+                0 => "".to_string(),
+                _ => vec_to_string(&self.params, ", "),
+            }
         )
     }
 }
@@ -48,16 +59,18 @@ impl UnresolvedType {
         UnresolvedType {
             maybe_mod_name: None,
             name: name.to_string(),
+            params: vec![],
             span,
         }
     }
 
-    /// Creates a new unresolved type with a module name.
-    pub fn new_with_mod(maybe_mod_name: Option<String>, name: &str, span: Span) -> UnresolvedType {
+    /// Creates a new unresolved type from the given symbol.
+    pub fn from_symbol(symbol: Symbol) -> UnresolvedType {
         UnresolvedType {
-            maybe_mod_name,
-            name: name.to_string(),
-            span,
+            maybe_mod_name: symbol.maybe_mod_name,
+            name: symbol.name,
+            params: symbol.params,
+            span: symbol.span,
         }
     }
 
@@ -66,6 +79,7 @@ impl UnresolvedType {
         UnresolvedType {
             maybe_mod_name: None,
             name: name.to_string(),
+            params: vec![],
             span: Default::default(),
         }
     }
@@ -75,6 +89,7 @@ impl UnresolvedType {
         UnresolvedType {
             maybe_mod_name: None,
             name: "<none>".to_string(),
+            params: vec![],
             span: Default::default(),
         }
     }

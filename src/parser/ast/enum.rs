@@ -7,6 +7,8 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::r#type::Type;
+use crate::parser::ast::symbol::Symbol;
+use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::ParseResult;
 use crate::parser::module::Module;
 use crate::{locatable_impl, util};
@@ -174,7 +176,7 @@ impl EnumType {
 /// Represents enum variant initialization.
 #[derive(Debug, Clone, Eq)]
 pub struct EnumVariantInit {
-    pub enum_type: Type,
+    pub typ: UnresolvedType,
     pub variant_name: String,
     pub maybe_value: Option<Box<Expression>>,
     pub span: Span,
@@ -182,7 +184,7 @@ pub struct EnumVariantInit {
 
 impl PartialEq for EnumVariantInit {
     fn eq(&self, other: &Self) -> bool {
-        self.enum_type == other.enum_type
+        self.typ == other.typ
             && self.variant_name == other.variant_name
             && util::opts_eq(&self.maybe_value, &other.maybe_value)
     }
@@ -193,7 +195,7 @@ impl Display for EnumVariantInit {
         write!(
             f,
             "{}{}{}",
-            self.enum_type,
+            self.typ,
             TokenKind::DoubleColon,
             self.variant_name
         )?;
@@ -208,7 +210,7 @@ impl Display for EnumVariantInit {
 
 impl Hash for EnumVariantInit {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.enum_type.hash(state);
+        self.typ.hash(state);
         self.variant_name.hash(state);
         self.maybe_value.hash(state);
     }
@@ -217,19 +219,19 @@ impl Hash for EnumVariantInit {
 impl EnumVariantInit {
     /// Parses enum variant initialization. Expects token sequences of the forms
     ///
-    ///     <enum_type>::<variant_name>
-    ///     <enum_type>::<variant_name>(<value>)
+    ///     <type>::<variant_name>
+    ///     <type>::<variant_name>(<value>)
     ///
     /// where
-    ///  - `enum_name` is an identifier representing the name of the enum type
+    ///  - `type` is the enum type symbol
     ///  - `variant_name` is an identifier representing the enum type variant
     ///  - `value` is an expression representing the optional value associated with the enum
     ///    variant (see `Expression::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         let start_pos = Module::current_position(tokens);
 
-        // Parse `<enum_type>::`.
-        let enum_type = Type::from(tokens)?;
+        // Parse the enum type symbol followed by `::`.
+        let typ = UnresolvedType::from_symbol(Symbol::from(tokens)?);
         Module::parse_expecting(tokens, TokenKind::DoubleColon)?;
 
         // In case there is no value in this initialization, compute the end position now.
@@ -252,7 +254,7 @@ impl EnumVariantInit {
         };
 
         Ok(EnumVariantInit {
-            enum_type,
+            typ,
             variant_name,
             maybe_value,
             span: Span { start_pos, end_pos },

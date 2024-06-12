@@ -150,14 +150,9 @@ impl Type {
                 ..
             }) => Ok(Type::Array(Box::new(ArrayType::from(tokens)?))),
 
-            _ => {
-                let symbol = Symbol::from(tokens)?;
-                Ok(Type::Unresolved(UnresolvedType::new_with_mod(
-                    symbol.maybe_mod_name,
-                    symbol.name.as_str(),
-                    symbol.span,
-                )))
-            }
+            _ => Ok(Type::Unresolved(UnresolvedType::from_symbol(Symbol::from(
+                tokens,
+            )?))),
         }
     }
 

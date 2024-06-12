@@ -1,0 +1,29 @@
+use {exit}: "std/libc/proc.bl"
+use {memcpy, malloc, free}: "std/libc/mem.bl"
+
+use {assert}: "src/tests/test_utils.bl"
+
+struct Ref[T] {
+    ptr: *mut T
+}
+
+fn heap[T](t: *T): Ref[T] {
+     let ptr = malloc(sizeof T) as *mut T
+     memcpy(ptr as *u8, t as *u8, sizeof T)
+     return Ref[T]{
+        ptr: ptr
+     }
+}
+
+fn deref[T](ref: Ref[T]): *mut T {
+    return ref.ptr
+}
+
+fn main() {
+    let msg = "test\0"
+    let ref = heap[str](&msg)
+    let deref_msg = deref[str](ref)^
+    assert(deref_msg == msg, "expected \"test\"")
+
+    exit(0)
+}

@@ -20,6 +20,7 @@ use crate::analyzer::analyze::ProgramAnalysis;
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::module::AModule;
 use crate::analyzer::ast::r#const::AConst;
+use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::prog_context::Monomorphization;
 use crate::analyzer::type_store::{TypeKey, TypeStore};
@@ -186,9 +187,12 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
         }
 
         // Find the keys of all types that are still mapped to generic types.
+        // Also find the polymorphic parent type keys for all unresolved (generic) types.
         let mut unresolved_tks = vec![];
+        let mut poly_tks = HashSet::new();
         for (k, v) in &type_mapping {
-            if self.type_store.must_get(*v).is_generic() {
+            if let AType::Generic(generic_type) = self.type_store.must_get(*v) {
+                poly_tks.insert(generic_type.poly_type_key);
                 unresolved_tks.push(*k);
             }
         }
@@ -198,16 +202,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
             return vec![type_mapping];
         }
 
-        // Find the polymorphic parent type keys for all unresolved (generic) types.
-        let mut poly_tks = HashSet::new();
-        for unresolved_tk in &unresolved_tks {
-            let generic_type = self
-                .type_store
-                .must_get(*type_mapping.get(unresolved_tk).unwrap())
-                .to_generic_type();
-            poly_tks.insert(generic_type.poly_type_key);
-        }
-
+        // Recursively resolve monomorphizations of the polymorphic replacement types.
         let mut resolved_mappings = vec![];
         for poly_tk in poly_tks {
             let monos = self.resolve_monomorphizations(poly_tk);
@@ -221,7 +216,6 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                     }
                 }
 
-                // TODO: need to make permutations.
                 resolved_mappings.push(new_mapping);
             }
         }

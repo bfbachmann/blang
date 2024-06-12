@@ -583,7 +583,6 @@ fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
         // Composite value initialization.
         TokenKind::LeftBracket => Expression::ArrayInit(Box::new(ArrayInit::from(tokens)?)),
         TokenKind::LeftBrace => Expression::TupleInit(TupleInit::from(tokens)?),
-        TokenKind::Struct => Expression::StructInit(StructInit::from(tokens)?),
 
         // Inline function declarations.
         TokenKind::Fn => Expression::AnonFunction(Box::new(Function::from_anon(tokens)?)),

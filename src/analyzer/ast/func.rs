@@ -8,7 +8,7 @@ use crate::analyzer::ast::closure::{check_closure_returns, AClosure};
 use crate::analyzer::ast::params::AParams;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::prog_context::{mangle_param_names, ProgramContext};
 use crate::analyzer::scope::ScopeKind;
 use crate::analyzer::type_store::TypeKey;
 use crate::parser::ast::func::Function;
@@ -79,7 +79,7 @@ impl AFnSig {
     /// signature.
     pub fn from(ctx: &mut ProgramContext, sig: &FunctionSignature) -> Self {
         let maybe_impl_type_key = ctx.get_cur_self_type_key();
-        let mangled_name = ctx.mangle_name(None, maybe_impl_type_key, sig.name.as_str());
+        let mangled_name = ctx.mangle_name(None, maybe_impl_type_key, sig.name.as_str(), true);
 
         // Create a mostly-empty function type and insert it into the program context.
         // We'll fill in the details later, we just need a type key for it now.
@@ -93,13 +93,6 @@ impl AFnSig {
             params: None,
         };
         a_fn_sig.type_key = ctx.force_insert_type(AType::from_fn_sig(a_fn_sig.clone()));
-        if a_fn_sig.name == "get_default_str" {
-            println!(
-                "force inserted {} -> {}",
-                a_fn_sig.type_key,
-                a_fn_sig.display(ctx)
-            );
-        }
 
         // If the function has generic parameters, we need to analyze them first
         // and store them in the program context. We'll need them when analyzing
@@ -175,19 +168,16 @@ impl AFnSig {
 
         // Add monomorphized types to the name to disambiguate it from other
         // monomorphized instances of this function.
-        self.mangled_name += "[";
         if let Some(params) = &self.params {
-            for (i, param) in params.params.iter().enumerate() {
-                if let Some(mono_tk) = type_mappings.get(&param.generic_type_key) {
-                    if i == 0 {
-                        self.mangled_name += format!("{}", mono_tk).as_str();
-                    } else {
-                        self.mangled_name += format!(",{}", mono_tk).as_str();
-                    }
-                }
+            self.mangled_name += mangle_param_names(params, type_mappings).as_str();
+        } else {
+            for (target_tk, replacement_tk) in type_mappings {
+                self.mangled_name = self.mangled_name.replace(
+                    format!("{target_tk}").as_str(),
+                    format!("{replacement_tk}").as_str(),
+                );
             }
         }
-        self.mangled_name += "]";
 
         // Remove parameters from the signature now that they're no longer relevant.
         self.params = None;
@@ -245,7 +235,8 @@ impl AFnSig {
         );
 
         // Re-mangle the name based on the updated type info.
-        self.mangled_name = ctx.mangle_name(None, self.maybe_impl_type_key, self.name.as_str());
+        self.mangled_name =
+            ctx.mangle_name(None, self.maybe_impl_type_key, self.name.as_str(), true);
 
         // Define the new type in the program context.
         let new_fn_type_key = ctx.insert_type(AType::Function(Box::new(self.clone())));
