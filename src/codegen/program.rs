@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::fs::remove_file;
 use std::path::Path;
 use std::process::Command;
@@ -45,7 +46,7 @@ pub struct ProgramCodeGen<'a, 'ctx> {
 }
 
 /// The type of output file to generate.
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 pub enum OutputFormat {
     LLVMBitcode,
     LLVMIR,
@@ -426,6 +427,21 @@ pub fn generate(
         module_consts: HashMap::new(),
     };
     codegen.gen_program()?;
+
+    // Create the output directory if it does not yet exist.
+    if let Some(parent_dir) = output_path.parent() {
+        if let Err(e) = fs::create_dir_all(parent_dir) {
+            return Err(CodeGenError::new(
+                ErrorKind::WriteOutFailed,
+                format!(
+                    "failed to create output directory {}: {}",
+                    parent_dir.display(),
+                    e
+                )
+                .as_str(),
+            ));
+        }
+    }
 
     // Write output to file.
     match output_format {

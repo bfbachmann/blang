@@ -425,19 +425,13 @@ fn compile(
     let prog_analysis = analyze(src_path, None, &target_triple)?;
     let analyze_duration = Instant::now() - analyze_start;
 
-    // If no output path was specified, just use the source file name.
+    // If no output path was specified, just use the default generated from the
+    // source file path.
     let src = Path::new(src_path);
     let dst = if let Some(path) = dst_path {
         PathBuf::from(path)
     } else {
-        let file_stem = src.file_stem().unwrap_or_default();
-        PathBuf::from(file_stem).with_extension(match output_format {
-            OutputFormat::LLVMBitcode => "bc",
-            OutputFormat::LLVMIR => "ll",
-            OutputFormat::Assembly => "s",
-            OutputFormat::Object => "o",
-            OutputFormat::Executable => "",
-        })
+        default_output_file_path(src, output_format)
     };
 
     // Compile the program.
@@ -498,7 +492,7 @@ fn run(src_path: &str, target_triple: &TargetTriple) {
 
     // Set output executable path to the source path without the extension.
     let src = Path::new(src_path);
-    let dst = PathBuf::from(src.file_stem().unwrap_or_default());
+    let dst = default_output_file_path(src, OutputFormat::Executable);
 
     // Compile the program.
     if let Err(e) = generate(
@@ -516,6 +510,22 @@ fn run(src_path: &str, target_triple: &TargetTriple) {
     // Run the program.
     let io_err = process::Command::new(PathBuf::from(".").join(dst)).exec();
     fatalln!("{}", io_err);
+}
+
+/// Generates a new default output file path of the form `bin/<src>.<output_format>`.
+fn default_output_file_path(src: &Path, output_format: OutputFormat) -> PathBuf {
+    let file_stem = src.file_stem().unwrap_or_default();
+    let mut path = PathBuf::from("bin");
+    path.push(
+        PathBuf::from(file_stem).with_extension(match output_format {
+            OutputFormat::LLVMBitcode => "bc",
+            OutputFormat::LLVMIR => "ll",
+            OutputFormat::Assembly => "s",
+            OutputFormat::Object => "o",
+            OutputFormat::Executable => "",
+        }),
+    );
+    path
 }
 
 #[cfg(test)]
