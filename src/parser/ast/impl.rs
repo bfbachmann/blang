@@ -6,7 +6,6 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::symbol::Symbol;
-use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::ParseResult;
 use crate::parser::module::Module;
 use crate::{locatable_impl, util};
@@ -14,7 +13,7 @@ use crate::{locatable_impl, util};
 /// Represents the implementation of a series of member functions on a type.
 #[derive(Clone, Debug, Eq)]
 pub struct Impl {
-    pub typ: UnresolvedType,
+    pub typ: Symbol,
     /// The specs being implemented for the type.
     pub specs: Vec<Symbol>,
     pub member_fns: Vec<Function>,
@@ -49,7 +48,7 @@ impl Impl {
     ///     }
     ///
     /// where
-    ///  - `type` is the type for which member functions are being implemented
+    ///  - `type` is the name of the type for which member functions are being implemented
     ///  - `member_fn` is one of a series of member functions in the implementation
     ///  - `spec` is the optional symbol representing a spec this `impl` implements.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
@@ -60,7 +59,7 @@ impl Impl {
         Module::parse_expecting(tokens, TokenKind::Impl)?;
 
         // The next tokens should form a type.
-        let typ = UnresolvedType::from_symbol(Symbol::from(tokens)?);
+        let type_name = Symbol::from_identifier(tokens)?;
 
         // Check for an optional specs.
         let specs = if Module::parse_optional(tokens, TokenKind::Colon).is_some() {
@@ -91,7 +90,7 @@ impl Impl {
         }
 
         Ok(Impl {
-            typ,
+            typ: type_name,
             specs,
             member_fns,
             span: Span { start_pos, end_pos },

@@ -176,6 +176,8 @@ pub struct ProgramContext {
     pub type_store: TypeStore,
     /// Maps polymorphic type keys to their monomorphizations.
     pub monomorphized_types: HashMap<TypeKey, HashSet<Monomorphization>>,
+    /// Maps monomorphic type keys to their corresponding polymorph type keys.
+    polymorphs: HashMap<TypeKey, TypeKey>,
     /// Maps primitive type names to their type keys.
     primitive_type_keys: HashMap<String, TypeKey>,
 
@@ -255,6 +257,7 @@ impl ProgramContext {
             spec_impls: Default::default(),
             params: vec![],
             monomorphized_types: Default::default(),
+            polymorphs: Default::default(),
             warnings: Default::default(),
             errors: Default::default(),
         }
@@ -505,21 +508,19 @@ impl ProgramContext {
         let typ = self.must_get_type(type_key);
         let maybe_type_name = match typ {
             AType::Struct(struct_type) => {
-                let name = struct_type.name.clone();
                 let mangled_name = struct_type.mangled_name.clone();
                 self.cur_mod_ctx_mut()
                     .struct_type_keys
                     .insert(mangled_name.clone(), type_key);
-                Some(name)
+                Some(mangled_name)
             }
 
             AType::Enum(enum_type) => {
-                let name = enum_type.name.clone();
                 let mangled_name = enum_type.mangled_name.clone();
                 self.cur_mod_ctx_mut()
                     .enum_type_keys
                     .insert(mangled_name.clone(), type_key);
-                Some(name.clone())
+                Some(mangled_name)
             }
 
             AType::Spec(spec_type) => {
@@ -601,8 +602,22 @@ impl ProgramContext {
 
     /// Tries to map the given un-analyzed type to a type key and return that type key. If there is
     /// no existing mapping for `typ`, performs semantic analysis on `typ`, inserts it into the
-    /// type store and returns the resulting type key.
+    /// type store and returns the resulting type key. An error will be recorded if
+    /// the type is parameterized and invalid parameters were provided.
     pub fn resolve_type(&mut self, typ: &Type) -> TypeKey {
+        self.resolve_type_helper(typ, false)
+    }
+
+    /// Does the same thing as `resolve_type`, except it doesn't require parameters
+    /// for polymorphic types.  
+    pub fn resolve_maybe_polymorphic_type(&mut self, typ: &Type) -> TypeKey {
+        self.resolve_type_helper(typ, true)
+    }
+
+    /// Implements the functionality described in `resolve_type`, except that
+    /// if `allow_polymorph` is `false` and the resolved type is polymorphic,
+    /// an error will be recorded.
+    fn resolve_type_helper(&mut self, typ: &Type, allow_polymorph: bool) -> TypeKey {
         let maybe_param_types: Option<&Vec<Type>> = if let Type::Unresolved(unresolved_type) = typ {
             if let Some(mod_name) = &unresolved_type.maybe_mod_name {
                 // Make sure the module name is valid before looking up the type
@@ -684,7 +699,7 @@ impl ProgramContext {
         // If parameters were provided, we need to monomorphize the type.
         if let Some(param_types) = maybe_param_types {
             return self.monomorphize_type(key, param_types, typ);
-        } else if is_polymorphic {
+        } else if is_polymorphic && !allow_polymorph {
             self.insert_err(AnalyzeError::new(
                 ErrorKind::UnresolvedParams,
                 "expected generic parameters",
@@ -723,14 +738,14 @@ impl ProgramContext {
     /// type.
     pub fn monomorphize_type<T: Locatable>(
         &mut self,
-        type_key: TypeKey,
+        poly_type_key: TypeKey,
         param_types: &Vec<Type>,
         loc: &T,
     ) -> TypeKey {
         // Look up the type and make sure it's actually polymorphic.
-        let poly_type = self.must_get_type(type_key).clone();
+        let poly_type = self.must_get_type(poly_type_key).clone();
         let defined_params = match poly_type.params() {
-            Some(params) => &params.params,
+            Some(params) => params.params.clone(),
 
             // The type is not polymorphic.
             None => {
@@ -745,7 +760,7 @@ impl ProgramContext {
                             .as_str(),
                     ),
                 );
-                return type_key;
+                return poly_type_key;
             }
         };
 
@@ -767,13 +782,13 @@ impl ProgramContext {
                 .as_str(),
                 loc,
             ));
-            return type_key;
+            return poly_type_key;
         }
 
         // Generate a monomorphization for this type. We'll use this to track
         // the fact that this type has been monomorphized.
         let mut mono = Monomorphization {
-            poly_type_key: type_key,
+            poly_type_key,
             mono_type_key: 0,
             replaced_params: vec![],
         };
@@ -798,7 +813,7 @@ impl ProgramContext {
 
         // Check if the type has already been monomorphized. If so, return the
         // existing monomorphic type's key.
-        if let Some(monos) = self.monomorphized_types.get(&type_key) {
+        if let Some(monos) = self.monomorphized_types.get(&poly_type_key) {
             if let Some(existing_mono) = monos.get(&mono) {
                 return existing_mono.mono_type_key;
             }
@@ -808,16 +823,17 @@ impl ProgramContext {
         mono.mono_type_key = match poly_type.monomorphize(self, &type_mappings) {
             Some(replacement_tk) => replacement_tk,
             // It turns out the type doesn't need monomorphization.
-            None => return type_key,
+            None => return poly_type_key,
         };
 
         let mono_type_key = mono.mono_type_key;
 
-        // We don't need to monomorphize every method on every impl for this
-        // type, as those will be monomorphized individually if/when they're used.
-        // Regardless, we must still mark this new monomorphic type as
-        // implementing the specs it claims to implement.
-        if let Some(spec_impl_tks) = self.spec_impls.get(&type_key) {
+        // Monomorphize all member functions on the polymorphic type.
+        self.monomorphize_mem_fns(&mono, &type_mappings);
+
+        // Mark this new monomorphic type as implementing the specs its polymorphic
+        // counterpart implements.
+        if let Some(spec_impl_tks) = self.spec_impls.get(&poly_type_key) {
             for spec_impl_tk in spec_impl_tks.clone() {
                 self.insert_spec_impl(mono.mono_type_key, spec_impl_tk);
             }
@@ -825,17 +841,49 @@ impl ProgramContext {
 
         // Insert the monomorphization so we know we need to generate code
         // for it during codegen.
-        match self.monomorphized_types.get_mut(&type_key) {
-            Some(set) => {
-                set.insert(mono);
-            }
-            None => {
-                self.monomorphized_types
-                    .insert(type_key, HashSet::from([mono]));
-            }
-        };
+        self.polymorphs
+            .insert(mono.mono_type_key, mono.poly_type_key);
+        self.insert_monomorphization(mono);
 
         mono_type_key
+    }
+
+    /// Monomorphizes all the member functions for the type monomorphized with
+    /// the given monomorphization.
+    fn monomorphize_mem_fns(
+        &mut self,
+        mono: &Monomorphization,
+        type_mappings: &HashMap<TypeKey, TypeKey>,
+    ) {
+        let mut poly_mem_fn_tks = HashMap::new();
+        if let Some(poly_mem_fns) = self.type_member_fn_sigs.get(&mono.poly_type_key) {
+            for (fn_name, fn_sig) in poly_mem_fns {
+                poly_mem_fn_tks.insert(fn_name.clone(), fn_sig.type_key);
+            }
+        }
+
+        let mut mono_mem_fn_sigs = HashMap::new();
+        for (fn_name, poly_fn_tk) in poly_mem_fn_tks {
+            let mut poly_fn_sig = self.must_get_type(poly_fn_tk).to_fn_sig().clone();
+            poly_fn_sig.mangled_name += mangle_param_names(
+                self.must_get_type(mono.poly_type_key).params().unwrap(),
+                &type_mappings,
+            )
+            .as_str();
+            let mono_fn_tk = poly_fn_sig.monomorphize(self, type_mappings);
+            let fn_mono = Monomorphization {
+                poly_type_key: mono.poly_type_key,
+                mono_type_key: mono_fn_tk,
+                replaced_params: mono.replaced_params.clone(),
+            };
+            self.insert_monomorphization(fn_mono);
+            mono_mem_fn_sigs.insert(fn_name, self.must_get_type(mono_fn_tk).to_fn_sig().clone());
+        }
+
+        if !mono_mem_fn_sigs.is_empty() {
+            self.type_member_fn_sigs
+                .insert(mono.mono_type_key, mono_mem_fn_sigs);
+        }
     }
 
     /// Analyzed a passed parameter type and checks that it matches the expected
@@ -902,6 +950,19 @@ impl ProgramContext {
         }
 
         Ok(param_type_key)
+    }
+
+    /// Inserts the given monomorphization into the program context.
+    fn insert_monomorphization(&mut self, mono: Monomorphization) {
+        match self.monomorphized_types.get_mut(&mono.poly_type_key) {
+            Some(set) => {
+                set.insert(mono);
+            }
+            None => {
+                self.monomorphized_types
+                    .insert(mono.poly_type_key, HashSet::from([mono]));
+            }
+        };
     }
 
     /// Returns the type key for the analyzer-internal `<unknown>` type.

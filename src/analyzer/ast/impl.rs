@@ -6,6 +6,7 @@ use crate::analyzer::type_store::TypeKey;
 use crate::fmt::format_code_vec;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#type::Type;
+use crate::parser::ast::unresolved::UnresolvedType;
 use crate::{format_code, util};
 
 /// Represents a semantically valid `impl` block that declares member functions for a type.
@@ -40,7 +41,18 @@ impl AImpl {
         }
 
         // Get the type key of the type for this impl.
-        let type_key = ctx.resolve_type(&Type::Unresolved(impl_.typ.clone()));
+        let type_key = ctx.resolve_maybe_polymorphic_type(&Type::Unresolved(
+            UnresolvedType::from_symbol(impl_.typ.clone()),
+        ));
+
+        // Abort early if the type failed analysis.
+        let typ = ctx.must_get_type(type_key);
+        if typ.is_unknown() {
+            return AImpl {
+                type_key: ctx.unknown_type_key(),
+                member_fns: vec![],
+            };
+        }
 
         // Record an error and return early if the type was not defined in this module.
         if !ctx.type_declared_in_cur_mod(type_key) {
@@ -59,6 +71,16 @@ impl AImpl {
                 member_fns: vec![],
             };
         }
+
+        // If there are parameters for this impl, push them to the program context
+        // so we can resolve them when we're analyzing member functions.
+        let has_params = match typ.params() {
+            Some(params) => {
+                ctx.push_params(params.clone());
+                true
+            }
+            None => false,
+        };
 
         // Set the impl type key in the program context so we can use it when resolving type `This`.
         ctx.set_cur_self_type_key(Some(type_key));
@@ -126,7 +148,8 @@ impl AImpl {
                     )
                     .with_detail(
                         format!(
-                            "Missing adequate implementations for the following functions from spec {}: {}.",
+                            "Missing adequate implementations for the following \
+                            functions from spec {}: {}.",
                             format_code!(spec),
                             format_code_vec(&missing_fn_names, ", "),
                         )
@@ -138,6 +161,12 @@ impl AImpl {
 
         for err in spec_impl_errs {
             ctx.insert_err(err);
+        }
+
+        // We can pop the params and the current `Self` type key from the program
+        // context now that we're done analyzing this `impl`.
+        if has_params {
+            ctx.pop_params();
         }
 
         ctx.set_cur_self_type_key(None);

@@ -10,6 +10,7 @@ use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::spec::Spec;
 use crate::parser::ast::statement::Statement;
+use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::module::Module;
 
 /// Represents a semantically analyzed source file.
@@ -219,12 +220,25 @@ fn define_extern_fn(ctx: &mut ProgramContext, ext: &Extern) {
 fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     // Set the current impl type key on the program context so we can access it when
     // resolving type `Self`.
-    let impl_type_key = ctx.resolve_type(&Type::Unresolved(impl_.typ.clone()));
+    let impl_type_key = ctx.resolve_maybe_polymorphic_type(&Type::Unresolved(
+        UnresolvedType::from_symbol(impl_.typ.clone()),
+    ));
 
     // Skip the impl if it's illegal.
     if !ctx.type_declared_in_cur_mod(impl_type_key) {
         return;
     }
+
+    // If there are parameters for this impl, push them to the program context
+    // so we can resolve them when we're analyzing member functions.
+    let typ = ctx.must_get_type(impl_type_key);
+    let has_params = match typ.params() {
+        Some(params) => {
+            ctx.push_params(params.clone());
+            true
+        }
+        None => false,
+    };
 
     ctx.set_cur_self_type_key(Some(impl_type_key));
 
@@ -254,6 +268,10 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     }
 
     ctx.set_cur_self_type_key(None);
+
+    if has_params {
+        ctx.pop_params();
+    }
 
     // Regardless of errors, we'll mark this `impl` as implementing all the
     // specs it claims it does. This is just to prevent redundant error
