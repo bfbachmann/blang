@@ -38,7 +38,7 @@ impl AField {
 pub struct AStructType {
     pub name: String,
     pub mangled_name: String,
-    pub params: Option<AParams>,
+    pub maybe_params: Option<AParams>,
     pub fields: Vec<AField>,
 }
 
@@ -62,7 +62,7 @@ impl PartialEq for AStructType {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && self.mangled_name == other.mangled_name
-            && self.params == other.params
+            && self.maybe_params == other.maybe_params
             && util::vecs_eq(&self.fields, &other.fields)
     }
 }
@@ -110,7 +110,7 @@ impl AStructType {
         let type_key = ctx.insert_type(AType::Struct(AStructType {
             name: struct_type.name.clone(),
             mangled_name: mangled_name.clone(),
-            params: None,
+            maybe_params: None,
             fields: vec![],
         }));
 
@@ -165,7 +165,7 @@ impl AStructType {
         let a_struct = AStructType {
             name: struct_type.name.clone(),
             mangled_name,
-            params: maybe_params,
+            maybe_params: maybe_params,
             fields,
         };
 
@@ -225,7 +225,7 @@ impl AStructType {
         if replaced_tks {
             // Add monomorphized types to the name to disambiguate it from other
             // monomorphized instances of this function.
-            if let Some(params) = &self.params {
+            if let Some(params) = &self.maybe_params {
                 self.mangled_name += mangle_param_names(params, type_mappings).as_str();
             } else {
                 for (target_tk, replacement_tk) in type_mappings {
@@ -237,7 +237,7 @@ impl AStructType {
             }
 
             // Remove parameters from the signature now that they're no longer relevant.
-            self.params = None;
+            self.maybe_params = None;
 
             // Define the new type in the program context.
             return Some(ctx.insert_type(AType::Struct(self.clone())));
@@ -257,7 +257,11 @@ impl AStructType {
 
             s + format!("}}").as_str()
         } else {
-            format!("{}", self.name)
+            let params = match &self.maybe_params {
+                Some(params) => params.display(ctx),
+                None => "".to_string(),
+            };
+            format!("{}{}", self.name, params)
         }
     }
 }

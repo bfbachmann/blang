@@ -21,6 +21,7 @@ use crate::analyzer::analyze::ProgramAnalysis;
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::module::AModule;
 use crate::analyzer::ast::r#const::AConst;
+use crate::analyzer::ast::r#impl::AImpl;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::prog_context::Monomorphization;
@@ -67,22 +68,25 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                 AStatement::FunctionDeclaration(func) => {
                     self.gen_fn(func)?;
                 }
+
                 AStatement::Impl(impl_) => {
-                    for mem_fn in &impl_.member_fns {
-                        self.gen_fn(mem_fn)?;
-                    }
+                    self.gen_impl(impl_)?;
                 }
+
                 AStatement::StructTypeDeclaration(_) | AStatement::EnumTypeDeclaration(_) => {
                     // Nothing to do here because types are compiled only when they're used.
                 }
+
                 AStatement::ExternFn(_) => {
                     // Nothing to do here because extern functions are compiled in the call to
                     // `ProgramCodeGen::declare_fns_and_consts`.
                 }
+
                 AStatement::Const(_) => {
                     // Nothing to do here because constants are compiled in the call to
                     // `ProgramCodeGen::define_consts` above.
                 }
+
                 other => {
                     panic!("unexpected top-level statement {other}");
                 }
@@ -108,6 +112,45 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
 
         if let Err(e) = self.module.verify() {
             panic!("module verification failed: {}", e);
+        }
+
+        Ok(())
+    }
+
+    /// Generates code for functions in an `impl` block.
+    fn gen_impl(&mut self, impl_: &AImpl) -> CompileResult<()> {
+        let impl_type = self.type_store.must_get(impl_.type_key);
+        let maybe_impl_params = impl_type.params();
+
+        // If the impl type has no parameters, we can just generate the member
+        // functions normally.
+        if maybe_impl_params.is_none() {
+            for mem_fn in &impl_.member_fns {
+                self.gen_fn(mem_fn)?;
+            }
+
+            return Ok(());
+        }
+
+        let impl_params = &maybe_impl_params.unwrap().params;
+        let mappings = self.resolve_monomorphizations(impl_.type_key);
+        for mapping in mappings {
+            for mem_fn in &impl_.member_fns {
+                let mut new_mem_fn = mem_fn.clone();
+                let mut replacement_tks = vec![];
+                for param in impl_params {
+                    replacement_tks.push(mapping.get(&param.generic_type_key).unwrap());
+                }
+
+                new_mem_fn.signature.mangled_name +=
+                    format!("[{}]", vec_to_string(&replacement_tks, ",")).as_str();
+
+                self.type_converter.push_type_mapping(mapping.clone());
+
+                self.gen_fn(&new_mem_fn)?;
+
+                self.type_converter.pop_type_mapping();
+            }
         }
 
         Ok(())
@@ -249,7 +292,9 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                     );
                 }
 
-                AStatement::Impl(impl_) => {
+                AStatement::Impl(impl_)
+                    if self.type_store.must_get(impl_.type_key).params().is_none() =>
+                {
                     for mem_fn in &impl_.member_fns {
                         if !mem_fn.signature.is_parameterized() {
                             func::gen_fn_sig(
@@ -277,8 +322,12 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
             for mapping in mappings {
                 let mut mono_fn_sig = poly_type.to_fn_sig().clone();
                 let mut replacement_tks = vec![];
-                for param in &mono_fn_sig.params.as_ref().unwrap().params {
-                    replacement_tks.push(mapping.get(&param.generic_type_key).unwrap());
+                if let Some(params) = mono_fn_sig.params.as_ref() {
+                    for param in &params.params {
+                        if let Some(replacement_tk) = mapping.get(&param.generic_type_key) {
+                            replacement_tks.push(replacement_tk);
+                        }
+                    }
                 }
 
                 mono_fn_sig.mangled_name +=

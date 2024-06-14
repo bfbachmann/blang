@@ -7,6 +7,18 @@ struct Ref[T] {
     ptr: *mut T
 }
 
+impl Ref {
+    fn clone(*self): Ref {
+        return Ref{
+            ptr: self^.ptr
+        }
+    }
+
+    fn ptr(*self): *T {
+        return self^.ptr
+    }
+}
+
 fn heap[T](t: *T): Ref[T] {
      let ptr = malloc(sizeof T) as *mut T
      memcpy(ptr as *u8, t as *u8, sizeof T)
@@ -20,10 +32,15 @@ fn deref[T](ref: Ref[T]): *mut T {
 }
 
 fn main() {
+    // Test parameterized structs and functions that use them.
     let msg = "test\0"
     let ref = heap[str](&msg)
     let deref_msg = deref[str](ref)^
     assert(deref_msg == msg, "expected \"test\"")
+
+    // Test methods on parameterized structs.
+    let clone = ref.clone()
+    assert(clone.ptr()^ == msg, "expected \"test\"")
 
     exit(0)
 }
