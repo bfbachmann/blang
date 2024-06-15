@@ -17,6 +17,3 @@ colored = "2.0.4"
 flame = "0.2.2"
 flamer = "0.5.0"
 logos = "0.14.0"
-
-[features]
-generics = []
