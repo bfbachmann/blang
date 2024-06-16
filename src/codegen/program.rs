@@ -137,13 +137,12 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
         for mapping in mappings {
             for mem_fn in &impl_.member_fns {
                 let mut new_mem_fn = mem_fn.clone();
-                let mut replacement_tks = vec![];
                 for param in impl_params {
-                    replacement_tks.push(mapping.get(&param.generic_type_key).unwrap());
+                    new_mem_fn.signature.mangled_name = new_mem_fn.signature.mangled_name.replace(
+                        format!("{}", param.generic_type_key).as_str(),
+                        format!("{}", mapping.get(&param.generic_type_key).unwrap()).as_str(),
+                    );
                 }
-
-                new_mem_fn.signature.mangled_name +=
-                    format!("[{}]", vec_to_string(&replacement_tks, ",")).as_str();
 
                 self.type_converter.push_type_mapping(mapping.clone());
 
@@ -292,19 +291,8 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                     );
                 }
 
-                AStatement::Impl(impl_)
-                    if self.type_store.must_get(impl_.type_key).params().is_none() =>
-                {
-                    for mem_fn in &impl_.member_fns {
-                        if !mem_fn.signature.is_parameterized() {
-                            func::gen_fn_sig(
-                                self.ctx,
-                                self.module,
-                                &mut self.type_converter,
-                                &mem_fn.signature,
-                            );
-                        }
-                    }
+                AStatement::Impl(impl_) => {
+                    self.declare_impl_fn_sigs(impl_);
                 }
 
                 _ => {}
@@ -341,6 +329,54 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                     self.module,
                     &mut self.type_converter,
                     &mono_fn_sig,
+                );
+
+                self.type_converter.pop_type_mapping();
+            }
+        }
+    }
+
+    /// Declares all functions from an `impl` block in the LLVM module.
+    fn declare_impl_fn_sigs(&mut self, impl_: &AImpl) {
+        let impl_type = self.type_store.must_get(impl_.type_key);
+        let maybe_impl_params = impl_type.params();
+
+        // If the impl type has no parameters, we can just generate the member
+        // functions normally.
+        if maybe_impl_params.is_none() {
+            for mem_fn in &impl_.member_fns {
+                if !mem_fn.signature.is_parameterized() {
+                    func::gen_fn_sig(
+                        self.ctx,
+                        self.module,
+                        &mut self.type_converter,
+                        &mem_fn.signature,
+                    );
+                }
+            }
+
+            return;
+        }
+
+        let impl_params = &maybe_impl_params.unwrap().params;
+        let mappings = self.resolve_monomorphizations(impl_.type_key);
+        for mapping in mappings {
+            for mem_fn in &impl_.member_fns {
+                let mut new_mem_fn_sig = mem_fn.signature.clone();
+                for param in impl_params {
+                    new_mem_fn_sig.mangled_name = new_mem_fn_sig.mangled_name.replace(
+                        format!("{}", param.generic_type_key).as_str(),
+                        format!("{}", mapping.get(&param.generic_type_key).unwrap()).as_str(),
+                    );
+                }
+
+                self.type_converter.push_type_mapping(mapping.clone());
+
+                func::gen_fn_sig(
+                    self.ctx,
+                    self.module,
+                    &mut self.type_converter,
+                    &new_mem_fn_sig,
                 );
 
                 self.type_converter.pop_type_mapping();

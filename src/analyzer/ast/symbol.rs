@@ -20,8 +20,6 @@ pub struct ASymbol {
     pub name: String,
     /// The type key of the symbol.
     pub type_key: TypeKey,
-    /// The type key for the symbol's polymorphic type before it was monomorphized.
-    pub poly_type_key: TypeKey,
     pub maybe_param_tks: Option<Vec<TypeKey>>,
     /// This will be set to true if the name of this symbol matches a type name and no variable
     /// names. If this is the case, the `var_type_key` field will hold the ID of the matching type.
@@ -58,7 +56,6 @@ impl ASymbol {
         ASymbol {
             name: name.to_string(),
             type_key,
-            poly_type_key: type_key,
             maybe_param_tks: None,
             is_type: false,
             is_const: true,
@@ -73,11 +70,14 @@ impl ASymbol {
     /// Otherwise, only variables, types, and constants will be searched.
     /// If `allow_type` is true, the symbol can refer to a type. Otherwise, an error
     /// will be raised if the symbol refers to a type rather than a value.
+    /// If `no_params` is true, an error will be raised if the symbol includes generic
+    /// parameters.
     pub fn from(
         ctx: &mut ProgramContext,
         symbol: &Symbol,
         include_fns: bool,
         allow_type: bool,
+        no_params: bool,
         maybe_impl_type_key: Option<TypeKey>,
     ) -> Self {
         let mut var_name = symbol.name.clone();
@@ -176,55 +176,65 @@ impl ASymbol {
         // Analyze any generic parameters on this symbol and use them to monomorphize
         // the generic value, if it is generic. We don't do this if it's a type
         // because it would have already been done during type resolution.
-        let (mono_type_key, poly_type_key, maybe_param_tks) = match !symbol.params.is_empty() {
-            true if is_type => {
-                let mono_tk = ctx.resolve_type(&Type::Unresolved(UnresolvedType::from_symbol(
-                    symbol.clone(),
-                )));
-                (mono_tk, var_type_key, None)
+        let (mono_type_key, maybe_param_tks) = match symbol.params.is_empty() {
+            false => {
+                if no_params {
+                    ctx.insert_err(AnalyzeError::new(
+                        ErrorKind::UnexpectedParams,
+                        "parameters not allowed here",
+                        symbol,
+                    ));
+                }
+
+                if is_type {
+                    let mono_tk = ctx.resolve_type(&Type::Unresolved(UnresolvedType::from_symbol(
+                        symbol.clone(),
+                    )));
+                    (mono_tk, None)
+                } else {
+                    // We're only including parameter type keys here so the symbol
+                    // resolver in the code generator can figure out which concrete
+                    // type this symbol maps to.
+                    let mono_tk = ctx.monomorphize_type(var_type_key, &symbol.params, symbol);
+                    let param_tks = symbol.params.iter().map(|t| ctx.resolve_type(t)).collect();
+                    (mono_tk, Some(param_tks))
+                }
             }
 
             true => {
-                // We're only including parameter type keys here so the symbol
-                // resolver in the code generator can figure out which concrete
-                // type this symbol maps to.
-                let mono_tk = ctx.monomorphize_type(var_type_key, &symbol.params, symbol);
-                let param_tks = symbol.params.iter().map(|t| ctx.resolve_type(t)).collect();
-                (mono_tk, var_type_key, Some(param_tks))
-            }
-
-            false => {
                 // No parameters were provided, so the type had better not be
-                // parameterized.
+                // parameterized unless `no_params` is false.
                 let poly_type = ctx.must_get_type(var_type_key);
-                if let Some(params) = poly_type.params() {
-                    let param_names = params.params.iter().map(|p| p.name.as_str()).collect();
-                    ctx.insert_err(
-                        AnalyzeError::new(
-                            ErrorKind::UnresolvedParams,
-                            "unresolved parameters",
-                            symbol,
-                        )
-                        .with_detail(
-                            format!(
-                                "{} has polymorphic type {} which requires that types \
-                                be specified for parameters: {}.",
-                                format_code!(symbol),
-                                format_code!(poly_type.display(ctx)),
-                                format_code_vec(&param_names, ", "),
+                if !no_params {
+                    if let Some(params) = poly_type.params() {
+                        let param_names = params.params.iter().map(|p| p.name.as_str()).collect();
+                        ctx.insert_err(
+                            AnalyzeError::new(
+                                ErrorKind::UnresolvedParams,
+                                "unresolved parameters",
+                                symbol,
                             )
-                            .as_str(),
-                        ),
-                    )
+                            .with_detail(
+                                format!(
+                                    "{} has polymorphic type {} which requires that types \
+                                    be specified for parameters: {}.",
+                                    format_code!(symbol),
+                                    format_code!(poly_type.display(ctx)),
+                                    format_code_vec(&param_names, ", "),
+                                )
+                                .as_str(),
+                            ),
+                        )
+                    }
                 }
-                (var_type_key, var_type_key, None)
+
+                (var_type_key, None)
             }
         };
 
         ASymbol {
             name: var_name,
             type_key: mono_type_key,
-            poly_type_key,
             maybe_param_tks,
             is_type,
             is_const,
@@ -258,7 +268,6 @@ impl ASymbol {
         ASymbol {
             name: "null".to_string(),
             type_key,
-            poly_type_key: type_key,
             maybe_param_tks: None,
             is_type: false,
             is_const: true,

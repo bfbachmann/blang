@@ -711,7 +711,6 @@ impl AExpr {
                     "int" => AExprKind::IntLiteral(0, false),
                     "uint" => AExprKind::UintLiteral(0),
                     "str" => AExprKind::StrLiteral("".to_string()),
-                    "rawptr" => AExpr::new_null_ptr(ctx, None).kind,
                     _ => AExprKind::Unknown,
                 };
 
@@ -1262,7 +1261,7 @@ fn analyze_unary_op(
                         ));
                     }
 
-                    AExpr::new_null_ptr(ctx, None)
+                    AExpr::new_zero_value(ctx, Type::new_unresolved("<unknown>"))
                 }
             }
         }
@@ -1361,7 +1360,7 @@ fn analyze_binary_op(
 }
 
 fn analyze_symbol(ctx: &mut ProgramContext, symbol: Symbol, allow_type: bool, span: Span) -> AExpr {
-    let a_symbol = ASymbol::from(ctx, &symbol, true, allow_type, None);
+    let a_symbol = ASymbol::from(ctx, &symbol, true, allow_type, false, None);
     AExpr {
         type_key: a_symbol.type_key,
         kind: AExprKind::Symbol(a_symbol),

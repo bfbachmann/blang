@@ -24,7 +24,8 @@ pub struct TypeConverter<'ctx> {
     type_store: &'ctx TypeStore,
     ll_basic_types: HashMap<TypeKey, BasicTypeEnum<'ctx>>,
     ll_fn_types: HashMap<TypeKey, FunctionType<'ctx>>,
-    type_mappings: Vec<HashMap<TypeKey, TypeKey>>,
+    // TODO: This really should not be public. Fix this hack.
+    pub type_mappings: Vec<HashMap<TypeKey, TypeKey>>,
 }
 
 impl<'ctx> TypeConverter<'ctx> {

@@ -17,7 +17,7 @@ use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::scope::{Scope, ScopeKind, ScopedSymbol};
 use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::analyzer::warn::AnalyzeWarning;
-use crate::fmt::format_code_vec;
+use crate::fmt::{format_code_vec, vec_to_string};
 use crate::lexer::pos::{Locatable, Position};
 use crate::parser::ast::r#const::Const;
 use crate::parser::ast::r#enum::EnumType;
@@ -506,7 +506,7 @@ impl ProgramContext {
 
         // Create an additional mapping to the new type key to avoid type duplication, if necessary.
         let typ = self.must_get_type(type_key);
-        let maybe_type_name = match typ {
+        let maybe_mangled_type_name = match typ {
             AType::Struct(struct_type) => {
                 let mangled_name = struct_type.mangled_name.clone();
                 self.cur_mod_ctx_mut()
@@ -561,8 +561,8 @@ impl ProgramContext {
         };
 
         // Make sure the type is resolvable in the current scope if it has a name.
-        if let Some(name) = maybe_type_name {
-            self.insert_type_key(Type::new_unresolved(name.as_str()), type_key);
+        if let Some(mangled_name) = maybe_mangled_type_name {
+            self.insert_type_key(Type::new_unresolved(mangled_name.as_str()), type_key);
 
             // Record the module in which the type was defined.
             self.type_declaration_mods
@@ -618,18 +618,13 @@ impl ProgramContext {
     /// if `allow_polymorph` is `false` and the resolved type is polymorphic,
     /// an error will be recorded.
     fn resolve_type_helper(&mut self, typ: &Type, allow_polymorph: bool) -> TypeKey {
-        let maybe_param_types: Option<&Vec<Type>> = if let Type::Unresolved(unresolved_type) = typ {
+        if let Type::Unresolved(unresolved_type) = typ {
             if let Some(mod_name) = &unresolved_type.maybe_mod_name {
                 // Make sure the module name is valid before looking up the type
                 // in the corresponding module.
-                if self.check_mod_name(mod_name, typ) {
-                    if let Some(tk) = self.get_type_key_by_type_name(
-                        unresolved_type.maybe_mod_name.as_ref(),
-                        unresolved_type.name.as_str(),
-                    ) {
-                        return tk;
-                    }
-                }
+                if !self.check_mod_name(mod_name, typ) {
+                    return self.unknown_type_key();
+                };
             } else {
                 if unresolved_type.name == "Self" {
                     return match self.get_cur_self_type_key() {
@@ -662,25 +657,37 @@ impl ProgramContext {
                 }
             }
 
-            match unresolved_type.params.is_empty() {
-                true => None,
-                false => Some(&unresolved_type.params),
-            }
-        } else {
-            None
-        };
+            if let Some(tk) = self.get_type_key_by_type_name(
+                unresolved_type.maybe_mod_name.as_ref(),
+                unresolved_type.name.as_str(),
+            ) {
+                return if unresolved_type.params.is_empty() {
+                    // No parameters were provided, so this type should either be monomorphic, or
+                    // `allow_polymorph` should be `true`.
+                    let resolved_type = self.must_get_type(tk);
+                    if resolved_type.params().is_some() && !allow_polymorph {
+                        self.insert_err(AnalyzeError::new(
+                            ErrorKind::UnresolvedParams,
+                            "expected generic parameters",
+                            typ,
+                        ));
+                    }
 
-        // Only try to resolve the type by searching the stack if there are
-        // no parameters on it. Otherwise, we'll need to re-resolve it with
-        // the provided parameters.
-        if maybe_param_types.is_none() {
-            if let Some(key) = self
-                .cur_mod_ctx()
-                .search_stack(|scope| scope.get_type_key(&typ))
-            {
-                return key;
-            };
+                    tk
+                } else {
+                    // Parameters were provided for the type, so we need to monomorphize it before
+                    // returning it.
+                    self.monomorphize_type(tk, unresolved_type.params.as_ref(), unresolved_type)
+                };
+            }
         }
+
+        if let Some(key) = self
+            .cur_mod_ctx()
+            .search_stack(|scope| scope.get_type_key(&typ))
+        {
+            return key;
+        };
 
         let a_type = AType::from(self, &typ);
         if a_type.is_unknown() {
@@ -696,10 +703,7 @@ impl ProgramContext {
             self.insert_type_key(typ.clone(), key);
         }
 
-        // If parameters were provided, we need to monomorphize the type.
-        if let Some(param_types) = maybe_param_types {
-            return self.monomorphize_type(key, param_types, typ);
-        } else if is_polymorphic && !allow_polymorph {
+        if is_polymorphic && !allow_polymorph {
             self.insert_err(AnalyzeError::new(
                 ErrorKind::UnresolvedParams,
                 "expected generic parameters",
@@ -728,6 +732,16 @@ impl ProgramContext {
         }
 
         let mod_ctx = self.get_mod_ctx(maybe_mod_name);
+
+        // Try searching for the mangled type name first. If that doesn't work, we'll try with the
+        // regular name. We have to do this to account for cases where a type is defined inside a
+        // function.
+        let mangled_name = self.mangle_name(maybe_mod_name, None, name, true);
+        let typ = Type::new_unresolved(mangled_name.as_str());
+        if let Some(tk) = mod_ctx.search_stack(|scope| scope.get_type_key(&typ)) {
+            return Some(tk);
+        }
+
         let typ = Type::new_unresolved(name);
         mod_ctx.search_stack(|scope| scope.get_type_key(&typ))
     }
@@ -793,6 +807,7 @@ impl ProgramContext {
             replaced_params: vec![],
         };
         let mut type_mappings: HashMap<TypeKey, TypeKey> = HashMap::new();
+        let mut all_type_keys_match = true;
         let type_display = poly_type.display(self);
         for (param, param_type) in defined_params.iter().zip(param_types.iter()) {
             match self.check_param(param_type, param, &type_display) {
@@ -803,12 +818,22 @@ impl ProgramContext {
                     });
 
                     type_mappings.insert(param.generic_type_key, param_tk);
+
+                    if param.generic_type_key != param_tk {
+                        all_type_keys_match = false;
+                    }
                 }
 
                 Err(e) => {
                     self.insert_err(e);
                 }
             }
+        }
+
+        // Check if we're monomorphizing a type with its own generic parameters. If so, we can just
+        // return the original polymorphic type's key.
+        if all_type_keys_match {
+            return poly_type_key;
         }
 
         // Check if the type has already been monomorphized. If so, return the
@@ -855,21 +880,15 @@ impl ProgramContext {
         mono: &Monomorphization,
         type_mappings: &HashMap<TypeKey, TypeKey>,
     ) {
-        let mut poly_mem_fn_tks = HashMap::new();
-        if let Some(poly_mem_fns) = self.type_member_fn_sigs.get(&mono.poly_type_key) {
-            for (fn_name, fn_sig) in poly_mem_fns {
-                poly_mem_fn_tks.insert(fn_name.clone(), fn_sig.type_key);
+        let mut poly_mem_fns = HashMap::new();
+        if let Some(mem_fns) = self.type_member_fn_sigs.get(&mono.poly_type_key) {
+            for (fn_name, fn_sig) in mem_fns {
+                poly_mem_fns.insert(fn_name.clone(), fn_sig.clone());
             }
         }
 
         let mut mono_mem_fn_sigs = HashMap::new();
-        for (fn_name, poly_fn_tk) in poly_mem_fn_tks {
-            let mut poly_fn_sig = self.must_get_type(poly_fn_tk).to_fn_sig().clone();
-            poly_fn_sig.mangled_name += mangle_param_names(
-                self.must_get_type(mono.poly_type_key).params().unwrap(),
-                &type_mappings,
-            )
-            .as_str();
+        for (fn_name, mut poly_fn_sig) in poly_mem_fns {
             let mono_fn_tk = poly_fn_sig.monomorphize(self, type_mappings);
             let fn_mono = Monomorphization {
                 poly_type_key: mono.poly_type_key,
@@ -1269,7 +1288,7 @@ impl ProgramContext {
                 // module.
                 let mut symbol = symbol.clone();
                 symbol.maybe_mod_name = Some(mod_name.clone());
-                let a_symbol = ASymbol::from(self, &symbol, true, true, None);
+                let a_symbol = ASymbol::from(self, &symbol, true, true, true, None);
 
                 // Record an error and skip the symbol if its type could not be
                 // resolved.
@@ -1533,7 +1552,20 @@ impl ProgramContext {
         };
 
         let type_prefix = match maybe_impl_type_key {
-            Some(type_key) => format!("{}.", self.must_get_type(type_key).name()),
+            Some(impl_tk) => {
+                let impl_type = self.must_get_type(impl_tk);
+                let params_suffix = match impl_type.params() {
+                    Some(params) => format!(
+                        "[{}]",
+                        vec_to_string(
+                            &params.params.iter().map(|p| p.generic_type_key).collect(),
+                            ",",
+                        )
+                    ),
+                    None => "".to_string(),
+                };
+                format!("{}{}.", impl_type.name(), params_suffix)
+            }
             None => "".to_string(),
         };
 

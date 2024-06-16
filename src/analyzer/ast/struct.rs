@@ -26,13 +26,6 @@ impl Display for AField {
     }
 }
 
-impl AField {
-    /// Returns a string containing the human-readable version of this struct field.
-    pub fn display(&self, ctx: &ProgramContext) -> String {
-        format!("{}: {}", self.name, ctx.display_type_for_key(self.type_key))
-    }
-}
-
 /// Represents a semantically valid and type-rich structure.
 #[derive(Clone, Debug)]
 pub struct AStructType {
@@ -44,17 +37,11 @@ pub struct AStructType {
 
 impl Display for AStructType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if self.name == "" {
-            write!(f, "struct {{")?;
-
-            for field in &self.fields {
-                write!(f, "{}", field)?;
-            }
-
-            write!(f, "}}")
-        } else {
-            write!(f, "{}", self.name)
-        }
+        let params = match &self.maybe_params {
+            Some(params) => format!("{params}"),
+            None => "".to_string(),
+        };
+        write!(f, "{}{}", self.name, params)
     }
 }
 
@@ -248,21 +235,11 @@ impl AStructType {
 
     /// Returns a string containing the human-readable representation of the struct type.
     pub fn display(&self, ctx: &ProgramContext) -> String {
-        if self.name == "" {
-            let mut s = format!("struct {{");
-
-            for field in &self.fields {
-                s += format!("{}", field.display(ctx)).as_str();
-            }
-
-            s + format!("}}").as_str()
-        } else {
-            let params = match &self.maybe_params {
-                Some(params) => params.display(ctx),
-                None => "".to_string(),
-            };
-            format!("{}{}", self.name, params)
-        }
+        let params = match &self.maybe_params {
+            Some(params) => params.display(ctx),
+            None => "".to_string(),
+        };
+        format!("{}{}", self.name, params)
     }
 }
 

@@ -8,8 +8,8 @@ struct Ref[T] {
 }
 
 impl Ref {
-    fn clone(*self): Ref {
-        return Ref{
+    fn clone(*self): Ref[T] {
+        return Ref[T]{
             ptr: self^.ptr
         }
     }

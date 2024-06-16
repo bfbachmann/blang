@@ -505,8 +505,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             return Some(result);
         }
 
-        let (mangled_name, ll_fn_type) = {
-            if let Some(impl_tk) = fn_sig.maybe_impl_type_key {
+        let (mut mangled_name, ll_fn_type) = match fn_sig.maybe_impl_type_key {
+            Some(impl_tk) => {
                 if self.type_store.must_get(impl_tk).is_generic() {
                     // This is a function on a generic type. We need to look up the
                     // actual function by figuring out what the corresponding concrete
@@ -538,13 +538,21 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                         self.type_converter.get_fn_type(fn_sig.type_key),
                     )
                 }
-            } else {
-                (
-                    fn_sig.mangled_name.clone(),
-                    self.type_converter.get_fn_type(fn_sig.type_key),
-                )
             }
+
+            None => (
+                fn_sig.mangled_name.clone(),
+                self.type_converter.get_fn_type(fn_sig.type_key),
+            ),
         };
+
+        // TODO: This is a nasty hack. Find a better way of doing this.
+        if let Some(mapping) = self.type_converter.type_mappings.last() {
+            for (k, v) in mapping {
+                mangled_name =
+                    mangled_name.replace(format!("{k}").as_str(), format!("{v}").as_str());
+            }
+        }
 
         // Check if we're short one argument. If so, it means the function signature expects
         // the return value to be written to the address pointed to by the first argument, so we

@@ -6,6 +6,7 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
+use crate::fmt::vec_to_string;
 use crate::lexer::pos::{Locatable, Position, Span};
 use crate::parser::ast::params::{Param, Params};
 use crate::{format_code, locatable_impl};
@@ -138,6 +139,12 @@ impl Hash for AParams {
 impl Default for AParams {
     fn default() -> Self {
         AParams { params: vec![] }
+    }
+}
+
+impl Display for AParams {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}]", vec_to_string(&self.params, ","))
     }
 }
 
