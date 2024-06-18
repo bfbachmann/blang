@@ -19,7 +19,7 @@ use crate::parser::error::ParseResult;
 #[derive(Debug, Clone, Hash, Eq)]
 pub enum Type {
     Struct(StructType),
-    // TODO: Remove? This only needs to exist here if enums can be declared inline like structs.
+    // TODO: Remove? This only needs to exist here if enums can be declared inline.
     #[allow(dead_code)]
     Enum(EnumType),
     Tuple(TupleType),

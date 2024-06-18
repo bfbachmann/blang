@@ -8,7 +8,7 @@ use crate::analyzer::ast::closure::{check_closure_returns, AClosure};
 use crate::analyzer::ast::params::AParams;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::prog_context::{mangle_param_names, ProgramContext};
+use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
 use crate::analyzer::type_store::TypeKey;
 use crate::parser::ast::func::Function;
@@ -156,39 +156,6 @@ impl AFnSig {
         self.params.is_some()
     }
 
-    /// Converts this function signature from a polymorphic (parameterized) type
-    /// into a monomorph by substituting type keys for generic types with those
-    /// from the provided parameter values.
-    pub fn monomorphize(
-        &mut self,
-        ctx: &mut ProgramContext,
-        type_mappings: &HashMap<TypeKey, TypeKey>,
-    ) -> TypeKey {
-        self.replace_type_keys(ctx, type_mappings);
-
-        // Add monomorphized types to the name to disambiguate it from other
-        // monomorphized instances of this function.
-        if let Some(params) = &self.params {
-            self.mangled_name += mangle_param_names(params, type_mappings).as_str();
-        } else {
-            for (target_tk, replacement_tk) in type_mappings {
-                self.mangled_name = self.mangled_name.replace(
-                    format!("{target_tk}").as_str(),
-                    format!("{replacement_tk}").as_str(),
-                );
-            }
-        }
-
-        // Remove parameters from the signature now that they're no longer relevant.
-        self.params = None;
-
-        // Define the new type in the program context.
-        let new_fn_type_key = ctx.insert_type(AType::Function(Box::new(self.clone())));
-        self.type_key = new_fn_type_key;
-        ctx.replace_type(new_fn_type_key, AType::Function(Box::new(self.clone())));
-        new_fn_type_key
-    }
-
     /// Returns true if `other` has arguments of the same type in the same order and the
     /// same return type as `self`.
     pub fn is_same_as(&self, ctx: &ProgramContext, other: &AFnSig) -> bool {
@@ -228,11 +195,41 @@ impl AFnSig {
         target_type_key: TypeKey,
         replacement_type_key: TypeKey,
     ) {
-        // Do the type replacements.
-        self.replace_type_keys(
-            ctx,
-            &HashMap::from([(target_type_key, replacement_type_key)]),
-        );
+        fn replace_tk(
+            ctx: &mut ProgramContext,
+            tk: &mut TypeKey,
+            target_tk: TypeKey,
+            replacement_tk: TypeKey,
+        ) {
+            if *tk == target_tk {
+                *tk = replacement_tk;
+                return;
+            }
+
+            if let Some(new_tk) =
+                ctx.monomorphize_type(*tk, &HashMap::from([(target_tk, replacement_tk)]))
+            {
+                *tk = new_tk;
+            }
+        }
+
+        // Make type key replacements in the function signature.
+        for arg in &mut self.args {
+            replace_tk(
+                ctx,
+                &mut arg.type_key,
+                target_type_key,
+                replacement_type_key,
+            )
+        }
+
+        if let Some(ret_tk) = &mut self.maybe_ret_type_key {
+            replace_tk(ctx, ret_tk, target_type_key, replacement_type_key);
+        }
+
+        if let Some(impl_tk) = &mut self.maybe_impl_type_key {
+            replace_tk(ctx, impl_tk, target_type_key, replacement_type_key);
+        }
 
         // Re-mangle the name based on the updated type info.
         self.mangled_name =
@@ -242,57 +239,6 @@ impl AFnSig {
         let new_fn_type_key = ctx.insert_type(AType::Function(Box::new(self.clone())));
         self.type_key = new_fn_type_key;
         ctx.replace_type(new_fn_type_key, AType::Function(Box::new(self.clone())));
-    }
-
-    /// Updates this function signature by recursively replacing any type keys
-    /// inside it based on `type_mappings` that maps target type key to replacement
-    /// type key.
-    /// Returns true if the type was changed at all.
-    fn replace_type_keys(
-        &mut self,
-        ctx: &mut ProgramContext,
-        type_mappings: &HashMap<TypeKey, TypeKey>,
-    ) -> bool {
-        fn maybe_replace_tk(
-            ctx: &mut ProgramContext,
-            tk: &mut TypeKey,
-            type_mappings: &HashMap<TypeKey, TypeKey>,
-        ) -> bool {
-            if let Some(replacement_tk) = type_mappings.get(tk) {
-                *tk = *replacement_tk;
-                return true;
-            }
-
-            let typ = ctx.must_get_type(*tk);
-            if let Some(replacement_tk) = typ.clone().monomorphize(ctx, type_mappings) {
-                *tk = replacement_tk;
-                return true;
-            }
-
-            false
-        }
-
-        let mut replaced_tks = false;
-
-        for arg in &mut self.args {
-            if maybe_replace_tk(ctx, &mut arg.type_key, type_mappings) {
-                replaced_tks = true;
-            }
-        }
-
-        if let Some(ret_type_key) = &mut self.maybe_ret_type_key {
-            if maybe_replace_tk(ctx, ret_type_key, type_mappings) {
-                replaced_tks = true;
-            }
-        }
-
-        if let Some(impl_type_key) = &mut self.maybe_impl_type_key {
-            if maybe_replace_tk(ctx, impl_type_key, type_mappings) {
-                replaced_tks = true;
-            }
-        }
-
-        replaced_tks
     }
 
     /// Returns a string containing the human-readable version of this function signature.

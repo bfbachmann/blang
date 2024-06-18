@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 
@@ -6,7 +6,7 @@ use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::params::AParams;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::prog_context::{mangle_param_names, ProgramContext};
+use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::fmt::format_code_vec;
 use crate::parser::ast::r#struct::{StructInit, StructType};
@@ -26,35 +26,22 @@ impl Display for AField {
     }
 }
 
-impl AField {
-    /// Returns a string containing the human-readable version of this struct field.
-    pub fn display(&self, ctx: &ProgramContext) -> String {
-        format!("{}: {}", self.name, ctx.display_type_for_key(self.type_key))
-    }
-}
-
 /// Represents a semantically valid and type-rich structure.
 #[derive(Clone, Debug)]
 pub struct AStructType {
     pub name: String,
     pub mangled_name: String,
-    pub params: Option<AParams>,
+    pub maybe_params: Option<AParams>,
     pub fields: Vec<AField>,
 }
 
 impl Display for AStructType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if self.name == "" {
-            write!(f, "struct {{")?;
-
-            for field in &self.fields {
-                write!(f, "{}", field)?;
-            }
-
-            write!(f, "}}")
-        } else {
-            write!(f, "{}", self.name)
-        }
+        let params = match &self.maybe_params {
+            Some(params) => format!("{params}"),
+            None => "".to_string(),
+        };
+        write!(f, "{}{}", self.name, params)
     }
 }
 
@@ -62,7 +49,7 @@ impl PartialEq for AStructType {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && self.mangled_name == other.mangled_name
-            && self.params == other.params
+            && self.maybe_params == other.maybe_params
             && util::vecs_eq(&self.fields, &other.fields)
     }
 }
@@ -110,7 +97,7 @@ impl AStructType {
         let type_key = ctx.insert_type(AType::Struct(AStructType {
             name: struct_type.name.clone(),
             mangled_name: mangled_name.clone(),
-            params: None,
+            maybe_params: None,
             fields: vec![],
         }));
 
@@ -165,7 +152,7 @@ impl AStructType {
         let a_struct = AStructType {
             name: struct_type.name.clone(),
             mangled_name,
-            params: maybe_params,
+            maybe_params: maybe_params,
             fields,
         };
 
@@ -198,67 +185,13 @@ impl AStructType {
         None
     }
 
-    /// Converts this struct type from a polymorphic (parameterized) type into a
-    /// monomorph by substituting type keys for generic types with those from the
-    /// provided parameter values.
-    pub fn monomorphize(
-        &mut self,
-        ctx: &mut ProgramContext,
-        type_mappings: &HashMap<TypeKey, TypeKey>,
-    ) -> Option<TypeKey> {
-        let mut replaced_tks = false;
-
-        for field in &mut self.fields {
-            if let Some(replacement_tk) = type_mappings.get(&field.type_key) {
-                field.type_key = *replacement_tk;
-                replaced_tks = true;
-                continue;
-            }
-
-            let field_type = ctx.must_get_type(field.type_key);
-            if let Some(replacement_tk) = field_type.clone().monomorphize(ctx, type_mappings) {
-                field.type_key = replacement_tk;
-                replaced_tks = true;
-            }
-        }
-
-        if replaced_tks {
-            // Add monomorphized types to the name to disambiguate it from other
-            // monomorphized instances of this function.
-            if let Some(params) = &self.params {
-                self.mangled_name += mangle_param_names(params, type_mappings).as_str();
-            } else {
-                for (target_tk, replacement_tk) in type_mappings {
-                    self.mangled_name = self.mangled_name.replace(
-                        format!("{target_tk}").as_str(),
-                        format!("{replacement_tk}").as_str(),
-                    );
-                }
-            }
-
-            // Remove parameters from the signature now that they're no longer relevant.
-            self.params = None;
-
-            // Define the new type in the program context.
-            return Some(ctx.insert_type(AType::Struct(self.clone())));
-        }
-
-        None
-    }
-
     /// Returns a string containing the human-readable representation of the struct type.
     pub fn display(&self, ctx: &ProgramContext) -> String {
-        if self.name == "" {
-            let mut s = format!("struct {{");
-
-            for field in &self.fields {
-                s += format!("{}", field.display(ctx)).as_str();
-            }
-
-            s + format!("}}").as_str()
-        } else {
-            format!("{}", self.name)
-        }
+        let params = match &self.maybe_params {
+            Some(params) => params.display(ctx),
+            None => "".to_string(),
+        };
+        format!("{}{}", self.name, params)
     }
 }
 

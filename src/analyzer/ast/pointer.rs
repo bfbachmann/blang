@@ -1,7 +1,5 @@
-use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
-use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::parser::ast::pointer::PointerType;
@@ -44,28 +42,6 @@ impl APointerType {
             pointee_type_key,
             is_mut: typ.is_mut,
         }
-    }
-
-    /// Converts this pointer type from a polymorphic (parameterized) type into a
-    /// monomorph by substituting type keys for generic types with those from the
-    /// provided parameter values.
-    pub fn monomorphize(
-        &mut self,
-        ctx: &mut ProgramContext,
-        type_mappings: &HashMap<TypeKey, TypeKey>,
-    ) -> Option<TypeKey> {
-        if let Some(replacement_tk) = type_mappings.get(&self.pointee_type_key) {
-            self.pointee_type_key = *replacement_tk;
-            return Some(ctx.insert_type(AType::Pointer(self.clone())));
-        }
-
-        let pointee_type = ctx.must_get_type(self.pointee_type_key);
-        if let Some(replacement_tk) = pointee_type.clone().monomorphize(ctx, type_mappings) {
-            self.pointee_type_key = replacement_tk;
-            return Some(ctx.insert_type(AType::Pointer(self.clone())));
-        }
-
-        None
     }
 
     /// Returns the human-readable version of this pointer type.

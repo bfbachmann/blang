@@ -1,0 +1,19 @@
+use {malloc, realloc, free}: "std/libc/mem.bl"
+
+pub fn heap_alloc[T](count: uint): *mut T {
+    return malloc(sizeof T * count) as *mut T
+}
+
+pub fn heap_free[T](ptr: *mut T) {
+    free(ptr as *u8)
+}
+
+pub fn heap_realloc[T](ptr: *mut T, count: uint): *mut T {
+    return realloc(ptr as *u8, sizeof T * count) as *mut T
+}
+
+pub fn heap[T](t: T): *mut T {
+    let ptr = heap_alloc[T](1)
+    ptr^ = t
+    return ptr
+}
