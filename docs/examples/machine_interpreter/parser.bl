@@ -1,7 +1,7 @@
 use {malloc, realloc, free}: "std/libc/mem.bl"
 use {strtol, strncmp}: "std/libc/string.bl"
 
-use {assert}: "docs/examples/machine-interpreter/utils.bl"
+use {assert}: "docs/examples/machine_interpreter/utils.bl"
 
 /// Represents a machine instruction.
 pub struct Instruction {
