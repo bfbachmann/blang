@@ -14,7 +14,7 @@ use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::ast::tuple::ATupleType;
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
-use crate::analyzer::scope::{Scope, ScopeKind, ScopedSymbol};
+use crate::analyzer::scope::{Scope, ScopedSymbol, ScopeKind};
 use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::fmt::{format_code_vec, vec_to_string};
@@ -1213,6 +1213,7 @@ impl ProgramContext {
         mono: &Monomorphization,
         type_mappings: &HashMap<TypeKey, TypeKey>,
     ) {
+        // Collect all member functions on the polymorphic type.
         let mut poly_mem_fn_tks = HashMap::new();
         if let Some(mem_fns) = self.type_member_fn_sigs.get(&mono.poly_type_key) {
             for (fn_name, fn_sig) in mem_fns {
@@ -1220,6 +1221,7 @@ impl ProgramContext {
             }
         }
 
+        // Monomorphize all member functions.
         let mut mono_mem_fn_sigs = HashMap::new();
         for (fn_name, poly_mem_fn_tk) in poly_mem_fn_tks {
             if let Some(mono_tk) = self.monomorphize_fn_type(poly_mem_fn_tk, type_mappings) {
@@ -1228,8 +1230,9 @@ impl ProgramContext {
             }
         }
 
+        // Mark monomorphic member functions as public where necessary, and mark the monomorphic
+        // type as an implementer of these functions.
         if !mono_mem_fn_sigs.is_empty() {
-            // Mark public member functions.
             for fn_name in mono_mem_fn_sigs.keys() {
                 if self.member_fn_is_pub(mono.poly_type_key, fn_name.as_str()) {
                     self.mark_member_fn_pub(mono.mono_type_key, fn_name.as_str());
