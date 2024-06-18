@@ -1,0 +1,75 @@
+use {puts}: "std/libc/io.bl"
+use {exit}: "std/libc/proc.bl"
+use {heap_realloc, heap_free}: "std/mem/mem.bl"
+use {panic}: "std/backtrace/panic.bl"
+
+use {assert}: "src/tests/test_utils.bl"
+
+struct List[T] {
+    ptr: *mut T
+    len: uint
+    cap: uint
+}
+
+impl List {
+    fn new(): List[T] {
+        return List[T]{
+            ptr: null
+            len: 0
+            cap: 0
+        }
+    }
+
+    fn push(*mut self, t: T) {
+        if self^.len == self^.cap {
+            self.grow()
+        }
+
+        self^.ptr.(self^.len as int)^ = t
+        self^.len += 1
+    }
+
+    fn grow(*mut self) {
+        let mut new_cap = self^.cap * 2
+        if new_cap == 0 {
+            new_cap = 1
+        }
+
+        self^.ptr = heap_realloc[T](self^.ptr, new_cap)
+        self^.cap = new_cap
+    }
+
+    fn get(*self, i: uint): *T {
+        if i >= self^.len {
+            panic("list index out of bounds")
+        }
+
+        return self^.ptr.(i as int)
+    }
+
+    fn free(*self) {
+        heap_free[T](self^.ptr)
+    }
+}
+
+
+fn main() {
+    let mut list = List[int]{
+        ptr: null
+        len: 0
+        cap: 0
+    }
+
+    for let mut i = 0, i < 10, i += 1 {
+        list.push(i)
+    }
+
+    let mut sum = 0
+    for let mut i = 0, i < 10, i += 1 {
+        sum += list.get(i as uint)^
+    }
+
+    list.free()
+    assert(sum == 45, "expected 45\0")
+    exit(0)
+}

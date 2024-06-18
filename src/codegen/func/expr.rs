@@ -529,7 +529,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     let ll_fn_type = self
                         .module
                         .get_function(concrete_fn_name.as_str())
-                        .unwrap()
+                        .expect(format!("function {} should exist", concrete_fn_name).as_str())
                         .get_type();
                     (concrete_fn_name, ll_fn_type)
                 } else {

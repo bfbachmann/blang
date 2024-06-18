@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
 use crate::analyzer::ast::expr::AExpr;
@@ -70,36 +69,6 @@ impl ATupleType {
         }
 
         panic!("tuple type {} has no field {}", self, name)
-    }
-
-    /// Converts this tuple type from a polymorphic (parameterized) type into a
-    /// monomorph by substituting type keys for generic types with those from the
-    /// provided parameter values.
-    pub fn monomorphize(
-        &mut self,
-        ctx: &mut ProgramContext,
-        type_mappings: &HashMap<TypeKey, TypeKey>,
-    ) -> Option<TypeKey> {
-        let mut replaced_tks = false;
-
-        for field in &mut self.fields {
-            if let Some(replacement_tk) = type_mappings.get(&field.type_key) {
-                field.type_key = *replacement_tk;
-                replaced_tks = true;
-            } else {
-                let field_type = ctx.must_get_type(field.type_key);
-                if let Some(replacement_tk) = field_type.clone().monomorphize(ctx, type_mappings) {
-                    field.type_key = replacement_tk;
-                    replaced_tks = true;
-                }
-            }
-        }
-
-        if replaced_tks {
-            return Some(ctx.insert_type(AType::Tuple(self.clone())));
-        }
-
-        None
     }
 
     /// Returns a string containing the human-readable version of this tuple type.

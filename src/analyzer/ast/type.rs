@@ -1,5 +1,4 @@
 use std::cmp::max;
-use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
@@ -14,7 +13,7 @@ use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::ast::tuple::ATupleType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::type_store::{TypeKey, TypeStore};
+use crate::analyzer::type_store::TypeStore;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::unresolved::UnresolvedType;
 
@@ -265,41 +264,6 @@ impl AType {
 
                 a == b
             }
-        }
-    }
-
-    /// Converts this type from a polymorphic (parameterized) type into a monomorph
-    /// by substituting type keys for generic types with those from the provided
-    /// parameter values.
-    pub fn monomorphize(
-        mut self,
-        ctx: &mut ProgramContext,
-        type_mappings: &HashMap<TypeKey, TypeKey>,
-    ) -> Option<TypeKey> {
-        match &mut self {
-            AType::Function(fn_sig) => Some(fn_sig.monomorphize(ctx, type_mappings)),
-            AType::Struct(struct_type) => struct_type.monomorphize(ctx, type_mappings),
-            AType::Enum(enum_type) => enum_type.monomorphize(ctx, type_mappings),
-            AType::Tuple(tuple_type) => tuple_type.monomorphize(ctx, type_mappings),
-            AType::Array(array_type) => array_type.monomorphize(ctx, type_mappings),
-            AType::Pointer(ptr_type) => ptr_type.monomorphize(ctx, type_mappings),
-
-            // These types cannot be polymorphic and therefore can't be monomorphized.
-            AType::Bool
-            | AType::U8
-            | AType::I8
-            | AType::U32
-            | AType::I32
-            | AType::F32
-            | AType::I64
-            | AType::U64
-            | AType::F64
-            | AType::Int
-            | AType::Uint
-            | AType::Str
-            | AType::Spec(_)
-            | AType::Generic(_)
-            | AType::Unknown(_) => None,
         }
     }
 
@@ -581,6 +545,15 @@ impl AType {
         match self {
             AType::Struct(struct_type) => struct_type,
             _ => panic!("type {} is not a struct", self),
+        }
+    }
+
+    /// Returns the tuple type corresponding to this type. Panics if this type is not a
+    /// tuple type.
+    pub fn to_tuple_type(&self) -> &ATupleType {
+        match self {
+            AType::Tuple(tuple_type) => tuple_type,
+            _ => panic!("type {} is not a tuple", self),
         }
     }
 

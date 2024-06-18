@@ -42,34 +42,6 @@ impl Display for AEnumTypeVariant {
 }
 
 impl AEnumTypeVariant {
-    /// Converts this variant from a polymorphic (parameterized) type into a
-    /// monomorph by substituting type keys for generic types with those from the
-    /// provided parameter values.
-    pub fn monomorphize(
-        &mut self,
-        ctx: &mut ProgramContext,
-        type_mappings: &HashMap<TypeKey, TypeKey>,
-    ) -> bool {
-        if self.maybe_type_key.is_none() {
-            return false;
-        }
-
-        let variant_tk = self.maybe_type_key.unwrap();
-
-        if let Some(replacement_tk) = type_mappings.get(&variant_tk) {
-            self.maybe_type_key = Some(*replacement_tk);
-            return true;
-        }
-
-        let variant_type = ctx.must_get_type(variant_tk);
-        if let Some(replacement_tk) = variant_type.clone().monomorphize(ctx, type_mappings) {
-            self.maybe_type_key = Some(replacement_tk);
-            return true;
-        }
-
-        false
-    }
-
     /// Returns a string containing the human-readable version of this enum variant.
     pub fn display(&self, ctx: &ProgramContext) -> String {
         let mut s = format!("{}", self.name);
@@ -220,27 +192,6 @@ impl AEnumType {
         ctx.replace_type(type_key, a_enum_type);
 
         a_enum
-    }
-
-    /// Converts this enum type from a polymorphic (parameterized) type into a
-    /// monomorph by substituting type keys for generic types with those from the
-    /// provided parameter values.
-    pub fn monomorphize(
-        &mut self,
-        ctx: &mut ProgramContext,
-        type_mappings: &HashMap<TypeKey, TypeKey>,
-    ) -> Option<TypeKey> {
-        let mut replaced_tks = false;
-
-        for (_, variant) in &mut self.variants {
-            replaced_tks = replaced_tks || variant.monomorphize(ctx, type_mappings);
-        }
-
-        if replaced_tks {
-            return Some(ctx.insert_type(AType::Enum(self.clone())));
-        }
-
-        None
     }
 
     /// Returns a string containing the human-readable version of this enum type.

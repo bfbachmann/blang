@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 
@@ -6,7 +6,7 @@ use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::params::AParams;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::prog_context::{mangle_param_names, ProgramContext};
+use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::fmt::format_code_vec;
 use crate::parser::ast::r#struct::{StructInit, StructType};
@@ -180,54 +180,6 @@ impl AStructType {
             if field.name.as_str() == name {
                 return Some(i);
             }
-        }
-
-        None
-    }
-
-    /// Converts this struct type from a polymorphic (parameterized) type into a
-    /// monomorph by substituting type keys for generic types with those from the
-    /// provided parameter values.
-    pub fn monomorphize(
-        &mut self,
-        ctx: &mut ProgramContext,
-        type_mappings: &HashMap<TypeKey, TypeKey>,
-    ) -> Option<TypeKey> {
-        let mut replaced_tks = false;
-
-        for field in &mut self.fields {
-            if let Some(replacement_tk) = type_mappings.get(&field.type_key) {
-                field.type_key = *replacement_tk;
-                replaced_tks = true;
-                continue;
-            }
-
-            let field_type = ctx.must_get_type(field.type_key);
-            if let Some(replacement_tk) = field_type.clone().monomorphize(ctx, type_mappings) {
-                field.type_key = replacement_tk;
-                replaced_tks = true;
-            }
-        }
-
-        if replaced_tks {
-            // Add monomorphized types to the name to disambiguate it from other
-            // monomorphized instances of this function.
-            if let Some(params) = &self.maybe_params {
-                self.mangled_name += mangle_param_names(params, type_mappings).as_str();
-            } else {
-                for (target_tk, replacement_tk) in type_mappings {
-                    self.mangled_name = self.mangled_name.replace(
-                        format!("{target_tk}").as_str(),
-                        format!("{replacement_tk}").as_str(),
-                    );
-                }
-            }
-
-            // Remove parameters from the signature now that they're no longer relevant.
-            self.maybe_params = None;
-
-            // Define the new type in the program context.
-            return Some(ctx.insert_type(AType::Struct(self.clone())));
         }
 
         None

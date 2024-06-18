@@ -195,7 +195,8 @@ impl ASymbol {
                     // We're only including parameter type keys here so the symbol
                     // resolver in the code generator can figure out which concrete
                     // type this symbol maps to.
-                    let mono_tk = ctx.monomorphize_type(var_type_key, &symbol.params, symbol);
+                    let mono_tk =
+                        ctx.monomorphize_parameterized_type(var_type_key, &symbol.params, symbol);
                     let param_tks = symbol.params.iter().map(|t| ctx.resolve_type(t)).collect();
                     (mono_tk, Some(param_tks))
                 }
@@ -203,9 +204,9 @@ impl ASymbol {
 
             true => {
                 // No parameters were provided, so the type had better not be
-                // parameterized unless `no_params` is false.
+                // parameterized unless `no_params` is false or the symbol is `self`.
                 let poly_type = ctx.must_get_type(var_type_key);
-                if !no_params {
+                if !no_params && !(symbol.name == "self" && symbol.maybe_mod_name.is_none()) {
                     if let Some(params) = poly_type.params() {
                         let param_names = params.params.iter().map(|p| p.name.as_str()).collect();
                         ctx.insert_err(

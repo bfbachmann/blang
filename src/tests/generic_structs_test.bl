@@ -14,7 +14,7 @@ impl Ref {
         }
     }
 
-    fn ptr(*self): *T {
+    fn get_ptr(*self): *T {
         return self^.ptr
     }
 }
@@ -27,20 +27,20 @@ fn heap[T](t: *T): Ref[T] {
      }
 }
 
-fn deref[T](ref: Ref[T]): *mut T {
-    return ref.ptr
+fn deref[T](ref: *Ref[T]): *mut T {
+    return ref^.ptr
 }
 
 fn main() {
     // Test parameterized structs and functions that use them.
     let msg = "test\0"
     let ref = heap[str](&msg)
-    let deref_msg = deref[str](ref)^
+    let deref_msg = deref[str](&ref)^
     assert(deref_msg == msg, "expected \"test\"")
 
     // Test methods on parameterized structs.
     let clone = ref.clone()
-    assert(clone.ptr()^ == msg, "expected \"test\"")
+    assert(clone.get_ptr()^ == msg, "expected \"test\"")
 
     exit(0)
 }
