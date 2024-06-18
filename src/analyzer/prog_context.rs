@@ -1222,15 +1222,6 @@ impl ProgramContext {
 
         let mut mono_mem_fn_sigs = HashMap::new();
         for (fn_name, poly_mem_fn_tk) in poly_mem_fn_tks {
-            // let mono_fn_tk = poly_fn_sig.monomorphize(self, type_mappings);
-            // let fn_mono = Monomorphization {
-            //     poly_type_key: mono.poly_type_key,
-            //     mono_type_key: mono_fn_tk,
-            //     replaced_params: mono.replaced_params.clone(),
-            // };
-            // self.insert_monomorphization(fn_mono);
-            // mono_mem_fn_sigs.insert(fn_name, self.must_get_type(mono_fn_tk).to_fn_sig().clone());
-
             if let Some(mono_tk) = self.monomorphize_fn_type(poly_mem_fn_tk, type_mappings) {
                 let mono_fn_sig = self.must_get_type(mono_tk).to_fn_sig();
                 mono_mem_fn_sigs.insert(fn_name, mono_fn_sig.clone());
@@ -1238,6 +1229,13 @@ impl ProgramContext {
         }
 
         if !mono_mem_fn_sigs.is_empty() {
+            // Mark public member functions.
+            for fn_name in mono_mem_fn_sigs.keys() {
+                if self.member_fn_is_pub(mono.poly_type_key, fn_name.as_str()) {
+                    self.mark_member_fn_pub(mono.mono_type_key, fn_name.as_str());
+                }
+            }
+
             self.type_member_fn_sigs
                 .insert(mono.mono_type_key, mono_mem_fn_sigs);
         }

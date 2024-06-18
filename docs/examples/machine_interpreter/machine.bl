@@ -1,5 +1,6 @@
-use {Program, Instruction, InstKind}: "docs/examples/machine_interpreter/parser.bl"
+use {Instruction, InstKind}: "docs/examples/machine_interpreter/parser.bl"
 use {print_str}: "docs/examples/machine_interpreter/utils.bl"
+use {List}: "std/types/list.bl"
 
 const mem_size: uint = 1024
 
@@ -7,7 +8,7 @@ const mem_size: uint = 1024
 /// to program instructions.
 pub struct Machine {
     memory: [int; mem_size]
-    prog: *Program
+    instructions: List[Instruction]
     pc: uint
 }
 
@@ -40,11 +41,11 @@ impl ExecResult {
 }
 
 impl Machine {
-    /// Creates a new machine for executing the given program.
-    pub fn new(prog: *Program): Machine {
+    /// Creates a new machine for executing the given instructions.
+    pub fn new(instructions: List[Instruction]): Machine {
         return Machine{
             memory: [0; mem_size]
-            prog: prog
+            instructions: instructions
             pc: 0
         }
     }
@@ -53,11 +54,11 @@ impl Machine {
     /// indicating whether execution succeeded.
     pub fn exec_prog(*mut self): ExecResult {
         for self^.pc = 0,
-            self^.pc < self^.prog.len(),
+            self^.pc < self^.instructions.len(),
             self^.pc += 1
         {
-            let inst_ptr = self^.prog.inst_at(self^.pc)
-            let result = self.exec_inst(inst_ptr)
+            let inst = self^.instructions.get(self^.pc)
+            let result = self.exec_inst(inst)
             if result.status ~~ ExecStatus::Err {
                 return result
             }
@@ -68,25 +69,25 @@ impl Machine {
 
 
     /// Executes an instruction.
-    fn exec_inst(*mut self, inst: *Instruction): ExecResult {
-        if inst^.kind ~~ InstKind::Store {
+    fn exec_inst(*mut self, inst: Instruction): ExecResult {
+        if inst.kind ~~ InstKind::Store {
             print_str("store\n")
-            return self.store(inst^.operands.(0), inst^.operands.(1) as uint)
+            return self.store(inst.operands.(0), inst.operands.(1) as uint)
         }
 
-        if inst^.kind ~~ InstKind::Copy {
+        if inst.kind ~~ InstKind::Copy {
             print_str("copy\n")
-            return self.copy(inst^.operands.(0) as uint, inst^.operands.(1) as uint)
+            return self.copy(inst.operands.(0) as uint, inst.operands.(1) as uint)
         }
 
-        if inst^.kind ~~ InstKind::Add {
+        if inst.kind ~~ InstKind::Add {
             print_str("add\n")
-            return self.add(inst^.operands.(0) as uint, inst^.operands.(1) as uint)
+            return self.add(inst.operands.(0) as uint, inst.operands.(1) as uint)
         }
 
-        if inst^.kind ~~ InstKind::JumpIf0 {
+        if inst.kind ~~ InstKind::JumpIf0 {
             print_str("jumpif0\n")
-            return self.jumpif0(inst^.operands.(0) as uint, inst^.operands.(1) as uint)
+            return self.jumpif0(inst.operands.(0) as uint, inst.operands.(1) as uint)
         }
 
         return ExecResult.new_err("unimplemented instruction")
@@ -136,7 +137,7 @@ impl Machine {
             return ExecResult.new_err("jumpif0 source address out of bounds")
         }
 
-        if dst_inst >= self^.prog.len() {
+        if dst_inst >= self^.instructions.len() {
             return ExecResult.new_err("jumpif0 destination address out of bounds")
         }
 
@@ -150,5 +151,10 @@ impl Machine {
     /// Returns the int in memory at the given index.
     pub fn memory_at(*self, index: uint): int {
         return self^.memory.(index)
+    }
+
+    /// Frees memory associated with this machine.
+    pub fn free(self) {
+        self.instructions.free()
     }
 }

@@ -44,7 +44,7 @@ impl Display for UnresolvedType {
             self.name,
             match self.params.len() {
                 0 => "".to_string(),
-                _ => vec_to_string(&self.params, ", "),
+                _ => format!("[{}]", vec_to_string(&self.params, ", ")),
             }
         )
     }

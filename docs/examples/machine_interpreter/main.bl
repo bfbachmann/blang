@@ -26,10 +26,10 @@ fn main() {
 
     // Read instructions from the file.
     let mut parser = Parser.new(prog_data, bytes_read)
-    let prog = parser.parse_prog()
+    let instructions = parser.parse_instructions()
 
     // Execute instructions.
-    let mut machine = Machine.new(&prog)
+    let mut machine = Machine.new(instructions)
     let result = machine.exec_prog()
     assert(result.status ~~ ExecStatus::Ok, result.msg)
 
@@ -39,9 +39,9 @@ fn main() {
     for let mut i = 0uint, i < 10, i += 1 {
         sum += machine.memory_at(i)
     }
-    
+
+    machine.free()
     free(prog_data)
-    prog.free()
     fclose(file)
     exit(sum as uint)
 }

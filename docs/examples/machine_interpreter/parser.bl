@@ -1,5 +1,7 @@
 use {malloc, realloc, free}: "std/libc/mem.bl"
 use {strtol, strncmp}: "std/libc/string.bl"
+use {Clone}: "std/specs/clone.bl"
+use {List}: "std/types/list.bl"
 
 use {assert}: "docs/examples/machine_interpreter/utils.bl"
 
@@ -9,11 +11,18 @@ pub struct Instruction {
     pub operands: {int, int}
 }
 
-impl Instruction {
+impl Instruction: Clone {
     fn new_nop(): Instruction {
         return Instruction{
             kind: InstKind::JumpIf0
             operands: {1, 0}
+        }
+    }
+
+    fn clone(*self): Instruction {
+        return Instruction{
+            kind: self^.kind.clone()
+            operands: {self^.operands.(0), self^.operands.(1)}
         }
     }
 }
@@ -43,68 +52,17 @@ pub enum InstKind {
     JumpIf0
 }
 
-/// A program is just an array of instructions.
-pub struct Program {
-    instructions: *mut Instruction
-    len: uint
-    cap: uint
-}
-
-impl Program {
-    pub fn new(): Program {
-        return Program{
-            instructions: null
-            len: 0
-            cap: 0
+impl InstKind: Clone {
+    fn clone(*self): InstKind {
+        if self^ ~~ InstKind::Store {
+            return InstKind::Store
+        } elsif self^ ~~ InstKind::Copy {
+            return InstKind::Copy
+        } elsif self^ ~~ InstKind::Add {
+            return InstKind::Add
+        } else {
+            return InstKind::JumpIf0
         }
-    }
-
-    /// Returns the number of instructions in the program.
-    pub fn len(*self): uint {
-        return self^.len
-    }
-
-    /// Increases the amount of heap memory allocated to store this program's
-    /// instructions.
-    fn grow(*mut self) {
-        let mut new_cap = self^.cap * 2
-        if new_cap == 0 {
-            new_cap = 128
-        }
-
-        self^.instructions = realloc(
-            self^.instructions as *u8,
-            sizeof Instruction * new_cap,
-        ) as *mut Instruction
-        self^.cap = new_cap
-    }
-
-    /// Adds the given instruction to the program.
-    fn push_inst(*mut self, inst: Instruction) {
-        if self^.len == self^.cap {
-            self.grow()
-        }
-
-        let inst_ptr = self.inst_ptr_mut(self^.len)
-        inst_ptr^ = inst
-        self^.len += 1
-    }
-
-    /// Returns a `*mut` to the instruction at the given index.
-    fn inst_ptr_mut(*mut self, index: uint): *mut Instruction {
-        assert(index < self^.cap, "instruction index out of bounds")
-        return self^.instructions + (index * sizeof Instruction) as *Instruction
-    }
-
-    /// Returns a pointer to the instruction at the given index.
-    pub fn inst_at(*self, index: uint): *Instruction {
-        assert(index < self^.len, "instruction index out of bounds")
-        return self^.instructions.(index as int)
-    }
-
-    /// Frees heap memory associated with this program.
-    pub fn free(self) {
-        free(self.instructions as *u8)
     }
 }
 
@@ -170,19 +128,19 @@ impl Parser {
         }
     }
 
-    /// Parses the program stored in the parser and returns the result. This function
+    /// Parses the instructions stored in the parser and returns the result. This function
     /// will abort with an error message if the program is syntactically invalid.
-    pub fn parse_prog(*mut self): Program {
-        let mut prog = Program.new()
+    pub fn parse_instructions(*mut self): List[Instruction] {
+        let mut instructions = List[Instruction].new()
         loop {
             let result = self.try_parse_inst()
             assert(result.status !~ ParseStatus::Err, result.msg)
     
             if result.status ~~ ParseStatus::Done {
-                return prog
+                return instructions
             }
     
-            prog.push_inst(result.inst)
+            instructions.push(result.inst)
         }
     }
 
