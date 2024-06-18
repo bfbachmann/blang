@@ -36,7 +36,7 @@ impl AFnCall {
     /// Performs semantic analysis on a function call and returns the analyzed version of it.
     pub fn from(ctx: &mut ProgramContext, call: &FuncCall) -> AFnCall {
         // Analyze the expression that should represent a function.
-        let fn_expr = AExpr::from(ctx, call.fn_expr.clone(), None, false, false);
+        let fn_expr = AExpr::from_with_pref(ctx, call.fn_expr.clone(), None, false, false, true);
 
         // This value will serve as a placeholder for cases where analysis fails on the function
         // call, and we need to abort early.

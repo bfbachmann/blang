@@ -230,6 +230,16 @@ impl AType {
         }
     }
 
+    /// Returns the type's mangled name, if it has one.
+    pub fn maybe_mangled_name(&self) -> Option<&String> {
+        match self {
+            AType::Function(fn_sig) => Some(&fn_sig.mangled_name),
+            AType::Struct(struct_type) => Some(&struct_type.mangled_name),
+            AType::Enum(enum_type) => Some(&enum_type.mangled_name),
+            _ => None,
+        }
+    }
+
     /// Creates a new type from the given function signature.
     pub fn from_fn_sig(sig: AFnSig) -> AType {
         AType::Function(Box::new(sig))
@@ -432,6 +442,25 @@ impl AType {
     /// Returns true if this is a spec type.
     pub fn is_spec(&self) -> bool {
         matches!(self, AType::Spec(_))
+    }
+
+    /// Returns true if the type is primitive.
+    pub fn is_primitive(&self) -> bool {
+        matches!(
+            self,
+            AType::Bool
+                | AType::U8
+                | AType::I8
+                | AType::U32
+                | AType::I32
+                | AType::F32
+                | AType::I64
+                | AType::U64
+                | AType::F64
+                | AType::Int
+                | AType::Uint
+                | AType::Str
+        )
     }
 
     /// Returns true if arithmetic operations on this type should be signed. Otherwise, this type

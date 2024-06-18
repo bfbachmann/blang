@@ -518,12 +518,16 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     let re = Regex::new(r"(?P<prefix>[^:]*::)([^\.]*)(?P<suffix>.*)").unwrap();
                     let concrete_fn_name = re
                         .replace(fn_sig.mangled_name.as_str(), |caps: &Captures| {
-                            format!(
-                                "{}{}{}",
-                                &caps["prefix"],
-                                concrete_type.name(),
-                                &caps["suffix"]
-                            )
+                            if let Some(mangled_name) = concrete_type.maybe_mangled_name() {
+                                format!("{}{}", mangled_name, &caps["suffix"])
+                            } else {
+                                format!(
+                                    "{}{}{}",
+                                    &caps["prefix"],
+                                    concrete_type.name(),
+                                    &caps["suffix"]
+                                )
+                            }
                         })
                         .into_owned();
                     let ll_fn_type = self
@@ -1229,7 +1233,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Checks if the given function call is a call to an intrinsic function. If so,
-    /// generates code for the intrinsic function and returns the result.
+    /// generates code for the intrinsic function call and returns the result.
     fn maybe_gen_intrinsic_call(
         &mut self,
         call: &AFnCall,
@@ -1254,6 +1258,21 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             };
 
             return Some(ll_str_len);
+        } else if fn_sig.mangled_name.ends_with(".clone")
+            && fn_sig
+                .maybe_impl_type_key
+                .is_some_and(|tk| self.type_converter.must_get_type(tk).is_primitive())
+        {
+            // Compile the `*self` argument expression.
+            let ll_self_arg = self.gen_expr(call.args.first().unwrap());
+            let ll_pointee_type = self
+                .type_converter
+                .get_basic_type(fn_sig.maybe_impl_type_key.unwrap());
+            return Some(self.builder.build_load(
+                ll_pointee_type,
+                ll_self_arg.into_pointer_value(),
+                "cloned",
+            ));
         }
 
         None

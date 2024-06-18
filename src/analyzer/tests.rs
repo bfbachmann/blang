@@ -17,7 +17,7 @@ mod tests {
     fn get_analysis(raw: &str) -> ProgramAnalysis {
         let tokens = lex(raw).expect("should not error");
         let module = Module::from("", &mut Stream::from(tokens)).expect("should not error");
-        analyze_modules(vec![module], &&new_test_triple())
+        analyze_modules(vec![module], &new_test_triple())
     }
 
     fn analyze(raw: &str) -> AnalyzeResult<AModule> {

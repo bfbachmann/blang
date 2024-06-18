@@ -193,6 +193,8 @@ pub struct ProgramContext {
     type_monomorphizations: HashMap<TypeKey, Monomorphization>,
     /// Maps primitive type names to their type keys.
     primitive_type_keys: HashMap<String, TypeKey>,
+    /// Stores reserved type names that users can't use.
+    reserved_type_names: HashSet<String>,
 
     /// The path of the module that is currently being analyzed.
     cur_mod_path: String,
@@ -219,7 +221,7 @@ pub struct ProgramContext {
     pub_member_fn_names: HashMap<TypeKey, HashSet<String>>,
     /// Maps struct type key to the set of public field names on that struct type.
     pub_struct_field_names: HashMap<TypeKey, HashSet<String>>,
-    /// Maps type keys to the modules in which the types are declared.
+    /// Maps type keys to the paths of the modules in which the types are declared.
     type_declaration_mods: HashMap<TypeKey, String>,
     /// Maps type key to the set of specs implemented by that type.
     spec_impls: HashMap<TypeKey, HashSet<TypeKey>>,
@@ -256,6 +258,7 @@ impl ProgramContext {
         ProgramContext {
             type_store,
             primitive_type_keys,
+            reserved_type_names: HashSet::from(["Clone".to_string()]),
             cur_mod_path: root_mod_path.to_string(),
             module_contexts: mod_ctxs,
             tuple_type_keys: Default::default(),
@@ -352,6 +355,7 @@ impl ProgramContext {
     fn check_type_name_not_used<T: Locatable>(&mut self, name: &str, loc: &T) -> bool {
         let mod_ctx = self.cur_mod_ctx();
         if self.primitive_type_keys.contains_key(name)
+            || self.reserved_type_names.contains(name)
             || mod_ctx.unchecked_struct_types.contains_key(name)
             || mod_ctx.unchecked_enum_types.contains_key(name)
             || mod_ctx.unchecked_specs.contains_key(name)
@@ -382,6 +386,12 @@ impl ProgramContext {
             .spec_type_keys;
 
         for spec_type_key in spec_type_keys {
+            if self.must_get_type(*spec_type_key).to_spec_type().name == "Clone"
+                && self.must_get_type(type_key).is_primitive()
+            {
+                continue;
+            }
+
             let type_implements_spec = self
                 .spec_impls
                 .get(&type_key)
@@ -1119,7 +1129,9 @@ impl ProgramContext {
         };
         let mut type_mappings: HashMap<TypeKey, TypeKey> = HashMap::new();
         let mut all_type_keys_match = true;
+        let mut param_checks_failed = false;
         let type_display = poly_type.display(self);
+
         for (param, (passed_param_tk, param_loc)) in defined_params
             .iter()
             .zip(param_type_keys.iter().zip(param_locs.iter()))
@@ -1140,8 +1152,13 @@ impl ProgramContext {
 
                 Err(e) => {
                     self.insert_err(e);
+                    param_checks_failed = true;
                 }
             }
+        }
+
+        if param_checks_failed {
+            return self.unknown_type_key();
         }
 
         // Check if we're monomorphizing a type with its own generic parameters. If so, we can just
@@ -1224,7 +1241,7 @@ impl ProgramContext {
         }
     }
 
-    /// Analyzed a passed parameter type and checks that it matches the expected
+    /// Analyzes a passed parameter type and checks that it matches the expected
     /// parameter constraints.
     fn check_param<T: Locatable>(
         &mut self,

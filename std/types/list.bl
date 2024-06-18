@@ -1,0 +1,108 @@
+use {panic}: "std/backtrace/panic.bl"
+use {heap_realloc, heap_free}: "std/mem/mem.bl"
+use {memmove}: "std/libc/mem.bl"
+use {Clone}: "std/specs/clone.bl"
+
+/// A resizable array. The element type here should implement `Clone` so 
+/// elements can be safely copied out of the list. This type is not threadsafe.
+pub struct List[T: Clone] {
+    ptr: *mut T
+    len: uint
+    cap: uint
+}
+
+impl List {
+    /// Returns a new empty list.
+    pub fn new(): List[T] {
+        return List[T]{
+            ptr: null
+            len: 0
+            cap: 0
+        }
+    }
+
+    /// Returns the number of elements currently in the list.
+    pub fn len(*self): uint {
+        return self^.len
+    }
+
+    /// Pushes `t` onto the end of the list.
+    pub fn push(*mut self, t: T) {
+        if self.is_full() {
+            self.grow()
+        }
+
+        self^.ptr.(self^.len as int)^ = t
+        self^.len += 1
+    }
+
+    /// Pops removes the last element from the list and returns it. Panics if
+    /// the list is empty.
+    pub fn pop(*mut self): T {
+        if self^.len == 0 {
+            panic("cannot pop from empty list")
+        }
+        return self.remove(self^.len - 1)
+    }
+
+    /// Returns a clone of the element at index `i` in the list if `i` is in 
+    /// bounds. Panics if `i` is out of bounds.
+    pub fn get(*self, i: uint): T {
+        self.check_bounds(i)
+        return self^.ptr.(i as int).clone()
+    }
+
+    /// Removes the element at index `i` from the list and returns it. Panics if
+    /// `i` is out of bounds.
+    pub fn remove(*mut self, i: uint): T {
+        self.check_bounds(i)
+        let t = self^.ptr.(i as int).clone()
+
+        // We only need to shift elements over if we're not removing the last
+        // element in the list.
+        let len = self.len()
+        if len > i + 1 {
+            memmove(
+                self^.ptr.(i as int) as *u8, 
+                self^.ptr.(i as int + 1) as *u8, 
+                len - i - 1,
+            )
+        }
+        
+        self^.len -= 1
+        return t
+    }
+    
+    /// Frees the memory allocated for this list.
+    pub fn free(self) {
+        heap_free[T](self.ptr)
+    }
+
+    /// Returns true if the list has no elements.
+    pub fn is_empty(*self): bool {
+        return self^.len > 0
+    }
+
+    /// Returns true if the list is full.
+    fn is_full(*self): bool {
+        return self^.len == self^.cap
+    }
+
+    /// Increases the capacity of the list.
+    fn grow(*mut self) {
+        let mut new_cap = self^.cap * 2
+        if new_cap == 0 {
+            new_cap = 1
+        }
+
+        self^.ptr = heap_realloc[T](self^.ptr, new_cap)
+        self^.cap = new_cap
+    }
+
+    /// Panics if `i` is outside of the array bounds.
+    fn check_bounds(*self, i: uint) {
+        if i >= self^.len {
+            panic("list index out of bounds")
+        }
+    }
+}

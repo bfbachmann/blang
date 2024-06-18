@@ -89,7 +89,7 @@ impl AParam {
                 spec.member_fn_type_keys.values().map(|tk| *tk).collect();
             for mem_fn_type_key in mem_fn_type_keys {
                 let mut fn_sig = ctx.must_get_type(mem_fn_type_key).to_fn_sig().clone();
-                fn_sig.replace_type_and_define(ctx, ctx.self_type_key(), generic_type_key);
+                fn_sig.replace_self_type_and_define(ctx, generic_type_key);
                 ctx.insert_member_fn(generic_type_key, fn_sig);
             }
         }

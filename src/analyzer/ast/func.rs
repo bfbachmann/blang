@@ -187,12 +187,11 @@ impl AFnSig {
     }
 
     /// Updates this function signature by replacing any instances of the
-    /// `target_type_key`  type inside it with `replacement_type_key`. Also
+    /// `Self`  type inside it with `replacement_type_key`. Also
     /// records the new function signature as a new type in the program context.
-    pub fn replace_type_and_define(
+    pub fn replace_self_type_and_define(
         &mut self,
         ctx: &mut ProgramContext,
-        target_type_key: TypeKey,
         replacement_type_key: TypeKey,
     ) {
         fn replace_tk(
@@ -213,22 +212,19 @@ impl AFnSig {
             }
         }
 
+        let self_type_key = ctx.self_type_key();
+
         // Make type key replacements in the function signature.
         for arg in &mut self.args {
-            replace_tk(
-                ctx,
-                &mut arg.type_key,
-                target_type_key,
-                replacement_type_key,
-            )
+            replace_tk(ctx, &mut arg.type_key, self_type_key, replacement_type_key)
         }
 
         if let Some(ret_tk) = &mut self.maybe_ret_type_key {
-            replace_tk(ctx, ret_tk, target_type_key, replacement_type_key);
+            replace_tk(ctx, ret_tk, self_type_key, replacement_type_key);
         }
 
         if let Some(impl_tk) = &mut self.maybe_impl_type_key {
-            replace_tk(ctx, impl_tk, target_type_key, replacement_type_key);
+            replace_tk(ctx, impl_tk, self_type_key, replacement_type_key);
         }
 
         // Re-mangle the name based on the updated type info.

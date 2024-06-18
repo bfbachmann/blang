@@ -31,7 +31,13 @@ impl Display for AMemberAccess {
 
 impl AMemberAccess {
     /// Performs semantic analysis on the given member access expression.
-    pub fn from(ctx: &mut ProgramContext, access: &MemberAccess) -> AMemberAccess {
+    /// If `prefer_method` is set to true, and the member access could refer to either a field
+    /// or a method by the same name, the method will be chosen.
+    pub fn from(
+        ctx: &mut ProgramContext,
+        access: &MemberAccess,
+        prefer_method: bool,
+    ) -> AMemberAccess {
         // Analyze the expression whose member is being accessed.
         let mut base_expr = AExpr::from(ctx, access.base_expr.clone(), None, true, false);
         let base_type = ctx.must_get_type(base_expr.type_key);
@@ -52,10 +58,16 @@ impl AMemberAccess {
         // Check if the member access is accessing a field on a struct type or
         // a member function or method on a type.
         let (maybe_field_type_key, base_type_key, base_expr_is_ptr) = match base_type {
-            // Only match struct field types if the base expression is not a type.
-            // If it is a type, then we should only be trying to resolve member
-            // functions on it.
-            AType::Struct(struct_type) if !base_expr.kind.is_type() => {
+            // Only match struct field types if the base expression is not a type. We'll also avoid
+            // matching struct fields if there is already a method with a matching name and
+            // `prefer_methods` is `true`.
+            AType::Struct(struct_type)
+                if !base_expr.kind.is_type()
+                    && !(prefer_method
+                        && ctx
+                            .get_member_fn(base_expr.type_key, access.member_name.as_str())
+                            .is_some()) =>
+            {
                 let maybe_field_type_key =
                     struct_type.get_field_type_key(access.member_name.as_str());
 
@@ -121,11 +133,7 @@ impl AMemberAccess {
                         // change any `Self` type keys into type keys that match
                         // the base generic type the function is being called on.
                         let mut fn_sig = matching_fns[0].clone();
-                        fn_sig.replace_type_and_define(
-                            ctx,
-                            ctx.self_type_key(),
-                            base_expr.type_key,
-                        );
+                        fn_sig.replace_self_type_and_define(ctx, base_expr.type_key);
                         (None, base_expr.type_key, false)
                     }
 

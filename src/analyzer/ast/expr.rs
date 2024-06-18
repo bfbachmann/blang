@@ -369,11 +369,33 @@ impl AExpr {
         allow_type: bool,
         ignore_mutability: bool,
     ) -> AExpr {
-        let result = analyze_expr(
+        AExpr::from_with_pref(
+            ctx,
+            expr,
+            maybe_expected_type_key,
+            allow_type,
+            ignore_mutability,
+            false,
+        )
+    }
+
+    /// Does the same thing as `from`, but allows the caller to specify how to resolve ambiguous
+    /// member accesses based on whether the caller prefers a method or a field. This is only really
+    /// relevant to struct types with field names that match their method names.
+    pub fn from_with_pref(
+        ctx: &mut ProgramContext,
+        expr: Expression,
+        maybe_expected_type_key: Option<TypeKey>,
+        allow_type: bool,
+        ignore_mutability: bool,
+        prefer_method: bool,
+    ) -> AExpr {
+        let result = analyze_expr_with_pref(
             ctx,
             expr.clone(),
             maybe_expected_type_key,
             allow_type,
+            prefer_method,
             Span {
                 start_pos: expr.start_pos().clone(),
                 end_pos: expr.end_pos().clone(),
@@ -1401,11 +1423,12 @@ fn analyze_from(
     }
 }
 
-fn analyze_expr(
+fn analyze_expr_with_pref(
     ctx: &mut ProgramContext,
     expr: Expression,
     maybe_expected_type_key: Option<TypeKey>,
     allow_type: bool,
+    prefer_method: bool,
     span: Span,
 ) -> AExpr {
     match expr {
@@ -1537,7 +1560,14 @@ fn analyze_expr(
         }
 
         Expression::MemberAccess(member_access) => {
-            let access = AMemberAccess::from(ctx, &member_access);
+            // Prefer methods if the expected type is a function.
+            let prefer_method = prefer_method
+                || match maybe_expected_type_key {
+                    Some(tk) => ctx.must_get_type(tk).is_fn(),
+                    None => false,
+                };
+
+            let access = AMemberAccess::from(ctx, &member_access, prefer_method);
             AExpr {
                 type_key: access.member_type_key,
                 kind: AExprKind::MemberAccess(Box::new(access)),
@@ -1566,6 +1596,16 @@ fn analyze_expr(
 
         Expression::From(from) => analyze_from(ctx, &from, maybe_expected_type_key),
     }
+}
+
+fn analyze_expr(
+    ctx: &mut ProgramContext,
+    expr: Expression,
+    maybe_expected_type_key: Option<TypeKey>,
+    allow_type: bool,
+    span: Span,
+) -> AExpr {
+    analyze_expr_with_pref(ctx, expr, maybe_expected_type_key, allow_type, false, span)
 }
 
 #[cfg(test)]
