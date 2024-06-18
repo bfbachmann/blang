@@ -193,8 +193,6 @@ pub struct ProgramContext {
     type_monomorphizations: HashMap<TypeKey, Monomorphization>,
     /// Maps primitive type names to their type keys.
     primitive_type_keys: HashMap<String, TypeKey>,
-    /// Stores reserved type names that users can't use.
-    reserved_type_names: HashSet<String>,
 
     /// The path of the module that is currently being analyzed.
     cur_mod_path: String,
@@ -258,7 +256,6 @@ impl ProgramContext {
         ProgramContext {
             type_store,
             primitive_type_keys,
-            reserved_type_names: HashSet::from(["Clone".to_string()]),
             cur_mod_path: root_mod_path.to_string(),
             module_contexts: mod_ctxs,
             tuple_type_keys: Default::default(),
@@ -355,10 +352,10 @@ impl ProgramContext {
     fn check_type_name_not_used<T: Locatable>(&mut self, name: &str, loc: &T) -> bool {
         let mod_ctx = self.cur_mod_ctx();
         if self.primitive_type_keys.contains_key(name)
-            || self.reserved_type_names.contains(name)
             || mod_ctx.unchecked_struct_types.contains_key(name)
             || mod_ctx.unchecked_enum_types.contains_key(name)
             || mod_ctx.unchecked_specs.contains_key(name)
+            || self.is_reserved_type_name(name)
         {
             self.insert_err(AnalyzeError::new(
                 ErrorKind::DuplicateType,
@@ -370,6 +367,11 @@ impl ProgramContext {
         }
 
         return true;
+    }
+
+    /// Returns true if `name` is a reserved type name that cannot be used by users.
+    fn is_reserved_type_name(&self, name: &str) -> bool {
+        name == "Clone" && !self.cur_mod_path.ends_with("std/specs/clone.bl")
     }
 
     /// Checks that the given type implements the set of specs on the given

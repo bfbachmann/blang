@@ -1,8 +1,9 @@
 use std::fmt;
 use std::fmt::Formatter;
 
+use crate::{format_code, locatable_impl};
 use crate::analyzer::ast::array::AArrayInit;
-use crate::analyzer::ast::closure::{check_closure_returns, check_closure_yields, AClosure};
+use crate::analyzer::ast::closure::{AClosure, check_closure_returns, check_closure_yields};
 use crate::analyzer::ast::fn_call::AFnCall;
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::index::AIndex;
@@ -29,7 +30,6 @@ use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::tuple::TupleInit;
 use crate::parser::ast::unresolved::UnresolvedType;
-use crate::{format_code, locatable_impl};
 
 /// Represents a kind of expression.
 #[derive(Debug, Clone)]
@@ -1596,16 +1596,6 @@ fn analyze_expr_with_pref(
 
         Expression::From(from) => analyze_from(ctx, &from, maybe_expected_type_key),
     }
-}
-
-fn analyze_expr(
-    ctx: &mut ProgramContext,
-    expr: Expression,
-    maybe_expected_type_key: Option<TypeKey>,
-    allow_type: bool,
-    span: Span,
-) -> AExpr {
-    analyze_expr_with_pref(ctx, expr, maybe_expected_type_key, allow_type, false, span)
 }
 
 #[cfg(test)]
