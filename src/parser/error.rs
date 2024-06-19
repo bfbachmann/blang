@@ -43,6 +43,7 @@ impl Display for ErrorKind {
 /// Represents any fatal error that occurs during parsing.
 #[derive(Debug)]
 pub struct ParseError {
+    #[allow(dead_code)]
     pub kind: ErrorKind,
     pub message: String,
     pub token: Option<Token>,

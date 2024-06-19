@@ -8,8 +8,6 @@ use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::array::ArrayType;
 use crate::parser::ast::func_sig::FunctionSignature;
 use crate::parser::ast::pointer::PointerType;
-use crate::parser::ast::r#enum::EnumType;
-use crate::parser::ast::r#struct::StructType;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::tuple::TupleType;
 use crate::parser::ast::unresolved::UnresolvedType;
@@ -18,10 +16,6 @@ use crate::parser::error::ParseResult;
 /// Represents a type referenced in a program.
 #[derive(Debug, Clone, Hash, Eq)]
 pub enum Type {
-    Struct(StructType),
-    // TODO: Remove? This only needs to exist here if enums can be declared inline.
-    #[allow(dead_code)]
-    Enum(EnumType),
     Tuple(TupleType),
     Function(Box<FunctionSignature>),
     Pointer(Box<PointerType>),
@@ -47,8 +41,6 @@ impl PartialEq for Type {
                     args_match && f1.maybe_ret_type == f2.maybe_ret_type
                 }
             }
-            (Type::Struct(s1), Type::Struct(s2)) => s1 == s2,
-            (Type::Enum(s1), Type::Enum(s2)) => s1 == s2,
             (Type::Tuple(t1), Type::Tuple(t2)) => t1 == t2,
             (Type::Pointer(t1), Type::Pointer(t2)) => t1 == t2,
             (Type::Unresolved(u1), Type::Unresolved(u2)) => u1 == u2,
@@ -61,8 +53,6 @@ impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Type::Function(fn_sig) => write!(f, "{}", fn_sig),
-            Type::Struct(s) => write!(f, "{}", s),
-            Type::Enum(s) => write!(f, "{}", s),
             Type::Tuple(t) => write!(f, "{}", t),
             Type::Pointer(t) => write!(f, "{}", t),
             Type::Array(a) => write!(f, "{}", a),
@@ -74,8 +64,6 @@ impl fmt::Display for Type {
 impl Locatable for Type {
     fn start_pos(&self) -> &Position {
         match self {
-            Type::Struct(struct_type) => struct_type.start_pos(),
-            Type::Enum(enum_type) => enum_type.start_pos(),
             Type::Tuple(tuple_type) => tuple_type.start_pos(),
             Type::Function(fn_sig) => fn_sig.start_pos(),
             Type::Pointer(t) => t.start_pos(),
@@ -86,8 +74,6 @@ impl Locatable for Type {
 
     fn end_pos(&self) -> &Position {
         match self {
-            Type::Struct(struct_type) => struct_type.end_pos(),
-            Type::Enum(enum_type) => enum_type.end_pos(),
             Type::Tuple(tuple_type) => tuple_type.end_pos(),
             Type::Function(fn_sig) => fn_sig.end_pos(),
             Type::Pointer(t) => t.end_pos(),
@@ -98,8 +84,6 @@ impl Locatable for Type {
 
     fn span(&self) -> &Span {
         match self {
-            Type::Struct(struct_type) => struct_type.span(),
-            Type::Enum(enum_type) => enum_type.span(),
             Type::Tuple(tuple_type) => tuple_type.span(),
             Type::Function(fn_sig) => fn_sig.span(),
             Type::Pointer(t) => t.span(),
@@ -119,14 +103,6 @@ impl Type {
             }) => {
                 let sig = FunctionSignature::from_anon(tokens, false)?;
                 Ok(Type::Function(Box::new(sig)))
-            }
-
-            Some(Token {
-                kind: TokenKind::Struct,
-                ..
-            }) => {
-                let struct_type = StructType::from(tokens)?;
-                Ok(Type::Struct(struct_type))
             }
 
             Some(Token {

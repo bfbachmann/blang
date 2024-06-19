@@ -90,16 +90,6 @@ impl AType {
 
             Type::Function(sig) => AType::from_fn_sig(AFnSig::from(ctx, &*sig)),
 
-            Type::Struct(struct_type) => {
-                let a_struct_type = AStructType::from(ctx, struct_type, true);
-                return AType::Struct(a_struct_type);
-            }
-
-            Type::Enum(enum_type) => {
-                let a_enum_type = AEnumType::from(ctx, enum_type);
-                return AType::Enum(a_enum_type);
-            }
-
             Type::Tuple(tuple_type) => {
                 let a_tuple_type = ATupleType::from(ctx, tuple_type);
                 return AType::Tuple(a_tuple_type);

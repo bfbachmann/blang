@@ -25,14 +25,6 @@ pub fn check_type_containment(
             }
         }
 
-        Type::Struct(field_struct_type) => {
-            check_struct_containment(ctx, field_struct_type, hierarchy)?;
-        }
-
-        Type::Enum(field_enum_type) => {
-            check_enum_containment(ctx, field_enum_type, hierarchy)?;
-        }
-
         Type::Tuple(field_tuple_type) => {
             check_tuple_containment(ctx, field_tuple_type, hierarchy)?;
         }

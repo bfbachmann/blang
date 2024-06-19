@@ -598,14 +598,6 @@ mod tests {
     }
 
     #[test]
-    fn inline_struct_types_in_fn_sig() {
-        let raw = r#"fn one(a: struct {one: i64, two: bool}, b: i64): struct {thing: str} {}"#;
-        let tokens = lex(raw).expect("should succeed");
-        let result = Module::from("", &mut Stream::from(tokens));
-        assert!(matches!(result, Ok(_)));
-    }
-
-    #[test]
     fn invalid_type_cast() {
         let raw = r#"
             fn main() {

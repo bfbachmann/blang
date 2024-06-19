@@ -1,15 +1,14 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use crate::{format_code, locatable_impl};
 use crate::analyzer::ast::array::AArrayInit;
-use crate::analyzer::ast::closure::{AClosure, check_closure_returns, check_closure_yields};
+use crate::analyzer::ast::closure::{check_closure_returns, check_closure_yields, AClosure};
 use crate::analyzer::ast::fn_call::AFnCall;
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::index::AIndex;
 use crate::analyzer::ast::member::AMemberAccess;
 use crate::analyzer::ast::pointer::APointerType;
-use crate::analyzer::ast::r#enum::{AEnumTypeVariant, AEnumVariantInit};
+use crate::analyzer::ast::r#enum::AEnumVariantInit;
 use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::statement::AStatement;
@@ -30,6 +29,7 @@ use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::tuple::TupleInit;
 use crate::parser::ast::unresolved::UnresolvedType;
+use crate::{format_code, locatable_impl};
 
 /// Represents a kind of expression.
 #[derive(Debug, Clone)]
@@ -669,29 +669,6 @@ impl AExpr {
         let span = typ.span().clone();
 
         match typ {
-            Type::Struct(_) => AExpr {
-                kind: AExprKind::StructInit(AStructInit {
-                    type_key,
-                    field_values: Default::default(),
-                }),
-                type_key,
-                span,
-            },
-
-            Type::Enum(_) => AExpr {
-                kind: AExprKind::EnumInit(AEnumVariantInit {
-                    type_key,
-                    variant: AEnumTypeVariant {
-                        number: 0,
-                        name: "<unknown>".to_string(),
-                        maybe_type_key: None,
-                    },
-                    maybe_value: None,
-                }),
-                type_key,
-                span,
-            },
-
             Type::Tuple(_) => AExpr {
                 kind: AExprKind::TupleInit(ATupleInit::new_empty(ctx)),
                 type_key,
