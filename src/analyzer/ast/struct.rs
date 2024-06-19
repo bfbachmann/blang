@@ -152,7 +152,7 @@ impl AStructType {
         let a_struct = AStructType {
             name: struct_type.name.clone(),
             mangled_name,
-            maybe_params: maybe_params,
+            maybe_params,
             fields,
         };
 

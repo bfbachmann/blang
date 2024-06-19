@@ -42,5 +42,9 @@ fn main() {
     let clone = ref.clone()
     assert(clone.get_ptr()^ == msg, "expected \"test\"")
 
+    // Check that we can initialize parameterized structs inline.
+    let ref = Ref[int]{ptr: &mut 9}
+    assert(ref.ptr^ == 9, "expected 9")
+
     exit(0)
 }

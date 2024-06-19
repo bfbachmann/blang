@@ -105,7 +105,7 @@ impl Scope {
     /// Gets the type key for the given type, if it exists in the scope.
     pub fn get_type_key(&self, typ: &Type) -> Option<TypeKey> {
         match self.type_keys.get(&typ) {
-            Some(k) => Some(*k),
+            Some(tk) => Some(*tk),
             None => None,
         }
     }

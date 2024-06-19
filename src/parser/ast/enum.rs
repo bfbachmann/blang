@@ -6,6 +6,7 @@ use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::expr::Expression;
+use crate::parser::ast::params::Params;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::unresolved::UnresolvedType;
@@ -91,6 +92,7 @@ impl EnumTypeVariant {
 #[derive(Debug, Eq, Clone)]
 pub struct EnumType {
     pub name: String,
+    pub maybe_params: Option<Params>,
     pub variants: Vec<EnumTypeVariant>,
     pub is_pub: bool,
     span: Span,
@@ -98,7 +100,9 @@ pub struct EnumType {
 
 impl PartialEq for EnumType {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && util::vecs_eq(&self.variants, &other.variants)
+        self.name == other.name
+            && self.maybe_params == other.maybe_params
+            && util::vecs_eq(&self.variants, &other.variants)
     }
 }
 
@@ -132,13 +136,14 @@ locatable_impl!(EnumType);
 impl EnumType {
     /// Parses enum type declarations. Expects token sequences of the form
     ///
-    ///     pub enum <name> {
+    ///     pub enum <name><params> {
     ///         <variant_name>(<variant_type>)
     ///         ...
     ///     }
     ///
     /// where
     ///  - `name` is the name of the enum type
+    ///  - `params` are optional generic parameters
     ///  - `variant_name` is the name of a variant of the enum type
     ///  - `variant_type` is the optional variant type (see `Type::from`)
     ///  - `pub` is optional.
@@ -146,9 +151,16 @@ impl EnumType {
         let is_pub = Module::parse_optional(tokens, TokenKind::Pub).is_some();
         let start_pos = Module::current_position(tokens);
 
-        // Parse `enum <name> {`.
+        // Parse `enum <name>`.
         Module::parse_expecting(tokens, TokenKind::Enum)?;
         let name = Module::parse_identifier(tokens)?;
+
+        // Parse optional parameters.
+        let maybe_params = match Module::next_token_is(tokens, &TokenKind::LeftBracket) {
+            true => Some(Params::from(tokens)?),
+            false => None,
+        };
+
         Module::parse_expecting(tokens, TokenKind::LeftBrace)?;
 
         // Parse the enum variants ending with `}`.
@@ -166,6 +178,7 @@ impl EnumType {
 
         Ok(EnumType {
             name,
+            maybe_params,
             variants,
             is_pub,
             span: Span { start_pos, end_pos },

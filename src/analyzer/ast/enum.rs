@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
 use crate::analyzer::ast::expr::AExpr;
+use crate::analyzer::ast::params::AParams;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
@@ -59,6 +60,7 @@ impl AEnumTypeVariant {
 pub struct AEnumType {
     pub name: String,
     pub mangled_name: String,
+    pub maybe_params: Option<AParams>,
     pub variants: HashMap<String, AEnumTypeVariant>,
     pub max_variant_size_bytes: u32,
 }
@@ -66,6 +68,7 @@ pub struct AEnumType {
 impl PartialEq for AEnumType {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
+            && self.maybe_params == other.maybe_params
             && self.mangled_name == other.mangled_name
             && util::hashmaps_eq(&self.variants, &other.variants)
     }
@@ -97,9 +100,21 @@ impl AEnumType {
         let type_key = ctx.insert_type(AType::Enum(AEnumType {
             name: enum_type.name.clone(),
             mangled_name: mangled_name.clone(),
+            maybe_params: None,
             variants: HashMap::new(),
             max_variant_size_bytes: 0,
         }));
+
+        // Analyze parameters.
+        let maybe_params = match &enum_type.maybe_params {
+            Some(params) => {
+                let params = AParams::from(ctx, params, type_key);
+                ctx.push_params(params.clone());
+                Some(params)
+            }
+            None => None,
+        };
+        let has_params = maybe_params.is_some();
 
         // Analyze each variant in the enum type.
         let mut largest_variant_size_bytes: u32 = 0;
@@ -152,6 +167,7 @@ impl AEnumType {
         let a_enum = AEnumType {
             name: enum_type.name.clone(),
             mangled_name,
+            maybe_params,
             variants,
             max_variant_size_bytes: largest_variant_size_bytes,
         };
@@ -191,6 +207,10 @@ impl AEnumType {
         // can be referenced later.
         ctx.replace_type(type_key, a_enum_type);
 
+        if has_params {
+            ctx.pop_params();
+        }
+
         a_enum
     }
 
@@ -210,19 +230,11 @@ impl AEnumType {
 }
 
 /// Represents a semantically valid enum variant initialization.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AEnumVariantInit {
     pub type_key: TypeKey,
     pub variant: AEnumTypeVariant,
     pub maybe_value: Option<Box<AExpr>>,
-}
-
-impl PartialEq for AEnumVariantInit {
-    fn eq(&self, other: &Self) -> bool {
-        self.type_key == other.type_key
-            && self.variant == other.variant
-            && util::opts_eq(&self.maybe_value, &other.maybe_value)
-    }
 }
 
 impl Display for AEnumVariantInit {
@@ -240,16 +252,6 @@ impl Display for AEnumVariantInit {
         }
 
         Ok(())
-    }
-}
-
-impl Clone for AEnumVariantInit {
-    fn clone(&self) -> Self {
-        AEnumVariantInit {
-            type_key: self.type_key,
-            variant: self.variant.clone(),
-            maybe_value: self.maybe_value.clone(),
-        }
     }
 }
 

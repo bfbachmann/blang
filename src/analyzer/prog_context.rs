@@ -14,7 +14,7 @@ use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::ast::tuple::ATupleType;
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
-use crate::analyzer::scope::{Scope, ScopedSymbol, ScopeKind};
+use crate::analyzer::scope::{Scope, ScopeKind, ScopedSymbol};
 use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::fmt::{format_code_vec, vec_to_string};
@@ -733,6 +733,7 @@ impl ProgramContext {
         }
 
         if is_polymorphic && !allow_polymorph {
+            println!("error happened");
             self.insert_err(AnalyzeError::new(
                 ErrorKind::UnresolvedParams,
                 "expected generic parameters",
@@ -771,9 +772,17 @@ impl ProgramContext {
             return Some(tk);
         }
 
+        // Try searching for the mangled name without the current path.
+        let mangled_name = self.mangle_name(maybe_mod_name, None, name, false);
+        let typ = Type::new_unresolved(mangled_name.as_str());
+        if let Some(tk) = mod_ctx.search_stack(|scope| scope.get_type_key(&typ)) {
+            return Some(tk);
+        }
+
         let typ = Type::new_unresolved(name);
         mod_ctx.search_stack(|scope| scope.get_type_key(&typ))
     }
+
     pub fn monomorphize_type(
         &mut self,
         type_key: TypeKey,
@@ -864,16 +873,19 @@ impl ProgramContext {
         if replaced_tks {
             // Add monomorphized types to the name to disambiguate it from other
             // monomorphized instances of this type.
-            // TODO: Check enum type with params.
-            for (target_tk, replacement_tk) in type_mappings {
-                enum_type.mangled_name = enum_type.mangled_name.replace(
-                    format!("{target_tk}").as_str(),
-                    format!("{replacement_tk}").as_str(),
-                );
+            if let Some(params) = &enum_type.maybe_params {
+                enum_type.mangled_name += mangle_param_names(params, type_mappings).as_str();
+            } else {
+                for (target_tk, replacement_tk) in type_mappings {
+                    enum_type.mangled_name = enum_type.mangled_name.replace(
+                        format!("{target_tk}").as_str(),
+                        format!("{replacement_tk}").as_str(),
+                    );
+                }
             }
 
             // Remove parameters from the signature now that they're no longer relevant.
-            // TODO
+            enum_type.maybe_params = None;
 
             // Define the new type in the program context.
             return Some(self.insert_type(AType::Enum(enum_type)));
