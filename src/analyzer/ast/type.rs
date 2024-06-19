@@ -404,6 +404,21 @@ impl AType {
         )
     }
 
+    /// Returns true if this type is an integer type.
+    pub fn is_integer(&self) -> bool {
+        matches!(
+            self,
+            AType::U8
+                | AType::I8
+                | AType::U32
+                | AType::I32
+                | AType::U64
+                | AType::I64
+                | AType::Int
+                | AType::Uint
+        )
+    }
+
     /// Returns true if this is a pointer type.
     pub fn is_ptr(&self) -> bool {
         matches!(self, AType::Pointer(_))

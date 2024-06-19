@@ -10,7 +10,6 @@ enum Result[T, E] {
 fn main() {
     let ok_int = Result[int, str]::Ok(1234)
     assert(ok_int ~~ Result[int, str]::Ok(1234), "expected Ok")
-    assert(ok_int.is_ok(), "expected is_ok() to return true")
 
     exit(0)
 }

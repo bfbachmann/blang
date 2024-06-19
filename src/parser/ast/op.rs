@@ -14,9 +14,15 @@ pub enum Operator {
     LogicalAnd,
     LogicalOr,
     As,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
+    BitwiseLeftShift,
+    BitwiseRightShift,
 
     // Basic unary operators
     LogicalNot,
+    BitwiseNot,
     Reference,
     MutReference,
     Defererence,
@@ -51,6 +57,7 @@ impl Operator {
             TokenKind::LogicalAnd => Some(Operator::LogicalAnd),
             TokenKind::LogicalOr => Some(Operator::LogicalOr),
             TokenKind::LogicalNot => Some(Operator::LogicalNot),
+            TokenKind::BitwiseNot => Some(Operator::BitwiseNot),
             TokenKind::EqualTo => Some(Operator::EqualTo),
             TokenKind::NotEqualTo => Some(Operator::NotEqualTo),
             TokenKind::GreaterThan => Some(Operator::GreaterThan),
@@ -58,6 +65,11 @@ impl Operator {
             TokenKind::GreaterThanOrEqual => Some(Operator::GreaterThanOrEqual),
             TokenKind::LessThanOrEqual => Some(Operator::LessThanOrEqual),
             TokenKind::As => Some(Operator::As),
+            TokenKind::BitwiseAnd => Some(Operator::BitwiseAnd),
+            TokenKind::BitwiseOr => Some(Operator::BitwiseOr),
+            TokenKind::BitwiseXor => Some(Operator::BitwiseXor),
+            TokenKind::BitwiseLeftShift => Some(Operator::BitwiseLeftShift),
+            TokenKind::BitwiseRightShift => Some(Operator::BitwiseRightShift),
             TokenKind::Like => Some(Operator::Like),
             TokenKind::NotLike => Some(Operator::NotLike),
             TokenKind::Ref => Some(Operator::Reference),
@@ -77,6 +89,7 @@ impl Operator {
             Operator::LogicalAnd => TokenKind::LogicalAnd.to_string(),
             Operator::LogicalOr => TokenKind::LogicalOr.to_string(),
             Operator::LogicalNot => TokenKind::LogicalNot.to_string(),
+            Operator::BitwiseNot => TokenKind::BitwiseNot.to_string(),
             Operator::EqualTo => TokenKind::EqualTo.to_string(),
             Operator::Like => TokenKind::Like.to_string(),
             Operator::NotLike => TokenKind::NotLike.to_string(),
@@ -86,17 +99,22 @@ impl Operator {
             Operator::GreaterThanOrEqual => TokenKind::GreaterThanOrEqual.to_string(),
             Operator::LessThanOrEqual => TokenKind::LessThanOrEqual.to_string(),
             Operator::As => TokenKind::As.to_string(),
+            Operator::BitwiseAnd => TokenKind::BitwiseAnd.to_string(),
+            Operator::BitwiseOr => TokenKind::BitwiseOr.to_string(),
+            Operator::BitwiseXor => TokenKind::BitwiseXor.to_string(),
+            Operator::BitwiseLeftShift => TokenKind::BitwiseLeftShift.to_string(),
+            Operator::BitwiseRightShift => TokenKind::BitwiseRightShift.to_string(),
             Operator::Reference => TokenKind::Ref.to_string(),
             Operator::MutReference => TokenKind::RefMut.to_string(),
             Operator::Defererence => TokenKind::Deref.to_string(),
         }
     }
 
-    /// Returns the precedence of this operator. Relative operator precedence is copied from the C
-    /// standard.
+    /// Returns the precedence of this operator.
     pub fn precedence(&self) -> u32 {
         100 - match self {
             Operator::LogicalNot
+            | Operator::BitwiseNot
             | Operator::Reference
             | Operator::MutReference
             | Operator::Defererence => 2,
@@ -107,16 +125,24 @@ impl Operator {
 
             Operator::Add | Operator::Subtract => 5,
 
+            Operator::BitwiseLeftShift | Operator::BitwiseRightShift => 6,
+
+            Operator::BitwiseAnd => 7,
+
+            Operator::BitwiseXor => 8,
+
+            Operator::BitwiseOr => 9,
+
             Operator::GreaterThan
             | Operator::LessThan
             | Operator::GreaterThanOrEqual
-            | Operator::LessThanOrEqual => 6,
+            | Operator::LessThanOrEqual => 10,
 
-            Operator::EqualTo | Operator::NotEqualTo | Operator::Like | Operator::NotLike => 7,
+            Operator::EqualTo | Operator::NotEqualTo | Operator::Like | Operator::NotLike => 11,
 
-            Operator::LogicalAnd => 8,
+            Operator::LogicalAnd => 12,
 
-            Operator::LogicalOr => 9,
+            Operator::LogicalOr => 13,
         }
     }
 
@@ -125,6 +151,7 @@ impl Operator {
     pub fn is_left_associative(&self) -> bool {
         match self {
             Operator::LogicalNot
+            | Operator::BitwiseNot
             | Operator::Reference
             | Operator::MutReference
             | Operator::Defererence => false,
@@ -136,11 +163,20 @@ impl Operator {
     pub fn is_binary(&self) -> bool {
         match self {
             Operator::LogicalNot
+            | Operator::BitwiseNot
             | Operator::Reference
             | Operator::MutReference
             | Operator::Defererence => false,
             _ => true,
         }
+    }
+
+    /// Returns true if this is a bit shift operator.
+    pub fn is_bitshift(&self) -> bool {
+        matches!(
+            self,
+            Operator::BitwiseLeftShift | Operator::BitwiseRightShift
+        )
     }
 
     /// Returns true if this is a unary operator. Note that some operators like subtract
@@ -189,6 +225,12 @@ impl Operator {
                 | Operator::LogicalOr
                 | Operator::As
                 | Operator::LogicalNot
+                | Operator::BitwiseNot
+                | Operator::BitwiseAnd
+                | Operator::BitwiseOr
+                | Operator::BitwiseXor
+                | Operator::BitwiseLeftShift
+                | Operator::BitwiseRightShift
                 | Operator::EqualTo
                 | Operator::NotEqualTo
                 | Operator::GreaterThan

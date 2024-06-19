@@ -1256,7 +1256,7 @@ impl CFGAnalyzer<'_> {
     fn analyze_unary_op(&mut self, op: &Operator, operand: &AExpr, use_kind: UseKind) -> MValue {
         let use_kind = match op {
             Operator::Reference | Operator::MutReference => UseKind::Borrow,
-            Operator::LogicalNot | Operator::Subtract => use_kind,
+            Operator::LogicalNot | Operator::Subtract | Operator::BitwiseNot => use_kind,
             Operator::Defererence => {
                 // Check if the value being dereferenced is a shared reference
                 // to a value that requires moves. If so, this is an illegal

@@ -807,7 +807,7 @@ fn check_operand_types(
     let mut right_type_key = None;
     let mut errors = vec![];
 
-    if !is_valid_operand_type(op, left_type) {
+    if !is_valid_operand_type(op, left_type, true) {
         errors.push(AnalyzeError::new(
             ErrorKind::MismatchedTypes,
             format_code!(
@@ -822,7 +822,7 @@ fn check_operand_types(
         left_type_key = Some(left_expr.type_key);
     }
 
-    if !is_valid_operand_type(op, right_type) {
+    if !is_valid_operand_type(op, right_type, false) {
         errors.push(AnalyzeError::new(
             ErrorKind::MismatchedTypes,
             format_code!(
@@ -837,7 +837,8 @@ fn check_operand_types(
         right_type_key = Some(right_expr.type_key);
     }
 
-    if !right_type.is_same_as(ctx, left_type, true) {
+    // Operands need to be the same in all cases except for bit shift operations.
+    if !op.is_bitshift() && !right_type.is_same_as(ctx, left_type, true) {
         errors.push(AnalyzeError::new(
             ErrorKind::MismatchedTypes,
             format_code!(
@@ -874,7 +875,7 @@ fn check_operand_types(
 }
 
 /// Returns true only if `operand_type` is valid for operator `op`.
-fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
+fn is_valid_operand_type(op: &Operator, operand_type: &AType, is_left_operand: bool) -> bool {
     // Determine the expected operand types on the operator.
     match op {
         // Mathematical operators only work on numeric and pointer types.
@@ -886,6 +887,19 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType) -> bool {
 
         // Logical operators only work on bools.
         Operator::LogicalAnd | Operator::LogicalOr => operand_type == &AType::Bool,
+
+        // Bitwise `band` and `bor` operators only work on integers.
+        Operator::BitwiseAnd | Operator::BitwiseOr => operand_type.is_integer(),
+
+        // Bit shift operators take integers as their left operands and unsigned integers as
+        // their right operands.
+        Operator::BitwiseLeftShift | Operator::BitwiseRightShift => match is_left_operand {
+            true => operand_type.is_integer(),
+            false => operand_type.is_integer() && !operand_type.is_signed(),
+        },
+
+        // Bitwise xor works on bools and integers.
+        Operator::BitwiseXor => operand_type.is_integer() || operand_type == &AType::Bool,
 
         // Equality operators work on most primitive types.
         Operator::EqualTo | Operator::NotEqualTo => {
@@ -952,6 +966,16 @@ fn get_result_type(
         // Logical operators result in bools.
         Operator::LogicalAnd | Operator::LogicalOr => ctx.bool_type_key(),
 
+        // Bitwise operators result in numerics matching their operands.
+        Operator::BitwiseAnd
+        | Operator::BitwiseOr
+        | Operator::BitwiseXor
+        | Operator::BitwiseLeftShift
+        | Operator::BitwiseRightShift => match operand_type_key {
+            Some(type_key) => type_key,
+            None => ctx.unknown_type_key(),
+        },
+
         // Equality operators result in bools.
         Operator::EqualTo | Operator::NotEqualTo | Operator::Like | Operator::NotLike => {
             ctx.bool_type_key()
@@ -988,6 +1012,12 @@ fn get_expected_operand_type_key(
         | Operator::Modulo => Some(expected_result_type_key),
 
         Operator::LogicalAnd | Operator::LogicalOr => Some(ctx.bool_type_key()),
+
+        Operator::BitwiseAnd
+        | Operator::BitwiseOr
+        | Operator::BitwiseXor
+        | Operator::BitwiseLeftShift
+        | Operator::BitwiseRightShift => Some(expected_result_type_key),
 
         Operator::EqualTo | Operator::NotEqualTo | Operator::Like | Operator::NotLike => None,
 
@@ -1296,6 +1326,32 @@ fn analyze_unary_op(
             }
         }
 
+        Operator::BitwiseNot => {
+            let operand_expr = AExpr::from(ctx, right_expr.clone(), None, false, false);
+            let operand_expr_type = ctx.must_get_type(operand_expr.type_key);
+
+            // Make sure the operand is of an integer type.
+            if operand_expr_type.is_integer() {
+                AExpr {
+                    type_key: operand_expr.type_key,
+                    kind: AExprKind::UnaryOperation(Operator::BitwiseNot, Box::new(operand_expr)),
+                    span,
+                }
+            } else {
+                ctx.insert_err(AnalyzeError::new(
+                    ErrorKind::MismatchedTypes,
+                    format!(
+                        "cannot bitwise negate value of non-integer type {}",
+                        format_code!(operand_expr_type)
+                    )
+                    .as_str(),
+                    expr,
+                ));
+
+                AExpr::new_zero_value(ctx, Type::new_unresolved("<unknown>"))
+            }
+        }
+
         _ => {
             panic!("unexpected unary operator {}", op)
         }
@@ -1318,9 +1374,14 @@ fn analyze_binary_op(
     let a_left = AExpr::from(ctx, left_expr, maybe_expected_operand_tk, false, false);
 
     // If there is no expected operand type, we should try to coerce the right
-    // expression to the type of the left expression.
-    let expected_tk = maybe_expected_operand_tk.unwrap_or(a_left.type_key);
-    let a_right = AExpr::from(ctx, right_expr, Some(expected_tk), false, true);
+    // expression to the type of the left expression, but only if it's not a bit shift operation.
+    // Bit shift operations are currently the only ones where the left and right operands can
+    // have mismatched types.
+    let maybe_expected_right_tk = match op.is_bitshift() {
+        true => None,
+        false => Some(maybe_expected_operand_tk.unwrap_or(a_left.type_key)),
+    };
+    let a_right = AExpr::from(ctx, right_expr, maybe_expected_right_tk, false, true);
 
     // If we couldn't resolve both of the operand types, we'll skip any further
     // type checks by returning early.

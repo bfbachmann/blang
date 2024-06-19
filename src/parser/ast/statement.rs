@@ -391,6 +391,11 @@ impl Statement {
                         TokenKind::PercentEqual,
                         TokenKind::LogicalAndEqual,
                         TokenKind::LogicalOrEqual,
+                        TokenKind::BitwiseAndEqual,
+                        TokenKind::BitwiseOrEqual,
+                        TokenKind::BitwiseXorEqual,
+                        TokenKind::BitwiseLeftShiftEqual,
+                        TokenKind::BitwiseRightShiftEqual,
                     ],
                 ) {
                     // Parse the expression being assigned and return the variable

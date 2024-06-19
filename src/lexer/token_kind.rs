@@ -18,7 +18,7 @@ pub enum TokenKind {
     #[regex(r"/\*(?:[^*]|\*[^/])*\*/", update_line_count)]
     BlockComment,
 
-    // Binary operators
+    // Bitwise operators
     #[token("+")]
     Plus,
     #[token("-")]
@@ -47,10 +47,32 @@ pub enum TokenKind {
     LogicalAndEqual,
     #[token("or=")]
     LogicalOrEqual,
+    #[token("band")]
+    BitwiseAnd,
+    #[token("bor")]
+    BitwiseOr,
+    #[token("bxor")]
+    BitwiseXor,
+    #[token("bls")]
+    BitwiseLeftShift,
+    #[token("brs")]
+    BitwiseRightShift,
+    #[token("band=")]
+    BitwiseAndEqual,
+    #[token("bor=")]
+    BitwiseOrEqual,
+    #[token("bxor=")]
+    BitwiseXorEqual,
+    #[token("bls=")]
+    BitwiseLeftShiftEqual,
+    #[token("brs=")]
+    BitwiseRightShiftEqual,
 
     // Unary operators
     #[token("!")]
     LogicalNot,
+    #[token("bnot")]
+    BitwiseNot,
     #[token("&")]
     Ref,
     #[token("&mut")]
@@ -214,6 +236,17 @@ impl TokenKind {
             TokenKind::LogicalAndEqual => "and=".to_string(),
             TokenKind::LogicalOrEqual => "or=".to_string(),
             TokenKind::LogicalNot => "!".to_string(),
+            TokenKind::BitwiseNot => "bnot".to_string(),
+            TokenKind::BitwiseAnd => "band".to_string(),
+            TokenKind::BitwiseOr => "bor".to_string(),
+            TokenKind::BitwiseXor => "bxor".to_string(),
+            TokenKind::BitwiseLeftShift => "bls".to_string(),
+            TokenKind::BitwiseRightShift => "brs".to_string(),
+            TokenKind::BitwiseAndEqual => "band=".to_string(),
+            TokenKind::BitwiseOrEqual => "bor=".to_string(),
+            TokenKind::BitwiseXorEqual => "bxor=".to_string(),
+            TokenKind::BitwiseLeftShiftEqual => "bls=".to_string(),
+            TokenKind::BitwiseRightShiftEqual => "brs=".to_string(),
             TokenKind::Equal => "=".to_string(),
             TokenKind::EqualTo => "==".to_string(),
             TokenKind::NotEqualTo => "!=".to_string(),

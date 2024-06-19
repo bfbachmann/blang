@@ -50,6 +50,11 @@ impl VariableAssignment {
     ///     <target> %= <expr>
     ///     <target> and= <expr>
     ///     <target> or= <expr>
+    ///     <target> band= <expr>
+    ///     <target> bor= <expr>
+    ///     <target> bxor= <expr>
+    ///     <target> bls= <expr>
+    ///     <target> brs= <expr>
     ///
     /// where
     ///  - `target` is the target that is being assigned to (see `Expression::from`)
@@ -73,6 +78,11 @@ impl VariableAssignment {
                 TokenKind::PercentEqual,
                 TokenKind::LogicalAndEqual,
                 TokenKind::LogicalOrEqual,
+                TokenKind::BitwiseAndEqual,
+                TokenKind::BitwiseOrEqual,
+                TokenKind::BitwiseXorEqual,
+                TokenKind::BitwiseLeftShiftEqual,
+                TokenKind::BitwiseRightShiftEqual,
             ],
         )?
         .kind;
@@ -92,6 +102,11 @@ impl VariableAssignment {
                     TokenKind::PercentEqual => Operator::Modulo,
                     TokenKind::LogicalAndEqual => Operator::LogicalAnd,
                     TokenKind::LogicalOrEqual => Operator::LogicalOr,
+                    TokenKind::BitwiseAndEqual => Operator::BitwiseAnd,
+                    TokenKind::BitwiseOrEqual => Operator::BitwiseOr,
+                    TokenKind::BitwiseXorEqual => Operator::BitwiseXor,
+                    TokenKind::BitwiseLeftShiftEqual => Operator::BitwiseLeftShift,
+                    TokenKind::BitwiseRightShiftEqual => Operator::BitwiseRightShift,
                     _ => unreachable!(),
                 };
 

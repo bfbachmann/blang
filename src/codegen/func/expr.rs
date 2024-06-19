@@ -730,6 +730,16 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 }
             }
 
+            Operator::BitwiseNot => {
+                // Compile operand expression.
+                let ll_operand = self.gen_expr(operand_expr);
+
+                // Flip the operand's bits.
+                self.builder
+                    .build_not(ll_operand.into_int_value(), "bnot")
+                    .as_basic_value_enum()
+            }
+
             _ => {
                 panic!("unsupported unary operator {}", op)
             }
@@ -777,10 +787,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 result
             }
         } else if op.is_comparator() {
-            self.gen_cmp(ll_lhs, left_expr.type_key, op, ll_rhs, signed)
+            self.gen_cmp_op(ll_lhs, left_expr.type_key, op, ll_rhs, signed)
                 .as_basic_value_enum()
         } else {
-            panic!("unsupported operator {op}")
+            self.gen_bitwise_op(op, left_expr, right_expr)
+                .as_basic_value_enum()
         }
     }
 
@@ -1015,7 +1026,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles a comparison operation expression.
-    fn gen_cmp(
+    fn gen_cmp_op(
         &mut self,
         mut ll_lhs: BasicValueEnum<'ctx>,
         left_type_key: TypeKey,
@@ -1058,15 +1069,37 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // Handle the special case of floating point comparisons.
         if left_type.is_float() {
-            return self.gen_float_cmp(op, ll_lhs, ll_rhs);
+            return self.gen_float_cmp_op(op, ll_lhs, ll_rhs);
         }
 
         // At this point we know it's safe to represent the types as ints for comparison.
         self.gen_int_cmp(op, ll_lhs, ll_rhs, signed)
     }
 
+    /// Generates code for bitwise operations.
+    fn gen_bitwise_op(
+        &mut self,
+        op: &Operator,
+        left_expr: &AExpr,
+        right_expr: &AExpr,
+    ) -> IntValue<'ctx> {
+        let ll_lhs = self.gen_expr(left_expr).into_int_value();
+        let ll_rhs = self.gen_expr(right_expr).into_int_value();
+
+        match op {
+            Operator::BitwiseAnd => self.builder.build_and(ll_lhs, ll_rhs, "band"),
+            Operator::BitwiseOr => self.builder.build_or(ll_lhs, ll_rhs, "bor"),
+            Operator::BitwiseXor => self.builder.build_xor(ll_lhs, ll_rhs, "bxor"),
+            Operator::BitwiseLeftShift => self.builder.build_left_shift(ll_lhs, ll_rhs, "bls"),
+            Operator::BitwiseRightShift => {
+                self.builder.build_right_shift(ll_lhs, ll_rhs, false, "brs")
+            }
+            _ => panic!("unexpected bitwise operator {op}"),
+        }
+    }
+
     /// Generates code for floating-point value comparisons.
-    fn gen_float_cmp(
+    fn gen_float_cmp_op(
         &mut self,
         op: &Operator,
         ll_lhs: BasicValueEnum<'ctx>,

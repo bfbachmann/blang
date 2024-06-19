@@ -22,12 +22,19 @@ fn main() {
     assert((true or false) == true, "fail: 17")
     assert((false or false) == false, "fail: 18")
     assert(2_u32 > 0, "fail: 19")
+    assert(1 bls 3uint == 8, "fail: 20")
+    assert(4 brs 2u8 == 1, "fail: 21")
+    assert(-1234 bxor 432 == -1378, "fail: 22")
+    assert(223 band -432 == 80, "fail: 23")
+    assert(223 bor -432 == -289, "fail: 24")
+    assert(bnot 38 == -39, "fail: 25")
 
     // Make sure that logical operations short-circuit correctly.
     assert(true or fail(), "short-circuit or")
     assert(true or fail() or fail(), "nested short-circuit or")
     assert(!(false and fail()), "short-circuit and")
     assert(!(false and fail() and fail()), "nested short-circuit and")
+
     exit(0)
 }
 
