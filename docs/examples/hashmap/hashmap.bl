@@ -1,17 +1,14 @@
-use {puts}: "std/libc/io.bl"
-use {exit}: "std/libc/proc.bl"
 use {heap_realloc, heap_free, copy}: "std/mem/mem.bl"
-use {panic}: "std/backtrace/panic.bl"
 use {Table}: "std/types/table.bl"
 
 /// Any type that implements `Hash` can be hashed using a provided hash function.
-spec Hash {
+pub spec Hash {
     /// Returns the hash of `self` computed using `hash_fn`.
     fn hash(*self, hash_fn: fn (*u8, uint): u64): u64
 }
 
 /// Implements the simple djb2 hashing algorithm.
-fn djb2_hash(data: *u8, len: uint): u64 {
+pub fn djb2_hash(data: *u8, len: uint): u64 {
     let mut hash: u64 = 5381
     for let mut i = 0, i < len as int, i += 1 {
         let c = data.(i)^ as u64
@@ -23,7 +20,7 @@ fn djb2_hash(data: *u8, len: uint): u64 {
 
 /// Any type that implements `Eq` can be compared to other instances of that type
 /// for equality.
-spec Eq {
+pub spec Eq {
     /// Returns true if `self` is equal to `other`.
     fn eq(*self, other: *Self): bool
 }
@@ -44,7 +41,7 @@ impl Mapping {
 }
 
 /// A hashmap that maps keys to their corresponding values.
-struct HashMap[K: Hash + Eq, V] {
+pub struct HashMap[K: Hash + Eq, V] {
     table: Table[Mapping[K, V]]
     num_allocated: uint
     hash_fn: fn (*u8, uint): u64
@@ -52,12 +49,12 @@ struct HashMap[K: Hash + Eq, V] {
 
 impl HashMap {
     /// Creates a new empty map that uses the djb2 hashing algorithm.
-    fn new(): HashMap[K, V] {
+    pub fn new(): HashMap[K, V] {
         return HashMap[K, V].new_with_hash_fn(djb2_hash)
     }
 
     /// Creates a new empty map that uses the given hash function.
-    fn new_with_hash_fn(hash_fn: fn (*u8, uint): u64): HashMap[K, V] {
+    pub fn new_with_hash_fn(hash_fn: fn (*u8, uint): u64): HashMap[K, V] {
         return HashMap[K, V]{
             table: Table[Mapping[K, V]].new(0)
             num_allocated: 0
@@ -66,7 +63,7 @@ impl HashMap {
     }
 
     /// Inserts the given key and value into the map.
-    fn insert(*mut self, k: K, v: V) {
+    pub fn insert(*mut self, k: K, v: V) {
         if self.needs_grow() {
             self.grow()
         }
@@ -92,7 +89,7 @@ impl HashMap {
 
     /// Returns a pointer to the value that is mapped to the given key, or null
     /// if the key is not in the map.
-    fn get(*self, k: K): *V {
+    pub fn get(*self, k: K): *V {
         let size = self^.table.size()
         let hash = k.hash(self^.hash_fn) as uint
         for let mut count: uint = 0, count < size, count += 1 {
@@ -113,7 +110,7 @@ impl HashMap {
     }
 
     /// Removes the mapping for the given key from the map, if it exists.
-    fn delete(*mut self, k: K) {
+    pub fn delete(*mut self, k: K) {
         let size = self^.table.size()
         let hash = k.hash(self^.hash_fn) as uint
         for let mut count: uint = 0, count < size, count += 1 {
@@ -134,7 +131,7 @@ impl HashMap {
     }
 
     /// Frees the memory that underlies the map.
-    fn free(self) {
+    pub fn free(self) {
         self.table.free()
     }
 
@@ -200,48 +197,5 @@ impl HashMap {
 
         // Free the old table.
         old_table.free()
-    }
-}
-
-struct Key {
-    s: str
-}
-
-impl Key: Hash + Eq {
-    fn hash(*self, hash_fn: fn (*u8, uint): u64): u64 {
-        return hash_fn(self^.s as *u8, self^.s.len())
-    }
-
-    fn eq(*self, other: *Self): bool {
-        return self^.s == other^.s
-    }
-}
-
-fn main() {
-    let mut map = HashMap[Key, str].new()
-
-    map.insert(Key{s: "key"}, "value")
-    let result_ptr = map.get(Key{s: "key"})
-    assert(result_ptr != null, "result can't be null")
-    assert(result_ptr^ == "value", "value should be \"value\"")
-
-    map.delete(Key{s: "key"})
-    assert(map.get(Key{s: "key"}) == null, "result should be null")
-
-    map.insert(Key{s: "a"}, "value: a")
-    assert(map.get(Key{s: "a"})^ == "value: a", "expected \"value: a\"")
-    map.insert(Key{s: "b"}, "value: b")
-    assert(map.get(Key{s: "b"})^ == "value: b", "expected \"value: b\"")
-    map.insert(Key{s: "c"}, "value: c")
-    assert(map.get(Key{s: "c"})^ == "value: c", "expected \"value: c\"")
-    map.insert(Key{s: "d"}, "value: d")
-    assert(map.get(Key{s: "d"})^ == "value: d", "expected \"value: d\"")
-
-    exit(0)
-}
-
-fn assert(cond: bool, msg: str) {
-    if !cond {
-        panic(msg)
     }
 }
