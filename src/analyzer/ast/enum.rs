@@ -1,4 +1,3 @@
-use std::cmp::max;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
@@ -62,7 +61,6 @@ pub struct AEnumType {
     pub mangled_name: String,
     pub maybe_params: Option<AParams>,
     pub variants: HashMap<String, AEnumTypeVariant>,
-    pub max_variant_size_bytes: u32,
 }
 
 impl PartialEq for AEnumType {
@@ -102,7 +100,6 @@ impl AEnumType {
             mangled_name: mangled_name.clone(),
             maybe_params: None,
             variants: HashMap::new(),
-            max_variant_size_bytes: 0,
         }));
 
         // Analyze parameters.
@@ -117,7 +114,6 @@ impl AEnumType {
         let has_params = maybe_params.is_some();
 
         // Analyze each variant in the enum type.
-        let mut largest_variant_size_bytes: u32 = 0;
         let mut variants: HashMap<String, AEnumTypeVariant> = HashMap::new();
         for (i, variant) in enum_type.variants.iter().enumerate() {
             // Make sure the variant name is unique.
@@ -141,14 +137,6 @@ impl AEnumType {
             let maybe_type_key = match &variant.maybe_type {
                 Some(typ) => {
                     let variant_type_key = ctx.resolve_type(&typ);
-
-                    // Update the size of the largest variant, if necessary.
-                    let variant_type = ctx.must_get_type(variant_type_key);
-                    largest_variant_size_bytes = max(
-                        largest_variant_size_bytes,
-                        variant_type.min_size_bytes(&ctx.type_store),
-                    );
-
                     Some(variant_type_key)
                 }
                 None => None,
@@ -169,7 +157,6 @@ impl AEnumType {
             mangled_name,
             maybe_params,
             variants,
-            max_variant_size_bytes: largest_variant_size_bytes,
         };
 
         // Make sure the enum doesn't contain itself via other types.
@@ -216,16 +203,11 @@ impl AEnumType {
 
     /// Returns a string containing the human-readable version of this enum type.
     pub fn display(&self, ctx: &ProgramContext) -> String {
-        let mut s = format!("{} {} {{", TokenKind::Enum, self.name);
-
-        for (i, variant) in self.variants.values().enumerate() {
-            match i {
-                0 => s += format!("{}", variant.display(ctx)).as_str(),
-                _ => s += format!(", {}", variant.display(ctx)).as_str(),
-            }
-        }
-
-        s + format!("}}").as_str()
+        let params = match &self.maybe_params {
+            Some(params) => params.display(ctx),
+            None => "".to_string(),
+        };
+        format!("{}{}", self.name, params)
     }
 }
 

@@ -671,7 +671,7 @@ mod tests {
 
     #[test]
     fn invalid_mod_paths() {
-        for path in ["/thing.bl", "../thing.bl", "path/../other.bl"] {
+        for path in ["/thing.bl", "../thing.bl", "path/../table.bl"] {
             let raw = format!(r#"use thing: "{path}""#);
             let tokens = lex(raw.as_str()).expect("should succeed");
             let result = Module::from("", &mut Stream::from(tokens));

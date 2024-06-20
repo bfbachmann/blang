@@ -469,11 +469,12 @@ pub fn generate(
     module.set_triple(target_triple);
 
     // Set data layout.
-    let data_layout = module
+    // TODO: Probably don't need to create an execution engine to get the data layout.
+    let engine = module
         .create_jit_execution_engine(OptimizationLevel::None)
-        .unwrap()
-        .get_target_data()
-        .get_data_layout();
+        .unwrap();
+    let target_data = engine.get_target_data();
+    let data_layout = target_data.get_data_layout();
     module.set_data_layout(&data_layout);
 
     // Set up function pass manager that performs LLVM IR optimization.
@@ -508,7 +509,11 @@ pub fn generate(
         maybe_main_fn_name: program_analysis.maybe_main_fn_mangled_name,
         monomorphized_types: &program_analysis.monomorphized_types,
         type_store: &program_analysis.type_store,
-        type_converter: TypeConverter::new(&ctx, &program_analysis.type_store),
+        type_converter: TypeConverter::new(
+            &ctx,
+            &program_analysis.type_store,
+            target_data.as_mut_ptr(),
+        ),
         module_consts: HashMap::new(),
     };
     codegen.gen_program()?;
@@ -555,6 +560,7 @@ pub fn generate(
                     CodeModel::Default,
                 )
                 .unwrap();
+
             let file_type = match output_format {
                 OutputFormat::Assembly => FileType::Assembly,
                 OutputFormat::Object | OutputFormat::Executable => FileType::Object,

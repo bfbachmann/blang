@@ -1,0 +1,247 @@
+use {puts}: "std/libc/io.bl"
+use {exit}: "std/libc/proc.bl"
+use {heap_realloc, heap_free, copy}: "std/mem/mem.bl"
+use {panic}: "std/backtrace/panic.bl"
+use {Table}: "std/types/table.bl"
+
+/// Any type that implements `Hash` can be hashed using a provided hash function.
+spec Hash {
+    /// Returns the hash of `self` computed using `hash_fn`.
+    fn hash(*self, hash_fn: fn (*u8, uint): u64): u64
+}
+
+/// Implements the simple djb2 hashing algorithm.
+fn djb2_hash(data: *u8, len: uint): u64 {
+    let mut hash: u64 = 5381
+    for let mut i = 0, i < len as int, i += 1 {
+        let c = data.(i)^ as u64
+        hash = ((hash bls 5uint) + hash) + c // hash * 33 + c
+    }
+
+    return hash
+}
+
+/// Any type that implements `Eq` can be compared to other instances of that type
+/// for equality.
+spec Eq {
+    /// Returns true if `self` is equal to `other`.
+    fn eq(*self, other: *Self): bool
+}
+
+/// A mapping from a key to its value.
+struct Mapping[K, V] {
+    key: K
+    value: V
+}
+
+impl Mapping {
+    fn new(k: K, v: V): Mapping[K, V] {
+        return Mapping[K, V]{
+            key: k
+            value: v
+        }
+    }
+}
+
+/// A hashmap that maps keys to their corresponding values.
+struct HashMap[K: Hash + Eq, V] {
+    table: Table[Mapping[K, V]]
+    num_allocated: uint
+    hash_fn: fn (*u8, uint): u64
+}
+
+impl HashMap {
+    /// Creates a new empty map that uses the djb2 hashing algorithm.
+    fn new(): HashMap[K, V] {
+        return HashMap[K, V].new_with_hash_fn(djb2_hash)
+    }
+
+    /// Creates a new empty map that uses the given hash function.
+    fn new_with_hash_fn(hash_fn: fn (*u8, uint): u64): HashMap[K, V] {
+        return HashMap[K, V]{
+            table: Table[Mapping[K, V]].new(0)
+            num_allocated: 0
+            hash_fn: hash_fn
+        }
+    }
+
+    /// Inserts the given key and value into the map.
+    fn insert(*mut self, k: K, v: V) {
+        if self.needs_grow() {
+            self.grow()
+        }
+
+        let size = self^.table.size()
+        for let mut index = k.hash(self^.hash_fn) as uint % size, , index = (index + 1) % size {
+            let entry_ptr = self^.table.get(index)
+
+            // If the entry pointer is `null`, it means that the entry is either empty
+            // or a tombstone. Either way, we can use it to store the mapping.
+            // If the entry already holds this key, we just need to overwrite it.
+            if entry_ptr == null or entry_ptr^.key.eq(&k) {
+                self^.table.set(index, Mapping[K, V].new(k, v))
+                break
+            }
+
+            // At this point we know the entry was occupied by another key, so we
+            // can just move onto the next entry.
+        }
+
+        self^.num_allocated += 1
+    }
+
+    /// Returns a pointer to the value that is mapped to the given key, or null
+    /// if the key is not in the map.
+    fn get(*self, k: K): *V {
+        let size = self^.table.size()
+        let hash = k.hash(self^.hash_fn) as uint
+        for let mut count: uint = 0, count < size, count += 1 {
+            let index = (hash + count) % size
+
+            // If the entry is empty, it means the key can't be in the map.
+            if self^.table.entry_is_empty(index) {
+                return null
+            }
+
+            let entry_ptr = self^.table.get(index)
+            if entry_ptr != null and entry_ptr^.key.eq(&k) {
+                return &entry_ptr^.value
+            }
+        }
+
+        return null
+    }
+
+    /// Removes the mapping for the given key from the map, if it exists.
+    fn delete(*mut self, k: K) {
+        let size = self^.table.size()
+        let hash = k.hash(self^.hash_fn) as uint
+        for let mut count: uint = 0, count < size, count += 1 {
+            let index = (hash + count) % size
+
+            // If the entry is empty, it means the key can't be in the map.
+            if self^.table.entry_is_empty(index) {
+                return
+            }
+
+            let entry_ptr = self^.table.get(index)
+            if entry_ptr != null and entry_ptr^.key.eq(&k) {
+                self^.table.delete(index)
+                self^.num_allocated -= 1
+                return
+            }
+        }
+    }
+
+    /// Frees the memory that underlies the map.
+    fn free(self) {
+        self.table.free()
+    }
+
+    /// If `find_occupied` is `true`, tries to find the index of the entry containing `k`.
+    /// If `find_occupied` is `false`, tries to find the index of the entry into which `k`
+    /// should be inserted.
+    /// This function uses quadratic probing. Returns `{0, false}` if no entry was found.
+    fn get_entry_index(*self, k: *K, find_occupied: bool): {uint, bool} {
+        let hash = k.hash(self^.hash_fn) as uint
+        let size = self^.table.size()
+
+        for let mut count: uint = 0, count < size, count += 1 {
+            let index = (hash + (count * count + count) / 2) % size
+
+            if find_occupied {
+                // If the entry is empty, it means the key can't be in the map.
+                if self^.table.entry_is_empty(index) {
+                    break
+                }
+
+                let entry_ptr = self^.table.get(index)
+                if entry_ptr != null and entry_ptr^.key.eq(k) {
+                    return {index, true}
+                }
+            } elsif self^.table.entry_is_empty(index) {
+                 return {index, true}
+            }
+        }
+
+        return {0, false}
+    }
+
+    /// Returns true if the table needs to grow (i.e. we've reached the resize threshold
+    /// computed using a hard-coded load factor of 0.8).
+    fn needs_grow(*self): bool {
+        // Using load factor of 0.8 (4 / 5).
+        let resize_threshold = self^.table.size() * 4 / 5
+        return self^.num_allocated >= resize_threshold
+    }
+
+    /// Increases the size of the table, ensuring that it is always a power of 2 (required for
+    /// quadratic probing).
+    fn grow(*mut self) {
+        // Double the size of the table (or set it to 1 if it's empty).
+        let old_size = self^.table.size()
+        let mut new_size = old_size * 2
+        if new_size == 0 {
+            new_size = 2
+        }
+
+        // Replace the old table with a new one that is double the size.
+        let old_table = self^.table
+        self^.table = Table[Mapping[K, V]].new(new_size)
+
+        // Re-hash all the keys in the table and copy mappings into the new table.
+        for let mut i: uint = 0, i < old_size, i += 1 {
+            let entry_ptr = old_table.get(i)
+            if entry_ptr != null {
+                let new_index = self.get_entry_index(&entry_ptr^.key, false)
+                copy[Mapping[K, V]](self^.table.get_mut_ptr(i), entry_ptr)
+            }
+        }
+
+        // Free the old table.
+        old_table.free()
+    }
+}
+
+struct Key {
+    s: str
+}
+
+impl Key: Hash + Eq {
+    fn hash(*self, hash_fn: fn (*u8, uint): u64): u64 {
+        return hash_fn(self^.s as *u8, self^.s.len())
+    }
+
+    fn eq(*self, other: *Self): bool {
+        return self^.s == other^.s
+    }
+}
+
+fn main() {
+    let mut map = HashMap[Key, str].new()
+
+    map.insert(Key{s: "key"}, "value")
+    let result_ptr = map.get(Key{s: "key"})
+    assert(result_ptr != null, "result can't be null")
+    assert(result_ptr^ == "value", "value should be \"value\"")
+
+    map.delete(Key{s: "key"})
+    assert(map.get(Key{s: "key"}) == null, "result should be null")
+
+    map.insert(Key{s: "a"}, "value: a")
+    assert(map.get(Key{s: "a"})^ == "value: a", "expected \"value: a\"")
+    map.insert(Key{s: "b"}, "value: b")
+    assert(map.get(Key{s: "b"})^ == "value: b", "expected \"value: b\"")
+    map.insert(Key{s: "c"}, "value: c")
+    assert(map.get(Key{s: "c"})^ == "value: c", "expected \"value: c\"")
+    map.insert(Key{s: "d"}, "value: d")
+    assert(map.get(Key{s: "d"})^ == "value: d", "expected \"value: d\"")
+
+    exit(0)
+}
+
+fn assert(cond: bool, msg: str) {
+    if !cond {
+        panic(msg)
+    }
+}

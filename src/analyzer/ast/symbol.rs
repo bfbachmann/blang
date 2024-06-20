@@ -204,9 +204,14 @@ impl ASymbol {
 
             true => {
                 // No parameters were provided, so the type had better not be
-                // parameterized unless `no_params` is false or the symbol is `self`.
+                // parameterized unless `no_params` is false or the symbol type is the current
+                // `impl` type.
                 let poly_type = ctx.must_get_type(var_type_key);
-                if !no_params && !(symbol.name == "self" && symbol.maybe_mod_name.is_none()) {
+                if !no_params
+                    && !ctx
+                        .get_cur_self_type_key()
+                        .is_some_and(|tk| tk == var_type_key)
+                {
                     if let Some(params) = poly_type.params() {
                         let param_names = params.params.iter().map(|p| p.name.as_str()).collect();
                         ctx.insert_err(

@@ -1,5 +1,5 @@
 use {panic}: "std/backtrace/panic.bl"
-use {heap_realloc, heap_free}: "std/mem/mem.bl"
+use {heap_alloc, heap_realloc, heap_free}: "std/mem/mem.bl"
 use {memmove}: "std/libc/mem.bl"
 use {Clone}: "std/specs/clone.bl"
 
@@ -21,9 +21,23 @@ impl List {
         }
     }
 
+    /// Returns a new list with the given pre-allocated capacity.
+    pub fn with_capacity(cap: uint): List[T] {
+        return List[T]{
+            ptr: heap_alloc[T](cap)
+            len: 0
+            cap: cap
+        }
+    }
+
     /// Returns the number of elements currently in the list.
     pub fn len(*self): uint {
         return self^.len
+    }
+
+    /// Returns the current capacity of the list.
+    pub fn capacity(*self): uint {
+        return self^.cap
     }
 
     /// Pushes `t` onto the end of the list.

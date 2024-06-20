@@ -1,4 +1,3 @@
-use std::cmp::max;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
@@ -13,7 +12,6 @@ use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::ast::tuple::ATupleType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::type_store::TypeStore;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::unresolved::UnresolvedType;
 
@@ -488,80 +486,6 @@ impl AType {
             | AType::Pointer(_)
             | AType::Generic(_)
             | AType::Unknown(_) => false,
-        }
-    }
-
-    /// Returns the minimum size of this type (i.e. the amount of memory required to store it)
-    /// in bytes. Note that this WILL NOT necessarily be the actual size of the type in the
-    /// generated machine code, as that is partially determined by LLVM based on the target arch.
-    /// This function should only be used to get a sense for the minimum size of a given type.
-    pub fn min_size_bytes(&self, type_store: &TypeStore) -> u32 {
-        match self {
-            // Bools are 1 byte.
-            AType::Bool | AType::U8 | AType::I8 => 1,
-
-            // All the following types are 32 bits (4 bytes).
-            AType::U32 | AType::I32 | AType::F32 => 4,
-
-            // All the following types are 64 bits (8 bytes).
-            AType::I64 | AType::U64 | AType::F64 | AType::Function(_) => 8,
-
-            // `int`s, `uint`s, and pointers are sized based on the target platform (64 or 32 bits, generally).
-            AType::Int | AType::Uint | AType::Pointer(_) => {
-                (type_store.get_target_ptr_width() / 8) as u32
-            }
-
-            // `str`s are composed of a pointer and an integer.
-            AType::Str => {
-                (type_store.get_target_ptr_width() / 8) as u32
-                    + AType::Int.min_size_bytes(type_store)
-            }
-
-            // The size of a struct type is the sum of the sizes of all of its fields.
-            AType::Struct(struct_type) => {
-                let mut size = 0;
-                for field in &struct_type.fields {
-                    let field_type = type_store.must_get(field.type_key);
-                    size += field_type.min_size_bytes(type_store);
-                }
-
-                size
-            }
-
-            // The size of an enum type is 1 byte (to hold the variant number) plus the greatest
-            // size of all of its variants.
-            AType::Enum(enum_type) => {
-                let mut size = 0;
-                for variant in enum_type.variants.values() {
-                    if let Some(type_key) = variant.maybe_type_key {
-                        let variant_type = type_store.must_get(type_key);
-                        size = max(size, variant_type.min_size_bytes(type_store));
-                    }
-                }
-
-                size + 1
-            }
-
-            AType::Tuple(tuple_type) => {
-                let mut size = 0;
-                for field in &tuple_type.fields {
-                    let field_type = type_store.must_get(field.type_key);
-                    size += field_type.min_size_bytes(type_store)
-                }
-
-                size
-            }
-
-            AType::Array(array_type) => match &array_type.maybe_element_type_key {
-                Some(key) => {
-                    let element_type = type_store.must_get(*key);
-                    element_type.min_size_bytes(type_store) * array_type.len as u32
-                }
-
-                None => 0,
-            },
-
-            AType::Spec(_) | AType::Generic(_) | AType::Unknown(_) => 0,
         }
     }
 

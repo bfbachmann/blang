@@ -1,4 +1,3 @@
-use inkwell::types::BasicType;
 use inkwell::values::{
     ArrayValue, BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue, StructValue,
 };
@@ -265,9 +264,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             AExprKind::Sizeof(type_key) => self
                 .type_converter
-                .get_basic_type(*type_key)
-                .size_of()
-                .unwrap()
+                .const_int_size_of_type(*type_key)
                 .as_basic_value_enum(),
 
             AExprKind::MemberAccess(access) => {

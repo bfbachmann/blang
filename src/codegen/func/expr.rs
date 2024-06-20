@@ -34,9 +34,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             AExprKind::Sizeof(type_key) => self
                 .type_converter
-                .get_basic_type(*type_key)
-                .size_of()
-                .unwrap()
+                .const_int_size_of_type(*type_key)
                 .as_basic_value_enum(),
 
             AExprKind::Symbol(var) => self.get_var_value(var),
@@ -835,7 +833,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             // Casting between numeric types.
             (src, dst) if src.is_numeric() && dst.is_numeric() => {
-                self.gen_numeric_type_cast(ll_src_val, src, dst, ll_dst_type)
+                self.gen_numeric_type_cast(ll_src_val, src_expr.type_key, dst_type_key, ll_dst_type)
             }
 
             // Casting from pointer to numeric type.
@@ -871,16 +869,18 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     fn gen_numeric_type_cast(
         &self,
         ll_src_val: BasicValueEnum<'ctx>,
-        src_type: &AType,
-        dst_type: &AType,
+        src_type_key: TypeKey,
+        dst_type_key: TypeKey,
         ll_dst_type: BasicTypeEnum<'ctx>,
     ) -> BasicValueEnum<'ctx> {
+        let src_type = self.type_store.must_get(src_type_key);
+        let dst_type = self.type_converter.must_get_type(dst_type_key);
         let src_is_signed = src_type.is_signed();
         let dst_is_signed = dst_type.is_signed();
         let src_is_float = src_type.is_float();
         let dst_is_float = dst_type.is_float();
-        let src_size = src_type.min_size_bytes(self.type_store);
-        let dst_size = dst_type.min_size_bytes(self.type_store);
+        let src_size = self.type_converter.size_of_type(src_type_key);
+        let dst_size = self.type_converter.size_of_type(dst_type_key);
         let name = format!("as_{}", dst_type.name());
 
         return match (src_is_float, dst_is_float, dst_is_signed) {

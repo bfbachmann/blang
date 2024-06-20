@@ -1,9 +1,9 @@
-use {malloc, realloc, free}: "std/libc/mem.bl"
+use {calloc, realloc, free, memcpy}: "std/libc/mem.bl"
 
 /// Allocates space on the heap for `count` values of type `T` and returns a pointer
 /// to the allocated region.
 pub fn heap_alloc[T](count: uint): *mut T {
-    return malloc(sizeof T * count) as *mut T
+    return calloc(sizeof T, count) as *mut T
 }
 
 /// Frees the heap space pointed to by `ptr`.
@@ -15,6 +15,12 @@ pub fn heap_free[T](ptr: *mut T) {
 /// of type `T`. This will also copy the existing data into the new memory region.
 pub fn heap_realloc[T](ptr: *mut T, count: uint): *mut T {
     return realloc(ptr as *u8, sizeof T * count) as *mut T
+}
+
+/// Copies a `T` from `src` to `dst`. These two pointers must not point to overlapping
+/// regions.
+pub fn copy[T](dst: *mut T, src: *T) {
+    memcpy(dst as *u8, src as *u8, sizeof T)
 }
 
 /// Moves `T` onto the heap and returns a pointer to it.

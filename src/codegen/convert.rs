@@ -5,9 +5,11 @@ use inkwell::types::{
     AnyType, AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType,
 };
 use inkwell::types::{ArrayType, AsTypeRef};
+use inkwell::values::IntValue;
 use inkwell::AddressSpace;
 use llvm_sys::core::LLVMFunctionType;
 use llvm_sys::prelude::LLVMTypeRef;
+use llvm_sys::target::{LLVMStoreSizeOfType, LLVMTargetDataRef};
 
 use crate::analyzer::ast::array::AArrayType;
 use crate::analyzer::ast::func::AFnSig;
@@ -24,13 +26,18 @@ pub struct TypeConverter<'ctx> {
     type_store: &'ctx TypeStore,
     ll_basic_types: HashMap<TypeKey, BasicTypeEnum<'ctx>>,
     ll_fn_types: HashMap<TypeKey, FunctionType<'ctx>>,
+    ll_data_layout: LLVMTargetDataRef,
     // TODO: This really should not be public. Fix this hack.
     pub type_mappings: Vec<HashMap<TypeKey, TypeKey>>,
 }
 
 impl<'ctx> TypeConverter<'ctx> {
     /// Creates a new type converter.
-    pub fn new(ctx: &'ctx Context, type_store: &'ctx TypeStore) -> TypeConverter<'ctx> {
+    pub fn new(
+        ctx: &'ctx Context,
+        type_store: &'ctx TypeStore,
+        ll_data_layout: LLVMTargetDataRef,
+    ) -> TypeConverter<'ctx> {
         gen_intrinsic_types(ctx, type_store);
 
         TypeConverter {
@@ -38,6 +45,7 @@ impl<'ctx> TypeConverter<'ctx> {
             type_store,
             ll_basic_types: Default::default(),
             ll_fn_types: Default::default(),
+            ll_data_layout,
             type_mappings: vec![],
         }
     }
@@ -317,7 +325,7 @@ impl<'ctx> TypeConverter<'ctx> {
                 self.ctx.i8_type().as_basic_type_enum(),
                 self.ctx
                     .i8_type()
-                    .array_type(enum_type.max_variant_size_bytes)
+                    .array_type(self.max_enum_variant_size(enum_type) as u32)
                     .as_basic_type_enum(),
             ],
             false,
@@ -341,6 +349,40 @@ impl<'ctx> TypeConverter<'ctx> {
         } else {
             BasicMetadataTypeEnum::from(self.to_basic_type(typ))
         }
+    }
+
+    /// Returns the size of the given type in bytes.
+    pub fn size_of_type(&self, type_key: TypeKey) -> u64 {
+        unsafe {
+            LLVMStoreSizeOfType(
+                self.ll_data_layout,
+                self.to_basic_type(self.must_get_type(type_key))
+                    .as_type_ref(),
+            ) as u64
+        }
+    }
+
+    /// Returns the size of the given type in bytes as an LLVM constant integer.
+    pub fn const_int_size_of_type(&self, type_key: TypeKey) -> IntValue<'ctx> {
+        self.get_const_int(self.size_of_type(type_key), false)
+    }
+
+    /// Converts `v` to an LLVM constant integer value.
+    pub fn get_const_int(&self, v: u64, sign_extend: bool) -> IntValue<'ctx> {
+        get_ptr_sized_int_type(self.ctx, self.type_store)
+            .into_int_type()
+            .const_int(v, sign_extend)
+    }
+
+    /// Returns the size of the largest enum variant in bytes.
+    fn max_enum_variant_size(&self, enum_type: &AEnumType) -> u64 {
+        enum_type
+            .variants
+            .iter()
+            .fold(0, |acc, (_, v)| match v.maybe_type_key {
+                Some(tk) => u64::max(acc, self.size_of_type(tk)),
+                None => acc,
+            })
     }
 }
 

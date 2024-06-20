@@ -732,13 +732,23 @@ impl ProgramContext {
             self.insert_type_key(typ.clone(), key);
         }
 
-        if is_polymorphic && !allow_polymorph {
-            println!("error happened");
-            self.insert_err(AnalyzeError::new(
-                ErrorKind::UnresolvedParams,
-                "expected generic parameters",
-                typ,
-            ));
+        // It's possible that we just resolved a polymorphic type that was not defined before now.
+        // If so, we should try to monomorphize it.
+        if is_polymorphic {
+            match typ {
+                Type::Unresolved(unresolved_type) if !unresolved_type.params.is_empty() => {
+                    return self.monomorphize_parameterized_type(key, &unresolved_type.params, typ);
+                }
+                _ => {}
+            }
+
+            if !allow_polymorph {
+                self.insert_err(AnalyzeError::new(
+                    ErrorKind::UnresolvedParams,
+                    "expected generic parameters",
+                    typ,
+                ));
+            }
         }
 
         key
@@ -1023,15 +1033,15 @@ impl ProgramContext {
 
             Some((*tk, param_tks))
         } else if let Some(mono) = self.type_monomorphizations.get(tk) {
+            let mono = mono.clone();
+
             // The type is a monomorphization of a polymorphic type. We can find the polymorphic type
             // and use it to extract monomorphization info.
             let mut param_tks = vec![];
             for replaced_param in &mono.replaced_params {
-                param_tks.push(
-                    *type_mappings
-                        .get(&replaced_param.replacement_type_key)
-                        .unwrap(),
-                );
+                let mut param_tk = replaced_param.replacement_type_key;
+                self.replace_tk(&mut param_tk, type_mappings);
+                param_tks.push(param_tk);
             }
 
             Some((mono.poly_type_key, param_tks))

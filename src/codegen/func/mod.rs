@@ -6,7 +6,7 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::passes::PassManager;
-use inkwell::types::{AnyType, BasicType, BasicTypeEnum};
+use inkwell::types::{AnyType, BasicTypeEnum};
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
 
 use crate::analyzer::ast::func::{AFn, AFnSig};
@@ -382,11 +382,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             .must_get(self.type_converter.map_type_key(type_key));
         if typ.is_composite() {
             // Copy the value from the source pointer to the destination pointer.
-            let ll_type_size = self
-                .type_converter
-                .get_basic_type(type_key)
-                .size_of()
-                .unwrap();
+            let ll_type_size = self.type_converter.const_int_size_of_type(type_key);
 
             self.builder
                 .build_memcpy(
