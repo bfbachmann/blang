@@ -41,7 +41,7 @@ impl AMemberAccess {
         // Analyze the expression whose member is being accessed.
         let mut base_expr = AExpr::from(ctx, access.base_expr.clone(), None, true, false);
         let base_type = ctx.must_get_type(base_expr.type_key);
-        let base_type_string = base_type.display(ctx);
+        let base_type_string = ctx.display_type(base_expr.type_key);
 
         // Abort early if the expression failed analysis.
         let placeholder = AMemberAccess {
@@ -214,7 +214,7 @@ impl AMemberAccess {
                                         or add {} as the first argument to make it a method.",
                                         format!(
                                             "{}.{}",
-                                            ctx.display_type_for_key(base_type_key),
+                                            ctx.display_type(base_type_key),
                                             access.member_name
                                         ),
                                         "self"

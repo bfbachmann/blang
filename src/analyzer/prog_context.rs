@@ -1100,8 +1100,11 @@ impl ProgramContext {
                         loc,
                     )
                     .with_detail(
-                        format_code!("Type {} is not polymorphic.", poly_type.display(self))
-                            .as_str(),
+                        format_code!(
+                            "Type {} is not polymorphic.",
+                            self.display_type(poly_type_key)
+                        )
+                        .as_str(),
                     ),
                 );
                 return poly_type_key;
@@ -1154,7 +1157,7 @@ impl ProgramContext {
         let mut type_mappings: HashMap<TypeKey, TypeKey> = HashMap::new();
         let mut all_type_keys_match = true;
         let mut param_checks_failed = false;
-        let type_display = poly_type.display(self);
+        let type_display = self.display_type(poly_type_key);
 
         for (param, (passed_param_tk, param_loc)) in defined_params
             .iter()
@@ -1307,10 +1310,10 @@ impl ProgramContext {
             self.get_missing_spec_impls(param_type_key, expected_param.generic_type_key);
         let missing_spec_names: Vec<String> = missing_spec_type_keys
             .into_iter()
-            .map(|tk| self.display_type_for_key(tk))
+            .map(|tk| self.display_type(tk))
             .collect();
         if !missing_spec_names.is_empty() {
-            let param_type_display = self.display_type_for_key(param_type_key);
+            let param_type_display = self.display_type(param_type_key);
             return Err(AnalyzeError::new(
                 ErrorKind::SpecNotSatisfied,
                 format_code!("type {} violates parameter constraints", param_type_display).as_str(),
@@ -1343,6 +1346,15 @@ impl ProgramContext {
                     .insert(mono.poly_type_key, HashSet::from([mono]));
             }
         };
+    }
+
+    /// If `type_key` corresponds to a type that was produced by a monomorphization,
+    /// this function returns the type key of its corresponding polymorphic type.
+    pub fn get_poly_type_key(&self, mono_tk: TypeKey) -> Option<TypeKey> {
+        match self.type_monomorphizations.get(&mono_tk) {
+            Some(mono) => Some(mono.poly_type_key),
+            None => None,
+        }
     }
 
     /// Returns the type key for the analyzer-internal `<unknown>` type.
@@ -2100,8 +2112,120 @@ impl ProgramContext {
 
     /// Returns a string containing the human-readable version of the type corresponding to the
     /// given type key.
-    pub fn display_type_for_key(&self, type_key: TypeKey) -> String {
-        self.must_get_type(type_key).display(self)
+    pub fn display_type(&self, type_key: TypeKey) -> String {
+        let typ = self.must_get_type(type_key);
+        match typ {
+            AType::Bool
+            | AType::Str
+            | AType::I8
+            | AType::U8
+            | AType::U32
+            | AType::I32
+            | AType::F32
+            | AType::I64
+            | AType::U64
+            | AType::F64
+            | AType::Int
+            | AType::Uint => {
+                format!("{}", typ)
+            }
+
+            AType::Struct(struct_type) => {
+                format!("{}{}", struct_type.name, self.display_param_types(type_key))
+            }
+
+            AType::Enum(enum_type) => {
+                format!("{}{}", enum_type.name, self.display_param_types(type_key))
+            }
+
+            AType::Spec(s) => s.name.clone(),
+
+            AType::Tuple(tuple_type) => {
+                let mut s = format!("{{");
+
+                for (i, field) in tuple_type.fields.iter().enumerate() {
+                    s += format!("{}", self.display_type(field.type_key)).as_str();
+
+                    if i + 1 < tuple_type.fields.len() {
+                        s += format!(", ").as_str();
+                    }
+                }
+
+                s + format!("}}").as_str()
+            }
+
+            AType::Array(array_type) => match &array_type.maybe_element_type_key {
+                Some(key) => {
+                    format!("[{}; {}]", self.display_type(*key), array_type.len)
+                }
+
+                None => "[]".to_string(),
+            },
+
+            AType::Function(fn_sig) => {
+                let name = fn_sig.name.as_str();
+                let mut s = format!("fn {}", name);
+
+                if let Some(params) = &fn_sig.params {
+                    s += params.display(self).as_str();
+                }
+
+                s += "(";
+
+                for (i, arg) in fn_sig.args.iter().enumerate() {
+                    if i == 0 {
+                        s += format!("{}", arg.display(self)).as_str();
+                    } else {
+                        s += format!(", {}", arg.display(self)).as_str();
+                    }
+                }
+
+                s += ")";
+
+                if let Some(tk) = &fn_sig.maybe_ret_type_key {
+                    s += format!(": {}", self.display_type(*tk)).as_str();
+                }
+
+                s
+            }
+
+            AType::Pointer(ptr_type) => format!(
+                "*{}{}",
+                match ptr_type.is_mut {
+                    true => "mut ",
+                    false => "",
+                },
+                self.display_type(ptr_type.pointee_type_key)
+            )
+            .to_string(),
+
+            AType::Generic(t) => t.name.clone(),
+
+            AType::Unknown(name) => format!("{}", name),
+        }
+    }
+
+    fn display_param_types(&self, type_key: TypeKey) -> String {
+        let mut params = "".to_string();
+        if let Some(mono) = self.type_monomorphizations.get(&type_key) {
+            params += "[";
+            for (i, replaced_param) in mono.replaced_params.iter().enumerate() {
+                let param_display = self.display_type(replaced_param.replacement_type_key);
+
+                match i {
+                    0 => {
+                        params += param_display.as_str();
+                    }
+                    _ => {
+                        params += format!(", {}", param_display).as_str();
+                    }
+                }
+            }
+
+            params += "]";
+        }
+
+        params
     }
 
     /// Maps `const_name` to `const_value` in the program context so the value can be looked up by

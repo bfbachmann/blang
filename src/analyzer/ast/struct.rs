@@ -184,15 +184,6 @@ impl AStructType {
 
         None
     }
-
-    /// Returns a string containing the human-readable representation of the struct type.
-    pub fn display(&self, ctx: &ProgramContext) -> String {
-        let params = match &self.maybe_params {
-            Some(params) => params.display(ctx),
-            None => "".to_string(),
-        };
-        format!("{}{}", self.name, params)
-    }
 }
 
 /// Represents a semantically valid struct initialization.
@@ -231,13 +222,13 @@ impl AStructInit {
 
             AType::Struct(s) => s.clone(),
 
-            other => {
+            _ => {
                 // This is not a struct type. Record the error and return a placeholder value.
                 ctx.insert_err(AnalyzeError::new(
                     ErrorKind::TypeIsNotStruct,
                     format_code!(
                         "type {} is not a struct, but is being used like one",
-                        other.display(ctx)
+                        ctx.display_type(type_key)
                     )
                     .as_str(),
                     struct_init,
@@ -265,7 +256,7 @@ impl AStructInit {
                         ErrorKind::UndefStructField,
                         format_code!(
                             "struct type {} has no field {}",
-                            struct_type.display(ctx),
+                            ctx.display_type(type_key),
                             field_name
                         )
                         .as_str(),
@@ -324,7 +315,7 @@ impl AStructInit {
                         _ => "fields",
                     },
                     format_code_vec(&uninit_field_names, ", "),
-                    format_code!(struct_type.display(ctx)),
+                    format_code!(ctx.display_type(type_key)),
                     match uninit_field_names.len() {
                         1 => "is",
                         _ => "are",
@@ -349,7 +340,7 @@ impl AStructInit {
 
     /// Returns the human-readable version of this struct initialization.
     pub fn display(&self, ctx: &ProgramContext) -> String {
-        format!("{} {{ ... }}", ctx.display_type_for_key(self.type_key))
+        format!("{} {{ ... }}", ctx.display_type(self.type_key))
     }
 
     /// Returns the value assigned to the field with the given name. Panics if

@@ -84,7 +84,7 @@ impl ARet {
                             ErrorKind::MismatchedTypes,
                             format_code!(
                                 "expected return value of type {}, but found empty return",
-                                ctx.display_type_for_key(expected),
+                                ctx.display_type(expected),
                             )
                             .as_str(),
                             ret,

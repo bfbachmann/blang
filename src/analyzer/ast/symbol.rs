@@ -158,7 +158,7 @@ impl ASymbol {
                 ErrorKind::ExpectedExpr,
                 format_code!(
                     "expected expression, but found type {}",
-                    ctx.display_type_for_key(var_type_key)
+                    ctx.display_type(var_type_key)
                 )
                 .as_str(),
                 symbol,
@@ -225,7 +225,7 @@ impl ASymbol {
                                     "{} has polymorphic type {} which requires that types \
                                     be specified for parameters: {}.",
                                     format_code!(symbol),
-                                    format_code!(poly_type.display(ctx)),
+                                    format_code!(ctx.display_type(var_type_key)),
                                     format_code_vec(&param_names, ", "),
                                 )
                                 .as_str(),

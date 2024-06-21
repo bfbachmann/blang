@@ -77,10 +77,14 @@ impl AIndex {
                 return placeholder;
             }
 
-            other => {
+            _ => {
                 ctx.insert_err(AnalyzeError::new(
                     ErrorKind::MismatchedTypes,
-                    format_code!("cannot index value of type {}", other.display(ctx)).as_str(),
+                    format_code!(
+                        "cannot index value of type {}",
+                        ctx.display_type(collection_expr.type_key)
+                    )
+                    .as_str(),
                     &index.index_expr,
                 ));
 
@@ -132,7 +136,7 @@ impl AIndex {
                                 true => "",
                                 false => "non-constant ",
                             },
-                            ctx.display_type_for_key(index_expr.type_key)
+                            ctx.display_type(index_expr.type_key)
                         )
                         .as_str(),
                         &index.index_expr,

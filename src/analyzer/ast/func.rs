@@ -259,7 +259,7 @@ impl AFnSig {
         s += ")";
 
         if let Some(tk) = &self.maybe_ret_type_key {
-            s += format!(": {}", ctx.must_get_type(*tk).display(ctx)).as_str();
+            s += format!(": {}", ctx.display_type(*tk)).as_str();
         }
 
         s

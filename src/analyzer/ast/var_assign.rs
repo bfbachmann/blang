@@ -134,7 +134,6 @@ fn check_assignable<T: Locatable>(ctx: &mut ProgramContext, loc: &T, target_expr
         AExprKind::UnaryOperation(Operator::Defererence, operand) => {
             if let AType::Pointer(pointer_type) = ctx.must_get_type(operand.type_key) {
                 if !pointer_type.is_mut {
-                    let pointee_type = ctx.must_get_type(pointer_type.pointee_type_key);
                     ctx.insert_err(AnalyzeError::new(
                         ErrorKind::ImmutableAssignment,
                         "cannot assign via pointer to immutable data",
@@ -148,7 +147,7 @@ fn check_assignable<T: Locatable>(ctx: &mut ProgramContext, loc: &T, target_expr
                         format_code!(
                             "For this assignment to work, {} would need to have type {}.",
                             operand.display(ctx),
-                            format!("*mut {}", pointee_type.display(ctx)),
+                            format!("*mut {}", ctx.display_type(pointer_type.pointee_type_key)),
                         ).as_str()
                     ));
 

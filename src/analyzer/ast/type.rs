@@ -578,35 +578,6 @@ impl AType {
         matches!(self, AType::Bool)
     }
 
-    /// Returns a string containing a human-readable version of the type.
-    pub fn display(&self, ctx: &ProgramContext) -> String {
-        match self {
-            AType::Bool
-            | AType::Str
-            | AType::I8
-            | AType::U8
-            | AType::U32
-            | AType::I32
-            | AType::F32
-            | AType::I64
-            | AType::U64
-            | AType::F64
-            | AType::Int
-            | AType::Uint => {
-                format!("{}", self)
-            }
-            AType::Struct(s) => format!("{}", s.display(ctx)),
-            AType::Enum(e) => format!("{}", e.display(ctx)),
-            AType::Spec(s) => s.name.clone(),
-            AType::Tuple(t) => format!("{}", t.display(ctx)),
-            AType::Array(a) => format!("{}", a.display(ctx)),
-            AType::Function(func) => format!("{}", func.display(ctx)),
-            AType::Pointer(t) => format!("{}", t.display(ctx)),
-            AType::Generic(t) => t.name.clone(),
-            AType::Unknown(name) => format!("{}", name),
-        }
-    }
-
     /// Returns generic parameters defined for this type.
     pub fn params(&self) -> Option<&AParams> {
         match self {

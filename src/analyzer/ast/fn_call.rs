@@ -57,10 +57,14 @@ impl AFnCall {
                 return placeholder;
             }
 
-            other => {
+            _ => {
                 ctx.insert_err(AnalyzeError::new(
                     ErrorKind::MismatchedTypes,
-                    format_code!("type {} is not callable", other.display(ctx)).as_str(),
+                    format_code!(
+                        "type {} is not callable",
+                        ctx.display_type(fn_expr.type_key)
+                    )
+                    .as_str(),
                     &call.fn_expr,
                 ));
                 return placeholder;
@@ -187,15 +191,15 @@ fn analyze_generic_arg(
     let missing_spec_type_keys =
         ctx.get_missing_spec_impls(analyzed_arg.type_key, expected_arg_type_key);
     if !missing_spec_type_keys.is_empty() {
-        let type_string = ctx.display_type_for_key(analyzed_arg.type_key);
+        let type_string = ctx.display_type(analyzed_arg.type_key);
         let missing_specs_string = format_code_vec(
             &missing_spec_type_keys
                 .iter()
-                .map(|k| ctx.display_type_for_key(*k))
+                .map(|k| ctx.display_type(*k))
                 .collect::<Vec<String>>(),
             ", ",
         );
-        let generic_type_string = ctx.display_type_for_key(expected_arg_type_key);
+        let generic_type_string = ctx.display_type(expected_arg_type_key);
 
         ctx.insert_err(
             AnalyzeError::new(

@@ -71,21 +71,6 @@ impl ATupleType {
         panic!("tuple type {} has no field {}", self, name)
     }
 
-    /// Returns a string containing the human-readable version of this tuple type.
-    pub fn display(&self, ctx: &ProgramContext) -> String {
-        let mut s = format!("{{");
-
-        for (i, field) in self.fields.iter().enumerate() {
-            s += format!("{}", ctx.display_type_for_key(field.type_key)).as_str();
-
-            if i + 1 < self.fields.len() {
-                s += format!(", ").as_str();
-            }
-        }
-
-        s + format!("}}").as_str()
-    }
-
     /// Returns true if this tuple type is the same as `other`. Tuple types are considered the same
     /// if they contain types that are considered the same in the same order.
     pub fn is_same_as(&self, ctx: &ProgramContext, other: &ATupleType) -> bool {

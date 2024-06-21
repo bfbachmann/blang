@@ -47,7 +47,7 @@ impl AEnumTypeVariant {
         let mut s = format!("{}", self.name);
 
         if let Some(type_key) = &self.maybe_type_key {
-            s += format!("({})", ctx.display_type_for_key(*type_key)).as_str();
+            s += format!("({})", ctx.display_type(*type_key)).as_str();
         }
 
         s
@@ -200,15 +200,6 @@ impl AEnumType {
 
         a_enum
     }
-
-    /// Returns a string containing the human-readable version of this enum type.
-    pub fn display(&self, ctx: &ProgramContext) -> String {
-        let params = match &self.maybe_params {
-            Some(params) => params.display(ctx),
-            None => "".to_string(),
-        };
-        format!("{}{}", self.name, params)
-    }
 }
 
 /// Represents a semantically valid enum variant initialization.
@@ -259,13 +250,13 @@ impl AEnumVariantInit {
 
             AType::Enum(enum_type) => enum_type,
 
-            other => {
+            _ => {
                 // This is not an enum type. Record the error and return a placeholder value.
                 ctx.insert_err(AnalyzeError::new(
                     ErrorKind::TypeIsNotEnum,
                     format_code!(
                         "type {} is not an enum, but is being used like one",
-                        other.display(ctx)
+                        ctx.display_type(enum_type_key)
                     )
                     .as_str(),
                     enum_init,
@@ -348,7 +339,7 @@ impl AEnumVariantInit {
                         ErrorKind::MismatchedTypes,
                         format_code!(
                             "missing value of type {} for variant {} of enum {}",
-                            ctx.display_type_for_key(*type_key),
+                            ctx.display_type(*type_key),
                             variant.display(ctx),
                             enum_type.name
                         )
@@ -378,7 +369,7 @@ impl AEnumVariantInit {
     pub fn display(&self, ctx: &ProgramContext) -> String {
         let mut s = format!(
             "{}{}{}",
-            ctx.display_type_for_key(self.type_key),
+            ctx.display_type(self.type_key),
             TokenKind::DoubleColon,
             self.variant.name
         );

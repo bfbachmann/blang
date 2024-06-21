@@ -311,11 +311,11 @@ impl AExprKind {
                 format!(
                     "{} as {}",
                     left_expr.display(ctx),
-                    ctx.display_type_for_key(*target_type_key)
+                    ctx.display_type(*target_type_key)
                 )
             }
             AExprKind::Sizeof(type_key) => {
-                format!("sizeof {}", ctx.display_type_for_key(*type_key))
+                format!("sizeof {}", ctx.display_type(*type_key))
             }
             AExprKind::MemberAccess(access) => {
                 format!("{}.{}", access.base_expr.display(ctx), access.member_name)
@@ -445,8 +445,8 @@ impl AExpr {
                 ErrorKind::MismatchedTypes,
                 format_code!(
                     "expected expression of type {}, but found {}",
-                    expected_type.display(ctx),
-                    actual_type.display(ctx),
+                    ctx.display_type(expected_tk),
+                    ctx.display_type(self.type_key),
                 )
                 .as_str(),
                 expr,
@@ -813,7 +813,7 @@ fn check_operand_types(
             format_code!(
                 "cannot apply operator {} to left-side expression of type {}",
                 &op,
-                ctx.display_type_for_key(left_expr.type_key),
+                ctx.display_type(left_expr.type_key),
             )
             .as_str(),
             left_expr,
@@ -828,7 +828,7 @@ fn check_operand_types(
             format_code!(
                 "cannot apply operator {} to right-side expression of type {}",
                 &op,
-                ctx.display_type_for_key(right_expr.type_key),
+                ctx.display_type(right_expr.type_key),
             )
             .as_str(),
             right_expr,
@@ -844,8 +844,8 @@ fn check_operand_types(
             format_code!(
                 "{} operands have mismatched types {} and {}",
                 op,
-                left_type.display(ctx),
-                right_type.display(ctx),
+                ctx.display_type(left_expr.type_key),
+                ctx.display_type(right_expr.type_key),
             )
             .as_str(),
             right_expr,
@@ -1052,8 +1052,8 @@ fn analyze_type_cast(
             ErrorKind::InvalidTypeCast,
             format_code!(
                 "cannot cast value of type {} to type {}",
-                left_type.display(ctx),
-                a_target_type.display(ctx)
+                ctx.display_type(left_expr.type_key),
+                ctx.display_type(target_type_key)
             )
             .as_str(),
             &left_expr,
@@ -1066,7 +1066,7 @@ fn analyze_type_cast(
             format_code!(
                 "{} already has type {}",
                 left_expr.display(ctx),
-                ctx.display_type_for_key(target_type_key)
+                ctx.display_type(target_type_key)
             )
             .as_str(),
             &span,
@@ -1284,8 +1284,11 @@ fn analyze_unary_op(
                     if !other.is_unknown() {
                         ctx.insert_err(AnalyzeError::new(
                             ErrorKind::MismatchedTypes,
-                            format_code!("cannot dereference value of type {}", other.display(ctx))
-                                .as_str(),
+                            format_code!(
+                                "cannot dereference value of type {}",
+                                ctx.display_type(operand_expr.type_key)
+                            )
+                            .as_str(),
                             expr,
                         ));
                     }

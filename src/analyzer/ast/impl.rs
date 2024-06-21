@@ -6,7 +6,6 @@ use crate::analyzer::type_store::TypeKey;
 use crate::fmt::format_code_vec;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#type::Type;
-use crate::parser::ast::unresolved::UnresolvedType;
 use crate::{format_code, util};
 
 /// Represents a semantically valid `impl` block that declares member functions for a type.
@@ -41,9 +40,8 @@ impl AImpl {
         }
 
         // Get the type key of the type for this impl.
-        let type_key = ctx.resolve_maybe_polymorphic_type(&Type::Unresolved(
-            UnresolvedType::from_symbol(impl_.typ.clone()),
-        ));
+        let type_key = ctx.resolve_maybe_polymorphic_type(&Type::Unresolved(impl_.typ.clone()));
+        let parent_tk = ctx.get_poly_type_key(type_key).unwrap_or(type_key);
 
         // Abort early if the type failed analysis.
         let typ = ctx.must_get_type(type_key);
@@ -55,12 +53,12 @@ impl AImpl {
         }
 
         // Record an error and return early if the type was not defined in this module.
-        if !ctx.type_declared_in_cur_mod(type_key) {
+        if !ctx.type_declared_in_cur_mod(parent_tk) {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::IllegalImpl,
                 format_code!(
                     "cannot define impl for foreign type {}",
-                    ctx.display_type_for_key(type_key)
+                    ctx.display_type(type_key)
                 )
                 .as_str(),
                 &impl_.typ,

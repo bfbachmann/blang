@@ -6,6 +6,7 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::symbol::Symbol;
+use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::ParseResult;
 use crate::parser::module::Module;
 use crate::{locatable_impl, util};
@@ -13,7 +14,7 @@ use crate::{locatable_impl, util};
 /// Represents the implementation of a series of member functions on a type.
 #[derive(Clone, Debug, Eq)]
 pub struct Impl {
-    pub typ: Symbol,
+    pub typ: UnresolvedType,
     /// The specs being implemented for the type.
     pub specs: Vec<Symbol>,
     pub member_fns: Vec<Function>,
@@ -59,7 +60,7 @@ impl Impl {
         Module::parse_expecting(tokens, TokenKind::Impl)?;
 
         // The next tokens should form a type.
-        let type_name = Symbol::from_identifier(tokens)?;
+        let typ = UnresolvedType::from_symbol(Symbol::from(tokens)?);
 
         // Check for an optional specs.
         let specs = if Module::parse_optional(tokens, TokenKind::Colon).is_some() {
@@ -90,7 +91,7 @@ impl Impl {
         }
 
         Ok(Impl {
-            typ: type_name,
+            typ,
             specs,
             member_fns,
             span: Span { start_pos, end_pos },

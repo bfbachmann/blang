@@ -84,17 +84,6 @@ impl AArrayType {
         }
     }
 
-    /// Return the human-readable version of the array type.
-    pub fn display(&self, ctx: &ProgramContext) -> String {
-        match &self.maybe_element_type_key {
-            Some(key) => {
-                format!("[{}; {}]", ctx.must_get_type(*key).display(ctx), self.len)
-            }
-
-            None => "[]".to_string(),
-        }
-    }
-
     /// Returns true if this array type is the same as `other`. Array types are considered the same
     /// if they have the same length and have element types that are considered the same.
     pub fn is_same_as(&self, ctx: &ProgramContext, other: &AArrayType) -> bool {
@@ -192,8 +181,8 @@ impl AArrayInit {
                         ErrorKind::MismatchedTypes,
                         format_code!(
                             "expected value of type {}, but found {}",
-                            expected_type.display(ctx),
-                            value_type.display(ctx)
+                            ctx.display_type(expected_type_key),
+                            ctx.display_type(value.type_key)
                         )
                         .as_str(),
                         value,

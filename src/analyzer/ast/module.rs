@@ -10,7 +10,6 @@ use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::spec::Spec;
 use crate::parser::ast::statement::Statement;
-use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::module::Module;
 
 /// Represents a semantically analyzed source file.
@@ -220,9 +219,7 @@ fn define_extern_fn(ctx: &mut ProgramContext, ext: &Extern) {
 fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     // Set the current impl type key on the program context so we can access it when
     // resolving type `Self`.
-    let impl_type_key = ctx.resolve_maybe_polymorphic_type(&Type::Unresolved(
-        UnresolvedType::from_symbol(impl_.typ.clone()),
-    ));
+    let impl_type_key = ctx.resolve_maybe_polymorphic_type(&Type::Unresolved(impl_.typ.clone()));
 
     // Skip the impl if it's illegal.
     if !ctx.type_declared_in_cur_mod(impl_type_key) {
@@ -257,7 +254,7 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
                 format_code!(
                     "function {} is already defined for type {}",
                     member_fn.signature.name,
-                    ctx.display_type_for_key(impl_type_key),
+                    ctx.display_type(impl_type_key),
                 )
                 .as_str(),
                 &member_fn.signature,

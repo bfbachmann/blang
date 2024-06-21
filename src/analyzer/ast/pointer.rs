@@ -52,7 +52,7 @@ impl APointerType {
                 true => "mut ",
                 false => "",
             },
-            ctx.must_get_type(self.pointee_type_key).display(ctx)
+            ctx.display_type(self.pointee_type_key)
         )
         .to_string()
     }

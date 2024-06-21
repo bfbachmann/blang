@@ -114,9 +114,9 @@ impl AParam {
             .enumerate()
         {
             if i == 0 {
-                s += format!(": {}", ctx.display_type_for_key(*spec_type_key)).as_str();
+                s += format!(": {}", ctx.display_type(*spec_type_key)).as_str();
             } else {
-                s += format!(" + {}", ctx.display_type_for_key(*spec_type_key)).as_str();
+                s += format!(" + {}", ctx.display_type(*spec_type_key)).as_str();
             }
         }
 
