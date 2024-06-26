@@ -34,6 +34,26 @@ impl Empty {
     }
 }
 
+spec GetValue {
+    fn get_value(): int
+}
+
+struct ValueGetter {}
+
+impl ValueGetter: GetValue {
+    fn get_value(): int {
+        return -3
+    }
+}
+
+struct Thing[T: GetValue] {}
+
+impl Thing {
+    fn call(): int {
+        return T.get_value()
+    }
+}
+
 fn main() {
     // Test generic list functionality.
     {
@@ -74,6 +94,7 @@ fn main() {
         assert(Empty[int].do_nothing() == 234, "expected 234")
         assert(Empty[str].do_nothing() == 234, "expected 234")
         assert(Empty[Empty[uint]].do_nothing() == 234, "expected 234")
+        assert(Thing[ValueGetter].call() == -3, "expected -3")
     }
 
     exit(0)
