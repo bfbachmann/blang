@@ -22,6 +22,18 @@ impl Container[int]: ToInt {
     }
 }
 
+struct Empty[T] {}
+
+impl Empty {
+    fn do_nothing(): int {
+        return 234
+    }
+
+    fn neg(*self, value: bool): bool {
+        return !value
+    }
+}
+
 fn main() {
     // Test generic list functionality.
     {
@@ -53,6 +65,15 @@ fn main() {
     {
         let cont = Container[int]{t: 432}
         assert(cont.to_int() == 432, "expected 432")
+    }
+
+    // Check that we can use a monomorphized struct type that has no fields.
+    {
+        let empty = Empty[u64]{}
+        assert(empty.neg(false), "expected true")
+        assert(Empty[int].do_nothing() == 234, "expected 234")
+        assert(Empty[str].do_nothing() == 234, "expected 234")
+        assert(Empty[Empty[uint]].do_nothing() == 234, "expected 234")
     }
 
     exit(0)

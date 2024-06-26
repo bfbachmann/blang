@@ -14,7 +14,7 @@ use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::ast::tuple::ATupleType;
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
-use crate::analyzer::scope::{Scope, ScopeKind, ScopedSymbol};
+use crate::analyzer::scope::{Scope, ScopedSymbol, ScopeKind};
 use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::fmt::{format_code_vec, vec_to_string};
@@ -190,7 +190,7 @@ pub struct ProgramContext {
     /// Maps polymorphic type keys to their monomorphizations.
     pub monomorphized_types: HashMap<TypeKey, HashSet<Monomorphization>>,
     /// Maps monomorphic type keys to the monomorphizations that were used to derive them.
-    type_monomorphizations: HashMap<TypeKey, Monomorphization>,
+    pub type_monomorphizations: HashMap<TypeKey, Monomorphization>,
     /// Maps primitive type names to their type keys.
     primitive_type_keys: HashMap<String, TypeKey>,
 
@@ -841,7 +841,16 @@ impl ProgramContext {
             }
         }
 
-        if replaced_tks {
+        let has_replaced_param = match self.must_get_type(type_key).params() {
+            Some(params) => params
+                .params
+                .iter()
+                .find(|p| type_mappings.contains_key(&p.generic_type_key))
+                .is_some(),
+            None => false,
+        };
+
+        if replaced_tks || has_replaced_param {
             // Add monomorphized types to the name to disambiguate it from other
             // monomorphized instances of this type.
             if let Some(params) = &struct_type.maybe_params {

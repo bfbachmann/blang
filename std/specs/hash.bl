@@ -1,0 +1,13 @@
+pub spec Hasher {
+    /// Creates a new hasher.
+    fn new(): Self
+    /// Writes bytes to be hashed into the hasher.
+    fn write(*mut self, bytes: *u8, len: uint)
+    /// Produces a hash from bytes that were written to the hasher.
+    fn finish(*self): u64
+}
+
+pub spec Hash {
+    /// Writes bytes to be hashed into the hasher.
+    fn hash[H: Hasher](*self, hasher: *mut H)
+}

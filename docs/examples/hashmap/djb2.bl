@@ -1,0 +1,25 @@
+use {Hasher}: "std/specs/hash.bl"
+
+/// Implements the DJB2 hash function.
+pub struct DJB2Hasher {
+    hash: u64
+}
+
+impl DJB2Hasher: Hasher {
+    fn new(): DJB2Hasher {
+        return DJB2Hasher{
+            hash: 5381
+        }
+    }
+
+    fn write(*mut self, bytes: *u8, len: uint) {
+        for let mut i = 0, i < len as int, i += 1 {
+            let c = bytes.(i)^ as u64
+            self^.hash = ((self^.hash bls 5uint) + self^.hash) + c
+        }
+    }
+
+    fn finish(*self): u64 {
+        return self^.hash
+    }
+}

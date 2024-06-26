@@ -1,0 +1,6 @@
+/// Any type that implements `Eq` can be compared to other instances of that type
+/// for equality.
+pub spec Eq {
+    /// Returns true if `self` is equal to `other`.
+    fn eq(*self, other: *Self): bool
+}
