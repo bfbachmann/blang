@@ -14,7 +14,7 @@ use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::ast::tuple::ATupleType;
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
-use crate::analyzer::scope::{Scope, ScopedSymbol, ScopeKind};
+use crate::analyzer::scope::{Scope, ScopeKind, ScopedSymbol};
 use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::fmt::{format_code_vec, vec_to_string};
@@ -1220,8 +1220,6 @@ impl ProgramContext {
 
         // Insert the monomorphization so we know we need to generate code
         // for it during codegen.
-        self.type_monomorphizations
-            .insert(mono.mono_type_key, mono.clone());
         self.insert_monomorphization(mono.clone());
 
         let mono_type_key = mono.mono_type_key;
@@ -1346,6 +1344,9 @@ impl ProgramContext {
 
     /// Inserts the given monomorphization into the program context.
     fn insert_monomorphization(&mut self, mono: Monomorphization) {
+        self.type_monomorphizations
+            .insert(mono.mono_type_key, mono.clone());
+
         match self.monomorphized_types.get_mut(&mono.poly_type_key) {
             Some(set) => {
                 set.insert(mono);
