@@ -105,7 +105,7 @@ impl ASymbol {
             // there is an impl_type_key, check if this function is defined as a member function on
             // that type.
             if let Some(impl_type_key) = maybe_impl_type_key {
-                if let Some(mem_fn) = ctx.get_member_fn(impl_type_key, var_name.as_str()) {
+                if let Some(mem_fn) = ctx.get_or_monomorphize_member_fn(impl_type_key, var_name.as_str()) {
                     maybe_type_key = Some(mem_fn.type_key);
                     is_method = true;
                 }

@@ -40,7 +40,7 @@ impl AMemberAccess {
     ) -> AMemberAccess {
         // Analyze the expression whose member is being accessed.
         let mut base_expr = AExpr::from(ctx, access.base_expr.clone(), None, true, false);
-        let base_type = ctx.must_get_type(base_expr.type_key);
+        let base_type = ctx.must_get_type(base_expr.type_key).clone();
         let base_type_string = ctx.display_type(base_expr.type_key);
 
         // Abort early if the expression failed analysis.
@@ -65,7 +65,7 @@ impl AMemberAccess {
                 if !base_expr.kind.is_type()
                     && !(prefer_method
                         && ctx
-                            .get_member_fn(base_expr.type_key, access.member_name.as_str())
+                            .get_or_monomorphize_member_fn(base_expr.type_key, access.member_name.as_str())
                             .is_some()) =>
             {
                 let maybe_field_type_key =
@@ -178,7 +178,7 @@ impl AMemberAccess {
         let (member_type_key, is_method) = if let Some(tk) = maybe_field_type_key {
             (tk, false)
         } else {
-            match ctx.get_member_fn(base_type_key, access.member_name.as_str()) {
+            match ctx.get_or_monomorphize_member_fn(base_type_key, access.member_name.as_str()) {
                 Some(member_fn_sig) => {
                     let called_via_type = base_expr.kind.is_type();
                     let (takes_self, maybe_self_type_key) = match member_fn_sig.args.first() {

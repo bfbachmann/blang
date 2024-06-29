@@ -32,6 +32,10 @@ impl Empty {
     fn neg(*self, value: bool): bool {
         return !value
     }
+
+    fn new_nested(): Empty[Empty[T]] {
+        return Empty[Empty[T]]{}
+    }
 }
 
 spec GetValue {

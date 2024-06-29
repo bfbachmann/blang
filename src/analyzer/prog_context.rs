@@ -54,6 +54,15 @@ impl Hash for Monomorphization {
     }
 }
 
+impl Monomorphization {
+    pub fn type_mappings(&self) -> HashMap<TypeKey, TypeKey> {
+        self.replaced_params
+            .iter()
+            .map(|rp| (rp.param_type_key, rp.replacement_type_key))
+            .collect()
+    }
+}
+
 /// Stores information about code in a given module.
 struct ModuleContext {
     /// Each scope on this stack corresponds to a scope in the program. Each scope will store
@@ -1224,9 +1233,6 @@ impl ProgramContext {
 
         let mono_type_key = mono.mono_type_key;
 
-        // Monomorphize all member functions on the polymorphic type.
-        self.monomorphize_mem_fns(&mono, &type_mappings);
-
         // Mark this new monomorphic type as implementing the specs its polymorphic
         // counterpart implements.
         if let Some(spec_impl_tks) = self.spec_impls.get(&poly_type_key) {
@@ -1236,44 +1242,6 @@ impl ProgramContext {
         };
 
         mono_type_key
-    }
-
-    /// Monomorphizes all the member functions for the type monomorphized with
-    /// the given monomorphization.
-    fn monomorphize_mem_fns(
-        &mut self,
-        mono: &Monomorphization,
-        type_mappings: &HashMap<TypeKey, TypeKey>,
-    ) {
-        // Collect all member functions on the polymorphic type.
-        let mut poly_mem_fn_tks = HashMap::new();
-        if let Some(mem_fns) = self.type_member_fn_sigs.get(&mono.poly_type_key) {
-            for (fn_name, fn_sig) in mem_fns {
-                poly_mem_fn_tks.insert(fn_name.clone(), fn_sig.type_key);
-            }
-        }
-
-        // Monomorphize all member functions.
-        let mut mono_mem_fn_sigs = HashMap::new();
-        for (fn_name, poly_mem_fn_tk) in poly_mem_fn_tks {
-            if let Some(mono_tk) = self.monomorphize_fn_type(poly_mem_fn_tk, type_mappings) {
-                let mono_fn_sig = self.must_get_type(mono_tk).to_fn_sig();
-                mono_mem_fn_sigs.insert(fn_name, mono_fn_sig.clone());
-            }
-        }
-
-        // Mark monomorphic member functions as public where necessary, and mark the monomorphic
-        // type as an implementer of these functions.
-        if !mono_mem_fn_sigs.is_empty() {
-            for fn_name in mono_mem_fn_sigs.keys() {
-                if self.member_fn_is_pub(mono.poly_type_key, fn_name.as_str()) {
-                    self.mark_member_fn_pub(mono.mono_type_key, fn_name.as_str());
-                }
-            }
-
-            self.type_member_fn_sigs
-                .insert(mono.mono_type_key, mono_mem_fn_sigs);
-        }
     }
 
     /// Analyzes a passed parameter type and checks that it matches the expected
@@ -1764,12 +1732,62 @@ impl ProgramContext {
         self.cur_mod_ctx().cur_self_type_key
     }
 
-    /// Returns the member function with the given name on the type associated with `type_key`.
-    pub fn get_member_fn(&self, type_key: TypeKey, fn_name: &str) -> Option<&AFnSig> {
+    /// Returns the member function with the given name on the type associated with `type_key`, if
+    /// it exists. Otherwise, checks to see if the type is a monomorphization of a polymorphic type
+    /// and tries to locate, monomorphize, and return the member function from the polymorphic type.
+    pub fn get_or_monomorphize_member_fn(
+        &mut self,
+        type_key: TypeKey,
+        fn_name: &str,
+    ) -> Option<AFnSig> {
+        if let Some(mem_fn) = self.get_member_fn(type_key, fn_name) {
+            return Some(mem_fn.clone());
+        }
+
+        if self.try_monomorphize_member_fn(type_key, fn_name) {
+            self.get_member_fn(type_key, fn_name).cloned()
+        } else {
+            None
+        }
+    }
+
+    /// Tries to locate the member function with the given name on the given type.
+    fn get_member_fn(&self, type_key: TypeKey, fn_name: &str) -> Option<&AFnSig> {
         match self.type_member_fn_sigs.get(&type_key) {
             Some(member_fns) => member_fns.get(fn_name),
             None => None,
         }
+    }
+
+    /// Tries to locate the given member function on the parent polymorphic type and monomorphizes
+    /// it, if found.
+    fn try_monomorphize_member_fn(&mut self, type_key: TypeKey, fn_name: &str) -> bool {
+        // We could not find the member function, so let's see if this type is a
+        // monomorphization of a polymorphic type that has a matching member function.
+        let mono = match self.type_monomorphizations.get(&type_key) {
+            Some(mono) => mono,
+            None => return false,
+        };
+
+        let poly_fn_tk = match self.get_member_fn(mono.poly_type_key, fn_name) {
+            Some(fn_sig) => fn_sig.type_key,
+            None => return false,
+        };
+
+        let is_pub = self.member_fn_is_pub(mono.poly_type_key, fn_name);
+        let type_mappings = mono.type_mappings();
+
+        let mono_fn_sig = match self.monomorphize_fn_type(poly_fn_tk, &type_mappings) {
+            Some(fn_tk) => self.must_get_type(fn_tk),
+            None => return false,
+        };
+
+        self.insert_member_fn(type_key, mono_fn_sig.to_fn_sig().clone());
+        if is_pub {
+            self.mark_member_fn_pub(type_key, fn_name);
+        }
+
+        true
     }
 
     /// Records the given member function as public in the program context.

@@ -246,7 +246,7 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
 
         // Make sure this isn't a duplicate member function.
         if ctx
-            .get_member_fn(impl_type_key, fn_sig.name.as_str())
+            .get_or_monomorphize_member_fn(impl_type_key, fn_sig.name.as_str())
             .is_some()
         {
             ctx.insert_err(AnalyzeError::new(
