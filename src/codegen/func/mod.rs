@@ -529,22 +529,22 @@ pub fn gen_fn_sig<'a, 'ctx>(
     );
 
     // Define the function in the module using the fully-qualified function name.
-    let fn_type = type_converter.get_fn_type(sig.type_key);
-    let fn_val = module.add_function(sig.mangled_name.as_str(), fn_type, None);
+    let ll_fn_type = type_converter.get_fn_type(sig.type_key);
+    let ll_fn_val = module.add_function(sig.mangled_name.as_str(), ll_fn_type, None);
 
     // For now, all functions get the `frame-pointer=non-leaf` attribute. This tells
     // LLVM that the frame pointer should be kept if the function calls other functions.
     // This is important for stack unwinding.
-    fn_val.add_attribute(
+    ll_fn_val.add_attribute(
         AttributeLoc::Function,
         ctx.create_string_attribute("frame-pointer", "non-leaf"),
     );
 
     // Set arg names and mark arguments as pass-by-value where necessary.
-    if fn_val.count_params() == sig.args.len() as u32 {
+    if ll_fn_val.count_params() == sig.args.len() as u32 {
         // The compiled function arguments match those of the original function signature, so
         // just assign arg names normally.
-        for (arg_val, arg) in fn_val.get_param_iter().zip(sig.args.iter()) {
+        for (arg_val, arg) in ll_fn_val.get_param_iter().zip(sig.args.iter()) {
             arg_val.set_name(arg.name.as_str());
         }
     } else {
@@ -552,16 +552,16 @@ pub fn gen_fn_sig<'a, 'ctx>(
         // signature. This means the function is taking an additional pointer as its first
         // argument, to which the result will be written. This is done for functions that
         // return structured types.
-        let first_arg_val = fn_val.get_first_param().unwrap();
+        let first_arg_val = ll_fn_val.get_first_param().unwrap();
         first_arg_val.set_name("ret_val_ptr");
 
         // Add the "sret" attribute to the first argument to tell LLVM that it is being used to
         // pass the return value.
-        add_fn_arg_attrs(ctx, fn_val, 0, vec!["sret"]);
+        add_fn_arg_attrs(ctx, ll_fn_val, 0, vec!["sret"]);
 
         // Name the remaining function arguments normally.
-        for i in 1..fn_val.count_params() {
-            let arg_val = fn_val.get_nth_param(i).unwrap();
+        for i in 1..ll_fn_val.count_params() {
+            let arg_val = ll_fn_val.get_nth_param(i).unwrap();
             arg_val.set_name(sig.args.get((i - 1) as usize).unwrap().name.as_str());
         }
     }

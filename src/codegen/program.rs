@@ -220,14 +220,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
     }
 
     fn resolve_monomorphization(&self, mono: &Monomorphization) -> Vec<HashMap<TypeKey, TypeKey>> {
-        // Create a type mapping from the monomorphization.
-        let mut type_mapping: HashMap<TypeKey, TypeKey> = HashMap::new();
-        for replaced_param in &mono.replaced_params {
-            type_mapping.insert(
-                replaced_param.param_type_key,
-                replaced_param.replacement_type_key,
-            );
-        }
+        let type_mapping = mono.type_mappings();
 
         // Find the keys of all types that are still mapped to generic types.
         // Also find the polymorphic parent type keys for all unresolved (generic) types.
