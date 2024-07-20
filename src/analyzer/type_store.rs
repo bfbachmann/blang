@@ -1,4 +1,4 @@
-
+use std::fmt::{Debug, Formatter};
 use crate::analyzer::ast::r#type::AType;
 
 /// A key that is associated with an analyzed type inside the type store. This is actually just an
@@ -6,13 +6,22 @@ use crate::analyzer::ast::r#type::AType;
 pub type TypeKey = u64;
 
 /// Stores analyzed types.
-#[derive(Debug)]
 pub struct TypeStore {
     /// We're just using a Vec here because types should never be removed from the store after
     /// insertion, and Vecs allow for fast and simple access.
     types: Vec<AType>,
     /// Represents the width (in bits) of a pointer on the target architecture.
     target_ptr_width: u8,
+}
+
+impl Debug for TypeStore {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        for (i, typ) in self.types.iter().enumerate() {
+            writeln!(f, "{i}: {:#?}", typ)?;
+        }
+
+        Ok(())
+    }
 }
 
 impl TypeStore {

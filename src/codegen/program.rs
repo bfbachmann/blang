@@ -84,7 +84,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
 
                 AStatement::Const(_) => {
                     // Nothing to do here because constants are compiled in the call to
-                    // `ProgramCodeGen::define_consts` above.
+                    // `ProgramCodeGen::declare_fns_and_consts` above.
                 }
 
                 other => {
@@ -260,7 +260,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
     }
 
     /// Declares the following inside the LLVM module (without assigning values)
-    /// - functions
+    /// - functions that aren't parameterize
     /// - extern functions (to be linked by the linker)
     /// - constants
     fn declare_fns_and_consts(&mut self) {
