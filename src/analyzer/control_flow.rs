@@ -492,9 +492,9 @@ impl CFGAnalyzer<'_> {
         // over the entire function graph, doing DFS from each node to find
         // any cycles that begin and end with that node.
         let cycles: Vec<Vec<usize>> = analyzer
-            .traverse(|block_id| analyzer.find_cycle(vec![block_id]))
+            .traverse(|block_id| analyzer.find_cycles(vec![block_id]))
             .into_iter()
-            .filter_map(|v| v)
+            .flat_map(|v| v)
             .collect();
 
         for cycle in cycles {
@@ -545,6 +545,7 @@ impl CFGAnalyzer<'_> {
         // Maps root variable name to the sequence of moves from the variable
         // in the cycle.
         let mut illegal_moves: HashMap<String, Vec<MMove>> = HashMap::new();
+        let mut vars_declared_in_cycle: HashSet<String> = HashSet::new();
 
         fn drop_last_move(map: &mut HashMap<String, Vec<MMove>>, move_path: &str) {
             let root_var_name = get_root_var_name(move_path);
@@ -572,6 +573,7 @@ impl CFGAnalyzer<'_> {
                 match &statement.kind {
                     MStatementKind::Declare(declare) => {
                         drop_last_move(&mut illegal_moves, declare.var_name.as_str());
+                        vars_declared_in_cycle.insert(declare.var_name.clone());
                     }
 
                     MStatementKind::Assign(assign) => {
@@ -579,7 +581,11 @@ impl CFGAnalyzer<'_> {
                     }
 
                     MStatementKind::Move(mv) => {
-                        add_move(&mut illegal_moves, mv.clone());
+                        let moved_val_declared_in_cycle = vars_declared_in_cycle
+                            .contains(mv.value_path.split(".").collect::<Vec<_>>()[0]);
+                        if !moved_val_declared_in_cycle {
+                            add_move(&mut illegal_moves, mv.clone());
+                        }
                     }
 
                     _ => {}
@@ -1632,31 +1638,31 @@ impl CFGAnalyzer<'_> {
         }
     }
 
-    /// Tries to find a cycle starting at the first block in the given path.
-    /// Returns the sequence of block IDs on the cyclical path if one is found.
-    fn find_cycle(&self, mut current_path: Vec<usize>) -> Option<Vec<usize>> {
+    /// Tries to find all cycles starting at the first block in the given path.
+    /// Returns a Vec of cycles, where a cycle is represented as a Vec of block IDs.
+    fn find_cycles(&self, current_path: Vec<usize>) -> Vec<Vec<usize>> {
         let target_block_id = *current_path.first().unwrap();
         let cur_block_id = *current_path.last().unwrap();
         let next_block_ids = self.get_descendant_block_ids(cur_block_id);
+        let mut cycles = vec![];
 
         for block_id in next_block_ids {
             if block_id == target_block_id {
-                return Some(current_path);
+                // We found a cycle for our target block ID.
+                cycles.push(current_path.clone());
+                continue;
             } else if current_path.contains(&block_id) {
                 // We've found a cycle, but it's not the one we're looking for.
                 continue;
             }
 
-            current_path.push(block_id);
-
-            if let Some(path) = self.find_cycle(current_path.clone()) {
-                return Some(path);
-            }
-
-            current_path.pop();
+            // We did not find a cycle yet. Keep searching.
+            let mut next_path = current_path.clone();
+            next_path.push(block_id);
+            cycles.extend(self.find_cycles(next_path));
         }
 
-        None
+        cycles
     }
 
     /// Returns the IDs of the given block's descendents.

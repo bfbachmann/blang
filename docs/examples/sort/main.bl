@@ -1,0 +1,90 @@
+use {exit}: "std/libc/proc.bl"
+use {panic}: "std/backtrace/panic.bl"
+use {List}: "std/types/list.bl"
+use {Clone}: "std/specs/clone.bl"
+
+fn main() {
+    let mut list = List[Value].new()
+    for let mut i = 10, i >= 0, i -= 1 {
+        list.push(Value{v: i})
+    }
+
+    sort[Value](&mut list)
+
+    if !is_sorted[Value](&list) {
+        panic("list is not sorted")
+    }
+
+    exit(0)
+}
+
+struct Value {
+    v: int
+}
+
+impl Value: Order + Clone {
+    fn compare(*self, other: *Value): Ord {
+        if self^.v > other^.v {
+            return Ord::Greater
+        } elsif self^.v < other^.v {
+            return Ord::Lesser
+        }
+        return Ord::Equal
+    }
+
+    fn clone(*self): Value {
+        return Value{v: self^.v}
+    }
+}
+
+spec Order {
+    fn compare(*self, other: *Self): Ord
+}
+
+enum Ord {
+    Greater
+    Lesser
+    Equal
+}
+
+fn is_sorted[T: Order + Clone](list: *List[T]): bool {
+    for let mut i = 0uint, i < list.len() - 1, i += 1 {
+        let ival = list.get(i)
+        let jval = list.get(i + 1)
+        if ival.compare(&jval) ~~ Ord::Greater {
+            return false
+        }
+    }
+
+    return true
+}
+
+fn sort[T: Order + Clone](list: *mut List[T]) {
+    for let mut i = 0uint, i < list.len() - 1, {} {
+        let cur_value = list.get(i)
+        let result = find_min[T](list, i + 1)
+        let min_index = result.(0)
+        let min_value = result.(1)
+        if min_value.compare(&cur_value) ~~ Ord::Lesser {
+            list.set(i, min_value)
+            list.set(min_index, cur_value)
+        } else {
+            i += 1
+        }
+    }
+}
+
+fn find_min[T: Order + Clone](list: *List[T], start: uint): {uint, T} {
+    let mut min_value = list.get(start)
+    let mut min_index = start
+
+    for let mut i = start + 1, i < list.len(), i += 1 {
+        let v = list.get(i)
+        if v.compare(&min_value) ~~ Ord::Lesser {
+            min_value = v
+            min_index = i
+        }
+    }
+
+    return {min_index, min_value}
+}

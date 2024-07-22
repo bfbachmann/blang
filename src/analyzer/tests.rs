@@ -987,6 +987,27 @@ mod tests {
     }
 
     #[test]
+    fn define_and_move_in_loop() {
+        let result = analyze(
+            r#"
+            struct S {}
+
+            fn main() {
+                loop {
+                    let s = S{}
+                    if true {
+                        take(s)
+                    }
+                }
+            }
+
+            fn take(s: S) {}
+            "#,
+        );
+        check_result(result, None);
+    }
+
+    #[test]
     fn invalid_deref() {
         let result = analyze(
             r#"

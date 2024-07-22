@@ -66,6 +66,13 @@ impl List {
         return self^.ptr.(i as int).clone()
     }
 
+    /// Sets the element at index `i` to `value`. Panics if `i` is ouf of
+    /// bounds.
+    pub fn set(*mut self, i: uint, value: T) {
+        self.check_bounds(i)
+        self^.ptr.(i as int)^ = value
+    }
+
     /// Removes the element at index `i` from the list and returns it. Panics if
     /// `i` is out of bounds.
     pub fn remove(*mut self, i: uint): T {
