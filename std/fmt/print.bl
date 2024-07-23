@@ -2,7 +2,7 @@ use {write, stdout}: "std/libc/io.bl"
 use {String}: "std/types/string.bl"
 
 pub fn print(msg: *String) {
-    write(stdout, msg^.ptr, msg^.len)
+    write(stdout, msg.ptr(), msg.len())
 }
 
 pub fn println(msg: *String) {

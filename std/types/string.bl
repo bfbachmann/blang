@@ -2,9 +2,8 @@ use mem: "std/libc/mem.bl"
 
 /// Strings are heap-allocated sequences of bytes.
 pub struct String {
-    // TODO: Expose methods for accessing these values and make them private.
-    pub ptr: *u8
-    pub len: uint
+    ptr: *u8
+    len: uint
 }
 
 impl String {
@@ -30,6 +29,16 @@ impl String {
             ptr: ptr
             len: new_len
         }
+    }
+
+    /// Returns a pointer to the bytes in the string.
+    pub fn ptr(*self): *u8 {
+        return self^.ptr
+    }
+
+    /// Returns the length of the string in bytes.
+    pub fn len(*self): uint {
+        return self^.len
     }
 
     /// Frees heap space allocated for this `String`.
