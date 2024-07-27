@@ -429,6 +429,13 @@ fn main() {
 }
 ```
 
+Externs can also be declared with custom names to link against. For example, to declare
+a function `str_to_int` and have it link against `strtol`:
+
+```
+extern "strtol" fn str_to_int(start: *u8, end: *mut *u8, base: int): int
+```
+
 ### Imports: `use`
 
 Constants, types, and functions can be imported from other modules with `use` statements. For example, to import `Thing`

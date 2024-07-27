@@ -3,8 +3,9 @@ use std::fmt::Formatter;
 
 use crate::analyzer::ast::closure::{analyze_break, analyze_continue, AClosure};
 use crate::analyzer::ast::cond::ACond;
+use crate::analyzer::ast::ext::AExternFn;
 use crate::analyzer::ast::fn_call::AFnCall;
-use crate::analyzer::ast::func::{AFn, AFnSig};
+use crate::analyzer::ast::func::AFn;
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#impl::AImpl;
@@ -36,7 +37,7 @@ pub enum AStatement {
     StructTypeDeclaration(AStructType),
     EnumTypeDeclaration(AEnumType),
     /// An external function declaration.
-    ExternFn(AFnSig),
+    ExternFn(AExternFn),
     Const(AConst),
     Impl(AImpl),
 }
@@ -136,20 +137,7 @@ impl AStatement {
 
             Statement::Impl(impl_) => AStatement::Impl(AImpl::from(ctx, &impl_)),
 
-            Statement::ExternFn(ext) => {
-                // Make sure we are not already inside a function. Extern functions cannot be
-                // defined within other functions.
-                if ctx.is_in_fn() {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::InvalidStatement,
-                        "cannot declare external functions inside other functions",
-                        ext,
-                    ));
-                }
-
-                // Analyze the function signature in the `extern` block.
-                AStatement::ExternFn(AFnSig::from(ctx, &ext.fn_sig))
-            }
+            Statement::ExternFn(ext_fn) => AStatement::ExternFn(AExternFn::from(ctx, ext_fn)),
 
             Statement::Const(const_decl) => AStatement::Const(AConst::from(ctx, const_decl)),
 

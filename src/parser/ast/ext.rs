@@ -14,6 +14,7 @@ use crate::parser::module::Module;
 #[derive(Clone, Debug, Eq)]
 pub struct Extern {
     pub fn_sig: FunctionSignature,
+    pub maybe_link_name: Option<String>,
     pub is_pub: bool,
     span: Span,
 }
@@ -43,9 +44,11 @@ impl Extern {
     /// Expects token sequences of one of the following forms:
     ///
     ///     pub extern <fn_sig>
+    ///     pub extern "name" <fn_sig>
     ///
     /// where
     ///  - `fn_sig` is a function signature (see `FunctionSignature::from`)
+    ///  - `name` is the optional name to link against in codegen
     ///  - `pub` is optional.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         let is_pub = Module::parse_optional(tokens, TokenKind::Pub).is_some();
@@ -54,12 +57,26 @@ impl Extern {
         // Parse the `extern` token.
         Module::parse_expecting(tokens, TokenKind::Extern)?;
 
+        // Parse the optional extern name.
+        let maybe_link_name = match tokens.peek_next() {
+            Some(Token {
+                kind: TokenKind::StrLiteral(name),
+                ..
+            }) => {
+                let result = Some(name.clone());
+                tokens.next();
+                result
+            }
+            _ => None,
+        };
+
         // Parse the function signature.
         let fn_sig = FunctionSignature::from(tokens)?;
         let end_pos = fn_sig.end_pos().clone();
 
         Ok(Extern {
             fn_sig,
+            maybe_link_name,
             is_pub,
             span: Span { start_pos, end_pos },
         })

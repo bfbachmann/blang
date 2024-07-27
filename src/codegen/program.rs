@@ -18,7 +18,8 @@ use inkwell::OptimizationLevel;
 use target_lexicon::Triple;
 
 use crate::analyzer::analyze::ProgramAnalysis;
-use crate::analyzer::ast::func::{AFn, AFnSig};
+use crate::analyzer::ast::ext::AExternFn;
+use crate::analyzer::ast::func::AFn;
 use crate::analyzer::ast::module::AModule;
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::r#impl::AImpl;
@@ -271,8 +272,8 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                         .insert(const_decl.name.clone(), const_decl.clone());
                 }
 
-                AStatement::ExternFn(fn_sig) => {
-                    self.gen_extern_fn(fn_sig);
+                AStatement::ExternFn(ext_fn) => {
+                    self.gen_extern_fn(ext_fn);
                 }
 
                 AStatement::FunctionDeclaration(func) if !func.signature.is_parameterized() => {
@@ -381,12 +382,18 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
     /// 1. A function with a mangled name that calls 2 and returns its result.
     /// 2. A function with the original unmangled name that is defined without body
     ///    that will be linked externally by the linker.
-    fn gen_extern_fn(&mut self, fn_sig: &AFnSig) {
+    fn gen_extern_fn(&mut self, ext_fn: &AExternFn) {
+        let fn_sig = &ext_fn.fn_sig;
+        let link_name = match &ext_fn.maybe_link_name {
+            Some(name) => name,
+            None => &fn_sig.name,
+        };
+
         // Generate the external function definition.
         let ll_fn_type = self.type_converter.get_fn_type(fn_sig.type_key);
         let ll_extern_fn =
             self.module
-                .add_function(fn_sig.name.as_str(), ll_fn_type, Some(Linkage::External));
+                .add_function(link_name.as_str(), ll_fn_type, Some(Linkage::External));
 
         // Generate the internal function that calls the external one. We'll tell
         // LLVM to always inline this function.

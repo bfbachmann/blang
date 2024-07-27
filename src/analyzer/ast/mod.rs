@@ -5,6 +5,7 @@ pub mod cond;
 pub mod r#const;
 pub mod r#enum;
 pub mod expr;
+pub mod ext;
 pub mod fn_call;
 pub mod func;
 pub mod generic;
