@@ -141,7 +141,7 @@ fn is_bad_day(day_in_month: int): bool {
 Like variables, constant types can be declared explicitly.
 
 ```
-const default_balance: u64 = 10_000
+const bad_address: u64 = 0xdeadbeef
 ```
 
 Constant values don't occupy any place in memory or program data. Instead, they are always inlined by the compiler. This

@@ -29,6 +29,26 @@ fn main() {
     assert(223 bor -432 == -289, "fail: 24")
     assert(bnot 38 == -39, "fail: 25")
 
+    // Test hex integer literals.
+    assert(0xf_u8 == 15_u8, "fail: 25")
+    assert(0xf_i8 == 15_i8, "fail: 26")
+    assert(0xab_u32 == 171_u32, "fail: 27")
+    assert(0xab_i32 == 171_i32, "fail: 28")
+    assert(0xabc_u64 == 2748_u64, "fail: 29")
+    assert(0xabc_i64 == 2748_i64, "fail: 30")
+    assert(0xabc_uint == 2748_uint, "fail: 31")
+    assert(0xabc_int == 2748_int, "fail: 32")
+
+    // Test binary integer literals.
+    assert(0b101_u8 == 5_u8, "fail: 33")
+    assert(0b101_i8 == 5_i8, "fail: 34")
+    assert(0b101_u32 == 5_u32, "fail: 35")
+    assert(0b101_i32 == 5_i32, "fail: 36")
+    assert(0b101_u64 == 5_u64, "fail: 37")
+    assert(0b101_i64 == 5_i64, "fail: 38")
+    assert(0b101_uint == 5_uint, "fail: 39")
+    assert(0b101_int == 5_int, "fail: 40")
+
     // Make sure that logical operations short-circuit correctly.
     assert(true or fail(), "short-circuit or")
     assert(true or fail() or fail(), "nested short-circuit or")
