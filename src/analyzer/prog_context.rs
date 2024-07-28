@@ -1820,17 +1820,7 @@ impl ProgramContext {
     /// accessible from the current module. This will be trie if the type is defined
     /// in this module or the field was declared public.
     pub fn struct_field_is_accessible(&self, type_key: TypeKey, field_name: &str) -> bool {
-        // The struct field is considered accessible by default if the type is
-        // just an inline type (i.e. not a named type declared separately).
-        let is_anon = self
-            .must_get_type(type_key)
-            .to_struct_type()
-            .name
-            .is_empty();
-
-        is_anon
-            || self.type_declared_in_cur_mod(type_key)
-            || self.struct_field_is_pub(type_key, field_name)
+        self.type_declared_in_cur_mod(type_key) || self.struct_field_is_pub(type_key, field_name)
     }
 
     /// Returns true if the field with the given name on the given struct type is public.
