@@ -254,16 +254,16 @@ Arrays are stack-allocated, fixed-sized sequences of values of the same type.
 
 ```
 fn main() {
-    let byte_array: [i64; 5] = [1, 2, 3, 4, 5]
+    let array: [i64; 5] = [1, 2, 3, 4, 5]
 
     // Arrays can be declared by repeating an expression.
     let ten_zeros = [0; 10]
 
     // Arrays can be indexed.
-    let five = byte_array.(4)
+    let five = array.(4)
 
     // Array access is bounds-checked at compile time if possible.
-    let undef = byte_array.(200)  // error: index (200) is outside of array bounds ([0:4])
+    let undef = array.(200)  // error: index (200) is outside of array bounds ([0:4])
 }
 ```
 
