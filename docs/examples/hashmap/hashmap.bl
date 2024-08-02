@@ -1,4 +1,4 @@
-use {heap_realloc, heap_free, copy}: "std/mem/mem.bl"
+use {copy}: "std/mem/mem.bl"
 use {Table}: "std/types/table.bl"
 
 /// Any type that implements `Hash` can be hashed using a provided hash function.
@@ -157,7 +157,7 @@ impl HashMap {
                     return {index, true}
                 }
             } elsif self^.table.entry_is_empty(index) {
-                 return {index, true}
+                return {index, true}
             }
         }
 
