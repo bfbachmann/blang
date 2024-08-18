@@ -1,28 +1,11 @@
+use {free}: "std/libc/mem.bl"
 use {copy}: "std/mem/mem.bl"
 use {Table}: "std/types/table.bl"
+use {Eq}: "std/specs/eq.bl"
+use {Hasher}: "std/specs/hasher.bl"
 
-/// Any type that implements `Hash` can be hashed using a provided hash function.
-pub spec Hash {
-    /// Returns the hash of `self` computed using `hash_fn`.
-    fn hash(*self, hash_fn: fn (*u8, uint): u64): u64
-}
-
-/// Implements the simple djb2 hashing algorithm.
-pub fn djb2_hash(data: *u8, len: uint): u64 {
-    let mut hash: u64 = 5381
-    for let mut i = 0, i < len as int, i += 1 {
-        let c = data.(i)^ as u64
-        hash = ((hash bls 5uint) + hash) + c // hash * 33 + c
-    }
-
-    return hash
-}
-
-/// Any type that implements `Eq` can be compared to other instances of that type
-/// for equality.
-pub spec Eq {
-    /// Returns true if `self` is equal to `other`.
-    fn eq(*self, other: *Self): bool
+pub spec Serialize {
+    fn serialize(*self): {*u8, uint}
 }
 
 /// A mapping from a key to its value.
@@ -41,24 +24,24 @@ impl Mapping {
 }
 
 /// A hashmap that maps keys to their corresponding values.
-pub struct HashMap[K: Hash + Eq, V] {
+pub struct HashMap[K: Serialize + Eq, V, H: Hasher] {
     table: Table[Mapping[K, V]]
     num_allocated: uint
-    hash_fn: fn (*u8, uint): u64
+    hasher: H
 }
 
 impl HashMap {
-    /// Creates a new empty map that uses the djb2 hashing algorithm.
-    pub fn new(): HashMap[K, V] {
-        return HashMap[K, V].new_with_hash_fn(djb2_hash)
+    /// Creates a new empty map that uses the djb2 hasher.
+    pub fn new(): HashMap[K, V, H] {
+        return HashMap[K, V, H].new_with_hasher(H.new())
     }
 
-    /// Creates a new empty map that uses the given hash function.
-    pub fn new_with_hash_fn(hash_fn: fn (*u8, uint): u64): HashMap[K, V] {
-        return HashMap[K, V]{
+    /// Creates a new empty map that uses the given hasher.
+    pub fn new_with_hasher(hasher: H): HashMap[K, V, H] {
+        return HashMap[K, V, H]{
             table: Table[Mapping[K, V]].new(0)
             num_allocated: 0
-            hash_fn: hash_fn
+            hasher: hasher
         }
     }
 
@@ -69,7 +52,7 @@ impl HashMap {
         }
 
         let size = self^.table.size()
-        for let mut index = k.hash(self^.hash_fn) as uint % size, , index = (index + 1) % size {
+        for let mut index = self.hash_key(&k) % size, , index = (index + 1) % size {
             let entry_ptr = self^.table.get(index)
 
             // If the entry pointer is `null`, it means that the entry is either empty
@@ -89,9 +72,9 @@ impl HashMap {
 
     /// Returns a pointer to the value that is mapped to the given key, or null
     /// if the key is not in the map.
-    pub fn get(*self, k: K): *V {
+    pub fn get(*mut self, k: *K): *V {
         let size = self^.table.size()
-        let hash = k.hash(self^.hash_fn) as uint
+        let hash = self.hash_key(k)
         for let mut count: uint = 0, count < size, count += 1 {
             let index = (hash + count) % size
 
@@ -101,7 +84,7 @@ impl HashMap {
             }
 
             let entry_ptr = self^.table.get(index)
-            if entry_ptr != null and entry_ptr^.key.eq(&k) {
+            if entry_ptr != null and entry_ptr^.key.eq(k) {
                 return &entry_ptr^.value
             }
         }
@@ -110,9 +93,9 @@ impl HashMap {
     }
 
     /// Removes the mapping for the given key from the map, if it exists.
-    pub fn delete(*mut self, k: K) {
+    pub fn delete(*mut self, k: *K) {
         let size = self^.table.size()
-        let hash = k.hash(self^.hash_fn) as uint
+        let hash = self.hash_key(k)
         for let mut count: uint = 0, count < size, count += 1 {
             let index = (hash + count) % size
 
@@ -122,7 +105,7 @@ impl HashMap {
             }
 
             let entry_ptr = self^.table.get(index)
-            if entry_ptr != null and entry_ptr^.key.eq(&k) {
+            if entry_ptr != null and entry_ptr^.key.eq(k) {
                 self^.table.delete(index)
                 self^.num_allocated -= 1
                 return
@@ -135,12 +118,23 @@ impl HashMap {
         self.table.free()
     }
 
+    /// Returns the hash of the given key.
+    fn hash_key(*mut self, k: *K): uint {
+        let serialization = k.serialize()
+        let key_bytes = serialization.(0)
+        let key_len = serialization.(1)
+        self^.hasher.reset()
+        let hash = self^.hasher.hash(key_bytes, key_len) as uint
+        free(key_bytes)
+        return hash
+    }
+
     /// If `find_occupied` is `true`, tries to find the index of the entry containing `k`.
     /// If `find_occupied` is `false`, tries to find the index of the entry into which `k`
     /// should be inserted.
     /// This function uses quadratic probing. Returns `{0, false}` if no entry was found.
-    fn get_entry_index(*self, k: *K, find_occupied: bool): {uint, bool} {
-        let hash = k.hash(self^.hash_fn) as uint
+    fn get_entry_index(*mut self, k: *K, find_occupied: bool): {uint, bool} {
+        let hash = self.hash_key(k)
         let size = self^.table.size()
 
         for let mut count: uint = 0, count < size, count += 1 {

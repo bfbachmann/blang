@@ -1,14 +1,23 @@
 use {panic}: "std/backtrace/panic.bl"
 use {exit}: "std/libc/proc.bl"
-use {HashMap, Hash, Eq}: "docs/examples/hashmap/hashmap.bl"
+use {memcpy}: "std/libc/mem.bl"
+use {heap_alloc}: "std/mem/mem.bl"
+use {Eq}: "std/specs/eq.bl"
+use {Hasher}: "std/specs/hasher.bl"
+
+use {HashMap, Serialize}: "docs/examples/hashmap/hashmap.bl"
+use {DJB2Hasher}: "docs/examples/hashmap/djb2.bl"
 
 struct Key {
     s: str
 }
 
-impl Key: Hash + Eq {
-    fn hash(*self, hash_fn: fn (*u8, uint): u64): u64 {
-        return hash_fn(self^.s as *u8, self^.s.len())
+impl Key: Serialize + Eq {
+    fn serialize(*self): {*u8, uint} {
+        let len = self^.s.len()
+        let ptr = heap_alloc[u8](len)
+        memcpy(ptr, self^.s as *u8, len)
+        return {ptr, len}
     }
 
     fn eq(*self, other: *Self): bool {
@@ -17,24 +26,24 @@ impl Key: Hash + Eq {
 }
 
 fn main() {
-    let mut map = HashMap[Key, str].new()
+    let mut map = HashMap[Key, str, DJB2Hasher].new()
 
     map.insert(Key{s: "key"}, "value")
-    let result_ptr = map.get(Key{s: "key"})
+    let result_ptr = map.get(&Key{s: "key"})
     assert(result_ptr != null, "result can't be null")
     assert(result_ptr^ == "value", "value should be \"value\"")
 
-    map.delete(Key{s: "key"})
-    assert(map.get(Key{s: "key"}) == null, "result should be null")
+    map.delete(&Key{s: "key"})
+    assert(map.get(&Key{s: "key"}) == null, "result should be null")
 
     map.insert(Key{s: "a"}, "value: a")
-    assert(map.get(Key{s: "a"})^ == "value: a", "expected \"value: a\"")
+    assert(map.get(&Key{s: "a"})^ == "value: a", "expected \"value: a\"")
     map.insert(Key{s: "b"}, "value: b")
-    assert(map.get(Key{s: "b"})^ == "value: b", "expected \"value: b\"")
+    assert(map.get(&Key{s: "b"})^ == "value: b", "expected \"value: b\"")
     map.insert(Key{s: "c"}, "value: c")
-    assert(map.get(Key{s: "c"})^ == "value: c", "expected \"value: c\"")
+    assert(map.get(&Key{s: "c"})^ == "value: c", "expected \"value: c\"")
     map.insert(Key{s: "d"}, "value: d")
-    assert(map.get(Key{s: "d"})^ == "value: d", "expected \"value: d\"")
+    assert(map.get(&Key{s: "d"})^ == "value: d", "expected \"value: d\"")
 
     exit(0)
 }
