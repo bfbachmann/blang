@@ -13,6 +13,7 @@ use crate::analyzer::ast::member::AMemberAccess;
 use crate::analyzer::ast::module::AModule;
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::r#enum::AEnumVariantInit;
+use crate::analyzer::ast::r#impl::AImpl;
 use crate::analyzer::ast::r#loop::ALoop;
 use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#yield::AYield;
@@ -539,6 +540,13 @@ impl CFGAnalyzer<'_> {
         // print!("___{}___\n{analyzer}", func.signature.name);
     }
 
+    /// Analyzes all functions declared inside an `impl` block.
+    fn analyze_impl(ctx: &mut ProgramContext, impl_: &AImpl) {
+        for mem_fn in &impl_.member_fns {
+            CFGAnalyzer::analyze_fn(ctx, mem_fn);
+        }
+    }
+
     /// Checks the given cycle (a list of block IDs that forms a loop) for moves
     /// that may execute more than once (i.e., use-after-move errors).
     fn get_duplicated_moves_in_cycle(&self, cycle: Vec<usize>) -> HashMap<String, Vec<MMove>> {
@@ -1019,7 +1027,22 @@ impl CFGAnalyzer<'_> {
             if let Some(cond) = &branch.cond {
                 let condition = self.analyze_expr(cond, UseKind::Move);
                 let then_block_id = self.new_block();
-                let else_block_id = self.new_block();
+
+                // In the case where the last branch has a condition, we should use the
+                // existing end block as the else branch. If there is no existing end block,
+                // then we'll generate a new end block for the else branch.
+                let else_block_id = if is_last_branch {
+                    match maybe_end_block_id {
+                        Some(id) => id,
+                        None => {
+                            let new_block_id = self.new_block();
+                            maybe_end_block_id = Some(new_block_id);
+                            new_block_id
+                        }
+                    }
+                } else {
+                    self.new_block()
+                };
 
                 self.insert_statement(MStatement {
                     kind: MStatementKind::BranchIf(MBranchIf {
@@ -1286,7 +1309,7 @@ impl CFGAnalyzer<'_> {
                             operand,
                         )
                         .with_detail(
-                            "This move is illegal because it it happens via a \
+                            "This move is illegal because it happens via a \
                             shared reference, so the underlying value is not owned.",
                         )
                         .with_help(
@@ -1711,8 +1734,16 @@ fn move_is_from_var(var_name: &str, move_path: &str) -> bool {
 /// Analysis includes checking for use-after-move violations and dead code.
 pub fn analyze_module_fns(ctx: &mut ProgramContext, module: &AModule) {
     for statement in &module.statements {
-        if let AStatement::FunctionDeclaration(func) = statement {
-            CFGAnalyzer::analyze_fn(ctx, func);
+        match statement {
+            AStatement::FunctionDeclaration(func) => {
+                CFGAnalyzer::analyze_fn(ctx, func);
+            }
+
+            AStatement::Impl(impl_) => {
+                CFGAnalyzer::analyze_impl(ctx, impl_);
+            }
+
+            _ => {}
         }
     }
 }

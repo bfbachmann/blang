@@ -443,6 +443,24 @@ mod tests {
     }
 
     #[test]
+    fn illegal_move_in_method() {
+        let result = analyze(
+            r#"
+            struct T {}
+
+            impl T {
+                fn nothing() {
+                    let t = T{}
+                    let tt = t
+                    let illegal = t
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::UseOfMovedValue));
+    }
+
+    #[test]
     fn illegal_member_move() {
         let result = analyze(
             r#"
@@ -1927,6 +1945,18 @@ mod tests {
             "#,
         );
         check_result(result, Some(ErrorKind::SuperfluousTypeCast));
+    }
+
+    #[test]
+    fn cond_ending_with_elsif() {
+        let result = analyze(
+            r#"
+            fn main() {
+                if true {} elsif false {}
+            }
+            "#,
+        );
+        check_result(result, None);
     }
 
     #[test]

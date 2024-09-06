@@ -177,7 +177,7 @@ impl HashMap {
         }
 
         // Replace the old table with a new one that is double the size.
-        let old_table = self^.table
+        let old_table = self^.table.clone()
         self^.table = Table[Mapping[K, V]].new(new_size)
 
         // Re-hash all the keys in the table and copy mappings into the new table.

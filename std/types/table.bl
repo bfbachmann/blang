@@ -1,5 +1,6 @@
 use {heap_alloc, heap_realloc, heap_free}: "std/mem/mem.bl"
 use {panic}: "std/backtrace/panic.bl"
+use {Clone}: "std/specs/clone.bl"
 
 const deleted: u8 = 2
 const occupied: u8 = 1
@@ -107,6 +108,18 @@ impl Table {
     fn check_bounds(*self, i: uint) {
         if i >= self^.size {
             panic("table index out of bounds")
+        }
+    }
+}
+
+impl Table: Clone {
+    /// Clones the table and returns the clone.
+    /// The clone is shallow and does not copy entires in the table.
+    fn clone(*self): Table[T] {
+        return Table[T]{
+            entries: self^.entries
+            size: self^.size
+            entry_status: self^.entry_status
         }
     }
 }
