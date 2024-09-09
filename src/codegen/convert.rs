@@ -124,6 +124,8 @@ impl<'ctx> TypeConverter<'ctx> {
 
             AType::I8 | AType::U8 => self.ctx.i8_type().as_basic_type_enum(),
 
+            AType::I16 | AType::U16 => self.ctx.i16_type().as_basic_type_enum(),
+
             AType::I32 | AType::U32 => self.ctx.i32_type().as_basic_type_enum(),
 
             AType::F32 => self.ctx.f32_type().as_basic_type_enum(),

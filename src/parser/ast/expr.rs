@@ -13,6 +13,7 @@ use crate::parser::ast::f64_lit::F64Lit;
 use crate::parser::ast::from::From;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::func_call::FuncCall;
+use crate::parser::ast::i16_lit::I16Lit;
 use crate::parser::ast::i32_lit::I32Lit;
 use crate::parser::ast::i64_lit::I64Lit;
 use crate::parser::ast::i8_lit::I8Lit;
@@ -28,6 +29,7 @@ use crate::parser::ast::sizeof::SizeOf;
 use crate::parser::ast::str_lit::StrLit;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::tuple::TupleInit;
+use crate::parser::ast::u16_lit::U16Lit;
 use crate::parser::ast::u32_lit::U32Lit;
 use crate::parser::ast::u64_lit::U64Lit;
 use crate::parser::ast::u8_lit::U8Lit;
@@ -45,6 +47,8 @@ pub enum Expression {
     BoolLiteral(BoolLit),
     I8Literal(I8Lit),
     U8Literal(U8Lit),
+    I16Literal(I16Lit),
+    U16Literal(U16Lit),
     I32Literal(I32Lit),
     U32Literal(U32Lit),
     F32Literal(F32Lit),
@@ -81,6 +85,8 @@ impl Display for Expression {
             Expression::BoolLiteral(b) => write!(f, "{}", b),
             Expression::I8Literal(i) => write!(f, "{}", i),
             Expression::U8Literal(i) => write!(f, "{}", i),
+            Expression::I16Literal(i) => write!(f, "{}", i),
+            Expression::U16Literal(i) => write!(f, "{}", i),
             Expression::I32Literal(i) => write!(f, "{}", i),
             Expression::U32Literal(i) => write!(f, "{}", i),
             Expression::F32Literal(i) => write!(f, "{}", i),
@@ -127,6 +133,8 @@ impl Locatable for Expression {
             Expression::BoolLiteral(bool_lit) => bool_lit.start_pos(),
             Expression::I8Literal(i) => i.start_pos(),
             Expression::U8Literal(i) => i.start_pos(),
+            Expression::I16Literal(i) => i.start_pos(),
+            Expression::U16Literal(i) => i.start_pos(),
             Expression::I32Literal(i) => i.start_pos(),
             Expression::U32Literal(i) => i.start_pos(),
             Expression::F32Literal(i) => i.start_pos(),
@@ -159,6 +167,8 @@ impl Locatable for Expression {
             Expression::BoolLiteral(bool_lit) => bool_lit.end_pos(),
             Expression::I8Literal(i) => i.end_pos(),
             Expression::U8Literal(i) => i.end_pos(),
+            Expression::I16Literal(i) => i.end_pos(),
+            Expression::U16Literal(i) => i.end_pos(),
             Expression::I32Literal(i) => i.end_pos(),
             Expression::U32Literal(i) => i.end_pos(),
             Expression::F32Literal(i) => i.end_pos(),
@@ -191,6 +201,8 @@ impl Locatable for Expression {
             Expression::BoolLiteral(bool_lit) => bool_lit.span(),
             Expression::I8Literal(i) => i.span(),
             Expression::U8Literal(i) => i.span(),
+            Expression::I16Literal(i) => i.span(),
+            Expression::U16Literal(i) => i.span(),
             Expression::I32Literal(i) => i.span(),
             Expression::U32Literal(i) => i.span(),
             Expression::F32Literal(i) => i.span(),
@@ -570,6 +582,8 @@ fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
         TokenKind::BoolLiteral(_) => Expression::BoolLiteral(BoolLit::from(tokens)?),
         TokenKind::I8Literal(_) => Expression::I8Literal(I8Lit::from(tokens)?),
         TokenKind::U8Literal(_) => Expression::U8Literal(U8Lit::from(tokens)?),
+        TokenKind::I16Literal(_) => Expression::I16Literal(I16Lit::from(tokens)?),
+        TokenKind::U16Literal(_) => Expression::U16Literal(U16Lit::from(tokens)?),
         TokenKind::I32Literal(_) => Expression::I32Literal(I32Lit::from(tokens)?),
         TokenKind::U32Literal(_) => Expression::U32Literal(U32Lit::from(tokens)?),
         TokenKind::F32Literal(_) => Expression::F32Literal(F32Lit::from(tokens)?),

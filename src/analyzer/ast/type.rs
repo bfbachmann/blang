@@ -21,6 +21,8 @@ pub enum AType {
     Bool,
     U8,
     I8,
+    U16,
+    I16,
     U32,
     I32,
     F32,
@@ -57,6 +59,8 @@ impl Display for AType {
             AType::Str => write!(f, "str"),
             AType::U8 => write!(f, "u8"),
             AType::I8 => write!(f, "i8"),
+            AType::U16 => write!(f, "u16"),
+            AType::I16 => write!(f, "i16"),
             AType::U32 => write!(f, "u32"),
             AType::I32 => write!(f, "i32"),
             AType::F32 => write!(f, "f32"),
@@ -177,6 +181,8 @@ impl AType {
             AType::Bool,
             AType::U8,
             AType::I8,
+            AType::U16,
+            AType::I16,
             AType::U32,
             AType::I32,
             AType::F32,
@@ -199,6 +205,8 @@ impl AType {
             AType::Bool => "bool",
             AType::U8 => "u8",
             AType::I8 => "i8",
+            AType::U16 => "u16",
+            AType::I16 => "i16",
             AType::U32 => "u32",
             AType::I32 => "i32",
             AType::F32 => "f32",
@@ -299,6 +307,8 @@ impl AType {
             AType::Bool
             | AType::U8
             | AType::I8
+            | AType::U16
+            | AType::I16
             | AType::U32
             | AType::I32
             | AType::F32
@@ -391,6 +401,8 @@ impl AType {
             self,
             AType::U8
                 | AType::I8
+                | AType::I16
+                | AType::U16
                 | AType::U32
                 | AType::I32
                 | AType::F32
@@ -408,6 +420,8 @@ impl AType {
             self,
             AType::U8
                 | AType::I8
+                | AType::U16
+                | AType::I16
                 | AType::U32
                 | AType::I32
                 | AType::U64
@@ -470,10 +484,18 @@ impl AType {
     /// either doesn't support arithmetic operations, or requires unsigned operations.
     pub fn is_signed(&self) -> bool {
         match self {
-            AType::I8 | AType::I32 | AType::F32 | AType::I64 | AType::F64 | AType::Int => true,
+            AType::I8
+            | AType::I16
+            | AType::I32
+            | AType::F32
+            | AType::I64
+            | AType::F64
+            | AType::Int => true,
+
             AType::Bool
             | AType::Str
             | AType::U8
+            | AType::U16
             | AType::U32
             | AType::U64
             | AType::Uint

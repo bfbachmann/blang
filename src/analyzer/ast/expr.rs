@@ -39,6 +39,8 @@ pub enum AExprKind {
     BoolLiteral(bool),
     I8Literal(i8),
     U8Literal(u8),
+    I16Literal(i16),
+    U16Literal(u16),
     I32Literal(i32),
     U32Literal(u32),
     F32Literal(f32),
@@ -71,6 +73,8 @@ impl fmt::Display for AExprKind {
             AExprKind::BoolLiteral(b) => write!(f, "{}", b),
             AExprKind::I8Literal(i) => write!(f, "{}i8", i),
             AExprKind::U8Literal(i) => write!(f, "{}u8", i),
+            AExprKind::I16Literal(i) => write!(f, "{}i16", i),
+            AExprKind::U16Literal(i) => write!(f, "{}u16", i),
             AExprKind::I32Literal(i) => write!(f, "{}i32", i),
             AExprKind::U32Literal(i) => write!(f, "{}u32", i),
             AExprKind::F32Literal(i) => write!(f, "{}f32", i),
@@ -173,6 +177,8 @@ impl AExprKind {
             AExprKind::BoolLiteral(_)
             | AExprKind::I8Literal(_)
             | AExprKind::U8Literal(_)
+            | AExprKind::I16Literal(_)
+            | AExprKind::U16Literal(_)
             | AExprKind::I32Literal(_)
             | AExprKind::U32Literal(_)
             | AExprKind::F32Literal(_)
@@ -269,6 +275,8 @@ impl AExprKind {
             AExprKind::BoolLiteral(b) => format!("{}", b),
             AExprKind::I8Literal(i) => format!("{}", i),
             AExprKind::U8Literal(i) => format!("{}", i),
+            AExprKind::I16Literal(i) => format!("{}", i),
+            AExprKind::U16Literal(i) => format!("{}", i),
             AExprKind::I32Literal(i) => format!("{}", i),
             AExprKind::U32Literal(i) => format!("{}", i),
             AExprKind::F32Literal(i) => format!("{}", i),
@@ -550,6 +558,19 @@ impl AExpr {
 
                     self.kind = AExprKind::U32Literal(*i as u32);
                     self.type_key = ctx.u32_type_key();
+                }
+
+                AType::U16 => {
+                    if *i > u16::MAX as i64 {
+                        ctx.insert_err(AnalyzeError::new(
+                            ErrorKind::LiteralOutOfRange,
+                            format_code!("literal out of range for {}", "u16").as_str(),
+                            &self,
+                        ));
+                    }
+
+                    self.kind = AExprKind::U16Literal(*i as u16);
+                    self.type_key = ctx.u16_type_key();
                 }
 
                 AType::U8 => {
@@ -1492,6 +1513,18 @@ fn analyze_expr_with_pref(
         Expression::U8Literal(i) => AExpr {
             kind: AExprKind::U8Literal(i.value),
             type_key: ctx.u8_type_key(),
+            span,
+        },
+
+        Expression::I16Literal(i) => AExpr {
+            kind: AExprKind::I16Literal(i.value),
+            type_key: ctx.i16_type_key(),
+            span,
+        },
+
+        Expression::U16Literal(i) => AExpr {
+            kind: AExprKind::U16Literal(i.value),
+            type_key: ctx.u16_type_key(),
             span,
         },
 

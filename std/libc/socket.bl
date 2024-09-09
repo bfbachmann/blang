@@ -1,0 +1,15 @@
+pub extern fn socket(domain: int, type: int, protocol: int): int
+pub extern fn bind(sockfd: int, addr: *SockAddrIn, addrlen: u32): int
+pub extern fn listen(sockfd: int, backlog: int): int
+pub extern fn accept(sockfd: int, addr: *SockAddrIn, addrlen: *u32): int
+pub extern fn shutdown(sockfd: int, how: int): int
+
+pub struct SockAddrIn {
+    family: u16
+    port: u16
+    addr: u32
+    zero: [u8; 8]
+}
+
+const sock_stream = 1
+const af_inet = 2

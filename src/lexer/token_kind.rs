@@ -110,6 +110,10 @@ pub enum TokenKind {
     U8Literal(u8),
     #[regex(r"((0x[0-9a-f_]+)|(0b[01_]+)|([0-9][0-9_]*))i8", lex_i8_literal)]
     I8Literal(i8),
+    #[regex(r"((0x[0-9a-f_]+)|(0b[01_]+)|([0-9][0-9_]*))u16", lex_u16_literal)]
+    U16Literal(u16),
+    #[regex(r"((0x[0-9a-f_]+)|(0b[01_]+)|([0-9][0-9_]*))i16", lex_i16_literal)]
+    I16Literal(i16),
     #[regex(r"((0x[0-9a-f_]+)|(0b[01_]+)|([0-9][0-9_]*))u32", lex_u32_literal)]
     U32Literal(u32),
     #[regex(r"((0x[0-9a-f_]+)|(0b[01_]+)|([0-9][0-9_]*))i32", lex_i32_literal)]
@@ -257,6 +261,8 @@ impl TokenKind {
             TokenKind::BoolLiteral(v) => v.to_string(),
             TokenKind::I8Literal(v) => v.to_string(),
             TokenKind::U8Literal(v) => v.to_string(),
+            TokenKind::I16Literal(v) => v.to_string(),
+            TokenKind::U16Literal(v) => v.to_string(),
             TokenKind::I32Literal(v) => v.to_string(),
             TokenKind::U32Literal(v) => v.to_string(),
             TokenKind::F32Literal(v) => v.to_string(),
@@ -453,6 +459,16 @@ fn lex_u8_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<u8, LexingError>
 fn lex_i8_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<i8, LexingError> {
     let lit = lexer.slice().trim_end_matches("i8").replace("_", "");
     lex_int!(i8, lit)
+}
+
+fn lex_u16_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<u16, LexingError> {
+    let lit = lexer.slice().trim_end_matches("u16").replace("_", "");
+    lex_int!(u16, lit)
+}
+
+fn lex_i16_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<i16, LexingError> {
+    let lit = lexer.slice().trim_end_matches("i16").replace("_", "");
+    lex_int!(i16, lit)
 }
 
 fn lex_u32_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<u32, LexingError> {

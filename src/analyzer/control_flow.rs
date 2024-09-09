@@ -1433,6 +1433,8 @@ impl CFGAnalyzer<'_> {
             AExprKind::BoolLiteral(_)
             | AExprKind::I8Literal(_)
             | AExprKind::U8Literal(_)
+            | AExprKind::I16Literal(_)
+            | AExprKind::U16Literal(_)
             | AExprKind::I32Literal(_)
             | AExprKind::U32Literal(_)
             | AExprKind::F32Literal(_)

@@ -823,6 +823,8 @@ impl ProgramContext {
             AType::Bool
             | AType::U8
             | AType::I8
+            | AType::U16
+            | AType::I16
             | AType::U32
             | AType::I32
             | AType::F32
@@ -1359,6 +1361,16 @@ impl ProgramContext {
     /// Returns the type key for the `u8` type.
     pub fn u8_type_key(&self) -> TypeKey {
         *self.primitive_type_keys.get("u8").unwrap()
+    }
+
+    /// Returns the type key for the `i16` type.
+    pub fn i16_type_key(&self) -> TypeKey {
+        *self.primitive_type_keys.get("i16").unwrap()
+    }
+
+    /// Returns the type key for the `u16` type.
+    pub fn u16_type_key(&self) -> TypeKey {
+        *self.primitive_type_keys.get("u16").unwrap()
     }
 
     /// Returns the type key for the `i32` type.
@@ -2137,6 +2149,8 @@ impl ProgramContext {
             | AType::Str
             | AType::I8
             | AType::U8
+            | AType::I16
+            | AType::U16
             | AType::U32
             | AType::I32
             | AType::F32
