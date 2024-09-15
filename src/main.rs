@@ -137,6 +137,7 @@ fn main() {
                     .get_many::<String>("linker-flag")
                     .unwrap_or_default()
                     .collect();
+
                 if let Err(e) = compile(
                     src_path,
                     dst_path,

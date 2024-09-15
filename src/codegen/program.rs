@@ -635,20 +635,44 @@ fn link(
         .args(linker_args)
         .args(["-o", output_path.to_str().unwrap()])
         .args(obj_file_paths);
+
+    // Convert the command to a str so we can log it, if necessary.
+    let raw_cmd = format!(
+        "{} {}",
+        linker_cmd,
+        link_cmd
+            .get_args()
+            .map(|a| a.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(" "),
+    );
+
     match link_cmd.output() {
         Ok(output) => match output.status.success() {
-            true => Ok(()),
+            true => {
+                // Log any warnings that occurred.
+                if !output.stderr.is_empty() {
+                    eprintln!("{}", String::from_utf8(output.stderr.clone()).unwrap());
+                }
+                Ok(())
+            }
+
             false => Err(CodeGenError::new(
                 ErrorKind::LinkingFailed,
-                String::from_utf8(output.stderr)
-                    .unwrap_or("".to_string())
-                    .as_str(),
+                format!(
+                    "\"{}\": {}",
+                    raw_cmd,
+                    String::from_utf8(output.stderr)
+                        .unwrap_or("".to_string())
+                        .as_str()
+                )
+                .as_str(),
             )),
         },
 
         Err(err) => Err(CodeGenError::new(
             ErrorKind::LinkingFailed,
-            format!(r#"failed to invoke linker "{}"\n{}"#, linker_cmd, err).as_str(),
+            format!("failed to invoke linker \"{}\"\n{}", raw_cmd, err).as_str(),
         )),
     }
 }
