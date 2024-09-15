@@ -5,11 +5,11 @@ pub extern fn accept(sockfd: int, addr: *SockAddrIn, addrlen: *u32): int
 pub extern fn shutdown(sockfd: int, how: int): int
 
 pub struct SockAddrIn {
-    family: u16
-    port: u16
-    addr: u32
-    zero: [u8; 8]
+    pub family: u16
+    pub port: u16
+    pub addr: u32
+    pub zero: [u8; 8]
 }
 
-const sock_stream = 1
-const af_inet = 2
+pub const sock_stream = 1
+pub const af_inet = 2
