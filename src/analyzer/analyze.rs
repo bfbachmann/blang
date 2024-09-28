@@ -166,7 +166,7 @@ pub fn analyze_module(
 
 /// Defines all intrinsic (built-in) functions, methods, values, and types.
 fn define_intrinsics(ctx: &mut ProgramContext) {
-    // Generate the method `len(self: str): uint`.
+    // Generate the method `len(self: str) -> uint`.
     let maybe_impl_tk = ctx.get_cur_self_type_key();
     let str_type_key = ctx.str_type_key();
     let fn_name = "len";

@@ -8,18 +8,18 @@ struct Ref[T] {
 }
 
 impl Ref {
-    fn clone(*self): Ref[T] {
+    fn clone(*self) -> Ref[T] {
         return Ref[T]{
             ptr: self^.ptr
         }
     }
 
-    fn get_ptr(*self): *T {
+    fn get_ptr(*self) -> *T {
         return self^.ptr
     }
 }
 
-fn heap[T](t: *T): Ref[T] {
+fn heap[T](t: *T) -> Ref[T] {
     let ptr = malloc(sizeof T) as *mut T
     memcpy(ptr as *u8, t as *u8, sizeof T)
     return Ref[T]{
@@ -27,7 +27,7 @@ fn heap[T](t: *T): Ref[T] {
     }
 }
 
-fn deref[T](ref: *Ref[T]): *mut T {
+fn deref[T](ref: *Ref[T]) -> *mut T {
     return ref^.ptr
 }
 

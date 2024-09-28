@@ -10,7 +10,7 @@ struct Node {
 
 impl Node {
     /// Heap-allocates a new node and returns the pointer.
-    fn new(value: int, next: *mut Node): *mut Node {
+    fn new(value: int, next: *mut Node) -> *mut Node {
         let ptr = malloc(sizeof Node) as *mut Node
         ptr^.value = value
         ptr^.next = next
@@ -18,12 +18,12 @@ impl Node {
     }
 
     /// Returns true if this node has a next node.
-    fn has_next(*self): bool {
+    fn has_next(*self) -> bool {
         return self^.next != null
     }
 
     /// Returns the last node in this list.
-    fn tail(*mut self): *mut Node {
+    fn tail(*mut self) -> *mut Node {
         for
             let mut head = self,
             head.has_next(),
@@ -34,7 +34,7 @@ impl Node {
 
     /// Splices the linked list starting at `node` into the location at `index` in this list.
     /// Returns true if and only if the index was in-bounds.
-    fn insert(*mut self, node: *mut Node, index: uint): bool {
+    fn insert(*mut self, node: *mut Node, index: uint) -> bool {
         let mut target = self
         if index > 0 {
             target = self.node_at(index - 1)
@@ -54,7 +54,7 @@ impl Node {
 
     /// Removes the node from the list at the given index and returns it. Returns null
     /// if the index is out of bounds.
-    fn remove(*mut self, index: uint): *mut Node {
+    fn remove(*mut self, index: uint) -> *mut Node {
         let mut target = self
         if index > 0 {
             target = self.node_at(index - 1)
@@ -70,7 +70,7 @@ impl Node {
 
     /// Returns the node at `index` if it is in-bounds. Otherwise,
     /// returns null.
-    fn node_at(*mut self, mut index: uint): *mut Node {
+    fn node_at(*mut self, mut index: uint) -> *mut Node {
         for let mut head = self, index > 0, index -= 1 {
             if head == null {
                 return null
@@ -85,7 +85,7 @@ impl Node {
     /// Return true and the index of the first node containing the
     /// target value, or false and zero if no such value exists in
     /// the list.
-    fn index_of(*self, target: int): {bool, uint} {
+    fn index_of(*self, target: int) -> {bool, uint} {
         let mut i: uint = 0
         for
             let mut head = self,

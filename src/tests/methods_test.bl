@@ -7,11 +7,11 @@ struct T {
 }
 
 impl T {
-    fn get_value(self): int {
+    fn get_value(self) -> int {
         return self.value
     }
 
-    fn new(value: int): T {
+    fn new(value: int) -> T {
         return T{value: value}
     }
 }
@@ -21,17 +21,17 @@ struct Value {
 }
 
 impl Value {
-    fn new(inner: int): Value {
+    fn new(inner: int) -> Value {
         return Value{
             inner: inner
         }
     }
 
-    fn mul(self, v: int): Value {
+    fn mul(self, v: int) -> Value {
         return Value.new(self.inner * v)
     }
 
-    fn add(self, v: int): Value {
+    fn add(self, v: int) -> Value {
         return Value.new(self.inner + v)
     }
 }

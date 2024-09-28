@@ -25,14 +25,14 @@ pub enum ExecStatus {
 }
 
 impl ExecResult {
-    fn new_ok(): ExecResult {
+    fn new_ok() -> ExecResult {
         return ExecResult{
             status: ExecStatus::Ok
             msg: ""
         }
     }
 
-    fn new_err(msg: str): ExecResult {
+    fn new_err(msg: str) -> ExecResult {
         return ExecResult{
             status: ExecStatus::Err
             msg: msg
@@ -42,7 +42,7 @@ impl ExecResult {
 
 impl Machine {
     /// Creates a new machine for executing the given instructions.
-    pub fn new(instructions: List[Instruction]): Machine {
+    pub fn new(instructions: List[Instruction]) -> Machine {
         return Machine{
             memory: [0; mem_size]
             instructions: instructions
@@ -52,7 +52,7 @@ impl Machine {
 
     /// Executes the program associated with the machine and returns a result
     /// indicating whether execution succeeded.
-    pub fn exec_prog(*mut self): ExecResult {
+    pub fn exec_prog(*mut self) -> ExecResult {
         for self^.pc = 0,
             self^.pc < self^.instructions.len(),
             self^.pc += 1
@@ -69,7 +69,7 @@ impl Machine {
 
 
     /// Executes an instruction.
-    fn exec_inst(*mut self, inst: Instruction): ExecResult {
+    fn exec_inst(*mut self, inst: Instruction) -> ExecResult {
         if inst.kind ~~ InstKind::Store {
             print_str("store\n")
             return self.store(inst.operands.(0), inst.operands.(1) as uint)
@@ -94,7 +94,7 @@ impl Machine {
     }
 
     /// Executes a store instruction.
-    fn store(*mut self, value: int, addr: uint): ExecResult {
+    fn store(*mut self, value: int, addr: uint) -> ExecResult {
         if addr >= mem_size {
             return ExecResult.new_err("store address out of bounds")
         }
@@ -104,7 +104,7 @@ impl Machine {
     }
 
     /// Executes a copy instruction.
-    fn copy(*mut self, src_addr: uint, dst_addr: uint): ExecResult {
+    fn copy(*mut self, src_addr: uint, dst_addr: uint) -> ExecResult {
         if src_addr >= mem_size {
             return ExecResult.new_err("copy source address out of bounds")
         }
@@ -118,7 +118,7 @@ impl Machine {
     }
 
     /// Executes an add instruction.
-    fn add(*mut self, src_addr: uint, dst_addr: uint): ExecResult {
+    fn add(*mut self, src_addr: uint, dst_addr: uint) -> ExecResult {
         if src_addr >= mem_size {
             return ExecResult.new_err("add source address out of bounds")
         }
@@ -132,7 +132,7 @@ impl Machine {
     }
 
     /// Executes a jumpif0 instruction.
-    fn jumpif0(*mut self, src_addr: uint, dst_inst: uint): ExecResult {
+    fn jumpif0(*mut self, src_addr: uint, dst_inst: uint) -> ExecResult {
         if src_addr >= mem_size {
             return ExecResult.new_err("jumpif0 source address out of bounds")
         }
@@ -149,7 +149,7 @@ impl Machine {
     }
 
     /// Returns the int in memory at the given index.
-    pub fn memory_at(*self, index: uint): int {
+    pub fn memory_at(*self, index: uint) -> int {
         return self^.memory.(index)
     }
 

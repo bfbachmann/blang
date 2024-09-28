@@ -2,5 +2,5 @@
 /// for equality.
 pub spec Eq {
     /// Returns true if `self` is equal to `other`.
-    fn eq(*self, other: *Self): bool
+    fn eq(*self, other: *Self) -> bool
 }

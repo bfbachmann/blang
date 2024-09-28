@@ -19,7 +19,7 @@ pub struct Table[T] {
 
 impl Table {
     /// Creates a new table with `size` entries.
-    pub fn new(size: uint): Table[T] {
+    pub fn new(size: uint) -> Table[T] {
         if size == 0 {
             return Table[T]{
                 entries: null
@@ -38,7 +38,7 @@ impl Table {
     }
 
     /// Returns the current number of entries in the table.
-    pub fn size(*self): uint {
+    pub fn size(*self) -> uint {
         return self^.size
     }
 
@@ -51,7 +51,7 @@ impl Table {
 
     /// Returns a pointer to the value at index `i` in the table. Returns `null` if the entry
     /// at `i` is empty.
-    pub fn get(*self, i: uint): *T {
+    pub fn get(*self, i: uint) -> *T {
         self.check_bounds(i)
         if self^.entry_status.(i as int)^ != occupied {
             return null
@@ -61,7 +61,7 @@ impl Table {
     }
 
     /// Returns a `*mut` to the entry at index `i`, even if it is not occupied.
-    pub fn get_mut_ptr(*mut self, i: uint): *mut T {
+    pub fn get_mut_ptr(*mut self, i: uint) -> *mut T {
         self.check_bounds(i)
         return self^.entries.(i as int)
     }
@@ -76,19 +76,19 @@ impl Table {
     }
 
     /// Returns `true` if the entry at index `i` is occupied.
-    pub fn entry_is_occupied(*self, i: uint): bool {
+    pub fn entry_is_occupied(*self, i: uint) -> bool {
         self.check_bounds(i)
         return self^.entry_status.(i as int)^ == occupied
     }
 
     /// Returns `true` if the entry at index `i` was deleted.
-    pub fn entry_is_deleted(*self, i: uint): bool {
+    pub fn entry_is_deleted(*self, i: uint) -> bool {
         self.check_bounds(i)
         return self^.entry_status.(i as int)^ == deleted
     }
 
     /// Returns `true` if the entry at index `i` is empty.
-    pub fn entry_is_empty(*self, i: uint): bool {
+    pub fn entry_is_empty(*self, i: uint) -> bool {
         return self^.entry_status.(i as int)^ == empty
     }
 
@@ -115,7 +115,7 @@ impl Table {
 impl Table: Clone {
     /// Clones the table and returns the clone.
     /// The clone is shallow and does not copy entires in the table.
-    fn clone(*self): Table[T] {
+    fn clone(*self) -> Table[T] {
         return Table[T]{
             entries: self^.entries
             size: self^.size

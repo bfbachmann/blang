@@ -4,19 +4,19 @@ use {malloc, free}: "std/libc/mem.bl"
 use {assert}: "src/tests/test_utils.bl"
 
 spec ToStr {
-    fn to_str(*self): str
+    fn to_str(*self) -> str
 }
 
 spec Default {
-    fn default(): Self
+    fn default() -> Self
 }
 
 // Test functions with params that have multiple spec constraints.
-fn get_default_str[T: Default + ToStr](): str {
+fn get_default_str[T: Default + ToStr]() -> str {
     return get_str[T](T.default())
 }
 
-fn get_str[T: ToStr](t: T): str {
+fn get_str[T: ToStr](t: T) -> str {
     return t.to_str()
 }
 
@@ -25,23 +25,23 @@ struct Thing {
 }
 
 impl Thing: Default + ToStr {
-    fn default(): Thing {
+    fn default() -> Thing {
         return Thing{s: "default\0"}
     }
 
-    fn to_str(*self): str {
+    fn to_str(*self) -> str {
         return self^.s
     }
 }
 
 // Test functions with params that have no constraints.
-fn heap[T](t: T): *mut T {
+fn heap[T](t: T) -> *mut T {
     let ptr = heap_alloc[T]()
     ptr^ = t
     return ptr
 }
 
-fn heap_alloc[T](): *mut T {
+fn heap_alloc[T]() -> *mut T {
     return malloc(sizeof T) as *mut T
 }
 
@@ -49,27 +49,27 @@ fn heap_free[T](t: *T) {
     free(t as *u8)
 }
 
-fn double(s: int): int {
+fn double(s: int) -> int {
     return s * 2
 }
 
 // Test functions that have function arguments that contain the function params.
-fn apply[T](f: fn (T): T, t: T): T {
+fn apply[T](f: fn (T) -> T, t: T) -> T {
     return f(t)
 }
 
 // Test functions that have tuple arguments that contain the function params.
-fn get_second[T](tup: {T, T}): T {
+fn get_second[T](tup: {T, T}) -> T {
     return tup.(1)
 }
 
 // Test functions that have pointer arguments that contain the function params.
-fn deref[T](ptr: *int): int {
+fn deref[T](ptr: *int) -> int {
     return ptr^
 }
 
 // Test functions that have array arguments that contain the function params.
-fn nth[T](array: [int; 4], n: uint): int {
+fn nth[T](array: [int; 4], n: uint) -> int {
     return array.(n)
 }
 

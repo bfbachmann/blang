@@ -13,7 +13,7 @@ pub struct List[T: Clone] {
 
 impl List {
     /// Returns a new empty list.
-    pub fn new(): List[T] {
+    pub fn new() -> List[T] {
         return List[T]{
             ptr: null
             len: 0
@@ -22,7 +22,7 @@ impl List {
     }
 
     /// Returns a new list with the given pre-allocated capacity.
-    pub fn with_capacity(cap: uint): List[T] {
+    pub fn with_capacity(cap: uint) -> List[T] {
         return List[T]{
             ptr: heap_alloc[T](cap)
             len: 0
@@ -31,12 +31,12 @@ impl List {
     }
 
     /// Returns the number of elements currently in the list.
-    pub fn len(*self): uint {
+    pub fn len(*self) -> uint {
         return self^.len
     }
 
     /// Returns the current capacity of the list.
-    pub fn capacity(*self): uint {
+    pub fn capacity(*self) -> uint {
         return self^.cap
     }
 
@@ -52,7 +52,7 @@ impl List {
 
     /// Pops removes the last element from the list and returns it. Panics if
     /// the list is empty.
-    pub fn pop(*mut self): T {
+    pub fn pop(*mut self) -> T {
         if self^.len == 0 {
             panic("cannot pop from empty list")
         }
@@ -61,7 +61,7 @@ impl List {
 
     /// Returns a clone of the element at index `i` in the list if `i` is in 
     /// bounds. Panics if `i` is out of bounds.
-    pub fn get(*self, i: uint): T {
+    pub fn get(*self, i: uint) -> T {
         self.check_bounds(i)
         return self^.ptr.(i as int).clone()
     }
@@ -75,7 +75,7 @@ impl List {
 
     /// Removes the element at index `i` from the list and returns it. Panics if
     /// `i` is out of bounds.
-    pub fn remove(*mut self, i: uint): T {
+    pub fn remove(*mut self, i: uint) -> T {
         self.check_bounds(i)
         let t = self^.ptr.(i as int).clone()
 
@@ -100,12 +100,12 @@ impl List {
     }
 
     /// Returns true if the list has no elements.
-    pub fn is_empty(*self): bool {
+    pub fn is_empty(*self) -> bool {
         return self^.len > 0
     }
 
     /// Returns true if the list is full.
-    fn is_full(*self): bool {
+    fn is_full(*self) -> bool {
         return self^.len == self^.cap
     }
 

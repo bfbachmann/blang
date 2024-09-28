@@ -7,12 +7,12 @@ struct Thing {}
 
 // Make sure we can implement the imported spec.
 impl Thing: Test {
-    fn test(): int {
+    fn test() -> int {
         return 784
     }
 }
 
-fn call_test[T: Test](): int {
+fn call_test[T: Test]() -> int {
     return T.test()
 }
 

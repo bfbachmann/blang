@@ -184,7 +184,7 @@ mod tests {
     #[test]
     fn simple_return() {
         let raw = r#"
-            fn thing(): bool {
+            fn thing() -> bool {
                 let b = true
                 return b
             }
@@ -197,7 +197,7 @@ mod tests {
     #[test]
     fn return_in_conditional() {
         let raw = r#"
-            fn thing(a: i64): bool {
+            fn thing(a: i64) -> bool {
                 let mut a = a * 2
                 if a > 10 {
                     return true
@@ -216,7 +216,7 @@ mod tests {
     #[test]
     fn missing_return_in_conditional() {
         let raw = r#"
-            fn thing(a: i64): bool {
+            fn thing(a: i64) -> bool {
                 let mut mut_a = a * 2
                 if mut_a > 10 {
                     return true
@@ -245,7 +245,7 @@ mod tests {
     #[test]
     fn non_exhaustive_conditional() {
         let raw = r#"
-            fn thing(a: i64): bool {
+            fn thing(a: i64) -> bool {
                 let mut mut_a = a * 2
                 if mut_a > 10 {
                     return true
@@ -272,7 +272,7 @@ mod tests {
     #[test]
     fn conditional_with_loop() {
         let raw = r#"
-            fn thing(a: i64): bool {
+            fn thing(a: i64) -> bool {
                 let mut mut_a = a * 2
                 if mut_a > 10 {
                     return true
@@ -296,7 +296,7 @@ mod tests {
     #[test]
     fn conditional_with_closure() {
         let raw = r#"
-            fn thing(a: i64): bool {
+            fn thing(a: i64) -> bool {
                 let mut mut_a = a * 2
                 if a > 10 {
                     return true
@@ -327,7 +327,7 @@ mod tests {
     #[test]
     fn loop_with_return() {
         let raw = r#"
-            fn thing(a: i64): bool {
+            fn thing(a: i64) -> bool {
                 loop {
                     return true
                 }
@@ -341,7 +341,7 @@ mod tests {
     #[test]
     fn loop_with_return_in_cond() {
         let raw = r#"
-            fn thing(a: i64): bool {
+            fn thing(a: i64) -> bool {
                 loop {
                     if a == 1 {
                         return true
@@ -357,7 +357,7 @@ mod tests {
     #[test]
     fn loop_with_return_in_closure() {
         let raw = r#"
-            fn thing(a: i64): bool {
+            fn thing(a: i64) -> bool {
                 loop {
                     loop {
                         if a == 1 {
@@ -375,7 +375,7 @@ mod tests {
     #[test]
     fn loop_with_continue() {
         let raw = r#"
-            fn thing(a: i64): bool {
+            fn thing(a: i64) -> bool {
                 let mut mut_a = a
                 loop {
                     mut_a = mut_a - 1
@@ -394,7 +394,7 @@ mod tests {
     #[test]
     fn statements_following_return() {
         let raw = r#"
-            fn thing(a: i64): bool {
+            fn thing(a: i64) -> bool {
                 return true
                 a = 2
                 return false
@@ -433,7 +433,7 @@ mod tests {
     #[test]
     fn loop_with_return_and_break() {
         let raw = r#"
-            fn thing(a: i64): bool {
+            fn thing(a: i64) -> bool {
                 loop {
                     loop {
                         if a == 1 {

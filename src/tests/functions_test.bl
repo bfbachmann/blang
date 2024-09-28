@@ -3,9 +3,9 @@ use {exit}: "std/libc/proc.bl"
 use {assert}: "src/tests/test_utils.bl"
 
 // Check that we can link with a custom symbol name.
-extern "strtol" fn atoi(s: *u8, end: *mut *u8, base: int): int
+extern "strtol" fn atoi(s: *u8, end: *mut *u8, base: int) -> int
 
-fn cumulative_sum(n: i64): i64 {
+fn cumulative_sum(n: i64) -> i64 {
     let mut result: i64 = 0
     for let mut i = n, i > 0, i -= 1 {
         result = result + i
@@ -14,34 +14,34 @@ fn cumulative_sum(n: i64): i64 {
     return result
 }
 
-fn fib(n: i64): i64 {
+fn fib(n: i64) -> i64 {
     if n <= 2 { 
         return 1
     }
     return fib(n-1) + fib(n-2)
 }
 
-fn run_fn_with_arg(f: fn (i64): i64, arg: i64): i64 {
+fn run_fn_with_arg(f: fn (i64) -> i64, arg: i64) -> i64 {
     return f(arg)
 }
 
-fn double(i: i64): i64 {
+fn double(i: i64) -> i64 {
     return i * 2
 }
 
 struct CalcTask {
-    f: fn (i64): i64
+    f: fn (i64) -> i64
     arg: i64
 }
 
 impl CalcTask {
-    fn run(self): i64 {
+    fn run(self) -> i64 {
         return self.f(self.arg)
     }
 }
 
-fn get_sum_fn(): fn (int, int): int {
-    fn sum(a: int, b: int): int {
+fn get_sum_fn() -> fn (int, int) -> int {
+    fn sum(a: int, b: int) -> int {
         return a + b
     }
 
@@ -83,15 +83,15 @@ fn main() {
 
     // Check that anonymous functions work.
     {
-        let f = fn (): int {
-            fn get_43(): int {
+        let f = fn () -> int {
+            fn get_43() -> int {
                 return 43
             }
             return get_43() - 1
         }
         assert(f() == 42, "expected anon fn to return 42")
         assert(
-            fn (i: int): int {
+            fn (i: int) -> int {
                 return i * 2
             }(-3) == -6,
             "expected inline anonymous function call to return -6",

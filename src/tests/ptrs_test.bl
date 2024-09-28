@@ -148,13 +148,13 @@ fn take(ptr: *u64) {
     assert(ptr^ == 223, "4")
 }
 
-fn take_t(t: *T): T {
+fn take_t(t: *T) -> T {
     return T{
         i: t^.i
         b: t^.b
     }
 }
 
-fn take_tuple(tup: *{int}): int {
+fn take_tuple(tup: *{int}) -> int {
     return tup^.(0)
 }

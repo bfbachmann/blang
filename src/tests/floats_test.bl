@@ -29,7 +29,7 @@ fn main() {
     // Check that float types can be used as function args and return types.
     // Also check that float arithmetic works
     {
-        fn calc(a: f64, b: f64, c: f64, d: f64): f64 {
+        fn calc(a: f64, b: f64, c: f64, d: f64) -> f64 {
             return a * b - c / d
         }
 

@@ -205,7 +205,7 @@ impl<'ctx> TypeConverter<'ctx> {
         // return value and will point to a location in memory (the caller's stack) to write
         // the structured return value. For example, if the function signature looks like this
         //
-        //      fn new_person(): Person
+        //      fn new_person() -> Person
         //
         // then the signature of the compiled function will essentially look like this
         //

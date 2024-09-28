@@ -67,7 +67,7 @@ impl fmt::Display for AFnSig {
         }
 
         if let Some(typ) = &self.maybe_ret_type_key {
-            write!(f, "): {}", typ)
+            write!(f, ") -> {}", typ)
         } else {
             write!(f, ")")
         }

@@ -48,7 +48,7 @@ mod tests {
                 let prefix = "Fibonacci number " + itoa(i) + " is: "
                 let result = fib(
                     i,
-                    fn (n: int): bool {
+                    fn (n: int) -> bool {
                         print("fib visitor sees n=" + itoa(n))
                         return n % 2 == 0
                     },
@@ -63,7 +63,7 @@ mod tests {
         }
 
         // Calls `visitor_fn` with n and returns the n'th Fibonacci number.
-        fn fib(n: int, visitor_fn: fn (int): bool): int {
+        fn fib(n: int, visitor_fn: fn (int) -> bool) -> int {
             if visitor_fn(n) {
                 print("visitor returned true")
             }
@@ -131,7 +131,7 @@ mod tests {
 
     #[test]
     fn parse_function_declaration() {
-        let tokens = tokenize(r#"fn my_fn(arg1: str, arg2: i64): str { let s = "hello world!"; }"#);
+        let tokens = tokenize(r#"fn my_fn(arg1: str, arg2: i64) -> str { let s = "hello world!"; }"#);
         let result = Function::from(&mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
@@ -173,13 +173,13 @@ mod tests {
                     Some(Type::Unresolved(UnresolvedType::new(
                         "str",
                         Span {
-                            start_pos: Position::new(1, 33),
-                            end_pos: Position::new(1, 36)
+                            start_pos: Position::new(1, 35),
+                            end_pos: Position::new(1, 38)
                         }
                     ))),
                     Span {
                         start_pos: Position::new(1, 1),
-                        end_pos: Position::new(1, 31),
+                        end_pos: Position::new(1, 38),
                     }
                 ),
                 Closure::new(
@@ -190,25 +190,25 @@ mod tests {
                         Expression::StrLiteral(StrLit {
                             value: "hello world!".to_string(),
                             span: Span {
-                                start_pos: Position::new(1, 47),
-                                end_pos: Position::new(1, 61),
+                                start_pos: Position::new(1, 49),
+                                end_pos: Position::new(1, 63),
                             }
                         }),
                         Span {
-                            start_pos: Position::new(1, 39),
-                            end_pos: Position::new(1, 61),
+                            start_pos: Position::new(1, 41),
+                            end_pos: Position::new(1, 63),
                         }
                     ))],
                     Span {
-                        start_pos: Position::new(1, 37),
-                        end_pos: Position::new(1, 64),
+                        start_pos: Position::new(1, 39),
+                        end_pos: Position::new(1, 66),
                     }
                 ),
                 false
             )
         );
 
-        let tokens = tokenize("fn bigboi(f: fn (str, i64): bool, i: i64): fn (bool): str {}");
+        let tokens = tokenize("fn bigboi(f: fn (str, i64) -> bool, i: i64) -> fn (bool) -> str {}");
         let result = Function::from(&mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
@@ -254,19 +254,19 @@ mod tests {
                                 Some(Type::Unresolved(UnresolvedType::new(
                                     "bool",
                                     Span {
-                                        start_pos: Position::new(1, 29),
-                                        end_pos: Position::new(1, 33)
+                                        start_pos: Position::new(1, 31),
+                                        end_pos: Position::new(1, 35)
                                     }
                                 ))),
                                 Span {
                                     start_pos: Position::new(1, 14),
-                                    end_pos: Position::new(1, 33),
+                                    end_pos: Position::new(1, 35),
                                 }
                             ))),
                             false,
                             Span {
                                 start_pos: Position::new(1, 11),
-                                end_pos: Position::new(1, 33),
+                                end_pos: Position::new(1, 35),
                             }
                         ),
                         Argument::new(
@@ -274,14 +274,14 @@ mod tests {
                             Type::Unresolved(UnresolvedType::new(
                                 "i64",
                                 Span {
-                                    start_pos: Position::new(1, 38),
-                                    end_pos: Position::new(1, 41)
+                                    start_pos: Position::new(1, 40),
+                                    end_pos: Position::new(1, 43)
                                 }
                             )),
                             false,
                             Span {
-                                start_pos: Position::new(1, 35),
-                                end_pos: Position::new(1, 41)
+                                start_pos: Position::new(1, 37),
+                                end_pos: Position::new(1, 43)
                             }
                         )
                     ],
@@ -291,38 +291,38 @@ mod tests {
                             Type::Unresolved(UnresolvedType::new(
                                 "bool",
                                 Span {
-                                    start_pos: Position::new(1, 48),
-                                    end_pos: Position::new(1, 52)
+                                    start_pos: Position::new(1, 52),
+                                    end_pos: Position::new(1, 56)
                                 }
                             )),
                             false,
                             Span {
-                                start_pos: Position::new(1, 48),
-                                end_pos: Position::new(1, 52)
+                                start_pos: Position::new(1, 52),
+                                end_pos: Position::new(1, 56)
                             }
                         )],
                         Some(Type::Unresolved(UnresolvedType::new(
                             "str",
                             Span {
-                                start_pos: Position::new(1, 55),
-                                end_pos: Position::new(1, 58)
+                                start_pos: Position::new(1, 61),
+                                end_pos: Position::new(1, 64)
                             }
                         ))),
                         Span {
-                            start_pos: Position::new(1, 44),
-                            end_pos: Position::new(1, 58),
+                            start_pos: Position::new(1, 48),
+                            end_pos: Position::new(1, 64),
                         }
                     )))),
                     Span {
                         start_pos: Position::new(1, 1),
-                        end_pos: Position::new(1, 58),
+                        end_pos: Position::new(1, 64),
                     }
                 ),
                 Closure::new(
                     vec![],
                     Span {
-                        start_pos: Position::new(1, 59),
-                        end_pos: Position::new(1, 61)
+                        start_pos: Position::new(1, 65),
+                        end_pos: Position::new(1, 67)
                     }
                 ),
                 false
@@ -574,7 +574,7 @@ mod tests {
 
     #[test]
     fn missing_fn_closing_brace() {
-        let raw = r#"fn thing(): i64 {
+        let raw = r#"fn thing() -> i64 {
             return 4 / 2 + 8
         "#;
         let tokens = lex(raw).expect("should not error");

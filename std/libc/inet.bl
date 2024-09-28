@@ -1,2 +1,2 @@
-pub extern fn inet_addr(cp: *u8): u32
-pub extern fn htons(hostshort: u16): u16
+pub extern fn inet_addr(cp: *u8) -> u32
+pub extern fn htons(hostshort: u16) -> u16

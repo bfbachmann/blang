@@ -9,7 +9,7 @@ struct S {
 }
 
 impl S {
-    fn new(): S {
+    fn new() -> S {
         return S{i: 0, b: false, s: ""}
     }
 }
@@ -27,11 +27,11 @@ enum OptionalI64 {
 }
 
 impl OptionalI64 {
-    fn new_some(i: i64): OptionalI64 {
+    fn new_some(i: i64) -> OptionalI64 {
         return OptionalI64::Some(i)
     }
 
-    fn new_none(): OptionalI64 {
+    fn new_none() -> OptionalI64 {
         return OptionalI64::None
     }
 }

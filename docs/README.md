@@ -46,7 +46,7 @@ A regular function can be defined as follows.
 
 ```
 /// This function takes an unsigned integer `n` and returns the nth number in the Fibonnaci sequence.
-fn fibonacci(n: u64): u64 {
+fn fibonacci(n: u64) -> u64 {
     if n <= 1 {
         return 1
     }
@@ -58,8 +58,8 @@ fn fibonacci(n: u64): u64 {
 Functions can be nested.
 
 ```
-fn call_nested(): int {
-    fn sum(a: int, b: int): int {
+fn call_nested() -> int {
+    fn sum(a: int, b: int) -> int {
         return a + b
     }
 
@@ -76,8 +76,8 @@ fn main() {
 }
 
 // This function returns a function pointer.
-fn get_fn(): fn (int, int): int {
-    fn sum(a: int, b: int): int {
+fn get_fn() -> fn (int, int) -> int {
+    fn sum(a: int, b: int) -> int {
         return a + b
     }
 
@@ -107,7 +107,7 @@ Variables declared this way are always either stack-allocated or inlined dependi
 By default, all variables are immutable. To declare a mutable variable, use the `mut` modifier.
 
 ```
-fn calculate(n: u64, double: bool, max: u64): u64 {
+fn calculate(n: u64, double: bool, max: u64) -> u64 {
     let mut result = n
     if double {
         result = result * 2
@@ -132,7 +132,7 @@ const hours_in_day = 24
 const days_in_year = 365
 const seasons = ["Spring", "Summer", "Autumn", "Winter"]
 
-fn is_bad_day(day_in_month: int): bool {
+fn is_bad_day(day_in_month: int) -> bool {
     const bad_day = 13
     return day_in_month == bad_day
 }
@@ -280,7 +280,7 @@ struct User {
 
 impl User {
     // Creates a new user with the given username and age.
-    fn new(username: str, age: u64): User {
+    fn new(username: str, age: u64) -> User {
         return User{
             username: username
             age: age
@@ -288,12 +288,12 @@ impl User {
     }
 
     // Returns a copy of this user with the new username.
-    fn with_username(self, new_username: str): User {
+    fn with_username(self, new_username: str) -> User {
         // This is a call to a class method.
         return User.new(new_username, self .age)
     }
 
-    fn is_senior(*self): bool {
+    fn is_senior(*self) -> bool {
         return self^.age
     }
 }
@@ -320,7 +320,7 @@ enum Cmp {
     LessThan,
 }
 
-fn compare(a: i64, b: i64): Cmp {
+fn compare(a: i64, b: i64) -> Cmp {
     if a > b {
         return Cmp::GreaterThan
     } elsif a < b {
@@ -433,7 +433,7 @@ Externs can also be declared with custom names to link against. For example, to 
 a function `str_to_int` and have it link against `strtol`:
 
 ```
-extern "strtol" fn str_to_int(start: *u8, end: *mut *u8, base: int): int
+extern "strtol" fn str_to_int(start: *u8, end: *mut *u8, base: int) -> int
 ```
 
 ### Imports: `use`
@@ -450,7 +450,7 @@ Whole modules can also be imported with aliases and used as follows.
 ```
 use mem: "std/libc/mem.bl"
 
-fn clone_bytes(src: *u8, len: uint): *mut u8 {
+fn clone_bytes(src: *u8, len: uint) -> *mut u8 {
     // Use the `malloc` function from the `mem` module.
     let dst = @mem.malloc(len)
     

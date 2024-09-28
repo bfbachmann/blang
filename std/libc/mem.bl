@@ -1,6 +1,6 @@
-pub extern fn memcpy(dst: *u8, src: *u8, n_bytes: uint): *mut u8
-pub extern fn memmove(dst: *u8, src: *u8, n_bytes: uint): *mut u8
-pub extern fn malloc(nbytes: uint): *mut u8
-pub extern fn calloc(count: uint, size: uint): *mut u8
-pub extern fn realloc(src: *u8, size: uint): *mut u8
+pub extern fn memcpy(dst: *u8, src: *u8, n_bytes: uint) -> *mut u8
+pub extern fn memmove(dst: *u8, src: *u8, n_bytes: uint) -> *mut u8
+pub extern fn malloc(nbytes: uint) -> *mut u8
+pub extern fn calloc(count: uint, size: uint) -> *mut u8
+pub extern fn realloc(src: *u8, size: uint) -> *mut u8
 pub extern fn free(ptr: *u8)

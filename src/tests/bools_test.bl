@@ -58,7 +58,7 @@ fn main() {
     exit(0)
 }
 
-fn fail(): bool {
+fn fail() -> bool {
     assert(false, "aborting")
     return false
 }

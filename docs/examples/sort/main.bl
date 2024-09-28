@@ -28,7 +28,7 @@ struct Value {
 }
 
 impl Value: Order + Clone {
-    fn compare(*self, other: *Value): Ord {
+    fn compare(*self, other: *Value) -> Ord {
         if self^.v > other^.v {
             return Ord::Greater
         } elsif self^.v < other^.v {
@@ -37,13 +37,13 @@ impl Value: Order + Clone {
         return Ord::Equal
     }
 
-    fn clone(*self): Value {
+    fn clone(*self) -> Value {
         return Value{v: self^.v}
     }
 }
 
 /// Returns true only if the list is sorted in ascending order.
-fn is_sorted[T: Order + Clone](list: *List[T]): bool {
+fn is_sorted[T: Order + Clone](list: *List[T]) -> bool {
     for let mut i = 0uint, i < list.len() - 1, i += 1 {
         let ival = list.get(i)
         let jval = list.get(i + 1)
@@ -72,7 +72,7 @@ fn sort[T: Order + Clone](list: *mut List[T]) {
 }
 
 /// Finds the minimum value from the `start` index to the end of the list (inclusive).
-fn find_min[T: Order + Clone](list: *List[T], start: uint): {uint, T} {
+fn find_min[T: Order + Clone](list: *List[T], start: uint) -> {uint, T} {
     let mut min_value = list.get(start)
     let mut min_index = start
 

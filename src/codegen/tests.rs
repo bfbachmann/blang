@@ -42,16 +42,16 @@ mod tests {
                 str_stuff("test")
             }
 
-            fn thing(b: bool): bool {
+            fn thing(b: bool) -> bool {
                 let a = true
                 return !a or b
             }
 
-            fn other(a: i64, b: i64): i64 {
+            fn other(a: i64, b: i64) -> i64 {
                 return a * b + a / 2 - 1
             }
 
-            fn fib(n: i64): i64 {
+            fn fib(n: i64) -> i64 {
                 if n < 2 {
                     return 1
                 }
@@ -59,7 +59,7 @@ mod tests {
                 return fib(n-1) + fib(n-2)
             }
 
-            fn do_thing(a: i64): i64 {
+            fn do_thing(a: i64) -> i64 {
                 let mut result = 5
                 let mut mut_a = a
                 loop {
@@ -79,7 +79,7 @@ mod tests {
                 }
             }
 
-            fn cum_sum(n: i64): i64 {
+            fn cum_sum(n: i64) -> i64 {
                 let mut i = 1
                 let mut result = 0
                 loop {
@@ -94,7 +94,7 @@ mod tests {
                 }
             }
 
-            fn str_stuff(s: str): str {
+            fn str_stuff(s: str) -> str {
                 return "test"
             }
         "#,
@@ -108,10 +108,10 @@ mod tests {
             struct Person {
                 name: str,
                 age: i64,
-                do_thing: fn(str): i64,
+                do_thing: fn(str) -> i64,
             }
 
-            fn new_person(name: str, age: i64): Person {
+            fn new_person(name: str, age: i64) -> Person {
                 return Person{
                     name: name,
                     age: age,
@@ -119,7 +119,7 @@ mod tests {
                 }
             }
 
-            fn test(s: str): i64 {
+            fn test(s: str) -> i64 {
                 return 1
             }
 
@@ -144,7 +144,7 @@ mod tests {
                 age: i64,
             }
 
-            fn is_old(p: Person): bool {
+            fn is_old(p: Person) -> bool {
                 let p = Person{age: 100}
                 return false
             }
@@ -184,7 +184,7 @@ mod tests {
 
             fn do_thing(a: A) {}
 
-            fn new_a(count: i64): A {
+            fn new_a(count: i64) -> A {
                 return A {
                     count: count,
                     f: do_thing,
@@ -215,8 +215,8 @@ mod tests {
                 inner: int
             }
             impl Value {
-                fn add(self, v: i64): Value { return Value{inner: self.inner + v } }
-                fn sub(self, v: i64): Value { return Value{inner: self.inner - v } }
+                fn add(self, v: i64) -> Value { return Value{inner: self.inner + v } }
+                fn sub(self, v: i64) -> Value { return Value{inner: self.inner - v } }
             }
             fn main() {
                 let i = Value{inner: 1i64}
@@ -262,10 +262,10 @@ mod tests {
     fn function_generic_using_specs() {
         assert_compiles(
             r#"
-            extern fn write(fd: i64, msg: str, len: i64): i64
+            extern fn write(fd: i64, msg: str, len: i64) -> i64
 
             spec Task {
-                fn run(self): bool
+                fn run(self) -> bool
             }
 
             struct PrintTask {
@@ -273,13 +273,13 @@ mod tests {
             }
 
             impl PrintTask: Task {
-                fn run(self): bool {
+                fn run(self) -> bool {
                     write(1, self.msg, 100)
                     return true
                 }
             }
 
-            fn run_task[T: Task](task: T): bool {
+            fn run_task[T: Task](task: T) -> bool {
                 return task.run()
             }
 
@@ -304,35 +304,35 @@ mod tests {
             }
 
             struct Calculator {
-                calc_fn: fn (i64, i64): i64
+                calc_fn: fn (i64, i64) -> i64
                 accumulator: i64
             }
 
             impl Calculator {
-                fn new(f: fn (i64, i64): i64): Calculator {
+                fn new(f: fn (i64, i64) -> i64) -> Calculator {
                     return Calculator{
                         calc_fn: f
                         accumulator: 0
                     }
                 }
 
-                fn update(mut self, value: i64): Calculator {
+                fn update(mut self, value: i64) -> Calculator {
                     let func = self.calc_fn
                     self.accumulator = func(self.accumulator, value)
                     return self
                 }
 
-                fn with_calc_fn(mut self, f: fn (i64, i64): i64): Calculator {
+                fn with_calc_fn(mut self, f: fn (i64, i64) -> i64) -> Calculator {
                     self.calc_fn = f
                     return self
                 }
             }
 
-            fn add(a: i64, b: i64): i64 {
+            fn add(a: i64, b: i64) -> i64 {
                 return a + b
             }
 
-            fn mul(a: i64, b: i64): i64 {
+            fn mul(a: i64, b: i64) -> i64 {
                 return a * b
             }
 
@@ -371,10 +371,10 @@ mod tests {
         assert_compiles(
             r#"
             spec Default {
-                fn default(): Self
+                fn default() -> Self
             }
 
-            fn default[T: Default](): T {
+            fn default[T: Default]() -> T {
                 return T.default()
             }
 
@@ -383,7 +383,7 @@ mod tests {
             }
 
             impl Thing: Default {
-                fn default(): Thing {
+                fn default() -> Thing {
                     return Thing{value: 0}
                 }
             }
@@ -393,7 +393,7 @@ mod tests {
             }
 
             impl MyStruct: Default {
-                fn default(): MyStruct {
+                fn default() -> MyStruct {
                     return MyStruct{
                         thing: default[Thing]()
                     }
@@ -411,11 +411,11 @@ mod tests {
     fn param_fn_used_as_var() {
         assert_compiles(
             r#"
-            fn apply[T](f: fn (T): T, arg: T): T {
+            fn apply[T](f: fn (T) -> T, arg: T) -> T {
                 return f(arg)
             }
 
-            fn double(v: i64): i64 {
+            fn double(v: i64) -> i64 {
                 return v * 2
             }
 

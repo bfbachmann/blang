@@ -1,9 +1,9 @@
-pub extern fn puts(msg: str): uint
-pub extern fn read(fd: uint, buf: *u8, size: uint): int
+pub extern fn puts(msg: str) -> uint
+pub extern fn read(fd: uint, buf: *u8, size: uint) -> int
 pub extern fn fflush(fd: uint)
-pub extern fn write(fd: uint, ptr: *u8, nbytes: uint): int
-pub extern fn lseek(fd: uint, offset: i64, whence: int): i64
-pub extern fn close(fd: int): int
+pub extern fn write(fd: uint, ptr: *u8, nbytes: uint) -> int
+pub extern fn lseek(fd: uint, offset: i64, whence: int) -> i64
+pub extern fn close(fd: int) -> int
 
 pub const stdin: uint = 0
 pub const stdout: uint = 1

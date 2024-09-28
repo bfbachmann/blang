@@ -8,7 +8,7 @@ pub struct String {
 
 impl String {
     /// Creates a new `String` from the given `str`.
-    pub fn from_str(s: str): String {
+    pub fn from_str(s: str) -> String {
         let ptr = @mem.malloc(s.len())
         @mem.memcpy(ptr, s as *u8, s.len())
         return String{
@@ -18,7 +18,7 @@ impl String {
     }
 
     /// Creates a new `String` from the concatenation of `first` and `second`.
-    pub fn concat(first: *String, second: *String): String {
+    pub fn concat(first: *String, second: *String) -> String {
         let new_len = first^.len + second^.len
         let ptr = @mem.malloc(new_len)
 
@@ -32,12 +32,12 @@ impl String {
     }
 
     /// Returns a pointer to the bytes in the string.
-    pub fn ptr(*self): *u8 {
+    pub fn ptr(*self) -> *u8 {
         return self^.ptr
     }
 
     /// Returns the length of the string in bytes.
-    pub fn len(*self): uint {
+    pub fn len(*self) -> uint {
         return self^.len
     }
 

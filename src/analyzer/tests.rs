@@ -164,7 +164,7 @@ mod tests {
     fn invalid_main_defs() {
         for code in [
             r#"fn main(a: int) {}"#,
-            r#"fn main(): int { return 0 }"#,
+            r#"fn main() -> int { return 0 }"#,
             r#"fn main[T]() {}"#,
         ] {
             let result = analyze(code);
@@ -182,7 +182,7 @@ mod tests {
 
                     let result = fib(
                         i,
-                        fn (n: int): bool {
+                        fn (n: int) -> bool {
                             print(str_concat("fib visitor sees n=", itoa(n)))
                             return n % 2 == 0
                         },
@@ -203,7 +203,7 @@ mod tests {
             }
 
             // Calls `visitor_fn` with n and returns the n'th Fibonacci number.
-            fn fib(n: int, visitor_fn: fn (int): bool): int {
+            fn fib(n: int, visitor_fn: fn (int) -> bool) -> int {
                 if visitor_fn(n) {
                     print("visitor returned true")
                 }
@@ -215,11 +215,11 @@ mod tests {
 
             fn print(s: str) {}
 
-            fn str_concat(a: str, b: str): str {
+            fn str_concat(a: str, b: str) -> str {
                 return a
             }
 
-            fn itoa(i: int): str {
+            fn itoa(i: int) -> str {
                 return "fake"
             }
 
@@ -253,7 +253,7 @@ mod tests {
             struct Inner {
                 count: i64,
                 msg: str,
-                get_person: fn (str): Person,
+                get_person: fn (str) -> Person,
                 thing: Thing,
             }
 
@@ -264,7 +264,7 @@ mod tests {
 
             struct Empty {}
 
-            fn get_person(name: str): Person {
+            fn get_person(name: str) -> Person {
                 return Person{
                     name: "dave",
                     age: 43,
@@ -342,7 +342,7 @@ mod tests {
                 do_thing()
             }
 
-            fn do_thing(): bool {
+            fn do_thing() -> bool {
                 return true
                 let a = 1
             }
@@ -382,14 +382,14 @@ mod tests {
             r#"
            struct Thing {
                i: i64,
-               func: fn (i64, i64): bool,
+               func: fn (i64, i64) -> bool,
            }
 
-           fn eq(a: i64, b: i64): bool {
+           fn eq(a: i64, b: i64) -> bool {
                return a == b
            }
 
-           fn neq(a: i64, b: i64): bool {
+           fn neq(a: i64, b: i64) -> bool {
                return !eq(a, b)
            }
 
@@ -787,7 +787,7 @@ mod tests {
             }
 
             impl T {
-                fn get_value(self): i64 {
+                fn get_value(self) -> i64 {
                     return self.value
                 }
             }
@@ -1084,9 +1084,9 @@ mod tests {
             }
 
             impl Value {
-                fn new(inner: i64): Value { return Value{inner: inner} }
+                fn new(inner: i64) -> Value { return Value{inner: inner} }
 
-                fn add(self, v: i64): i64 { return self.inner + v }
+                fn add(self, v: i64) -> i64 { return self.inner + v }
             }
 
             struct Thing {
@@ -1094,7 +1094,7 @@ mod tests {
             }
 
             impl Thing {
-                fn new(i: i64): Thing {
+                fn new(i: i64) -> Thing {
                     return Thing{
                         i: i
                     }
@@ -1118,9 +1118,9 @@ mod tests {
             }
 
             impl Value {
-                fn new(inner: i64): Value { return Value{inner: inner} }
+                fn new(inner: i64) -> Value { return Value{inner: inner} }
 
-                fn add(self, v: i64): i64 { return self.inner + v }
+                fn add(self, v: i64) -> i64 { return self.inner + v }
             }
 
             struct Thing {
@@ -1128,7 +1128,7 @@ mod tests {
             }
 
             impl Thing {
-                fn new(i: i64): Thing {
+                fn new(i: i64) -> Thing {
                     return Thing{
                         i: i
                     }
@@ -1215,7 +1215,7 @@ mod tests {
     fn illegal_move_in_array_index() {
         let result = analyze(
             r#"
-            fn take(array: [int; 2]): uint {
+            fn take(array: [int; 2]) -> uint {
                 return 1
             }
 
@@ -1547,7 +1547,7 @@ mod tests {
                 fn main() {
                     let x = 1
 
-                    fn illegal(): int {
+                    fn illegal() -> int {
                         return x
                     }
                 }
@@ -1893,7 +1893,7 @@ mod tests {
     fn missing_return_in_loop() {
         let result = analyze(
             r#"
-                fn thing(): int {
+                fn thing() -> int {
                     loop {
                         if false {
                             return 1
@@ -1913,7 +1913,7 @@ mod tests {
     fn missing_return_in_for_loop() {
         let result = analyze(
             r#"
-                fn thing(): int {
+                fn thing() -> int {
                     for let mut i = 0, i < 10, i += 1 {
                         return 1
                     }
@@ -2039,7 +2039,7 @@ mod tests {
                     }
         
                     impl Thing {
-                        fn new(): Thing {
+                        fn new() -> Thing {
                             return Thing{priv_field: 0}
                         }
                     }

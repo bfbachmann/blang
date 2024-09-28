@@ -13,14 +13,14 @@ struct Key {
 }
 
 impl Key: Serialize + Eq {
-    fn serialize(*self): {*u8, uint} {
+    fn serialize(*self) -> {*u8, uint} {
         let len = self^.s.len()
         let ptr = heap_alloc[u8](len)
         memcpy(ptr, self^.s as *u8, len)
         return {ptr, len}
     }
 
-    fn eq(*self, other: *Self): bool {
+    fn eq(*self, other: *Self) -> bool {
         return self^.s == other^.s
     }
 }

@@ -1,8 +1,8 @@
-pub extern fn socket(domain: int, type: int, protocol: int): int
-pub extern fn bind(sockfd: int, addr: *SockAddrIn, addrlen: u32): int
-pub extern fn listen(sockfd: int, backlog: int): int
-pub extern fn accept(sockfd: int, addr: *SockAddrIn, addrlen: *u32): int
-pub extern fn shutdown(sockfd: int, how: int): int
+pub extern fn socket(domain: int, type: int, protocol: int) -> int
+pub extern fn bind(sockfd: int, addr: *SockAddrIn, addrlen: u32) -> int
+pub extern fn listen(sockfd: int, backlog: int) -> int
+pub extern fn accept(sockfd: int, addr: *SockAddrIn, addrlen: *u32) -> int
+pub extern fn shutdown(sockfd: int, how: int) -> int
 
 pub struct SockAddrIn {
     pub family: u16

@@ -5,7 +5,7 @@ use {Eq}: "std/specs/eq.bl"
 use {Hasher}: "std/specs/hasher.bl"
 
 pub spec Serialize {
-    fn serialize(*self): {*u8, uint}
+    fn serialize(*self) -> {*u8, uint}
 }
 
 /// A mapping from a key to its value.
@@ -15,7 +15,7 @@ struct Mapping[K, V] {
 }
 
 impl Mapping {
-    fn new(k: K, v: V): Mapping[K, V] {
+    fn new(k: K, v: V) -> Mapping[K, V] {
         return Mapping[K, V]{
             key: k
             value: v
@@ -32,12 +32,12 @@ pub struct HashMap[K: Serialize + Eq, V, H: Hasher] {
 
 impl HashMap {
     /// Creates a new empty map that uses the djb2 hasher.
-    pub fn new(): HashMap[K, V, H] {
+    pub fn new() -> HashMap[K, V, H] {
         return HashMap[K, V, H].new_with_hasher(H.new())
     }
 
     /// Creates a new empty map that uses the given hasher.
-    pub fn new_with_hasher(hasher: H): HashMap[K, V, H] {
+    pub fn new_with_hasher(hasher: H) -> HashMap[K, V, H] {
         return HashMap[K, V, H]{
             table: Table[Mapping[K, V]].new(0)
             num_allocated: 0
@@ -72,7 +72,7 @@ impl HashMap {
 
     /// Returns a pointer to the value that is mapped to the given key, or null
     /// if the key is not in the map.
-    pub fn get(*mut self, k: *K): *V {
+    pub fn get(*mut self, k: *K) -> *V {
         let size = self^.table.size()
         let hash = self.hash_key(k)
         for let mut count: uint = 0, count < size, count += 1 {
@@ -119,7 +119,7 @@ impl HashMap {
     }
 
     /// Returns the hash of the given key.
-    fn hash_key(*mut self, k: *K): uint {
+    fn hash_key(*mut self, k: *K) -> uint {
         let serialization = k.serialize()
         let key_bytes = serialization.(0)
         let key_len = serialization.(1)
@@ -133,7 +133,7 @@ impl HashMap {
     /// If `find_occupied` is `false`, tries to find the index of the entry into which `k`
     /// should be inserted.
     /// This function uses quadratic probing. Returns `{0, false}` if no entry was found.
-    fn get_entry_index(*mut self, k: *K, find_occupied: bool): {uint, bool} {
+    fn get_entry_index(*mut self, k: *K, find_occupied: bool) -> {uint, bool} {
         let hash = self.hash_key(k)
         let size = self^.table.size()
 
@@ -160,7 +160,7 @@ impl HashMap {
 
     /// Returns true if the table needs to grow (i.e. we've reached the resize threshold
     /// computed using a hard-coded load factor of 0.8).
-    fn needs_grow(*self): bool {
+    fn needs_grow(*self) -> bool {
         // Using load factor of 0.8 (4 / 5).
         let resize_threshold = self^.table.size() * 4 / 5
         return self^.num_allocated >= resize_threshold

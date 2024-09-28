@@ -9,7 +9,7 @@ use {List}: "std/types/list.bl"
 use {assert}: "src/tests/test_utils.bl"
 
 spec ToInt {
-    fn to_int(self): int
+    fn to_int(self) -> int
 }
 
 struct Container[T] {
@@ -17,7 +17,7 @@ struct Container[T] {
 }
 
 impl Container[int]: ToInt {
-    fn to_int(self): int {
+    fn to_int(self) -> int {
         return self.t
     }
 }
@@ -25,27 +25,27 @@ impl Container[int]: ToInt {
 struct Empty[T] {}
 
 impl Empty {
-    fn do_nothing(): int {
+    fn do_nothing() -> int {
         return 234
     }
 
-    fn neg(*self, value: bool): bool {
+    fn neg(*self, value: bool) -> bool {
         return !value
     }
 
-    fn new_nested(): Empty[Empty[T]] {
+    fn new_nested() -> Empty[Empty[T]] {
         return Empty[Empty[T]]{}
     }
 }
 
 spec GetValue {
-    fn get_value(): int
+    fn get_value() -> int
 }
 
 struct ValueGetter {}
 
 impl ValueGetter: GetValue {
-    fn get_value(): int {
+    fn get_value() -> int {
         return -3
     }
 }
@@ -53,7 +53,7 @@ impl ValueGetter: GetValue {
 struct Thing[T: GetValue] {}
 
 impl Thing {
-    fn call(): int {
+    fn call() -> int {
         return T.get_value()
     }
 }

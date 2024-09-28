@@ -204,6 +204,8 @@ pub enum TokenKind {
     SemiColon,
     #[token(":")]
     Colon,
+    #[token("->")]
+    Arrow,
     #[token("::")]
     DoubleColon,
     #[token(".")]
@@ -310,6 +312,7 @@ impl TokenKind {
             TokenKind::Comma => ",".to_string(),
             TokenKind::SemiColon => ";".to_string(),
             TokenKind::Colon => ":".to_string(),
+            TokenKind::Arrow => "->".to_string(),
             TokenKind::DoubleColon => "::".to_string(),
             TokenKind::Dot => ".".to_string(),
             TokenKind::Break => "break".to_string(),
