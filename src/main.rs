@@ -9,13 +9,14 @@ use std::{fs, process};
 
 use clap::{arg, ArgAction, Command};
 use flamer::flame;
-use inkwell::targets::TargetTriple;
+use inkwell::targets::{RelocMode, TargetTriple};
+use inkwell::OptimizationLevel;
 use target_lexicon::Triple;
 
 use parser::module::Module;
 
 use crate::analyzer::analyze::{analyze_modules, ProgramAnalysis};
-use crate::codegen::program::{generate, init_target, OutputFormat};
+use crate::codegen::program::{generate, init_target, CodeGenConfig, OutputFormat};
 use crate::fmt::{display_err, format_duration};
 use crate::lexer::error::LexResult;
 use crate::lexer::lex::lex;
@@ -51,9 +52,14 @@ fn main() {
             .about("Compile Blang source code")
             .arg(arg!([SRC_PATH] "Path to the source code to compile").required(true))
             .arg(
-                arg!(-u --unoptimized ... "Prevent optimization")
+                arg!(-O --"optimization-level" <OPT_LEVEL> "Optimization level")
                     .required(false)
-                    .action(ArgAction::SetTrue),
+                    .value_parser(["default", "none", "less", "aggressive"]),
+            )
+            .arg(
+                arg!(--"reloc-mode" <RELOC_MODE> "Relocation mode")
+                    .required(false)
+                    .value_parser(["default", "pic", "dynamic-no-pic", "static"]),
             )
             .arg(
                 arg!(-q --quiet ... "Don't print log messages")
@@ -129,24 +135,56 @@ fn main() {
                         None => OutputFormat::Executable,
                     },
                 };
+                let output_path = match dst_path {
+                    Some(path) => PathBuf::from(path),
+                    None => {
+                        // If no output path was specified, just use the default generated from the
+                        // source file path.
+                        let src = Path::new(src_path);
+                        default_output_file_path(src, output_format)
+                    }
+                };
+                let optimization_level = match sub_matches.get_one::<String>("optimization-level") {
+                    Some(level) => match level.as_str() {
+                        "default" => OptimizationLevel::Default,
+                        "none" => OptimizationLevel::None,
+                        "less" => OptimizationLevel::Less,
+                        "aggressive" => OptimizationLevel::Aggressive,
+                        _ => unreachable!(),
+                    },
 
-                let optimize = !sub_matches.get_flag("unoptimized");
+                    None => OptimizationLevel::Default,
+                };
+                let reloc_mode = match sub_matches.get_one::<String>("reloc-mode") {
+                    Some(mode) => match mode.as_str() {
+                        "default" => RelocMode::Default,
+                        "pic" => RelocMode::PIC,
+                        "dynamic-no-pic" => RelocMode::DynamicNoPic,
+                        "static" => RelocMode::Static,
+                        _ => unreachable!(),
+                    },
+
+                    None => RelocMode::Default,
+                };
                 let quiet = sub_matches.get_flag("quiet");
                 let linker = sub_matches.get_one::<String>("linker");
-                let linker_flags = sub_matches
+                let linker_args = sub_matches
                     .get_many::<String>("linker-flag")
                     .unwrap_or_default()
                     .collect();
 
                 if let Err(e) = compile(
                     src_path,
-                    dst_path,
-                    output_format,
-                    target_triple,
-                    optimize,
                     quiet,
-                    linker,
-                    linker_flags,
+                    CodeGenConfig {
+                        output_path: &output_path,
+                        output_format,
+                        target_triple,
+                        optimization_level,
+                        reloc_mode,
+                        linker,
+                        linker_args,
+                    },
                 ) {
                     fatalln!("{}", e);
                 }
@@ -411,41 +449,15 @@ fn analyze(
 /// source files therein will be compiled. If there is no target, infers configuration
 /// for the current host system.
 #[flame]
-fn compile(
-    src_path: &str,
-    dst_path: Option<&String>,
-    output_format: OutputFormat,
-    target_triple: &TargetTriple,
-    optimize: bool,
-    quiet: bool,
-    linker: Option<&String>,
-    linker_flags: Vec<&String>,
-) -> Result<(), String> {
+fn compile(src_path: &str, quiet: bool, config: CodeGenConfig) -> Result<(), String> {
     // Read and analyze the program.
     let analyze_start = Instant::now();
-    let prog_analysis = analyze(src_path, None, &target_triple)?;
+    let prog_analysis = analyze(src_path, None, &config.target_triple)?;
     let analyze_duration = Instant::now() - analyze_start;
-
-    // If no output path was specified, just use the default generated from the
-    // source file path.
-    let src = Path::new(src_path);
-    let dst = if let Some(path) = dst_path {
-        PathBuf::from(path)
-    } else {
-        default_output_file_path(src, output_format)
-    };
 
     // Compile the program.
     let generate_start = Instant::now();
-    if let Err(e) = generate(
-        prog_analysis,
-        &target_triple,
-        output_format,
-        dst.as_path(),
-        optimize,
-        linker,
-        linker_flags,
-    ) {
+    if let Err(e) = generate(prog_analysis, config) {
         return Err(format!("{}", e));
     }
 
@@ -498,12 +510,7 @@ fn run(src_path: &str, target_triple: &TargetTriple) {
     // Compile the program.
     if let Err(e) = generate(
         prog_analysis,
-        target_triple,
-        OutputFormat::Executable,
-        dst.as_path(),
-        true,
-        None,
-        vec![],
+        CodeGenConfig::new_default(target_triple, dst.as_path(), OutputFormat::Executable),
     ) {
         fatalln!("{}", e);
     }
@@ -532,10 +539,10 @@ fn default_output_file_path(src: &Path, output_format: OutputFormat) -> PathBuf 
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::process::Command;
 
-    use crate::codegen::program::{init_target, OutputFormat};
+    use crate::codegen::program::{init_target, CodeGenConfig, OutputFormat};
     use crate::compile;
 
     /// Compiles and executes the code at the given path and asserts that
@@ -547,13 +554,8 @@ mod tests {
         // Compile the program.
         compile(
             file_path.to_str().unwrap(),
-            Some(&output_path),
-            OutputFormat::Executable,
-            &target,
             true,
-            true,
-            None,
-            vec![],
+            CodeGenConfig::new_default(&target, Path::new(&output_path), OutputFormat::Executable),
         )
         .expect("should succeed");
 
@@ -582,13 +584,8 @@ mod tests {
             // Compile the program.
             compile(
                 lib_path.to_str().unwrap(),
-                Some(&output_path),
-                OutputFormat::Object,
-                &target,
                 true,
-                true,
-                None,
-                vec![],
+                CodeGenConfig::new_default(&target, Path::new(&output_path), OutputFormat::Object),
             )
             .expect("should succeed");
         }

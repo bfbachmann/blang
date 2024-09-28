@@ -6,7 +6,7 @@ mod tests {
     use target_lexicon::Triple;
 
     use crate::analyzer::analyze::analyze_modules;
-    use crate::codegen::program::{generate, init_target, OutputFormat};
+    use crate::codegen::program::{generate, init_target, CodeGenConfig, OutputFormat};
     use crate::lexer::lex::lex;
     use crate::lexer::stream::Stream;
     use crate::parser::module::Module;
@@ -20,12 +20,11 @@ mod tests {
         );
         generate(
             analysis,
-            &init_target(None).unwrap(),
-            OutputFormat::Object,
-            Path::new("/dev/null"),
-            true,
-            None,
-            vec![],
+            CodeGenConfig::new_default(
+                &init_target(None).unwrap(),
+                Path::new("/dev/null"),
+                OutputFormat::Object,
+            ),
         )
         .expect("should not error");
     }
