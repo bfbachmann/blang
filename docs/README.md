@@ -55,11 +55,14 @@ fn fibonacci(n: u64) -> u64 {
 }
 ```
 
-Functions can be nested.
+Functions can be nested, but nested functions don't capture data from their
+enclosing scopes.
 
 ```
 fn call_nested() -> int {
     fn sum(a: int, b: int) -> int {
+        // You can't reference variables declared in `call_nested` from
+        // inside this function.
         return a + b
     }
 
