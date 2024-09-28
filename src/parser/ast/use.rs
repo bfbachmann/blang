@@ -58,10 +58,10 @@ impl ModulePath {
 
                     let full_path = match fs::canonicalize(path) {
                         Ok(p) => p,
-                        Err(_) => {
+                        Err(err) => {
                             return Err(ParseError::new_with_token(
                                 ErrorKind::InvalidModPath,
-                                format_code!("invalid module path {}", path).as_str(),
+                                format_code!("invalid module path {}: {err}", path).as_str(),
                                 token.clone(),
                             ));
                         }
