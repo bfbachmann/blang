@@ -426,6 +426,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
 
 /// Initializes a target machine for the host system with default optimization level
 /// and reloc mode.
+#[cfg(test)]
 pub fn init_default_host_target() -> Result<TargetMachine, CodeGenError> {
     init_target(None, OptimizationLevel::Default, RelocMode::Default)
 }
@@ -569,7 +570,7 @@ pub fn generate(program_analysis: ProgramAnalysis, config: CodeGenConfig) -> Com
         type_converter: TypeConverter::new(
             &ctx,
             &program_analysis.type_store,
-            target_data.as_mut_ptr(),
+            config.target_machine,
         ),
         module_consts: HashMap::new(),
     };

@@ -4,7 +4,7 @@ mod tests {
 
     use crate::analyzer::analyze::analyze_modules;
     use crate::codegen::program::{
-        generate, init_default_host_target, CodeGenConfig, OutputFormat,
+        CodeGenConfig, generate, init_default_host_target, OutputFormat,
     };
     use crate::lexer::lex::lex;
     use crate::lexer::stream::Stream;
@@ -13,12 +13,11 @@ mod tests {
     fn assert_compiles(code: &str) {
         let tokens = lex(code).expect("should not error");
         let module = Module::from("test", &mut Stream::from(tokens)).expect("should not error");
-        let target_machine = init_default_host_target().expect("should not error");
-        let analysis = analyze_modules(vec![module], &target_machine);
+        let analysis = analyze_modules(vec![module]);
         generate(
             analysis,
             CodeGenConfig::new_default(
-                &target_machine,
+                &init_default_host_target().expect("should not error"),
                 Path::new("/dev/null"),
                 OutputFormat::Object,
             ),

@@ -1,15 +1,16 @@
 use std::collections::HashMap;
 
+use inkwell::AddressSpace;
 use inkwell::context::Context;
+use inkwell::targets::TargetMachine;
 use inkwell::types::{
     AnyType, AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType,
 };
 use inkwell::types::{ArrayType, AsTypeRef};
 use inkwell::values::IntValue;
-use inkwell::AddressSpace;
 use llvm_sys::core::LLVMFunctionType;
 use llvm_sys::prelude::LLVMTypeRef;
-use llvm_sys::target::{LLVMStoreSizeOfType, LLVMTargetDataRef};
+use llvm_sys::target::LLVMStoreSizeOfType;
 
 use crate::analyzer::ast::array::AArrayType;
 use crate::analyzer::ast::func::AFnSig;
@@ -26,7 +27,7 @@ pub struct TypeConverter<'ctx> {
     type_store: &'ctx TypeStore,
     ll_basic_types: HashMap<TypeKey, BasicTypeEnum<'ctx>>,
     ll_fn_types: HashMap<TypeKey, FunctionType<'ctx>>,
-    ll_data_layout: LLVMTargetDataRef,
+    ll_target_machine: &'ctx TargetMachine,
     // TODO: This really should not be public. Fix this hack.
     pub type_mappings: Vec<HashMap<TypeKey, TypeKey>>,
 }
@@ -36,16 +37,16 @@ impl<'ctx> TypeConverter<'ctx> {
     pub fn new(
         ctx: &'ctx Context,
         type_store: &'ctx TypeStore,
-        ll_data_layout: LLVMTargetDataRef,
+        ll_target_machine: &'ctx TargetMachine,
     ) -> TypeConverter<'ctx> {
-        gen_intrinsic_types(ctx, type_store);
+        gen_intrinsic_types(ctx, ll_target_machine);
 
         TypeConverter {
             ctx,
             type_store,
             ll_basic_types: Default::default(),
             ll_fn_types: Default::default(),
-            ll_data_layout,
+            ll_target_machine,
             type_mappings: vec![],
         }
     }
@@ -134,7 +135,7 @@ impl<'ctx> TypeConverter<'ctx> {
 
             AType::F64 => self.ctx.f64_type().as_basic_type_enum(),
 
-            AType::Int | AType::Uint => get_ptr_sized_int_type(self.ctx, self.type_store),
+            AType::Int | AType::Uint => get_ptr_sized_int_type(self.ctx, self.ll_target_machine),
 
             AType::Str => self
                 .ctx
@@ -357,7 +358,7 @@ impl<'ctx> TypeConverter<'ctx> {
     pub fn size_of_type(&self, type_key: TypeKey) -> u64 {
         unsafe {
             LLVMStoreSizeOfType(
-                self.ll_data_layout,
+                self.ll_target_machine.get_target_data().as_mut_ptr(),
                 self.to_basic_type(self.must_get_type(type_key))
                     .as_type_ref(),
             ) as u64
@@ -371,7 +372,7 @@ impl<'ctx> TypeConverter<'ctx> {
 
     /// Converts `v` to an LLVM constant integer value.
     pub fn get_const_int(&self, v: u64, sign_extend: bool) -> IntValue<'ctx> {
-        get_ptr_sized_int_type(self.ctx, self.type_store)
+        get_ptr_sized_int_type(self.ctx, self.ll_target_machine)
             .into_int_type()
             .const_int(v, sign_extend)
     }
@@ -390,23 +391,26 @@ impl<'ctx> TypeConverter<'ctx> {
 
 /// Returns the LLVM type to be used in place of pointer-sized integer types which are sized
 /// based on the target platform.
-fn get_ptr_sized_int_type<'ctx>(ctx: &'ctx Context, type_store: &TypeStore) -> BasicTypeEnum<'ctx> {
-    match type_store.get_target_ptr_width() {
-        64 => ctx.i64_type().as_basic_type_enum(),
-        32 => ctx.i32_type().as_basic_type_enum(),
-        16 => ctx.i16_type().as_basic_type_enum(),
-        _ => ctx.i8_type().as_basic_type_enum(),
+fn get_ptr_sized_int_type<'ctx>(
+    ctx: &'ctx Context,
+    target_machine: &TargetMachine,
+) -> BasicTypeEnum<'ctx> {
+    match target_machine.get_target_data().get_pointer_byte_size(None) {
+        4 => ctx.i32_type().as_basic_type_enum(),
+        2 => ctx.i16_type().as_basic_type_enum(),
+        1 => ctx.i8_type().as_basic_type_enum(),
+        _ => ctx.i64_type().as_basic_type_enum(),
     }
 }
 
 /// Generates type definitions for intrinsic types.
-fn gen_intrinsic_types(ctx: &Context, type_store: &TypeStore) {
+fn gen_intrinsic_types(ctx: &Context, target_machine: &TargetMachine) {
     // Create the LLVM struct type for the `str` type.
     {
         let ll_struct_type = ctx.opaque_struct_type(AType::Str.name());
         let ll_field_types: [BasicTypeEnum; 2] = [
             ctx.i8_type().ptr_type(AddressSpace::default()).into(),
-            get_ptr_sized_int_type(ctx, type_store),
+            get_ptr_sized_int_type(ctx, target_machine),
         ];
         ll_struct_type.set_body(&ll_field_types, false);
     }

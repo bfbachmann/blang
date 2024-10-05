@@ -1,5 +1,6 @@
-use crate::analyzer::ast::r#type::AType;
 use std::fmt::{Debug, Formatter};
+
+use crate::analyzer::ast::r#type::AType;
 
 /// A key that is associated with an analyzed type inside the type store. This is actually just an
 /// index into the Vec that the type store uses to store analyzed types.
@@ -10,8 +11,6 @@ pub struct TypeStore {
     /// We're just using a Vec here because types should never be removed from the store after
     /// insertion, and Vecs allow for fast and simple access.
     types: Vec<AType>,
-    /// Represents the width (in bits) of a pointer on the target architecture.
-    target_ptr_width_bits: u32,
 }
 
 impl Debug for TypeStore {
@@ -26,16 +25,8 @@ impl Debug for TypeStore {
 
 impl TypeStore {
     /// Creates a new empty type store.
-    pub fn new(target_ptr_width_bits: u32) -> Self {
-        TypeStore {
-            types: vec![],
-            target_ptr_width_bits,
-        }
-    }
-
-    /// Returns the width (in bits) of a pointer on the target architecture.
-    pub fn get_target_ptr_width(&self) -> u32 {
-        self.target_ptr_width_bits
+    pub fn new() -> Self {
+        TypeStore { types: vec![] }
     }
 
     /// Generates the type key to be used for the next stored type.

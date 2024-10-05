@@ -204,13 +204,8 @@ fn main() {
 
         Some(("check", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(file_path) => {
-                let target_machine =
-                    match init_target(None, OptimizationLevel::Default, RelocMode::Default) {
-                        Ok(machine) => machine,
-                        Err(err) => fatalln!("{err}"),
-                    };
                 let maybe_dump_path = sub_matches.get_one::<String>("dump");
-                if let Err(e) = analyze(file_path, maybe_dump_path, &target_machine) {
+                if let Err(e) = analyze(file_path, maybe_dump_path) {
                     fatalln!("{}", e);
                 };
             }
@@ -367,11 +362,7 @@ fn lex_source_file(input_path: &str) -> Result<LexResult<Vec<Token>>, String> {
 /// all source files therein will be analyzed. Returns the analyzed set of sources, or logs an
 /// error and exits with code 1.
 #[flame]
-fn analyze(
-    input_path: &str,
-    maybe_dump_path: Option<&String>,
-    target_machine: &TargetMachine,
-) -> Result<ProgramAnalysis, String> {
+fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> Result<ProgramAnalysis, String> {
     // Parse all targeted source files.
     let modules = parse_source_files(input_path)?;
     if modules.is_empty() {
@@ -379,7 +370,7 @@ fn analyze(
     }
 
     // Analyze the program.
-    let analysis = analyze_modules(modules, target_machine);
+    let analysis = analyze_modules(modules);
 
     // Display warnings and errors that occurred.
     let mut err_count = 0;
@@ -458,7 +449,7 @@ fn analyze(
 fn compile(src_path: &str, quiet: bool, config: CodeGenConfig) -> Result<(), String> {
     // Read and analyze the program.
     let analyze_start = Instant::now();
-    let prog_analysis = analyze(src_path, None, &config.target_machine)?;
+    let prog_analysis = analyze(src_path, None)?;
     let analyze_duration = Instant::now() - analyze_start;
 
     // Compile the program.
@@ -504,7 +495,7 @@ fn compile(src_path: &str, quiet: bool, config: CodeGenConfig) -> Result<(), Str
 /// Compiles and runs Blang source code at the given path.
 fn run(src_path: &str, target_machine: &TargetMachine) {
     // Read and analyze the program.
-    let prog_analysis = match analyze(src_path, None, target_machine) {
+    let prog_analysis = match analyze(src_path, None) {
         Ok(pa) => pa,
         Err(e) => fatalln!("{}", e),
     };
@@ -548,12 +539,7 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
-    use inkwell::targets::RelocMode;
-    use inkwell::OptimizationLevel;
-
-    use crate::codegen::program::{
-        init_default_host_target, init_target, CodeGenConfig, OutputFormat,
-    };
+    use crate::codegen::program::{init_default_host_target, CodeGenConfig, OutputFormat};
     use crate::compile;
 
     /// Compiles and executes the code at the given path and asserts that
@@ -590,7 +576,7 @@ mod tests {
     #[test]
     fn compile_std_lib() {
         // Check that we can compile the standard library.
-        let target = init_target(None, OptimizationLevel::Default, RelocMode::Default).unwrap();
+        let target = init_default_host_target().unwrap();
         let entries = fs::read_dir("std").expect("should succeed");
         for entry in entries {
             let lib_path = entry.unwrap().path();
