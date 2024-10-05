@@ -1,12 +1,11 @@
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-    use std::str::FromStr;
-
-    use target_lexicon::Triple;
 
     use crate::analyzer::analyze::analyze_modules;
-    use crate::codegen::program::{generate, init_target, CodeGenConfig, OutputFormat};
+    use crate::codegen::program::{
+        generate, init_default_host_target, CodeGenConfig, OutputFormat,
+    };
     use crate::lexer::lex::lex;
     use crate::lexer::stream::Stream;
     use crate::parser::module::Module;
@@ -14,14 +13,12 @@ mod tests {
     fn assert_compiles(code: &str) {
         let tokens = lex(code).expect("should not error");
         let module = Module::from("test", &mut Stream::from(tokens)).expect("should not error");
-        let analysis = analyze_modules(
-            vec![module],
-            &Triple::from_str(init_target(None).unwrap().as_str().to_str().unwrap()).unwrap(),
-        );
+        let target_machine = init_default_host_target().expect("should not error");
+        let analysis = analyze_modules(vec![module], &target_machine);
         generate(
             analysis,
             CodeGenConfig::new_default(
-                &init_target(None).unwrap(),
+                &target_machine,
                 Path::new("/dev/null"),
                 OutputFormat::Object,
             ),

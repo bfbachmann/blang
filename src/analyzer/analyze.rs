@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use flamer::flame;
-use target_lexicon::Triple;
+use inkwell::targets::TargetMachine;
 
 use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::module::AModule;
@@ -61,20 +61,14 @@ pub struct ProgramAnalysis {
 
 /// Analyzes all the given modules.
 #[flame]
-pub fn analyze_modules(modules: Vec<Module>, target_triple: &Triple) -> ProgramAnalysis {
+pub fn analyze_modules(modules: Vec<Module>, target_machine: &TargetMachine) -> ProgramAnalysis {
     let root_mod_path = PathBuf::from(&modules.first().unwrap().path);
     let mods: HashMap<PathBuf, Module> =
         HashMap::from_iter(modules.into_iter().map(|m| (PathBuf::from(&m.path), m)));
     let mut analyzed_mods: HashMap<PathBuf, AnalyzedModule> = HashMap::new();
     let mod_paths = mods.keys().map(|k| k.to_str().unwrap()).collect();
-    let mut ctx = match target_triple.pointer_width() {
-        Ok(width) => ProgramContext::new(width.bits(), root_mod_path.to_str().unwrap(), mod_paths),
-
-        // TODO: Record error here and abort?
-        Err(_) => {
-            ProgramContext::new_with_host_ptr_width(root_mod_path.to_str().unwrap(), mod_paths)
-        }
-    };
+    let ptr_width_bits = target_machine.get_target_data().get_pointer_byte_size(None) * 8;
+    let mut ctx = ProgramContext::new(ptr_width_bits, root_mod_path.to_str().unwrap(), mod_paths);
 
     define_intrinsics(&mut ctx);
     analyze_module(&mut ctx, &mods, &mut analyzed_mods, &vec![], &root_mod_path);

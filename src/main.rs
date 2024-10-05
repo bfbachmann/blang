@@ -3,15 +3,13 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::os::unix::prelude::CommandExt;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::time::Instant;
 use std::{fs, process};
 
 use clap::{arg, ArgAction, Command};
 use flamer::flame;
-use inkwell::targets::{RelocMode, TargetTriple};
+use inkwell::targets::{RelocMode, TargetMachine};
 use inkwell::OptimizationLevel;
-use target_lexicon::Triple;
 
 use parser::module::Module;
 
@@ -103,8 +101,41 @@ fn main() {
     match matches.subcommand() {
         Some(("build", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(src_path) => {
-                let target_triple = &get_target_triple(sub_matches.get_one::<String>("target"));
+                let optimization_level = match sub_matches.get_one::<String>("optimization-level") {
+                    Some(level) => match level.as_str() {
+                        "default" => OptimizationLevel::Default,
+                        "none" => OptimizationLevel::None,
+                        "less" => OptimizationLevel::Less,
+                        "aggressive" => OptimizationLevel::Aggressive,
+                        _ => unreachable!(),
+                    },
+
+                    None => OptimizationLevel::Default,
+                };
+
+                let reloc_mode = match sub_matches.get_one::<String>("reloc-mode") {
+                    Some(mode) => match mode.as_str() {
+                        "default" => RelocMode::Default,
+                        "pic" => RelocMode::PIC,
+                        "dynamic-no-pic" => RelocMode::DynamicNoPic,
+                        "static" => RelocMode::Static,
+                        _ => unreachable!(),
+                    },
+
+                    None => RelocMode::Default,
+                };
+
+                let target_machine = match init_target(
+                    sub_matches.get_one::<String>("target"),
+                    optimization_level,
+                    reloc_mode,
+                ) {
+                    Ok(machine) => machine,
+                    Err(err) => fatalln!("{err}"),
+                };
+
                 let dst_path = sub_matches.get_one::<String>("out");
+
                 let output_format = match sub_matches.get_one::<String>("format") {
                     // If an output format was explicitly set, use that.
                     Some(output_format) => match output_format.as_str() {
@@ -135,6 +166,7 @@ fn main() {
                         None => OutputFormat::Executable,
                     },
                 };
+
                 let output_path = match dst_path {
                     Some(path) => PathBuf::from(path),
                     None => {
@@ -144,48 +176,26 @@ fn main() {
                         default_output_file_path(src, output_format)
                     }
                 };
-                let optimization_level = match sub_matches.get_one::<String>("optimization-level") {
-                    Some(level) => match level.as_str() {
-                        "default" => OptimizationLevel::Default,
-                        "none" => OptimizationLevel::None,
-                        "less" => OptimizationLevel::Less,
-                        "aggressive" => OptimizationLevel::Aggressive,
-                        _ => unreachable!(),
-                    },
 
-                    None => OptimizationLevel::Default,
-                };
-                let reloc_mode = match sub_matches.get_one::<String>("reloc-mode") {
-                    Some(mode) => match mode.as_str() {
-                        "default" => RelocMode::Default,
-                        "pic" => RelocMode::PIC,
-                        "dynamic-no-pic" => RelocMode::DynamicNoPic,
-                        "static" => RelocMode::Static,
-                        _ => unreachable!(),
-                    },
-
-                    None => RelocMode::Default,
-                };
                 let quiet = sub_matches.get_flag("quiet");
+
                 let linker = sub_matches.get_one::<String>("linker");
+
                 let linker_args = sub_matches
                     .get_many::<String>("linker-flag")
                     .unwrap_or_default()
                     .collect();
 
-                if let Err(e) = compile(
-                    src_path,
-                    quiet,
-                    CodeGenConfig {
-                        output_path: &output_path,
-                        output_format,
-                        target_triple,
-                        optimization_level,
-                        reloc_mode,
-                        linker,
-                        linker_args,
-                    },
-                ) {
+                let codegen_config = CodeGenConfig {
+                    output_path: &output_path,
+                    output_format,
+                    target_machine: &target_machine,
+                    optimization_level,
+                    linker,
+                    linker_args,
+                };
+
+                if let Err(e) = compile(src_path, quiet, codegen_config) {
                     fatalln!("{}", e);
                 }
             }
@@ -194,9 +204,13 @@ fn main() {
 
         Some(("check", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(file_path) => {
-                let target_triple = &get_target_triple(None);
+                let target_machine =
+                    match init_target(None, OptimizationLevel::Default, RelocMode::Default) {
+                        Ok(machine) => machine,
+                        Err(err) => fatalln!("{err}"),
+                    };
                 let maybe_dump_path = sub_matches.get_one::<String>("dump");
-                if let Err(e) = analyze(file_path, maybe_dump_path, target_triple) {
+                if let Err(e) = analyze(file_path, maybe_dump_path, &target_machine) {
                     fatalln!("{}", e);
                 };
             }
@@ -205,8 +219,12 @@ fn main() {
 
         Some(("run", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(file_path) => {
-                let target_triple = &get_target_triple(None);
-                run(file_path, target_triple);
+                let target_machine =
+                    match init_target(None, OptimizationLevel::Default, RelocMode::Default) {
+                        Ok(machine) => machine,
+                        Err(err) => fatalln!("{err}"),
+                    };
+                run(file_path, &target_machine);
             }
             _ => fatalln!("expected source path"),
         },
@@ -218,14 +236,6 @@ fn main() {
     if matches.get_one::<bool>("time").is_some() {
         flame::dump_html(&mut File::create("compile-time.html").unwrap()).unwrap();
     };
-}
-
-// Initializes the LLVM target that we're compiling to.
-fn get_target_triple(target: Option<&String>) -> TargetTriple {
-    match init_target(target) {
-        Ok(t) => t,
-        Err(e) => fatalln!("{}", e),
-    }
 }
 
 /// Parses source code. If `input_path` is a directory, we'll try to locate and parse
@@ -360,7 +370,7 @@ fn lex_source_file(input_path: &str) -> Result<LexResult<Vec<Token>>, String> {
 fn analyze(
     input_path: &str,
     maybe_dump_path: Option<&String>,
-    target_triple: &TargetTriple,
+    target_machine: &TargetMachine,
 ) -> Result<ProgramAnalysis, String> {
     // Parse all targeted source files.
     let modules = parse_source_files(input_path)?;
@@ -369,11 +379,7 @@ fn analyze(
     }
 
     // Analyze the program.
-    let target = match Triple::from_str(target_triple.as_str().to_str().unwrap()) {
-        Ok(t) => t,
-        Err(e) => return Err(format!("failed to initialize target: {}", e)),
-    };
-    let analysis = analyze_modules(modules, &target);
+    let analysis = analyze_modules(modules, target_machine);
 
     // Display warnings and errors that occurred.
     let mut err_count = 0;
@@ -452,7 +458,7 @@ fn analyze(
 fn compile(src_path: &str, quiet: bool, config: CodeGenConfig) -> Result<(), String> {
     // Read and analyze the program.
     let analyze_start = Instant::now();
-    let prog_analysis = analyze(src_path, None, &config.target_triple)?;
+    let prog_analysis = analyze(src_path, None, &config.target_machine)?;
     let analyze_duration = Instant::now() - analyze_start;
 
     // Compile the program.
@@ -496,9 +502,9 @@ fn compile(src_path: &str, quiet: bool, config: CodeGenConfig) -> Result<(), Str
 }
 
 /// Compiles and runs Blang source code at the given path.
-fn run(src_path: &str, target_triple: &TargetTriple) {
+fn run(src_path: &str, target_machine: &TargetMachine) {
     // Read and analyze the program.
-    let prog_analysis = match analyze(src_path, None, target_triple) {
+    let prog_analysis = match analyze(src_path, None, target_machine) {
         Ok(pa) => pa,
         Err(e) => fatalln!("{}", e),
     };
@@ -510,7 +516,7 @@ fn run(src_path: &str, target_triple: &TargetTriple) {
     // Compile the program.
     if let Err(e) = generate(
         prog_analysis,
-        CodeGenConfig::new_default(target_triple, dst.as_path(), OutputFormat::Executable),
+        CodeGenConfig::new_default(target_machine, dst.as_path(), OutputFormat::Executable),
     ) {
         fatalln!("{}", e);
     }
@@ -542,20 +548,29 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
-    use crate::codegen::program::{init_target, CodeGenConfig, OutputFormat};
+    use inkwell::targets::RelocMode;
+    use inkwell::OptimizationLevel;
+
+    use crate::codegen::program::{
+        init_default_host_target, init_target, CodeGenConfig, OutputFormat,
+    };
     use crate::compile;
 
     /// Compiles and executes the code at the given path and asserts that
     /// execution succeeded.
     fn run_and_check_result(file_path: PathBuf) {
-        let target = init_target(None).unwrap();
+        let target_machine = init_default_host_target().expect("should not fail");
         let output_path = format!("bin/{}", file_path.file_stem().unwrap().to_str().unwrap());
 
         // Compile the program.
         compile(
             file_path.to_str().unwrap(),
             true,
-            CodeGenConfig::new_default(&target, Path::new(&output_path), OutputFormat::Executable),
+            CodeGenConfig::new_default(
+                &target_machine,
+                Path::new(&output_path),
+                OutputFormat::Executable,
+            ),
         )
         .expect("should succeed");
 
@@ -575,7 +590,7 @@ mod tests {
     #[test]
     fn compile_std_lib() {
         // Check that we can compile the standard library.
-        let target = init_target(None).unwrap();
+        let target = init_target(None, OptimizationLevel::Default, RelocMode::Default).unwrap();
         let entries = fs::read_dir("std").expect("should succeed");
         for entry in entries {
             let lib_path = entry.unwrap().path();

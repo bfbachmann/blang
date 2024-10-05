@@ -17,6 +17,7 @@ use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::scope::{Scope, ScopeKind, ScopedSymbol};
 use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::analyzer::warn::AnalyzeWarning;
+use crate::codegen::program::init_default_host_target;
 use crate::fmt::{format_code_vec, vec_to_string};
 use crate::lexer::pos::{Locatable, Position, Span};
 use crate::parser::ast::r#const::Const;
@@ -245,8 +246,8 @@ pub struct ProgramContext {
 impl ProgramContext {
     /// Creates a new program context. The program context will be initialized with stack containing
     /// a single scope representing the global scope and a type store containing primitive types.
-    pub fn new(target_ptr_width: u8, root_mod_path: &str, mod_paths: Vec<&str>) -> Self {
-        let mut type_store = TypeStore::new(target_ptr_width);
+    pub fn new(target_ptr_width_bits: u32, root_mod_path: &str, mod_paths: Vec<&str>) -> Self {
+        let mut type_store = TypeStore::new(target_ptr_width_bits);
 
         // Set up primitive type keys.
         let mut primitive_type_keys = HashMap::new();
@@ -287,12 +288,11 @@ impl ProgramContext {
 
     /// Creates a new program context where the pointer width is set according to the
     /// host system.
+    #[cfg(test)]
     pub fn new_with_host_ptr_width(root_mod_path: &str, mod_paths: Vec<&str>) -> ProgramContext {
+        let target_machine = init_default_host_target().unwrap();
         ProgramContext::new(
-            target_lexicon::Triple::host()
-                .pointer_width()
-                .unwrap()
-                .bits(),
+            target_machine.get_target_data().get_pointer_byte_size(None) * 8,
             root_mod_path,
             mod_paths,
         )

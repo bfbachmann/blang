@@ -1,15 +1,12 @@
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::str::FromStr;
-
-    use target_lexicon::Triple;
 
     use crate::analyzer::analyze::{analyze_modules, ProgramAnalysis};
     use crate::analyzer::ast::module::AModule;
     use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
     use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
-    use crate::codegen::program::init_target;
+    use crate::codegen::program::init_default_host_target;
     use crate::lexer::lex::lex;
     use crate::lexer::stream::Stream;
     use crate::parser::module::Module;
@@ -17,7 +14,7 @@ mod tests {
     fn get_analysis(raw: &str) -> ProgramAnalysis {
         let tokens = lex(raw).expect("should not error");
         let module = Module::from("", &mut Stream::from(tokens)).expect("should not error");
-        analyze_modules(vec![module], &new_test_triple())
+        analyze_modules(vec![module], &init_default_host_target().unwrap())
     }
 
     fn analyze(raw: &str) -> AnalyzeResult<AModule> {
@@ -36,10 +33,6 @@ mod tests {
         }
     }
 
-    fn new_test_triple() -> Triple {
-        Triple::from_str(init_target(None).unwrap().as_str().to_str().unwrap()).unwrap()
-    }
-
     fn analyze_program(mods: HashMap<String, String>) -> ProgramAnalysis {
         let mut parsed_mods = vec![];
         for (mod_path, mod_code) in mods {
@@ -49,7 +42,7 @@ mod tests {
             parsed_mods.push(parsed_mod);
         }
 
-        analyze_modules(parsed_mods, &new_test_triple())
+        analyze_modules(parsed_mods, &init_default_host_target().unwrap())
     }
 
     fn check_mod_errs(
