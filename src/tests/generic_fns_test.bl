@@ -1,7 +1,7 @@
 use {exit}: "std/libc/proc.bl"
 use {malloc, free}: "std/libc/mem.bl"
 
-use {assert}: "src/tests/test_utils.bl"
+use {assert}: "std/backtrace/panic.bl"
 
 spec ToStr {
     fn to_str(*self) -> str

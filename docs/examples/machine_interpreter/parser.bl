@@ -3,7 +3,7 @@ use {strtol, strncmp}: "std/libc/string.bl"
 use {Clone}: "std/specs/clone.bl"
 use {List}: "std/types/list.bl"
 
-use {assert}: "docs/examples/machine_interpreter/utils.bl"
+use {assert}: "std/backtrace/panic.bl"
 
 /// Represents a machine instruction.
 pub struct Instruction {

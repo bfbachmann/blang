@@ -2202,7 +2202,7 @@ impl ProgramContext {
                 s += ")";
 
                 if let Some(tk) = &fn_sig.maybe_ret_type_key {
-                    s += format!(": {}", self.display_type(*tk)).as_str();
+                    s += format!(" -> {}", self.display_type(*tk)).as_str();
                 }
 
                 s

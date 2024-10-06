@@ -60,6 +60,7 @@ pub enum ErrorKind {
     ImportCycle,
     DuplicateImportName,
     IllegalImpl,
+    IllegalSelfArg,
 }
 
 impl fmt::Display for ErrorKind {
@@ -119,6 +120,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::ImportCycle => write!(f, "import cycle"),
             ErrorKind::DuplicateImportName => write!(f, "duplicate import name"),
             ErrorKind::IllegalImpl => write!(f, "illegal impl"),
+            ErrorKind::IllegalSelfArg => write!(f, "illegal argument `self`"),
         }
     }
 }

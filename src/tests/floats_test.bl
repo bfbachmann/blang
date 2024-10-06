@@ -1,6 +1,6 @@
 use {exit}: "std/libc/proc.bl"
 
-use {assert}: "src/tests/test_utils.bl"
+use {assert}: "std/backtrace/panic.bl"
 
 fn main() {
     // Check that we can initialize float variables with literals and compare them.

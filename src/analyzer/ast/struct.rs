@@ -322,7 +322,7 @@ impl AStructInit {
                     },
                 )
                 .as_str(),
-                struct_init,
+                &struct_init.typ,
             ));
         }
 

@@ -4,7 +4,7 @@ use {fopen, fseek, fread, ftell, rewind, fclose, seek_end}: "std/libc/file.bl"
 
 use {Parser}: "docs/examples/machine_interpreter/parser.bl"
 use {Machine, ExecStatus}: "docs/examples/machine_interpreter/machine.bl"
-use {assert}: "docs/examples/machine_interpreter/utils.bl"
+use {assert}: "std/backtrace/panic.bl"
 
 fn main() {
     // Open file for reading.

@@ -7,6 +7,7 @@ use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::pointer::PointerType;
 use crate::parser::ast::r#type::Type;
+use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::module::Module;
 
@@ -85,7 +86,13 @@ impl Argument {
             return Ok(Argument::new(
                 name.as_str(),
                 Type::Pointer(Box::new(PointerType::new(
-                    Type::new_unresolved("Self"),
+                    Type::Unresolved(UnresolvedType::new(
+                        "Self",
+                        Span {
+                            start_pos,
+                            end_pos: Module::prev_position(tokens),
+                        },
+                    )),
                     is_mut,
                     Span { start_pos, end_pos },
                 ))),
@@ -107,7 +114,13 @@ impl Argument {
         if name == "self" {
             return Ok(Argument::new(
                 name.as_str(),
-                Type::new_unresolved("Self"),
+                Type::Unresolved(UnresolvedType::new(
+                    "Self",
+                    Span {
+                        start_pos,
+                        end_pos: Module::prev_position(tokens),
+                    },
+                )),
                 is_mut,
                 Span { start_pos, end_pos },
             ));

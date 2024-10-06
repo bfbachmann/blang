@@ -1,14 +1,5 @@
-use {exit}: "std/libc/proc.bl"
 use {write, stdout}: "std/libc/io.bl"
 
 pub fn print_str(s: str) {
     write(stdout, s as *u8, s.len())
-}
-
-pub fn assert(cond: bool, msg: str) {
-    if !cond {
-        print_str("FATAL: ")
-        print_str(msg)
-        exit(1)
-    }
 }

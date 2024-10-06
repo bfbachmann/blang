@@ -1,129 +1,135 @@
-use {panic}: "std/backtrace/panic.bl"
-use {heap_alloc, heap_realloc, heap_free}: "std/mem/mem.bl"
-use {memmove}: "std/libc/mem.bl"
+use panic: "std/backtrace/panic.bl"
+use mem: "std/libc/mem.bl"
 use {Clone}: "std/specs/clone.bl"
+use {Array}: "std/types/array.bl"
 
-/// A resizable array. The element type here should implement `Clone` so 
-/// elements can be safely copied out of the list. This type is not threadsafe.
-pub struct List[T: Clone] {
-    ptr: *mut T
+/// An array of heap-allocated values of type T that resizes itself 
+/// automatically.
+pub struct List[T] {
+    entries: Array[T]
     len: uint
-    cap: uint
 }
 
 impl List {
     /// Returns a new empty list.
     pub fn new() -> List[T] {
-        return List[T]{
-            ptr: null
-            len: 0
-            cap: 0
-        }
+        return List[T].with_capacity(0)
     }
 
-    /// Returns a new list with the given pre-allocated capacity.
+    /// Returns a list with enough allocated memory to hold `cap` values of 
+    /// type `T`.
     pub fn with_capacity(cap: uint) -> List[T] {
-        return List[T]{
-            ptr: heap_alloc[T](cap)
+        return List[T] {
+            entries: Array[T].new_with_len(cap)
             len: 0
-            cap: cap
         }
     }
 
-    /// Returns the number of elements currently in the list.
+    /// Returns the current length of the list.
     pub fn len(*self) -> uint {
         return self^.len
     }
 
-    /// Returns the current capacity of the list.
+    /// Returns the current capacity of the list (i.e. how many entries it 
+    /// could store before it would need to allocate more space for them).
     pub fn capacity(*self) -> uint {
-        return self^.cap
+        return self^.entries.len()
     }
 
-    /// Pushes `t` onto the end of the list.
+    /// Appends `t` to the end of the list.
     pub fn push(*mut self, t: T) {
         if self.is_full() {
             self.grow()
         }
 
-        self^.ptr.(self^.len as int)^ = t
+        self^.entries.mut_ptr_at(self^.len)^ = t
         self^.len += 1
     }
 
-    /// Pops removes the last element from the list and returns it. Panics if
-    /// the list is empty.
-    pub fn pop(*mut self) -> T {
-        if self^.len == 0 {
-            panic("cannot pop from empty list")
-        }
-        return self.remove(self^.len - 1)
+    /// Removes the value at the end of the list. Panics if the list if empty.
+    pub fn pop(*mut self) {
+        @panic.assert(self^.len > 0, "cannot pop from empty list")
+        self.remove(self^.len - 1)
     }
 
-    /// Returns a clone of the element at index `i` in the list if `i` is in 
-    /// bounds. Panics if `i` is out of bounds.
-    pub fn get(*self, i: uint) -> T {
+    /// Returns a pointer to the value at index `i` in the list.
+    /// Panics if `i` is out of bounds.
+    pub fn get(*self, i: uint) -> *T {
         self.check_bounds(i)
-        return self^.ptr.(i as int).clone()
+        return self^.entries.ptr_at(i)
     }
 
-    /// Sets the element at index `i` to `value`. Panics if `i` is ouf of
-    /// bounds.
-    pub fn set(*mut self, i: uint, value: T) {
+    /// Returns a mutating pointer to the value at index `i` in the list.
+    /// Panics if `i` is out of bounds.
+    pub fn get_mut(*mut self, i: uint) -> *mut T {
         self.check_bounds(i)
-        self^.ptr.(i as int)^ = value
+        return self^.entries.mut_ptr_at(i)
     }
 
-    /// Removes the element at index `i` from the list and returns it. Panics if
-    /// `i` is out of bounds.
-    pub fn remove(*mut self, i: uint) -> T {
-        self.check_bounds(i)
-        let t = self^.ptr.(i as int).clone()
+    /// Sets the value at index `i` in the list to `t`.
+    /// Panics if `i` is out of bounds.
+    pub fn set(*mut self, i: uint, t: T) {
+        self.get_mut(i)^ = t
+    }
 
-        // We only need to shift elements over if we're not removing the last
-        // element in the list.
-        let len = self.len()
-        if len > i + 1 {
-            memmove(
-                self^.ptr.(i as int) as *u8, 
-                self^.ptr.(i as int + 1) as *u8, 
-                len - i - 1,
+    /// Remove the value at index `i` from the list.
+    /// Panics if `i` is out of bounds.
+    pub fn remove(*mut self, i: uint) {
+        self.check_bounds(i)
+        
+        // We only need to move entries left by one if the element we removed
+        // was not the last one.
+        let len = self^.len
+        let is_last_entry = i + 1 == len
+        if !is_last_entry {
+            @mem.memmove(
+                self^.entries.mut_ptr_at(i) as *mut u8, 
+                self^.entries.ptr_at(i + 1) as *u8, 
+                (len - 1 - i) * sizeof T,
             )
         }
-        
+
         self^.len -= 1
-        return t
     }
-    
+
     /// Frees the memory allocated for this list.
     pub fn free(self) {
-        heap_free[T](self.ptr)
+        self.entries.free()
     }
 
     /// Returns true if the list has no elements.
     pub fn is_empty(*self) -> bool {
-        return self^.len > 0
+        return self^.len == 0
     }
 
     /// Returns true if the list is full.
-    fn is_full(*self) -> bool {
-        return self^.len == self^.cap
+    pub fn is_full(*self) -> bool {
+        return self^.len == self^.entries.len()
     }
 
     /// Increases the capacity of the list.
     fn grow(*mut self) {
-        let mut new_cap = self^.cap * 2
+        let mut new_cap = self^.entries.len() * 2
         if new_cap == 0 {
             new_cap = 1
         }
 
-        self^.ptr = heap_realloc[T](self^.ptr, new_cap)
-        self^.cap = new_cap
+        self^.entries.resize(new_cap)
     }
 
     /// Panics if `i` is outside of the array bounds.
     fn check_bounds(*self, i: uint) {
-        if i >= self^.len {
-            panic("list index out of bounds")
+        @panic.assert(i < self^.len, "list index out of bounds")
+    }
+}
+
+impl List: Clone {
+    /// Returns a shallow clone of the list (i.e. does not clone entries).
+    fn clone(*self) -> List[T] {
+        return List[T]{
+            // Shallow array clone.
+            entries: self^.entries.clone()
+            len: self^.len
         }
     }
 }

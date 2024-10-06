@@ -1,6 +1,6 @@
 use {exit}: "std/libc/proc.bl"
 
-use {assert}: "src/tests/test_utils.bl"
+use {assert}: "std/backtrace/panic.bl"
 use {Test}: "src/tests/specs_2.bl"
 
 struct Thing {}

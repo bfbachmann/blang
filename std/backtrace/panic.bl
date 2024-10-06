@@ -3,7 +3,7 @@ use {write, stderr}: "std/libc/io.bl"
 use {backtrace, backtrace_symbols_fd}: "std/libc/signal.bl"
 
 pub fn panic(msg: str) {
-    let panic_str = "Panic: "
+    let panic_str = "panic: "
     write(stderr, panic_str as *u8, panic_str.len())
     write(stderr, msg as *u8, msg.len())
     write(stderr, "\n" as *u8, 1)
@@ -13,4 +13,10 @@ pub fn panic(msg: str) {
     let num_frames = backtrace(frame_buf, max_frames)
     backtrace_symbols_fd(frame_buf, num_frames, stderr)
     exit(1)
+}
+
+pub fn assert(cond: bool, msg: str) {
+    if !cond {
+        panic(msg)
+    }
 }

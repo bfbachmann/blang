@@ -54,7 +54,6 @@ locatable_impl!(UnresolvedType);
 
 impl UnresolvedType {
     /// Creates a new unresolved type with the given type name.
-    #[cfg(test)]
     pub fn new(name: &str, span: Span) -> Self {
         UnresolvedType {
             maybe_mod_name: None,

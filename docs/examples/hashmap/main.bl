@@ -1,4 +1,4 @@
-use {panic}: "std/backtrace/panic.bl"
+use {assert}: "std/backtrace/panic.bl"
 use {exit}: "std/libc/proc.bl"
 use {memcpy}: "std/libc/mem.bl"
 use {heap_alloc}: "std/mem/mem.bl"
@@ -46,10 +46,4 @@ fn main() {
     assert(map.get(&Key{s: "d"})^ == "value: d", "expected \"value: d\"")
 
     exit(0)
-}
-
-fn assert(cond: bool, msg: str) {
-    if !cond {
-        panic(msg)
-    }
 }

@@ -1,125 +1,107 @@
-use {heap_alloc, heap_realloc, heap_free}: "std/mem/mem.bl"
-use {panic}: "std/backtrace/panic.bl"
 use {Clone}: "std/specs/clone.bl"
+use {Array}: "std/types/array.bl"
 
-const deleted: u8 = 2
-const occupied: u8 = 1
-const empty: u8 = 0
-
+/// Manages a heap-allocated array of entries of type T. Each entry has a 
+/// status that indicates whether it is empty (was never occupied), occupied, 
+/// or deleted (was once occupied but is now unoccupied).
 pub struct Table[T] {
-    /// Points to the beginning of the region in which table entries are stored.
-    entries: *mut T
-    /// The number of table entries.
-    size: uint
-    /// Points to the beginning of the region that holds a `u8` for each table entry.
-    /// The `u8` for a given entry will be 0 if it is empty, 1 if it is occupied, and
-    /// 2 if it was deleted (i.e. was occupied and then got deleted).
-    entry_status: *mut u8
+    entries: Array[Entry[T]]
+}
+
+enum EntryStatus {
+    Empty
+    Occupied
+    Deleted
+}
+
+struct Entry[T] {
+    status: EntryStatus
+    value: T
 }
 
 impl Table {
-    /// Creates a new table with `size` entries.
-    pub fn new(size: uint) -> Table[T] {
-        if size == 0 {
-            return Table[T]{
-                entries: null
-                size: 0
-                entry_status: null
-            }
+    /// Creates a new table with `len` entries.
+    pub fn new(len: uint) -> Table[T] {
+        return Table[T]{
+            entries: Array[Entry[T]].new_with_len(len)
         }
-
-        let table = Table[T]{
-            entries: heap_alloc[T](size)
-            size: size
-            entry_status: heap_alloc[u8](size)
-        }
-
-        return table
     }
 
     /// Returns the current number of entries in the table.
-    pub fn size(*self) -> uint {
-        return self^.size
+    pub fn len(*self) -> uint {
+        return self^.entries.len()
     }
 
     /// Writes `t` into the entry at index `i`.
     pub fn set(*mut self, i: uint, t: T) {
-        self.check_bounds(i)
-        self^.entries.(i as int)^ = t
-        self^.entry_status.(i as int)^ = occupied
+        let entry_ptr = self^.entries.mut_ptr_at(i)
+        entry_ptr^.status = EntryStatus::Occupied
+        entry_ptr^.value = t
     }
 
-    /// Returns a pointer to the value at index `i` in the table. Returns `null` if the entry
-    /// at `i` is empty.
+    /// Returns a pointer to the value at index `i` in the table. Returns `null`
+    /// if the entry at `i` is empty.
     pub fn get(*self, i: uint) -> *T {
-        self.check_bounds(i)
-        if self^.entry_status.(i as int)^ != occupied {
+        let entry_ptr = self^.entries.ptr_at(i)
+        if entry_ptr^.status !~ EntryStatus::Occupied {
             return null
         }
 
-        return self^.entries.(i as int)
+        return &entry_ptr^.value
     }
 
     /// Returns a `*mut` to the entry at index `i`, even if it is not occupied.
-    pub fn get_mut_ptr(*mut self, i: uint) -> *mut T {
-        self.check_bounds(i)
-        return self^.entries.(i as int)
+    pub fn get_mut(*mut self, i: uint) -> *mut T {
+        return &mut self^.entries.mut_ptr_at(i)^.value
     }
 
-    /// Deletes the entry at index `i`. This marks the entry as deleted if it was previously
-    /// occupied. Otherwise, does nothing.
+    /// Deletes the entry at index `i`. This marks the entry as deleted if it 
+    /// was previously occupied. Otherwise, does nothing.
     pub fn delete(*mut self, i: uint) {
-        self.check_bounds(i)
-        if self^.entry_status.(i as int)^ == occupied {
-            self^.entry_status.(i as int)^ = deleted
+        let entry_ptr = self^.entries.mut_ptr_at(i)
+        if entry_ptr^.status ~~ EntryStatus::Occupied {
+            entry_ptr^.status = EntryStatus::Deleted
         }
     }
 
     /// Returns `true` if the entry at index `i` is occupied.
     pub fn entry_is_occupied(*self, i: uint) -> bool {
-        self.check_bounds(i)
-        return self^.entry_status.(i as int)^ == occupied
+        return self^.entries.ptr_at(i)^.status ~~ EntryStatus::Occupied
     }
 
     /// Returns `true` if the entry at index `i` was deleted.
     pub fn entry_is_deleted(*self, i: uint) -> bool {
-        self.check_bounds(i)
-        return self^.entry_status.(i as int)^ == deleted
+        return self^.entries.ptr_at(i)^.status ~~ EntryStatus::Deleted
     }
 
     /// Returns `true` if the entry at index `i` is empty.
     pub fn entry_is_empty(*self, i: uint) -> bool {
-        return self^.entry_status.(i as int)^ == empty
+        return self^.entries.ptr_at(i)^.status ~~ EntryStatus::Empty
     }
 
-    /// Resizes the table to the given size.
-    pub fn resize(*mut self, size: uint) {
-        self^.entries = heap_realloc[T](self^.entries, size)
-        self^.entry_status = heap_realloc[u8](self^.entry_status, size)
-        self^.size = size
+    /// Resizes the table so it can hold `len` entries.
+    pub fn resize(*mut self, len: uint) {
+        let old_len = self^.entries.len()
+        self^.entries.resize(len)
+
+        // Set new entry statuses to emtpy.
+        for let mut i = old_len, i < len, i += 1 {
+            self^.entries.mut_ptr_at(i)^.status = EntryStatus::Empty
+        }
     }
 
     /// Frees memory that underlies the table.
     pub fn free(self) {
-        heap_free[T](self.entries)
-        heap_free[u8](self.entry_status)
-    }
-
-    fn check_bounds(*self, i: uint) {
-        if i >= self^.size {
-            panic("table index out of bounds")
-        }
+        self.entries.free()
     }
 }
 
 impl Table: Clone {
     /// Clones the table and returns the clone.
-    /// The clone is shallow and does not copy entires in the table.
+    /// The clone is shallow and does not copy entries in the table.
     fn clone(*self) -> Table[T] {
         return Table[T]{
-            entries: self^.entries
-            size: self^.size
-            entry_status: self^.entry_status
+            entries: self^.entries.clone()
         }
     }
 }

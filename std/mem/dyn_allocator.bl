@@ -1,0 +1,29 @@
+use {Allocator}: "std/mem/allocator.bl"
+
+/// An allocator with dynamic dispatch.
+pub struct DynAllocator {
+    /// A pointer to the underlying allocator.
+    pub allocator: *mut DynAllocator
+
+    // Function pointers for dynamic dispatch (i.e. a virtual table of sorts).
+    pub alloc_fn: fn (*mut DynAllocator, uint) -> *mut u8
+    pub realloc_fn: fn (*mut DynAllocator, *u8, uint) -> *mut u8
+    pub free_fn: fn (*mut DynAllocator, *u8)
+}
+
+impl DynAllocator {
+    /// Calls alloc on the underlying allocator and returns the result.
+    pub fn alloc(*mut self, size: uint) -> *mut u8 {
+        return self^.alloc_fn(self^.allocator, size)
+    }
+    
+    /// Calls realloc on the underlying allocator and returns the result.
+    pub fn realloc(*mut self, ptr: *u8, size: uint) -> *mut u8 {
+        return self^.realloc_fn(self^.allocator, ptr, size)
+    }
+
+    /// Calls free on the underlying allocator and returns the result.
+    pub fn free(*mut self, ptr: *u8) {
+        self^.free_fn(self^.allocator, ptr)
+    }
+}

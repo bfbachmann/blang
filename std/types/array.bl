@@ -1,0 +1,71 @@
+use mem: "std/libc/mem.bl"
+use panic: "std/backtrace/panic.bl"
+use {Clone}: "std/specs/clone.bl"
+
+/// A resizeable array of heap-allocated values of type T.
+pub struct Array[T] {
+    data: *mut T
+    len: uint
+}
+
+impl Array {
+    /// Create a new empty array.
+    pub fn new() -> Array[T]{
+        return Array[T].new_with_len(0)
+    }
+
+    /// Create a new array that can contain `len` elements.
+    pub fn new_with_len(len: uint) -> Array[T] {
+        let mut data: *mut T = null
+        if len > 0 {
+            data = @mem.malloc(sizeof T * len) as *mut T
+        }
+
+        return Array[T]{
+            data: data
+            len: len
+        }
+    }
+
+    /// Resize the array so it can hold `len` elements. Be careful with 
+    /// this function because it might move all the data in the array,
+    /// which would invalidate any existing pointers to its data.
+    pub fn resize(*mut self, len: uint) {
+        self^.data = @mem.realloc(self^.data as *mut u8, sizeof T * len) as *mut T
+        self^.len = len
+    }
+
+    /// Returns a pointer to the element at index `i`. Panics if `i`
+    /// is out of bounds.
+    pub fn ptr_at(*self, i: uint) -> *T {
+        @panic.assert(i < self^.len, "index out of bounds for Array")
+        return self^.data.(i as int)
+    }
+
+    /// Returns a mutating pointer to the element at index `i`. Panics if
+    /// `i` is out of bounds.
+    pub fn mut_ptr_at(*mut self, i: uint) -> *mut T {
+        @panic.assert(i < self^.len, "index out of bounds for Array")
+        return self^.data.(i as int)
+    }
+
+    /// Returns the nubmer of elements in the array.
+    pub fn len(*self) -> uint {
+        return self^.len
+    }
+
+    /// Frees all heap memory allocated for the array.
+    pub fn free(self) {
+        @mem.free(self.data as *u8)
+    }
+}
+
+impl Array: Clone {
+    /// Returns a shallow clone of the array (i.e. does not clone entries).
+    fn clone(*self) -> Array[T] {
+        return Array[T]{
+            data: self^.data
+            len: self^.len
+        }
+    }
+}

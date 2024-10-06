@@ -51,8 +51,8 @@ impl HashMap {
             self.grow()
         }
 
-        let size = self^.table.size()
-        for let mut index = self.hash_key(&k) % size, , index = (index + 1) % size {
+        let len = self^.table.len()
+        for let mut index = self.hash_key(&k) % len, , index = (index + 1) % len {
             let entry_ptr = self^.table.get(index)
 
             // If the entry pointer is `null`, it means that the entry is either empty
@@ -73,10 +73,10 @@ impl HashMap {
     /// Returns a pointer to the value that is mapped to the given key, or null
     /// if the key is not in the map.
     pub fn get(*mut self, k: *K) -> *V {
-        let size = self^.table.size()
+        let len = self^.table.len()
         let hash = self.hash_key(k)
-        for let mut count: uint = 0, count < size, count += 1 {
-            let index = (hash + count) % size
+        for let mut count: uint = 0, count < len, count += 1 {
+            let index = (hash + count) % len
 
             // If the entry is empty, it means the key can't be in the map.
             if self^.table.entry_is_empty(index) {
@@ -94,10 +94,10 @@ impl HashMap {
 
     /// Removes the mapping for the given key from the map, if it exists.
     pub fn delete(*mut self, k: *K) {
-        let size = self^.table.size()
+        let len = self^.table.len()
         let hash = self.hash_key(k)
-        for let mut count: uint = 0, count < size, count += 1 {
-            let index = (hash + count) % size
+        for let mut count: uint = 0, count < len, count += 1 {
+            let index = (hash + count) % len
 
             // If the entry is empty, it means the key can't be in the map.
             if self^.table.entry_is_empty(index) {
@@ -135,10 +135,10 @@ impl HashMap {
     /// This function uses quadratic probing. Returns `{0, false}` if no entry was found.
     fn get_entry_index(*mut self, k: *K, find_occupied: bool) -> {uint, bool} {
         let hash = self.hash_key(k)
-        let size = self^.table.size()
+        let len = self^.table.len()
 
-        for let mut count: uint = 0, count < size, count += 1 {
-            let index = (hash + (count * count + count) / 2) % size
+        for let mut count: uint = 0, count < len, count += 1 {
+            let index = (hash + (count * count + count) / 2) % len
 
             if find_occupied {
                 // If the entry is empty, it means the key can't be in the map.
@@ -162,7 +162,7 @@ impl HashMap {
     /// computed using a hard-coded load factor of 0.8).
     fn needs_grow(*self) -> bool {
         // Using load factor of 0.8 (4 / 5).
-        let resize_threshold = self^.table.size() * 4 / 5
+        let resize_threshold = self^.table.len() * 4 / 5
         return self^.num_allocated >= resize_threshold
     }
 
@@ -170,22 +170,22 @@ impl HashMap {
     /// quadratic probing).
     fn grow(*mut self) {
         // Double the size of the table (or set it to 1 if it's empty).
-        let old_size = self^.table.size()
-        let mut new_size = old_size * 2
-        if new_size == 0 {
-            new_size = 2
+        let old_len = self^.table.len()
+        let mut new_len = old_len * 2
+        if new_len == 0 {
+            new_len = 2
         }
 
         // Replace the old table with a new one that is double the size.
         let old_table = self^.table.clone()
-        self^.table = Table[Mapping[K, V]].new(new_size)
+        self^.table = Table[Mapping[K, V]].new(new_len)
 
         // Re-hash all the keys in the table and copy mappings into the new table.
-        for let mut i: uint = 0, i < old_size, i += 1 {
+        for let mut i: uint = 0, i < old_len, i += 1 {
             let entry_ptr = old_table.get(i)
             if entry_ptr != null {
                 let new_index = self.get_entry_index(&entry_ptr^.key, false)
-                copy[Mapping[K, V]](self^.table.get_mut_ptr(i), entry_ptr)
+                copy[Mapping[K, V]](self^.table.get_mut(i), entry_ptr)
             }
         }
 

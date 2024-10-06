@@ -138,6 +138,7 @@ fn print_source_color(file_path: &str, span: &Span) {
         format_file_loc(file_path, Some(start_pos.line), Some(start_pos.col))
     );
 
+    let mut mid_lines_printed = 0;
     for (i, line) in reader.lines().enumerate() {
         let line_num = i + 1;
         if line_num < start_pos.line {
@@ -148,6 +149,7 @@ fn print_source_color(file_path: &str, span: &Span) {
 
         let line = line.unwrap();
         if line_num == start_pos.line && start_pos.line == end_pos.line {
+            // The code only spans one line.
             let (left, right) = line.split_at(start_pos.col - 1);
             let (mid, right) = right.split_at(end_pos.col - start_pos.col);
             println!(
@@ -161,10 +163,11 @@ fn print_source_color(file_path: &str, span: &Span) {
                     .blue()
                     .bold(),
                 left,
-                mid.on_bright_red(),
+                mid.red().bold(),
                 right
             );
         } else if line_num == start_pos.line {
+            // The code spans multiple lines and this is the first.
             let (left, right) = line.split_at(start_pos.col - 1);
             println!(
                 "{pipe:>width$}",
@@ -177,26 +180,45 @@ fn print_source_color(file_path: &str, span: &Span) {
                     .blue()
                     .bold(),
                 left,
-                right.on_bright_red(),
+                right.red().bold(),
             );
         } else if line_num == end_pos.line {
+            // The code spans multiple lines and this is the last.
             let (left, right) = line.split_at(end_pos.col - 1);
             println!(
                 "{} {}{}",
                 format!("{:>width$}|", line_num, width = width)
                     .blue()
                     .bold(),
-                left.on_bright_red(),
+                left.red().bold(),
                 right
             );
         } else {
-            println!(
-                "{} {}",
-                format!("{:>width$}|", line_num, width = width)
-                    .blue()
-                    .bold(),
-                line.on_bright_red()
-            );
+            mid_lines_printed += 1;
+
+            // The code spans multiple lines and this is neither the first nor the last.
+            if mid_lines_printed == 3 {
+                let ws: String = line
+                    .chars()
+                    .take_while(|c| c.is_whitespace())
+                    .into_iter()
+                    .collect();
+
+                println!(
+                    "{} {}{}",
+                    format!("{:>width$}|", "", width = width).blue().bold(),
+                    ws,
+                    "// ...".red().bold()
+                );
+            } else if mid_lines_printed <= 1 {
+                println!(
+                    "{} {}",
+                    format!("{:>width$}|", line_num, width = width)
+                        .blue()
+                        .bold(),
+                    line.red().bold()
+                );
+            }
         }
     }
 }
@@ -216,6 +238,7 @@ fn print_source_no_color(file_path: &str, span: &Span) {
         format_file_loc(file_path, Some(start_pos.line), Some(start_pos.col))
     );
 
+    let mut mid_lines_printed = 0;
     for (i, line) in reader.lines().enumerate() {
         let line_num = i + 1;
         if line_num < start_pos.line {
@@ -289,11 +312,29 @@ fn print_source_no_color(file_path: &str, span: &Span) {
             // The segment we're printing spans multiple lines, and this is neither the first
             // nor the last. We only print these lines if the total segment spans more than the maximum
             // number of lines.
-            println!(
-                "{} {}",
-                format!("{:>width$}|", line_num, width = width),
-                line
-            );
+            mid_lines_printed += 1;
+
+            // The code spans multiple lines and this is neither the first nor the last.
+            if mid_lines_printed == 3 {
+                let ws: String = line
+                    .chars()
+                    .take_while(|c| c.is_whitespace())
+                    .into_iter()
+                    .collect();
+
+                println!(
+                    "{} {}{}",
+                    format!("{:>width$}|", "", width = width),
+                    ws,
+                    "// ..."
+                );
+            } else if mid_lines_printed <= 1 {
+                println!(
+                    "{} {}",
+                    format!("{:>width$}|", line_num, width = width),
+                    line
+                );
+            }
         }
     }
 }

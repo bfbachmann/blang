@@ -1,6 +1,6 @@
 use {exit}: "std/libc/proc.bl"
 use {malloc, free}: "std/libc/mem.bl"
-use {panic}: "std/backtrace/panic.bl"
+use {assert}: "std/backtrace/panic.bl"
 
 /// A node in a linked list.
 struct Node {
@@ -153,11 +153,4 @@ fn main() {
     head.free()
 
     exit(0)
-}
-
-/// Panics with the given message if `cond` is false.
-fn assert(cond: bool, msg: str) {
-    if !cond {
-        panic(msg)
-    }
 }

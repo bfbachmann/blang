@@ -108,7 +108,7 @@ impl AFnSig {
 
         // Analyze the arguments.
         let mut arg_names = HashSet::new();
-        for arg in &sig.args {
+        for (i, arg) in sig.args.iter().enumerate() {
             // Make sure the argument name wasn't already used if it's not empty.
             if !arg.name.is_empty() {
                 if arg_names.contains(arg.name.as_str()) {
@@ -124,6 +124,33 @@ impl AFnSig {
 
                     // Skip this invalid argument
                     continue;
+                }
+
+                if arg.name == "self" {
+                    if ctx.get_cur_self_type_key().is_none() {
+                        ctx.insert_err(AnalyzeError::new(
+                            ErrorKind::IllegalSelfArg,
+                            format_code!(
+                                "cannot declare argument {} outside of {} or {} block",
+                                "self", "spec", "impl"
+                            )
+                            .as_str(),
+                            arg,
+                        ));
+
+                        // Skip this invalid argument
+                        continue;
+                    } else if i != 0 {
+                        ctx.insert_err(AnalyzeError::new(
+                            ErrorKind::IllegalSelfArg,
+                            format!("{} must always be the first argument, if present", "self",)
+                                .as_str(),
+                            arg,
+                        ));
+
+                        // Skip this invalid argument
+                        continue;
+                    }
                 }
 
                 arg_names.insert(arg.name.clone());
@@ -259,7 +286,7 @@ impl AFnSig {
         s += ")";
 
         if let Some(tk) = &self.maybe_ret_type_key {
-            s += format!(": {}", ctx.display_type(*tk)).as_str();
+            s += format!(" -> {}", ctx.display_type(*tk)).as_str();
         }
 
         s

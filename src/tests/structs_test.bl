@@ -1,6 +1,6 @@
 use {exit}: "std/libc/proc.bl"
 
-use {assert}: "src/tests/test_utils.bl"
+use {assert}: "std/backtrace/panic.bl"
 
 struct Nested {
     int_val: i64,
