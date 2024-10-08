@@ -1,27 +1,29 @@
-use mem: "std/libc/mem.bl"
 use panic: "std/backtrace/panic.bl"
 use {Clone}: "std/specs/clone.bl"
+use {DynAllocator}: "std/mem/dyn_allocator.bl"
 
 /// A resizeable array of heap-allocated values of type T.
 pub struct Array[T] {
+    allocator: *mut DynAllocator
     data: *mut T
     len: uint
 }
 
 impl Array {
     /// Create a new empty array.
-    pub fn new() -> Array[T]{
-        return Array[T].new_with_len(0)
+    pub fn new(al: *mut DynAllocator) -> Array[T]{
+        return Array[T].new_with_len(al, 0)
     }
 
     /// Create a new array that can contain `len` elements.
-    pub fn new_with_len(len: uint) -> Array[T] {
+    pub fn new_with_len(al: *mut DynAllocator, len: uint) -> Array[T] {
         let mut data: *mut T = null
         if len > 0 {
-            data = @mem.malloc(sizeof T * len) as *mut T
+            data = al.alloc(sizeof T * len) as *mut T
         }
 
         return Array[T]{
+            allocator: al
             data: data
             len: len
         }
@@ -31,7 +33,7 @@ impl Array {
     /// this function because it might move all the data in the array,
     /// which would invalidate any existing pointers to its data.
     pub fn resize(*mut self, len: uint) {
-        self^.data = @mem.realloc(self^.data as *mut u8, sizeof T * len) as *mut T
+        self^.data = self^.allocator.realloc(self^.data as *mut u8, sizeof T * len) as *mut T
         self^.len = len
     }
 
@@ -55,8 +57,8 @@ impl Array {
     }
 
     /// Frees all heap memory allocated for the array.
-    pub fn free(self) {
-        @mem.free(self.data as *u8)
+    pub fn free(mut self) {
+        self.allocator.free(self.data as *u8)
     }
 }
 
@@ -64,6 +66,7 @@ impl Array: Clone {
     /// Returns a shallow clone of the array (i.e. does not clone entries).
     fn clone(*self) -> Array[T] {
         return Array[T]{
+            allocator: self^.allocator
             data: self^.data
             len: self^.len
         }

@@ -1,8 +1,8 @@
 use io: "std/libc/io.bl"
-use mem: "std/libc/mem.bl"
 use panic: "std/backtrace/panic.bl"
-use {List}: "std/types/list.bl"
 use {Allocator}: "std/mem/allocator.bl"
+use {DynAllocator}: "std/mem/dyn_allocator.bl"
+use {List}: "std/types/list.bl"
 
 /// A block of heap-allocated memory.
 struct Block {
@@ -27,20 +27,24 @@ impl Block {
 /// Allcates memory on the heap and checks for invalid pointers and memory
 /// leaks.
 pub struct DebugAllocator {
+    allocator: *mut DynAllocator
+    // TODO: A list is a very inefficient way of storing and accessing this 
+    // information.
     blocks: List[Block]
 }
 
 impl DebugAllocator: Allocator {
-    /// Returns a new allocator.
-    pub fn new() -> DebugAllocator {
+    /// Returns a new allocator that uses `al` as its underlying allocator.
+    pub fn new(al: *mut DynAllocator) -> DebugAllocator {
         return DebugAllocator{
-            blocks: List[Block].new()
+            allocator: al
+            blocks: List[Block].new(al)
         }
     }
 
     /// Allocates `size` bytes on the heap an returns the pointer.
     pub fn alloc(*mut self, size: uint) -> *mut u8 {
-        let ptr = @mem.malloc(size)
+        let ptr = self^.allocator.alloc(size)
         @panic.assert(ptr != null, "failed to allocate memory\0")
         self^.blocks.push(Block{
             ptr: ptr
@@ -61,7 +65,7 @@ impl DebugAllocator: Allocator {
         let block = self^.blocks.get_mut(index)
         @panic.assert(block^.ptr == ptr, "cannot relloc using non-base pointer")
 
-        block^.ptr = @mem.realloc(block^.ptr, size)
+        block^.ptr = self^.allocator.realloc(block^.ptr, size)
         @panic.assert(block^.ptr != null, "failed to reallocate memory")
         block^.size = size
 
@@ -78,7 +82,7 @@ impl DebugAllocator: Allocator {
         let block = self^.blocks.get(index)
         @panic.assert(block^.ptr == ptr, "cannot free using non-base pointer")
         
-        @mem.free(block^.ptr)
+        self^.allocator.free(block^.ptr)
         self^.blocks.remove(index)
     }
 

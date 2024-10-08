@@ -1,3 +1,4 @@
+use io: "std/libc/io.bl"
 use {Allocator}: "std/mem/allocator.bl"
 
 /// An allocator with dynamic dispatch.
@@ -11,7 +12,7 @@ pub struct DynAllocator {
     pub free_fn: fn (*mut DynAllocator, *u8)
 }
 
-impl DynAllocator {
+impl DynAllocator: Allocator {
     /// Calls alloc on the underlying allocator and returns the result.
     pub fn alloc(*mut self, size: uint) -> *mut u8 {
         return self^.alloc_fn(self^.allocator, size)
@@ -25,5 +26,23 @@ impl DynAllocator {
     /// Calls free on the underlying allocator and returns the result.
     pub fn free(*mut self, ptr: *u8) {
         self^.free_fn(self^.allocator, ptr)
+    }
+}
+
+/// Returns an allocator with dynamic dispatch to `al`'s methods.
+// TODO: Make this the `new` method on the `DynAllocator` type when we support
+// parameterized methods.
+pub fn new_dyn_allocator[Al: Allocator](al: *mut Al) -> DynAllocator {
+    return DynAllocator{
+        allocator: al as *mut DynAllocator
+        alloc_fn: fn (dyn_al: *mut DynAllocator, size: uint) -> *mut u8 {
+            return Al.alloc(dyn_al as *mut Al, size)
+        }
+        realloc_fn: fn (dyn_al: *mut DynAllocator, ptr: *u8, size: uint) -> *mut u8 {
+            return Al.realloc(dyn_al as *mut Al, ptr, size)
+        }
+        free_fn: fn (dyn_al: *mut DynAllocator, ptr: *u8) {
+            Al.free(dyn_al as *mut Al, ptr)
+        }
     }
 }

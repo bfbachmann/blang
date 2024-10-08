@@ -2,6 +2,8 @@ use {puts}: "std/libc/io.bl"
 use {exit}: "std/libc/proc.bl"
 use {heap_realloc, heap_free}: "std/mem/mem.bl"
 use {panic}: "std/backtrace/panic.bl"
+use {new_dyn_allocator}: "std/mem/dyn_allocator.bl"
+use {LibcAllocator}: "std/mem/libc_allocator.bl"
 
 // List is the data type being tested.
 use {List}: "std/types/list.bl"
@@ -61,7 +63,8 @@ impl Thing {
 fn main() {
     // Test generic list functionality.
     {
-        let mut list = List[uint].new()
+        let mut allocator = new_dyn_allocator[LibcAllocator](&mut LibcAllocator{})
+        let mut list = List[uint].new(&mut allocator)
         for let mut i: uint = 0, i < 10, i += 1 {
             list.push(i)
             assert(list.len() == i + 1, "list has wrong len after push()")

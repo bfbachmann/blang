@@ -1237,7 +1237,8 @@ fn analyze_unary_op(
             );
 
             // Make sure the expression has type bool.
-            if !ctx.must_get_type(a_expr.type_key).is_bool() {
+            let typ = ctx.must_get_type(a_expr.type_key);
+            if !typ.is_unknown() && !typ.is_bool() {
                 ctx.insert_err(AnalyzeError::new(
                     ErrorKind::MismatchedTypes,
                     format_code!(

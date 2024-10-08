@@ -1952,6 +1952,33 @@ mod tests {
     }
 
     #[test]
+    fn self_referential_type_missing_params() {
+        let result = analyze(
+            r#"
+            struct Thing[T] { ptr: *mut Thing }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::UnresolvedParams));
+    }
+
+    #[test]
+    fn self_referential_parameterized_type() {
+        let result = analyze(
+            r#"
+            struct Thing[T] {
+                ptr: *mut Thing[int]
+                value: T
+            }
+
+            fn main() {
+                let t = Thing[str]{ptr: null, value: "test"}
+            }
+            "#,
+        );
+        check_result(result, None);
+    }
+
+    #[test]
     fn private_member_access() {
         let mods = HashMap::from([
             (

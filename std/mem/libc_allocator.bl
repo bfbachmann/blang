@@ -1,0 +1,19 @@
+use mem: "std/libc/mem.bl"
+use {Allocator}: "std/mem/allocator.bl"
+
+/// Just wraps libc's memory management API.
+pub struct LibcAllocator {}
+
+impl LibcAllocator: Allocator {
+    pub fn alloc(*mut self, size: uint) -> *mut u8 {
+        return @mem.malloc(size)
+    }
+
+    pub fn realloc(*mut self, ptr: *u8, size: uint) -> *mut u8 {
+        return @mem.realloc(ptr, size)
+    }
+
+    pub fn free(*mut self, ptr: *u8) {
+        @mem.free(ptr)
+    }
+}

@@ -1,6 +1,7 @@
 use panic: "std/backtrace/panic.bl"
 use mem: "std/libc/mem.bl"
 use {Clone}: "std/specs/clone.bl"
+use {DynAllocator}: "std/mem/dyn_allocator.bl"
 use {Array}: "std/types/array.bl"
 
 /// An array of heap-allocated values of type T that resizes itself 
@@ -12,15 +13,15 @@ pub struct List[T] {
 
 impl List {
     /// Returns a new empty list.
-    pub fn new() -> List[T] {
-        return List[T].with_capacity(0)
+    pub fn new(al: *mut DynAllocator) -> List[T] {
+        return List[T].with_capacity(al, 0)
     }
 
     /// Returns a list with enough allocated memory to hold `cap` values of 
     /// type `T`.
-    pub fn with_capacity(cap: uint) -> List[T] {
+    pub fn with_capacity(al: *mut DynAllocator, cap: uint) -> List[T] {
         return List[T] {
-            entries: Array[T].new_with_len(cap)
+            entries: Array[T].new_with_len(al, cap)
             len: 0
         }
     }

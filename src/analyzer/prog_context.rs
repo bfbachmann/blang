@@ -14,7 +14,7 @@ use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::ast::tuple::ATupleType;
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
-use crate::analyzer::scope::{Scope, ScopedSymbol, ScopeKind};
+use crate::analyzer::scope::{Scope, ScopeKind, ScopedSymbol};
 use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::fmt::{format_code_vec, vec_to_string};
@@ -600,6 +600,7 @@ impl ProgramContext {
         // Check if we've already inserted this type. This just prevents us
         // from storing duplicate types in the type store.
         if let Some(existing_tk) = self.get_existing_type_key(&typ) {
+            self.replace_type(existing_tk, typ);
             return existing_tk;
         }
 
@@ -692,6 +693,8 @@ impl ProgramContext {
                             "expected generic parameters",
                             typ,
                         ));
+
+                        return self.unknown_type_key();
                     }
 
                     tk
@@ -744,6 +747,8 @@ impl ProgramContext {
                     "expected generic parameters",
                     typ,
                 ));
+
+                return self.unknown_type_key();
             }
         }
 
@@ -831,8 +836,14 @@ impl ProgramContext {
         type_key: TypeKey,
         type_mappings: &HashMap<TypeKey, TypeKey>,
     ) -> Option<TypeKey> {
-        let mut replaced_tks = false;
         let mut struct_type = self.must_get_type(type_key).to_struct_type().clone();
+
+        // We can't monomorphize struct types that aren't parameterized.
+        if struct_type.maybe_params.is_none() {
+            return None;
+        }
+
+        let mut replaced_tks = false;
         for field in &mut struct_type.fields {
             if self.replace_tk(&mut field.type_key, type_mappings) {
                 replaced_tks = true;
@@ -1145,6 +1156,22 @@ impl ProgramContext {
         self.try_execute_monomorphization(poly_type_key, param_type_keys, param_locs)
     }
 
+    /// Re-executes a monomorphization.
+    pub fn reexecute_monomorphization(&mut self, mono: Monomorphization) {
+        // Temporarily remove the cached monomorphization to force a new one.
+        let removed = self
+            .type_monomorphizations
+            .remove(&mono.mono_type_key)
+            .unwrap();
+
+        // Execute the same monomorphization again.
+        self.monomorphize_type(mono.poly_type_key, &mono.type_mappings())
+            .unwrap();
+
+        // Re-insert the monomorphization.
+        self.insert_monomorphization(removed);
+    }
+
     fn try_execute_monomorphization<T: Locatable>(
         &mut self,
         poly_type_key: TypeKey,
@@ -1158,7 +1185,7 @@ impl ProgramContext {
         // the fact that this type has been monomorphized.
         let mut mono = Monomorphization {
             poly_type_key,
-            mono_type_key: 0,
+            mono_type_key: self.unknown_type_key(),
             replaced_params: vec![],
         };
         let mut type_mappings: HashMap<TypeKey, TypeKey> = HashMap::new();
@@ -1209,6 +1236,11 @@ impl ProgramContext {
             }
         }
 
+        // Before we proceed with monomorphization, we'll preemptively track the monomorphization
+        // to prevent infinitely recursive monomorphization. This is important for types that
+        // contain references to types that are monomorphizations of themselves.
+        self.insert_monomorphization(mono.clone());
+
         // Monomorphize the type.
         mono.mono_type_key = match self.monomorphize_type(poly_type_key, &type_mappings) {
             Some(replacement_tk) => replacement_tk,
@@ -1220,8 +1252,6 @@ impl ProgramContext {
         // for it during codegen.
         self.insert_monomorphization(mono.clone());
 
-        let mono_type_key = mono.mono_type_key;
-
         // Mark this new monomorphic type as implementing the specs its polymorphic
         // counterpart implements.
         if let Some(spec_impl_tks) = self.spec_impls.get(&poly_type_key) {
@@ -1230,7 +1260,7 @@ impl ProgramContext {
             }
         };
 
-        mono_type_key
+        mono.mono_type_key
     }
 
     /// Analyzes a passed parameter type and checks that it matches the expected
@@ -1301,12 +1331,14 @@ impl ProgramContext {
 
     /// Inserts the given monomorphization into the program context.
     fn insert_monomorphization(&mut self, mono: Monomorphization) {
-        self.type_monomorphizations
-            .insert(mono.mono_type_key, mono.clone());
+        if mono.mono_type_key != self.unknown_type_key() {
+            self.type_monomorphizations
+                .insert(mono.mono_type_key, mono.clone());
+        }
 
         match self.monomorphized_types.get_mut(&mono.poly_type_key) {
             Some(set) => {
-                set.insert(mono);
+                set.replace(mono);
             }
             None => {
                 self.monomorphized_types

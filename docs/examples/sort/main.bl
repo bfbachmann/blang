@@ -3,10 +3,13 @@ use {panic}: "std/backtrace/panic.bl"
 use {List}: "std/types/list.bl"
 use {Clone}: "std/specs/clone.bl"
 use {Ord, Order}: "std/specs/ord.bl"
+use {LibcAllocator}: "std/mem/libc_allocator.bl"
+use {new_dyn_allocator}: "std/mem/dyn_allocator.bl"
 
 fn main() {
     // Created a list and populate it.
-    let mut list = List[Value].new()
+    let mut allocator = new_dyn_allocator[LibcAllocator](&mut LibcAllocator{})
+    let mut list = List[Value].new(&mut allocator)
     for let mut i = 10, i >= 0, i -= 1 {
         list.push(Value{v: i})
     }

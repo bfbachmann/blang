@@ -1,5 +1,7 @@
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
+use crate::fmt::hierarchy_to_string;
+use crate::lexer::pos::Locatable;
 use crate::parser::ast::array::ArrayType;
 use crate::parser::ast::r#enum::EnumType;
 use crate::parser::ast::r#struct::StructType;
@@ -48,10 +50,10 @@ pub fn check_struct_containment(
     hierarchy: &mut Vec<String>,
 ) -> AnalyzeResult<()> {
     if hierarchy.contains(&struct_type.name) {
-        return Err(AnalyzeError::new(
-            ErrorKind::InfiniteSizedType,
-            format_code!("struct type {} cannot contain itself", struct_type.name).as_str(),
+        return Err(new_containment_err(
+            struct_type.name.as_str(),
             struct_type,
+            hierarchy,
         ));
     }
 
@@ -78,10 +80,10 @@ pub fn check_enum_containment(
     hierarchy: &mut Vec<String>,
 ) -> AnalyzeResult<()> {
     if hierarchy.contains(&enum_type.name) {
-        return Err(AnalyzeError::new(
-            ErrorKind::InfiniteSizedType,
-            format_code!("enum type {} cannot contain itself", enum_type.name).as_str(),
+        return Err(new_containment_err(
+            enum_type.name.as_str(),
             enum_type,
+            hierarchy,
         ));
     }
 
@@ -129,4 +131,26 @@ pub fn check_array_containment(
     } else {
         Ok(())
     }
+}
+
+fn new_containment_err<T: Locatable>(
+    type_name: &str,
+    typ: &T,
+    hierarchy: &Vec<String>,
+) -> AnalyzeError {
+    AnalyzeError::new(
+        ErrorKind::InfiniteSizedType,
+        format_code!("type {} cannot contain itself", type_name).as_str(),
+        typ,
+    )
+    .with_detail(
+        format!(
+            "The offending type hierarchy is {}.",
+            hierarchy_to_string(hierarchy)
+        )
+        .as_str(),
+    )
+    .with_help(
+        "Consider adding some form of indirection on the offending types, like a pointer type.",
+    )
 }

@@ -7,7 +7,6 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::fmt::hierarchy_to_string;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::r#enum::{EnumType, EnumVariantInit};
 use crate::parser::ast::r#type::Type;
@@ -95,12 +94,13 @@ impl AEnumType {
         // type, we won't get into an infinitely recursive type resolution cycle. When we're done
         // analyzing this type, the mapping will be updated in the program context.
         let mangled_name = ctx.mangle_name(None, None, enum_type.name.as_str(), true);
-        let type_key = ctx.insert_type(AType::Enum(AEnumType {
+        let mut a_enum_type = AEnumType {
             name: enum_type.name.clone(),
             mangled_name: mangled_name.clone(),
             maybe_params: None,
             variants: HashMap::new(),
-        }));
+        };
+        let type_key = ctx.insert_type(AType::Enum(a_enum_type.clone()));
 
         // Analyze parameters.
         let maybe_params = match &enum_type.maybe_params {
@@ -112,6 +112,12 @@ impl AEnumType {
             None => None,
         };
         let has_params = maybe_params.is_some();
+
+        // Update the stored type with the resolved parameters. It's important that we do this
+        // before analyzing any fields because the field types may reference this type, in
+        // which case it's important that we know what parameters it expects.
+        a_enum_type.maybe_params = maybe_params.clone();
+        ctx.replace_type(type_key, AType::Enum(a_enum_type.clone()));
 
         // Analyze each variant in the enum type.
         let mut variants: HashMap<String, AEnumTypeVariant> = HashMap::new();
@@ -152,37 +158,35 @@ impl AEnumType {
             );
         }
 
-        let a_enum = AEnumType {
+        // Update the type in the type store now that we've analyzed its fields.
+        let a_enum_type = AEnumType {
             name: enum_type.name.clone(),
             mangled_name,
             maybe_params,
             variants,
         };
+        ctx.replace_type(type_key, AType::Enum(a_enum_type.clone()));
 
-        // Make sure the enum doesn't contain itself via other types.
-        let a_enum_type = AType::Enum(a_enum.clone());
-        if let Some(type_hierarchy) = a_enum_type.contains_type(ctx, &a_enum_type) {
-            ctx.insert_err(
-                AnalyzeError::new(
-                    ErrorKind::InfiniteSizedType,
-                    format_code!(
-                        "enum {} cannot contain itself via any of its field types",
-                        enum_type.name,
-                    )
-                    .as_str(),
-                    enum_type,
-                )
-                .with_detail(
-                    format!(
-                        "The offending type hierarchy is {}.",
-                        hierarchy_to_string(
-                            &type_hierarchy.iter().map(|t| t.to_string()).collect()
-                        )
-                    )
-                    .as_str(),
-                )
-                .with_help("Consider using reference types instead."),
-            );
+        if has_params {
+            // We've analyzed all the variants on this enum, but it's possible that some of the
+            // variants had types that were monomorphizations of this enum type. For example, in
+            // this enum
+            //
+            //      enum Thing[T] { One(*Thing[int]) }
+            //
+            // variant `One` type `*Thing[int]` references a monomorphization of the `Thing` type.
+            // If this happens, the monomorphization would actually not be correct at this point
+            // because it happened before any of the variants on this type had been analyzed and
+            // written back to the type store. In other words, the monomorphization would have
+            // happened on an empty type, so we need to redo it on the analyzed type.
+            if let Some(monos) = ctx.monomorphized_types.remove(&type_key) {
+                for mono in monos {
+                    ctx.reexecute_monomorphization(mono);
+                }
+            }
+
+            // Pop generic parameters now that we're done analyzing the type.
+            ctx.pop_params();
         }
 
         // Record the type name as public in the current module if necessary.
@@ -190,15 +194,7 @@ impl AEnumType {
             ctx.insert_pub_type_name(enum_type.name.as_str());
         }
 
-        // Now that we have a fully analyzed enum type, we can add it to the program context so it
-        // can be referenced later.
-        ctx.replace_type(type_key, a_enum_type);
-
-        if has_params {
-            ctx.pop_params();
-        }
-
-        a_enum
+        a_enum_type
     }
 }
 

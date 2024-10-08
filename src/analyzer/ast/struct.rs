@@ -94,12 +94,13 @@ impl AStructType {
         // type, we won't get into an infinitely recursive type resolution cycle. When we're done
         // analyzing this struct type, the mapping will be updated in the program context.
         let mangled_name = ctx.mangle_name(None, None, struct_type.name.as_str(), true);
-        let type_key = ctx.insert_type(AType::Struct(AStructType {
+        let mut a_struct_type = AStructType {
             name: struct_type.name.clone(),
             mangled_name: mangled_name.clone(),
             maybe_params: None,
             fields: vec![],
-        }));
+        };
+        let type_key = ctx.insert_type(AType::Struct(a_struct_type.clone()));
 
         // Analyze generic params, if any and push them to the program context.
         let maybe_params = match &struct_type.maybe_params {
@@ -110,6 +111,12 @@ impl AStructType {
             }
             None => None,
         };
+
+        // Update the stored type with the resolved parameters. It's important that we do this
+        // before analyzing any fields because the field types may reference this type, in
+        // which case it's important that we know what parameters it expects.
+        a_struct_type.maybe_params = maybe_params.clone();
+        ctx.replace_type(type_key, AType::Struct(a_struct_type));
 
         // Analyze the struct fields.
         let mut fields = vec![];
@@ -144,26 +151,44 @@ impl AStructType {
             });
         }
 
-        // If necessary, pop generic parameters now that we're done analyzing the type.
-        if maybe_params.is_some() {
-            ctx.pop_params();
-        }
-
-        let a_struct = AStructType {
+        // Update the type in the type store now that we've analyzed its fields.
+        let has_params = maybe_params.is_some();
+        let a_struct_type = AStructType {
             name: struct_type.name.clone(),
             mangled_name,
             maybe_params,
             fields,
         };
+        ctx.replace_type(type_key, AType::Struct(a_struct_type.clone()));
+
+        if has_params {
+            // We've analyzed all the fields on this struct, but it's possible that some of the
+            // fields had types that were monomorphizations of this struct type. For example, in
+            // this struct
+            //
+            //      struct Thing[T] { ptr: *Thing[int] }
+            //
+            // the `ptr` field type `*Thing[int]` references a monomorphization of the `Thing` type.
+            // If this happens, the monomorphization would actually not be correct at this point
+            // because it happened before any of the fields on this type had been analyzed and
+            // written back to the type store. In other words, the monomorphization would have
+            // happened on an empty type, so we need to redo it on the analyzed type.
+            if let Some(monos) = ctx.monomorphized_types.remove(&type_key) {
+                for mono in monos {
+                    ctx.reexecute_monomorphization(mono);
+                }
+            }
+
+            // Pop generic parameters now that we're done analyzing the type.
+            ctx.pop_params();
+        }
 
         // Record the type name as public in the current module if necessary.
         if struct_type.is_pub {
             ctx.insert_pub_type_name(struct_type.name.as_str());
         }
 
-        let a_struct_type = AType::Struct(a_struct.clone());
-        ctx.replace_type(type_key, a_struct_type);
-        a_struct
+        a_struct_type
     }
 
     /// Returns the type of the struct field with the given name.

@@ -1,12 +1,17 @@
 use {exit}: "std/libc/proc.bl"
 use {calloc, free}: "std/libc/mem.bl"
 use {fopen, fseek, fread, ftell, rewind, fclose, seek_end}: "std/libc/file.bl"
+use {LibcAllocator}: "std/mem/libc_allocator.bl"
+use {DynAllocator, new_dyn_allocator}: "std/mem/dyn_allocator.bl"
 
 use {Parser}: "docs/examples/machine_interpreter/parser.bl"
 use {Machine, ExecStatus}: "docs/examples/machine_interpreter/machine.bl"
 use {assert}: "std/backtrace/panic.bl"
 
 fn main() {
+    // Use libc for memory management.
+    let mut allocator = new_dyn_allocator[LibcAllocator](&mut LibcAllocator{})
+
     // Open file for reading.
     let file = fopen("docs/examples/machine_interpreter/program.txt\0" as *u8, "rb\0" as *u8)
     assert(file as uint != 0, "failed to open file")
@@ -25,7 +30,7 @@ fn main() {
     assert(bytes_read == size_bytes as uint, "failed to read file into memory")
 
     // Read instructions from the file.
-    let mut parser = Parser.new(prog_data, bytes_read)
+    let mut parser = Parser.new(&mut allocator, prog_data, bytes_read)
     let instructions = parser.parse_instructions()
 
     // Execute instructions.
