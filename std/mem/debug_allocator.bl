@@ -45,7 +45,7 @@ impl DebugAllocator: Allocator {
     /// Allocates `size` bytes on the heap an returns the pointer.
     pub fn alloc(*mut self, size: uint) -> *mut u8 {
         let ptr = self^.allocator.alloc(size)
-        @panic.assert(ptr != null, "failed to allocate memory\0")
+        @panic.assert(ptr != null, "failed to allocate memory")
         self^.blocks.push(Block{
             ptr: ptr
             size: size

@@ -35,14 +35,20 @@ impl DynAllocator: Allocator {
 pub fn new_dyn_allocator[Al: Allocator](al: *mut Al) -> DynAllocator {
     return DynAllocator{
         allocator: al as *mut DynAllocator
-        alloc_fn: fn (dyn_al: *mut DynAllocator, size: uint) -> *mut u8 {
-            return Al.alloc(dyn_al as *mut Al, size)
-        }
-        realloc_fn: fn (dyn_al: *mut DynAllocator, ptr: *u8, size: uint) -> *mut u8 {
-            return Al.realloc(dyn_al as *mut Al, ptr, size)
-        }
-        free_fn: fn (dyn_al: *mut DynAllocator, ptr: *u8) {
-            Al.free(dyn_al as *mut Al, ptr)
-        }
+        alloc_fn: dispatch_alloc[Al]
+        realloc_fn: dispatch_realloc[Al]
+        free_fn: dispatch_free[Al]
     }
+}
+
+fn dispatch_alloc[Al: Allocator](dyn_al: *mut DynAllocator, size: uint) -> *mut u8 {
+    return Al.alloc(dyn_al as *mut Al, size)
+}
+
+fn dispatch_realloc[Al: Allocator](dyn_al: *mut DynAllocator, ptr: *u8, size: uint) -> *mut u8 {
+    return Al.realloc(dyn_al as *mut Al, ptr, size)
+}
+
+fn dispatch_free[Al: Allocator](dyn_al: *mut DynAllocator, ptr: *u8) {
+    Al.free(dyn_al as *mut Al, ptr)
 }
