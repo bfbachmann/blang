@@ -2,7 +2,7 @@ use panic: "std/backtrace/panic.bl"
 use {Clone}: "std/specs/clone.bl"
 use {DynAllocator}: "std/mem/dyn_allocator.bl"
 
-/// A resizeable array of heap-allocated values of type T.
+/// A resizeable array of values of type T.
 pub struct Array[T] {
     allocator: *mut DynAllocator
     data: *mut T

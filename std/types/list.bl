@@ -4,8 +4,13 @@ use {Clone}: "std/specs/clone.bl"
 use {DynAllocator}: "std/mem/dyn_allocator.bl"
 use {Array}: "std/types/array.bl"
 
-/// An array of heap-allocated values of type T that resizes itself 
-/// automatically.
+/// The minimum capacity of the list once it has been allocated.
+const min_cap: uint = 4
+
+/// The factor by which to grow and shrink when resizing.
+const growth_factor: uint = 2
+
+/// An array of values of type T that resizes itself automatically.
 pub struct List[T] {
     entries: Array[T]
     len: uint
@@ -91,6 +96,13 @@ impl List {
         }
 
         self^.len -= 1
+
+        // If the array of entries is at or below 1/4 capacity, half its 
+        // capacity.
+        let new_cap = self.capacity() / growth_factor
+        if new_cap >= min_cap and self^.len * growth_factor <= new_cap {
+            self^.entries.resize(new_cap)
+        }
     }
 
     /// Frees the memory allocated for this list.
@@ -105,14 +117,14 @@ impl List {
 
     /// Returns true if the list is full.
     pub fn is_full(*self) -> bool {
-        return self^.len == self^.entries.len()
+        return self^.len == self.capacity()
     }
 
-    /// Increases the capacity of the list.
+    /// Doubles the capacity of the list.
     fn grow(*mut self) {
-        let mut new_cap = self^.entries.len() * 2
+        let mut new_cap = self.capacity() * growth_factor
         if new_cap == 0 {
-            new_cap = 1
+            new_cap = min_cap
         }
 
         self^.entries.resize(new_cap)
