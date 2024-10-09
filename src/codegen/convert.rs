@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 
-use inkwell::AddressSpace;
 use inkwell::context::Context;
 use inkwell::targets::TargetMachine;
 use inkwell::types::{
-    AnyType, AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType,
+    AnyType, AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, IntType,
+    StructType,
 };
 use inkwell::types::{ArrayType, AsTypeRef};
 use inkwell::values::IntValue;
+use inkwell::AddressSpace;
 use llvm_sys::core::LLVMFunctionType;
 use llvm_sys::prelude::LLVMTypeRef;
 use llvm_sys::target::LLVMStoreSizeOfType;
@@ -320,12 +321,16 @@ impl<'ctx> TypeConverter<'ctx> {
             return ll_struct_type;
         }
 
+        // Figure out how many bytes we need to store the variant number based on how many
+        // variants there are.
+        let ll_variant_num_type = self.enum_variant_num_field_type(enum_type.variants.len() as u64);
+
         // Create the struct type with two fields. The first stores the enum variant number and the
         // second stores the enum variant value, if any.
         let ll_enum_type = self.ctx.opaque_struct_type(enum_type.mangled_name.as_str());
         ll_enum_type.set_body(
             &[
-                self.ctx.i8_type().as_basic_type_enum(),
+                ll_variant_num_type.as_basic_type_enum(),
                 self.ctx
                     .i8_type()
                     .array_type(self.max_enum_variant_size(enum_type) as u32)
@@ -335,6 +340,18 @@ impl<'ctx> TypeConverter<'ctx> {
         );
 
         ll_enum_type
+    }
+
+    /// Returns the LLVM IntType required to store the given number of enum variants.
+    fn enum_variant_num_field_type(&self, num_variants: u64) -> IntType<'ctx> {
+        let bits_required = 64 - num_variants.leading_zeros();
+        let bytes_required = (bits_required + 7) / 8;
+        match bytes_required {
+            1 => self.ctx.i8_type(),
+            2 => self.ctx.i16_type(),
+            3 | 4 => self.ctx.i32_type(),
+            _ => self.ctx.i64_type(),
+        }
     }
 
     /// Gets the LLVM "any" type that corresponds to the given type.

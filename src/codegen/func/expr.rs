@@ -421,6 +421,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     fn gen_enum_variant_init(&mut self, enum_init: &AEnumVariantInit) -> BasicValueEnum<'ctx> {
         // Assemble the LLVM struct type for this enum value.
         let ll_struct_type = self.type_converter.get_struct_type(enum_init.type_key);
+        let ll_variant_num_type = ll_struct_type
+            .get_field_type_at_index(0)
+            .unwrap()
+            .into_int_type();
 
         // Allocate space for the struct on the stack.
         let ll_struct_ptr = self.stack_alloc("enum_init_ptr", enum_init.type_key);
@@ -437,9 +441,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             .unwrap();
         self.builder.build_store(
             ll_number_field_ptr,
-            self.ctx
-                .i8_type()
-                .const_int(enum_init.variant.number as u64, false),
+            ll_variant_num_type.const_int(enum_init.variant.number as u64, false),
         );
 
         // Set the variant value field, if necessary.

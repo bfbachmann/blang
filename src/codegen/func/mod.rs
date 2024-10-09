@@ -487,6 +487,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     ) -> IntValue<'ctx> {
         let enum_type = self.type_store.must_get(enum_type_key);
         let ll_enum_type = self.type_converter.get_basic_type(enum_type_key);
+        let ll_variant_num_type = ll_enum_type
+            .into_struct_type()
+            .get_field_type_at_index(0)
+            .unwrap();
 
         // If the value is a pointer to an enum (i.e. the LLVM struct value representing a Blang
         // enum), then we need to use a GEP instruction to compute the address of the enum variant
@@ -504,7 +508,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 )
                 .unwrap();
             self.builder
-                .build_load(self.ctx.i8_type(), ll_variant_ptr, "variant_number")
+                .build_load(ll_variant_num_type, ll_variant_ptr, "variant_number")
                 .into_int_value()
         } else {
             self.builder

@@ -253,9 +253,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             AExprKind::EnumInit(enum_init) => {
                 let ll_struct_type = self.type_converter.get_struct_type(enum_init.type_key);
-                let ll_variant_num = self
-                    .ctx
-                    .i8_type()
+                let ll_variant_num_type = ll_struct_type
+                    .get_field_type_at_index(0)
+                    .unwrap()
+                    .into_int_type();
+                let ll_variant_num = ll_variant_num_type
                     .const_int(enum_init.variant.number as u64, false)
                     .as_basic_value_enum();
                 let mut ll_field_values = vec![ll_variant_num];
