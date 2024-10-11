@@ -545,12 +545,10 @@ pub fn gen_fn_sig<'a, 'ctx>(
     );
 
     // Set arg names and mark arguments as pass-by-value where necessary.
-    if ll_fn_val.count_params() == sig.args.len() as u32 {
+    let args_offset = if ll_fn_val.count_params() == sig.args.len() as u32 {
         // The compiled function arguments match those of the original function signature, so
-        // just assign arg names normally.
-        for (arg_val, arg) in ll_fn_val.get_param_iter().zip(sig.args.iter()) {
-            arg_val.set_name(arg.name.as_str());
-        }
+        // just assign arg names and attributes normally.
+        0
     } else {
         // The compiled function arguments do not match those of the original function
         // signature. This means the function is taking an additional pointer as its first
@@ -561,12 +559,28 @@ pub fn gen_fn_sig<'a, 'ctx>(
 
         // Add the "sret" attribute to the first argument to tell LLVM that it is being used to
         // pass the return value.
-        add_fn_arg_attrs(ctx, ll_fn_val, 0, vec!["sret"]);
+        add_fn_arg_attrs(
+            ctx,
+            ll_fn_val,
+            0,
+            vec!["sret", "writeonly", "noalias", "nonnull"],
+        );
 
-        // Name the remaining function arguments normally.
-        for i in 1..ll_fn_val.count_params() {
-            let arg_val = ll_fn_val.get_nth_param(i).unwrap();
-            arg_val.set_name(sig.args.get((i - 1) as usize).unwrap().name.as_str());
+        1
+    };
+
+    // Set argument names and attributes.
+    for i in args_offset..ll_fn_val.count_params() {
+        let arg = sig.args.get((i - args_offset) as usize).unwrap();
+        let arg_type = type_converter.must_get_type(arg.type_key);
+
+        // Set the argument name.
+        let ll_arg = ll_fn_val.get_nth_param(i).unwrap();
+        ll_arg.set_name(arg.name.as_str());
+
+        // Add appropriate attributes for optimization.
+        if ll_arg.is_pointer_value() && !arg_type.is_mut_pointer() && !arg.is_mut {
+            add_fn_arg_attrs(ctx, ll_fn_val, i, vec!["readonly"])
         }
     }
 }
