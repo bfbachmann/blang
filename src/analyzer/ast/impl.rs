@@ -97,13 +97,14 @@ impl AImpl {
             member_fns.push(a_fn);
         }
 
-        // Check that this `impl` actually implements all the specs it claims to.
-        let mut spec_impl_errs = vec![];
-        for spec in &impl_.specs {
-            // Find the spec being referred to.
-            let a_spec = {
-                let spec_type =
-                    match ctx.get_type_key_by_type_name(spec.maybe_mod_name.as_ref(), &spec.name) {
+        // Check that this `impl` actually implement the spec it claims to.
+        let spec_impl_err = match &impl_.maybe_spec {
+            Some(spec) => 'check: {
+                // Find the spec being referred to.
+                let a_spec = {
+                    let spec_type = match ctx
+                        .get_type_key_by_type_name(spec.maybe_mod_name.as_ref(), &spec.name)
+                    {
                         Some(tk) => match ctx.must_get_type(tk) {
                             AType::Spec(spec_type) => Some(spec_type),
                             _ => None,
@@ -111,53 +112,57 @@ impl AImpl {
                         _ => None,
                     };
 
-                if spec_type.is_none() {
-                    spec_impl_errs.push(AnalyzeError::new(
-                        ErrorKind::UndefSpec,
-                        format_code!("spec {} is not defined", spec).as_str(),
-                        spec,
-                    ));
-                    continue;
-                }
-
-                spec_type.unwrap()
-            };
-
-            // Collect the names of all the functions that aren't implemented
-            // from this spec.
-            let mut missing_fn_names = vec![];
-            'next_fn: for fn_type_key in a_spec.member_fn_type_keys.values() {
-                let spec_fn_sig = ctx.must_get_type(*fn_type_key).to_fn_sig();
-                for member_fn in &member_fns {
-                    if member_fn.signature.is_same_as(ctx, &spec_fn_sig) {
-                        continue 'next_fn;
+                    if spec_type.is_none() {
+                        break 'check Some(AnalyzeError::new(
+                            ErrorKind::UndefSpec,
+                            format_code!("spec {} is not defined", spec).as_str(),
+                            spec,
+                        ));
                     }
+
+                    spec_type.unwrap()
+                };
+
+                // Collect the names of all the functions that aren't implemented
+                // from this spec.
+                let mut missing_fn_names = vec![];
+                'next_fn: for fn_type_key in a_spec.member_fn_type_keys.values() {
+                    let spec_fn_sig = ctx.must_get_type(*fn_type_key).to_fn_sig();
+                    for member_fn in &member_fns {
+                        if member_fn.signature.is_same_as(ctx, &spec_fn_sig) {
+                            continue 'next_fn;
+                        }
+                    }
+
+                    missing_fn_names.push(spec_fn_sig.name.clone());
                 }
 
-                missing_fn_names.push(spec_fn_sig.name.clone());
-            }
-
-            if !missing_fn_names.is_empty() {
-                spec_impl_errs.push(
-                    AnalyzeError::new(
-                        ErrorKind::SpecNotImplemented,
-                        format_code!("spec {} not implemented", spec).as_str(),
-                        spec,
-                    )
-                    .with_detail(
-                        format!(
-                            "Missing adequate implementations for the following \
-                            functions from spec {}: {}.",
-                            format_code!(spec),
-                            format_code_vec(&missing_fn_names, ", "),
+                if !missing_fn_names.is_empty() {
+                    break 'check Some(
+                        AnalyzeError::new(
+                            ErrorKind::SpecNotImplemented,
+                            format_code!("spec {} not implemented", spec).as_str(),
+                            spec,
                         )
-                        .as_str(),
-                    ),
-                )
-            }
-        }
+                        .with_detail(
+                            format!(
+                                "Missing adequate implementations for the following \
+                            functions from spec {}: {}.",
+                                format_code!(spec),
+                                format_code_vec(&missing_fn_names, ", "),
+                            )
+                            .as_str(),
+                        ),
+                    );
+                }
 
-        for err in spec_impl_errs {
+                None
+            }
+
+            None => None,
+        };
+
+        if let Some(err) = spec_impl_err {
             ctx.insert_err(err);
         }
 

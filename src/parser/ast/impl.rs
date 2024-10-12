@@ -15,8 +15,8 @@ use crate::{locatable_impl, util};
 #[derive(Clone, Debug, Eq)]
 pub struct Impl {
     pub typ: UnresolvedType,
-    /// The specs being implemented for the type.
-    pub specs: Vec<Symbol>,
+    /// The spec being implemented for the type.
+    pub maybe_spec: Option<Symbol>,
     pub member_fns: Vec<Function>,
     span: Span,
 }
@@ -44,7 +44,7 @@ impl Impl {
     ///         <member_fn>...
     ///     }
     ///
-    ///     impl <type>: <spec> + ... {
+    ///     impl <type>: <spec> {
     ///         <member_fn>...
     ///     }
     ///
@@ -62,19 +62,10 @@ impl Impl {
         // The next tokens should form a type.
         let typ = UnresolvedType::from_symbol(Symbol::from(tokens)?);
 
-        // Check for an optional specs.
-        let specs = if Module::parse_optional(tokens, TokenKind::Colon).is_some() {
-            let mut specs = vec![];
-            loop {
-                specs.push(Symbol::from(tokens)?);
-                if Module::parse_optional(tokens, TokenKind::Plus).is_none() {
-                    break;
-                }
-            }
-
-            specs
-        } else {
-            vec![]
+        // Check for an optional spec.
+        let maybe_spec = match Module::parse_optional(tokens, TokenKind::Colon) {
+            Some(_) => Some(Symbol::from(tokens)?),
+            None => None,
         };
 
         // The remaining tokens should be `{` followed by a set of function signatures and a `}`.
@@ -92,7 +83,7 @@ impl Impl {
 
         Ok(Impl {
             typ,
-            specs,
+            maybe_spec,
             member_fns,
             span: Span { start_pos, end_pos },
         })

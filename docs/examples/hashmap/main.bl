@@ -14,7 +14,7 @@ struct Key {
     s: str
 }
 
-impl Key: Serialize + Eq {
+impl Key: Serialize {
     fn serialize(*self) -> {*u8, uint} {
         let len = self^.s.len()
         let ptr = heap_alloc[u8](len)
@@ -22,6 +22,9 @@ impl Key: Serialize + Eq {
         return {ptr, len}
     }
 
+}
+
+impl Key: Eq {
     fn eq(*self, other: *Self) -> bool {
         return self^.s == other^.s
     }

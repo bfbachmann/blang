@@ -270,36 +270,38 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
         ctx.pop_params();
     }
 
-    // Regardless of errors, we'll mark this `impl` as implementing all the
-    // specs it claims it does. This is just to prevent redundant error
+    // Regardless of errors, we'll mark this `impl` as implementing the
+    // spec it claims it does. This is just to prevent redundant error
     // messages when the corresponding type gets used.
-    for spec in &impl_.specs {
-        // Try to find the analyzed spec type. It might not be there if it has not
-        // yet been analyzed.
-        if let Some(spec_type_key) =
-            ctx.get_type_key_by_type_name(spec.maybe_mod_name.as_ref(), spec.name.as_str())
-        {
-            ctx.insert_spec_impl(impl_type_key, spec_type_key);
-            continue;
-        }
-
-        // Try to find the un-analyzed spec type and analyze it.
-        if spec.maybe_mod_name.is_none() {
-            if let Some(unchecked_spec) = ctx.get_unchecked_spec(spec.name.as_str()) {
-                ASpecType::from(ctx, &unchecked_spec.clone());
-                let spec_type_key = ctx
-                    .get_type_key_by_type_name(None, spec.name.as_str())
-                    .unwrap();
+    'check: {
+        if let Some(spec) = &impl_.maybe_spec {
+            // Try to find the analyzed spec type. It might not be there if it has not
+            // yet been analyzed.
+            if let Some(spec_type_key) =
+                ctx.get_type_key_by_type_name(spec.maybe_mod_name.as_ref(), spec.name.as_str())
+            {
                 ctx.insert_spec_impl(impl_type_key, spec_type_key);
-                continue;
+                break 'check;
             }
-        }
 
-        ctx.insert_err(AnalyzeError::new(
-            ErrorKind::UndefSpec,
-            format_code!("spec {} not defined", spec.name).as_str(),
-            spec,
-        ));
+            // Try to find the un-analyzed spec type and analyze it.
+            if spec.maybe_mod_name.is_none() {
+                if let Some(unchecked_spec) = ctx.get_unchecked_spec(spec.name.as_str()) {
+                    ASpecType::from(ctx, &unchecked_spec.clone());
+                    let spec_type_key = ctx
+                        .get_type_key_by_type_name(None, spec.name.as_str())
+                        .unwrap();
+                    ctx.insert_spec_impl(impl_type_key, spec_type_key);
+                    break 'check;
+                }
+            }
+
+            ctx.insert_err(AnalyzeError::new(
+                ErrorKind::UndefSpec,
+                format_code!("spec {} not defined", spec.name).as_str(),
+                spec,
+            ));
+        }
     }
 }
 

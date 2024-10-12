@@ -30,7 +30,7 @@ struct Value {
     v: int
 }
 
-impl Value: Order + Clone {
+impl Value: Order {
     fn compare(*self, other: *Value) -> Ord {
         if self^.v > other^.v {
             return Ord::Greater
@@ -39,7 +39,9 @@ impl Value: Order + Clone {
         }
         return Ord::Equal
     }
+}
 
+impl Value: Clone {
     fn clone(*self) -> Value {
         return Value{v: self^.v}
     }

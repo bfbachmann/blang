@@ -24,11 +24,13 @@ struct Thing {
     s: str
 }
 
-impl Thing: Default + ToStr {
+impl Thing: Default {
     fn default() -> Thing {
         return Thing{s: "default\0"}
     }
+}
 
+impl Thing: ToStr {
     fn to_str(*self) -> str {
         return self^.s
     }
