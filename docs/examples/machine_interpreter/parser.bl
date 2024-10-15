@@ -12,14 +12,16 @@ pub struct Instruction {
     pub operands: {int, int}
 }
 
-impl Instruction: Clone {
+impl Instruction {
     fn new_nop() -> Instruction {
         return Instruction{
             kind: InstKind::JumpIf0
             operands: {1, 0}
         }
     }
+}
 
+impl Instruction: Clone {
     fn clone(*self) -> Instruction {
         return Instruction{
             kind: self^.kind.clone()

@@ -32,7 +32,7 @@ mod tests {
         }
     }
 
-    fn analyze_program(mods: HashMap<String, String>) -> ProgramAnalysis {
+    fn analyze_program(mods: Vec<(String, String)>) -> ProgramAnalysis {
         let mut parsed_mods = vec![];
         for (mod_path, mod_code) in mods {
             let tokens = lex(mod_code.as_str()).expect("lexing should succeed");
@@ -1979,18 +1979,69 @@ mod tests {
     }
 
     #[test]
+    fn spec_impl_missing_fns() {
+        let result = analyze(
+            r#"
+            spec Bla {
+                fn bla()
+            }
+            
+            struct BlaStruct {}
+            impl BlaStruct: Bla {}
+            "#,
+        );
+        check_result(result, Some(ErrorKind::SpecImplMissingFns));
+    }
+
+    #[test]
+    fn spec_not_defined() {
+        let result = analyze(
+            r#"
+            struct BlaStruct {}
+            impl BlaStruct: Bla {}
+            "#,
+        );
+        check_result(result, Some(ErrorKind::UndefSpec));
+    }
+
+    #[test]
+    fn non_spec_fn_in_impl() {
+        let result = analyze(
+            r#"
+            spec Bla {
+                fn bla()
+            }
+            
+            struct BlaStruct {}
+            impl BlaStruct: Bla {
+                fn bla() {}
+                fn illegal() {}
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::NonSpecFnInImpl));
+    }
+
+    #[test]
+    fn incorrect_spec_fn_in_impl() {
+        let result = analyze(
+            r#"
+            spec Bla {
+                fn bla()
+            }
+            
+            struct BlaStruct {}
+            impl BlaStruct: Bla {
+                fn bla(i: int) {}
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::IncorrectSpecFnInImpl));
+    }
+
+    #[test]
     fn private_member_access() {
-        let mods = HashMap::from([
-            (
-                "thing.bl".to_string(),
-                r#"
-                    pub struct Thing {}
-                    impl Thing {
-                        fn do_nothing() {}
-                    }
-                "#
-                .to_string(),
-            ),
+        let mods = vec![
             (
                 "impl.bl".to_string(),
                 r#"
@@ -2001,7 +2052,17 @@ mod tests {
                 "#
                 .to_string(),
             ),
-        ]);
+            (
+                "thing.bl".to_string(),
+                r#"
+                    pub struct Thing {}
+                    impl Thing {
+                        fn do_nothing() {}
+                    }
+                "#
+                .to_string(),
+            ),
+        ];
 
         let analysis = analyze_program(mods);
         check_mod_errs(
@@ -2014,17 +2075,91 @@ mod tests {
     }
 
     #[test]
-    fn private_struct_field_init() {
-        let mods = HashMap::from([
+    fn legal_access_to_pub_spec_fn() {
+        let mods = vec![
+            // We should be able to use methods on the type that aren't marked pub as long
+            // as they're part of the public spec implementation.
             (
-                "thing.bl".to_string(),
+                "main.bl".to_string(),
                 r#"
-                    pub struct Thing {
-                        priv_field: int
+                    use {Thing}: "thing.bl"
+                    fn main() {
+                        Thing.bing()
                     }
                 "#
                 .to_string(),
             ),
+            // Declare a type that implements the public spec.
+            (
+                "thing.bl".to_string(),
+                r#"
+                    pub spec Bing {
+                        fn bing()
+                    }
+                    pub struct Thing {}
+                    impl Thing: Bing {
+                        fn bing() {}
+                    }
+                "#
+                .to_string(),
+            ),
+        ];
+
+        let analysis = analyze_program(mods);
+        check_mod_errs(
+            &analysis,
+            HashMap::from([
+                ("main.bl".to_string(), vec![]),
+                ("bing.bl".to_string(), vec![]),
+                ("thing.bl".to_string(), vec![]),
+            ]),
+        );
+    }
+
+    #[test]
+    fn illegal_access_to_priv_spec_fn() {
+        let mods = vec![
+            // We should not be able to use methods on the type that aren't marked pub because the
+            // spec is private.
+            (
+                "main.bl".to_string(),
+                r#"
+                    use {Thing}: "bing.bl"
+                    fn main() {
+                        Thing.bing()
+                    }
+                "#
+                .to_string(),
+            ),
+            // Declare private spec and a type that implements it.
+            (
+                "bing.bl".to_string(),
+                r#"
+                    spec Bing {
+                        fn bing()
+                    }
+                    pub struct Thing {}
+                    impl Thing: Bing {
+                        fn bing() {}
+                    }
+                "#
+                .to_string(),
+            ),
+        ];
+
+        let analysis = analyze_program(mods);
+        check_mod_errs(
+            &analysis,
+            HashMap::from([
+                ("main.bl".to_string(), vec![ErrorKind::UseOfPrivateValue]),
+                ("bing.bl".to_string(), vec![]),
+            ]),
+        )
+    }
+
+    #[test]
+    fn private_struct_field_init() {
+        let mods = vec![
             (
                 "impl.bl".to_string(),
                 r#"
@@ -2035,7 +2170,16 @@ mod tests {
                 "#
                 .to_string(),
             ),
-        ]);
+            (
+                "thing.bl".to_string(),
+                r#"
+                    pub struct Thing {
+                        priv_field: int
+                    }
+                "#
+                .to_string(),
+            ),
+        ];
 
         let analysis = analyze_program(mods);
         check_mod_errs(
@@ -2049,7 +2193,17 @@ mod tests {
 
     #[test]
     fn private_struct_field_access() {
-        let mods = HashMap::from([
+        let mods = vec![
+            (
+                "impl.bl".to_string(),
+                r#"
+                    use {Thing}: "thing.bl"
+                    fn test() {
+                        let illegal = Thing.new().priv_field
+                    }
+                "#
+                .to_string(),
+            ),
             (
                 "thing.bl".to_string(),
                 r#"
@@ -2065,17 +2219,7 @@ mod tests {
             "#
                 .to_string(),
             ),
-            (
-                "impl.bl".to_string(),
-                r#"
-                    use {Thing}: "thing.bl"
-                    fn test() {
-                        let illegal = Thing.new().priv_field
-                    }
-                "#
-                .to_string(),
-            ),
-        ]);
+        ];
 
         let analysis = analyze_program(mods);
         check_mod_errs(

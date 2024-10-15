@@ -150,7 +150,10 @@ impl AType {
         if let Some(spec_type) = ctx.get_spec_type(maybe_mod_name, type_name) {
             return AType::Spec(spec_type.clone());
         }
-        if let Some(fn_sig) = ctx.get_defined_fn_sig(maybe_mod_name, type_name) {
+        if let Some(fn_sig) = ctx.get_fn_sig_by_mangled_name(
+            maybe_mod_name,
+            ctx.mangle_name(None, None, type_name, false).as_str(),
+        ) {
             return AType::from_fn_sig(fn_sig.clone());
         }
         if let Some(fn_type) = ctx.get_fn(maybe_mod_name, type_name) {

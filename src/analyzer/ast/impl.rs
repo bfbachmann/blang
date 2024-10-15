@@ -1,11 +1,15 @@
+use std::collections::{HashMap, HashSet};
+
 use crate::analyzer::ast::func::AFn;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::fmt::format_code_vec;
+use crate::parser::ast::func::Function;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#type::Type;
+use crate::parser::ast::symbol::Symbol;
 use crate::{format_code, util};
 
 /// Represents a semantically valid `impl` block that declares member functions for a type.
@@ -80,90 +84,36 @@ impl AImpl {
             None => false,
         };
 
-        // Set the impl type key in the program context so we can use it when resolving type `This`.
+        // Set the impl type key in the program context so we can use it when resolving type `Self`.
         ctx.set_cur_self_type_key(Some(type_key));
 
         // Analyze member functions.
-        let mut member_fns = vec![];
+        let mut member_fns: HashMap<String, (AFn, &Function)> = HashMap::new();
         for mem_fn in &impl_.member_fns {
             let a_fn = AFn::from(ctx, mem_fn);
-
-            // Record public member functions, so we can check whether they're accessible
-            // whenever they're used.
-            if mem_fn.is_pub {
-                ctx.mark_member_fn_pub(type_key, mem_fn.signature.name.as_str());
-            }
-
-            member_fns.push(a_fn);
+            member_fns.insert(a_fn.signature.name.clone(), (a_fn, mem_fn));
         }
 
-        // Check that this `impl` actually implement the spec it claims to.
-        let spec_impl_err = match &impl_.maybe_spec {
-            Some(spec) => 'check: {
-                // Find the spec being referred to.
-                let a_spec = {
-                    let spec_type = match ctx
-                        .get_type_key_by_type_name(spec.maybe_mod_name.as_ref(), &spec.name)
-                    {
-                        Some(tk) => match ctx.must_get_type(tk) {
-                            AType::Spec(spec_type) => Some(spec_type),
-                            _ => None,
-                        },
-                        _ => None,
-                    };
-
-                    if spec_type.is_none() {
-                        break 'check Some(AnalyzeError::new(
-                            ErrorKind::UndefSpec,
-                            format_code!("spec {} is not defined", spec).as_str(),
-                            spec,
-                        ));
-                    }
-
-                    spec_type.unwrap()
-                };
-
-                // Collect the names of all the functions that aren't implemented
-                // from this spec.
-                let mut missing_fn_names = vec![];
-                'next_fn: for fn_type_key in a_spec.member_fn_type_keys.values() {
-                    let spec_fn_sig = ctx.must_get_type(*fn_type_key).to_fn_sig();
-                    for member_fn in &member_fns {
-                        if member_fn.signature.is_same_as(ctx, &spec_fn_sig) {
-                            continue 'next_fn;
-                        }
-                    }
-
-                    missing_fn_names.push(spec_fn_sig.name.clone());
-                }
-
-                if !missing_fn_names.is_empty() {
-                    break 'check Some(
-                        AnalyzeError::new(
-                            ErrorKind::SpecNotImplemented,
-                            format_code!("spec {} not implemented", spec).as_str(),
-                            spec,
-                        )
-                        .with_detail(
-                            format!(
-                                "Missing adequate implementations for the following \
-                            functions from spec {}: {}.",
-                                format_code!(spec),
-                                format_code_vec(&missing_fn_names, ", "),
-                            )
-                            .as_str(),
-                        ),
-                    );
-                }
-
-                None
-            }
-
-            None => None,
+        // Check that this `impl` actually implements the spec it claims to.
+        let (implements_pub_spec, spec_impl_errs) = match &impl_.maybe_spec {
+            Some(spec) => check_spec_impl(ctx, type_key, spec, &member_fns),
+            None => (false, vec![]),
         };
 
-        if let Some(err) = spec_impl_err {
+        for err in spec_impl_errs {
             ctx.insert_err(err);
+        }
+
+        // Record public member functions, so we can check whether they're accessible
+        // whenever they're used. We'll also consider the member function public if
+        // it is an implementation of a function from a public spec.
+        let mut fns = vec![];
+        for (a_fn, raw_fn) in member_fns.into_values() {
+            if raw_fn.is_pub || implements_pub_spec {
+                ctx.mark_member_fn_pub(type_key, a_fn.signature.type_key);
+            }
+
+            fns.push(a_fn);
         }
 
         // We can pop the params and the current `Self` type key from the program
@@ -176,7 +126,140 @@ impl AImpl {
 
         AImpl {
             type_key,
-            member_fns,
+            member_fns: fns,
         }
     }
+}
+
+/// Checks that `member_fns` declared in an impl for the given type properly implement `spec`.
+/// Returns a tuple where the first value indicates whether the spec implemented is public and the
+/// second contains errors from the impl block.
+fn check_spec_impl(
+    ctx: &mut ProgramContext,
+    type_key: TypeKey,
+    spec: &Symbol,
+    member_fns: &HashMap<String, (AFn, &Function)>,
+) -> (bool, Vec<AnalyzeError>) {
+    // Find the spec being referred to.
+    let result = match ctx.get_type_key_by_type_name(spec.maybe_mod_name.as_ref(), &spec.name) {
+        Some(tk) => match ctx.must_get_type(tk) {
+            AType::Spec(spec_type) => Some((spec_type, tk)),
+            _ => None,
+        },
+        _ => None,
+    };
+
+    let (a_spec, spec_tk) = match result {
+        Some(spec_info) => spec_info,
+        None => {
+            return (
+                false,
+                vec![AnalyzeError::new(
+                    ErrorKind::UndefSpec,
+                    format_code!("spec {} is not defined", spec).as_str(),
+                    spec,
+                )],
+            );
+        }
+    };
+
+    // Collect the names of all the functions that aren't implemented
+    // from this spec and check that spec functions were implemented correctly.
+    let mut spec_impl_errs = vec![];
+    let mut missing_fn_names = vec![];
+    let mut extra_fn_names: HashSet<String> = HashSet::from_iter(member_fns.keys().cloned());
+    for fn_type_key in a_spec.member_fn_type_keys.values() {
+        let spec_fn_sig = ctx.must_get_type(*fn_type_key).to_fn_sig();
+
+        // Check if this impl has a function with the same name.
+        match member_fns.get(spec_fn_sig.name.as_str()) {
+            Some((a_fn, raw_fn)) => {
+                // Make sure the function was defined correctly.
+                if !a_fn.signature.is_same_as(ctx, spec_fn_sig) {
+                    spec_impl_errs.push(
+                        AnalyzeError::new(
+                            ErrorKind::IncorrectSpecFnInImpl,
+                            format_code!(
+                                "function {} not implemented according to spec {}",
+                                a_fn.signature.name,
+                                spec.name
+                            )
+                            .as_str(),
+                            &raw_fn.signature,
+                        )
+                        .with_detail(
+                            format_code!(
+                                "Spec {} defines the function as {}.",
+                                spec.name,
+                                spec_fn_sig.display(ctx),
+                            )
+                            .as_str(),
+                        ),
+                    );
+                }
+
+                // Remove the function name from the set of "extra" functions. Any
+                // functions left in the set at the end of this loop should appear in an
+                // error because they're not part of the spec.
+                extra_fn_names.remove(a_fn.signature.name.as_str());
+            }
+
+            None => {
+                missing_fn_names.push(spec_fn_sig.name.clone());
+            }
+        }
+    }
+
+    // Record an error if this impl is missing functions defined in the spec.
+    if !missing_fn_names.is_empty() {
+        spec_impl_errs.push(
+            AnalyzeError::new(
+                ErrorKind::SpecImplMissingFns,
+                format_code!("spec {} not fully implemented", spec.name).as_str(),
+                spec,
+            )
+            .with_detail(
+                format!(
+                    "The following functions from spec {} are missing: {}.",
+                    format_code!(spec),
+                    format_code_vec(&missing_fn_names, ", "),
+                )
+                .as_str(),
+            ),
+        );
+    }
+
+    // Record an error for each function in this impl that is not part of the spec.
+    for fn_name in extra_fn_names {
+        let raw_func = member_fns.get(fn_name.as_str()).unwrap().1;
+
+        spec_impl_errs.push(
+            AnalyzeError::new(
+                ErrorKind::NonSpecFnInImpl,
+                format_code!("function {} is not defined in spec {}", fn_name, spec.name).as_str(),
+                &raw_func.signature,
+            )
+            .with_detail(
+                format_code!(
+                    "Spec {} does not contain a function named {}, so it should not appear \
+                            in this {} block.",
+                    spec.name,
+                    fn_name,
+                    "impl",
+                )
+                .as_str(),
+            )
+            .with_help(
+                format_code!(
+                    "Consider moving function {} to a default {} block.",
+                    fn_name,
+                    format!("impl {}", ctx.display_type(type_key))
+                )
+                .as_str(),
+            ),
+        );
+    }
+
+    let spec_is_pub = ctx.type_is_pub(spec_tk);
+    (spec_is_pub, spec_impl_errs)
 }

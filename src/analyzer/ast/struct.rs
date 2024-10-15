@@ -185,7 +185,7 @@ impl AStructType {
 
         // Record the type name as public in the current module if necessary.
         if struct_type.is_pub {
-            ctx.insert_pub_type_name(struct_type.name.as_str());
+            ctx.mark_type_pub(type_key);
         }
 
         a_struct_type
@@ -298,7 +298,7 @@ impl AStructInit {
             if !ctx.struct_field_is_accessible(type_key, field_name) {
                 errors.push(AnalyzeError::new(
                     ErrorKind::UseOfPrivateValue,
-                    format_code!("{} is not public", field_name).as_str(),
+                    format_code!("field {} is not public", field_name).as_str(),
                     field_name_symbol,
                 ));
             }

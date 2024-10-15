@@ -56,10 +56,12 @@ pub enum ErrorKind {
     IndexOutOfBounds,
     LiteralOutOfRange,
     SpecNotSatisfied,
-    SpecNotImplemented,
+    SpecImplMissingFns,
     ImportCycle,
     DuplicateImportName,
     IllegalImpl,
+    NonSpecFnInImpl,
+    IncorrectSpecFnInImpl,
     IllegalSelfArg,
 }
 
@@ -116,11 +118,15 @@ impl fmt::Display for ErrorKind {
             ErrorKind::IndexOutOfBounds => write!(f, "index out of bounds"),
             ErrorKind::LiteralOutOfRange => write!(f, "literal out of range"),
             ErrorKind::SpecNotSatisfied => write!(f, "unsatisfied spec"),
-            ErrorKind::SpecNotImplemented => write!(f, "spec not implemented"),
+            ErrorKind::SpecImplMissingFns => write!(f, "spec impl missing functions"),
             ErrorKind::ImportCycle => write!(f, "import cycle"),
             ErrorKind::DuplicateImportName => write!(f, "duplicate import name"),
             ErrorKind::IllegalImpl => write!(f, "illegal impl"),
             ErrorKind::IllegalSelfArg => write!(f, "illegal argument `self`"),
+            ErrorKind::NonSpecFnInImpl => write!(f, "impl has functions not defined in spec"),
+            ErrorKind::IncorrectSpecFnInImpl => {
+                write!(f, "spec function not implemented correctly")
+            }
         }
     }
 }

@@ -105,11 +105,46 @@ impl ASymbol {
             // there is an impl_type_key, check if this function is defined as a member function on
             // that type.
             if let Some(impl_type_key) = maybe_impl_type_key {
-                if let Some(mem_fn) =
-                    ctx.get_or_monomorphize_member_fn(impl_type_key, var_name.as_str())
-                {
-                    maybe_type_key = Some(mem_fn.type_key);
-                    is_method = true;
+                match ctx.get_or_monomorphize_member_fn(impl_type_key, var_name.as_str()) {
+                    // There is exactly one matching member function.
+                    Ok(Some(fn_sig)) => {
+                        maybe_type_key = Some(fn_sig.type_key);
+                        is_method = true;
+                    }
+
+                    // There are many member functions by that name.
+                    Err(_) => {
+                        let type_display = ctx.display_type(impl_type_key);
+                        ctx.insert_err(
+                            AnalyzeError::new(
+                                ErrorKind::AmbiguousAccess,
+                                format_code!(
+                                    "ambiguous access to member {} on type {}",
+                                    var_name,
+                                    type_display
+                                )
+                                .as_str(),
+                                symbol,
+                            )
+                            .with_detail(
+                                format_code!(
+                                    "There are multiple methods named {} on type {}.",
+                                    var_name,
+                                    type_display
+                                )
+                                .as_str(),
+                            )
+                            .with_help("Consider referring to the method via its type or spec."),
+                        );
+
+                        return ASymbol::new_with_default_pos(
+                            symbol.name.as_str(),
+                            ctx.unknown_type_key(),
+                        );
+                    }
+
+                    // There are no matching member functions.
+                    Ok(None) => {}
                 }
             }
         };
@@ -311,15 +346,16 @@ fn get_type_key_for_symbol(
     if include_fns {
         // Search for a function with the given name. Functions take precedence over extern
         // functions.
-        if let Some(func) = ctx.get_fn(
-            maybe_mod_name,
-            ctx.mangle_name(None, None, name, true).as_str(),
-        ) {
+        let mangled_name_with_path = ctx.mangle_name(maybe_mod_name, None, name, true);
+        if let Some(func) = ctx.get_fn(maybe_mod_name, mangled_name_with_path.as_str()) {
             return (Some(func.signature.type_key), None);
         };
 
         // Search for an extern function with the given name.
-        if let Some(fn_sig) = ctx.get_defined_fn_sig(maybe_mod_name, name) {
+        let mangled_name_without_path = ctx.mangle_name(maybe_mod_name, None, name, false);
+        if let Some(fn_sig) =
+            ctx.get_fn_sig_by_mangled_name(maybe_mod_name, mangled_name_without_path.as_str())
+        {
             return (Some(fn_sig.type_key), None);
         }
     }

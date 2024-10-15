@@ -175,7 +175,8 @@ fn define_intrinsics(ctx: &mut ProgramContext) {
             Some(Type::new_unresolved("uint")),
         ),
     );
-    ctx.insert_member_fn(str_type_key, fn_sig);
-    ctx.mark_member_fn_pub(str_type_key, fn_name);
+    let fn_tk = fn_sig.type_key;
+    ctx.insert_member_fn(str_type_key, None, fn_sig);
+    ctx.mark_member_fn_pub(str_type_key, fn_tk);
     ctx.set_cur_self_type_key(maybe_impl_tk);
 }

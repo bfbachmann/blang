@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::analyzer::ast::func::{analyze_fn_sig, AFnSig};
 use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::ast::statement::AStatement;
@@ -239,29 +241,55 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
 
     ctx.set_cur_self_type_key(Some(impl_type_key));
 
-    // Analyze each member function signature and record it as a member of this type
-    // in the program context.
+    let is_default_impl = impl_.maybe_spec.is_none();
+
+    // Analyze each member function signature.
+    let mut fn_type_keys = HashMap::new();
     for member_fn in &impl_.member_fns {
         let fn_sig = AFnSig::from(ctx, &member_fn.signature);
 
-        // Make sure this isn't a duplicate member function.
-        if ctx
-            .get_or_monomorphize_member_fn(impl_type_key, fn_sig.name.as_str())
-            .is_some()
-        {
+        // Make sure there are no other functions in this impl block that share the same name.
+        if fn_type_keys.contains_key(fn_sig.name.as_str()) {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::DuplicateFunction,
                 format_code!(
-                    "function {} is already defined for type {}",
+                    "function {} already defined in this {}",
                     member_fn.signature.name,
-                    ctx.display_type(impl_type_key),
+                    "impl",
                 )
                 .as_str(),
                 &member_fn.signature,
             ));
-        } else {
-            ctx.insert_member_fn(impl_type_key, fn_sig);
+
+            // Skip invalid func.
+            continue;
         }
+
+        // If this is a default impl (i.e. it's not implementing a spec), then we need to
+        // make sure that function names don't collide with those of existing functions from
+        // other default impls on this type.
+        if is_default_impl {
+            let has_matching_default_fn = ctx
+                .get_default_member_fn(impl_type_key, fn_sig.name.as_str())
+                .is_some();
+            if has_matching_default_fn {
+                ctx.insert_err(AnalyzeError::new(
+                    ErrorKind::DuplicateFunction,
+                    format_code!(
+                        "function {} already defined for type {}",
+                        fn_sig.name,
+                        ctx.display_type(impl_type_key),
+                    )
+                    .as_str(),
+                    &member_fn.signature,
+                ));
+
+                // Skip invalid func.
+                continue;
+            }
+        }
+
+        fn_type_keys.insert(fn_sig.name.clone(), fn_sig.type_key);
     }
 
     ctx.set_cur_self_type_key(None);
@@ -273,15 +301,14 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     // Regardless of errors, we'll mark this `impl` as implementing the
     // spec it claims it does. This is just to prevent redundant error
     // messages when the corresponding type gets used.
-    'check: {
-        if let Some(spec) = &impl_.maybe_spec {
+    let maybe_spec_tk = match &impl_.maybe_spec {
+        Some(spec) => 'check: {
             // Try to find the analyzed spec type. It might not be there if it has not
             // yet been analyzed.
             if let Some(spec_type_key) =
                 ctx.get_type_key_by_type_name(spec.maybe_mod_name.as_ref(), spec.name.as_str())
             {
-                ctx.insert_spec_impl(impl_type_key, spec_type_key);
-                break 'check;
+                break 'check Some(spec_type_key);
             }
 
             // Try to find the un-analyzed spec type and analyze it.
@@ -291,8 +318,7 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
                     let spec_type_key = ctx
                         .get_type_key_by_type_name(None, spec.name.as_str())
                         .unwrap();
-                    ctx.insert_spec_impl(impl_type_key, spec_type_key);
-                    break 'check;
+                    break 'check Some(spec_type_key);
                 }
             }
 
@@ -301,8 +327,14 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
                 format_code!("spec {} not defined", spec.name).as_str(),
                 spec,
             ));
+
+            return;
         }
-    }
+
+        None => None,
+    };
+
+    ctx.insert_impl(impl_type_key, maybe_spec_tk, fn_type_keys);
 }
 
 fn define_spec(ctx: &mut ProgramContext, spec: &Spec) {

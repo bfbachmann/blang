@@ -77,9 +77,17 @@ impl fmt::Display for AFnSig {
 impl AFnSig {
     /// Analyzes a function signature and returns a semantically valid, type-rich function
     /// signature.
-    pub fn from(ctx: &mut ProgramContext, sig: &FunctionSignature) -> Self {
+    pub fn from(ctx: &mut ProgramContext, sig: &FunctionSignature) -> AFnSig {
         let maybe_impl_type_key = ctx.get_cur_self_type_key();
         let mangled_name = ctx.mangle_name(None, maybe_impl_type_key, sig.name.as_str(), true);
+
+        // If this function signature has a name, we can try to locate it by its mangled name to
+        // avoid re-analyzing it.
+        if !sig.name.is_empty() {
+            if let Some(fn_sig) = ctx.get_fn_sig_by_mangled_name(None, mangled_name.as_str()) {
+                return fn_sig.clone();
+            }
+        }
 
         // Create a mostly-empty function type and insert it into the program context.
         // We'll fill in the details later, we just need a type key for it now.
@@ -132,7 +140,9 @@ impl AFnSig {
                             ErrorKind::IllegalSelfArg,
                             format_code!(
                                 "cannot declare argument {} outside of {} or {} block",
-                                "self", "spec", "impl"
+                                "self",
+                                "spec",
+                                "impl"
                             )
                             .as_str(),
                             arg,
@@ -168,6 +178,12 @@ impl AFnSig {
 
         // Replace the type now that it has been fully analyzed.
         ctx.replace_type(a_fn_sig.type_key, AType::from_fn_sig(a_fn_sig.clone()));
+
+        // Track the function type by name in the current module, if it has a name. We do this
+        // so we can avoid reanalyzing it in the future.
+        if !a_fn_sig.name.is_empty() {
+            ctx.insert_fn_sig(a_fn_sig.mangled_name.as_str(), a_fn_sig.type_key);
+        }
 
         // We can clear the params from the program context now that we're
         // done analyzing this signature.
@@ -298,23 +314,21 @@ impl AFnSig {
 pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) {
     // Add the function to the program context with an empty body, making sure it doesn't already
     // exist. We'll replace the function body when we analyze it later.
-    let a_fn_sig = AFnSig::from(ctx, &sig);
-
+    let mangled_name = ctx.mangle_name(None, None, sig.name.as_str(), true);
     if ctx
-        .get_defined_fn_sig(None, a_fn_sig.name.as_str())
+        .get_fn_sig_by_mangled_name(None, mangled_name.as_str())
         .is_some()
-        || ctx
-            .get_scoped_symbol(None, a_fn_sig.name.as_str())
-            .is_some()
+        || ctx.get_scoped_symbol(None, sig.name.as_str()).is_some()
     {
         ctx.insert_err(AnalyzeError::new(
             ErrorKind::DuplicateFunction,
             format_code!("{} is already defined", sig.name).as_str(),
             sig,
         ));
-    } else {
-        ctx.insert_defined_fn_sig(a_fn_sig);
+        return;
     }
+
+    AFnSig::from(ctx, &sig);
 }
 
 /// Represents a semantically valid and type-a function.
@@ -333,14 +347,7 @@ impl fmt::Display for AFn {
 impl AFn {
     /// Performs semantic analysis on the given function and returns an analyzed version of it.
     pub fn from(ctx: &mut ProgramContext, func: &Function) -> Self {
-        // If the function signature has already been analyzed, there is no need
-        // to re-analyze it. This will be the case for regular functions defined
-        // at the top level of the module. It will not be the case for nested
-        // functions and methods.
-        let signature = match ctx.get_defined_fn_sig(None, func.signature.name.as_str()) {
-            Some(sig) if ctx.get_cur_self_type_key().is_none() => sig.clone(),
-            _ => AFnSig::from(ctx, &func.signature),
-        };
+        let signature = AFnSig::from(ctx, &func.signature);
 
         // Make sure there isn't already another function by the same name. There are already
         // checks for regular function name collisions in `analyze_fn_sig`, but those
@@ -348,7 +355,7 @@ impl AFn {
         if ctx.get_fn(None, signature.mangled_name.as_str()).is_some() {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::DuplicateFunction,
-                format_code!("{} is already defined", &signature.name).as_str(),
+                format_code!("function {} is already defined", &signature.name).as_str(),
                 &func.signature,
             ));
         }
@@ -380,9 +387,7 @@ impl AFn {
 
         // Record the function name as public in the current module if necessary.
         if func.is_pub {
-            if let Some(type_key) = ctx.get_cur_self_type_key() {
-                ctx.insert_pub_member_fn_name(type_key, func.signature.name.as_str());
-            } else {
+            if ctx.get_cur_self_type_key().is_none() {
                 ctx.insert_pub_fn_name(func.signature.name.as_str());
             }
         }

@@ -61,30 +61,43 @@ impl AMemberAccess {
             // Only match struct field types if the base expression is not a type. We'll also avoid
             // matching struct fields if there is already a method with a matching name and
             // `prefer_methods` is `true`.
-            AType::Struct(struct_type)
-                if !base_expr.kind.is_type()
-                    && !(prefer_method
-                        && ctx
-                            .get_or_monomorphize_member_fn(base_expr.type_key, access.member_name.as_str())
-                            .is_some()) =>
-            {
-                let maybe_field_type_key =
-                    struct_type.get_field_type_key(access.member_name.as_str());
-
-                // Only allow access to the struct field if the struct type is
-                // local to this module or if the field is public.
-                if maybe_field_type_key.is_some()
-                    && !ctx
-                        .struct_field_is_accessible(base_expr.type_key, access.member_name.as_str())
+            AType::Struct(struct_type) => {
+                let base_expr_is_type = base_expr.kind.is_type();
+                let found_method = match ctx
+                    .get_or_monomorphize_member_fn(base_expr.type_key, access.member_name.as_str())
                 {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::UseOfPrivateValue,
-                        format_code!("{} is not public", access).as_str(),
-                        access,
-                    ));
-                }
+                    // There are no matching methods on this type.
+                    Ok(None) => false,
+                    // There is at least one matching method on this type.
+                    _ => true,
+                };
+                let use_method = prefer_method && found_method;
 
-                (maybe_field_type_key, base_expr.type_key, false)
+                // Only try to locate the member as a struct field if we're not looking for a
+                // method.
+                if base_expr_is_type || use_method {
+                    (None, base_expr.type_key, false)
+                } else {
+                    let maybe_field_type_key =
+                        struct_type.get_field_type_key(access.member_name.as_str());
+
+                    // Only allow access to the struct field if the struct type is
+                    // local to this module or if the field is public.
+                    if maybe_field_type_key.is_some()
+                        && !ctx.struct_field_is_accessible(
+                            base_expr.type_key,
+                            access.member_name.as_str(),
+                        )
+                    {
+                        ctx.insert_err(AnalyzeError::new(
+                            ErrorKind::UseOfPrivateValue,
+                            format_code!("field {} is not public", access.member_name).as_str(),
+                            access,
+                        ));
+                    }
+
+                    (maybe_field_type_key, base_expr.type_key, false)
+                }
             }
 
             // For pointer types, we'll try to use the pointee type to resolve methods
@@ -179,7 +192,7 @@ impl AMemberAccess {
             (tk, false)
         } else {
             match ctx.get_or_monomorphize_member_fn(base_type_key, access.member_name.as_str()) {
-                Some(member_fn_sig) => {
+                Ok(Some(member_fn_sig)) => {
                     let called_via_type = base_expr.kind.is_type();
                     let (takes_self, maybe_self_type_key) = match member_fn_sig.args.first() {
                         Some(arg) => (arg.name == "self", Some(arg.type_key)),
@@ -189,10 +202,13 @@ impl AMemberAccess {
 
                     // Only allow access to the member if it is public or local
                     // to the current module.
-                    if !ctx.member_fn_is_accessible(base_type_key, access.member_name.as_str()) {
+                    if !ctx.member_fn_is_accessible(
+                        member_fn_sig.maybe_impl_type_key.unwrap(),
+                        member_fn_sig.type_key,
+                    ) {
                         ctx.insert_err(AnalyzeError::new(
                             ErrorKind::UseOfPrivateValue,
-                            format_code!("{} is not public", access).as_str(),
+                            format_code!("function {} is not public", access.member_name).as_str(),
                             access,
                         ))
                     }
@@ -259,7 +275,7 @@ impl AMemberAccess {
                     (member_type_key, true)
                 }
 
-                None => {
+                Ok(None) => {
                     // Error and return a placeholder value since we couldn't
                     // locate the member being accessed.
                     ctx.insert_err(AnalyzeError::new(
@@ -272,6 +288,34 @@ impl AMemberAccess {
                         .as_str(),
                         access,
                     ));
+
+                    (ctx.unknown_type_key(), false)
+                }
+
+                Err(_) => {
+                    // Many matching member functions were found by the given name, so this
+                    // reference is ambiguous.
+                    ctx.insert_err(
+                        AnalyzeError::new(
+                            ErrorKind::AmbiguousAccess,
+                            format_code!(
+                                "ambiguous access to member {} on type {}",
+                                base_type_string,
+                                access.member_name
+                            )
+                            .as_str(),
+                            access,
+                        )
+                        .with_detail(
+                            format_code!(
+                                "There are multiple methods named {} on type {}.",
+                                access.member_name,
+                                base_type_string
+                            )
+                            .as_str(),
+                        )
+                        .with_help("Consider referring to the method via its type or spec."),
+                    );
 
                     (ctx.unknown_type_key(), false)
                 }

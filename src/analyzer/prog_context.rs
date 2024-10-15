@@ -63,6 +63,98 @@ impl Monomorphization {
     }
 }
 
+/// Contains information about `impl` blocks for a type.
+struct TypeImpls {
+    /// Maps function name to function type key for all functions declared in default impl blocks
+    /// (impl blocks without specs) for the type.
+    default_fns: HashMap<String, TypeKey>,
+    /// Maps implemented spec type key to a mapping from member function name to its type key.
+    /// There should be one mapping for each spec impl on this type.
+    spec_impls: HashMap<TypeKey, HashMap<String, TypeKey>>,
+    /// Contains the type keys of all public member functions for this type.
+    pub_fn_tks: HashSet<TypeKey>,
+}
+
+impl TypeImpls {
+    fn new() -> TypeImpls {
+        TypeImpls {
+            default_fns: Default::default(),
+            spec_impls: Default::default(),
+            pub_fn_tks: Default::default(),
+        }
+    }
+
+    /// Inserts information about an `impl` block for this type.
+    fn insert_impl(&mut self, maybe_spec_tk: Option<TypeKey>, fns: HashMap<String, TypeKey>) {
+        match maybe_spec_tk {
+            Some(tk) => {
+                assert!(self.spec_impls.insert(tk, fns).is_none());
+            }
+            None => {
+                self.default_fns.extend(fns);
+            }
+        }
+    }
+
+    /// Inserts the given function info.
+    fn insert_fn(&mut self, maybe_spec_tk: Option<TypeKey>, fn_name: String, fn_type_key: TypeKey) {
+        match maybe_spec_tk {
+            Some(spec_tk) => {
+                self.spec_impls
+                    .get_mut(&spec_tk)
+                    .expect(format!("spec {spec_tk} should exist").as_str())
+                    .insert(fn_name, fn_type_key);
+            }
+            None => {
+                self.default_fns.insert(fn_name, fn_type_key);
+            }
+        }
+    }
+
+    /// Returns the type key for the spec that the given function implements.
+    fn get_spec_type_key(&self, fn_type_key: TypeKey) -> Option<TypeKey> {
+        for (spec_tk, fns) in &self.spec_impls {
+            for fn_tk in fns.values() {
+                if *fn_tk == fn_type_key {
+                    return Some(*spec_tk);
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Marks the given function as public.
+    fn mark_fn_pub(&mut self, fn_type_key: TypeKey) {
+        self.pub_fn_tks.insert(fn_type_key);
+    }
+
+    /// Tries to find a "default" function (i.e. a function declared in a regular `impl` block
+    /// without a spec) with the given name.
+    fn get_default_fn(&self, name: &str) -> Option<TypeKey> {
+        self.default_fns.get(name).cloned()
+    }
+
+    /// Returns the type keys of all functions with the given name in all impls.
+    fn get_fns_by_name(&self, name: &str) -> HashSet<TypeKey> {
+        let mut fn_tks = HashSet::new();
+
+        // Find a default function with the same name.
+        if let Some(tk) = self.default_fns.get(name) {
+            fn_tks.insert(*tk);
+        }
+
+        // Find any spec functions with the same name.
+        for fns in self.spec_impls.values() {
+            if let Some(tk) = fns.get(name) {
+                fn_tks.insert(*tk);
+            }
+        }
+
+        fn_tks
+    }
+}
+
 /// Stores information about code in a given module.
 struct ModuleContext {
     /// Each scope on this stack corresponds to a scope in the program. Each scope will store
@@ -89,10 +181,6 @@ struct ModuleContext {
     pub_const_names: HashSet<String>,
     /// The names of public functions defined in this module.
     pub_fn_names: HashSet<String>,
-    /// The names of public types defined in this module.
-    pub_type_names: HashSet<String>,
-    /// The names of public type member functions in this module.
-    pub_type_member_fn_names: HashMap<TypeKey, String>,
 
     /// Contains the names of all types that have been marked as "invalid" by the analyzer. At the
     /// time of writing this, this should only be used for illegal cyclical types with infinite
@@ -106,8 +194,8 @@ struct ModuleContext {
     unchecked_specs: HashMap<String, Spec>,
     /// Maps constant names to un-analyzed constant values.
     unchecked_consts: HashMap<String, Const>,
-    /// Maps function names to analyzed function signatures.
-    defined_fn_sigs: HashMap<String, AFnSig>,
+    /// Maps mangled function names to the type keys of analyzed function signatures.
+    fn_types: HashMap<String, TypeKey>,
     /// Maps function names to analyzed functions.
     funcs: HashMap<String, AFn>,
     /// Maps constant names to their values.
@@ -132,14 +220,12 @@ impl ModuleContext {
             imported_mod_paths: Default::default(),
             pub_const_names: Default::default(),
             pub_fn_names: Default::default(),
-            pub_type_names: Default::default(),
-            pub_type_member_fn_names: Default::default(),
             invalid_type_names: Default::default(),
             unchecked_struct_types: Default::default(),
             unchecked_enum_types: Default::default(),
             unchecked_specs: Default::default(),
             unchecked_consts: Default::default(),
-            defined_fn_sigs: Default::default(),
+            fn_types: Default::default(),
             funcs: Default::default(),
             const_values: Default::default(),
             struct_type_keys: Default::default(),
@@ -202,6 +288,8 @@ pub struct ProgramContext {
     pub type_monomorphizations: HashMap<TypeKey, Monomorphization>,
     /// Maps primitive type names to their type keys.
     primitive_type_keys: HashMap<String, TypeKey>,
+    /// Contains the type keys of all types declared public.
+    pub_type_keys: HashSet<TypeKey>,
 
     /// The path of the module that is currently being analyzed.
     cur_mod_path: String,
@@ -219,19 +307,12 @@ pub struct ProgramContext {
     generic_type_keys: HashMap<AGenericType, TypeKey>,
     /// Maps function types to their type keys.
     fn_type_keys: HashMap<AFnSig, TypeKey>,
-    /// Maps type keys to mappings from their member function names to their member function
-    /// signatures.
-    type_member_fn_sigs: HashMap<TypeKey, HashMap<String, AFnSig>>,
-    /// Maps type keys to sets of public member function names for those types.
-    /// This is just used to figure out whether a given type member function
-    /// was declared public.
-    pub_member_fn_names: HashMap<TypeKey, HashSet<String>>,
+    /// Maps type key to its impl blocks.
+    type_impls: HashMap<TypeKey, TypeImpls>,
     /// Maps struct type key to the set of public field names on that struct type.
     pub_struct_field_names: HashMap<TypeKey, HashSet<String>>,
     /// Maps type keys to the paths of the modules in which the types are declared.
     type_declaration_mods: HashMap<TypeKey, String>,
-    /// Maps type key to the set of specs implemented by that type.
-    spec_impls: HashMap<TypeKey, HashSet<TypeKey>>,
     /// Represents a stack of parameters that are relevant when analyzing parameterized
     /// functions and types.
     params: Vec<AParams>,
@@ -265,6 +346,7 @@ impl ProgramContext {
         ProgramContext {
             type_store,
             primitive_type_keys,
+            pub_type_keys: Default::default(),
             cur_mod_path: root_mod_path.to_string(),
             module_contexts: mod_ctxs,
             tuple_type_keys: Default::default(),
@@ -272,11 +354,9 @@ impl ProgramContext {
             pointer_type_keys: Default::default(),
             generic_type_keys: Default::default(),
             fn_type_keys: Default::default(),
-            type_member_fn_sigs: Default::default(),
-            pub_member_fn_names: Default::default(),
+            type_impls: Default::default(),
             pub_struct_field_names: Default::default(),
             type_declaration_mods: Default::default(),
-            spec_impls: Default::default(),
             params: vec![],
             monomorphized_types: Default::default(),
             type_monomorphizations: Default::default(),
@@ -391,9 +471,9 @@ impl ProgramContext {
             }
 
             let type_implements_spec = self
-                .spec_impls
+                .type_impls
                 .get(&type_key)
-                .is_some_and(|spec_set| spec_set.contains(spec_type_key));
+                .is_some_and(|i| i.spec_impls.contains_key(spec_type_key));
             if !type_implements_spec {
                 missing_spec_type_keys.push(*spec_type_key);
             }
@@ -605,21 +685,6 @@ impl ProgramContext {
         }
 
         self.force_insert_type(typ)
-    }
-
-    /// Records the mapping from `type_key` to the `spec_type_key` for the spec
-    /// that is implemented by that type. Essentially, this records a record
-    /// of the fact that a type implements a spec. Returns true if a record
-    /// was newly inserted, and false otherwise (if one already existed).
-    pub fn insert_spec_impl(&mut self, type_key: TypeKey, spec_type_key: TypeKey) -> bool {
-        match self.spec_impls.get_mut(&type_key) {
-            Some(spec_set) => spec_set.insert(spec_type_key),
-            None => {
-                self.spec_impls
-                    .insert(type_key, HashSet::from([spec_type_key]));
-                true
-            }
-        }
     }
 
     /// Tries to map the given un-analyzed type to a type key and return that type key. If there is
@@ -1254,11 +1319,12 @@ impl ProgramContext {
 
         // Mark this new monomorphic type as implementing the specs its polymorphic
         // counterpart implements.
-        if let Some(spec_impl_tks) = self.spec_impls.get(&poly_type_key) {
-            for spec_impl_tk in spec_impl_tks.clone() {
-                self.insert_spec_impl(mono.mono_type_key, spec_impl_tk);
+        if let Some(impls) = self.type_impls.get(&poly_type_key) {
+            let spec_type_keys: Vec<TypeKey> = impls.spec_impls.keys().cloned().collect();
+            for spec_tk in spec_type_keys {
+                self.insert_impl(mono.mono_type_key, Some(spec_tk), HashMap::new());
             }
-        };
+        }
 
         mono.mono_type_key
     }
@@ -1558,29 +1624,27 @@ impl ProgramContext {
         self.cur_mod_ctx().invalid_type_names.contains(name)
     }
 
-    /// Inserts the given function signature into the current module context, thereby
-    /// declaring it as a defined function. This is done so we can locate function
-    /// signatures before having analyzed their bodies.
-    pub fn insert_defined_fn_sig(&mut self, sig: AFnSig) {
-        let name = sig.name.clone();
+    /// Stores a mapping from the given mangled function name to its type key.
+    pub fn insert_fn_sig(&mut self, mangled_name: &str, type_key: TypeKey) {
         assert!(self
             .cur_mod_ctx_mut()
-            .defined_fn_sigs
-            .insert(name, sig)
+            .fn_types
+            .insert(mangled_name.to_string(), type_key)
             .is_none());
     }
 
-    /// Gets the signature for the function with the given name in the module
-    /// with the given name, or in the current module if `maybe_mod_name` is
-    /// `None`.
-    pub fn get_defined_fn_sig(
+    /// Gets the signature for the function with the given mangled name in the module
+    /// with the given name, or in the current module if `maybe_mod_name` is `None`.
+    pub fn get_fn_sig_by_mangled_name(
         &self,
         maybe_mod_name: Option<&String>,
-        name: &str,
+        mangled_name: &str,
     ) -> Option<&AFnSig> {
-        // Select the module to search in.
         let mod_ctx = self.get_mod_ctx(maybe_mod_name);
-        mod_ctx.defined_fn_sigs.get(name)
+        match mod_ctx.fn_types.get(mangled_name) {
+            Some(tk) => Some(self.must_get_type(*tk).to_fn_sig()),
+            None => None,
+        }
     }
 
     /// Sets the type key associated with the current `impl` or `spec` type so it can be retrieved
@@ -1597,23 +1661,18 @@ impl ProgramContext {
     }
 
     /// Records the given name as a public type name in the current module.
-    pub fn insert_pub_type_name(&mut self, name: &str) {
-        self.cur_mod_ctx_mut()
-            .pub_type_names
-            .insert(name.to_string());
+    pub fn mark_type_pub(&mut self, type_key: TypeKey) {
+        self.pub_type_keys.insert(type_key);
+    }
+
+    /// Returns true if the type with the given name in the given module is public.
+    pub fn type_is_pub(&self, type_key: TypeKey) -> bool {
+        self.pub_type_keys.contains(&type_key) || self.must_get_type(type_key).is_primitive()
     }
 
     /// Records the given name as a public function name in the current module.
     pub fn insert_pub_fn_name(&mut self, name: &str) {
         self.cur_mod_ctx_mut().pub_fn_names.insert(name.to_string());
-    }
-
-    /// Records the given name as a public member function name on the given type
-    /// in the current module.
-    pub fn insert_pub_member_fn_name(&mut self, impl_type_key: TypeKey, name: &str) {
-        self.cur_mod_ctx_mut()
-            .pub_type_member_fn_names
-            .insert(impl_type_key, name.to_string());
     }
 
     /// Sets the current module in the program context to `module`.
@@ -1693,7 +1752,7 @@ impl ProgramContext {
                 let is_pub = if a_symbol.is_const {
                     mod_ctx.pub_const_names.contains(symbol.name.as_str())
                 } else if a_symbol.is_type {
-                    mod_ctx.pub_type_names.contains(symbol.name.as_str())
+                    self.type_is_pub(a_symbol.type_key)
                 } else {
                     mod_ctx.pub_fn_names.contains(symbol.name.as_str())
                 };
@@ -1763,75 +1822,133 @@ impl ProgramContext {
         self.cur_mod_ctx().cur_self_type_key
     }
 
-    /// Returns the member function with the given name on the type associated with `type_key`, if
-    /// it exists. Otherwise, checks to see if the type is a monomorphization of a polymorphic type
-    /// and tries to locate, monomorphize, and return the member function from the polymorphic type.
+    /// Inserts the given mapping from member function name to type key into the program context
+    /// as an impl. If `maybe_spec_type_key` is not None, then it will be recorded as a spec impl
+    /// for the given type.
+    pub fn insert_impl(
+        &mut self,
+        type_key: TypeKey,
+        maybe_spec_type_key: Option<TypeKey>,
+        fns: HashMap<String, TypeKey>,
+    ) {
+        match self.type_impls.get_mut(&type_key) {
+            Some(impls) => {
+                impls.insert_impl(maybe_spec_type_key, fns);
+            }
+
+            None => {
+                let mut impls = TypeImpls::new();
+                impls.insert_impl(maybe_spec_type_key, fns);
+                self.type_impls.insert(type_key, impls);
+            }
+        }
+    }
+
+    /// Tries to locate (or generate) the member function with the given name on the given type.
+    /// Returns:
+    ///  - `Ok(Some(fn_sig))` if we found exactly one matching function on the type
+    ///  - `Ok(None)` if we found no matching functions were found on the type
+    ///  - `Err(tks)` if we found many matching functions on the type
     pub fn get_or_monomorphize_member_fn(
         &mut self,
         type_key: TypeKey,
         fn_name: &str,
-    ) -> Option<AFnSig> {
-        if let Some(mem_fn) = self.get_member_fn(type_key, fn_name) {
-            return Some(mem_fn.clone());
-        }
+    ) -> Result<Option<AFnSig>, HashSet<TypeKey>> {
+        let fn_tks = self.get_member_fns(type_key, fn_name);
+        match fn_tks.len() {
+            // We didn't find any member functions for this type, but maybe this type was generated
+            // as the result of a monomorphization and we have yet to generate this member function
+            // for it. Let's check...
+            0 => self.try_monomorphize_member_fn(type_key, fn_name),
 
-        if self.try_monomorphize_member_fn(type_key, fn_name) {
-            self.get_member_fn(type_key, fn_name).cloned()
-        } else {
-            None
+            // Exactly one function by that name was found for the type. This is the ideal case.
+            1 => {
+                let tk = fn_tks.iter().next().unwrap();
+                let fn_sig = self.must_get_type(*tk).to_fn_sig();
+                Ok(Some(fn_sig.clone()))
+            }
+
+            // Many functions were found by that name.
+            _ => Err(fn_tks),
         }
     }
 
-    /// Tries to locate the member function with the given name on the given type.
-    fn get_member_fn(&self, type_key: TypeKey, fn_name: &str) -> Option<&AFnSig> {
-        match self.type_member_fn_sigs.get(&type_key) {
-            Some(member_fns) => member_fns.get(fn_name),
+    /// Tries to locate member functions with the given name on the given type. If the type
+    /// implements multiple specs with methods that share the same name, then this function will
+    /// return the type keys of all of those functions.
+    fn get_member_fns(&self, type_key: TypeKey, fn_name: &str) -> HashSet<TypeKey> {
+        match self.type_impls.get(&type_key) {
+            Some(impls) => impls.get_fns_by_name(fn_name),
+            None => HashSet::new(),
+        }
+    }
+
+    /// Returns the type key of the default function on the given type with the given name, or
+    /// None if no such function exists.
+    pub fn get_default_member_fn(&self, type_key: TypeKey, fn_name: &str) -> Option<TypeKey> {
+        match self.type_impls.get(&type_key) {
+            Some(impls) => impls.get_default_fn(fn_name),
             None => None,
         }
     }
 
     /// Tries to locate the given member function on the parent polymorphic type and monomorphizes
     /// it, if found.
-    fn try_monomorphize_member_fn(&mut self, type_key: TypeKey, fn_name: &str) -> bool {
-        // We could not find the member function, so let's see if this type is a
-        // monomorphization of a polymorphic type that has a matching member function.
+    fn try_monomorphize_member_fn(
+        &mut self,
+        type_key: TypeKey,
+        fn_name: &str,
+    ) -> Result<Option<AFnSig>, HashSet<TypeKey>> {
+        // Check if the given type is the result of a monomorphization. If not, then we're not
+        // going to find the function so we can abort early.
         let mono = match self.type_monomorphizations.get(&type_key) {
-            Some(mono) => mono,
-            None => return false,
+            Some(mono) => mono.clone(),
+            None => return Ok(None),
         };
 
-        let poly_fn_tk = match self.get_member_fn(mono.poly_type_key, fn_name) {
-            Some(fn_sig) => fn_sig.type_key,
-            None => return false,
+        // Try to find the function by name on the parent polymorphic type.
+        let poly_fn_tks = self.get_member_fns(mono.poly_type_key, fn_name);
+        let poly_fn_tk = match poly_fn_tks.len() {
+            // No function found.
+            0 => return Ok(None),
+            // Exactly one function found. This is what we want.
+            1 => *poly_fn_tks.iter().next().unwrap(),
+            // Many functions found by that name. We can't proceed because of this ambiguity.
+            _ => return Err(poly_fn_tks),
         };
 
-        let is_pub = self.member_fn_is_pub(mono.poly_type_key, fn_name);
+        let is_pub = self.member_fn_is_pub(mono.poly_type_key, poly_fn_tk);
+
+        // Monomorphize the function from the polymorphic parent type.
         let type_mappings = mono.type_mappings();
-
         let mono_fn_sig = match self.monomorphize_fn_type(poly_fn_tk, &type_mappings) {
-            Some(fn_tk) => self.must_get_type(fn_tk),
-            None => return false,
+            Some(fn_tk) => self.must_get_type(fn_tk).to_fn_sig().clone(),
+            // Monomorphization failed.
+            None => return Ok(None),
         };
 
-        self.insert_member_fn(type_key, mono_fn_sig.to_fn_sig().clone());
+        // Figure out if this function was implemented as part of a spec. If so, we need to
+        // associate the newly-monomorphized function with that same spec.
+        let maybe_spec_tk = self
+            .type_impls
+            .get(&mono.poly_type_key)
+            .unwrap()
+            .get_spec_type_key(poly_fn_tk);
+
+        self.insert_member_fn(type_key, maybe_spec_tk, mono_fn_sig.clone());
         if is_pub {
-            self.mark_member_fn_pub(type_key, fn_name);
+            self.mark_member_fn_pub(type_key, mono_fn_sig.type_key);
         }
 
-        true
+        Ok(Some(mono_fn_sig))
     }
 
     /// Records the given member function as public in the program context.
-    pub fn mark_member_fn_pub(&mut self, type_key: TypeKey, fn_name: &str) {
-        match self.pub_member_fn_names.get_mut(&type_key) {
-            Some(set) => {
-                set.insert(fn_name.to_string());
-            }
-            None => {
-                self.pub_member_fn_names
-                    .insert(type_key, HashSet::from([fn_name.to_string()]));
-            }
-        }
+    pub fn mark_member_fn_pub(&mut self, type_key: TypeKey, fn_type_key: TypeKey) {
+        self.type_impls
+            .get_mut(&type_key)
+            .expect(format!("type with key {type_key} should have impls").as_str())
+            .mark_fn_pub(fn_type_key);
     }
 
     /// Records the given struct field as public in the program context.
@@ -1865,8 +1982,8 @@ impl ProgramContext {
     /// Returns true if the member function is accessible from the current module.
     /// This will be true if the type is defined in this module or the function was
     /// declared public.
-    pub fn member_fn_is_accessible(&self, type_key: TypeKey, fn_name: &str) -> bool {
-        self.type_declared_in_cur_mod(type_key) || self.member_fn_is_pub(type_key, fn_name)
+    pub fn member_fn_is_accessible(&self, type_key: TypeKey, fn_type_key: TypeKey) -> bool {
+        self.type_declared_in_cur_mod(type_key) || self.member_fn_is_pub(type_key, fn_type_key)
     }
 
     /// Returns true if the given type was declared in the current module.
@@ -1878,31 +1995,37 @@ impl ProgramContext {
     }
 
     /// Returns true if the given type member function is public.
-    fn member_fn_is_pub(&self, type_key: TypeKey, fn_name: &str) -> bool {
+    fn member_fn_is_pub(&self, type_key: TypeKey, fn_type_key: TypeKey) -> bool {
         // Generic types always have public member fns.
         if self.must_get_type(type_key).is_generic() {
             return true;
         }
 
-        match self.pub_member_fn_names.get(&type_key) {
-            Some(set) => set.contains(fn_name),
+        match self.type_impls.get(&type_key) {
+            Some(impls) => impls.pub_fn_tks.contains(&fn_type_key),
             None => false,
         }
     }
 
     /// Inserts `member_fn_sig` as a member function on the type that corresponds to `type_key`.
-    pub fn insert_member_fn(&mut self, type_key: TypeKey, member_fn_sig: AFnSig) {
-        match self.type_member_fn_sigs.get_mut(&type_key) {
-            Some(mem_fns) => {
-                mem_fns.insert(member_fn_sig.name.clone(), member_fn_sig);
-            }
-            None => {
-                self.type_member_fn_sigs.insert(
-                    type_key,
-                    HashMap::from([(member_fn_sig.name.clone(), member_fn_sig)]),
-                );
-            }
-        };
+    pub fn insert_member_fn(
+        &mut self,
+        type_key: TypeKey,
+        maybe_spec_type_key: Option<TypeKey>,
+        member_fn_sig: AFnSig,
+    ) {
+        match self.type_impls.get_mut(&type_key) {
+            Some(impls) => impls.insert_fn(
+                maybe_spec_type_key,
+                member_fn_sig.name,
+                member_fn_sig.type_key,
+            ),
+            None => self.insert_impl(
+                type_key,
+                maybe_spec_type_key,
+                HashMap::from([(member_fn_sig.name, member_fn_sig.type_key)]),
+            ),
+        }
     }
 
     /// Returns the un-analyzed struct type with the given name.

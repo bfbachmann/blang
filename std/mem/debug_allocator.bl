@@ -33,7 +33,7 @@ pub struct DebugAllocator {
     blocks: List[Block]
 }
 
-impl DebugAllocator: Allocator {
+impl DebugAllocator {
     /// Returns a new allocator that uses `al` as its underlying allocator.
     pub fn new(al: *mut DynAllocator) -> DebugAllocator {
         return DebugAllocator{
@@ -42,6 +42,42 @@ impl DebugAllocator: Allocator {
         }
     }
 
+    /// Return true if `ptr` is valid and references a memory region capable of
+    /// holding at least `size` bytes.
+    pub fn is_valid(*self, ptr: *u8, size: uint) -> bool {
+        let result = self.block_index(ptr)
+        let found = result.(1)
+        if !found {
+            return false
+        }
+
+        let index = result.(0)
+        return self^.blocks.get(index).contains_range(ptr, size)
+    }
+
+    fn block_index(*self, ptr: *u8) -> {uint, bool} {
+        // TODO: This is really slow. Think of a faster way to search.
+        for let mut i = 0uint, i < self^.blocks.len(), i += 1 {
+            let block = self^.blocks.get(i)
+            if block.contains(ptr) {
+                return {i, true}
+            }
+        }
+
+        return {0, false}
+    }
+
+    /// Prints information about allocated memory blocks.
+    pub fn print_summary(*self) {
+        let len = self^.blocks.len()
+        for let mut i = 0uint, i < len, i += 1 {
+            // TODO: Print detailed info about block.
+            @io.puts("block\0")
+        }
+    }
+}
+
+impl DebugAllocator: Allocator {
     /// Allocates `size` bytes on the heap an returns the pointer.
     pub fn alloc(*mut self, size: uint) -> *mut u8 {
         let ptr = self^.allocator.alloc(size)
@@ -84,39 +120,5 @@ impl DebugAllocator: Allocator {
         
         self^.allocator.free(block^.ptr)
         self^.blocks.remove(index)
-    }
-
-    /// Return true if `ptr` is valid and references a memory region capable of
-    /// holding at least `size` bytes.
-    pub fn is_valid(*self, ptr: *u8, size: uint) -> bool {
-        let result = self.block_index(ptr)
-        let found = result.(1)
-        if !found {
-            return false
-        }
-
-        let index = result.(0)
-        return self^.blocks.get(index).contains_range(ptr, size)
-    }
-
-    fn block_index(*self, ptr: *u8) -> {uint, bool} {
-        // TODO: This is really slow. Think of a faster way to search.
-        for let mut i = 0uint, i < self^.blocks.len(), i += 1 {
-            let block = self^.blocks.get(i)
-            if block.contains(ptr) {
-                return {i, true}
-            }
-        }
-
-        return {0, false}
-    }
-
-    /// Prints information about allocated memory blocks.
-    pub fn print_summary(*self) {
-        let len = self^.blocks.len()
-        for let mut i = 0uint, i < len, i += 1 {
-            // TODO: Print detailed info about block.
-            @io.puts("block\0")
-        }
     }
 }

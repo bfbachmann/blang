@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
@@ -82,16 +83,17 @@ impl AParam {
         // Define member functions for the generic type based on its spec constraints.
         // Also mark the generic type as implementing all the specs from its constraints.
         for spec_type_key in required_spec_type_keys {
-            ctx.insert_spec_impl(generic_type_key, spec_type_key);
-
             let spec = ctx.must_get_type(spec_type_key).to_spec_type();
-            let mem_fn_type_keys: Vec<TypeKey> =
-                spec.member_fn_type_keys.values().map(|tk| *tk).collect();
-            for mem_fn_type_key in mem_fn_type_keys {
-                let mut fn_sig = ctx.must_get_type(mem_fn_type_key).to_fn_sig().clone();
+            let spec_fn_tks: Vec<TypeKey> = spec.member_fn_type_keys.values().cloned().collect();
+            let mut impl_fns = HashMap::new();
+
+            for fn_type_key in spec_fn_tks {
+                let mut fn_sig = ctx.must_get_type(fn_type_key).to_fn_sig().clone();
                 fn_sig.replace_self_type_and_define(ctx, generic_type_key);
-                ctx.insert_member_fn(generic_type_key, fn_sig);
+                impl_fns.insert(fn_sig.name, fn_sig.type_key);
             }
+
+            ctx.insert_impl(generic_type_key, Some(spec_type_key), impl_fns);
         }
 
         AParam {

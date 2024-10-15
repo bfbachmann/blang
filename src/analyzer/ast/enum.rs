@@ -191,7 +191,7 @@ impl AEnumType {
 
         // Record the type name as public in the current module if necessary.
         if enum_type.is_pub {
-            ctx.insert_pub_type_name(enum_type.name.as_str());
+            ctx.mark_type_pub(type_key);
         }
 
         a_enum_type
