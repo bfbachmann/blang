@@ -2005,6 +2005,46 @@ mod tests {
     }
 
     #[test]
+    fn ambiguous_access() {
+        let result = analyze(
+            r#"
+            spec A { fn thing() }
+            
+            struct Thing {}
+            impl Thing: A {
+                fn thing() {}
+            }
+            
+            spec B { fn thing() }
+            impl Thing: B {
+                fn thing() {}
+            }
+            
+            fn main() {
+                Thing.thing()
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::AmbiguousAccess));
+    }
+
+    #[test]
+    fn spec_member_access() {
+        let result = analyze(
+            r#"
+            spec Bla {
+                fn bla()
+            }
+
+            fn main() {
+                Bla.bla()
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::SpecMemberAccess));
+    }
+
+    #[test]
     fn non_spec_fn_in_impl() {
         let result = analyze(
             r#"

@@ -579,7 +579,7 @@ pub fn gen_fn_sig<'a, 'ctx>(
         ll_arg.set_name(arg.name.as_str());
 
         // Add appropriate attributes for optimization.
-        if ll_arg.is_pointer_value() && !arg_type.is_mut_pointer() && !arg.is_mut {
+        if ll_arg.is_pointer_value() && !arg_type.is_mut_ptr() && !arg.is_mut {
             add_fn_arg_attrs(ctx, ll_fn_val, i, vec!["readonly"])
         }
     }

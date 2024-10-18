@@ -93,7 +93,7 @@ impl AStructType {
         // type to the program context. This way, if any of the field types make use of this struct
         // type, we won't get into an infinitely recursive type resolution cycle. When we're done
         // analyzing this struct type, the mapping will be updated in the program context.
-        let mangled_name = ctx.mangle_name(None, None, struct_type.name.as_str(), true);
+        let mangled_name = ctx.mangle_name(None, None, None, struct_type.name.as_str(), true);
         let mut a_struct_type = AStructType {
             name: struct_type.name.clone(),
             mangled_name: mangled_name.clone(),

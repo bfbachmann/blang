@@ -172,6 +172,9 @@ struct ModuleContext {
     /// Will contain the type key corresponding to the current `spec` or `impl` block that is being
     /// analyzed, if any.
     cur_self_type_key: Option<TypeKey>,
+    /// Will contain the type key of the spec being implemented in the current `impl` or `spec`
+    /// block, if any.
+    cur_spec_type_key: Option<TypeKey>,
     /// Maps module name to full module path for each module that was imported into this
     /// module. For example, if an import was specified with `use "my_project/my_mod.bl"`, then
     /// this map would contain the mapping `"my_mod": "my_project/my_mod.bl"`.
@@ -217,6 +220,7 @@ impl ModuleContext {
             from_scope_indices: vec![],
             loop_scope_indices: vec![],
             cur_self_type_key: None,
+            cur_spec_type_key: None,
             imported_mod_paths: Default::default(),
             pub_const_names: Default::default(),
             pub_fn_names: Default::default(),
@@ -842,14 +846,14 @@ impl ProgramContext {
         // Try searching for the mangled type name first. If that doesn't work, we'll try with the
         // regular name. We have to do this to account for cases where a type is defined inside a
         // function.
-        let mangled_name = self.mangle_name(maybe_mod_name, None, name, true);
+        let mangled_name = self.mangle_name(maybe_mod_name, None, None, name, true);
         let typ = Type::new_unresolved(mangled_name.as_str());
         if let Some(tk) = mod_ctx.search_stack(|scope| scope.get_type_key(&typ)) {
             return Some(tk);
         }
 
         // Try searching for the mangled name without the current path.
-        let mangled_name = self.mangle_name(maybe_mod_name, None, name, false);
+        let mangled_name = self.mangle_name(maybe_mod_name, None, None, name, false);
         let typ = Type::new_unresolved(mangled_name.as_str());
         if let Some(tk) = mod_ctx.search_stack(|scope| scope.get_type_key(&typ)) {
             return Some(tk);
@@ -1503,11 +1507,6 @@ impl ProgramContext {
         *self.primitive_type_keys.get("str").unwrap()
     }
 
-    /// Returns the type key for the special `Self` type.
-    pub fn self_type_key(&self) -> TypeKey {
-        *self.primitive_type_keys.get("Self").unwrap()
-    }
-
     /// Pushes `scope` onto the stack.
     pub fn push_scope(&mut self, scope: Scope) {
         let mod_ctx = self.cur_mod_ctx_mut();
@@ -1651,6 +1650,12 @@ impl ProgramContext {
     /// during analysis of the `impl` or `spec` body.
     pub fn set_cur_self_type_key(&mut self, maybe_type_key: Option<TypeKey>) {
         self.cur_mod_ctx_mut().cur_self_type_key = maybe_type_key;
+    }
+
+    /// Sets the type key of the spec implemented by the current `impl` block to
+    /// `maybe_spec_type_key`.
+    pub fn set_cur_spec_type_key(&mut self, maybe_spec_type_key: Option<TypeKey>) {
+        self.cur_mod_ctx_mut().cur_spec_type_key = maybe_spec_type_key;
     }
 
     /// Records the given name as a public constant name in the current module.
@@ -1822,6 +1827,12 @@ impl ProgramContext {
         self.cur_mod_ctx().cur_self_type_key
     }
 
+    /// Returns the type key of the spec being implemented in the current `impl` or `spec`
+    /// block, if any.
+    pub fn get_cur_spec_type_key(&self) -> Option<TypeKey> {
+        self.cur_mod_ctx().cur_spec_type_key
+    }
+
     /// Inserts the given mapping from member function name to type key into the program context
     /// as an impl. If `maybe_spec_type_key` is not None, then it will be recorded as a spec impl
     /// for the given type.
@@ -1841,6 +1852,24 @@ impl ProgramContext {
                 impls.insert_impl(maybe_spec_type_key, fns);
                 self.type_impls.insert(type_key, impls);
             }
+        }
+    }
+
+    /// Returns the type key of the spec that the given function on the given implements.
+    pub fn get_spec_impl_by_fn(&self, fn_type_key: TypeKey) -> Option<TypeKey> {
+        let func = self.must_get_type(fn_type_key).to_fn_sig();
+        match func.maybe_impl_type_key {
+            Some(impl_tk) => match self.type_impls.get(&impl_tk) {
+                Some(impls) => impls.get_spec_type_key(fn_type_key),
+                // If there is no type impl, then maybe the function's impl type is a spec.
+                // This can happen in cases where the function is actually a method on a generic
+                // type declared as a parameter that implements a spec.
+                None => match self.must_get_type(impl_tk).is_spec() {
+                    true => Some(impl_tk),
+                    false => None,
+                },
+            },
+            None => None,
         }
     }
 
@@ -2070,13 +2099,15 @@ impl ProgramContext {
 
     /// Returns a name mangled to the following form.
     ///
-    ///     <mod_path>::<type_prefix><path><name>
+    ///     <mod_path>::<type_prefix><spec_prefix><path><name>
     ///
     /// where
     ///  - `mod_path` is the full path of the module in which the symbol is
     ///    defined (determined by `maybe_mod_name`)
     ///  - `type_prefix` has the form `<type>.` if there is an impl type on
     ///    the function (determined by `maybe_impl_type_key`), or is empty
+    ///  - `spec_prefix` has the form `impl:<spec>.` if the function implements a
+    ///    spec (determined by `maybe_spec_type_key`), or is empty
     ///  - `path` has the form `<f1>.<f2>...` where each item in the sequence
     ///    is the name of a function inside which the next function is nested
     ///    (this only applies if `include_fn_path` is `true`)
@@ -2087,6 +2118,7 @@ impl ProgramContext {
         &self,
         maybe_mod_name: Option<&String>,
         maybe_impl_type_key: Option<TypeKey>,
+        maybe_spec_type_key: Option<TypeKey>,
         name: &str,
         include_path: bool,
     ) -> String {
@@ -2114,8 +2146,16 @@ impl ProgramContext {
             None => "".to_string(),
         };
 
-        if mod_ctx.fn_scope_indices.is_empty() || !include_path {
-            return format!("{mod_path}::{type_prefix}{name}");
+        let spec_prefix = match maybe_spec_type_key {
+            Some(spec_tk) => {
+                let spec_name = self.must_get_type(spec_tk).to_spec_type().name.as_str();
+                format!("impl:{spec_name}.")
+            }
+            None => "".to_string(),
+        };
+
+        if !include_path || mod_ctx.fn_scope_indices.is_empty() {
+            return format!("{mod_path}::{type_prefix}{spec_prefix}{name}");
         }
 
         // Get a path to the function based on the current scope.
@@ -2128,7 +2168,7 @@ impl ProgramContext {
             fn_path = fn_path + fn_name + "::";
         }
 
-        format!("{mod_path}::{type_prefix}{fn_path}{name}")
+        format!("{mod_path}::{type_prefix}{spec_prefix}{fn_path}{name}")
     }
 
     /// Returns a new name for an anonymous function created inside the current scope. This
@@ -2218,7 +2258,7 @@ impl ProgramContext {
         name: &str,
     ) -> Option<&AStructType> {
         let mod_ctx = self.get_mod_ctx(maybe_mod_name);
-        let mangled_name = self.mangle_name(maybe_mod_name, None, name, false);
+        let mangled_name = self.mangle_name(maybe_mod_name, None, None, name, false);
         if let Some(tk) = mod_ctx.struct_type_keys.get(mangled_name.as_str()) {
             return Some(self.must_get_type(*tk).to_struct_type());
         }

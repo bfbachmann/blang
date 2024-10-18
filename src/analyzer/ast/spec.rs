@@ -25,9 +25,14 @@ impl Display for ASpecType {
 impl ASpecType {
     /// Performs semantic analysis on the given spec.
     pub fn from(ctx: &mut ProgramContext, spec: &Spec) -> ASpecType {
-        // Set the unknown type "Self" as the current type of "self" so it can be resolved when
-        // we analyzed methods in this spec.
-        ctx.set_cur_self_type_key(Some(ctx.self_type_key()));
+        // Insert the empty spec type so we have a type key for it. We'll update it when we're
+        // done analyzing.
+        let type_key = ctx.force_insert_type(AType::Spec(ASpecType {
+            name: spec.name.clone(),
+            member_fn_type_keys: Default::default(),
+        }));
+        ctx.set_cur_self_type_key(Some(type_key));
+        ctx.set_cur_spec_type_key(Some(type_key));
 
         // Analyze all the function signatures in the spec.
         let mut fn_sigs = vec![];
@@ -38,7 +43,8 @@ impl ASpecType {
             fn_sigs.push(a_fn_sig);
         }
 
-        // Unset the "Self" type now that we're done analyzing the spec.
+        // Unset the "Self" and spec type keys now that we're done analyzing the spec.
+        ctx.set_cur_spec_type_key(None);
         ctx.set_cur_self_type_key(None);
 
         let spec_type = ASpecType {
@@ -47,7 +53,7 @@ impl ASpecType {
         };
 
         // Add the new spec to the program context so we can reference it by name later.
-        let type_key = ctx.insert_type(AType::Spec(spec_type.clone()));
+        ctx.replace_type(type_key, AType::Spec(spec_type.clone()));
 
         // Record the type name as public in the current module if necessary.
         if spec.is_pub {

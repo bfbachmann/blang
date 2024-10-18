@@ -55,6 +55,27 @@ impl AMemberAccess {
             return placeholder;
         }
 
+        // Abort early if the base type is a spec. It's illegal to access member functions on
+        // specs because they're not real functions.
+        if let AType::Spec(spec_type) = base_type {
+            ctx.insert_err(
+                AnalyzeError::new(
+                    ErrorKind::SpecMemberAccess,
+                    "cannot access members on spec types",
+                    access,
+                )
+                .with_detail(
+                    format_code!(
+                        "Spec types like {} contain don't have real member functions, so \
+                        it's impossible to access their members this way.",
+                        spec_type.name
+                    )
+                    .as_str(),
+                ),
+            );
+            return placeholder;
+        }
+
         // Check if the member access is accessing a field on a struct type or
         // a member function or method on a type.
         let (maybe_field_type_key, base_type_key, base_expr_is_ptr) = match base_type {
@@ -143,10 +164,14 @@ impl AMemberAccess {
 
                     1 => {
                         // We found a matching member function. We just need to
-                        // change any `Self` type keys into type keys that match
+                        // change any spec type keys into type keys that match
                         // the base generic type the function is being called on.
                         let mut fn_sig = matching_fns[0].clone();
-                        fn_sig.replace_self_type_and_define(ctx, base_expr.type_key);
+                        fn_sig.replace_type_and_define(
+                            ctx,
+                            fn_sig.maybe_impl_type_key.unwrap(),
+                            base_expr.type_key,
+                        );
                         (None, base_expr.type_key, false)
                     }
 
@@ -249,7 +274,7 @@ impl AMemberAccess {
                         let self_arg_type_key = maybe_self_type_key.unwrap();
                         let self_arg_type = ctx.must_get_type(self_arg_type_key);
                         if !base_expr_is_ptr && self_arg_type.is_ptr() {
-                            let op = match self_arg_type.is_mut_pointer() {
+                            let op = match self_arg_type.is_mut_ptr() {
                                 true => {
                                     // Record an error if we're not allowed to get a
                                     // `&mut` to the base expression.
@@ -265,7 +290,7 @@ impl AMemberAccess {
                                 self_arg_type_key,
                                 span,
                             );
-                        } else if self_arg_type.is_mut_pointer() {
+                        } else if self_arg_type.is_mut_ptr() {
                             // Record an error here because we're trying to call
                             // a method that requires `*mut T` with only a `*T`.
                             base_expr.check_referencable_as_mut(ctx, &base_expr);

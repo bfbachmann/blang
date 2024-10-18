@@ -239,9 +239,44 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
         None => false,
     };
 
-    ctx.set_cur_self_type_key(Some(impl_type_key));
-
+    // Check if this is an implementation of a spec. If so, try to resolve the spec and track
+    // its type key in the program context while we analyze its functions.
     let is_default_impl = impl_.maybe_spec.is_none();
+    let maybe_spec_tk = match &impl_.maybe_spec {
+        Some(spec) => 'check: {
+            // Try to find the analyzed spec type. It might not be there if it has not
+            // yet been analyzed.
+            if let Some(spec_type_key) =
+                ctx.get_type_key_by_type_name(spec.maybe_mod_name.as_ref(), spec.name.as_str())
+            {
+                break 'check Some(spec_type_key);
+            }
+
+            // Try to find the un-analyzed spec type and analyze it.
+            if spec.maybe_mod_name.is_none() {
+                if let Some(unchecked_spec) = ctx.get_unchecked_spec(spec.name.as_str()) {
+                    ASpecType::from(ctx, &unchecked_spec.clone());
+                    let spec_type_key = ctx
+                        .get_type_key_by_type_name(None, spec.name.as_str())
+                        .unwrap();
+                    break 'check Some(spec_type_key);
+                }
+            }
+
+            ctx.insert_err(AnalyzeError::new(
+                ErrorKind::UndefSpec,
+                format_code!("spec {} not defined", spec.name).as_str(),
+                spec,
+            ));
+
+            None
+        }
+
+        None => None,
+    };
+
+    ctx.set_cur_self_type_key(Some(impl_type_key));
+    ctx.set_cur_spec_type_key(maybe_spec_tk);
 
     // Analyze each member function signature.
     let mut fn_type_keys = HashMap::new();
@@ -292,6 +327,7 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
         fn_type_keys.insert(fn_sig.name.clone(), fn_sig.type_key);
     }
 
+    ctx.set_cur_spec_type_key(None);
     ctx.set_cur_self_type_key(None);
 
     if has_params {
@@ -301,39 +337,6 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     // Regardless of errors, we'll mark this `impl` as implementing the
     // spec it claims it does. This is just to prevent redundant error
     // messages when the corresponding type gets used.
-    let maybe_spec_tk = match &impl_.maybe_spec {
-        Some(spec) => 'check: {
-            // Try to find the analyzed spec type. It might not be there if it has not
-            // yet been analyzed.
-            if let Some(spec_type_key) =
-                ctx.get_type_key_by_type_name(spec.maybe_mod_name.as_ref(), spec.name.as_str())
-            {
-                break 'check Some(spec_type_key);
-            }
-
-            // Try to find the un-analyzed spec type and analyze it.
-            if spec.maybe_mod_name.is_none() {
-                if let Some(unchecked_spec) = ctx.get_unchecked_spec(spec.name.as_str()) {
-                    ASpecType::from(ctx, &unchecked_spec.clone());
-                    let spec_type_key = ctx
-                        .get_type_key_by_type_name(None, spec.name.as_str())
-                        .unwrap();
-                    break 'check Some(spec_type_key);
-                }
-            }
-
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::UndefSpec,
-                format_code!("spec {} not defined", spec.name).as_str(),
-                spec,
-            ));
-
-            return;
-        }
-
-        None => None,
-    };
-
     ctx.insert_impl(impl_type_key, maybe_spec_tk, fn_type_keys);
 }
 

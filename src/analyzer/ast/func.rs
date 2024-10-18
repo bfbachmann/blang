@@ -79,7 +79,14 @@ impl AFnSig {
     /// signature.
     pub fn from(ctx: &mut ProgramContext, sig: &FunctionSignature) -> AFnSig {
         let maybe_impl_type_key = ctx.get_cur_self_type_key();
-        let mangled_name = ctx.mangle_name(None, maybe_impl_type_key, sig.name.as_str(), true);
+        let maybe_spec_type_key = ctx.get_cur_spec_type_key();
+        let mangled_name = ctx.mangle_name(
+            None,
+            maybe_impl_type_key,
+            maybe_spec_type_key,
+            sig.name.as_str(),
+            true,
+        );
 
         // If this function signature has a name, we can try to locate it by its mangled name to
         // avoid re-analyzing it.
@@ -230,11 +237,12 @@ impl AFnSig {
     }
 
     /// Updates this function signature by replacing any instances of the
-    /// `Self`  type inside it with `replacement_type_key`. Also
-    /// records the new function signature as a new type in the program context.
-    pub fn replace_self_type_and_define(
+    /// `target_type_key` inside it with `replacement_type_key`. Also records
+    /// the new function signature as a new type in the program context.
+    pub fn replace_type_and_define(
         &mut self,
         ctx: &mut ProgramContext,
+        target_type_key: TypeKey,
         replacement_type_key: TypeKey,
     ) {
         fn replace_tk(
@@ -255,24 +263,36 @@ impl AFnSig {
             }
         }
 
-        let self_type_key = ctx.self_type_key();
-
         // Make type key replacements in the function signature.
         for arg in &mut self.args {
-            replace_tk(ctx, &mut arg.type_key, self_type_key, replacement_type_key)
+            replace_tk(
+                ctx,
+                &mut arg.type_key,
+                target_type_key,
+                replacement_type_key,
+            )
         }
 
         if let Some(ret_tk) = &mut self.maybe_ret_type_key {
-            replace_tk(ctx, ret_tk, self_type_key, replacement_type_key);
+            replace_tk(ctx, ret_tk, target_type_key, replacement_type_key);
         }
 
-        if let Some(impl_tk) = &mut self.maybe_impl_type_key {
-            replace_tk(ctx, impl_tk, self_type_key, replacement_type_key);
-        }
+        let maybe_spec_tk = match &mut self.maybe_impl_type_key {
+            Some(impl_tk) => {
+                replace_tk(ctx, impl_tk, target_type_key, replacement_type_key);
+                ctx.get_spec_impl_by_fn(self.type_key)
+            }
+            None => None,
+        };
 
         // Re-mangle the name based on the updated type info.
-        self.mangled_name =
-            ctx.mangle_name(None, self.maybe_impl_type_key, self.name.as_str(), true);
+        self.mangled_name = ctx.mangle_name(
+            None,
+            self.maybe_impl_type_key,
+            maybe_spec_tk,
+            self.name.as_str(),
+            true,
+        );
 
         // Define the new type in the program context.
         let new_fn_type_key = ctx.insert_type(AType::Function(Box::new(self.clone())));
@@ -314,7 +334,7 @@ impl AFnSig {
 pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) {
     // Add the function to the program context with an empty body, making sure it doesn't already
     // exist. We'll replace the function body when we analyze it later.
-    let mangled_name = ctx.mangle_name(None, None, sig.name.as_str(), true);
+    let mangled_name = ctx.mangle_name(None, None, None, sig.name.as_str(), true);
     if ctx
         .get_fn_sig_by_mangled_name(None, mangled_name.as_str())
         .is_some()

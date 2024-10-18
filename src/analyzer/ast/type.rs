@@ -152,7 +152,7 @@ impl AType {
         }
         if let Some(fn_sig) = ctx.get_fn_sig_by_mangled_name(
             maybe_mod_name,
-            ctx.mangle_name(None, None, type_name, false).as_str(),
+            ctx.mangle_name(None, None, None, type_name, false).as_str(),
         ) {
             return AType::from_fn_sig(fn_sig.clone());
         }
@@ -261,15 +261,13 @@ impl AType {
                 same_pointee_types && (ignore_mutability || p1.is_mut == p2.is_mut)
             }
             (a, b) => {
-                let a = match ctx.get_cur_self_type_key() {
-                    Some(tk) if a.is_unknown() && a.name() == "Self" => ctx.must_get_type(tk),
-                    _ => a,
-                };
-
-                let b = match ctx.get_cur_self_type_key() {
-                    Some(tk) if b.is_unknown() && b.name() == "Self" => ctx.must_get_type(tk),
-                    _ => b,
-                };
+                if b.is_spec() {
+                    // TODO: Check if type implements spec. At the moment, we're just assuming
+                    // that the spec is satisfied by the type because this case should only
+                    // happen when we're checking if a function signature matches that of a spec,
+                    // so this works for now but isn't really robust long-term.
+                    return true;
+                }
 
                 a == b
             }
@@ -329,7 +327,7 @@ impl AType {
     }
 
     /// Returns true if this is a mutating pointer type.
-    pub fn is_mut_pointer(&self) -> bool {
+    pub fn is_mut_ptr(&self) -> bool {
         matches!(self, AType::Pointer(APointerType { is_mut: true, .. }))
     }
 

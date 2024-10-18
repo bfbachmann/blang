@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::analyzer::ast::func::AFn;
-use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
@@ -87,6 +86,30 @@ impl AImpl {
         // Set the impl type key in the program context so we can use it when resolving type `Self`.
         ctx.set_cur_self_type_key(Some(type_key));
 
+        // If this block implements a spec, resolve it and track it in the program context while
+        // we analyze its functions.
+        let maybe_spec_tk = match &impl_.maybe_spec {
+            Some(spec) => match ctx
+                .get_type_key_by_type_name(spec.maybe_mod_name.as_ref(), spec.name.as_str())
+            {
+                Some(spec_tk) => {
+                    ctx.set_cur_spec_type_key(Some(spec_tk));
+                    Some(spec_tk)
+                }
+                None => {
+                    ctx.insert_err(AnalyzeError::new(
+                        ErrorKind::UndefSpec,
+                        format_code!("spec {} is not defined", spec).as_str(),
+                        spec,
+                    ));
+
+                    None
+                }
+            },
+
+            None => None,
+        };
+
         // Analyze member functions.
         let mut member_fns: HashMap<String, (AFn, &Function)> = HashMap::new();
         for mem_fn in &impl_.member_fns {
@@ -95,8 +118,14 @@ impl AImpl {
         }
 
         // Check that this `impl` actually implements the spec it claims to.
-        let (implements_pub_spec, spec_impl_errs) = match &impl_.maybe_spec {
-            Some(spec) => check_spec_impl(ctx, type_key, spec, &member_fns),
+        let (implements_pub_spec, spec_impl_errs) = match maybe_spec_tk {
+            Some(spec_tk) => check_spec_impl(
+                ctx,
+                type_key,
+                impl_.maybe_spec.as_ref().unwrap(),
+                spec_tk,
+                &member_fns,
+            ),
             None => (false, vec![]),
         };
 
@@ -122,6 +151,7 @@ impl AImpl {
             ctx.pop_params();
         }
 
+        ctx.set_cur_spec_type_key(None);
         ctx.set_cur_self_type_key(None);
 
         AImpl {
@@ -138,30 +168,11 @@ fn check_spec_impl(
     ctx: &mut ProgramContext,
     type_key: TypeKey,
     spec: &Symbol,
+    spec_tk: TypeKey,
     member_fns: &HashMap<String, (AFn, &Function)>,
 ) -> (bool, Vec<AnalyzeError>) {
     // Find the spec being referred to.
-    let result = match ctx.get_type_key_by_type_name(spec.maybe_mod_name.as_ref(), &spec.name) {
-        Some(tk) => match ctx.must_get_type(tk) {
-            AType::Spec(spec_type) => Some((spec_type, tk)),
-            _ => None,
-        },
-        _ => None,
-    };
-
-    let (a_spec, spec_tk) = match result {
-        Some(spec_info) => spec_info,
-        None => {
-            return (
-                false,
-                vec![AnalyzeError::new(
-                    ErrorKind::UndefSpec,
-                    format_code!("spec {} is not defined", spec).as_str(),
-                    spec,
-                )],
-            );
-        }
-    };
+    let a_spec = ctx.must_get_type(spec_tk).to_spec_type();
 
     // Collect the names of all the functions that aren't implemented
     // from this spec and check that spec functions were implemented correctly.

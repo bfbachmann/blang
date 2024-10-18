@@ -89,7 +89,7 @@ impl AParam {
 
             for fn_type_key in spec_fn_tks {
                 let mut fn_sig = ctx.must_get_type(fn_type_key).to_fn_sig().clone();
-                fn_sig.replace_self_type_and_define(ctx, generic_type_key);
+                fn_sig.replace_type_and_define(ctx, spec_type_key, generic_type_key);
                 impl_fns.insert(fn_sig.name, fn_sig.type_key);
             }
 

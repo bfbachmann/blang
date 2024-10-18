@@ -493,7 +493,7 @@ impl AExpr {
                 ),
             );
         } else if !scoped_symbol.is_mut
-            && !ctx.must_get_type(scoped_symbol.type_key).is_mut_pointer()
+            && !ctx.must_get_type(scoped_symbol.type_key).is_mut_ptr()
         {
             ctx.insert_err(
                 AnalyzeError::new(
@@ -878,7 +878,7 @@ fn check_operand_types(
         (Some(ltk), Some(rtk)) => {
             // In the case of pointer arithmetic, if either of the pointers is
             // mutable, we'll make the result mutable as well.
-            if ctx.must_get_type(rtk).is_mut_pointer() {
+            if ctx.must_get_type(rtk).is_mut_ptr() {
                 Some(rtk)
             } else {
                 Some(ltk)

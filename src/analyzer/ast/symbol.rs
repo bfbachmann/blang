@@ -346,13 +346,13 @@ fn get_type_key_for_symbol(
     if include_fns {
         // Search for a function with the given name. Functions take precedence over extern
         // functions.
-        let mangled_name_with_path = ctx.mangle_name(maybe_mod_name, None, name, true);
+        let mangled_name_with_path = ctx.mangle_name(maybe_mod_name, None, None, name, true);
         if let Some(func) = ctx.get_fn(maybe_mod_name, mangled_name_with_path.as_str()) {
             return (Some(func.signature.type_key), None);
         };
 
         // Search for an extern function with the given name.
-        let mangled_name_without_path = ctx.mangle_name(maybe_mod_name, None, name, false);
+        let mangled_name_without_path = ctx.mangle_name(maybe_mod_name, None, None, name, false);
         if let Some(fn_sig) =
             ctx.get_fn_sig_by_mangled_name(maybe_mod_name, mangled_name_without_path.as_str())
         {
