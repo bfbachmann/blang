@@ -97,8 +97,7 @@ impl List {
 
         self^.len -= 1
 
-        // If the array of entries is at or below 1/4 capacity, half its 
-        // capacity.
+        // Check if we should shrink the list to conserve memory.
         let new_cap = self.capacity() / growth_factor
         if new_cap >= min_cap and self^.len * growth_factor <= new_cap {
             self^.entries.resize(new_cap)
@@ -120,7 +119,7 @@ impl List {
         return self^.len == self.capacity()
     }
 
-    /// Doubles the capacity of the list.
+    /// Grows the list by the growth factor.
     fn grow(*mut self) {
         let mut new_cap = self.capacity() * growth_factor
         if new_cap == 0 {
