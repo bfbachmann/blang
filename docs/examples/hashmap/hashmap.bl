@@ -1,5 +1,5 @@
 use {free}: "std/libc/mem.bl"
-use {copy}: "std/mem/mem.bl"
+use {copy, replace}: "std/mem/mem.bl"
 use {Table}: "std/types/table.bl"
 use {Eq}: "std/specs/eq.bl"
 use {Hasher}: "std/specs/hasher.bl"
@@ -180,8 +180,10 @@ impl HashMap {
         }
 
         // Replace the old table with a new one that is double the size.
-        let old_table = self^.table.clone()
-        self^.table = Table[Mapping[K, V]].new(self^.allocator, new_len)
+        let old_table = replace[Table[Mapping[K, V]]](
+            &mut self^.table, 
+            Table[Mapping[K, V]].new(self^.allocator, new_len),
+        )
 
         // Re-hash all the keys in the table and copy mappings into the new table.
         for let mut i: uint = 0, i < old_len, i += 1 {

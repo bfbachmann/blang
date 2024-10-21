@@ -29,3 +29,23 @@ pub fn heap[T](t: T) -> *mut T {
     ptr^ = t
     return ptr
 }
+
+/// Replaces the value pointed to by `dst` with `value` and returns the data
+/// pointed to by `dst`.
+pub fn replace[T](dst: *mut T, mut value: T) -> T {
+    swap[T](dst, &mut value)
+    return value
+}
+
+/// Swaps the data pointed to by `a` and `b`.
+pub fn swap[T](a: *mut T, b: *mut T) {
+    let a_bytes = a as *mut u8
+    let b_bytes = b as *mut u8
+    let len = sizeof T as int
+
+    for let mut i = 0, i < len, i += 1 {
+        let tmp = a_bytes.(i)^
+        a_bytes.(i)^ = b_bytes.(i)^
+        b_bytes.(i)^ = tmp
+    }
+}

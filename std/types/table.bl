@@ -98,14 +98,3 @@ impl Table {
         self.entries.free()
     }
 }
-
-impl Table: Clone {
-    /// Clones the table and returns the clone.
-    /// The clone is shallow and does not copy entries in the table.
-    fn clone(*self) -> Table[T] {
-        return Table[T]{
-            allocator: self^.allocator
-            entries: self^.entries.clone()
-        }
-    }
-}

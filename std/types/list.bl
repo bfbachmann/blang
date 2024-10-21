@@ -134,14 +134,3 @@ impl List {
         @panic.assert(i < self^.len, "list index out of bounds")
     }
 }
-
-impl List: Clone {
-    /// Returns a shallow clone of the list (i.e. does not clone entries).
-    fn clone(*self) -> List[T] {
-        return List[T]{
-            // Shallow array clone.
-            entries: self^.entries.clone()
-            len: self^.len
-        }
-    }
-}

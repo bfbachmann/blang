@@ -61,13 +61,3 @@ impl Array {
         self.allocator.free(self.data.ptr() as *u8)
     }
 }
-
-impl Array: Clone {
-    /// Returns a shallow clone of the array (i.e. does not clone entries).
-    fn clone(*self) -> Array[T] {
-        return Array[T]{
-            allocator: self^.allocator
-            data: self^.data.clone()
-        }
-    }
-}
