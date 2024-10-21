@@ -12,7 +12,7 @@ The Blang Playground is hosted at [play.blang.net](https://play.blang.net).
 
 See [docs](docs) for high-level language documentation and examples.
 
-See [src/tests](src/tests) for runnable examples.
+See [docs/examples](docs/examples) for runnable examples.
 
 ## Development Dependencies
 
