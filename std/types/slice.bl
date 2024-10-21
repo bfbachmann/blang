@@ -1,0 +1,146 @@
+use panic: "std/backtrace/panic.bl"
+use {Clone}: "std/specs/clone.bl"
+
+/// A bounded pointer to contiguous values of type T.
+pub struct Slice[T] {
+    ptr: *T
+    len: uint
+}
+
+impl Slice: Clone {
+    /// Returns a shallow clone of the slice (i.e. does not clone any 
+    /// underlying data).
+    pub fn clone(*self) -> Slice[T] {
+        return Slice[T]{
+            ptr: self^.ptr
+            len: self^.len
+        }
+    }
+}
+
+impl Slice {
+    /// Returns a new slice from `ptr` of `len` elements of type `T`.
+    pub fn new(ptr: *T, len: uint) -> Slice[T] {
+        return Slice[T]{
+            ptr: ptr
+            len: len
+        }
+    }
+
+    /// Returns the number of elements in the slice.
+    pub fn len(*self) -> uint {
+        return self^.len
+    }
+
+    /// Returns a pointer to the base of the slice.
+    pub fn ptr(*self) -> *T {
+        return self^.ptr
+    }
+
+    /// Returns a pointer to the element at index `offset` in the slice.
+    pub fn ptr_at(*self, offset: uint) -> *T {
+        @panic.assert(offset < self^.len, "slice offset out of bounds")
+        return self^.ptr.(offset as int)
+    }
+
+    /// Returns a slice that points to elements from index `start` (incluive) 
+    /// to `end` (exclusive).
+    pub fn slice(*self, start: uint, end: uint) -> Slice[T] {
+        @panic.assert(end > start, "slice end must be greater than start")
+        @panic.assert(start < self^.len, "slice start out of bounds")
+        @panic.assert(end <= self^.len, "slice end out of bounds")
+        return Slice[T]{
+            ptr: self^.ptr.(start as int)
+            len: end - start
+        }
+    }
+
+    /// Returns a slice that points to elements from the base of the slice
+    /// to `end` (exclusive).
+    pub fn slice_left(*self, end: uint) -> Slice[T] {
+        return self.slice(0, end)
+    }
+
+    /// Returns a slice that points to elements from `start` (inclusive) to
+    /// `end` (exclusive).
+    pub fn slice_right(*self, start: uint) -> Slice[T] {
+        return self.slice(start, self^.len)
+    }
+}
+
+/// A bounded pointer to contiguous mutable values of type T.
+// TODO: Deduplicate Slice and SliceMut implementations when we have support
+// type aliasing (e.g. `type Slice[T] = SliceMut[T]`).
+pub struct SliceMut[T] {
+    ptr: *mut T
+    len: uint
+}
+
+impl SliceMut: Clone {
+    /// Returns a shallow clone of the slice (i.e. does not clone any 
+    /// underlying data).
+    pub fn clone(*self) -> SliceMut[T] {
+        return SliceMut[T]{
+            ptr: self^.ptr
+            len: self^.len
+        }
+    }
+}
+
+impl SliceMut {
+    /// Returns a new slice from `ptr` of `len` elements of type `T`.
+    pub fn new(ptr: *mut T, len: uint) -> SliceMut[T] {
+        return SliceMut[T]{
+            ptr: ptr
+            len: len
+        }
+    }
+
+    /// Converts this SliceMut to a Slice.
+    pub fn to_slice(self) -> Slice[T] {
+        return Slice[T]{
+            ptr: self.ptr
+            len: self.len
+        }
+    }
+
+    /// Returns the number of elements in the slice.
+    pub fn len(*self) -> uint {
+        return self^.len
+    }
+
+    /// Returns a pointer to the base of the slice.
+    pub fn ptr(*self) -> *mut T {
+        return self^.ptr
+    }
+
+    /// Returns a pointer to the element at index `offset` in the slice.
+    pub fn ptr_at(*self, offset: uint) -> *mut T {
+        @panic.assert(offset < self^.len, "slice offset out of bounds")
+        return self^.ptr.(offset as int)
+    }
+
+    /// Returns a slice that points to elements from index `start` (incluive) 
+    /// to `end` (exclusive).
+    pub fn slice(*self, start: uint, end: uint) -> SliceMut[T] {
+        @panic.assert(end > start, "slice end must be greater than start")
+        @panic.assert(start < self^.len, "slice start out of bounds")
+        @panic.assert(end <= self^.len, "slice end out of bounds")
+        return SliceMut[T]{
+            ptr: self^.ptr.(start as int)
+            len: end - start
+        }
+    }
+
+    /// Returns a slice that points to elements from the base of the slice
+    /// to `end` (exclusive).
+    pub fn slice_left(*self, end: uint) -> SliceMut[T] {
+        return self.slice(0, end)
+    }
+
+    /// Returns a slice that points to elements from `start` (inclusive) to
+    /// `end` (exclusive).
+    pub fn slice_right(*self, start: uint) -> SliceMut[T] {
+        return self.slice(start, self^.len)
+    }
+}

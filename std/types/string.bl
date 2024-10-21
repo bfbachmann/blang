@@ -2,8 +2,7 @@ use mem: "std/libc/mem.bl"
 
 /// Strings are heap-allocated sequences of bytes.
 pub struct String {
-    ptr: *u8
-    len: uint
+    bytes: Slice[u8]
 }
 
 impl String {
@@ -12,37 +11,35 @@ impl String {
         let ptr = @mem.malloc(s.len())
         @mem.memcpy(ptr, s as *u8, s.len())
         return String{
-            ptr: ptr
-            len: s.len()
+            bytes: Slice[u8].new(ptr, s.len())
         }
     }
 
     /// Creates a new `String` from the concatenation of `first` and `second`.
-    pub fn concat(first: *String, second: *String) -> String {
-        let new_len = first^.len + second^.len
+    pub fn concat(first: Slice[u8], second: Slice[u8]) -> String {
+        let new_len = first.len() + second.len()
         let ptr = @mem.malloc(new_len)
 
-        @mem.memcpy(ptr, first^.ptr, first^.len)
-        @mem.memcpy(ptr.(first^.len as int), second^.ptr, second^.len)
+        @mem.memcpy(ptr, first.ptr(), first.len())
+        @mem.memcpy(ptr.(first.len() as int), second.ptr(), second.len())
 
         return String{
-            ptr: ptr
-            len: new_len
+            bytes: Slice[u8].new(ptr, new_len)
         }
     }
 
     /// Returns a pointer to the bytes in the string.
     pub fn ptr(*self) -> *u8 {
-        return self^.ptr
+        return self^.bytes.ptr()
     }
 
     /// Returns the length of the string in bytes.
     pub fn len(*self) -> uint {
-        return self^.len
+        return self^.bytes.len()
     }
 
     /// Frees heap space allocated for this `String`.
     pub fn free(self) {
-        @mem.free(self.ptr)
+        @mem.free(self.ptr())
     }
 }

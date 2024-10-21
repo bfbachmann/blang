@@ -1,14 +1,22 @@
-use {write, stdout}: "std/libc/io.bl"
-use {String}: "std/types/string.bl"
+use io: "std/libc/io.bl"
+use {Slice}: "std/types/slice.bl"
 
-pub fn print(msg: *String) {
-    write(stdout, msg.ptr(), msg.len())
+/// Writes the byte slice to stdout.
+pub fn print(msg: Slice[u8]) {
+    @io.write(@io.stdout, msg.ptr(), msg.len())
 }
 
-pub fn println(msg: *String) {
-    let newline = String.from_str("\n")
-    let msg_newline = String.concat(msg, &newline)
-    print(&msg_newline)
-    msg_newline.free()
-    newline.free()
+/// Writes the byte slice with a newline at the end to stdout.
+pub fn println(msg: Slice[u8]) {
+    let iovecs = [
+        @io.IOVec{
+            base_ptr: msg.ptr()
+            iov_len: msg.len()
+        },
+        @io.IOVec{
+            base_ptr: "\n" as *u8
+            iov_len: 1
+        },
+    ]
+    @io.writev(@io.stdout, &iovecs as *@io.IOVec, 2)
 }
