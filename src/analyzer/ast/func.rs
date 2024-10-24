@@ -286,12 +286,10 @@ impl AFnSig {
         };
 
         // Re-mangle the name based on the updated type info.
-        self.mangled_name = ctx.mangle_name(
-            None,
-            self.maybe_impl_type_key,
-            maybe_spec_tk,
-            self.name.as_str(),
-            true,
+        // TODO: Not sure this is right for all cases.
+        self.mangled_name = ctx.remangle_name(
+            self.mangled_name.as_str(),
+            self.maybe_impl_type_key.unwrap(),
         );
 
         // Define the new type in the program context.

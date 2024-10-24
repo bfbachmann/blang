@@ -14,10 +14,11 @@ use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::ast::tuple::ATupleType;
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
+use crate::analyzer::mangling;
 use crate::analyzer::scope::{Scope, ScopeKind, ScopedSymbol};
 use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::analyzer::warn::AnalyzeWarning;
-use crate::fmt::{format_code_vec, vec_to_string};
+use crate::fmt::format_code_vec;
 use crate::lexer::pos::{Locatable, Position, Span};
 use crate::parser::ast::r#const::Const;
 use crate::parser::ast::r#enum::EnumType;
@@ -2097,6 +2098,12 @@ impl ProgramContext {
         !self.cur_mod_ctx().from_scope_indices.is_empty()
     }
 
+    /// Changes the mangled type name in the given `mangled_name` to the mangled type name
+    /// corresponding to `type_key`.
+    pub fn remangle_name(&self, mangled_name: &str, type_key: TypeKey) -> String {
+        mangling::remangle_name(&self.type_store, mangled_name, type_key)
+    }
+
     /// Returns a name mangled to the following form.
     ///
     ///     <mod_path>::<type_prefix><spec_prefix><path><name>
@@ -2128,47 +2135,26 @@ impl ProgramContext {
             None => self.cur_mod_path.as_str(),
         };
 
-        let type_prefix = match maybe_impl_type_key {
-            Some(impl_tk) => {
-                let impl_type = self.must_get_type(impl_tk);
-                let params_suffix = match impl_type.params() {
-                    Some(params) => format!(
-                        "[{}]",
-                        vec_to_string(
-                            &params.params.iter().map(|p| p.generic_type_key).collect(),
-                            ",",
-                        )
-                    ),
-                    None => "".to_string(),
-                };
-                format!("{}{}.", impl_type.name(), params_suffix)
-            }
-            None => "".to_string(),
-        };
-
-        let spec_prefix = match maybe_spec_type_key {
-            Some(spec_tk) => {
-                let spec_name = self.must_get_type(spec_tk).to_spec_type().name.as_str();
-                format!("impl:{spec_name}.")
-            }
-            None => "".to_string(),
-        };
-
-        if !include_path || mod_ctx.fn_scope_indices.is_empty() {
-            return format!("{mod_path}::{type_prefix}{spec_prefix}{name}");
-        }
-
         // Get a path to the function based on the current scope.
         let mut fn_path = "".to_string();
-        for i in &mod_ctx.fn_scope_indices {
-            let fn_name = match &mod_ctx.stack.get(*i).unwrap().kind {
-                ScopeKind::FnBody(name) => name.as_str(),
-                _ => unreachable!(),
-            };
-            fn_path = fn_path + fn_name + "::";
+        if include_path && !mod_ctx.fn_scope_indices.is_empty() {
+            for i in &mod_ctx.fn_scope_indices {
+                let fn_name = match &mod_ctx.stack.get(*i).unwrap().kind {
+                    ScopeKind::FnBody(name) => name.as_str(),
+                    _ => unreachable!(),
+                };
+                fn_path = fn_path + fn_name + "::";
+            }
         }
 
-        format!("{mod_path}::{type_prefix}{spec_prefix}{fn_path}{name}")
+        mangling::mangle_name(
+            &self.type_store,
+            mod_path,
+            maybe_impl_type_key,
+            maybe_spec_type_key,
+            fn_path.as_str(),
+            name,
+        )
     }
 
     /// Returns a new name for an anonymous function created inside the current scope. This

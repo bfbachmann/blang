@@ -1,32 +1,34 @@
+use std::{fs, process};
 use std::collections::{HashSet, VecDeque};
 use std::fs::File;
 use std::io::prelude::*;
 use std::os::unix::prelude::CommandExt;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use std::{fs, process};
 
 use clap::{arg, ArgAction, Command};
 use flamer::flame;
-use inkwell::targets::{RelocMode, TargetMachine};
 use inkwell::OptimizationLevel;
+use inkwell::targets::{RelocMode, TargetMachine};
 
 use parser::module::Module;
 
 use crate::analyzer::analyze::{analyze_modules, ProgramAnalysis};
-use crate::codegen::program::{generate, init_target, CodeGenConfig, OutputFormat};
+use crate::codegen::program::{CodeGenConfig, generate, init_target, OutputFormat};
 use crate::fmt::{display_err, format_duration};
 use crate::lexer::error::LexResult;
 use crate::lexer::lex::lex;
 use crate::lexer::pos::Locatable;
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
+use crate::monomorphizer::mono_prog;
 
 mod codegen;
 #[macro_use]
 mod fmt;
 mod analyzer;
 mod lexer;
+mod monomorphizer;
 mod parser;
 mod util;
 
@@ -504,17 +506,19 @@ fn run(src_path: &str, target_machine: &TargetMachine) {
     let src = Path::new(src_path);
     let dst = default_output_file_path(src, OutputFormat::Executable);
 
-    // Compile the program.
-    if let Err(e) = generate(
-        prog_analysis,
-        CodeGenConfig::new_default(target_machine, dst.as_path(), OutputFormat::Executable),
-    ) {
-        fatalln!("{}", e);
-    }
+    let prog = mono_prog(prog_analysis);
 
-    // Run the program.
-    let io_err = process::Command::new(PathBuf::from(".").join(dst)).exec();
-    fatalln!("{}", io_err);
+    // Compile the program.
+    // if let Err(e) = generate(
+    //     prog_analysis,
+    //     CodeGenConfig::new_default(target_machine, dst.as_path(), OutputFormat::Executable),
+    // ) {
+    //     fatalln!("{}", e);
+    // }
+    //
+    // // Run the program.
+    // let io_err = process::Command::new(PathBuf::from(".").join(dst)).exec();
+    // fatalln!("{}", io_err);
 }
 
 /// Generates a new default output file path of the form `bin/<src>.<output_format>`.
@@ -539,7 +543,7 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
-    use crate::codegen::program::{init_default_host_target, CodeGenConfig, OutputFormat};
+    use crate::codegen::program::{CodeGenConfig, init_default_host_target, OutputFormat};
     use crate::compile;
 
     /// Compiles and executes the code at the given path and asserts that

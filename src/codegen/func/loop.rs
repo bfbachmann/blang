@@ -1,5 +1,5 @@
 use crate::analyzer::ast::r#loop::ALoop;
-use crate::codegen::error::CompileResult;
+use crate::codegen::error::CodeGenResult;
 
 use super::FnCodeGen;
 
@@ -19,7 +19,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles a loop.
-    pub(crate) fn gen_loop(&mut self, loop_: &ALoop) -> CompileResult<()> {
+    pub(crate) fn gen_loop(&mut self, loop_: &ALoop) -> CodeGenResult<()> {
         // Create a loop context to store information about the loop.
         self.push_loop_ctx();
 

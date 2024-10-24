@@ -1,11 +1,11 @@
 use crate::analyzer::ast::closure::AClosure;
-use crate::codegen::error::CompileResult;
+use crate::codegen::error::CodeGenResult;
 
 use super::FnCodeGen;
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles all statements in the closure.
-    pub(crate) fn gen_closure(&mut self, closure: &AClosure) -> CompileResult<()> {
+    pub(crate) fn gen_closure(&mut self, closure: &AClosure) -> CodeGenResult<()> {
         for (i, statement) in closure.statements.iter().enumerate() {
             // Create a new statement context that can store information about the statement
             // we're about to compile.

@@ -55,6 +55,7 @@ pub struct ProgramAnalysis {
     pub type_store: TypeStore,
     pub analyzed_modules: Vec<AnalyzedModule>,
     pub monomorphized_types: HashMap<TypeKey, HashSet<Monomorphization>>,
+    pub type_monomorphizations: HashMap<TypeKey, Monomorphization>,
     pub maybe_main_fn_mangled_name: Option<String>,
 }
 
@@ -84,6 +85,7 @@ pub fn analyze_modules(modules: Vec<Module>) -> ProgramAnalysis {
         type_store: ctx.type_store,
         analyzed_modules: analyzed_mods.into_values().collect(),
         monomorphized_types: ctx.monomorphized_types,
+        type_monomorphizations: ctx.type_monomorphizations,
         maybe_main_fn_mangled_name,
     }
 }

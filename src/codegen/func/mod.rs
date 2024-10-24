@@ -16,7 +16,7 @@ use crate::codegen::context::{
     BranchContext, CompilationContext, FnContext, FromContext, LoopContext, StatementContext,
 };
 use crate::codegen::convert::TypeConverter;
-use crate::codegen::error::{CodeGenError, CompileResult, ErrorKind};
+use crate::codegen::error::{CodeGenError, CodeGenResult, ErrorKind};
 use crate::format_code;
 
 mod closure;
@@ -56,7 +56,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         type_converter: &'a mut TypeConverter<'ctx>,
         module_consts: &'a HashMap<String, AConst>,
         func: &AFn,
-    ) -> CompileResult<FunctionValue<'ctx>> {
+    ) -> CodeGenResult<FunctionValue<'ctx>> {
         let mut fn_compiler = FnCodeGen {
             ctx: context,
             builder,
@@ -267,7 +267,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles the given function.
-    fn gen_fn(&mut self, func: &AFn) -> CompileResult<FunctionValue<'ctx>> {
+    fn gen_fn(&mut self, func: &AFn) -> CodeGenResult<FunctionValue<'ctx>> {
         // Retrieve the function and create a new "entry" block at the start of the function
         // body.
         let fn_val = match self

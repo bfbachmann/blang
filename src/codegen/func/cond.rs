@@ -1,11 +1,11 @@
 use crate::analyzer::ast::cond::ACond;
-use crate::codegen::error::CompileResult;
+use crate::codegen::error::CodeGenResult;
 
 use super::FnCodeGen;
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles a conditional.
-    pub(crate) fn gen_cond(&mut self, cond: &ACond) -> CompileResult<()> {
+    pub(crate) fn gen_cond(&mut self, cond: &ACond) -> CodeGenResult<()> {
         // Compile each branch, recording whether it returns.
         let mut end_block = None;
         let mut all_branches_return = true;

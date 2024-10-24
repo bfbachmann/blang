@@ -1,7 +1,7 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-pub type CompileResult<T> = Result<T, CodeGenError>;
+pub type CodeGenResult<T> = Result<T, CodeGenError>;
 
 #[derive(Debug)]
 pub enum ErrorKind {

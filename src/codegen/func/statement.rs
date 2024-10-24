@@ -3,13 +3,13 @@ use inkwell::values::BasicValue;
 use crate::analyzer::ast::r#yield::AYield;
 use crate::analyzer::ast::ret::ARet;
 use crate::analyzer::ast::statement::AStatement;
-use crate::codegen::error::CompileResult;
+use crate::codegen::error::CodeGenResult;
 
 use super::{gen_fn_sig, FnCodeGen};
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles a statement.
-    pub(crate) fn gen_statement(&mut self, statement: &AStatement) -> CompileResult<()> {
+    pub(crate) fn gen_statement(&mut self, statement: &AStatement) -> CodeGenResult<()> {
         match statement {
             AStatement::VariableDeclaration(var_decl) => {
                 // Get the value of the expression being assigned to the variable.

@@ -2,6 +2,7 @@ pub mod analyze;
 pub mod ast;
 mod control_flow;
 pub mod error;
+pub mod mangling;
 pub mod prog_context;
 pub mod scope;
 mod tests;

@@ -27,10 +27,11 @@ use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::prog_context::Monomorphization;
 use crate::analyzer::type_store::{TypeKey, TypeStore};
 use crate::codegen::convert::TypeConverter;
-use crate::codegen::error::{CodeGenError, CompileResult, ErrorKind};
+use crate::codegen::error::{CodeGenError, CodeGenResult, ErrorKind};
 use crate::codegen::func;
 use crate::codegen::func::FnCodeGen;
 use crate::fmt::vec_to_string;
+use crate::monomorphizer::MonoProg;
 
 /// Compiles a type-rich and semantically valid program to LLVM IR and/or bitcode.
 pub struct ProgramCodeGen<'a, 'ctx> {
@@ -58,7 +59,7 @@ pub enum OutputFormat {
 
 impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
     /// Compiles the program to LLVM IR.
-    fn gen_program(&mut self) -> CompileResult<()> {
+    fn gen_program(&mut self) -> CodeGenResult<()> {
         // Define top-level functions and constants from the program in the LLVM module.
         self.declare_fns_and_consts();
 
@@ -118,7 +119,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
     }
 
     /// Generates code for functions in an `impl` block.
-    fn gen_impl(&mut self, impl_: &AImpl) -> CompileResult<()> {
+    fn gen_impl(&mut self, impl_: &AImpl) -> CodeGenResult<()> {
         let impl_type = self.type_store.must_get(impl_.type_key);
         let maybe_impl_params = impl_type.params();
 
@@ -156,7 +157,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
     }
 
     /// Generates code for the given function.
-    fn gen_fn(&mut self, func: &AFn) -> CompileResult<()> {
+    fn gen_fn(&mut self, func: &AFn) -> CodeGenResult<()> {
         if !func.signature.is_parameterized() {
             FnCodeGen::generate(
                 self.ctx,
@@ -524,7 +525,7 @@ impl CodeGenConfig<'_> {
 /// Generates the program code for the given target. If there is no target, compiles the
 /// program for the host system.
 #[flame]
-pub fn generate(program_analysis: ProgramAnalysis, config: CodeGenConfig) -> CompileResult<()> {
+pub fn generate(program_analysis: ProgramAnalysis, config: CodeGenConfig) -> CodeGenResult<()> {
     let ctx = Context::create();
     let builder = ctx.create_builder();
     let module = ctx.create_module("main");
