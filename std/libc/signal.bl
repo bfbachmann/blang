@@ -4,3 +4,8 @@ pub extern fn backtrace_symbols(buf: **u8, size: uint) -> **u8
 pub extern fn backtrace_symbols_fd(buf: **u8, size: uint, fd: uint)
 
 pub const sigsegv: uint = 11
+pub const sigfpe: uint = 8
+pub const sigbus: uint = 7
+pub const sigabrt: uint = 6
+pub const sigtrap: uint = 5
+pub const sigill: uint = 4

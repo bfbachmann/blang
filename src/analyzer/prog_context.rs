@@ -16,7 +16,7 @@ use crate::analyzer::ast::tuple::ATupleType;
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::mangling;
 use crate::analyzer::scope::{Scope, ScopeKind, ScopedSymbol};
-use crate::analyzer::type_store::{TypeKey, TypeStore};
+use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::fmt::format_code_vec;
 use crate::lexer::pos::{Locatable, Position, Span};
@@ -134,6 +134,15 @@ impl TypeImpls {
     /// without a spec) with the given name.
     fn get_default_fn(&self, name: &str) -> Option<TypeKey> {
         self.default_fns.get(name).cloned()
+    }
+
+    /// Tries to find the function with the given name that is part of the implementation of the
+    /// given spec.
+    fn get_fn_from_spec_impl(&self, spec_tk: TypeKey, name: &str) -> Option<TypeKey> {
+        match self.spec_impls.get(&spec_tk) {
+            Some(impls) => impls.get(name).cloned(),
+            None => None,
+        }
     }
 
     /// Returns the type keys of all functions with the given name in all impls.
@@ -338,7 +347,7 @@ impl ProgramContext {
         let mut primitive_type_keys = HashMap::new();
         for typ in AType::primitives() {
             let name = typ.name().to_string();
-            let key = type_store.insert(typ);
+            let key = type_store.insert_type(typ);
             primitive_type_keys.insert(name, key);
         }
 
@@ -467,11 +476,11 @@ impl ProgramContext {
             .must_get_type(generic_type_key)
             .to_generic_type()
             .spec_type_keys;
+        let is_primitive = self.must_get_type(type_key).is_primitive();
 
         for spec_type_key in spec_type_keys {
-            if self.must_get_type(*spec_type_key).to_spec_type().name == "Clone"
-                && self.must_get_type(type_key).is_primitive()
-            {
+            let spec_is_clone = self.must_get_type(*spec_type_key).to_spec_type().name == "Clone";
+            if is_primitive && spec_is_clone {
                 continue;
             }
 
@@ -608,7 +617,7 @@ impl ProgramContext {
     /// already a matching type in the type store.
     pub fn force_insert_type(&mut self, typ: AType) -> TypeKey {
         // Store the newly analyzed type.
-        let type_key = self.type_store.insert(typ);
+        let type_key = self.type_store.insert_type(typ);
 
         // Create an additional mapping to the new type key to avoid type duplication, if necessary.
         let typ = self.must_get_type(type_key);
@@ -933,7 +942,8 @@ impl ProgramContext {
             // Add monomorphized types to the name to disambiguate it from other
             // monomorphized instances of this type.
             if let Some(params) = &struct_type.maybe_params {
-                struct_type.mangled_name += mangle_param_names(params, type_mappings).as_str();
+                struct_type.mangled_name +=
+                    mangling::mangle_param_names(params, type_mappings).as_str();
             } else {
                 for (target_tk, replacement_tk) in type_mappings {
                     struct_type.mangled_name = struct_type.mangled_name.replace(
@@ -972,7 +982,8 @@ impl ProgramContext {
             // Add monomorphized types to the name to disambiguate it from other
             // monomorphized instances of this type.
             if let Some(params) = &enum_type.maybe_params {
-                enum_type.mangled_name += mangle_param_names(params, type_mappings).as_str();
+                enum_type.mangled_name +=
+                    mangling::mangle_param_names(params, type_mappings).as_str();
             } else {
                 for (target_tk, replacement_tk) in type_mappings {
                     enum_type.mangled_name = enum_type.mangled_name.replace(
@@ -1031,7 +1042,7 @@ impl ProgramContext {
             // Add monomorphized types to the name to disambiguate it from other
             // monomorphized instances of this function.
             if let Some(params) = &fn_sig.params {
-                fn_sig.mangled_name += mangle_param_names(params, type_mappings).as_str();
+                fn_sig.mangled_name += mangling::mangle_param_names(params, type_mappings).as_str();
             } else {
                 for (target_tk, replacement_tk) in type_mappings {
                     fn_sig.mangled_name = fn_sig.mangled_name.replace(
@@ -1544,12 +1555,12 @@ impl ProgramContext {
 
     /// Returns the type associated with the given key. Panics if there is no such type.
     pub fn must_get_type(&self, type_key: TypeKey) -> &AType {
-        self.type_store.must_get(type_key)
+        self.type_store.get_type(type_key)
     }
 
     /// Replaces the existing type associated with `type_key` with `typ`.
     pub fn replace_type(&mut self, type_key: TypeKey, typ: AType) {
-        self.type_store.replace(type_key, typ);
+        self.type_store.replace_type(type_key, typ);
     }
 
     /// Tries to insert the un-analyzed struct type into the current module context.
@@ -1773,7 +1784,7 @@ impl ProgramContext {
 
                 // Define the symbol in the program context.
                 if a_symbol.is_type {
-                    match self.type_store.must_get(a_symbol.type_key) {
+                    match self.type_store.get_type(a_symbol.type_key) {
                         AType::Struct(struct_type) => {
                             let mangled_name = struct_type.mangled_name.clone();
                             self.cur_mod_ctx_mut()
@@ -1920,6 +1931,22 @@ impl ProgramContext {
             Some(impls) => impls.get_default_fn(fn_name),
             None => None,
         }
+    }
+
+    /// Tries to find a function named `fn_name` that is a member of the given type that forms
+    /// part of the implementation of the given spec.
+    pub fn get_member_fn_from_spec_impl(
+        &self,
+        type_key: TypeKey,
+        spec_tk: TypeKey,
+        fn_name: &str,
+    ) -> Option<TypeKey> {
+        let type_impls = match self.type_impls.get(&type_key) {
+            Some(impls) => impls,
+            None => return None,
+        };
+
+        type_impls.get_fn_from_spec_impl(spec_tk, fn_name)
     }
 
     /// Tries to locate the given member function on the parent polymorphic type and monomorphizes
@@ -2101,7 +2128,7 @@ impl ProgramContext {
     /// Changes the mangled type name in the given `mangled_name` to the mangled type name
     /// corresponding to `type_key`.
     pub fn remangle_name(&self, mangled_name: &str, type_key: TypeKey) -> String {
-        mangling::remangle_name(&self.type_store, mangled_name, type_key)
+        mangling::remangle_type_in_name(&self.type_store, mangled_name, type_key)
     }
 
     /// Returns a name mangled to the following form.
@@ -2440,19 +2467,4 @@ impl ProgramContext {
     pub fn get_const_value(&self, name: &str) -> Option<&AExpr> {
         self.cur_mod_ctx().const_values.get(name)
     }
-}
-
-/// Mangles generic parameter types.
-pub fn mangle_param_names(params: &AParams, type_mappings: &HashMap<TypeKey, TypeKey>) -> String {
-    let mut mangled_name = "[".to_string();
-    for (i, param) in params.params.iter().enumerate() {
-        if let Some(mono_tk) = type_mappings.get(&param.generic_type_key) {
-            if i == 0 {
-                mangled_name += format!("{}", mono_tk).as_str();
-            } else {
-                mangled_name += format!(",{}", mono_tk).as_str();
-            }
-        }
-    }
-    mangled_name + "]"
 }

@@ -1,1 +1,2 @@
 pub extern fn exit(code: uint)
+pub extern fn abort()

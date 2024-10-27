@@ -1,15 +1,18 @@
 use io: "std/libc/io.bl"
 use {Allocator}: "std/mem/allocator.bl"
 
+// TODO: Replace this with a `void` type when we have one.
+struct AnyAllocator {}
+
 /// An allocator with dynamic dispatch.
 pub struct DynAllocator {
     /// A pointer to the underlying allocator.
-    pub allocator: *mut DynAllocator
+    pub allocator: *mut AnyAllocator
 
     // Function pointers for dynamic dispatch (i.e. a virtual table of sorts).
-    pub alloc_fn: fn (*mut DynAllocator, uint) -> *mut u8
-    pub realloc_fn: fn (*mut DynAllocator, *u8, uint) -> *mut u8
-    pub free_fn: fn (*mut DynAllocator, *u8)
+    pub alloc_fn: fn (*mut AnyAllocator, uint) -> *mut u8
+    pub realloc_fn: fn (*mut AnyAllocator, *u8, uint) -> *mut u8
+    pub free_fn: fn (*mut AnyAllocator, *u8)
 }
 
 impl DynAllocator: Allocator {
@@ -34,21 +37,21 @@ impl DynAllocator: Allocator {
 // parameterized methods.
 pub fn new_dyn_allocator[Al: Allocator](al: *mut Al) -> DynAllocator {
     return DynAllocator{
-        allocator: al as *mut DynAllocator
+        allocator: al as *mut AnyAllocator
         alloc_fn: dispatch_alloc[Al]
         realloc_fn: dispatch_realloc[Al]
         free_fn: dispatch_free[Al]
     }
 }
 
-fn dispatch_alloc[Al: Allocator](dyn_al: *mut DynAllocator, size: uint) -> *mut u8 {
+fn dispatch_alloc[Al: Allocator](dyn_al: *mut AnyAllocator, size: uint) -> *mut u8 {
     return Al.alloc(dyn_al as *mut Al, size)
 }
 
-fn dispatch_realloc[Al: Allocator](dyn_al: *mut DynAllocator, ptr: *u8, size: uint) -> *mut u8 {
+fn dispatch_realloc[Al: Allocator](dyn_al: *mut AnyAllocator, ptr: *u8, size: uint) -> *mut u8 {
     return Al.realloc(dyn_al as *mut Al, ptr, size)
 }
 
-fn dispatch_free[Al: Allocator](dyn_al: *mut DynAllocator, ptr: *u8) {
+fn dispatch_free[Al: Allocator](dyn_al: *mut AnyAllocator, ptr: *u8) {
     Al.free(dyn_al as *mut Al, ptr)
 }

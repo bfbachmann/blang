@@ -72,7 +72,7 @@ impl DebugAllocator {
         let len = self^.blocks.len()
         for let mut i = 0uint, i < len, i += 1 {
             // TODO: Print detailed info about block.
-            @io.puts("block\0")
+            @io.puts("allocated block\0")
         }
     }
 }

@@ -22,7 +22,7 @@ pub struct ASymbol {
     pub type_key: TypeKey,
     pub maybe_param_tks: Option<Vec<TypeKey>>,
     /// This will be set to true if the name of this symbol matches a type name and no variable
-    /// names. If this is the case, the `var_type_key` field will hold the ID of the matching type.
+    /// names. If this is the case, the `type_key` field will hold the ID of the matching type.
     pub is_type: bool,
     /// This will be set to true if this symbol actually resolves to a constant.
     pub is_const: bool,

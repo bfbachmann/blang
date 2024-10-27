@@ -18,7 +18,7 @@ use crate::parser::module::Module;
 #[derive(Debug)]
 pub struct AModule {
     pub path: String,
-    pub statements: Vec<AStatement>,
+    pub fns: Vec<AStatement>,
 }
 
 impl AModule {
@@ -70,7 +70,7 @@ impl AModule {
 
         AModule {
             path: module.path.clone(),
-            statements: analyzed_statements,
+            fns: analyzed_statements,
         }
     }
 }

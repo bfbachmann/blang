@@ -1,7 +1,7 @@
+use inkwell::{AddressSpace, FloatPredicate, IntPredicate};
 use inkwell::intrinsics::Intrinsic;
 use inkwell::types::{BasicType, BasicTypeEnum};
 use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, FloatValue, IntValue};
-use inkwell::{AddressSpace, FloatPredicate, IntPredicate};
 use regex::{Captures, Regex};
 
 use crate::analyzer::ast::array::AArrayInit;
@@ -15,7 +15,7 @@ use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::ast::tuple::ATupleInit;
-use crate::analyzer::type_store::TypeKey;
+use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::parser::ast::op::Operator;
 
 use super::FnCodeGen;
@@ -104,11 +104,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         self.set_current_block(ctx.end_block);
 
         let mut ll_result_type = self.type_converter.get_basic_type(result_type_key);
-        if self
-            .type_converter
-            .must_get_type(result_type_key)
-            .is_composite()
-        {
+        if self.type_converter.get_type(result_type_key).is_composite() {
             // For composite types, we'll always expect yielded values to be
             // passed by reference. When we generate yield statements, we'll be
             // sure to stack-allocate composite values and yield pointers to them
@@ -161,7 +157,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         if access.is_method {
             let fn_sig = self
                 .type_converter
-                .must_get_type(access.member_type_key)
+                .get_type(access.member_type_key)
                 .to_fn_sig();
             return self
                 .module
@@ -186,7 +182,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles tuple initialization.
     fn gen_tuple_init(&mut self, tuple_init: &ATupleInit) -> BasicValueEnum<'ctx> {
         // Assemble the LLVM struct type.
-        let tuple_type = match self.type_store.must_get(tuple_init.type_key) {
+        let tuple_type = match self.type_store.get_type(tuple_init.type_key) {
             AType::Tuple(tt) => tt,
             _ => {
                 panic!("unexpected type {}", tuple_init.type_key);
@@ -231,9 +227,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // Generate code that retrieves the value from the collection at the
         // specified index.
-        let collection_type = self
-            .type_converter
-            .must_get_type(index.collection_expr.type_key);
+        let collection_type = self.type_converter.get_type(index.collection_expr.type_key);
         match collection_type {
             AType::Tuple(_) => self.get_member_value(
                 ll_collection_val,
@@ -305,7 +299,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     pub(crate) fn gen_array_init(&mut self, array_init: &AArrayInit) -> BasicValueEnum<'ctx> {
         let array_type = self
             .type_store
-            .must_get(array_init.type_key)
+            .get_type(array_init.type_key)
             .to_array_type();
         let ll_array_type = self.type_converter.get_array_type(array_init.type_key);
 
@@ -463,7 +457,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Assemble the LLVM struct type.
         let struct_type = self
             .type_store
-            .must_get(struct_init.type_key)
+            .get_type(struct_init.type_key)
             .to_struct_type();
         let ll_struct_type = self.type_converter.get_struct_type(struct_init.type_key);
 
@@ -499,7 +493,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Compiles a function call, returning the result if one exists.
     pub(crate) fn gen_call(&mut self, call: &AFnCall) -> Option<BasicValueEnum<'ctx>> {
-        let fn_sig = self.type_store.must_get(call.fn_expr.type_key).to_fn_sig();
+        let fn_sig = self.type_store.get_type(call.fn_expr.type_key).to_fn_sig();
 
         // Check if this is a call to an intrinsic function or method. If so, we'll use
         // whatever result the custom intrinsic code generator returned.
@@ -509,12 +503,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         let (mut mangled_name, ll_fn_type) = match fn_sig.maybe_impl_type_key {
             Some(impl_tk) => {
-                if self.type_store.must_get(impl_tk).is_generic() {
+                if self.type_store.get_type(impl_tk).is_generic() {
                     // This is a function on a generic type. We need to look up the
                     // actual function by figuring out what the corresponding concrete
                     // type.
                     let concrete_tk = self.type_converter.map_type_key(impl_tk);
-                    let concrete_type = self.type_store.must_get(concrete_tk);
+                    let concrete_type = self.type_store.get_type(concrete_tk);
 
                     // TODO: Fix demangling hack.
                     let re = Regex::new(r"(?P<prefix>[^:]*::)([^\.]*)(?P<suffix>.*)").unwrap();
@@ -537,6 +531,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                         .get_function(concrete_fn_name.as_str())
                         .expect(format!("function {} should exist", concrete_fn_name).as_str())
                         .get_type();
+
                     (concrete_fn_name, ll_fn_type)
                 } else {
                     (
@@ -553,11 +548,31 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         };
 
         // TODO: This is a nasty hack. Find a better way of doing this.
-        if let Some(mapping) = self.type_converter.type_mappings.last() {
-            for (k, v) in mapping {
-                mangled_name =
-                    mangled_name.replace(format!("{k}").as_str(), format!("{v}").as_str());
-            }
+        let type_mapping = self.type_converter.type_mapping();
+        if !type_mapping.is_empty() {
+            // Define a regex to capture the part inside brackets
+            let re = Regex::new(r"\[(\d+(?:,\d+)*)\]").unwrap();
+
+            // Use `re.replace_all` to process the captured groups
+            mangled_name = re
+                .replace_all(mangled_name.as_str(), |caps: &regex::Captures| {
+                    // Split the captured group by commas, parse integers, map them, and rejoin them
+                    let mapped_numbers: Vec<String> = caps[1]
+                        .split(',')
+                        .filter_map(|num_str| num_str.parse::<i32>().ok())
+                        .map(|num| {
+                            type_mapping
+                                .get(&(num as TypeKey))
+                                .cloned()
+                                .unwrap_or(num as TypeKey)
+                        }) // Map or keep original
+                        .map(|mapped_num| mapped_num.to_string()) // Convert back to string
+                        .collect();
+
+                    // Return the new bracketed string
+                    format!("[{}]", mapped_numbers.join(","))
+                })
+                .to_string();
         }
 
         // Check if we're short one argument. If so, it means the function signature expects
@@ -573,7 +588,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Compile call args.
         for (i, arg) in call.args.iter().enumerate() {
             let arg_tk = self.type_converter.map_type_key(arg.type_key);
-            let arg_type = self.type_store.must_get(arg_tk);
+            let arg_type = self.type_store.get_type(arg_tk);
             let ll_arg_val = self.gen_expr(arg);
 
             // Make sure we write constant values that are supposed to be passed as pointers to
@@ -720,7 +735,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let ll_operand = self.gen_expr(operand_expr);
 
                 // Negate the operand.
-                let operand_type = self.type_store.must_get(operand_expr.type_key);
+                let operand_type = self.type_store.get_type(operand_expr.type_key);
                 if operand_type.is_float() {
                     self.builder
                         .build_float_neg(ll_operand.into_float_value(), "neg")
@@ -765,10 +780,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let ll_rhs = self.gen_expr(right_expr);
 
         // Determine whether the operation should be signed or unsigned based on the operand types.
-        let signed = self
-            .type_converter
-            .must_get_type(left_expr.type_key)
-            .is_signed();
+        let signed = self.type_converter.get_type(left_expr.type_key).is_signed();
 
         if op.is_arithmetic() {
             let result = self
@@ -804,8 +816,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         dst_type_key: TypeKey,
     ) -> BasicValueEnum<'ctx> {
         let ll_src_val = self.gen_expr(src_expr);
-        let src_type = self.type_store.must_get(src_expr.type_key);
-        let dst_type = self.type_store.must_get(dst_type_key);
+        let src_type = self.type_store.get_type(src_expr.type_key);
+        let dst_type = self.type_store.get_type(dst_type_key);
         let ll_dst_type = self.type_converter.get_basic_type(dst_type_key);
 
         match (src_type, dst_type) {
@@ -877,8 +889,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         dst_type_key: TypeKey,
         ll_dst_type: BasicTypeEnum<'ctx>,
     ) -> BasicValueEnum<'ctx> {
-        let src_type = self.type_store.must_get(src_type_key);
-        let dst_type = self.type_converter.must_get_type(dst_type_key);
+        let src_type = self.type_store.get_type(src_type_key);
+        let dst_type = self.type_converter.get_type(dst_type_key);
         let src_is_signed = src_type.is_signed();
         let dst_is_signed = dst_type.is_signed();
         let src_is_float = src_type.is_float();
@@ -1057,7 +1069,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         // Handle the special case of `str` comparisons.
-        let left_type = self.type_store.must_get(left_type_key);
+        let left_type = self.type_store.get_type(left_type_key);
         if left_type == &AType::Str {
             ll_lhs = self
                 .builder
@@ -1298,7 +1310,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         } else if fn_sig.mangled_name.ends_with(".clone")
             && fn_sig
                 .maybe_impl_type_key
-                .is_some_and(|tk| self.type_converter.must_get_type(tk).is_primitive())
+                .is_some_and(|tk| self.type_converter.get_type(tk).is_primitive())
         {
             // Compile the `*self` argument expression.
             let ll_self_arg = self.gen_expr(call.args.first().unwrap());

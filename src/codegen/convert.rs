@@ -19,7 +19,7 @@ use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::tuple::ATupleType;
-use crate::analyzer::type_store::{TypeKey, TypeStore};
+use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 
 /// Converts types from the Blang analyzer to LLVM types. This struct also caches mappings from
 /// type keys to LLVM types to make type conversion faster.
@@ -29,8 +29,16 @@ pub struct TypeConverter<'ctx> {
     ll_basic_types: HashMap<TypeKey, BasicTypeEnum<'ctx>>,
     ll_fn_types: HashMap<TypeKey, FunctionType<'ctx>>,
     ll_target_machine: &'ctx TargetMachine,
-    // TODO: This really should not be public. Fix this hack.
-    pub type_mappings: Vec<HashMap<TypeKey, TypeKey>>,
+    type_mapping: HashMap<TypeKey, TypeKey>,
+}
+
+impl<'ctx> GetType for TypeConverter<'ctx> {
+    /// Returns the type that corresponds to the given key. This function will
+    /// map `type_key` to another type key before performing the lookup it if
+    /// falls within `self.type_key_mappings`.
+    fn get_type(&self, type_key: TypeKey) -> &AType {
+        self.type_store.get_type(self.map_type_key(type_key))
+    }
 }
 
 impl<'ctx> TypeConverter<'ctx> {
@@ -48,31 +56,27 @@ impl<'ctx> TypeConverter<'ctx> {
             ll_basic_types: Default::default(),
             ll_fn_types: Default::default(),
             ll_target_machine,
-            type_mappings: vec![],
+            type_mapping: Default::default(),
         }
     }
 
-    pub fn push_type_mapping(&mut self, mapping: HashMap<TypeKey, TypeKey>) {
-        self.type_mappings.push(mapping);
+    /// Sets the given mapping as a sort of overlay on the type store. This mapping will be used
+    /// to translate type keys into other type keys before they're used. We're doing this to
+    /// make monomorphization automatic.
+    pub fn set_type_mapping(&mut self, mapping: HashMap<TypeKey, TypeKey>) {
+        self.type_mapping = mapping;
     }
 
-    pub fn pop_type_mapping(&mut self) {
-        self.type_mappings.pop();
+    /// Returns a reference to the current type mapping overlay on the type store.
+    pub fn type_mapping(&self) -> &HashMap<TypeKey, TypeKey> {
+        &self.type_mapping
     }
 
-    /// Returns the type that corresponds to the given key. This function will
-    /// map `type_key` to another type key before performing the lookup it if
-    /// falls within `self.type_key_mappings`.
-    pub fn must_get_type(&self, type_key: TypeKey) -> &AType {
-        self.type_store.must_get(self.map_type_key(type_key))
-    }
-
+    /// Returns the type key that `type_key` should be replaced with according to the current
+    /// type mapping. If there is none, just returns `type_key`.
     pub fn map_type_key(&self, type_key: TypeKey) -> TypeKey {
-        match self.type_mappings.last() {
-            Some(mapping) => match mapping.get(&type_key) {
-                Some(tk) => *tk,
-                None => type_key,
-            },
+        match self.type_mapping.get(&type_key) {
+            Some(tk) => *tk,
             None => type_key,
         }
     }
@@ -84,7 +88,7 @@ impl<'ctx> TypeConverter<'ctx> {
         match self.ll_basic_types.get(&type_key) {
             Some(ll_type) => *ll_type,
             None => {
-                let ll_type = self.to_basic_type(self.must_get_type(type_key));
+                let ll_type = self.to_basic_type(self.get_type(type_key));
                 self.ll_basic_types.insert(type_key, ll_type);
                 ll_type
             }
@@ -98,7 +102,7 @@ impl<'ctx> TypeConverter<'ctx> {
         match self.ll_fn_types.get(&type_key) {
             Some(f) => *f,
             None => {
-                let ll_fn_type = self.to_fn_type(self.must_get_type(type_key).to_fn_sig());
+                let ll_fn_type = self.to_fn_type(self.get_type(type_key).to_fn_sig());
                 self.ll_fn_types.insert(type_key, ll_fn_type);
                 ll_fn_type
             }
@@ -158,7 +162,7 @@ impl<'ctx> TypeConverter<'ctx> {
                 .as_basic_type_enum(),
 
             AType::Pointer(ptr_type) => {
-                let pointee_type = self.must_get_type(ptr_type.pointee_type_key);
+                let pointee_type = self.get_type(ptr_type.pointee_type_key);
                 let ll_pointee_type = self.to_basic_type(pointee_type);
                 ll_pointee_type
                     .ptr_type(AddressSpace::default())
@@ -185,7 +189,7 @@ impl<'ctx> TypeConverter<'ctx> {
         let ll_field_types: Vec<BasicTypeEnum> = tuple_type
             .fields
             .iter()
-            .map(|f| self.to_basic_type(self.must_get_type(f.type_key)))
+            .map(|f| self.to_basic_type(self.get_type(f.type_key)))
             .collect();
 
         // Create and return the LLVM struct type.
@@ -196,7 +200,7 @@ impl<'ctx> TypeConverter<'ctx> {
     fn to_fn_type(&self, sig: &AFnSig) -> FunctionType<'ctx> {
         // Get return type.
         let ret_type = match &sig.maybe_ret_type_key {
-            Some(type_key) => Some(self.must_get_type(*type_key)),
+            Some(type_key) => Some(self.get_type(*type_key)),
             None => None,
         };
         let mut ll_ret_type = self.to_any_type(ret_type);
@@ -215,7 +219,7 @@ impl<'ctx> TypeConverter<'ctx> {
         //
         // and the `person` pointer will be written to when assigning the return value.
         let ret_type = match sig.maybe_ret_type_key {
-            Some(type_key) => Some(self.must_get_type(type_key)),
+            Some(type_key) => Some(self.get_type(type_key)),
             None => None,
         };
         let extra_arg_type = match ret_type {
@@ -247,7 +251,7 @@ impl<'ctx> TypeConverter<'ctx> {
 
         // Get arg types.
         for arg in &sig.args {
-            let arg_type = self.must_get_type(arg.type_key);
+            let arg_type = self.get_type(arg.type_key);
             ll_arg_types.push(self.to_metadata_type_enum(arg_type));
         }
 
@@ -269,7 +273,7 @@ impl<'ctx> TypeConverter<'ctx> {
         struct_type
             .fields
             .iter()
-            .map(|field| self.to_basic_type(self.must_get_type(field.type_key)))
+            .map(|field| self.to_basic_type(self.get_type(field.type_key)))
             .collect()
     }
 
@@ -307,7 +311,7 @@ impl<'ctx> TypeConverter<'ctx> {
     fn to_array_type(&self, array_type: &AArrayType) -> ArrayType<'ctx> {
         match &array_type.maybe_element_type_key {
             Some(tk) => {
-                let ll_element_type = self.to_basic_type(self.must_get_type(*tk));
+                let ll_element_type = self.to_basic_type(self.get_type(*tk));
                 ll_element_type.array_type(array_type.len as u32)
             }
             None => self.ctx.i8_type().array_type(0),
@@ -376,8 +380,7 @@ impl<'ctx> TypeConverter<'ctx> {
         unsafe {
             LLVMStoreSizeOfType(
                 self.ll_target_machine.get_target_data().as_mut_ptr(),
-                self.to_basic_type(self.must_get_type(type_key))
-                    .as_type_ref(),
+                self.to_basic_type(self.get_type(type_key)).as_type_ref(),
             ) as u64
         }
     }

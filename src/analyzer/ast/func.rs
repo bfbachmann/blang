@@ -277,13 +277,9 @@ impl AFnSig {
             replace_tk(ctx, ret_tk, target_type_key, replacement_type_key);
         }
 
-        let maybe_spec_tk = match &mut self.maybe_impl_type_key {
-            Some(impl_tk) => {
-                replace_tk(ctx, impl_tk, target_type_key, replacement_type_key);
-                ctx.get_spec_impl_by_fn(self.type_key)
-            }
-            None => None,
-        };
+        if let Some(impl_tk) = &mut self.maybe_impl_type_key {
+            replace_tk(ctx, impl_tk, target_type_key, replacement_type_key);
+        }
 
         // Re-mangle the name based on the updated type info.
         // TODO: Not sure this is right for all cases.

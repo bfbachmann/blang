@@ -3,6 +3,7 @@ use inkwell::values::BasicValue;
 use crate::analyzer::ast::r#yield::AYield;
 use crate::analyzer::ast::ret::ARet;
 use crate::analyzer::ast::statement::AStatement;
+use crate::analyzer::type_store::GetType;
 use crate::codegen::error::CodeGenResult;
 
 use super::{gen_fn_sig, FnCodeGen};
@@ -27,6 +28,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AStatement::FunctionDeclaration(func) => {
                 if !func.signature.is_parameterized() {
                     // Declare and compile the new function.
+                    //nocmmit: shouldn't need to generate anything here.
                     gen_fn_sig(self.ctx, self.module, self.type_converter, &func.signature);
                     self.gen_nested_fn(func);
                 }
@@ -85,7 +87,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 // If the value being returned is some structured type, we need to copy it to the
                 // memory pointed to by the first argument and return void.
                 let ret_type_key = self.type_converter.map_type_key(expr.type_key);
-                let expr_type = self.type_store.must_get(ret_type_key);
+                let expr_type = self.type_store.get_type(ret_type_key);
                 if expr_type.is_composite() {
                     // Copy the return value into the pointer from the first function argument.
                     let ll_ret_ptr = self.fn_value.unwrap().get_first_param().unwrap();
@@ -119,7 +121,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // of the type inconsistency in the phi node that receives yielded results.
         let is_composite_type = self
             .type_converter
-            .must_get_type(yld.value.type_key)
+            .get_type(yld.value.type_key)
             .is_composite();
         let is_const = !result.is_pointer_value();
         if is_composite_type && is_const {

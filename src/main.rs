@@ -1,20 +1,20 @@
-use std::{fs, process};
 use std::collections::{HashSet, VecDeque};
 use std::fs::File;
 use std::io::prelude::*;
 use std::os::unix::prelude::CommandExt;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
+use std::{fs, process};
 
 use clap::{arg, ArgAction, Command};
 use flamer::flame;
-use inkwell::OptimizationLevel;
 use inkwell::targets::{RelocMode, TargetMachine};
+use inkwell::OptimizationLevel;
 
 use parser::module::Module;
 
 use crate::analyzer::analyze::{analyze_modules, ProgramAnalysis};
-use crate::codegen::program::{CodeGenConfig, generate, init_target, OutputFormat};
+use crate::codegen::program::{generate, init_target, CodeGenConfig, OutputFormat};
 use crate::fmt::{display_err, format_duration};
 use crate::lexer::error::LexResult;
 use crate::lexer::lex::lex;
@@ -432,7 +432,7 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> Result<Program
             Ok(result) => result,
         };
 
-        if let Err(err) = write!(dst_file, "{:#?}", analysis) {
+        if let Err(err) = write!(dst_file, "{:#?}", analysis.analyzed_modules) {
             return Err(format!(
                 "error writing AST to file {}: {}",
                 dst.to_str().unwrap_or_default(),
@@ -452,11 +452,12 @@ fn compile(src_path: &str, quiet: bool, config: CodeGenConfig) -> Result<(), Str
     // Read and analyze the program.
     let analyze_start = Instant::now();
     let prog_analysis = analyze(src_path, None)?;
+    let prog = mono_prog(prog_analysis);
     let analyze_duration = Instant::now() - analyze_start;
 
     // Compile the program.
     let generate_start = Instant::now();
-    if let Err(e) = generate(prog_analysis, config) {
+    if let Err(e) = generate(prog, config) {
         return Err(format!("{}", e));
     }
 
@@ -502,23 +503,24 @@ fn run(src_path: &str, target_machine: &TargetMachine) {
         Err(e) => fatalln!("{}", e),
     };
 
+    // Find all relevant functions that we need to generate code for.
+    let prog = mono_prog(prog_analysis);
+
     // Set output executable path to the source path without the extension.
     let src = Path::new(src_path);
     let dst = default_output_file_path(src, OutputFormat::Executable);
 
-    let prog = mono_prog(prog_analysis);
-
     // Compile the program.
-    // if let Err(e) = generate(
-    //     prog_analysis,
-    //     CodeGenConfig::new_default(target_machine, dst.as_path(), OutputFormat::Executable),
-    // ) {
-    //     fatalln!("{}", e);
-    // }
-    //
-    // // Run the program.
-    // let io_err = process::Command::new(PathBuf::from(".").join(dst)).exec();
-    // fatalln!("{}", io_err);
+    if let Err(e) = generate(
+        prog,
+        CodeGenConfig::new_default(target_machine, dst.as_path(), OutputFormat::Executable),
+    ) {
+        fatalln!("{}", e);
+    }
+
+    // Run the program.
+    let io_err = process::Command::new(PathBuf::from(".").join(dst)).exec();
+    fatalln!("{}", io_err);
 }
 
 /// Generates a new default output file path of the form `bin/<src>.<output_format>`.
@@ -543,7 +545,7 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
-    use crate::codegen::program::{CodeGenConfig, init_default_host_target, OutputFormat};
+    use crate::codegen::program::{init_default_host_target, CodeGenConfig, OutputFormat};
     use crate::compile;
 
     /// Compiles and executes the code at the given path and asserts that

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::fs::remove_file;
 use std::path::Path;
@@ -16,22 +16,15 @@ use inkwell::targets::{
 use inkwell::values::{BasicMetadataValueEnum, BasicValue, FunctionValue};
 use inkwell::OptimizationLevel;
 
-use crate::analyzer::analyze::ProgramAnalysis;
 use crate::analyzer::ast::ext::AExternFn;
 use crate::analyzer::ast::func::AFn;
-use crate::analyzer::ast::module::AModule;
 use crate::analyzer::ast::r#const::AConst;
-use crate::analyzer::ast::r#impl::AImpl;
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::ast::statement::AStatement;
-use crate::analyzer::prog_context::Monomorphization;
-use crate::analyzer::type_store::{TypeKey, TypeStore};
+use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 use crate::codegen::convert::TypeConverter;
 use crate::codegen::error::{CodeGenError, CodeGenResult, ErrorKind};
-use crate::codegen::func;
-use crate::codegen::func::FnCodeGen;
-use crate::fmt::vec_to_string;
-use crate::monomorphizer::MonoProg;
+use crate::codegen::func::{gen_fn_sig, FnCodeGen};
+use crate::monomorphizer::{MonoItem, MonoProg};
 
 /// Compiles a type-rich and semantically valid program to LLVM IR and/or bitcode.
 pub struct ProgramCodeGen<'a, 'ctx> {
@@ -39,9 +32,10 @@ pub struct ProgramCodeGen<'a, 'ctx> {
     builder: &'a Builder<'ctx>,
     fpm: &'a PassManager<FunctionValue<'ctx>>,
     module: &'a Module<'ctx>,
-    program: &'a AModule,
+    fns: &'a HashMap<TypeKey, AFn>,
+    extern_fns: &'a HashMap<TypeKey, AExternFn>,
+    mono_items: &'a Vec<MonoItem>,
     maybe_main_fn_name: Option<String>,
-    monomorphized_types: &'a HashMap<TypeKey, HashSet<Monomorphization>>,
     type_store: &'a TypeStore,
     type_converter: TypeConverter<'ctx>,
     module_consts: HashMap<String, AConst>,
@@ -60,38 +54,61 @@ pub enum OutputFormat {
 impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
     /// Compiles the program to LLVM IR.
     fn gen_program(&mut self) -> CodeGenResult<()> {
-        // Define top-level functions and constants from the program in the LLVM module.
-        self.declare_fns_and_consts();
+        // Generate extern functions.
+        for extern_fn in self.extern_fns.values() {
+            self.gen_extern_fn(extern_fn);
+        }
 
-        // Generate all the statements in the program.
-        for statement in &self.program.statements {
-            match statement {
-                AStatement::FunctionDeclaration(func) => {
-                    self.gen_fn(func)?;
-                }
+        // Define functions.
+        for (i, item) in self.mono_items.iter().enumerate() {
+            // Skip the root mono item because it's meaningless.
+            if i == 0 {
+                continue;
+            }
 
-                AStatement::Impl(impl_) => {
-                    self.gen_impl(impl_)?;
-                }
+            self.type_converter
+                .set_type_mapping(item.type_mappings.clone());
+            let sig = self
+                .type_converter
+                .get_type(item.type_key)
+                .to_fn_sig()
+                .clone();
+            gen_fn_sig(self.ctx, self.module, &mut self.type_converter, &sig);
+            self.type_converter.set_type_mapping(HashMap::new());
+        }
 
-                AStatement::StructTypeDeclaration(_) | AStatement::EnumTypeDeclaration(_) => {
-                    // Nothing to do here because types are compiled only when they're used.
-                }
+        // Generate functions.
+        for (i, item) in self.mono_items.iter().enumerate() {
+            // Skip the root mono item because it's meaningless.
+            if i == 0 {
+                continue;
+            }
 
-                AStatement::ExternFn(_) => {
-                    // Nothing to do here because extern functions are compiled in the call to
-                    // `ProgramCodeGen::declare_fns_and_consts`.
-                }
+            self.type_converter
+                .set_type_mapping(item.type_mappings.clone());
 
-                AStatement::Const(_) => {
-                    // Nothing to do here because constants are compiled in the call to
-                    // `ProgramCodeGen::declare_fns_and_consts` above.
+            let typ = self.type_converter.get_type(item.type_key);
+            match typ {
+                AType::Function(fn_sig) => {
+                    let func = self.fns.get(&fn_sig.type_key).unwrap();
+                    FnCodeGen::generate(
+                        self.ctx,
+                        self.builder,
+                        self.fpm,
+                        self.module,
+                        self.type_store,
+                        &mut self.type_converter,
+                        &self.module_consts,
+                        func,
+                    )?;
                 }
 
                 other => {
-                    panic!("unexpected top-level statement {other}");
+                    panic!("unexpected statement {other}")
                 }
             }
+
+            self.type_converter.set_type_mapping(HashMap::new());
         }
 
         // If a main function was defined, generate a wrapping main that calls it.
@@ -116,266 +133,6 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
         }
 
         Ok(())
-    }
-
-    /// Generates code for functions in an `impl` block.
-    fn gen_impl(&mut self, impl_: &AImpl) -> CodeGenResult<()> {
-        let impl_type = self.type_store.must_get(impl_.type_key);
-        let maybe_impl_params = impl_type.params();
-
-        // If the impl type has no parameters, we can just generate the member
-        // functions normally.
-        if maybe_impl_params.is_none() {
-            for mem_fn in &impl_.member_fns {
-                self.gen_fn(mem_fn)?;
-            }
-
-            return Ok(());
-        }
-
-        let impl_params = &maybe_impl_params.unwrap().params;
-        let mappings = self.resolve_monomorphizations(impl_.type_key);
-        for mapping in mappings {
-            for mem_fn in &impl_.member_fns {
-                let mut new_mem_fn = mem_fn.clone();
-                for param in impl_params {
-                    new_mem_fn.signature.mangled_name = new_mem_fn.signature.mangled_name.replace(
-                        format!("{}", param.generic_type_key).as_str(),
-                        format!("{}", mapping.get(&param.generic_type_key).unwrap()).as_str(),
-                    );
-                }
-
-                self.type_converter.push_type_mapping(mapping.clone());
-
-                self.gen_fn(&new_mem_fn)?;
-
-                self.type_converter.pop_type_mapping();
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Generates code for the given function.
-    fn gen_fn(&mut self, func: &AFn) -> CodeGenResult<()> {
-        if !func.signature.is_parameterized() {
-            FnCodeGen::generate(
-                self.ctx,
-                self.builder,
-                self.fpm,
-                self.module,
-                self.type_store,
-                &mut self.type_converter,
-                &self.module_consts,
-                func,
-            )?;
-            return Ok(());
-        }
-
-        // This is a generic function, so we need to generate
-        // code for all its monomorphizations.
-        let mappings = self.resolve_monomorphizations(func.signature.type_key);
-        for mapping in mappings {
-            let mut new_func = func.clone();
-            let mut replacement_tks = vec![];
-            for param in &new_func.signature.params.as_ref().unwrap().params {
-                replacement_tks.push(mapping.get(&param.generic_type_key).unwrap());
-            }
-
-            new_func.signature.mangled_name +=
-                format!("[{}]", vec_to_string(&replacement_tks, ",")).as_str();
-
-            self.type_converter.push_type_mapping(mapping);
-
-            FnCodeGen::generate(
-                self.ctx,
-                self.builder,
-                self.fpm,
-                self.module,
-                self.type_store,
-                &mut self.type_converter,
-                &self.module_consts,
-                &new_func,
-            )?;
-
-            self.type_converter.pop_type_mapping();
-        }
-
-        Ok(())
-    }
-
-    fn resolve_monomorphizations(&self, type_key: TypeKey) -> Vec<HashMap<TypeKey, TypeKey>> {
-        let monomorphs = match self.monomorphized_types.get(&type_key) {
-            Some(monomorphs) => monomorphs,
-            None => {
-                return vec![];
-            }
-        };
-
-        let mut all_mappings = vec![];
-        for mono in monomorphs {
-            all_mappings.extend(self.resolve_monomorphization(mono));
-        }
-
-        all_mappings
-    }
-
-    fn resolve_monomorphization(&self, mono: &Monomorphization) -> Vec<HashMap<TypeKey, TypeKey>> {
-        let type_mapping = mono.type_mappings();
-
-        // Find the keys of all types that are still mapped to generic types.
-        // Also find the polymorphic parent type keys for all unresolved (generic) types.
-        let mut unresolved_tks = vec![];
-        let mut poly_tks = HashSet::new();
-        for (k, v) in &type_mapping {
-            if let AType::Generic(generic_type) = self.type_store.must_get(*v) {
-                poly_tks.insert(generic_type.poly_type_key);
-                unresolved_tks.push(*k);
-            }
-        }
-
-        // If no types are mapped to generic types, we're done.
-        if unresolved_tks.is_empty() {
-            return vec![type_mapping];
-        }
-
-        // Recursively resolve monomorphizations of the polymorphic replacement types.
-        let mut resolved_mappings = vec![];
-        for poly_tk in poly_tks {
-            let monos = self.resolve_monomorphizations(poly_tk);
-            for mapping in monos {
-                let mut new_mapping = type_mapping.clone();
-                for unresolved_tk in &unresolved_tks {
-                    if let Some(replacement_tk) =
-                        mapping.get(type_mapping.get(&unresolved_tk).unwrap())
-                    {
-                        new_mapping.insert(*unresolved_tk, *replacement_tk);
-                    }
-                }
-
-                resolved_mappings.push(new_mapping);
-            }
-        }
-
-        resolved_mappings
-    }
-
-    /// Declares the following inside the LLVM module (without assigning values)
-    /// - functions that aren't parameterize
-    /// - extern functions (to be linked by the linker)
-    /// - constants
-    fn declare_fns_and_consts(&mut self) {
-        for statement in &self.program.statements {
-            match statement {
-                AStatement::Const(const_decl) => {
-                    self.module_consts
-                        .insert(const_decl.name.clone(), const_decl.clone());
-                }
-
-                AStatement::ExternFn(ext_fn) => {
-                    self.gen_extern_fn(ext_fn);
-                }
-
-                AStatement::FunctionDeclaration(func) if !func.signature.is_parameterized() => {
-                    func::gen_fn_sig(
-                        self.ctx,
-                        self.module,
-                        &mut self.type_converter,
-                        &func.signature,
-                    );
-                }
-
-                AStatement::Impl(impl_) => {
-                    self.declare_impl_fn_sigs(impl_);
-                }
-
-                _ => {}
-            };
-        }
-
-        // Generate function signatures for monomorphized functions.
-        for poly_tk in self.monomorphized_types.keys() {
-            let poly_type = self.type_store.must_get(*poly_tk);
-            if !poly_type.is_fn() {
-                continue;
-            }
-
-            let mappings = self.resolve_monomorphizations(*poly_tk);
-            for mapping in mappings {
-                let mut mono_fn_sig = poly_type.to_fn_sig().clone();
-                let mut replacement_tks = vec![];
-                if let Some(params) = mono_fn_sig.params.as_ref() {
-                    for param in &params.params {
-                        if let Some(replacement_tk) = mapping.get(&param.generic_type_key) {
-                            replacement_tks.push(replacement_tk);
-                        }
-                    }
-                }
-
-                mono_fn_sig.mangled_name +=
-                    format!("[{}]", vec_to_string(&replacement_tks, ",")).as_str();
-                mono_fn_sig.params = None;
-
-                self.type_converter.push_type_mapping(mapping);
-
-                func::gen_fn_sig(
-                    self.ctx,
-                    self.module,
-                    &mut self.type_converter,
-                    &mono_fn_sig,
-                );
-
-                self.type_converter.pop_type_mapping();
-            }
-        }
-    }
-
-    /// Declares all functions from an `impl` block in the LLVM module.
-    fn declare_impl_fn_sigs(&mut self, impl_: &AImpl) {
-        let impl_type = self.type_store.must_get(impl_.type_key);
-        let maybe_impl_params = impl_type.params();
-
-        // If the impl type has no parameters, we can just generate the member
-        // functions normally.
-        if maybe_impl_params.is_none() {
-            for mem_fn in &impl_.member_fns {
-                if !mem_fn.signature.is_parameterized() {
-                    func::gen_fn_sig(
-                        self.ctx,
-                        self.module,
-                        &mut self.type_converter,
-                        &mem_fn.signature,
-                    );
-                }
-            }
-
-            return;
-        }
-
-        let impl_params = &maybe_impl_params.unwrap().params;
-        let mappings = self.resolve_monomorphizations(impl_.type_key);
-        for mapping in mappings {
-            for mem_fn in &impl_.member_fns {
-                let mut new_mem_fn_sig = mem_fn.signature.clone();
-                for param in impl_params {
-                    new_mem_fn_sig.mangled_name = new_mem_fn_sig.mangled_name.replace(
-                        format!("{}", param.generic_type_key).as_str(),
-                        format!("{}", mapping.get(&param.generic_type_key).unwrap()).as_str(),
-                    );
-                }
-
-                self.type_converter.push_type_mapping(mapping.clone());
-
-                func::gen_fn_sig(
-                    self.ctx,
-                    self.module,
-                    &mut self.type_converter,
-                    &new_mem_fn_sig,
-                );
-
-                self.type_converter.pop_type_mapping();
-            }
-        }
     }
 
     /// Generates an extern function. Extern functions are generated as two functions:
@@ -525,7 +282,7 @@ impl CodeGenConfig<'_> {
 /// Generates the program code for the given target. If there is no target, compiles the
 /// program for the host system.
 #[flame]
-pub fn generate(program_analysis: ProgramAnalysis, config: CodeGenConfig) -> CodeGenResult<()> {
+pub fn generate(prog: MonoProg, config: CodeGenConfig) -> CodeGenResult<()> {
     let ctx = Context::create();
     let builder = ctx.create_builder();
     let module = ctx.create_module("main");
@@ -548,32 +305,19 @@ pub fn generate(program_analysis: ProgramAnalysis, config: CodeGenConfig) -> Cod
     }
     fpm.initialize();
 
-    // Combine sources into one big source.
-    let a_module = AModule {
-        path: "main".to_string(), // TODO
-        statements: program_analysis
-            .analyzed_modules
-            .into_iter()
-            .flat_map(|m| m.module.statements)
-            .collect(),
-    };
-
     // Create the program code generator and generate the program.
     let mut codegen = ProgramCodeGen {
         ctx: &ctx,
         builder: &builder,
         fpm: &fpm,
         module: &module,
-        program: &a_module,
-        maybe_main_fn_name: program_analysis.maybe_main_fn_mangled_name,
-        monomorphized_types: &program_analysis.monomorphized_types,
-        type_store: &program_analysis.type_store,
-        type_converter: TypeConverter::new(
-            &ctx,
-            &program_analysis.type_store,
-            config.target_machine,
-        ),
-        module_consts: HashMap::new(),
+        fns: &prog.fns,
+        extern_fns: &prog.extern_fns,
+        mono_items: &prog.mono_items,
+        maybe_main_fn_name: prog.maybe_main_fn_mangled_name,
+        type_store: &prog.ctx.type_store,
+        type_converter: TypeConverter::new(&ctx, &prog.ctx.type_store, config.target_machine),
+        module_consts: prog.consts,
     };
     codegen.gen_program()?;
 

@@ -4,6 +4,7 @@ use inkwell::values::{
 
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::symbol::ASymbol;
+use crate::analyzer::type_store::GetType;
 
 use super::FnCodeGen;
 
@@ -235,7 +236,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AExprKind::StructInit(struct_init) => {
                 let struct_type = self
                     .type_store
-                    .must_get(struct_init.type_key)
+                    .get_type(struct_init.type_key)
                     .to_struct_type();
                 let ll_struct_type = self.type_converter.get_struct_type(struct_init.type_key);
                 let mut ll_field_values = vec![];
@@ -303,7 +304,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             return ll_intrinsic;
         }
 
-        let const_value = &self.must_get_const(symbol.name.as_str()).value.clone();
+        let const_value = &self.get_const(symbol.name.as_str()).value.clone();
         self.gen_const_expr(const_value)
     }
 }

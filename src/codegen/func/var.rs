@@ -4,7 +4,7 @@ use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::ast::var_assign::AVarAssign;
-use crate::analyzer::type_store::TypeKey;
+use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::fmt::vec_to_string;
 use crate::parser::ast::op::Operator;
 
@@ -56,9 +56,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AExprKind::Index(index) => {
                 let ll_collection_ptr = self.get_ptr_to(&index.collection_expr);
                 let ll_index_val = self.gen_expr(&index.index_expr);
-                let collection_type = self
-                    .type_converter
-                    .must_get_type(index.collection_expr.type_key);
+                let collection_type = self.type_converter.get_type(index.collection_expr.type_key);
 
                 if collection_type.is_tuple() {
                     // Handle tuple indexing the same way we handle struct member access
@@ -194,7 +192,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         base_expr_type_key: TypeKey,
         member_name: &str,
     ) -> PointerValue<'ctx> {
-        let base_expr_type = self.type_store.must_get(base_expr_type_key);
+        let base_expr_type = self.type_store.get_type(base_expr_type_key);
         let ll_base_expr_type = self.type_converter.get_basic_type(base_expr_type_key);
         let ll_field_index = match base_expr_type {
             AType::Struct(struct_type) => struct_type.get_field_index(member_name).unwrap() as u32,
@@ -227,7 +225,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         // At this point we know that we're accessing a member on a constant.
-        let base_expr_type = self.type_store.must_get(base_expr_type_key);
+        let base_expr_type = self.type_store.get_type(base_expr_type_key);
         match base_expr_type {
             AType::Struct(struct_type) => {
                 // Get the value of the struct field at the computed index.

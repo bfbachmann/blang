@@ -4,14 +4,15 @@ use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
-use inkwell::module::{Linkage, Module};
+use inkwell::module::Module;
 use inkwell::passes::PassManager;
 use inkwell::types::{AnyType, BasicTypeEnum};
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
 
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::r#const::AConst;
-use crate::analyzer::type_store::{TypeKey, TypeStore};
+use crate::analyzer::mangling;
+use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 use crate::codegen::context::{
     BranchContext, CompilationContext, FnContext, FromContext, LoopContext, StatementContext,
 };
@@ -268,22 +269,33 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Compiles the given function.
     fn gen_fn(&mut self, func: &AFn) -> CodeGenResult<FunctionValue<'ctx>> {
+        // Re-mangle the function name, if necessary.
+        let param_names = match &func.signature.params {
+            Some(params) => {
+                mangling::mangle_param_names(params, self.type_converter.type_mapping())
+            }
+            None => "".to_string(),
+        };
+
+        let mangled_name = &match func.signature.maybe_impl_type_key {
+            Some(impl_tk) => {
+                let mangled_name = mangling::remangle_type_in_name_with_mappings(
+                    self.type_converter,
+                    func.signature.mangled_name.as_str(),
+                    impl_tk,
+                    self.type_converter.type_mapping(),
+                );
+                format!("{mangled_name}{param_names}")
+            }
+            None => format!("{}{param_names}", func.signature.mangled_name),
+        };
+
         // Retrieve the function and create a new "entry" block at the start of the function
         // body.
-        let fn_val = match self
+        let fn_val = self
             .module
-            .get_function(func.signature.mangled_name.as_str())
-        {
-            Some(f) => f,
-            None => {
-                let fn_type = self.type_converter.get_fn_type(func.signature.type_key);
-                self.module.add_function(
-                    func.signature.mangled_name.as_str(),
-                    fn_type,
-                    Some(Linkage::Internal),
-                )
-            }
-        };
+            .get_function(mangled_name.as_str())
+            .expect(format!("function `{}` should exist", mangled_name).as_str());
 
         self.fn_value = Some(fn_val);
 
@@ -304,7 +316,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         };
 
         for (ll_arg_val, arg) in ll_fn_params.into_iter().zip(func.signature.args.iter()) {
-            let arg_type = self.type_store.must_get(arg.type_key);
+            let arg_type = self.type_store.get_type(arg.type_key);
 
             // Structs and tuples are passed as pointers and don't need to be copied to the callee
             // stack because they point to memory on the caller's stack that is safe to modify. In
@@ -355,11 +367,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Locates and returns the constant with the given name. Panics if there is no constant by
     /// that name.
-    fn must_get_const(&self, name: &str) -> &AConst {
+    fn get_const(&self, name: &str) -> &AConst {
         if let Some(const_) = self.local_consts.get(name) {
             const_
         } else {
-            self.module_consts.get(name).unwrap()
+            self.module_consts
+                .get(name)
+                .expect(format!("constant `{name}` should exist").as_str())
         }
     }
 
@@ -379,7 +393,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         let typ = self
             .type_store
-            .must_get(self.type_converter.map_type_key(type_key));
+            .get_type(self.type_converter.map_type_key(type_key));
         if typ.is_composite() {
             // Copy the value from the source pointer to the destination pointer.
             let ll_type_size = self.type_converter.const_int_size_of_type(type_key);
@@ -441,7 +455,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         type_key: TypeKey,
         name: &str,
     ) -> BasicValueEnum<'ctx> {
-        let typ = self.type_store.must_get(type_key);
+        let typ = self.type_store.get_type(type_key);
         if typ.is_composite() {
             ll_ptr.as_basic_value_enum()
         } else {
@@ -485,7 +499,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         enum_type_key: TypeKey,
         ll_enum_value: BasicValueEnum<'ctx>,
     ) -> IntValue<'ctx> {
-        let enum_type = self.type_store.must_get(enum_type_key);
+        let enum_type = self.type_store.get_type(enum_type_key);
         let ll_enum_type = self.type_converter.get_basic_type(enum_type_key);
         let ll_variant_num_type = ll_enum_type
             .into_struct_type()
@@ -519,22 +533,40 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 }
 
+/// Computes and returns the mangled name for the given function signature using the type mappings
+/// in the current context.
+pub fn get_mangled_fn_name(type_converter: &mut TypeConverter, sig: &AFnSig) -> String {
+    // Re-mangle the function name, if necessary.
+    let param_names = match &sig.params {
+        Some(params) => mangling::mangle_param_names(params, type_converter.type_mapping()),
+        None => "".to_string(),
+    };
+
+    match sig.maybe_impl_type_key {
+        Some(impl_tk) => {
+            let mangled_name = mangling::remangle_type_in_name_with_mappings(
+                type_converter,
+                sig.mangled_name.as_str(),
+                impl_tk,
+                type_converter.type_mapping(),
+            );
+            format!("{mangled_name}{param_names}")
+        }
+        None => format!("{}{param_names}", sig.mangled_name),
+    }
+}
+
 /// Defines the given function in the current module based on the function signature.
 pub fn gen_fn_sig<'a, 'ctx>(
     ctx: &'ctx Context,
     module: &'a Module<'ctx>,
     type_converter: &'a mut TypeConverter<'ctx>,
     sig: &AFnSig,
-) {
-    assert!(
-        !sig.is_parameterized(),
-        "unexpected generic function {}",
-        sig
-    );
-
+) -> String {
     // Define the function in the module using the fully-qualified function name.
     let ll_fn_type = type_converter.get_fn_type(sig.type_key);
-    let ll_fn_val = module.add_function(sig.mangled_name.as_str(), ll_fn_type, None);
+    let mangled_name = get_mangled_fn_name(type_converter, sig);
+    let ll_fn_val = module.add_function(mangled_name.as_str(), ll_fn_type, None);
 
     // For now, all functions get the `frame-pointer=non-leaf` attribute. This tells
     // LLVM that the frame pointer should be kept if the function calls other functions.
@@ -544,7 +576,6 @@ pub fn gen_fn_sig<'a, 'ctx>(
         ctx.create_string_attribute("frame-pointer", "non-leaf"),
     );
 
-    // Set arg names and mark arguments as pass-by-value where necessary.
     let args_offset = if ll_fn_val.count_params() == sig.args.len() as u32 {
         // The compiled function arguments match those of the original function signature, so
         // just assign arg names and attributes normally.
@@ -572,7 +603,7 @@ pub fn gen_fn_sig<'a, 'ctx>(
     // Set argument names and attributes.
     for i in args_offset..ll_fn_val.count_params() {
         let arg = sig.args.get((i - args_offset) as usize).unwrap();
-        let arg_type = type_converter.must_get_type(arg.type_key);
+        let arg_type = type_converter.get_type(arg.type_key);
 
         // Set the argument name.
         let ll_arg = ll_fn_val.get_nth_param(i).unwrap();
@@ -583,6 +614,8 @@ pub fn gen_fn_sig<'a, 'ctx>(
             add_fn_arg_attrs(ctx, ll_fn_val, i, vec!["readonly"])
         }
     }
+
+    mangled_name.clone()
 }
 
 /// Adds the given attributes to the function argument at the given index.

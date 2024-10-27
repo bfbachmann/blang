@@ -4,18 +4,20 @@ mod tests {
 
     use crate::analyzer::analyze::analyze_modules;
     use crate::codegen::program::{
-        CodeGenConfig, generate, init_default_host_target, OutputFormat,
+        generate, init_default_host_target, CodeGenConfig, OutputFormat,
     };
     use crate::lexer::lex::lex;
     use crate::lexer::stream::Stream;
+    use crate::monomorphizer::mono_prog;
     use crate::parser::module::Module;
 
     fn assert_compiles(code: &str) {
         let tokens = lex(code).expect("should not error");
         let module = Module::from("test", &mut Stream::from(tokens)).expect("should not error");
         let analysis = analyze_modules(vec![module]);
+        let prog = mono_prog(analysis);
         generate(
-            analysis,
+            prog,
             CodeGenConfig::new_default(
                 &init_default_host_target().expect("should not error"),
                 Path::new("/dev/null"),

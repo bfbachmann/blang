@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use flamer::flame;
@@ -7,8 +7,7 @@ use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::module::AModule;
 use crate::analyzer::control_flow::analyze_module_fns;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
-use crate::analyzer::prog_context::{Monomorphization, ProgramContext};
-use crate::analyzer::type_store::{TypeKey, TypeStore};
+use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::fmt::hierarchy_to_string;
 use crate::lexer::pos::Position;
@@ -50,12 +49,9 @@ impl AnalyzedModule {
 }
 
 /// The result of analysis on a set of source files.
-#[derive(Debug)]
 pub struct ProgramAnalysis {
-    pub type_store: TypeStore,
+    pub ctx: ProgramContext,
     pub analyzed_modules: Vec<AnalyzedModule>,
-    pub monomorphized_types: HashMap<TypeKey, HashSet<Monomorphization>>,
-    pub type_monomorphizations: HashMap<TypeKey, Monomorphization>,
     pub maybe_main_fn_mangled_name: Option<String>,
 }
 
@@ -82,10 +78,8 @@ pub fn analyze_modules(modules: Vec<Module>) -> ProgramAnalysis {
     };
 
     ProgramAnalysis {
-        type_store: ctx.type_store,
+        ctx,
         analyzed_modules: analyzed_mods.into_values().collect(),
-        monomorphized_types: ctx.monomorphized_types,
-        type_monomorphizations: ctx.type_monomorphizations,
         maybe_main_fn_mangled_name,
     }
 }

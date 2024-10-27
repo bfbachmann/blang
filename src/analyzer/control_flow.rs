@@ -1735,7 +1735,7 @@ fn move_is_from_var(var_name: &str, move_path: &str) -> bool {
 /// Performs control flow analysis on each function defined in the module.
 /// Analysis includes checking for use-after-move violations and dead code.
 pub fn analyze_module_fns(ctx: &mut ProgramContext, module: &AModule) {
-    for statement in &module.statements {
+    for statement in &module.fns {
         match statement {
             AStatement::FunctionDeclaration(func) => {
                 CFGAnalyzer::analyze_fn(ctx, func);
