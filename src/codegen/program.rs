@@ -24,7 +24,7 @@ use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 use crate::codegen::convert::TypeConverter;
 use crate::codegen::error::{CodeGenError, CodeGenResult, ErrorKind};
 use crate::codegen::func::{gen_fn_sig, FnCodeGen};
-use crate::monomorphizer::{MonoItem, MonoProg};
+use crate::mono_collector::{MonoItem, MonoProg};
 
 /// Compiles a type-rich and semantically valid program to LLVM IR and/or bitcode.
 pub struct ProgramCodeGen<'a, 'ctx> {

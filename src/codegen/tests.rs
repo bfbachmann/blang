@@ -8,7 +8,7 @@ mod tests {
     };
     use crate::lexer::lex::lex;
     use crate::lexer::stream::Stream;
-    use crate::monomorphizer::mono_prog;
+    use crate::mono_collector::mono_prog;
     use crate::parser::module::Module;
 
     fn assert_compiles(code: &str) {

@@ -48,7 +48,7 @@ impl Hash for MonoItem {
 }
 
 /// Stores information about the monomorphization tree as we traverse it.
-struct MonoCtx {
+struct MonoItemCollector {
     ctx: ProgramContext,
     /// Maps all function type keys to their declarations.
     fns: HashMap<TypeKey, AFn>,
@@ -68,9 +68,9 @@ struct MonoCtx {
     cur_item_index: usize,
 }
 
-impl MonoCtx {
+impl MonoItemCollector {
     /// Creates a new empty context.
-    fn new(ctx: ProgramContext) -> MonoCtx {
+    fn new(ctx: ProgramContext) -> MonoItemCollector {
         // Initialize an empty root mono item.
         let root_item = MonoItem {
             type_key: 0,
@@ -79,7 +79,7 @@ impl MonoCtx {
             child_indices: vec![],
         };
 
-        MonoCtx {
+        MonoItemCollector {
             ctx,
             fns: Default::default(),
             extern_fns: Default::default(),
@@ -197,7 +197,7 @@ pub struct MonoProg {
 /// This way, we end up building what is essentially a function monomorphization tree that we can
 /// traverse during codegen.
 pub fn mono_prog(analysis: ProgramAnalysis) -> MonoProg {
-    let mut ctx = MonoCtx::new(analysis.ctx);
+    let mut ctx = MonoItemCollector::new(analysis.ctx);
 
     // Collect all the functions and consts up into a map, so we can look them up easily.
     for module in analysis.analyzed_modules {
@@ -250,7 +250,7 @@ pub fn mono_prog(analysis: ProgramAnalysis) -> MonoProg {
     }
 }
 
-fn track_fn(ctx: &mut MonoCtx, maybe_main_fn_mangled_name: &Option<String>, func: AFn) {
+fn track_fn(ctx: &mut MonoItemCollector, maybe_main_fn_mangled_name: &Option<String>, func: AFn) {
     if let Some(main_fn_name) = maybe_main_fn_mangled_name {
         if ctx.incomplete_mono_items.is_empty() && &func.signature.mangled_name == main_fn_name {
             ctx.queue_item(func.signature.type_key, HashMap::new());
@@ -276,7 +276,7 @@ fn track_fn(ctx: &mut MonoCtx, maybe_main_fn_mangled_name: &Option<String>, func
     ctx.insert_fn(func);
 }
 
-fn walk_item(ctx: &mut MonoCtx, index: usize) {
+fn walk_item(ctx: &mut MonoItemCollector, index: usize) {
     let item = ctx.complete_mono_items.get(index).unwrap();
     let func = ctx.fns.get(&item.type_key).unwrap();
 
@@ -285,7 +285,7 @@ fn walk_item(ctx: &mut MonoCtx, index: usize) {
     }
 }
 
-fn walk_statement(ctx: &mut MonoCtx, statement: AStatement) {
+fn walk_statement(ctx: &mut MonoItemCollector, statement: AStatement) {
     match statement {
         AStatement::VariableDeclaration(var_decl) => {
             walk_expr(ctx, var_decl.val);
@@ -375,7 +375,7 @@ fn walk_statement(ctx: &mut MonoCtx, statement: AStatement) {
     }
 }
 
-fn walk_expr(ctx: &mut MonoCtx, expr: AExpr) {
+fn walk_expr(ctx: &mut MonoItemCollector, expr: AExpr) {
     match expr.kind {
         AExprKind::Symbol(sym) => walk_type_key(ctx, sym.type_key),
         AExprKind::MemberAccess(access) => {
@@ -457,7 +457,7 @@ fn walk_expr(ctx: &mut MonoCtx, expr: AExpr) {
     }
 }
 
-fn walk_type_key(ctx: &mut MonoCtx, type_key: TypeKey) {
+fn walk_type_key(ctx: &mut MonoItemCollector, type_key: TypeKey) {
     let type_key = ctx.map_type_key(type_key);
     let fn_sig = match ctx.get_type(type_key) {
         AType::Function(fn_sig) => fn_sig,

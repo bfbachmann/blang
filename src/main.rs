@@ -21,14 +21,14 @@ use crate::lexer::lex::lex;
 use crate::lexer::pos::Locatable;
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
-use crate::monomorphizer::mono_prog;
+use crate::mono_collector::mono_prog;
 
 mod codegen;
 #[macro_use]
 mod fmt;
 mod analyzer;
 mod lexer;
-mod monomorphizer;
+mod mono_collector;
 mod parser;
 mod util;
 
