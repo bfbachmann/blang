@@ -21,13 +21,10 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::tuple::ATupleType;
 use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 
-/// Converts types from the Blang analyzer to LLVM types. This struct also caches mappings from
-/// type keys to LLVM types to make type conversion faster.
+/// Converts types from the Blang analyzer to LLVM types.
 pub struct TypeConverter<'ctx> {
     ctx: &'ctx Context,
     type_store: &'ctx TypeStore,
-    ll_basic_types: HashMap<TypeKey, BasicTypeEnum<'ctx>>,
-    ll_fn_types: HashMap<TypeKey, FunctionType<'ctx>>,
     ll_target_machine: &'ctx TargetMachine,
     type_mapping: HashMap<TypeKey, TypeKey>,
 }
@@ -53,8 +50,6 @@ impl<'ctx> TypeConverter<'ctx> {
         TypeConverter {
             ctx,
             type_store,
-            ll_basic_types: Default::default(),
-            ll_fn_types: Default::default(),
             ll_target_machine,
             type_mapping: Default::default(),
         }
@@ -81,44 +76,22 @@ impl<'ctx> TypeConverter<'ctx> {
         }
     }
 
-    /// Returns the LLVM basic type enum for the type associated with the given type key, either by
-    /// locating the LLVM type in the cache (if it was already converted), or by converting and
-    /// caching it.
+    /// Returns the LLVM basic type enum for the type associated with the given type key.
     pub fn get_basic_type(&mut self, type_key: TypeKey) -> BasicTypeEnum<'ctx> {
-        match self.ll_basic_types.get(&type_key) {
-            Some(ll_type) => *ll_type,
-            None => {
-                let ll_type = self.to_basic_type(self.get_type(type_key));
-                self.ll_basic_types.insert(type_key, ll_type);
-                ll_type
-            }
-        }
+        self.to_basic_type(self.get_type(type_key))
     }
 
-    /// Returns the LLVM function type for the type associated with the given type key, either by
-    /// locating the LLVM type in the cache (if it was already converted), or by converting and
-    /// caching it.
+    /// Returns the LLVM function type for the type associated with the given type key.
     pub fn get_fn_type(&mut self, type_key: TypeKey) -> FunctionType<'ctx> {
-        match self.ll_fn_types.get(&type_key) {
-            Some(f) => *f,
-            None => {
-                let ll_fn_type = self.to_fn_type(self.get_type(type_key).to_fn_sig());
-                self.ll_fn_types.insert(type_key, ll_fn_type);
-                ll_fn_type
-            }
-        }
+        self.to_fn_type(self.get_type(type_key).to_fn_sig())
     }
 
-    /// Returns the LLVM struct type for the type associated with the given type key, either by
-    /// locating the LLVM type in the cache (if it was already converted), or by converting and
-    /// caching it.
+    /// Returns the LLVM struct type for the type associated with the given type key.
     pub fn get_struct_type(&mut self, type_key: TypeKey) -> StructType<'ctx> {
         self.get_basic_type(type_key).into_struct_type()
     }
 
-    /// Returns the LLVM array type for the type associated with the given type key, either
-    /// locating the LLVM type in the cache (if it was already converted), or by converting and
-    /// caching it.
+    /// Returns the LLVM array type for the type associated with the given type key.
     pub fn get_array_type(&mut self, type_key: TypeKey) -> ArrayType<'ctx> {
         self.get_basic_type(type_key).into_array_type()
     }

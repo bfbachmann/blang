@@ -68,6 +68,13 @@ impl Slice {
     }
 }
 
+impl Slice[u8] {
+    /// Creates a slice from the given str.
+    pub fn from_str(s: str) -> Slice[u8] {
+        return Slice[u8].new(s as *u8, s.len())
+    }
+}
+
 /// A bounded pointer to contiguous mutable values of type T.
 // TODO: Deduplicate Slice and SliceMut implementations when we have support
 // type aliasing (e.g. `type Slice[T] = SliceMut[T]`).
