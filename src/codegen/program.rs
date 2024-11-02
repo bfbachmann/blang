@@ -16,9 +16,9 @@ use inkwell::targets::{
 use inkwell::values::{BasicMetadataValueEnum, BasicValue, FunctionValue};
 use inkwell::OptimizationLevel;
 
+use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::ext::AExternFn;
 use crate::analyzer::ast::func::AFn;
-use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 use crate::codegen::convert::TypeConverter;
@@ -38,7 +38,7 @@ pub struct ProgramCodeGen<'a, 'ctx> {
     maybe_main_fn_name: Option<String>,
     type_store: &'a TypeStore,
     type_converter: TypeConverter<'ctx>,
-    module_consts: HashMap<String, AConst>,
+    mod_consts: HashMap<String, HashMap<String, AExpr>>,
 }
 
 /// The type of output file to generate.
@@ -98,7 +98,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                         self.module,
                         self.type_store,
                         &mut self.type_converter,
-                        &self.module_consts,
+                        &self.mod_consts,
                         func,
                     )?;
                 }
@@ -315,9 +315,9 @@ pub fn generate(prog: MonoProg, config: CodeGenConfig) -> CodeGenResult<()> {
         extern_fns: &prog.extern_fns,
         mono_items: &prog.mono_items,
         maybe_main_fn_name: prog.maybe_main_fn_mangled_name,
-        type_store: &prog.ctx.type_store,
-        type_converter: TypeConverter::new(&ctx, &prog.ctx.type_store, config.target_machine),
-        module_consts: prog.consts,
+        type_store: &prog.type_store,
+        type_converter: TypeConverter::new(&ctx, &prog.type_store, config.target_machine),
+        mod_consts: prog.mod_consts,
     };
     codegen.gen_program()?;
 

@@ -55,6 +55,7 @@ impl AConst {
         ctx.insert_symbol(ScopedSymbol::new_const(
             const_decl.name.as_str(),
             value.type_key,
+            ctx.get_cur_mod_path().to_owned(),
         ));
 
         // Just return a dummy value if the expression already failed analysis.

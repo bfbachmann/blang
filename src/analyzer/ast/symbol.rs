@@ -33,6 +33,8 @@ pub struct ASymbol {
     /// This will be true if this symbol refers to a method (either on a type or an instance of
     /// a type).
     pub is_method: bool,
+    /// The path of the module from whence the symbol comes.
+    pub maybe_mod_path: Option<String>,
     span: Span,
 }
 
@@ -61,6 +63,7 @@ impl ASymbol {
             is_const: true,
             is_var: false,
             is_method: false,
+            maybe_mod_path: None,
             span: Default::default(),
         }
     }
@@ -88,11 +91,15 @@ impl ASymbol {
         }
 
         // Return early if the mod name is invalid.
-        if let Some(mod_name) = symbol.maybe_mod_name.as_ref() {
+        let maybe_mod_path = if let Some(mod_name) = symbol.maybe_mod_name.as_ref() {
             if !ctx.check_mod_name(mod_name, symbol) {
                 return ASymbol::new_with_default_pos(symbol.name.as_str(), ctx.unknown_type_key());
             }
-        }
+
+            ctx.get_mod_path(mod_name).cloned()
+        } else {
+            Some(ctx.get_cur_mod_path().to_owned())
+        };
 
         // Find the type key for the symbol.
         // Return a placeholder value if we failed to resolve the symbol type key.
@@ -205,9 +212,9 @@ impl ASymbol {
         }
 
         // Check if this symbol is actually a constant.
-        let (is_const, is_var) = match maybe_symbol {
-            Some(var) => (var.is_const, true),
-            None => (false, false),
+        let (is_const, is_var, maybe_mod_path) = match maybe_symbol {
+            Some(var) => (var.is_const, true, var.maybe_mod_path),
+            None => (false, false, maybe_mod_path),
         };
 
         // Analyze any generic parameters on this symbol and use them to monomorphize
@@ -283,6 +290,7 @@ impl ASymbol {
             is_const,
             is_var,
             is_method,
+            maybe_mod_path,
             span: symbol.span,
         }
     }
@@ -316,6 +324,7 @@ impl ASymbol {
             is_const: true,
             is_var: false,
             is_method: false,
+            maybe_mod_path: None,
             span,
         }
     }

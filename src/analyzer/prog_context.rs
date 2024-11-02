@@ -397,6 +397,16 @@ impl ProgramContext {
         }
     }
 
+    /// Returns the path of the module with the given name in the current context.
+    pub fn get_mod_path(&self, mod_name: &str) -> Option<&String> {
+        self.cur_mod_ctx().imported_mod_paths.get(mod_name)
+    }
+
+    /// Returns the path of the current module in the current context.
+    pub fn get_cur_mod_path(&self) -> &String {
+        &self.cur_mod_path
+    }
+
     /// Returns the module context corresponding to the module that is currently
     /// being analysed.
     fn cur_mod_ctx(&self) -> &ModuleContext {
@@ -505,6 +515,20 @@ impl ProgramContext {
     #[cfg(test)]
     pub fn warnings(&self) -> &HashMap<Position, AnalyzeWarning> {
         &self.warnings
+    }
+
+    /// Drains all module constants from the program context.
+    pub fn drain_mod_consts(&mut self) -> HashMap<String, HashMap<String, AExpr>> {
+        let mut mod_consts = HashMap::new();
+
+        for (mod_name, mod_ctx) in &mut self.module_contexts {
+            mod_consts.insert(
+                mod_name.to_owned(),
+                std::mem::replace(&mut mod_ctx.const_values, HashMap::new()),
+            );
+        }
+
+        mod_consts
     }
 
     /// Inserts an error into the program context.
@@ -1826,8 +1850,11 @@ impl ProgramContext {
                             a_symbol.type_key,
                         )
                 } else {
-                    let scoped_symbol =
-                        ScopedSymbol::new_const(symbol.name.as_str(), a_symbol.type_key);
+                    let scoped_symbol = ScopedSymbol::new_const(
+                        symbol.name.as_str(),
+                        a_symbol.type_key,
+                        used_mod.path.raw.clone(),
+                    );
                     self.insert_symbol(scoped_symbol);
                 }
             }

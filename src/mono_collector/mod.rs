@@ -5,11 +5,10 @@ use crate::analyzer::analyze::ProgramAnalysis;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::ext::AExternFn;
 use crate::analyzer::ast::func::AFn;
-use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::type_store::{GetType, TypeKey};
+use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 
 /// Represents a monomorhic function. This will either be a function that is already
 /// monomorphic, or a polymorphic function with type mappings that map its generic parameters
@@ -56,8 +55,6 @@ struct MonoItemCollector {
     extern_fns: HashMap<TypeKey, AExternFn>,
     /// Tracks used extern functions.
     used_extern_fns: HashSet<TypeKey>,
-    /// Maps all mangled const names to their declarations.
-    consts: HashMap<String, AConst>,
     /// A queue of items that still need to be checked and collected for monomorphization.
     incomplete_mono_items: VecDeque<MonoItem>,
     /// A vec of items that have been collected for monomorphization.
@@ -84,7 +81,6 @@ impl MonoItemCollector {
             fns: Default::default(),
             extern_fns: Default::default(),
             used_extern_fns: Default::default(),
-            consts: Default::default(),
             incomplete_mono_items: Default::default(),
             cur_item_index: 0,
             already_queued_items: HashSet::from([root_item.clone()]),
@@ -171,16 +167,15 @@ impl MonoItemCollector {
 
 /// Stores information about a monomorphized program.
 pub struct MonoProg {
-    pub ctx: ProgramContext,
+    pub type_store: TypeStore,
     /// A list of monomorphized functions.
     pub mono_items: Vec<MonoItem>,
     /// Maps function type keys to their implementations.
     pub fns: HashMap<TypeKey, AFn>,
     /// Maps extern function type keys to their signatures.
     pub extern_fns: HashMap<TypeKey, AExternFn>,
-    /// Stores consts by name.
-    // TODO: Fix name conflicts here.
-    pub consts: HashMap<String, AConst>,
+    /// Maps module paths to mappings from const names to their values for those modules.
+    pub mod_consts: HashMap<String, HashMap<String, AExpr>>,
     /// Stores the name of the main function, if there is one.
     pub maybe_main_fn_mangled_name: Option<String>,
 }
@@ -197,29 +192,26 @@ pub struct MonoProg {
 /// This way, we end up building what is essentially a function monomorphization tree that we can
 /// traverse during codegen.
 pub fn mono_prog(analysis: ProgramAnalysis) -> MonoProg {
-    let mut ctx = MonoItemCollector::new(analysis.ctx);
+    let mut collector = MonoItemCollector::new(analysis.ctx);
 
     // Collect all the functions and consts up into a map, so we can look them up easily.
     for module in analysis.analyzed_modules {
         for statement in module.module.fns {
             match statement {
                 AStatement::FunctionDeclaration(func) => {
-                    track_fn(&mut ctx, &analysis.maybe_main_fn_mangled_name, func);
+                    track_fn(&mut collector, &analysis.maybe_main_fn_mangled_name, func);
                 }
 
                 AStatement::Impl(impl_) => {
                     for func in impl_.member_fns {
-                        track_fn(&mut ctx, &analysis.maybe_main_fn_mangled_name, func);
+                        track_fn(&mut collector, &analysis.maybe_main_fn_mangled_name, func);
                     }
                 }
 
                 AStatement::ExternFn(extern_fn) => {
-                    ctx.extern_fns.insert(extern_fn.fn_sig.type_key, extern_fn);
-                }
-
-                AStatement::Const(const_) => {
-                    // TODO: There will be naming conflicts here.
-                    ctx.consts.insert(const_.name.clone(), const_);
+                    collector
+                        .extern_fns
+                        .insert(extern_fn.fn_sig.type_key, extern_fn);
                 }
 
                 _ => {}
@@ -229,31 +221,37 @@ pub fn mono_prog(analysis: ProgramAnalysis) -> MonoProg {
 
     // If there is a main function, we'll start traversing from there. Otherwise, we'll just
     // iterate through all the functions.
-    while let Some(index) = ctx.pop_queued_item() {
-        walk_item(&mut ctx, index);
+    while let Some(index) = collector.pop_queued_item() {
+        walk_item(&mut collector, index);
     }
 
     // Filter out unused extern functions.
-    let extern_fns = ctx
+    let extern_fns = collector
         .extern_fns
         .into_iter()
-        .filter(|(tk, _)| ctx.used_extern_fns.contains(tk))
+        .filter(|(tk, _)| collector.used_extern_fns.contains(tk))
         .collect();
 
     MonoProg {
-        ctx: ctx.ctx,
-        mono_items: ctx.complete_mono_items,
-        fns: ctx.fns,
+        mod_consts: collector.ctx.drain_mod_consts(),
+        type_store: collector.ctx.type_store,
+        mono_items: collector.complete_mono_items,
+        fns: collector.fns,
         extern_fns,
-        consts: ctx.consts,
         maybe_main_fn_mangled_name: analysis.maybe_main_fn_mangled_name,
     }
 }
 
-fn track_fn(ctx: &mut MonoItemCollector, maybe_main_fn_mangled_name: &Option<String>, func: AFn) {
+fn track_fn(
+    collector: &mut MonoItemCollector,
+    maybe_main_fn_mangled_name: &Option<String>,
+    func: AFn,
+) {
     if let Some(main_fn_name) = maybe_main_fn_mangled_name {
-        if ctx.incomplete_mono_items.is_empty() && &func.signature.mangled_name == main_fn_name {
-            ctx.queue_item(func.signature.type_key, HashMap::new());
+        if collector.incomplete_mono_items.is_empty()
+            && &func.signature.mangled_name == main_fn_name
+        {
+            collector.queue_item(func.signature.type_key, HashMap::new());
         }
     } else {
         let should_queue = match func.signature.maybe_impl_type_key {
@@ -261,7 +259,7 @@ fn track_fn(ctx: &mut MonoItemCollector, maybe_main_fn_mangled_name: &Option<Str
             _ if func.signature.is_parameterized() => false,
 
             // Only queue monomorphic member functions if they're declared on monomorphic types.
-            Some(impl_tk) => ctx.get_type(impl_tk).params().is_none(),
+            Some(impl_tk) => collector.get_type(impl_tk).params().is_none(),
 
             // The function is not parameterized and is not a member function, so we should
             // queue it.
@@ -269,82 +267,82 @@ fn track_fn(ctx: &mut MonoItemCollector, maybe_main_fn_mangled_name: &Option<Str
         };
 
         if should_queue {
-            ctx.queue_item(func.signature.type_key, HashMap::new());
+            collector.queue_item(func.signature.type_key, HashMap::new());
         }
     }
 
-    ctx.insert_fn(func);
+    collector.insert_fn(func);
 }
 
-fn walk_item(ctx: &mut MonoItemCollector, index: usize) {
-    let item = ctx.complete_mono_items.get(index).unwrap();
-    let func = ctx.fns.get(&item.type_key).unwrap();
+fn walk_item(collector: &mut MonoItemCollector, index: usize) {
+    let item = collector.complete_mono_items.get(index).unwrap();
+    let func = collector.fns.get(&item.type_key).unwrap();
 
     for statement in func.body.statements.clone() {
-        walk_statement(ctx, statement);
+        walk_statement(collector, statement);
     }
 }
 
-fn walk_statement(ctx: &mut MonoItemCollector, statement: AStatement) {
+fn walk_statement(collector: &mut MonoItemCollector, statement: AStatement) {
     match statement {
         AStatement::VariableDeclaration(var_decl) => {
-            walk_expr(ctx, var_decl.val);
+            walk_expr(collector, var_decl.val);
         }
 
         AStatement::VariableAssignment(var_assign) => {
-            walk_expr(ctx, var_assign.val);
-            walk_expr(ctx, var_assign.target);
+            walk_expr(collector, var_assign.val);
+            walk_expr(collector, var_assign.target);
         }
 
         AStatement::FunctionDeclaration(func) => {
             if !func.signature.is_parameterized() {
-                ctx.queue_item(func.signature.type_key, HashMap::new());
+                collector.queue_item(func.signature.type_key, HashMap::new());
             }
 
-            ctx.insert_fn(func.clone());
+            collector.insert_fn(func.clone());
         }
 
         AStatement::Closure(closure) => {
             for statement in closure.statements {
-                walk_statement(ctx, statement);
+                walk_statement(collector, statement);
             }
         }
 
         AStatement::FunctionCall(call) => {
             for arg in call.args {
-                walk_expr(ctx, arg);
+                walk_expr(collector, arg);
             }
 
-            walk_expr(ctx, call.fn_expr);
+            walk_expr(collector, call.fn_expr);
         }
 
         AStatement::Conditional(cond) => {
             for branch in cond.branches {
                 if let Some(expr) = branch.cond {
-                    walk_expr(ctx, expr);
+                    walk_expr(collector, expr);
                 }
 
                 for statement in branch.body.statements {
-                    walk_statement(ctx, statement);
+                    walk_statement(collector, statement);
                 }
             }
         }
 
         AStatement::Loop(loop_) => {
             if let Some(statement) = loop_.maybe_init {
-                walk_statement(ctx, statement);
+                walk_statement(collector, statement);
             }
 
             if let Some(expr) = loop_.maybe_cond {
-                walk_expr(ctx, expr);
+                walk_expr(collector, expr);
             }
 
             for statement in loop_.body.statements {
-                walk_statement(ctx, statement);
+                walk_statement(collector, statement);
             }
 
             if let Some(statement) = loop_.maybe_update {
-                walk_statement(ctx, statement);
+                walk_statement(collector, statement);
             }
         }
 
@@ -356,16 +354,16 @@ fn walk_statement(ctx: &mut MonoItemCollector, statement: AStatement) {
 
         AStatement::Return(ret) => {
             if let Some(expr) = ret.val {
-                walk_expr(ctx, expr);
+                walk_expr(collector, expr);
             }
         }
 
         AStatement::Yield(yield_) => {
-            walk_expr(ctx, yield_.value);
+            walk_expr(collector, yield_.value);
         }
 
         AStatement::Const(const_) => {
-            walk_expr(ctx, const_.value);
+            walk_expr(collector, const_.value);
         }
 
         // These statements are impossible in this context.
@@ -375,64 +373,64 @@ fn walk_statement(ctx: &mut MonoItemCollector, statement: AStatement) {
     }
 }
 
-fn walk_expr(ctx: &mut MonoItemCollector, expr: AExpr) {
+fn walk_expr(collector: &mut MonoItemCollector, expr: AExpr) {
     match expr.kind {
-        AExprKind::Symbol(sym) => walk_type_key(ctx, sym.type_key),
+        AExprKind::Symbol(sym) => walk_type_key(collector, sym.type_key),
         AExprKind::MemberAccess(access) => {
-            walk_expr(ctx, access.base_expr);
-            walk_type_key(ctx, access.member_type_key);
+            walk_expr(collector, access.base_expr);
+            walk_type_key(collector, access.member_type_key);
         }
         AExprKind::StructInit(init) => {
             for (_, val) in init.field_values {
-                walk_expr(ctx, val);
+                walk_expr(collector, val);
             }
         }
         AExprKind::EnumInit(init) => {
             if let Some(val) = init.maybe_value {
-                walk_expr(ctx, *val);
+                walk_expr(collector, *val);
             }
         }
         AExprKind::TupleInit(init) => {
             for val in init.values {
-                walk_expr(ctx, val);
+                walk_expr(collector, val);
             }
         }
         AExprKind::ArrayInit(init) => {
             for val in init.values {
-                walk_expr(ctx, val);
+                walk_expr(collector, val);
             }
         }
         AExprKind::Index(index) => {
-            walk_expr(ctx, index.index_expr);
-            walk_expr(ctx, index.collection_expr);
+            walk_expr(collector, index.index_expr);
+            walk_expr(collector, index.collection_expr);
         }
         AExprKind::FunctionCall(call) => {
             for arg in call.args {
-                walk_expr(ctx, arg);
+                walk_expr(collector, arg);
             }
 
-            walk_expr(ctx, call.fn_expr);
+            walk_expr(collector, call.fn_expr);
         }
         AExprKind::AnonFunction(func) => {
             if !func.signature.is_parameterized() {
-                ctx.queue_item(func.signature.type_key, HashMap::new());
+                collector.queue_item(func.signature.type_key, HashMap::new());
             }
 
-            ctx.insert_fn(*func.clone());
+            collector.insert_fn(*func.clone());
         }
         AExprKind::UnaryOperation(_, operand) => {
-            walk_expr(ctx, *operand);
+            walk_expr(collector, *operand);
         }
         AExprKind::BinaryOperation(left, _, right) => {
-            walk_expr(ctx, *left);
-            walk_expr(ctx, *right);
+            walk_expr(collector, *left);
+            walk_expr(collector, *right);
         }
         AExprKind::TypeCast(expr, _) => {
-            walk_expr(ctx, *expr);
+            walk_expr(collector, *expr);
         }
         AExprKind::Sizeof(_) => {}
         AExprKind::From(statement) => {
-            walk_statement(ctx, *statement);
+            walk_statement(collector, *statement);
         }
 
         // These expressions never contain polymorphic items.
@@ -457,21 +455,21 @@ fn walk_expr(ctx: &mut MonoItemCollector, expr: AExpr) {
     }
 }
 
-fn walk_type_key(ctx: &mut MonoItemCollector, type_key: TypeKey) {
-    let type_key = ctx.map_type_key(type_key);
-    let fn_sig = match ctx.get_type(type_key) {
+fn walk_type_key(collector: &mut MonoItemCollector, type_key: TypeKey) {
+    let type_key = collector.map_type_key(type_key);
+    let fn_sig = match collector.get_type(type_key) {
         AType::Function(fn_sig) => fn_sig,
         _ => return,
     };
 
-    let (type_key, mut type_mappings) = match ctx.ctx.type_monomorphizations.get(&type_key) {
+    let (type_key, mut type_mappings) = match collector.ctx.type_monomorphizations.get(&type_key) {
         Some(mono) => (mono.poly_type_key, mono.type_mappings()),
         None => (type_key, HashMap::new()),
     };
 
     // If the type key already refers to an existing function, we're done.
-    if ctx.fns.get(&type_key).is_some() {
-        ctx.queue_item(type_key, type_mappings);
+    if collector.fns.get(&type_key).is_some() {
+        collector.queue_item(type_key, type_mappings);
         return;
     }
 
@@ -479,13 +477,13 @@ fn walk_type_key(ctx: &mut MonoItemCollector, type_key: TypeKey) {
     match fn_sig.maybe_impl_type_key {
         Some(impl_tk) => {
             // Check if the function is a method on a monomorphized type.
-            let impl_tk = ctx.map_type_key(impl_tk);
-            let impl_tk = match ctx.ctx.type_monomorphizations.get(&impl_tk) {
+            let impl_tk = collector.map_type_key(impl_tk);
+            let impl_tk = match collector.ctx.type_monomorphizations.get(&impl_tk) {
                 Some(mono) => {
                     for replaced_param in &mono.replaced_params {
                         type_mappings.insert(
                             replaced_param.param_type_key,
-                            ctx.map_type_key(replaced_param.replacement_type_key),
+                            collector.map_type_key(replaced_param.replacement_type_key),
                         );
                     }
 
@@ -495,14 +493,14 @@ fn walk_type_key(ctx: &mut MonoItemCollector, type_key: TypeKey) {
             };
 
             // Nothing to do if this is a method on a primitive type (i.e. intrinsic).
-            if ctx.get_type(impl_tk).is_primitive() {
+            if collector.get_type(impl_tk).is_primitive() {
                 return;
             }
 
             // Find the actual method on the original type.
-            match ctx.ctx.get_spec_impl_by_fn(type_key) {
+            match collector.ctx.get_spec_impl_by_fn(type_key) {
                 Some(spec_tk) => {
-                    let fn_tk = ctx
+                    let fn_tk = collector
                         .ctx
                         .get_member_fn_from_spec_impl(impl_tk, spec_tk, fn_sig.name.as_str())
                         .expect(
@@ -512,17 +510,18 @@ fn walk_type_key(ctx: &mut MonoItemCollector, type_key: TypeKey) {
                             )
                             .as_str(),
                         );
-                    ctx.queue_item(fn_tk, type_mappings);
+                    collector.queue_item(fn_tk, type_mappings);
                 }
                 None => {
                     // Since the function is not part of a spec implementation, we can
                     // search for it as a default member function. If we don't find it,
                     // it means that the function is actually a field on a struct, in which
                     // case there is nothing to queue.
-                    if let Some(fn_tk) =
-                        ctx.ctx.get_default_member_fn(impl_tk, fn_sig.name.as_str())
+                    if let Some(fn_tk) = collector
+                        .ctx
+                        .get_default_member_fn(impl_tk, fn_sig.name.as_str())
                     {
-                        ctx.queue_item(fn_tk, type_mappings);
+                        collector.queue_item(fn_tk, type_mappings);
                     }
                 }
             };
@@ -530,7 +529,7 @@ fn walk_type_key(ctx: &mut MonoItemCollector, type_key: TypeKey) {
 
         None => {
             // This will be the case for extern functions. We'll track them separately.
-            ctx.used_extern_fns.insert(fn_sig.type_key);
+            collector.used_extern_fns.insert(fn_sig.type_key);
         }
     }
 }

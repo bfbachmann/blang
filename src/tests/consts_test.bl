@@ -1,12 +1,14 @@
 use {exit}: "std/libc/proc.bl"
 
 use {assert}: "std/backtrace/panic.bl"
+use io: "std/libc/io.bl"
 
 struct Thing {
     i: i64
     b: bool
 }
 
+const seek_end = 123
 const some_int = -50
 const some_struct = Thing {
     i: 987
@@ -41,6 +43,10 @@ fn main() {
     // Make sure constant declaration is allows inside functions.
     const thing: str = "test"
     assert(thing == "test", "12")
+
+    // Make sure there are no const name collisions across modules.
+    assert(seek_end == 123, "expected 123")
+    assert(@io.seek_end == 2, "expected 2")
 
     exit(0)
 }

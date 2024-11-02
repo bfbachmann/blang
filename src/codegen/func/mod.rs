@@ -9,6 +9,7 @@ use inkwell::passes::PassManager;
 use inkwell::types::{AnyType, BasicTypeEnum};
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
 
+use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::mangling;
@@ -37,7 +38,7 @@ pub struct FnCodeGen<'a, 'ctx> {
     type_store: &'a TypeStore,
     type_converter: &'a mut TypeConverter<'ctx>,
     /// Stores constant values that are declared in the module outside of functions.
-    module_consts: &'a HashMap<String, AConst>,
+    mod_consts: &'a HashMap<String, HashMap<String, AExpr>>,
     /// Stores constant values that are declared within a function.
     local_consts: HashMap<String, AConst>,
     vars: HashMap<String, PointerValue<'ctx>>,
@@ -55,7 +56,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         module: &'a Module<'ctx>,
         type_store: &'a TypeStore,
         type_converter: &'a mut TypeConverter<'ctx>,
-        module_consts: &'a HashMap<String, AConst>,
+        mod_consts: &'a HashMap<String, HashMap<String, AExpr>>,
         func: &AFn,
     ) -> CodeGenResult<FunctionValue<'ctx>> {
         let mut fn_compiler = FnCodeGen {
@@ -65,7 +66,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             module,
             type_store,
             type_converter,
-            module_consts,
+            mod_consts,
             local_consts: Default::default(),
             vars: HashMap::new(),
             fn_value: None,
@@ -362,18 +363,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 ErrorKind::FnVerificationFailed,
                 format_code!("failed to verify function {}", func.signature.mangled_name).as_str(),
             ))
-        }
-    }
-
-    /// Locates and returns the constant with the given name. Panics if there is no constant by
-    /// that name.
-    fn get_const(&self, name: &str) -> &AConst {
-        if let Some(const_) = self.local_consts.get(name) {
-            const_
-        } else {
-            self.module_consts
-                .get(name)
-                .expect(format!("constant `{name}` should exist").as_str())
         }
     }
 

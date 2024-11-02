@@ -12,6 +12,7 @@ pub struct ScopedSymbol {
     pub type_key: TypeKey,
     pub is_mut: bool,
     pub is_const: bool,
+    pub maybe_mod_path: Option<String>,
 }
 
 impl ScopedSymbol {
@@ -22,16 +23,18 @@ impl ScopedSymbol {
             type_key,
             is_mut,
             is_const: false,
+            maybe_mod_path: None,
         }
     }
 
     /// Creates a new symbol representing a constant with the given type key.
-    pub fn new_const(name: &str, type_key: TypeKey) -> Self {
+    pub fn new_const(name: &str, type_key: TypeKey, mod_path: String) -> Self {
         ScopedSymbol {
             name: name.to_string(),
             type_key,
             is_mut: false,
             is_const: true,
+            maybe_mod_path: Some(mod_path),
         }
     }
 }

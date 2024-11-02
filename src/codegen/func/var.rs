@@ -114,7 +114,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Gets a pointer to the given variable or member.
     pub(crate) fn get_var_ptr(&mut self, symbol: &ASymbol) -> PointerValue<'ctx> {
-        self.get_var_ptr_by_name(self.get_full_symbol_name(symbol).as_str())
+        self.get_var_ptr_by_name(
+            &symbol.maybe_mod_path,
+            self.get_full_symbol_name(symbol).as_str(),
+        )
     }
 
     /// Returns true if `var` refers directly to a function in this module. Note that this function
@@ -162,7 +165,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Gets a pointer to a variable or function given its name.
-    fn get_var_ptr_by_name(&mut self, name: &str) -> PointerValue<'ctx> {
+    fn get_var_ptr_by_name(
+        &mut self,
+        maybe_mod_path: &Option<String>,
+        name: &str,
+    ) -> PointerValue<'ctx> {
         // Try to look up the symbol as a variable.
         if let Some(ll_var_ptr) = self.vars.get(name) {
             return *ll_var_ptr;
@@ -175,11 +182,15 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // The symbol might be a constant. If it is, copy its value to the stack
         // and return the stack pointer.
-        if let Some(mod_const) = self.module_consts.get(name) {
-            let ll_ptr = self.stack_alloc(name, mod_const.value.type_key);
-            let ll_val = self.gen_const_expr(&mod_const.value);
-            self.copy_value(ll_val, ll_ptr, mod_const.value.type_key);
-            return ll_ptr;
+        if let Some(mod_path) = maybe_mod_path {
+            if let Some(consts) = self.mod_consts.get(mod_path) {
+                if let Some(const_value) = consts.get(name) {
+                    let ll_ptr = self.stack_alloc(name, const_value.type_key);
+                    let ll_val = self.gen_const_expr(&const_value);
+                    self.copy_value(ll_val, ll_ptr, const_value.type_key);
+                    return ll_ptr;
+                }
+            }
         }
 
         panic!("failed to resolve variable {}", name);

@@ -304,7 +304,18 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             return ll_intrinsic;
         }
 
-        let const_value = &self.get_const(symbol.name.as_str()).value.clone();
-        self.gen_const_expr(const_value)
+        if let Some(mod_path) = &symbol.maybe_mod_path {
+            if let Some(mod_consts) = self.mod_consts.get(mod_path) {
+                if let Some(const_value) = mod_consts.get(&symbol.name) {
+                    return self.gen_const_expr(const_value);
+                }
+            }
+        }
+
+        if let Some(const_) = self.local_consts.get(&symbol.name) {
+            return self.gen_const_expr(&const_.value.clone());
+        }
+
+        panic!("failed to locate constant for symbol {symbol}")
     }
 }

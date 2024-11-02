@@ -133,7 +133,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             self.module,
             self.type_store,
             self.type_converter,
-            self.module_consts,
+            self.mod_consts,
             func,
         )
         .unwrap()
