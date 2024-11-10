@@ -17,7 +17,6 @@ pub struct AMemberAccess {
     pub base_expr: AExpr,
     pub member_name: String,
     pub member_type_key: TypeKey,
-    pub member_param_tks: Vec<TypeKey>,
     pub is_method: bool,
     span: Span,
 }
@@ -51,7 +50,6 @@ impl AMemberAccess {
             base_expr: base_expr.clone(),
             member_name: member_name.clone(),
             member_type_key: ctx.unknown_type_key(),
-            member_param_tks: vec![],
             is_method: false,
             span: access.span().clone(),
         };
@@ -98,7 +96,7 @@ impl AMemberAccess {
 
         // If we failed to find a field on this type with a matching name, check for a member
         // function with a matching name.
-        let (mut member_type_key, is_method) = match maybe_field_type_key {
+        let (member_type_key, is_method) = match maybe_field_type_key {
             Some(tk) => (tk, false),
             None => {
                 match try_resolve_method(
@@ -123,7 +121,6 @@ impl AMemberAccess {
             base_expr,
             member_name: member_name.clone(),
             member_type_key,
-            member_param_tks: vec![],
             is_method,
             span: access.span().clone(),
         }
