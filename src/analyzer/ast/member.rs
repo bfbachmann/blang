@@ -383,8 +383,8 @@ fn try_resolve_method(
                     ErrorKind::AmbiguousAccess,
                     format_code!(
                         "ambiguous access to member {} on type {}",
+                        member_name,
                         base_type_string,
-                        member_name
                     )
                     .as_str(),
                     access,
