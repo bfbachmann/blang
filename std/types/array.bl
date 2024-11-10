@@ -1,7 +1,7 @@
 use panic: "std/backtrace/panic.bl"
 use {Clone}: "std/specs/clone.bl"
 use {DynAllocator}: "std/mem/dyn_allocator.bl"
-use {SliceMut}: "std/types/slice.bl"
+use {Slice, SliceMut}: "std/types/slice.bl"
 
 /// A resizeable array of values of type T.
 pub struct Array[T] {
@@ -54,6 +54,11 @@ impl Array {
     /// Returns the nubmer of elements in the array.
     pub fn len(*self) -> uint {
         return self^.data.len()
+    }
+
+    /// Returns a slice that references the data in the array.
+    pub fn as_slice(*self) -> Slice[T] {
+        return self^.data.as_slice()
     }
 
     /// Frees all heap memory allocated for the array.

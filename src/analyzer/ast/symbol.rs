@@ -197,7 +197,7 @@ impl ASymbol {
         };
 
         // We need to make sure the symbol is not just a type. This prevents types from being valid expressions.
-        if !allow_type && is_type {
+        if is_type && !allow_type {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::ExpectedExpr,
                 format_code!(

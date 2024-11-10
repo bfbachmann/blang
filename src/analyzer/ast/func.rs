@@ -78,8 +78,19 @@ impl AFnSig {
     /// Analyzes a function signature and returns a semantically valid, type-rich function
     /// signature.
     pub fn from(ctx: &mut ProgramContext, sig: &FunctionSignature) -> AFnSig {
-        let maybe_impl_type_key = ctx.get_cur_self_type_key();
-        let maybe_spec_type_key = ctx.get_cur_spec_type_key();
+        // Only try to determine if this is a method on a type (i.e. it has a spec and impl
+        // type key) if it's a named function signature.
+        let is_anon = sig.name.is_empty();
+        let maybe_impl_type_key = match is_anon {
+            true => None,
+            false => ctx.get_cur_self_type_key(),
+        };
+        let maybe_spec_type_key = match is_anon {
+            true => None,
+            false => ctx.get_cur_spec_type_key(),
+        };
+
+        // Mangle the function name so it's unique.
         let mangled_name = ctx.mangle_name(
             None,
             maybe_impl_type_key,
@@ -90,7 +101,7 @@ impl AFnSig {
 
         // If this function signature has a name, we can try to locate it by its mangled name to
         // avoid re-analyzing it.
-        if !sig.name.is_empty() {
+        if !is_anon {
             if let Some(fn_sig) = ctx.get_fn_sig_by_mangled_name(None, mangled_name.as_str()) {
                 return fn_sig.clone();
             }

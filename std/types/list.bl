@@ -104,6 +104,23 @@ impl List {
         }
     }
 
+    /// Pushes `values` onto the end of the list.
+    pub fn extend(*mut self, values: List[T]) {
+        let num_values = values.len()
+        let num_free_slots = self.capacity() - self^.len
+        if num_free_slots < num_values {
+            self.grow_to_fit(num_values)
+        }
+
+        @mem.memmove(
+            self^.entries.mut_ptr_at(self^.len) as *mut u8,
+            values.get(0) as *u8,
+            num_values * sizeof T,
+        )
+
+        values.free()
+    }
+
     /// Frees the memory allocated for this list.
     pub fn free(self) {
         self.entries.free()
@@ -127,6 +144,17 @@ impl List {
         }
 
         self^.entries.resize(new_cap)
+    }
+
+    /// Grows the memory that backs the list so it can fit `count` new values.
+    pub fn grow_to_fit(*mut self, count: uint) {
+        let cap = self.capacity()
+        let num_free = cap - self^.len
+        if num_free >= count {
+            return
+        }
+
+        self^.entries.resize(cap + count - num_free)
     }
 
     /// Panics if `i` is outside of the array bounds.

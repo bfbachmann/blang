@@ -1147,8 +1147,8 @@ impl ProgramContext {
         let typ = self.must_get_type(*tk);
 
         let result = if let Some(params) = typ.params() {
-            // The type is polymorphic, so we can use its defined parameters to extract monomorphization
-            // info.
+            // The type is polymorphic, so we can use its defined parameters to extract
+            // monomorphization info.
             let mut param_tks = vec![];
             for param in &params.params {
                 param_tks.push(*type_mappings.get(&param.generic_type_key).unwrap());
@@ -1158,8 +1158,8 @@ impl ProgramContext {
         } else if let Some(mono) = self.type_monomorphizations.get(tk) {
             let mono = mono.clone();
 
-            // The type is a monomorphization of a polymorphic type. We can find the polymorphic type
-            // and use it to extract monomorphization info.
+            // The type is a monomorphization of a polymorphic type. We can find the polymorphic
+            // type and use it to extract monomorphization info.
             let mut param_tks = vec![];
             for replaced_param in &mono.replaced_params {
                 let mut param_tk = replaced_param.replacement_type_key;

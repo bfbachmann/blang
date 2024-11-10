@@ -430,7 +430,7 @@ fn parse_from_rpn(rpn_queue: &mut VecDeque<OutNode>) -> ParseResult<Expression> 
 /// Parses a basic expression. Expects token sequences of the following forms
 ///
 ///     <unit>
-///     <unit>\[comp\]*
+///     <unit>.(comp)
 ///     <unit>(comp,*)
 ///     <unit>.*
 ///
@@ -498,7 +498,6 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                 }
             }
 
-            // TODO: move index parsing into its own fn
             TokenKind::BeginIndex => {
                 tokens.next();
 
@@ -509,36 +508,15 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
             TokenKind::Dot => {
                 tokens.next();
 
-                let (member_name, end_pos) = match tokens.next() {
-                    Some(Token {
-                        kind: TokenKind::Identifier(name),
-                        span,
-                    }) => (name.clone(), span.end_pos),
-
-                    Some(other) => {
-                        return Err(ParseError::new_with_token(
-                            ErrorKind::ExpectedIdent,
-                            format_code!("expected identifier, but found {}", other).as_str(),
-                            other.clone(),
-                        ))
-                    }
-
-                    None => {
-                        return Err(ParseError::new(
-                            ErrorKind::UnexpectedEOF,
-                            "expected identifier, but found EOF",
-                            None,
-                            Default::default(),
-                        ))
-                    }
-                };
-
+                let member_symbol = Symbol::from(tokens)?;
                 let start_pos = expr.start_pos().clone();
-                expr = Expression::MemberAccess(Box::new(MemberAccess::new(
-                    expr,
-                    member_name,
-                    Span { start_pos, end_pos },
-                )));
+                let end_pos = member_symbol.end_pos().clone();
+
+                expr = Expression::MemberAccess(Box::new(MemberAccess {
+                    base_expr: expr,
+                    member_symbol,
+                    span: Span { start_pos, end_pos },
+                }));
             }
 
             TokenKind::Deref => {

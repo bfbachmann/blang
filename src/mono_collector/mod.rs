@@ -412,11 +412,8 @@ fn walk_expr(collector: &mut MonoItemCollector, expr: AExpr) {
             walk_expr(collector, call.fn_expr);
         }
         AExprKind::AnonFunction(func) => {
-            if !func.signature.is_parameterized() {
-                collector.queue_item(func.signature.type_key, HashMap::new());
-            }
-
-            collector.insert_fn(*func.clone());
+            collector.queue_item(func.signature.type_key, HashMap::new());
+            collector.insert_fn(*func);
         }
         AExprKind::UnaryOperation(_, operand) => {
             walk_expr(collector, *operand);

@@ -21,7 +21,7 @@ impl Ref {
 
 fn heap[T](t: *T) -> Ref[T] {
     let ptr = malloc(sizeof T) as *mut T
-    memcpy(ptr as *u8, t as *u8, sizeof T)
+    memcpy(ptr as *mut u8, t as *u8, sizeof T)
     return Ref[T]{
        ptr: ptr
     }

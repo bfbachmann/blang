@@ -20,7 +20,7 @@ pub fn heap_realloc[T](ptr: *mut T, count: uint) -> *mut T {
 /// Copies a `T` from `src` to `dst`. These two pointers must not point to overlapping
 /// regions.
 pub fn copy[T](dst: *mut T, src: *T) {
-    memcpy(dst as *u8, src as *u8, sizeof T)
+    memcpy(dst as *mut u8, src as *u8, sizeof T)
 }
 
 /// Moves `T` onto the heap and returns a pointer to it.

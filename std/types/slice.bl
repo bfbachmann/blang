@@ -37,10 +37,10 @@ impl Slice {
         return self^.ptr
     }
 
-    /// Returns a pointer to the element at index `offset` in the slice.
-    pub fn ptr_at(*self, offset: uint) -> *T {
-        @panic.assert(offset < self^.len, "slice offset out of bounds")
-        return self^.ptr.(offset as int)
+    /// Returns a pointer to the element at index `i` in the slice.
+    pub fn ptr_at(*self, i: uint) -> *T {
+        @panic.assert(i < self^.len, "slice index out of bounds")
+        return self^.ptr.(i as int)
     }
 
     /// Returns a slice that points to elements from index `start` (incluive) 
@@ -121,10 +121,18 @@ impl SliceMut {
         return self^.ptr
     }
 
-    /// Returns a pointer to the element at index `offset` in the slice.
-    pub fn ptr_at(*self, offset: uint) -> *mut T {
-        @panic.assert(offset < self^.len, "slice offset out of bounds")
-        return self^.ptr.(offset as int)
+    /// Returns a pointer to the element at index `i` in the slice.
+    pub fn ptr_at(*self, i: uint) -> *mut T {
+        @panic.assert(i < self^.len, "slice index out of bounds")
+        return self^.ptr.(i as int)
+    }
+
+    /// Returns a slice with the same pointer and length as this one.
+    pub fn as_slice(*self) -> Slice[T] {
+        return Slice[T]{
+            ptr: self^.ptr
+            len: self^.len
+        }
     }
 
     /// Returns a slice that points to elements from index `start` (incluive) 
