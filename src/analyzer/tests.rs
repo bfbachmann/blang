@@ -2091,6 +2091,40 @@ mod tests {
     }
 
     #[test]
+    fn unexpected_method_params() {
+        let result = analyze(
+            r#"
+            struct Thing {}
+            impl Thing {
+                fn do_thing() {}
+            }
+
+            fn main() {
+                Thing.do_thing[int]()
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::UnexpectedParams));
+    }
+
+    #[test]
+    fn unresolved_method_params() {
+        let result = analyze(
+            r#"
+            struct Thing {}
+            impl Thing {
+                fn do_thing[T]() {}
+            }
+
+            fn main() {
+                Thing.do_thing()
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::UnresolvedParams));
+    }
+
+    #[test]
     fn private_member_access() {
         let mods = vec![
             (

@@ -1,0 +1,16 @@
+use proc: "std/libc/proc.bl"
+use {assert}: "std/backtrace/panic.bl"
+
+struct Thing {}
+
+impl Thing {
+    fn test[T](t: T) -> T {
+        return t
+    }
+}
+
+fn main() {
+    assert(Thing.test[str]("sup!") == "sup!", "expected 'sup!'")
+
+    @proc.exit(0)
+}

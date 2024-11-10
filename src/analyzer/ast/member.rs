@@ -96,7 +96,7 @@ impl AMemberAccess {
 
         // If we failed to find a field on this type with a matching name, check for a member
         // function with a matching name.
-        let (member_type_key, is_method) = match maybe_field_type_key {
+        let (mut member_type_key, is_method) = match maybe_field_type_key {
             Some(tk) => (tk, false),
             None => {
                 match try_resolve_method(
@@ -116,6 +116,72 @@ impl AMemberAccess {
                 }
             }
         };
+
+        // Handle polymorphic methods.
+        if is_method {
+            let fn_sig = ctx.must_get_type(member_type_key).to_fn_sig();
+            let missing_params = access.member_symbol.params.is_empty();
+
+            match &fn_sig.params {
+                Some(expected_params) => {
+                    member_type_key = if missing_params {
+                        // The method is polymorphic, but no params were provided. Record and error
+                        // and set the member type to unknown.
+                        let param_names = expected_params
+                            .params
+                            .iter()
+                            .map(|p| p.name.as_str())
+                            .collect();
+                        ctx.insert_err(
+                            AnalyzeError::new(
+                                ErrorKind::UnresolvedParams,
+                                "unresolved parameters",
+                                access,
+                            )
+                            .with_detail(
+                                format!(
+                                    "{} has polymorphic type {} which requires that types \
+                                    be specified for parameters: {}.",
+                                    format_code!(access),
+                                    format_code!(ctx.display_type(member_type_key)),
+                                    format_code_vec(&param_names, ", "),
+                                )
+                                .as_str(),
+                            ),
+                        );
+
+                        ctx.unknown_type_key()
+                    } else {
+                        // Monomorphize the method and update the method type key.
+                        ctx.monomorphize_parameterized_type(
+                            member_type_key,
+                            &access.member_symbol.params,
+                            &access.member_symbol,
+                        )
+                    }
+                }
+
+                None => {
+                    if !missing_params {
+                        // The method is monomorphic, but params where provided.
+                        ctx.insert_err(
+                            AnalyzeError::new(
+                                ErrorKind::UnexpectedParams,
+                                "unexpected generic parameters",
+                                &access.member_symbol,
+                            )
+                            .with_detail(
+                                format_code!(
+                                    "Type {} is not polymorphic.",
+                                    ctx.display_type(member_type_key)
+                                )
+                                .as_str(),
+                            ),
+                        );
+                    }
+                }
+            }
+        }
 
         AMemberAccess {
             base_expr,
