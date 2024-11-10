@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::analyzer::ast::func::AFn;
+use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
@@ -172,14 +173,26 @@ fn check_spec_impl(
     member_fns: &HashMap<String, (AFn, &Function)>,
 ) -> (bool, Vec<AnalyzeError>) {
     // Find the spec being referred to.
-    let a_spec = ctx.must_get_type(spec_tk).to_spec_type();
+    let spec_type = match ctx.must_get_type(spec_tk) {
+        AType::Spec(spec_type) => spec_type,
+        _ => {
+            return (
+                false,
+                vec![AnalyzeError::new(
+                    ErrorKind::ExpectedSpec,
+                    format_code!("{} is not a spec", ctx.display_type(spec_tk)).as_str(),
+                    spec,
+                )],
+            )
+        }
+    };
 
     // Collect the names of all the functions that aren't implemented
     // from this spec and check that spec functions were implemented correctly.
     let mut spec_impl_errs = vec![];
     let mut missing_fn_names = vec![];
     let mut extra_fn_names: HashSet<String> = HashSet::from_iter(member_fns.keys().cloned());
-    for fn_type_key in a_spec.member_fn_type_keys.values() {
+    for fn_type_key in spec_type.member_fn_type_keys.values() {
         let spec_fn_sig = ctx.must_get_type(*fn_type_key).to_fn_sig();
 
         // Check if this impl has a function with the same name.

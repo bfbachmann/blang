@@ -2063,6 +2063,17 @@ mod tests {
     }
 
     #[test]
+    fn expected_spec() {
+        let result = analyze(
+            r#"
+            struct BlaStruct {}
+            impl BlaStruct: int {}
+            "#,
+        );
+        check_result(result, Some(ErrorKind::ExpectedSpec));
+    }
+
+    #[test]
     fn incorrect_spec_fn_in_impl() {
         let result = analyze(
             r#"
