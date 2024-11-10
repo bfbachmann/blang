@@ -6,7 +6,7 @@ use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::type_store::GetType;
 use crate::codegen::error::CodeGenResult;
 
-use super::{gen_fn_sig, FnCodeGen};
+use super::FnCodeGen;
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles a statement.
@@ -25,13 +25,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AStatement::VariableAssignment(assign) => {
                 self.assign_var(assign);
             }
-            AStatement::FunctionDeclaration(func) => {
-                if !func.signature.is_parameterized() {
-                    // Declare and compile the new function.
-                    //nocmmit: shouldn't need to generate anything here.
-                    gen_fn_sig(self.ctx, self.module, self.type_converter, &func.signature);
-                    self.gen_nested_fn(func);
-                }
+            AStatement::FunctionDeclaration(_) => {
+                // No need to generate any code here. The mono item collector would have already
+                // walked this function and created mono items for it, so we'll generate it in
+                // `gen_program` anyway.
             }
             AStatement::Closure(closure) => {
                 self.gen_closure(closure)?;
