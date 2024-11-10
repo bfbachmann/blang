@@ -36,7 +36,16 @@ fn main() {
         }
     }
 
-    assert(prime_count == 25, "1")
+    assert(prime_count == 25, "expected 25")
+
+    // Check that we can `continue` at the end of the loop body.
+    let mut sum = 0
+    for let mut i = 0, i < 10, i += 1 {
+        sum += i
+        continue
+    }
+
+    assert(sum == 45, "expected 45")
 
     exit(0)
 }

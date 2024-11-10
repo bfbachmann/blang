@@ -63,10 +63,16 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             };
         }
 
-        // Generate the loop update block if necessary, so we have somewhere to jump to
-        // if we encounter `continue` statements in the loop body.
-        if loop_.maybe_update.is_some() {
-            self.get_or_create_loop_update_block();
+        // Generate the loop update block.
+        if let Some(update_statement) = &loop_.maybe_update {
+            let update_block = self.get_or_create_loop_update_block();
+            self.set_current_block(update_block);
+            self.gen_statement(update_statement)?;
+
+            // Branch back to the beginning of the loop if this block doesn't already terminate.
+            if !self.current_block_has_terminator() {
+                self.builder.build_unconditional_branch(cond_block);
+            }
         }
 
         // Generate code for the loop body.
@@ -75,20 +81,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             self.gen_closure(&loop_.body)?;
         }
 
-        // Generate code for the loop update block, if one exists and the body doesn't already
-        // end in a terminator instruction.
+        // Branch back to the beginning of the loop if the body doesn't already have a terminator.
         if !self.current_block_has_terminator() {
-            let update_block = self.get_or_create_loop_update_block();
-            self.builder.build_unconditional_branch(update_block);
-            self.set_current_block(update_block);
-            if let Some(update_statement) = &loop_.maybe_update {
-                self.gen_statement(update_statement)?;
-            }
-
-            // Branch back to the beginning of the loop if this block doesn't already terminate.
-            if !self.current_block_has_terminator() {
-                self.builder.build_unconditional_branch(cond_block);
-            }
+            let begin_block = self.get_loop_begin_block();
+            self.builder.build_unconditional_branch(begin_block);
         }
 
         // Pop the loop context now that we've compiled the loop.
