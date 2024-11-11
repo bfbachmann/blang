@@ -4,7 +4,7 @@ use {memcpy}: "std/libc/mem.bl"
 use {heap_alloc}: "std/mem/mem.bl"
 use {Eq}: "std/specs/eq.bl"
 use {Hasher}: "std/specs/hasher.bl"
-use {DynAllocator, new_dyn_allocator}: "std/mem/dyn_allocator.bl"
+use {Allocator}: "std/mem/allocator.bl"
 use {LibcAllocator}: "std/mem/libc_allocator.bl"
 
 use {HashMap, Serialize}: "docs/examples/hashmap/hashmap.bl"
@@ -31,7 +31,7 @@ impl Key: Eq {
 }
 
 fn main() {
-    let mut allocator = new_dyn_allocator[LibcAllocator](&mut LibcAllocator{})
+    let mut allocator = Allocator.new[LibcAllocator](&mut LibcAllocator{})
     let mut map = HashMap[Key, str, DJB2Hasher].new(&mut allocator)
 
     map.insert(Key{s: "key"}, "value")

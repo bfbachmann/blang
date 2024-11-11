@@ -3,7 +3,7 @@ use {copy, replace}: "std/mem/mem.bl"
 use {Table}: "std/types/table.bl"
 use {Eq}: "std/specs/eq.bl"
 use {Hasher}: "std/specs/hasher.bl"
-use {DynAllocator}: "std/mem/dyn_allocator.bl"
+use {Allocator}: "std/mem/allocator.bl"
 
 pub spec Serialize {
     fn serialize(*self) -> {*u8, uint}
@@ -26,7 +26,7 @@ impl Mapping {
 
 /// A hashmap that maps keys to their corresponding values.
 pub struct HashMap[K: Serialize + Eq, V, H: Hasher] {
-    allocator: *mut DynAllocator
+    allocator: *mut Allocator
     table: Table[Mapping[K, V]]
     num_allocated: uint
     hasher: H
@@ -34,12 +34,12 @@ pub struct HashMap[K: Serialize + Eq, V, H: Hasher] {
 
 impl HashMap {
     /// Creates a new empty map that uses the djb2 hasher.
-    pub fn new(al: *mut DynAllocator) -> HashMap[K, V, H] {
+    pub fn new(al: *mut Allocator) -> HashMap[K, V, H] {
         return HashMap[K, V, H].new_with_hasher(al, H.new())
     }
 
     /// Creates a new empty map that uses the given hasher.
-    pub fn new_with_hasher(al: *mut DynAllocator, hasher: H) -> HashMap[K, V, H] {
+    pub fn new_with_hasher(al: *mut Allocator, hasher: H) -> HashMap[K, V, H] {
         return HashMap[K, V, H]{
             allocator: al
             table: Table[Mapping[K, V]].new(al, 0)

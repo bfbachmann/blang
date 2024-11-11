@@ -1,7 +1,7 @@
 use io: "std/libc/io.bl"
 use panic: "std/backtrace/panic.bl"
+use {Allocate}: "std/mem/allocate.bl"
 use {Allocator}: "std/mem/allocator.bl"
-use {DynAllocator}: "std/mem/dyn_allocator.bl"
 use {List}: "std/types/list.bl"
 
 /// A block of heap-allocated memory.
@@ -27,7 +27,7 @@ impl Block {
 /// Allcates memory on the heap and checks for invalid pointers and memory
 /// leaks.
 pub struct DebugAllocator {
-    allocator: *mut DynAllocator
+    allocator: *mut Allocator
     // TODO: A list is a very inefficient way of storing and accessing this 
     // information.
     blocks: List[Block]
@@ -35,7 +35,7 @@ pub struct DebugAllocator {
 
 impl DebugAllocator {
     /// Returns a new allocator that uses `al` as its underlying allocator.
-    pub fn new(al: *mut DynAllocator) -> DebugAllocator {
+    pub fn new(al: *mut Allocator) -> DebugAllocator {
         return DebugAllocator{
             allocator: al
             blocks: List[Block].new(al)
@@ -77,7 +77,7 @@ impl DebugAllocator {
     }
 }
 
-impl DebugAllocator: Allocator {
+impl DebugAllocator: Allocate {
     /// Allocates `size` bytes on the heap an returns the pointer.
     pub fn alloc(*mut self, size: uint) -> *mut u8 {
         let ptr = self^.allocator.alloc(size)

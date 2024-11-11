@@ -1,12 +1,12 @@
 use {Clone}: "std/specs/clone.bl"
 use {Array}: "std/types/array.bl"
-use {DynAllocator}: "std/mem/dyn_allocator.bl"
+use {Allocator}: "std/mem/allocator.bl"
 
 /// Manages a heap-allocated array of entries of type T. Each entry has a 
 /// status that indicates whether it is empty (was never occupied), occupied, 
 /// or deleted (was once occupied but is now unoccupied).
 pub struct Table[T] {
-    allocator: *mut DynAllocator
+    allocator: *mut Allocator
     entries: Array[Entry[T]]
 }
 
@@ -23,7 +23,7 @@ struct Entry[T] {
 
 impl Table {
     /// Creates a new table with `len` entries.
-    pub fn new(al: *mut DynAllocator, len: uint) -> Table[T] {
+    pub fn new(al: *mut Allocator, len: uint) -> Table[T] {
         return Table[T]{
             allocator: al
             entries: Array[Entry[T]].new_with_len(al, len)

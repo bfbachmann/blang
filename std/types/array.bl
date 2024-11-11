@@ -1,22 +1,22 @@
 use panic: "std/backtrace/panic.bl"
 use {Clone}: "std/specs/clone.bl"
-use {DynAllocator}: "std/mem/dyn_allocator.bl"
+use {Allocator}: "std/mem/allocator.bl"
 use {Slice, SliceMut}: "std/types/slice.bl"
 
 /// A resizeable array of values of type T.
 pub struct Array[T] {
-    allocator: *mut DynAllocator
+    allocator: *mut Allocator
     data: SliceMut[T]
 }
 
 impl Array {
     /// Create a new empty array.
-    pub fn new(al: *mut DynAllocator) -> Array[T]{
+    pub fn new(al: *mut Allocator) -> Array[T]{
         return Array[T].new_with_len(al, 0)
     }
 
     /// Create a new array that can contain `len` elements.
-    pub fn new_with_len(al: *mut DynAllocator, len: uint) -> Array[T] {
+    pub fn new_with_len(al: *mut Allocator, len: uint) -> Array[T] {
         let mut ptr: *mut T = null
         if len > 0 {
             ptr = al.alloc(sizeof T * len) as *mut T

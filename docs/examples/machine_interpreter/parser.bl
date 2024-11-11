@@ -2,7 +2,7 @@ use {malloc, realloc, free}: "std/libc/mem.bl"
 use {strtol, strncmp}: "std/libc/string.bl"
 use {Clone}: "std/specs/clone.bl"
 use {List}: "std/types/list.bl"
-use {DynAllocator}: "std/mem/dyn_allocator.bl"
+use {Allocator}: "std/mem/allocator.bl"
 
 use {assert}: "std/backtrace/panic.bl"
 
@@ -114,7 +114,7 @@ impl ParseResult {
 
 /// Parses a program from a character buffer.
 pub struct Parser {
-    allocator: *mut DynAllocator
+    allocator: *mut Allocator
     buf: *u8
     buf_len: uint
     cursor: uint
@@ -123,7 +123,7 @@ pub struct Parser {
 
 impl Parser {
     /// Returns a new parser for parsing the instructions in `buf` with a length of `buf_len` bytes.
-    pub fn new(al: *mut DynAllocator, buf: *u8, buf_len: uint) -> Parser {
+    pub fn new(al: *mut Allocator, buf: *u8, buf_len: uint) -> Parser {
         return Parser{
             allocator: al
             buf: buf

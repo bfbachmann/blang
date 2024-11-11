@@ -1,5 +1,48 @@
-pub spec Allocator {
-    fn alloc(*mut self, size: uint) -> *mut u8
-    fn realloc(*mut self, ptr: *u8, size: uint) -> *mut u8
-    fn free(*mut self, ptr: *u8)
+use io: "std/libc/io.bl"
+use {Allocate}: "std/mem/allocate.bl"
+
+/// An allocator with dynamic dispatch.
+pub struct Allocator {
+    /// A pointer to the underlying allocator.
+    pub allocator: *mut Allocator
+
+    // Function pointers for dynamic dispatch (i.e. a virtual table of sorts).
+    pub alloc_fn: fn (*mut Allocator, uint) -> *mut u8
+    pub realloc_fn: fn (*mut Allocator, *u8, uint) -> *mut u8
+    pub free_fn: fn (*mut Allocator, *u8)
+}
+
+impl Allocator {
+    /// Returns an allocator with dynamic dispatch to `al`'s methods.
+    pub fn new[Al: Allocate](al: *mut Al) -> Allocator {
+        return Allocator{
+            allocator: al as *mut Allocator
+            alloc_fn: fn (al: *mut Allocator, size: uint) -> *mut u8 {
+                return Al.alloc(al as *mut Al, size)
+            }
+            realloc_fn: fn (al: *mut Allocator, ptr: *u8, size: uint) -> *mut u8 {
+                return Al.realloc(al as *mut Al, ptr, size)
+            }
+            free_fn: fn (al: *mut Allocator, ptr: *u8) {
+                Al.free(al as *mut Al, ptr)
+            }
+        }
+    }
+}
+
+impl Allocator: Allocate {
+    /// Calls alloc on the underlying allocator and returns the result.
+    pub fn alloc(*mut self, size: uint) -> *mut u8 {
+        return self^.alloc_fn(self^.allocator, size)
+    }
+    
+    /// Calls realloc on the underlying allocator and returns the result.
+    pub fn realloc(*mut self, ptr: *u8, size: uint) -> *mut u8 {
+        return self^.realloc_fn(self^.allocator, ptr, size)
+    }
+
+    /// Calls free on the underlying allocator and returns the result.
+    pub fn free(*mut self, ptr: *u8) {
+        self^.free_fn(self^.allocator, ptr)
+    }
 }
