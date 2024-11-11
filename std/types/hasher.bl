@@ -18,6 +18,7 @@ pub spec Hash {
     fn hash(*self, writer: *mut HashWriter) -> u64
 }
 
+/// Implements the `BuildHash` and `WriteHash` specs with dynamic dispatch.
 pub struct Hasher {
     underlying: *mut u8
     reset_fn: fn (*mut u8)
@@ -26,6 +27,7 @@ pub struct Hasher {
 }
 
 impl Hasher {
+    /// Creates a new `Hasher` with dynamic dispatch to `underlying`.
     pub fn new[B: BuildHash](underlying: *mut B) -> Hasher {
         return Hasher{
             underlying: underlying as *mut u8
@@ -41,6 +43,7 @@ impl Hasher {
         }
     }
 
+    /// Returns a `HashWriter` that can write to this `Hasher`.
     pub fn writer(*mut self) -> HashWriter {
         return HashWriter{
             underlying: self^.underlying
@@ -74,6 +77,7 @@ impl Hasher: WriteHash {
     }
 }
 
+/// Implements the `HashWriter` spec with dynamic dispatch.
 pub struct HashWriter {
     underlying: *mut u8
     write_fn: fn (*mut u8, Slice[u8])
@@ -81,6 +85,7 @@ pub struct HashWriter {
 }
 
 impl HashWriter {
+    /// Creates a new `HashWriter` with dynamic dispatch to `underlying`.
     pub fn new[W: WriteHash](underlying: *mut W) -> HashWriter {
         return HashWriter{
             underlying: underlying as *mut u8
