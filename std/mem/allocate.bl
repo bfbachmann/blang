@@ -1,5 +1,5 @@
 pub spec Allocate {
     fn alloc(*mut self, size: uint) -> *mut u8
-    fn realloc(*mut self, ptr: *u8, size: uint) -> *mut u8
-    fn free(*mut self, ptr: *u8)
+    fn realloc(*mut self, ptr: *mut u8, size: uint) -> *mut u8
+    fn free(*mut self, ptr: *mut u8)
 }

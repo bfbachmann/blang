@@ -8,8 +8,8 @@ pub struct Allocator {
 
     // Function pointers for dynamic dispatch (i.e. a virtual table of sorts).
     pub alloc_fn: fn (*mut Allocator, uint) -> *mut u8
-    pub realloc_fn: fn (*mut Allocator, *u8, uint) -> *mut u8
-    pub free_fn: fn (*mut Allocator, *u8)
+    pub realloc_fn: fn (*mut Allocator, *mut u8, uint) -> *mut u8
+    pub free_fn: fn (*mut Allocator, *mut u8)
 }
 
 impl Allocator {
@@ -20,10 +20,10 @@ impl Allocator {
             alloc_fn: fn (al: *mut Allocator, size: uint) -> *mut u8 {
                 return Al.alloc(al as *mut Al, size)
             }
-            realloc_fn: fn (al: *mut Allocator, ptr: *u8, size: uint) -> *mut u8 {
+            realloc_fn: fn (al: *mut Allocator, ptr: *mut u8, size: uint) -> *mut u8 {
                 return Al.realloc(al as *mut Al, ptr, size)
             }
-            free_fn: fn (al: *mut Allocator, ptr: *u8) {
+            free_fn: fn (al: *mut Allocator, ptr: *mut u8) {
                 Al.free(al as *mut Al, ptr)
             }
         }
@@ -37,12 +37,12 @@ impl Allocator: Allocate {
     }
     
     /// Calls realloc on the underlying allocator and returns the result.
-    pub fn realloc(*mut self, ptr: *u8, size: uint) -> *mut u8 {
+    pub fn realloc(*mut self, ptr: *mut u8, size: uint) -> *mut u8 {
         return self^.realloc_fn(self^.allocator, ptr, size)
     }
 
     /// Calls free on the underlying allocator and returns the result.
-    pub fn free(*mut self, ptr: *u8) {
+    pub fn free(*mut self, ptr: *mut u8) {
         self^.free_fn(self^.allocator, ptr)
     }
 }

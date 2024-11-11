@@ -534,14 +534,30 @@ pub fn get_mangled_fn_name(
     };
 
     if is_nested {
-        mangled_name += "{";
-        for (k, v) in type_converter.type_mapping() {
-            mangled_name += format!("{k}:{v},").as_str();
-        }
-        mangled_name += "}";
+        mangled_name += mangle_type_mapping(type_converter.type_mapping()).as_str();
     }
 
     mangled_name
+}
+
+/// Mangles type mappings into the form `{k:v,...}` where type key `k` is mapped to `v`.
+pub fn mangle_type_mapping(mapping: &HashMap<TypeKey, TypeKey>) -> String {
+    let mut type_mappings: Vec<(TypeKey, TypeKey)> =
+        mapping.iter().map(|(k, v)| (*k, *v)).collect();
+    type_mappings.sort_by(|(k1, v1), (k2, v2)| {
+        let result = k1.cmp(k2);
+        match result.is_eq() {
+            true => v1.cmp(v2),
+            _ => result,
+        }
+    });
+
+    let mut mangled_name = "{".to_string();
+    for (k, v) in type_mappings {
+        mangled_name += format!("{k}:{v},").as_str();
+    }
+
+    mangled_name + "}"
 }
 
 /// Defines the given function in the current module based on the function signature.

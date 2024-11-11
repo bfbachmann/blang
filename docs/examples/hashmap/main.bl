@@ -1,27 +1,23 @@
+use proc: "std/libc/proc.bl"
+use mem: "std/libc/mem.bl"
 use {assert}: "std/backtrace/panic.bl"
-use {exit}: "std/libc/proc.bl"
-use {memcpy}: "std/libc/mem.bl"
-use {heap_alloc}: "std/mem/mem.bl"
+
 use {Eq}: "std/specs/eq.bl"
-use {Hasher}: "std/specs/hasher.bl"
 use {Allocator}: "std/mem/allocator.bl"
 use {LibcAllocator}: "std/mem/libc_allocator.bl"
-
-use {HashMap, Serialize}: "docs/examples/hashmap/hashmap.bl"
-use {DJB2Hasher}: "docs/examples/hashmap/djb2.bl"
+use {Hash, HashWriter}: "std/types/hasher.bl"
+use {Slice}: "std/types/slice.bl"
+use {HashMap}: "docs/examples/hashmap/hashmap.bl"
 
 struct Key {
     s: str
 }
 
-impl Key: Serialize {
-    fn serialize(*self) -> {*u8, uint} {
-        let len = self^.s.len()
-        let ptr = heap_alloc[u8](len)
-        memcpy(ptr, self^.s as *u8, len)
-        return {ptr, len}
+impl Key: Hash {
+    fn hash(*self, writer: *mut HashWriter) -> u64 {
+        writer.write(Slice[u8].from_str(self^.s))
+        return writer.sum()
     }
-
 }
 
 impl Key: Eq {
@@ -32,7 +28,7 @@ impl Key: Eq {
 
 fn main() {
     let mut allocator = Allocator.new[LibcAllocator](&mut LibcAllocator{})
-    let mut map = HashMap[Key, str, DJB2Hasher].new(&mut allocator)
+    let mut map = HashMap[Key, str].new(&mut allocator)
 
     map.insert(Key{s: "key"}, "value")
     let result_ptr = map.get(&Key{s: "key"})
@@ -51,5 +47,5 @@ fn main() {
     map.insert(Key{s: "d"}, "value: d")
     assert(map.get(&Key{s: "d"})^ == "value: d", "expected \"value: d\"")
 
-    exit(0)
+    @proc.exit(0)
 }

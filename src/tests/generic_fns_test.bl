@@ -47,8 +47,8 @@ fn heap_alloc[T]() -> *mut T {
     return malloc(sizeof T) as *mut T
 }
 
-fn heap_free[T](t: *T) {
-    free(t as *u8)
+fn heap_free[T](t: *mut T) {
+    free(t as *mut u8)
 }
 
 fn double(s: int) -> int {

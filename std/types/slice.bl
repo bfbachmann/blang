@@ -27,6 +27,14 @@ impl Slice {
         }
     }
 
+    /// Returns a new empty slice.
+    pub fn new_empty() -> Slice[T] {
+        return Slice[T]{
+            ptr: null
+            len: 0
+        }
+    }
+
     /// Returns the number of elements in the slice.
     pub fn len(*self) -> uint {
         return self^.len
@@ -100,6 +108,14 @@ impl SliceMut {
         return SliceMut[T]{
             ptr: ptr
             len: len
+        }
+    }
+
+    /// Returns a new empty slice.
+    pub fn new_empty() -> SliceMut[T] {
+        return SliceMut[T]{
+            ptr: null
+            len: 0
         }
     }
 

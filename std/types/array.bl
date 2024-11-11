@@ -63,6 +63,6 @@ impl Array {
 
     /// Frees all heap memory allocated for the array.
     pub fn free(mut self) {
-        self.allocator.free(self.data.ptr() as *u8)
+        self.allocator.free(self.data.ptr() as *mut u8)
     }
 }

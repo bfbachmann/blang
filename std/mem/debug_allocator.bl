@@ -92,7 +92,7 @@ impl DebugAllocator: Allocate {
     /// Resized memory allocated for `ptr` to `size` bytes and returns the
     /// pointer to the newly-allocated memory. This will copy data from the
     /// old memory region into the new one.
-    pub fn realloc(*mut self, ptr: *u8, size: uint) -> *mut u8 {
+    pub fn realloc(*mut self, ptr: *mut u8, size: uint) -> *mut u8 {
         let result = self.block_index(ptr)
         let found = result.(1)
         @panic.assert(found, "cannot realloc dangling pointer")
@@ -109,7 +109,7 @@ impl DebugAllocator: Allocate {
     }
 
     /// Frees memory pointed to by `ptr`.
-    pub fn free(*mut self, ptr: *u8) {
+    pub fn free(*mut self, ptr: *mut u8) {
         let result = self.block_index(ptr)
         let found = result.(1)
         @panic.assert(found, "cannot free dangling pointer")

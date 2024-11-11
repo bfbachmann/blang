@@ -1,5 +1,5 @@
-use {List}: "std/types/list.bl"
-use {Hasher}: "std/specs/hasher.bl"
+use {Slice}: "std/types/slice.bl"
+use {BuildHash}: "std/types/hasher.bl"
 
 /// Implements the DJB2 hash function.
 pub struct DJB2Hasher {
@@ -8,23 +8,27 @@ pub struct DJB2Hasher {
 
 const initial_hash: u64 = 5381
 
-impl DJB2Hasher: Hasher {
-    fn new() -> DJB2Hasher {
+impl DJB2Hasher {
+    pub fn new() -> DJB2Hasher {
         return DJB2Hasher{
             hash: initial_hash
         }
     }
+}
 
-    fn reset(*mut self) {
+impl DJB2Hasher: BuildHash {
+    pub fn reset(*mut self) {
         self^.hash = initial_hash
     }
 
-    fn hash(*mut self, bytes: *u8, len: uint) -> u64 {
-        for let mut i = 0, i < len as int, i += 1 {
-            let c = bytes.(i)^ as u64
+    pub fn write(*mut self, bytes: Slice[u8]) {
+        for let mut i = 0uint, i < bytes.len(), i += 1 {
+            let c = bytes.ptr_at(i)^ as u64
             self^.hash = ((self^.hash bls 5uint) + self^.hash) + c
         }
+    }
 
+    pub fn sum(*self) -> u64 {
         return self^.hash
     }
 }

@@ -24,11 +24,7 @@ impl Node {
 
     /// Returns the last node in this list.
     fn tail(*mut self) -> *mut Node {
-        for
-            let mut head = self,
-            head.has_next(),
-            head = head^.next
-        {}
+        for let mut head = self, head.has_next(), head = head^.next {}
         return head
     }
 
@@ -112,7 +108,7 @@ impl Node {
             }
 
             let next = head^.next
-            free(head as *u8)
+            free(head as *mut u8)
             head = next
         }
     }

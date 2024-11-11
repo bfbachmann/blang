@@ -1,5 +1,0 @@
-pub spec Hasher {
-    fn new() -> Self
-    fn reset(*mut self)
-    fn hash(*mut self, bytes: *u8, len: uint) -> u64
-}

@@ -8,7 +8,7 @@ use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::fmt::vec_to_string;
 use crate::parser::ast::op::Operator;
 
-use super::FnCodeGen;
+use super::{mangle_type_mapping, FnCodeGen};
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Allocates space on the stack for a new variable of the type corresponding to `type_key` and
@@ -112,11 +112,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         };
 
         if self.nested_fns.contains(&symbol.type_key) {
-            name += "{";
-            for (k, v) in self.type_converter.type_mapping() {
-                name += format!("{k}:{v},").as_str();
-            }
-            name += "}";
+            name += mangle_type_mapping(self.type_converter.type_mapping()).as_str();
         }
 
         name

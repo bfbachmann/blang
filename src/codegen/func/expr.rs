@@ -83,7 +83,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     get_mangled_fn_name(self.type_converter, &anon_fn.signature, true);
                 self.module
                     .get_function(&mangled_name)
-                    .unwrap()
+                    .expect(format!("function {mangled_name} should exist").as_str())
                     .as_global_value()
                     .as_basic_value_enum()
             }

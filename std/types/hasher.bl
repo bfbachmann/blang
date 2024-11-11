@@ -1,0 +1,105 @@
+use {Slice}: "std/types/slice.bl"
+
+/// Any type that can build a hash (essentially - a hash function with state).
+pub spec BuildHash {
+    fn reset(*mut self)
+    fn write(*mut self, bytes: Slice[u8])
+    fn sum(*self) -> u64
+}
+
+/// Any type that can write data to a hash function and return the current sum.
+pub spec WriteHash {
+    fn write(*mut self, bytes: Slice[u8])
+    fn sum(*self) -> u64
+}
+
+/// Any type that can be hashed.
+pub spec Hash {
+    fn hash(*self, writer: *mut HashWriter) -> u64
+}
+
+pub struct Hasher {
+    underlying: *mut u8
+    reset_fn: fn (*mut u8)
+    write_fn: fn (*mut u8, Slice[u8])
+    sum_fn: fn (*u8) -> u64
+}
+
+impl Hasher {
+    pub fn new[B: BuildHash](underlying: *mut B) -> Hasher {
+        return Hasher{
+            underlying: underlying as *mut u8
+            reset_fn: fn (hasher: *mut u8) {
+                B.reset(hasher as *mut B)
+            }
+            write_fn: fn (hasher: *mut u8, bytes: Slice[u8]) {
+                B.write(hasher as *mut B, bytes)
+            }
+            sum_fn: fn (hasher: *u8) -> u64 {
+                return B.sum(hasher as *B)
+            }
+        }
+    }
+
+    pub fn writer(*mut self) -> HashWriter {
+        return HashWriter{
+            underlying: self^.underlying
+            write_fn: self^.write_fn
+            sum_fn: self^.sum_fn
+        }
+    }
+}
+
+impl Hasher: BuildHash {
+    pub fn reset(*mut self) {
+        self^.reset_fn(self^.underlying)
+    }
+
+    pub fn write(*mut self, bytes: Slice[u8]) {
+        self^.write_fn(self^.underlying, bytes)
+    }
+
+    pub fn sum(*self) -> u64 {
+        return self^.sum_fn(self^.underlying)
+    }
+}
+
+impl Hasher: WriteHash {
+    pub fn write(*mut self, bytes: Slice[u8]) {
+        self^.write_fn(self^.underlying, bytes)
+    }
+
+    pub fn sum(*self) -> u64 {
+        return self^.sum_fn(self^.underlying)
+    }
+}
+
+pub struct HashWriter {
+    underlying: *mut u8
+    write_fn: fn (*mut u8, Slice[u8])
+    sum_fn: fn (*u8) -> u64
+}
+
+impl HashWriter {
+    pub fn new[W: WriteHash](underlying: *mut W) -> HashWriter {
+        return HashWriter{
+            underlying: underlying as *mut u8
+            write_fn: fn (hasher: *mut u8, bytes: Slice[u8]) {
+                W.write(hasher as *mut W, bytes)
+            }
+            sum_fn: fn (hasher: *u8) -> u64 {
+                return W.sum(hasher as *W)
+            }
+        }
+    }
+}
+
+impl HashWriter: WriteHash {
+    pub fn write(*mut self, bytes: Slice[u8]) {
+        self^.write_fn(self^.underlying, bytes)
+    }
+
+    pub fn sum(*self) -> u64 {
+        return self^.sum_fn(self^.underlying)
+    }
+}

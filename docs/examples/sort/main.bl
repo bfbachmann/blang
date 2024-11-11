@@ -68,8 +68,8 @@ fn sort[T: Order + Clone](list: *mut List[T]) {
         let min_index = result.(0)
         let min_value = result.(1)
         if min_value.compare(&cur_value) ~~ Ord::Lesser {
-            list.set(i, min_value)
-            list.set(min_index, cur_value)
+            list.replace(i, min_value)
+            list.replace(min_index, cur_value)
         } else {
             i += 1
         }

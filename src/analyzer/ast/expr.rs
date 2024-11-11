@@ -492,9 +492,7 @@ impl AExpr {
                         .as_str(),
                 ),
             );
-        } else if !scoped_symbol.is_mut
-            && !ctx.must_get_type(scoped_symbol.type_key).is_mut_ptr()
-        {
+        } else if !scoped_symbol.is_mut && !ctx.must_get_type(scoped_symbol.type_key).is_mut_ptr() {
             ctx.insert_err(
                 AnalyzeError::new(
                     ErrorKind::InvalidMutRef,
@@ -1068,7 +1066,10 @@ fn analyze_type_cast(
     // Skip the check if the left expression already failed analysis.
     // Also make sure the type keys are actually different. If not, this is a
     // superfluous type cast.
-    if !left_type.is_unknown() && !is_valid_type_cast(left_type, a_target_type) {
+    if !left_type.is_unknown()
+        && !a_target_type.is_unknown()
+        && !is_valid_type_cast(left_type, a_target_type)
+    {
         ctx.insert_err(AnalyzeError::new(
             ErrorKind::InvalidTypeCast,
             format_code!(
