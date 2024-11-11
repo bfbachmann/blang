@@ -1,0 +1,37 @@
+use {Allocate, Allocator}: "std/mem/allocator.bl"
+
+// These functions need to be linked from a compiled version of the
+// Boehm-Demers-Weiser Garbage Collector. See https://www.hboehm.info/gc/.
+extern "GC_init" fn gc_init()
+extern "GC_malloc" fn gc_malloc(nbytes: uint) -> *mut u8
+extern "GC_realloc" fn gc_realloc(ptr: *mut u8, nbytes: uint) -> *mut u8
+extern "GC_free" fn gc_free(ptr: *mut u8)
+
+/// Implements the `Allocator` interface, providing an allocator that will
+/// automatically reclaim unused memory.
+pub struct GCAllocator {}
+
+impl GCAllocator {
+    pub fn new() -> GCAllocator {
+        gc_init()
+        return GCAllocator{}
+    }
+
+    pub fn dynamic(*mut self) -> Allocator {
+        return Allocator.new[GCAllocator](self)
+    }
+}
+
+impl GCAllocator: Allocate {
+    pub fn alloc(*mut self, size: uint) -> *mut u8 {
+        return gc_malloc(size)
+    }
+
+    pub fn realloc(*mut self, ptr: *mut u8, size: uint) -> *mut u8 {
+        return gc_realloc(ptr, size)
+    }
+
+    pub fn free(*mut self, ptr: *mut u8) {
+        gc_free(ptr)
+    }
+}

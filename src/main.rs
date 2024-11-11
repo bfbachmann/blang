@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 use std::{fs, process};
 
-use clap::{arg, ArgAction, Command};
+use clap::{arg, Arg, ArgAction, Command};
 use flamer::flame;
 use inkwell::targets::{RelocMode, TargetMachine};
 use inkwell::OptimizationLevel;
@@ -75,9 +75,11 @@ fn main() {
             .arg(arg!(-o --out <OUTPUT_PATH> "Output file path").required(false))
             .arg(arg!(-l --linker <LINKER> "Linker to use").required(false))
             .arg(
-                arg!(-L --"linker-flag" <LINKER_FLAG> "Linker flag")
-                    .required(false)
+                Arg::new("linker-flag")
                     .num_args(1..)
+                    .value_delimiter(' ')
+                    .short('L')
+                    .required(false)
                     .allow_hyphen_values(true),
             ),
     );

@@ -75,7 +75,13 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                 .to_fn_sig()
                 .clone();
             let is_nested = self.nested_fns.contains(&sig.type_key);
-            gen_fn_sig(self.ctx, self.module, &mut self.type_converter, &sig, is_nested);
+            gen_fn_sig(
+                self.ctx,
+                self.module,
+                &mut self.type_converter,
+                &sig,
+                is_nested,
+            );
             self.type_converter.set_type_mapping(HashMap::new());
         }
 
