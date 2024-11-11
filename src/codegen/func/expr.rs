@@ -1,13 +1,13 @@
-use inkwell::{AddressSpace, FloatPredicate, IntPredicate};
 use inkwell::intrinsics::Intrinsic;
 use inkwell::types::{BasicType, BasicTypeEnum};
 use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, FloatValue, IntValue};
+use inkwell::{AddressSpace, FloatPredicate, IntPredicate};
 use regex::{Captures, Regex};
 
 use crate::analyzer::ast::array::AArrayInit;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::fn_call::AFnCall;
-use crate::analyzer::ast::func::{AFn, AFnSig};
+use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::index::AIndex;
 use crate::analyzer::ast::member::AMemberAccess;
 use crate::analyzer::ast::r#enum::AEnumVariantInit;
@@ -18,7 +18,7 @@ use crate::analyzer::ast::tuple::ATupleInit;
 use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::parser::ast::op::Operator;
 
-use super::FnCodeGen;
+use super::{get_mangled_fn_name, FnCodeGen};
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles an arbitrary expression.
@@ -76,7 +76,17 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             AExprKind::Index(index) => self.gen_index(index),
 
-            AExprKind::AnonFunction(anon_fn) => self.gen_nested_fn(anon_fn),
+            AExprKind::AnonFunction(anon_fn) => {
+                // Shouldn't need to generate anything here. The function should already
+                // have been generated. We just need to return it.
+                let mangled_name =
+                    get_mangled_fn_name(self.type_converter, &anon_fn.signature, true);
+                self.module
+                    .get_function(&mangled_name)
+                    .unwrap()
+                    .as_global_value()
+                    .as_basic_value_enum()
+            }
 
             AExprKind::MemberAccess(access) => self.gen_member_access(access),
 
@@ -120,33 +130,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         ll_phi.as_basic_value()
-    }
-
-    /// Generates code for a function or anonymous function that was declared inside
-    /// another function.
-    pub(crate) fn gen_nested_fn(&mut self, func: &AFn) -> BasicValueEnum<'ctx> {
-        // Generate the function in the LLVM module.
-        let ll_result = FnCodeGen::generate(
-            self.ctx,
-            self.builder,
-            self.fpm,
-            self.module,
-            self.type_store,
-            self.type_converter,
-            self.mod_consts,
-            func,
-        )
-        .unwrap()
-        .as_global_value()
-        .as_basic_value_enum();
-
-        // Now that the inline function has been generated, we need to make sure
-        // LLVM continues generating code from the current block, because the
-        // function codegen above would have changed the LLVM's builder's block
-        // cursor.
-        self.set_current_block(self.cur_block.unwrap());
-
-        ll_result
     }
 
     /// Compiles member access expressions.

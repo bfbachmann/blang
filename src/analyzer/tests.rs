@@ -2071,6 +2071,15 @@ mod tests {
             "#,
         );
         check_result(result, Some(ErrorKind::ExpectedSpec));
+
+        let result = analyze(
+            r#"
+            struct Other {}
+            struct BlaStruct {}
+            impl BlaStruct: Other {}
+            "#,
+        );
+        check_result(result, Some(ErrorKind::ExpectedSpec));
     }
 
     #[test]

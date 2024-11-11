@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::fs::remove_file;
 use std::path::Path;
@@ -34,6 +34,7 @@ pub struct ProgramCodeGen<'a, 'ctx> {
     module: &'a Module<'ctx>,
     fns: &'a HashMap<TypeKey, AFn>,
     extern_fns: &'a HashMap<TypeKey, AExternFn>,
+    nested_fns: &'a HashSet<TypeKey>,
     mono_items: &'a Vec<MonoItem>,
     maybe_main_fn_name: Option<String>,
     type_store: &'a TypeStore,
@@ -73,7 +74,8 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                 .get_type(item.type_key)
                 .to_fn_sig()
                 .clone();
-            gen_fn_sig(self.ctx, self.module, &mut self.type_converter, &sig);
+            let is_nested = self.nested_fns.contains(&sig.type_key);
+            gen_fn_sig(self.ctx, self.module, &mut self.type_converter, &sig, is_nested);
             self.type_converter.set_type_mapping(HashMap::new());
         }
 
@@ -98,6 +100,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                         self.module,
                         self.type_store,
                         &mut self.type_converter,
+                        &self.nested_fns,
                         &self.mod_consts,
                         func,
                     )?;
@@ -313,6 +316,7 @@ pub fn generate(prog: MonoProg, config: CodeGenConfig) -> CodeGenResult<()> {
         module: &module,
         fns: &prog.fns,
         extern_fns: &prog.extern_fns,
+        nested_fns: &prog.nested_fns,
         mono_items: &prog.mono_items,
         maybe_main_fn_name: prog.maybe_main_fn_mangled_name,
         type_store: &prog.type_store,

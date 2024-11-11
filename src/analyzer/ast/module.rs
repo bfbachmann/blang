@@ -243,33 +243,60 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     // its type key in the program context while we analyze its functions.
     let is_default_impl = impl_.maybe_spec.is_none();
     let maybe_spec_tk = match &impl_.maybe_spec {
-        Some(spec) => 'check: {
-            // Try to find the analyzed spec type. It might not be there if it has not
-            // yet been analyzed.
-            if let Some(spec_type_key) =
-                ctx.get_type_key_by_type_name(spec.maybe_mod_name.as_ref(), spec.name.as_str())
-            {
-                break 'check Some(spec_type_key);
-            }
+        Some(spec) => {
+            let maybe_spec_tk = 'find: {
+                // Try to find the analyzed spec type. It might not be there if it has not
+                // yet been analyzed.
+                if let Some(spec_type_key) =
+                    ctx.get_type_key_by_type_name(spec.maybe_mod_name.as_ref(), spec.name.as_str())
+                {
+                    break 'find Some(spec_type_key);
+                }
 
-            // Try to find the un-analyzed spec type and analyze it.
-            if spec.maybe_mod_name.is_none() {
-                if let Some(unchecked_spec) = ctx.get_unchecked_spec(spec.name.as_str()) {
-                    ASpecType::from(ctx, &unchecked_spec.clone());
-                    let spec_type_key = ctx
-                        .get_type_key_by_type_name(None, spec.name.as_str())
-                        .unwrap();
-                    break 'check Some(spec_type_key);
+                // Try to find the un-analyzed spec type and analyze it.
+                if spec.maybe_mod_name.is_none() {
+                    if let Some(unchecked_spec) = ctx.get_unchecked_spec(spec.name.as_str()) {
+                        ASpecType::from(ctx, &unchecked_spec.clone());
+                        let spec_type_key = ctx
+                            .get_type_key_by_type_name(None, spec.name.as_str())
+                            .unwrap();
+
+                        break 'find Some(spec_type_key);
+                    }
+                }
+
+                None
+            };
+
+            match maybe_spec_tk {
+                Some(spec_tk) => {
+                    if ctx.must_get_type(spec_tk).is_spec() {
+                        Some(spec_tk)
+                    } else {
+                        ctx.insert_err(AnalyzeError::new(
+                            ErrorKind::ExpectedSpec,
+                            format_code!(
+                                "type {} is not a spec",
+                                ctx.display_type(spec_tk).as_str()
+                            )
+                            .as_str(),
+                            spec,
+                        ));
+
+                        None
+                    }
+                }
+
+                None => {
+                    ctx.insert_err(AnalyzeError::new(
+                        ErrorKind::UndefSpec,
+                        format_code!("spec {} not defined", spec.name).as_str(),
+                        spec,
+                    ));
+
+                    None
                 }
             }
-
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::UndefSpec,
-                format_code!("spec {} not defined", spec.name).as_str(),
-                spec,
-            ));
-
-            None
         }
 
         None => None,

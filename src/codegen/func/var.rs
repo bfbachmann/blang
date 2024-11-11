@@ -101,7 +101,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Computes the full symbol name based on generic parameters applied to
     /// the symbol.
     pub(crate) fn get_full_symbol_name(&self, symbol: &ASymbol) -> String {
-        if let Some(param_tks) = &symbol.maybe_param_tks {
+        let mut name = if let Some(param_tks) = &symbol.maybe_param_tks {
             let param_value_tks = param_tks
                 .iter()
                 .map(|tk| self.type_converter.map_type_key(*tk))
@@ -109,15 +109,48 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             format!("{}[{}]", symbol.name, vec_to_string(&param_value_tks, ","))
         } else {
             symbol.name.clone()
+        };
+
+        if self.nested_fns.contains(&symbol.type_key) {
+            name += "{";
+            for (k, v) in self.type_converter.type_mapping() {
+                name += format!("{k}:{v},").as_str();
+            }
+            name += "}";
         }
+
+        name
     }
 
     /// Gets a pointer to the given variable or member.
     pub(crate) fn get_var_ptr(&mut self, symbol: &ASymbol) -> PointerValue<'ctx> {
-        self.get_var_ptr_by_name(
-            &symbol.maybe_mod_path,
-            self.get_full_symbol_name(symbol).as_str(),
-        )
+        let maybe_mod_path = &symbol.maybe_mod_path;
+        let name = self.get_full_symbol_name(symbol);
+
+        // Try to look up the symbol as a variable.
+        if let Some(ll_var_ptr) = self.vars.get(&name) {
+            return *ll_var_ptr;
+        }
+
+        // The symbol was not a variable, so try look it up as a function.
+        if let Some(func) = self.module.get_function(&name) {
+            return func.as_global_value().as_pointer_value();
+        }
+
+        // The symbol might be a constant. If it is, copy its value to the stack
+        // and return the stack pointer.
+        if let Some(mod_path) = maybe_mod_path {
+            if let Some(consts) = self.mod_consts.get(mod_path) {
+                if let Some(const_value) = consts.get(&name) {
+                    let ll_ptr = self.stack_alloc(&name, const_value.type_key);
+                    let ll_val = self.gen_const_expr(&const_value);
+                    self.copy_value(ll_val, ll_ptr, const_value.type_key);
+                    return ll_ptr;
+                }
+            }
+        }
+
+        panic!("failed to resolve variable {}", name);
     }
 
     /// Returns true if `var` refers directly to a function in this module. Note that this function
@@ -125,7 +158,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// than a function defined within this module.
     pub(crate) fn is_var_module_fn(&self, symbol: &ASymbol) -> bool {
         self.module
-            .get_function(self.get_full_symbol_name(symbol).as_str())
+            .get_function(&self.get_full_symbol_name(symbol))
             .is_some()
     }
 
@@ -162,38 +195,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         None
-    }
-
-    /// Gets a pointer to a variable or function given its name.
-    fn get_var_ptr_by_name(
-        &mut self,
-        maybe_mod_path: &Option<String>,
-        name: &str,
-    ) -> PointerValue<'ctx> {
-        // Try to look up the symbol as a variable.
-        if let Some(ll_var_ptr) = self.vars.get(name) {
-            return *ll_var_ptr;
-        }
-
-        // The symbol was not a variable, so try look it up as a function.
-        if let Some(func) = self.module.get_function(name) {
-            return func.as_global_value().as_pointer_value();
-        }
-
-        // The symbol might be a constant. If it is, copy its value to the stack
-        // and return the stack pointer.
-        if let Some(mod_path) = maybe_mod_path {
-            if let Some(consts) = self.mod_consts.get(mod_path) {
-                if let Some(const_value) = consts.get(name) {
-                    let ll_ptr = self.stack_alloc(name, const_value.type_key);
-                    let ll_val = self.gen_const_expr(&const_value);
-                    self.copy_value(ll_val, ll_ptr, const_value.type_key);
-                    return ll_ptr;
-                }
-            }
-        }
-
-        panic!("failed to resolve variable {}", name);
     }
 
     /// Returns a pointer to the member with name `member_name` on `ll_base_val`.

@@ -1691,6 +1691,12 @@ impl ProgramContext {
     /// Sets the type key of the spec implemented by the current `impl` block to
     /// `maybe_spec_type_key`.
     pub fn set_cur_spec_type_key(&mut self, maybe_spec_type_key: Option<TypeKey>) {
+        // Assert that the type is actually a spec.
+        assert!(match maybe_spec_type_key {
+            Some(spec_tk) => self.must_get_type(spec_tk).is_spec(),
+            None => true,
+        });
+
         self.cur_mod_ctx_mut().cur_spec_type_key = maybe_spec_type_key;
     }
 

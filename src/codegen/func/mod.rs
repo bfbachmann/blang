@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::basic_block::BasicBlock;
@@ -37,6 +37,7 @@ pub struct FnCodeGen<'a, 'ctx> {
     module: &'a Module<'ctx>,
     type_store: &'a TypeStore,
     type_converter: &'a mut TypeConverter<'ctx>,
+    nested_fns: &'a HashSet<TypeKey>,
     /// Stores constant values that are declared in the module outside of functions.
     mod_consts: &'a HashMap<String, HashMap<String, AExpr>>,
     /// Stores constant values that are declared within a function.
@@ -56,6 +57,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         module: &'a Module<'ctx>,
         type_store: &'a TypeStore,
         type_converter: &'a mut TypeConverter<'ctx>,
+        nested_fns: &'a HashSet<TypeKey>,
         mod_consts: &'a HashMap<String, HashMap<String, AExpr>>,
         func: &AFn,
     ) -> CodeGenResult<FunctionValue<'ctx>> {
@@ -66,6 +68,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             module,
             type_store,
             type_converter,
+            nested_fns,
             mod_consts,
             local_consts: Default::default(),
             vars: HashMap::new(),
@@ -270,26 +273,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Compiles the given function.
     fn gen_fn(&mut self, func: &AFn) -> CodeGenResult<FunctionValue<'ctx>> {
-        // Re-mangle the function name, if necessary.
-        let param_names = match &func.signature.params {
-            Some(params) => {
-                mangling::mangle_param_names(params, self.type_converter.type_mapping())
-            }
-            None => "".to_string(),
-        };
-
-        let mangled_name = &match func.signature.maybe_impl_type_key {
-            Some(impl_tk) => {
-                let mangled_name = mangling::remangle_type_in_name_with_mappings(
-                    self.type_converter,
-                    func.signature.mangled_name.as_str(),
-                    impl_tk,
-                    self.type_converter.type_mapping(),
-                );
-                format!("{mangled_name}{param_names}")
-            }
-            None => format!("{}{param_names}", func.signature.mangled_name),
-        };
+        let is_nested = self.nested_fns.contains(&func.signature.type_key);
+        let mangled_name = get_mangled_fn_name(self.type_converter, &func.signature, is_nested);
 
         // Retrieve the function and create a new "entry" block at the start of the function
         // body.
@@ -524,14 +509,18 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
 /// Computes and returns the mangled name for the given function signature using the type mappings
 /// in the current context.
-pub fn get_mangled_fn_name(type_converter: &mut TypeConverter, sig: &AFnSig) -> String {
+pub fn get_mangled_fn_name(
+    type_converter: &mut TypeConverter,
+    sig: &AFnSig,
+    is_nested: bool,
+) -> String {
     // Re-mangle the function name, if necessary.
     let param_names = match &sig.params {
         Some(params) => mangling::mangle_param_names(params, type_converter.type_mapping()),
         None => "".to_string(),
     };
 
-    match sig.maybe_impl_type_key {
+    let mut mangled_name = match sig.maybe_impl_type_key {
         Some(impl_tk) => {
             let mangled_name = mangling::remangle_type_in_name_with_mappings(
                 type_converter,
@@ -542,7 +531,17 @@ pub fn get_mangled_fn_name(type_converter: &mut TypeConverter, sig: &AFnSig) -> 
             format!("{mangled_name}{param_names}")
         }
         None => format!("{}{param_names}", sig.mangled_name),
+    };
+
+    if is_nested {
+        mangled_name += "{";
+        for (k, v) in type_converter.type_mapping() {
+            mangled_name += format!("{k}:{v},").as_str();
+        }
+        mangled_name += "}";
     }
+
+    mangled_name
 }
 
 /// Defines the given function in the current module based on the function signature.
@@ -551,10 +550,11 @@ pub fn gen_fn_sig<'a, 'ctx>(
     module: &'a Module<'ctx>,
     type_converter: &'a mut TypeConverter<'ctx>,
     sig: &AFnSig,
+    is_nested: bool,
 ) -> String {
     // Define the function in the module using the fully-qualified function name.
     let ll_fn_type = type_converter.get_fn_type(sig.type_key);
-    let mangled_name = get_mangled_fn_name(type_converter, sig);
+    let mangled_name = get_mangled_fn_name(type_converter, sig, is_nested);
     let ll_fn_val = module.add_function(mangled_name.as_str(), ll_fn_type, None);
 
     // For now, all functions get the `frame-pointer=non-leaf` attribute. This tells

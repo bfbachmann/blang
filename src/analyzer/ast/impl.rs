@@ -94,8 +94,22 @@ impl AImpl {
                 .get_type_key_by_type_name(spec.maybe_mod_name.as_ref(), spec.name.as_str())
             {
                 Some(spec_tk) => {
-                    ctx.set_cur_spec_type_key(Some(spec_tk));
-                    Some(spec_tk)
+                    if !ctx.must_get_type(spec_tk).is_spec() {
+                        ctx.insert_err(AnalyzeError::new(
+                            ErrorKind::ExpectedSpec,
+                            format_code!(
+                                "type {} is not a spec",
+                                ctx.display_type(spec_tk).as_str()
+                            )
+                            .as_str(),
+                            spec,
+                        ));
+
+                        None
+                    } else {
+                        ctx.set_cur_spec_type_key(Some(spec_tk));
+                        Some(spec_tk)
+                    }
                 }
                 None => {
                     ctx.insert_err(AnalyzeError::new(

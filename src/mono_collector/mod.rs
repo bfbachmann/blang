@@ -53,6 +53,9 @@ struct MonoItemCollector {
     fns: HashMap<TypeKey, AFn>,
     /// Maps all extern function type keys to their declarations.
     extern_fns: HashMap<TypeKey, AExternFn>,
+    /// Tracks the type keys of nested functions (functions that are declared inside other
+    /// functions).
+    nested_fns: HashSet<TypeKey>,
     /// Tracks used extern functions.
     used_extern_fns: HashSet<TypeKey>,
     /// A queue of items that still need to be checked and collected for monomorphization.
@@ -80,6 +83,7 @@ impl MonoItemCollector {
             ctx,
             fns: Default::default(),
             extern_fns: Default::default(),
+            nested_fns: Default::default(),
             used_extern_fns: Default::default(),
             incomplete_mono_items: Default::default(),
             cur_item_index: 0,
@@ -94,7 +98,11 @@ impl MonoItemCollector {
     }
 
     /// Inserts a function into the context, so it can be looked up by its type key later.
-    fn insert_fn(&mut self, func: AFn) {
+    fn insert_fn(&mut self, func: AFn, is_nested: bool) {
+        if is_nested {
+            self.nested_fns.insert(func.signature.type_key);
+        }
+
         self.fns.insert(func.signature.type_key, func);
     }
 
@@ -174,6 +182,9 @@ pub struct MonoProg {
     pub fns: HashMap<TypeKey, AFn>,
     /// Maps extern function type keys to their signatures.
     pub extern_fns: HashMap<TypeKey, AExternFn>,
+    /// Tracks the type keys of nested functions (functions that are declared inside other
+    /// functions).
+    pub nested_fns: HashSet<TypeKey>,
     /// Maps module paths to mappings from const names to their values for those modules.
     pub mod_consts: HashMap<String, HashMap<String, AExpr>>,
     /// Stores the name of the main function, if there is one.
@@ -238,6 +249,7 @@ pub fn mono_prog(analysis: ProgramAnalysis) -> MonoProg {
         mono_items: collector.complete_mono_items,
         fns: collector.fns,
         extern_fns,
+        nested_fns: collector.nested_fns,
         maybe_main_fn_mangled_name: analysis.maybe_main_fn_mangled_name,
     }
 }
@@ -271,7 +283,7 @@ fn track_fn(
         }
     }
 
-    collector.insert_fn(func);
+    collector.insert_fn(func, false);
 }
 
 fn walk_item(collector: &mut MonoItemCollector, index: usize) {
@@ -299,7 +311,7 @@ fn walk_statement(collector: &mut MonoItemCollector, statement: AStatement) {
                 collector.queue_item(func.signature.type_key, HashMap::new());
             }
 
-            collector.insert_fn(func.clone());
+            collector.insert_fn(func.clone(), true);
         }
 
         AStatement::Closure(closure) => {
@@ -413,7 +425,7 @@ fn walk_expr(collector: &mut MonoItemCollector, expr: AExpr) {
         }
         AExprKind::AnonFunction(func) => {
             collector.queue_item(func.signature.type_key, HashMap::new());
-            collector.insert_fn(*func);
+            collector.insert_fn(*func, true);
         }
         AExprKind::UnaryOperation(_, operand) => {
             walk_expr(collector, *operand);
