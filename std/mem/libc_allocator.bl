@@ -1,8 +1,20 @@
 use mem: "std/libc/mem.bl"
-use {Allocate}: "std/mem/allocate.bl"
+use {Allocate, Allocator}: "std/mem/allocator.bl"
 
 /// Just wraps libc's memory management API.
 pub struct LibcAllocator {}
+
+impl LibcAllocator {
+    /// Returns a new `LibcAllocator`.
+    pub fn new() -> LibcAllocator {
+        return LibcAllocator{}
+    }
+
+    /// Creates a new `Allocator` that dispatches to this allocator.
+    pub fn dynamic(*mut self) -> Allocator {
+        return Allocator.new[LibcAllocator](self)
+    }
+}
 
 impl LibcAllocator: Allocate {
     pub fn alloc(*mut self, size: uint) -> *mut u8 {

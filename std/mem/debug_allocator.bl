@@ -1,7 +1,6 @@
 use io: "std/libc/io.bl"
 use panic: "std/backtrace/panic.bl"
-use {Allocate}: "std/mem/allocate.bl"
-use {Allocator}: "std/mem/allocator.bl"
+use {Allocate, Allocator}: "std/mem/allocator.bl"
 use {List}: "std/types/list.bl"
 
 /// A block of heap-allocated memory.
@@ -40,6 +39,11 @@ impl DebugAllocator {
             allocator: al
             blocks: List[Block].new(al)
         }
+    }
+
+    /// Creates a new `Allocator` that dispatches to this allocator.
+    pub fn dynamic(*mut self) -> Allocator {
+        return Allocator.new[DebugAllocator](self)
     }
 
     /// Return true if `ptr` is valid and references a memory region capable of

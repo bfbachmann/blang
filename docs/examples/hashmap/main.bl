@@ -3,7 +3,6 @@ use mem: "std/libc/mem.bl"
 use {assert}: "std/backtrace/panic.bl"
 
 use {Eq}: "std/specs/eq.bl"
-use {Allocator}: "std/mem/allocator.bl"
 use {LibcAllocator}: "std/mem/libc_allocator.bl"
 use {Hash, HashWriter}: "std/types/hasher.bl"
 use {Slice}: "std/types/slice.bl"
@@ -27,7 +26,7 @@ impl Key: Eq {
 }
 
 fn main() {
-    let mut allocator = Allocator.new[LibcAllocator](&mut LibcAllocator{})
+    let mut allocator = LibcAllocator.new().dynamic()
     let mut map = HashMap[Key, str].new(&mut allocator)
 
     map.insert(Key{s: "key"}, "value")

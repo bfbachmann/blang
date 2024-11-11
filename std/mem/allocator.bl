@@ -1,5 +1,11 @@
 use io: "std/libc/io.bl"
-use {Allocate}: "std/mem/allocate.bl"
+
+/// Any type that can allocate, reallocate, and free memory.
+pub spec Allocate {
+    fn alloc(*mut self, size: uint) -> *mut u8
+    fn realloc(*mut self, ptr: *mut u8, size: uint) -> *mut u8
+    fn free(*mut self, ptr: *mut u8)
+}
 
 /// An allocator with dynamic dispatch.
 pub struct Allocator {
