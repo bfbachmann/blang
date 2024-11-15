@@ -6,6 +6,7 @@ use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_containment::{check_enum_containment, check_struct_containment};
+use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::ext::Extern;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::r#impl::Impl;
@@ -276,12 +277,15 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
                             ctx.insert_err(AnalyzeError::new(
                                 ErrorKind::DuplicateSpecImpl,
                                 format_code!(
-                                    "spec {} is already implemented for type {}",
-                                    ctx.display_type(spec_tk),
+                                    "{} already implements {}",
                                     ctx.display_type(impl_type_key),
+                                    ctx.display_type(spec_tk),
                                 )
                                 .as_str(),
-                                impl_.maybe_spec.as_ref().unwrap(),
+                                &Span {
+                                    start_pos: impl_.start_pos().clone(),
+                                    end_pos: impl_.maybe_spec.as_ref().unwrap().span.end_pos,
+                                },
                             ));
 
                             None
