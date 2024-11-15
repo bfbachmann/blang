@@ -489,6 +489,8 @@ impl ProgramContext {
         let is_primitive = self.must_get_type(type_key).is_primitive();
 
         for spec_type_key in spec_type_keys {
+            // TODO: Remove Clone check hack. Primitive types should actually implement clone in
+            // some intrinsics module.
             let spec_is_clone = self.must_get_type(*spec_type_key).to_spec_type().name == "Clone";
             if is_primitive && spec_is_clone {
                 continue;

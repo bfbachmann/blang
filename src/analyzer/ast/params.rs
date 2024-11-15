@@ -38,8 +38,7 @@ impl Hash for AParam {
 
 impl Display for AParam {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name)?;
-        write!(f, ": {}", self.generic_type_key)
+        write!(f, "{}: {}", self.name, self.generic_type_key)
     }
 }
 
