@@ -1,0 +1,56 @@
+use io: "std/libc/io.bl"
+use {Write, Writer}: "std/io/writer.bl"
+use {Slice}: "std/types/slice.bl"
+use {Buffered}: "std/io/buffer.bl"
+use {Allocator}: "std/mem/allocator.bl"
+
+// TODO: Move this struct definition to the bottom of this file. It's up here
+// at the moment to work around a bug in the compiler.
+struct BaseFileWriter {
+    fd: uint
+}
+
+impl BaseFileWriter: Write {
+    fn write(*mut self, bytes: Slice[u8]) {
+        @io.write(self^.fd, bytes.ptr(), bytes.len())
+    }
+}
+
+/// Performs buffered writes to a file given its descriptor.
+pub struct FileWriter {
+    buf_writer: Buffered[BaseFileWriter]
+}
+
+impl FileWriter {
+    /// Creates a new file writer that can perform buffered writes to the file
+    /// with the given file descriptor.
+    pub fn new(al: *mut Allocator, fd: uint) -> FileWriter {
+        return FileWriter{
+            buf_writer: Buffered[BaseFileWriter].new(al, BaseFileWriter{fd: fd})
+        }
+    }
+
+    /// Returns a generic writer that calls this writer via dynamic dispatch.
+    pub fn dynamic(*mut self) -> Writer {
+        return Writer.new[FileWriter](self)
+    }
+
+    /// Flushes the underlying buffer to the file.
+    pub fn flush(*mut self) {
+        self^.buf_writer.flush()
+    }
+
+    /// Flushes the underlying buffer to the file and frees all memory
+    /// associated with this writer.
+    pub fn free(self) {
+        self.buf_writer.free()
+    }
+}
+
+impl FileWriter: Write {
+    /// Writes data into the buffer. If the buffer is full or is too small
+    /// for the data, it will be flushed. Otherwise, flushes will be avoided.
+    pub fn write(*mut self, bytes: Slice[u8]) {
+        self^.buf_writer.write(bytes)
+    }
+}

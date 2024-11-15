@@ -1,0 +1,31 @@
+use {Slice}: "std/types/slice.bl"
+
+/// Any type to which bytes can be written.
+pub spec Write {
+    fn write(*mut self, bytes: Slice[u8])
+}
+
+/// A writer with dynamic dispatch.
+pub struct Writer {
+    underlying: *mut u8
+    write_fn: fn (*mut u8, Slice[u8])
+}
+
+impl Writer {
+    /// Creates a new writer with dynamic dispatch to `t`.
+    pub fn new[T: Write](t: *mut T) -> Writer {
+        return Writer{
+            underlying: t as *mut u8
+            write_fn: fn (writer: *mut u8, bytes: Slice[u8]) {
+                T.write(writer as *mut T, bytes)
+            }
+        }
+    }
+}
+
+impl Writer: Write {
+    /// Writes `bytes` to the underlying writer.
+    pub fn write(*mut self, bytes: Slice[u8]) {
+        self^.write_fn(self^.underlying, bytes)
+    }
+}

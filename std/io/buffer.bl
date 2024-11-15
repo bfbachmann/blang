@@ -1,0 +1,154 @@
+use mem: "std/libc/mem.bl"
+use {Read}: "std/io/reader.bl"
+use {Write, Writer}: "std/io/writer.bl"
+use {Array}: "std/types/array.bl"
+use {Slice}: "std/types/slice.bl"
+use {Allocator}: "std/mem/allocator.bl"
+
+/// A growable IO buffer that can be used to temporarily store data in memory.
+pub struct Buffer {
+    buf: Array[u8]
+    cursor: uint
+}
+
+impl Buffer {
+    /// Creates a new empty buffer.
+    pub fn new(al: *mut Allocator) -> Buffer {
+        return Buffer{
+            buf: Array[u8].new(al)
+            cursor: 0
+        }
+    }
+
+    /// Creates a new buffer with the given capacity.
+    pub fn new_with_capacity(al: *mut Allocator, cap: uint) -> Buffer {
+        return Buffer{
+            buf: Array[u8].new_with_len(al, cap)
+            cursor: 0
+        }
+    }
+
+    /// Returns true if the buffer has enough room for a write of the given
+    /// size in bytes.
+    pub fn can_fit(*self, num_bytes: uint) -> bool {
+        return self^.buf.len() - self^.cursor >= num_bytes
+    }
+
+    /// Empties the contents of the buffer into `writer`.
+    pub fn drain_into[W: Write](*mut self, writer: *mut W) {
+        if self^.cursor > 0 {
+            writer.write(self^.buf.as_slice().slice_left(self^.cursor))
+            self^.cursor = 0
+        }
+    }
+
+    /// Grows the memory region assigned to the buffer to fit `num_new` 
+    /// additional bytes.
+    pub fn grow_to_fit(*mut self, num_new: uint) {
+        let mut len = self^.buf.len()
+        let min_new_len = self^.cursor + num_new
+
+        if min_new_len <= len {
+            return
+        }
+
+        if len < 8 {
+            len = 8
+        }
+
+        while len < min_new_len {
+            len *= 2
+        }
+
+        self^.buf.resize(len)
+    }
+
+    /// Frees all memory associated with the buffer.
+    pub fn free(self) {
+        self.buf.free()
+    }
+}
+
+impl Buffer: Write {
+    /// Writes `bytes` to the buffer. The buffer will try to grow automatically
+    /// if it can't fit all the bytes.
+    pub fn write(*mut self, bytes: Slice[u8]) {
+        let len = self^.buf.len()
+        let bytes_len = bytes.len()
+        if bytes_len == 0 {
+            return
+        }
+
+        self.grow_to_fit(bytes_len)
+        let start = self^.buf.mut_ptr_at(self^.cursor)
+        @mem.memcpy(start, bytes.ptr_at(0), bytes_len)
+        self^.cursor += bytes_len
+    }
+}
+
+impl Buffer: Read {
+    /// Copies the contents of the buffer into the given writer. This does not
+    /// change the state of the buffer.
+    pub fn read(*mut self, writer: *mut Writer) {
+        writer.write(self^.buf.as_slice().slice_left(self^.cursor))
+    }
+}
+
+/// A buffered writer. Implements the `Write` spec, but buffers all writes to
+/// writer `W` in memory. This type should only be used in cases where writes
+/// to the underlying writer would be significantly slower than writes to 
+/// the buffer (e.g. writing to a file or a network socket). The buffer size
+/// is fixed and large so as to accomodate many small writes before flushing
+/// the buffer to the underlying writer.
+pub struct Buffered[W: Write] {
+    writer: W
+    buf: Buffer
+}
+
+const default_capacity: uint = 1024 * 8
+
+impl Buffered {
+    /// Creates a new buffered writer that writes to `W`.
+    pub fn new(al: *mut Allocator, writer: W) -> Buffered[W] {
+        return Buffered[W]{
+            writer: writer
+            buf: Buffer.new_with_capacity(al, default_capacity)
+        }
+    }
+
+    /// Flushes the buffer to the underlying writer.
+    pub fn flush(*mut self) {
+        self^.buf.drain_into[W](&mut self^.writer)
+    }
+
+    /// Frees all memory associated with the buffered writer.
+    pub fn free(mut self) {
+        self.flush()
+        self.buf.free()
+    }
+}
+
+impl Buffered: Write {
+    /// Writes `bytes` to this buffered writer. The buffer will only be flushed
+    /// to the underlying writer if it can't fit all of `bytes`.
+    pub fn write(*mut self, bytes: Slice[u8]) {
+        let num_bytes = bytes.len()
+
+        // If the bytes fit in the buffer, just write them to the buffer.
+        if self^.buf.can_fit(bytes.len()) {
+            self^.buf.write(bytes)
+            return
+        }
+        
+        // We need to flush to free space in the buffer.
+        self.flush()
+
+        // If the bytes still don't fit in the buffer, write them directly to
+        // the underlying writer.
+        if !self^.buf.can_fit(bytes.len()) {
+            self^.writer.write(bytes)
+        } else {
+            self^.buf.write(bytes)
+        }
+    }
+}

@@ -1,22 +1,138 @@
 use io: "std/libc/io.bl"
 use {Slice}: "std/types/slice.bl"
+use {List}: "std/types/list.bl"
+use {Writer}: "std/io/writer.bl"
+use {Allocator}: "std/mem/allocator.bl"
+use {LibcAllocator}: "std/mem/libc_allocator.bl"
+use {FileWriter}: "std/io/file_writer.bl"
 
-/// Writes the byte slice to stdout.
-pub fn print(msg: Slice[u8]) {
-    @io.write(@io.stdout, msg.ptr(), msg.len())
+/// Prints the given format to stdout.
+pub fn printf(format: Format) {
+    print[Format](&format)
+    format.free()
 }
 
-/// Writes the byte slice with a newline at the end to stdout.
-pub fn println(msg: Slice[u8]) {
-    let iovecs = [
-        @io.IOVec{
-            base_ptr: msg.ptr()
-            iov_len: msg.len()
-        },
-        @io.IOVec{
-            base_ptr: "\n" as *u8
-            iov_len: 1
-        },
-    ]
-    @io.writev(@io.stdout, &iovecs as *@io.IOVec, 2)
+/// Prints the given value to stdout.
+pub fn print[P: Print](p: *P) {
+    let mut allocator = LibcAllocator.new().dynamic()
+    let mut stdout_writer = FileWriter.new(&mut allocator, @io.stdout)
+    p.print(&mut stdout_writer.dynamic())
+    stdout_writer.free()
+}
+
+/// Any type that can be printed into a writer.
+pub spec Print {
+    fn print(*self, writer: *mut Writer)
+}
+
+/// A format string (literal) and arguments to be formatted.
+pub struct Format {
+    fmt: str
+    args: List[Arg]
+}
+
+impl Format {
+    /// Create a new format.
+    pub fn new(al: *mut Allocator, fmt: str) -> Format {
+        return Format{
+            fmt: fmt
+            args: List[Arg].new(al)
+        }
+    }
+
+    /// Appends a printable argument to be formatted.
+    pub fn arg[P: Print](mut self, p: *P) -> Format {
+        self.args.push(Arg.new[P](p))
+        return self
+    }
+
+    /// Prints the format into the given writer and frees it.
+    pub fn print_and_free(self, writer: *mut Writer) {
+        self.print(writer)
+        self.free()
+    }
+
+    /// Frees all memory associated with the format.
+    pub fn free(self) {
+        self.args.free()
+    }
+}
+
+impl Format: Print {
+    /// Prints the format into the given writer.
+    pub fn print(*self, writer: *mut Writer) {
+        const percent = 37u8
+        const backslash = 92u8
+
+        let fmt = Slice[u8].from_str(self^.fmt)
+        let fmt_len = fmt.len()
+        let mut last_char = 0u8
+        let mut substr_start = 0uint
+        let mut arg_i = 0uint
+
+        for let mut i: uint = 0, i < fmt_len, i += 1 {
+            let cur_char = fmt.ptr_at(i)^
+            last_char = from {
+                if last_char == backslash and cur_char == backslash {
+                    write_substr(writer, &fmt, substr_start, i + 1)
+                    substr_start = i + 1
+                    
+                    yield 0u8
+                } elsif last_char != backslash and cur_char == percent {
+                    write_substr(writer, &fmt, substr_start, i)
+                    substr_start = i + 1
+
+                    print_next_arg(writer, &self^.args, &mut arg_i)
+                } elsif last_char == backslash and cur_char == percent {
+                    write_substr(writer, &fmt, substr_start, i - 1)
+                    
+                    writer.write(Slice[u8].from_str("%"))
+                    substr_start = i + 1
+                }
+
+                yield cur_char
+            }
+        }
+
+        // Read remaining format substring, if any.
+        write_substr(writer, &fmt, substr_start, i)
+    }
+}
+
+fn print_next_arg(writer: *mut Writer, args: *List[Arg], i: *mut uint) {
+    let index = i^
+    if index >= args.len() {
+        writer.write(Slice[u8].from_str("<missing>"))
+    } else {
+        args.get(index).print(writer)
+        i^ += 1
+    }
+}
+
+fn write_substr(writer: *mut Writer, s: *Slice[u8], start: uint, end: uint) {
+    if end > start {
+        writer.write(s.slice(start, end))
+    }
+}
+
+struct Arg {
+    data: *u8
+    print_fn: fn (*u8, *mut Writer)
+}
+
+impl Arg {
+    fn new[P: Print](p: *P) -> Arg {
+        return Arg{
+            data: p as *u8
+            print_fn: fn (data: *u8, writer: *mut Writer) {
+                P.print(data as *P, writer)
+            }
+        }
+    }
+}
+
+impl Arg: Print {
+    fn print(*self, writer: *mut Writer) {
+        self^.print_fn(self^.data, writer)
+    }
 }

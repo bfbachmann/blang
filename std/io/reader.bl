@@ -1,0 +1,31 @@
+use {Writer}: "std/io/writer.bl"
+
+/// Any type that can be read into a writer.
+pub spec Read {
+    fn read(*mut self, writer: *mut Writer)
+}
+
+/// A reader with dynamic dispatch.
+pub struct Reader {
+    underlying: *mut u8
+    read_fn: fn (*mut u8, *mut Writer)
+}
+
+impl Reader {
+    /// Create a new reader with dynamic dispatch to `t`.
+    pub fn new[T: Read](t: *mut T) -> Reader {
+        return Reader{
+            underlying: t as *mut u8
+            read_fn: fn (reader: *mut u8, writer: *mut Writer) {
+                T.read(reader as *mut T, writer)
+            }
+        }
+    }
+}
+
+impl Reader: Read {
+    /// Reads data out of the underlying reader into `writer`.
+    pub fn read(*mut self, writer: *mut Writer) {
+        self^.read_fn(self^.underlying, writer)
+    }
+}
