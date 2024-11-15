@@ -271,7 +271,23 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
             match maybe_spec_tk {
                 Some(spec_tk) => {
                     if ctx.must_get_type(spec_tk).is_spec() {
-                        Some(spec_tk)
+                        // Make sure there isn't already an impl defined for this spec on this type.
+                        if ctx.type_has_spec_impl(impl_type_key, spec_tk) {
+                            ctx.insert_err(AnalyzeError::new(
+                                ErrorKind::DuplicateSpecImpl,
+                                format_code!(
+                                    "spec {} is already implemented for type {}",
+                                    ctx.display_type(spec_tk),
+                                    ctx.display_type(impl_type_key),
+                                )
+                                .as_str(),
+                                impl_.maybe_spec.as_ref().unwrap(),
+                            ));
+
+                            None
+                        } else {
+                            Some(spec_tk)
+                        }
                     } else {
                         ctx.insert_err(AnalyzeError::new(
                             ErrorKind::ExpectedSpec,

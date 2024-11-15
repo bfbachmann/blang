@@ -496,16 +496,19 @@ impl ProgramContext {
                 continue;
             }
 
-            let type_implements_spec = self
-                .type_impls
-                .get(&type_key)
-                .is_some_and(|i| i.spec_impls.contains_key(spec_type_key));
-            if !type_implements_spec {
+            if !self.type_has_spec_impl(type_key, *spec_type_key) {
                 missing_spec_type_keys.push(*spec_type_key);
             }
         }
 
         missing_spec_type_keys
+    }
+
+    /// Returns true if the type with the given key implements the spec with the given key.
+    pub fn type_has_spec_impl(&self, type_key: TypeKey, spec_type_key: TypeKey) -> bool {
+        self.type_impls
+            .get(&type_key)
+            .is_some_and(|i| i.spec_impls.contains_key(&spec_type_key))
     }
 
     /// Returns a mapping from error start position to the error that occurred there.
@@ -2107,16 +2110,20 @@ impl ProgramContext {
         member_fn_sig: AFnSig,
     ) {
         match self.type_impls.get_mut(&type_key) {
-            Some(impls) => impls.insert_fn(
-                maybe_spec_type_key,
-                member_fn_sig.name,
-                member_fn_sig.type_key,
-            ),
-            None => self.insert_impl(
-                type_key,
-                maybe_spec_type_key,
-                HashMap::from([(member_fn_sig.name, member_fn_sig.type_key)]),
-            ),
+            Some(impls) => {
+                impls.insert_fn(
+                    maybe_spec_type_key,
+                    member_fn_sig.name,
+                    member_fn_sig.type_key,
+                );
+            }
+            None => {
+                self.insert_impl(
+                    type_key,
+                    maybe_spec_type_key,
+                    HashMap::from([(member_fn_sig.name, member_fn_sig.type_key)]),
+                );
+            }
         }
     }
 

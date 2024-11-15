@@ -2100,6 +2100,27 @@ mod tests {
     }
 
     #[test]
+    fn spec_already_implemented() {
+        let result = analyze(
+            r#"
+            spec Bla {
+                fn bla()
+            }
+            
+            struct BlaStruct {}
+            impl BlaStruct: Bla {
+                fn bla() {}
+            }
+            
+            impl BlaStruct: Bla {
+                fn bla() {}
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::DuplicateSpecImpl));
+    }
+
+    #[test]
     fn unexpected_method_params() {
         let result = analyze(
             r#"
