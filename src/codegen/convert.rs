@@ -121,6 +121,8 @@ impl<'ctx> TypeConverter<'ctx> {
                 .unwrap()
                 .as_basic_type_enum(),
 
+            AType::Char => self.ctx.i32_type().as_basic_type_enum(),
+
             AType::Struct(struct_type) => self.to_struct_type(struct_type).as_basic_type_enum(),
 
             AType::Enum(enum_type) => self.enum_to_struct_type(enum_type).as_basic_type_enum(),

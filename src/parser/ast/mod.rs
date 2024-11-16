@@ -3,6 +3,7 @@ pub mod array;
 pub mod bool_lit;
 pub mod branch;
 pub mod r#break;
+pub mod char_lit;
 pub mod closure;
 pub mod cond;
 pub mod r#const;

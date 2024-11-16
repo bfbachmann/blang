@@ -1444,6 +1444,7 @@ impl CFGAnalyzer<'_> {
             | AExprKind::IntLiteral(_, _)
             | AExprKind::UintLiteral(_)
             | AExprKind::StrLiteral(_)
+            | AExprKind::CharLiteral(_)
             | AExprKind::Sizeof(_) => MValue::new_immediate(),
 
             AExprKind::StructInit(struct_init) => self.analyze_struct_init(struct_init),

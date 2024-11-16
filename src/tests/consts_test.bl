@@ -21,6 +21,7 @@ const other_int = some_int + 1
 const enum_err = Result::Err("failed")
 const some_str = "Hello world! 你好世界\n"
 const same_strs = some_str == "Hello world! 你好世界\n"
+const heart_char = '\u2764'
 
 enum Result {
     Ok
@@ -28,21 +29,22 @@ enum Result {
 }
 
 fn main() {
-    assert(some_int == -50, "1")
-    assert(some_struct.i == 987, "2")
-    assert(some_struct.b == false, "3")
-    assert(some_tuple.(0) == 345, "4")
-    assert(some_tuple.(1) == true, "5")
-    assert(ptr == null, "6")
-    assert(other_int == some_int + 1, "7")
-    assert(enum_err ~~ Result::Err("failed"), "8")
-    assert(same_strs, "9")
-    assert(some_str != "not the same", "10")
-    assert(some_struct_I == 987, "11")
+    assert(some_int == -50, "expected -50")
+    assert(some_struct.i == 987, "expected 987")
+    assert(some_struct.b == false, "expected false")
+    assert(some_tuple.(0) == 345, "expected 345")
+    assert(some_tuple.(1) == true, "expected true")
+    assert(ptr == null, "expected null")
+    assert(other_int == some_int + 1, "expected some_int + 1")
+    assert(enum_err ~~ Result::Err("failed"), "expected Err")
+    assert(same_strs, "expected same")
+    assert(some_str != "not the same", "expected 'not the same'")
+    assert(some_struct_I == 987, "expected 987")
+    assert(heart_char == '\u2764', "expected '\u2764'")
 
     // Make sure constant declaration is allows inside functions.
     const thing: str = "test"
-    assert(thing == "test", "12")
+    assert(thing == "test", "expected 'test'")
 
     // Make sure there are no const name collisions across modules.
     assert(seek_end == 123, "expected 123")

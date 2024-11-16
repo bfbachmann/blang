@@ -1,6 +1,8 @@
+use std::char::ParseCharError;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::num::{ParseFloatError, ParseIntError};
+use std::str::FromStr;
 
 use logos::{FilterResult, Lexer, Logos};
 
@@ -132,6 +134,11 @@ pub enum TokenKind {
     UintLiteral(u64),
     #[regex(r#""(?:[^"]|\\.)*""#, lex_str_lit)]
     StrLiteral(String),
+    #[regex(
+        r#"'([^'\\]|\\[nrt0'\\]|\\x[0-9A-Fa-f]{2}|\\u[0-9A-Fa-f]{1,6})'"#,
+        lex_char_lit
+    )]
+    CharLiteral(char),
     #[token("fn")]
     Fn,
     #[token("struct")]
@@ -290,6 +297,7 @@ impl TokenKind {
             .to_string(),
             TokenKind::UintLiteral(v) => v.to_string(),
             TokenKind::StrLiteral(v) => v.to_owned(),
+            TokenKind::CharLiteral(v) => v.to_string(),
             TokenKind::Fn => "fn".to_string(),
             TokenKind::Struct => "struct".to_string(),
             TokenKind::Let => "let".to_string(),
@@ -427,6 +435,40 @@ fn lex_str_lit(lexer: &mut Lexer<TokenKind>) -> String {
     replaced
 }
 
+fn lex_char_lit(lexer: &mut Lexer<TokenKind>) -> FilterResult<char, LexingError> {
+    let slice = lexer.slice();
+
+    // Remove quotes.
+    let char_lit = slice[1..slice.len() - 1].chars().as_str();
+
+    match char_lit {
+        // Escape sequences.
+        "\\n" => FilterResult::Emit('\n'),
+        "\\t" => FilterResult::Emit('\t'),
+        "\\r" => FilterResult::Emit('\r'),
+        "\\0" => FilterResult::Emit('\0'),
+        "\\'" => FilterResult::Emit('\''),
+        "\\\\" => FilterResult::Emit('\\'),
+
+        // Hex and unicode escape sequences with \x and \u.
+        _ if char_lit.starts_with("\\x") || char_lit.starts_with("\\u") => {
+            match u32::from_str_radix(&char_lit[2..], 16) {
+                Ok(char_code) => match char::from_u32(char_code) {
+                    Some(c) => FilterResult::Emit(c),
+                    None => FilterResult::Error(LexingError::InvalidCharCode(char_code)),
+                },
+                Err(e) => FilterResult::Error(LexingError::InvalidInt(e)),
+            }
+        }
+
+        // Regular ASCII literals.
+        _ => match char::from_str(char_lit) {
+            Ok(c) => FilterResult::Emit(c),
+            Err(e) => FilterResult::Error(LexingError::InvalidChar(e)),
+        },
+    }
+}
+
 /// Lexes an integer literal of type `$t` from string `$s`. Supports decimal, hex,
 /// and binary literals.
 macro_rules! lex_int {
@@ -555,6 +597,8 @@ impl Display for TokenKind {
 pub enum LexingError {
     InvalidInt(ParseIntError),
     InvalidF64(ParseFloatError),
+    InvalidChar(ParseCharError),
+    InvalidCharCode(u32),
     #[default]
     Default,
 }
@@ -564,6 +608,8 @@ impl Display for LexingError {
         match self {
             LexingError::InvalidInt(e) => write!(f, "{}", e),
             LexingError::InvalidF64(e) => write!(f, "{}", e),
+            LexingError::InvalidChar(e) => write!(f, "{}", e),
+            LexingError::InvalidCharCode(c) => write!(f, "invalid character code {c}"),
             LexingError::Default => write!(f, "invalid token"),
         }
     }

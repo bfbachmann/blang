@@ -32,6 +32,7 @@ pub enum AType {
     Int,
     Uint,
     Str,
+    Char,
 
     // Composite types.
     Struct(AStructType),
@@ -57,6 +58,7 @@ impl Display for AType {
         match self {
             AType::Bool => write!(f, "bool"),
             AType::Str => write!(f, "str"),
+            AType::Char => write!(f, "char"),
             AType::U8 => write!(f, "u8"),
             AType::I8 => write!(f, "i8"),
             AType::U16 => write!(f, "u16"),
@@ -195,6 +197,7 @@ impl AType {
             AType::Int,
             AType::Uint,
             AType::Str,
+            AType::Char,
             AType::Unknown("<unknown>".to_string()),
             AType::Unknown("<none>".to_string()),
             AType::Unknown("Self".to_string()),
@@ -219,6 +222,7 @@ impl AType {
             AType::Int => "int",
             AType::Uint => "uint",
             AType::Str => "str",
+            AType::Char => "char",
             AType::Struct(t) => t.name.as_str(),
             AType::Enum(t) => t.name.as_str(),
             AType::Spec(t) => t.name.as_str(),
@@ -384,6 +388,7 @@ impl AType {
 
             AType::Bool
             | AType::Str
+            | AType::Char
             | AType::U8
             | AType::U16
             | AType::U32

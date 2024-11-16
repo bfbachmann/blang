@@ -50,6 +50,7 @@ pub enum AExprKind {
     IntLiteral(i64, bool),
     UintLiteral(u64),
     StrLiteral(String),
+    CharLiteral(char),
     StructInit(AStructInit),
     EnumInit(AEnumVariantInit),
     TupleInit(ATupleInit),
@@ -100,6 +101,7 @@ impl fmt::Display for AExprKind {
             ),
             AExprKind::UintLiteral(i) => write!(f, "{}", i),
             AExprKind::StrLiteral(s) => write!(f, "{}", s),
+            AExprKind::CharLiteral(c) => write!(f, "{}", c),
             AExprKind::StructInit(s) => write!(f, "{}", s),
             AExprKind::EnumInit(e) => write!(f, "{}", e),
             AExprKind::TupleInit(t) => write!(f, "{}", t),
@@ -187,7 +189,8 @@ impl AExprKind {
             | AExprKind::F64Literal(_, _)
             | AExprKind::IntLiteral(_, _)
             | AExprKind::UintLiteral(_)
-            | AExprKind::StrLiteral(_) => true,
+            | AExprKind::StrLiteral(_)
+            | AExprKind::CharLiteral(_) => true,
 
             // Unary and binary operations are constants if they only operate on constants and have
             // valid constant operators.
@@ -300,6 +303,7 @@ impl AExprKind {
             ),
             AExprKind::UintLiteral(i) => format!("{}", i),
             AExprKind::StrLiteral(s) => format!("{}", s),
+            AExprKind::CharLiteral(c) => format!("{}", c),
             AExprKind::StructInit(s) => s.display(ctx),
             AExprKind::EnumInit(e) => e.display(ctx),
             AExprKind::TupleInit(t) => t.display(ctx),
@@ -924,7 +928,7 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType, is_left_operand: b
         Operator::EqualTo | Operator::NotEqualTo => {
             operand_type.is_numeric()
                 || operand_type.is_ptr()
-                || matches!(operand_type, AType::Bool | AType::Str)
+                || matches!(operand_type, AType::Bool | AType::Str | AType::Char)
         }
 
         // Both operands of "like" and "not like" comparisons should be enums.
@@ -946,6 +950,9 @@ fn is_valid_type_cast(left_type: &AType, right_type: &AType) -> bool {
     match (left_type, right_type) {
         // Casting between numeric types is allowed.
         (a, b) if a.is_numeric() && b.is_numeric() => true,
+
+        // Casting from char types to integer types is allowed.
+        (AType::Char, b) if b.is_integer() => true,
 
         // Casting between pointer types is allowed as long as immutability isn't broken.
         (AType::Pointer(p1), AType::Pointer(p2)) => p1.is_mut || !p2.is_mut,
@@ -1581,6 +1588,12 @@ fn analyze_expr_with_pref(
         Expression::StrLiteral(s) => AExpr {
             kind: AExprKind::StrLiteral(s.value.clone()),
             type_key: ctx.str_type_key(),
+            span,
+        },
+
+        Expression::CharLiteral(c) => AExpr {
+            kind: AExprKind::CharLiteral(c.value),
+            type_key: ctx.char_type_key(),
             span,
         },
 

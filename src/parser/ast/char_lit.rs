@@ -9,55 +9,43 @@ use crate::locatable_impl;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 
-/// Represents a string literal.
+/// Represents a character literal.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct StrLit {
-    pub value: String,
+pub struct CharLit {
+    pub value: char,
     pub span: Span,
 }
 
-impl Hash for StrLit {
+impl Hash for CharLit {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.value.hash(state);
     }
 }
 
-impl Display for StrLit {
+impl Display for CharLit {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, r#""{}""#, self.value)
+        write!(f, "'{}'", self.value)
     }
 }
 
-locatable_impl!(StrLit);
+locatable_impl!(CharLit);
 
-impl StrLit {
-    /// Creates a new string literal with default (zero) start and end positions.
-    #[cfg(test)]
-    pub fn new_with_default_pos(value: &str) -> Self {
-        StrLit {
-            value: value.to_string(),
-            span: Default::default(),
-        }
-    }
-
-    /// Attempts to parse a string literal from the given token sequence.
+impl CharLit {
+    /// Attempts to parse a character literal from the given token sequence.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         match tokens.next() {
             Some(&Token {
-                kind: TokenKind::StrLiteral(ref value),
+                kind: TokenKind::CharLiteral(value),
                 span,
-            }) => Ok(StrLit {
-                value: value.to_string(),
-                span,
-            }),
+            }) => Ok(CharLit { value, span }),
             Some(other) => Err(ParseError::new_with_token(
                 ErrorKind::ExpectedBasicExpr,
-                format_code!("expected string literal, but found {}", other).as_str(),
+                format_code!("expected character literal, but found {}", other).as_str(),
                 other.clone(),
             )),
             None => Err(ParseError::new(
                 ErrorKind::UnexpectedEOF,
-                "expected string literal, but found EOF",
+                "expected character literal, but found EOF",
                 None,
                 Default::default(),
             )),

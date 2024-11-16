@@ -934,6 +934,7 @@ impl ProgramContext {
             | AType::Int
             | AType::Uint
             | AType::Str
+            | AType::Char
             | AType::Generic(_)
             | AType::Unknown(_) => None,
         }
@@ -1546,6 +1547,11 @@ impl ProgramContext {
     /// Returns the type key for the `str` type.
     pub fn str_type_key(&self) -> TypeKey {
         *self.primitive_type_keys.get("str").unwrap()
+    }
+
+    /// Returns the type key for the `char` type.
+    pub fn char_type_key(&self) -> TypeKey {
+        *self.primitive_type_keys.get("char").unwrap()
     }
 
     /// Pushes `scope` onto the stack.
@@ -2384,6 +2390,7 @@ impl ProgramContext {
         match typ {
             AType::Bool
             | AType::Str
+            | AType::Char
             | AType::I8
             | AType::U8
             | AType::I16

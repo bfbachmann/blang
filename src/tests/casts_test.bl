@@ -94,7 +94,13 @@ fn main() {
 
     // String casting.
     {
-        assert(("Test" as *u8)^ == 84, "31")
+        assert(("Test" as *u8)^ == 84, "expected 84")
+    }
+
+    // Char casting.
+    {
+        assert('A' as uint == 65, "expected 65")
+        assert('\u00F8' as u32 == 248, "expected 248")
     }
 
     exit(0)

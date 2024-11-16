@@ -52,7 +52,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             | AExprKind::F64Literal(_, _)
             | AExprKind::IntLiteral(_, _)
             | AExprKind::UintLiteral(_)
-            | AExprKind::StrLiteral(_) => {
+            | AExprKind::StrLiteral(_)
+            | AExprKind::CharLiteral(_) => {
                 panic!("constant expression {} was not marked as constant", expr)
             }
 
@@ -830,8 +831,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 ll_str_ptr.as_basic_value_enum()
             }
 
-            // Casting between numeric types.
-            (src, dst) if src.is_numeric() && dst.is_numeric() => {
+            // Casting between numeric types, or between integers and chars.
+            (src, dst)
+                if src.is_numeric() && dst.is_numeric()
+                    || src.is_integer() && matches!(dst, AType::Char)
+                    || dst.is_integer() && matches!(src, AType::Char) =>
+            {
                 self.gen_numeric_type_cast(ll_src_val, src_expr.type_key, dst_type_key, ll_dst_type)
             }
 

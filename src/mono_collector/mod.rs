@@ -456,7 +456,8 @@ fn walk_expr(collector: &mut MonoItemCollector, expr: AExpr) {
         | AExprKind::F64Literal(_, _)
         | AExprKind::IntLiteral(_, _)
         | AExprKind::UintLiteral(_)
-        | AExprKind::StrLiteral(_) => {}
+        | AExprKind::StrLiteral(_)
+        | AExprKind::CharLiteral(_) => {}
 
         AExprKind::Unknown => {
             panic!("unknown expression kind")

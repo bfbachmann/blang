@@ -8,6 +8,7 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::array::ArrayInit;
 use crate::parser::ast::bool_lit::BoolLit;
+use crate::parser::ast::char_lit::CharLit;
 use crate::parser::ast::f32_lit::F32Lit;
 use crate::parser::ast::f64_lit::F64Lit;
 use crate::parser::ast::from::From;
@@ -58,6 +59,7 @@ pub enum Expression {
     IntLiteral(IntLit),
     UintLiteral(UintLit),
     StrLiteral(StrLit),
+    CharLiteral(CharLit),
     FunctionCall(Box<FuncCall>),
     AnonFunction(Box<Function>),
     Lambda(Box<Function>),
@@ -96,6 +98,7 @@ impl Display for Expression {
             Expression::IntLiteral(i) => write!(f, "{}", i),
             Expression::UintLiteral(i) => write!(f, "{}", i),
             Expression::StrLiteral(s) => write!(f, "{}", s),
+            Expression::CharLiteral(c) => write!(f, "{}", c),
             Expression::FunctionCall(call) => write!(f, "{}", call),
             Expression::AnonFunction(func) => write!(f, "{}", func),
             Expression::Lambda(func) => write!(f, "{}", func),
@@ -144,6 +147,7 @@ impl Locatable for Expression {
             Expression::IntLiteral(i) => i.start_pos(),
             Expression::UintLiteral(i) => i.start_pos(),
             Expression::StrLiteral(string_lit) => string_lit.start_pos(),
+            Expression::CharLiteral(char_lit) => char_lit.start_pos(),
             Expression::FunctionCall(fn_call) => fn_call.start_pos(),
             Expression::AnonFunction(func) => func.start_pos(),
             Expression::Lambda(func) => func.start_pos(),
@@ -178,6 +182,7 @@ impl Locatable for Expression {
             Expression::IntLiteral(i) => i.end_pos(),
             Expression::UintLiteral(i) => i.end_pos(),
             Expression::StrLiteral(string_lit) => string_lit.end_pos(),
+            Expression::CharLiteral(char_lit) => char_lit.end_pos(),
             Expression::FunctionCall(fn_call) => fn_call.end_pos(),
             Expression::AnonFunction(func) => func.end_pos(),
             Expression::Lambda(func) => func.end_pos(),
@@ -212,6 +217,7 @@ impl Locatable for Expression {
             Expression::IntLiteral(i) => i.span(),
             Expression::UintLiteral(i) => i.span(),
             Expression::StrLiteral(string_lit) => string_lit.span(),
+            Expression::CharLiteral(char_lit) => char_lit.span(),
             Expression::FunctionCall(fn_call) => fn_call.span(),
             Expression::AnonFunction(func) => func.span(),
             Expression::Lambda(func) => func.span(),
@@ -571,6 +577,7 @@ fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
         TokenKind::IntLiteral(_) => Expression::IntLiteral(IntLit::from(tokens)?),
         TokenKind::UintLiteral(_) => Expression::UintLiteral(UintLit::from(tokens)?),
         TokenKind::StrLiteral(_) => Expression::StrLiteral(StrLit::from(tokens)?),
+        TokenKind::CharLiteral(_) => Expression::CharLiteral(CharLit::from(tokens)?),
 
         // Composite value initialization.
         TokenKind::LeftBracket => Expression::ArrayInit(Box::new(ArrayInit::from(tokens)?)),

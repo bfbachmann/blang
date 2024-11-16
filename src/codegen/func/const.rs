@@ -142,6 +142,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 ll_str_val.as_basic_value_enum()
             }
 
+            AExprKind::CharLiteral(c) => self
+                .type_converter
+                .get_basic_type(expr.type_key)
+                .into_int_type()
+                .const_int(*c as u64, false)
+                .as_basic_value_enum(),
+
             AExprKind::TupleInit(tuple_init) => {
                 let ll_struct_type = self.type_converter.get_struct_type(tuple_init.type_key);
                 let ll_field_values: Vec<BasicValueEnum> = tuple_init

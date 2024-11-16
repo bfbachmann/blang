@@ -350,6 +350,7 @@ fn search_expr_for_statement(expr: &AExpr, is_match: &impl Fn(&AStatement) -> bo
         | AExprKind::IntLiteral(_, _)
         | AExprKind::UintLiteral(_)
         | AExprKind::StrLiteral(_)
+        | AExprKind::CharLiteral(_)
         | AExprKind::AnonFunction(_)
         | AExprKind::Sizeof(_)
         | AExprKind::Unknown => false,
@@ -446,6 +447,7 @@ fn search_expr(expr: &AExpr, is_match: &impl Fn(&AExpr) -> bool) -> bool {
         | AExprKind::IntLiteral(_, _)
         | AExprKind::UintLiteral(_)
         | AExprKind::StrLiteral(_)
+        | AExprKind::CharLiteral(_)
         | AExprKind::AnonFunction(_)
         | AExprKind::Unknown => false,
     }
