@@ -317,6 +317,36 @@ fn parse_source_files(input_path: &str) -> Result<Vec<Module>, String> {
             Ok(module) => {
                 for used_mod in &module.used_mods {
                     let used_mod_path = PathBuf::from(used_mod.path.raw.as_str());
+
+                    // Make sure the path is actually a file we can access.
+                    if !used_mod_path.exists() {
+                        parse_error_count += 1;
+                        display_err(
+                            format_code!("{} does not exist", used_mod_path.display()).as_str(),
+                            None,
+                            None,
+                            path,
+                            used_mod.path.span(),
+                            false,
+                        );
+
+                        continue;
+                    }
+
+                    if used_mod_path.is_dir() {
+                        parse_error_count += 1;
+                        display_err(
+                            format_code!("{} is not a file", used_mod_path.display()).as_str(),
+                            None,
+                            None,
+                            path,
+                            used_mod.path.span(),
+                            false,
+                        );
+
+                        continue;
+                    }
+
                     if !parsed_mod_paths.contains(&used_mod_path) {
                         files_to_parse.push_back(used_mod_path)
                     }
