@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::analyzer::ast::func::{analyze_fn_sig, AFnSig};
+use crate::analyzer::ast::ext::AExternFn;
+use crate::analyzer::ast::func::{analyze_fn_sig, AFn, AFnSig};
+use crate::analyzer::ast::r#impl::AImpl;
 use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
@@ -19,7 +21,9 @@ use crate::parser::module::Module;
 #[derive(Debug)]
 pub struct AModule {
     pub path: String,
-    pub fns: Vec<AStatement>,
+    pub fns: Vec<AFn>,
+    pub impls: Vec<AImpl>,
+    pub extern_fns: Vec<AExternFn>,
 }
 
 impl AModule {
@@ -36,18 +40,38 @@ impl AModule {
         define_specs(ctx, module);
         define_fns(ctx, module);
 
+        let mut fns = vec![];
+        let mut impls = vec![];
+        let mut extern_fns = vec![];
+
         // Second pass: fully analyze all program statements.
-        let mut analyzed_statements = vec![];
         for statement in &module.statements {
             match statement {
-                Statement::FunctionDeclaration(_)
-                | Statement::ExternFn(_)
-                | Statement::Const(_)
+                Statement::FunctionDeclaration(_) => match AStatement::from(ctx, &statement) {
+                    AStatement::FunctionDeclaration(func) => {
+                        fns.push(func);
+                    }
+                    _ => unreachable!(),
+                },
+
+                Statement::ExternFn(_) => match AStatement::from(ctx, &statement) {
+                    AStatement::ExternFn(func) => {
+                        extern_fns.push(func);
+                    }
+                    _ => unreachable!(),
+                },
+
+                Statement::Impl(_) => match AStatement::from(ctx, &statement) {
+                    AStatement::Impl(impl_) => {
+                        impls.push(impl_);
+                    }
+                    _ => unreachable!(),
+                },
+
+                Statement::Const(_)
                 | Statement::StructDeclaration(_)
-                | Statement::EnumDeclaration(_)
-                | Statement::Impl(_) => {
-                    let statement = AStatement::from(ctx, &statement);
-                    analyzed_statements.push(statement);
+                | Statement::EnumDeclaration(_) => {
+                    AStatement::from(ctx, &statement);
                 }
 
                 Statement::SpecDeclaration(_) => {
@@ -71,7 +95,9 @@ impl AModule {
 
         AModule {
             path: module.path.clone(),
-            fns: analyzed_statements,
+            fns,
+            impls,
+            extern_fns,
         }
     }
 }

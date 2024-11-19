@@ -205,28 +205,22 @@ pub struct MonoProg {
 pub fn mono_prog(analysis: ProgramAnalysis) -> MonoProg {
     let mut collector = MonoItemCollector::new(analysis.ctx);
 
-    // Collect all the functions and consts up into a map, so we can look them up easily.
+    // Collect all the functions up into a map, so we can look them up easily.
     for module in analysis.analyzed_modules {
-        for statement in module.module.fns {
-            match statement {
-                AStatement::FunctionDeclaration(func) => {
-                    track_fn(&mut collector, &analysis.maybe_main_fn_mangled_name, func);
-                }
+        for func in module.module.fns {
+            track_fn(&mut collector, &analysis.maybe_main_fn_mangled_name, func);
+        }
 
-                AStatement::Impl(impl_) => {
-                    for func in impl_.member_fns {
-                        track_fn(&mut collector, &analysis.maybe_main_fn_mangled_name, func);
-                    }
-                }
-
-                AStatement::ExternFn(extern_fn) => {
-                    collector
-                        .extern_fns
-                        .insert(extern_fn.fn_sig.type_key, extern_fn);
-                }
-
-                _ => {}
+        for impl_ in module.module.impls {
+            for func in impl_.member_fns {
+                track_fn(&mut collector, &analysis.maybe_main_fn_mangled_name, func);
             }
+        }
+
+        for extern_fn in module.module.extern_fns {
+            collector
+                .extern_fns
+                .insert(extern_fn.fn_sig.type_key, extern_fn);
         }
     }
 
