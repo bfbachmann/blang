@@ -19,10 +19,6 @@ pub struct MonoItem {
     pub type_key: TypeKey,
     /// The type mappings that map generic function parameter types to their concrete types.
     pub type_mappings: HashMap<TypeKey, TypeKey>,
-    /// The index of the parent MonoItem (the function that calls this one).
-    pub parent_index: usize,
-    /// The indices of the children MonoItems (the functions that this function calls).
-    pub child_indices: Vec<usize>,
 }
 
 impl PartialEq for MonoItem {
@@ -75,8 +71,6 @@ impl MonoItemCollector {
         let root_item = MonoItem {
             type_key: 0,
             type_mappings: Default::default(),
-            parent_index: 0,
-            child_indices: vec![],
         };
 
         MonoItemCollector {
@@ -111,8 +105,6 @@ impl MonoItemCollector {
     fn collect_item(&mut self, item: MonoItem) -> usize {
         // Update the parent item's children with the collected item's index.
         let new_index = self.complete_mono_items.len();
-        let parent = self.complete_mono_items.get_mut(item.parent_index).unwrap();
-        parent.child_indices.push(new_index);
 
         // Insert the collected item and return its index.
         self.complete_mono_items.push(item);
@@ -126,20 +118,28 @@ impl MonoItemCollector {
             *v = self.map_type_key(*v);
         }
 
-        // Include type mappings from parent contexts.
         let parent_item = self.complete_mono_items.get(self.cur_item_index).unwrap();
-        for (k, v) in &parent_item.type_mappings {
-            // Don't overwrite mappings from child contexts.
-            if !type_mappings.contains_key(k) {
-                type_mappings.insert(*k, *v);
+        let func = self.fns.get(&type_key).unwrap();
+        let is_nested = self.nested_fns.contains(&type_key);
+        let has_params = func.signature.is_parameterized();
+        let has_poly_impl_type = func
+            .signature
+            .maybe_impl_type_key
+            .is_some_and(|impl_tk| self.get_type(impl_tk).params().is_some());
+
+        // Include type mappings from parent contexts if the item could possibly need them.
+        if is_nested || has_params || has_poly_impl_type {
+            for (k, v) in &parent_item.type_mappings {
+                // Don't overwrite mappings from child contexts.
+                if !type_mappings.contains_key(k) {
+                    type_mappings.insert(*k, *v);
+                }
             }
         }
 
         let item = MonoItem {
             type_key,
             type_mappings,
-            parent_index: self.cur_item_index,
-            child_indices: vec![],
         };
 
         // Don't queue the item if it has already been queued or is identical to its parent (a
@@ -259,14 +259,10 @@ fn track_fn(
     maybe_main_fn_mangled_name: &Option<String>,
     func: AFn,
 ) {
-    if let Some(main_fn_name) = maybe_main_fn_mangled_name {
-        if collector.incomplete_mono_items.is_empty()
-            && &func.signature.mangled_name == main_fn_name
-        {
-            collector.queue_item(func.signature.type_key, HashMap::new());
-        }
+    let should_queue = if let Some(main_fn_name) = maybe_main_fn_mangled_name {
+        collector.incomplete_mono_items.is_empty() && &func.signature.mangled_name == main_fn_name
     } else {
-        let should_queue = match func.signature.maybe_impl_type_key {
+        match func.signature.maybe_impl_type_key {
             // Don't queue parameterized functions.
             _ if func.signature.is_parameterized() => false,
 
@@ -276,14 +272,15 @@ fn track_fn(
             // The function is not parameterized and is not a member function, so we should
             // queue it.
             None => true,
-        };
-
-        if should_queue {
-            collector.queue_item(func.signature.type_key, HashMap::new());
         }
-    }
+    };
 
+    let fn_tk = func.signature.type_key;
     collector.insert_fn(func, false);
+
+    if should_queue {
+        collector.queue_item(fn_tk, HashMap::new());
+    }
 }
 
 fn walk_item(collector: &mut MonoItemCollector, index: usize) {
@@ -307,11 +304,11 @@ fn walk_statement(collector: &mut MonoItemCollector, statement: AStatement) {
         }
 
         AStatement::FunctionDeclaration(func) => {
+            collector.insert_fn(func.clone(), true);
+
             if !func.signature.is_parameterized() {
                 collector.queue_item(func.signature.type_key, HashMap::new());
             }
-
-            collector.insert_fn(func.clone(), true);
         }
 
         AStatement::Closure(closure) => {
@@ -424,8 +421,9 @@ fn walk_expr(collector: &mut MonoItemCollector, expr: AExpr) {
             walk_expr(collector, call.fn_expr);
         }
         AExprKind::AnonFunction(func) => {
-            collector.queue_item(func.signature.type_key, HashMap::new());
+            let fn_tk = func.signature.type_key;
             collector.insert_fn(*func, true);
+            collector.queue_item(fn_tk, HashMap::new());
         }
         AExprKind::UnaryOperation(_, operand) => {
             walk_expr(collector, *operand);
@@ -487,8 +485,8 @@ fn walk_type_key(collector: &mut MonoItemCollector, type_key: TypeKey) {
     match fn_sig.maybe_impl_type_key {
         Some(impl_tk) => {
             // Check if the function is a method on a monomorphized type.
-            let impl_tk = collector.map_type_key(impl_tk);
-            let impl_tk = match collector.ctx.type_monomorphizations.get(&impl_tk) {
+            let mapped_impl_tk = collector.map_type_key(impl_tk);
+            let poly_impl_tk = match collector.ctx.type_monomorphizations.get(&mapped_impl_tk) {
                 Some(mono) => {
                     for replaced_param in &mono.replaced_params {
                         type_mappings.insert(
@@ -499,11 +497,11 @@ fn walk_type_key(collector: &mut MonoItemCollector, type_key: TypeKey) {
 
                     mono.poly_type_key
                 }
-                None => impl_tk,
+                None => mapped_impl_tk,
             };
 
             // Nothing to do if this is a method on a primitive type (i.e. intrinsic).
-            if collector.get_type(impl_tk).is_primitive() {
+            if collector.get_type(poly_impl_tk).is_primitive() {
                 return;
             }
 
@@ -512,14 +510,15 @@ fn walk_type_key(collector: &mut MonoItemCollector, type_key: TypeKey) {
                 Some(spec_tk) => {
                     let fn_tk = collector
                         .ctx
-                        .get_member_fn_from_spec_impl(impl_tk, spec_tk, fn_sig.name.as_str())
+                        .get_member_fn_from_spec_impl(poly_impl_tk, spec_tk, fn_sig.name.as_str())
                         .expect(
                             format!(
-                                "function `{}` should exist on type {impl_tk} for spec {spec_tk}",
+                                "function `{}` should exist on type {poly_impl_tk} for spec {spec_tk}",
                                 fn_sig.name
                             )
                             .as_str(),
                         );
+
                     collector.queue_item(fn_tk, type_mappings);
                 }
                 None => {
@@ -529,7 +528,7 @@ fn walk_type_key(collector: &mut MonoItemCollector, type_key: TypeKey) {
                     // case there is nothing to queue.
                     if let Some(fn_tk) = collector
                         .ctx
-                        .get_default_member_fn(impl_tk, fn_sig.name.as_str())
+                        .get_default_member_fn(poly_impl_tk, fn_sig.name.as_str())
                     {
                         collector.queue_item(fn_tk, type_mappings);
                     }
