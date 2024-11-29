@@ -58,42 +58,19 @@ impl AStructType {
     /// Performs semantic analysis on a struct type declaration. Note that this will also
     /// recursively analyze any types contained in the struct. On success, the struct type info will
     /// be stored in the program context.
-    /// If `anon` is true, the struct type is expected to be declared inline without a type
-    /// name.
-    pub fn from(ctx: &mut ProgramContext, struct_type: &StructType, anon: bool) -> Self {
-        if !anon {
-            if struct_type.name.is_empty() {
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::MissingTypeName,
-                    "struct types declared in this context must have names",
-                    struct_type,
-                ));
-            }
-
-            // Check if the struct type is already defined in the program context. This will be the
-            // case if we've already analyzed it in the process of analyzing another type that
-            // contains this type.
-            if let Some(a_struct) = ctx.get_struct_type(None, struct_type.name.as_str()) {
-                return a_struct.clone();
-            }
-        } else if !struct_type.name.is_empty() {
-            ctx.insert_err(
-                AnalyzeError::new(
-                    ErrorKind::UnexpectedTypeName,
-                    "inline struct type definitions cannot have type names",
-                    struct_type,
-                )
-                .with_help(
-                    format_code!("Consider removing the type name {}.", struct_type.name).as_str(),
-                ),
-            );
+    pub fn from(ctx: &mut ProgramContext, struct_type: &StructType, is_in_fn: bool) -> Self {
+        // Check if the struct type is already defined in the program context. This will be the
+        // case if we've already analyzed it in the process of analyzing another type that
+        // contains this type.
+        if let Some(a_struct) = ctx.get_struct_type(None, struct_type.name.as_str()) {
+            return a_struct.clone();
         }
 
         // Before analyzing struct field types, we'll prematurely add this (currently-empty) struct
         // type to the program context. This way, if any of the field types make use of this struct
         // type, we won't get into an infinitely recursive type resolution cycle. When we're done
         // analyzing this struct type, the mapping will be updated in the program context.
-        let mangled_name = ctx.mangle_name(None, None, None, struct_type.name.as_str(), true);
+        let mangled_name = ctx.mangle_name(None, None, None, struct_type.name.as_str(), is_in_fn);
         let mut a_struct_type = AStructType {
             name: struct_type.name.clone(),
             mangled_name: mangled_name.clone(),

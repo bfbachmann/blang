@@ -103,7 +103,7 @@ impl StructType {
     ///     }
     ///
     /// where
-    ///  - `name` is the struct type name (optional)
+    ///  - `name` is the struct type name
     ///  - `params` are generic parameters (optional)
     ///  - `type` is the struct field type
     ///  - `field` is the struct field name

@@ -128,11 +128,11 @@ impl AStatement {
             Statement::Yield(yld) => AStatement::Yield(AYield::from(ctx, yld)),
 
             Statement::StructDeclaration(s) => {
-                AStatement::StructTypeDeclaration(AStructType::from(ctx, &s, false))
+                AStatement::StructTypeDeclaration(AStructType::from(ctx, &s, true))
             }
 
             Statement::EnumDeclaration(e) => {
-                AStatement::EnumTypeDeclaration(AEnumType::from(ctx, &e))
+                AStatement::EnumTypeDeclaration(AEnumType::from(ctx, &e, true))
             }
 
             Statement::Impl(impl_) => AStatement::Impl(AImpl::from(ctx, &impl_)),

@@ -214,6 +214,7 @@ struct ModuleContext {
     /// Maps mangled function names to the type keys of analyzed function signatures.
     fn_types: HashMap<String, TypeKey>,
     /// Maps function names to analyzed functions.
+    // TODO: Remove this field. We really should not need this to find existing functions.
     funcs: HashMap<String, AFn>,
     /// Maps constant names to their values.
     const_values: HashMap<String, AExpr>,

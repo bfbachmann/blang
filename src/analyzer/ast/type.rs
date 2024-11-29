@@ -168,7 +168,7 @@ impl AType {
             return AType::Struct(AStructType::from(ctx, &struct_type.clone(), false));
         }
         if let Some(enum_type) = ctx.get_unchecked_enum_type(type_name) {
-            return AType::Enum(AEnumType::from(ctx, &enum_type.clone()));
+            return AType::Enum(AEnumType::from(ctx, &enum_type.clone(), false));
         }
 
         ctx.insert_err(AnalyzeError::new(

@@ -2,9 +2,11 @@ use std::collections::HashMap;
 
 use crate::analyzer::ast::ext::AExternFn;
 use crate::analyzer::ast::func::{analyze_fn_sig, AFn, AFnSig};
+use crate::analyzer::ast::r#const::AConst;
+use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#impl::AImpl;
+use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::spec::ASpecType;
-use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_containment::{check_enum_containment, check_struct_containment};
@@ -33,61 +35,53 @@ impl AModule {
         // create unique identifiers for symbols in this module during analysis.
         ctx.set_cur_mod(&module);
 
-        // Analyze the module now that dependencies have all been analyzed.
         // First pass: define types and functions in the module without analyzing them yet.
-        define_impls(ctx, module);
-        define_consts(ctx, module);
-        define_types(ctx, module);
-        define_specs(ctx, module);
-        define_fns(ctx, module);
+        define_symbols(ctx, module);
+
+        // Second pass: analyze specs and function signatures.
+        analyze_specs(ctx, module);
+        analyze_fn_sigs(ctx, module);
 
         let mut fns = vec![];
         let mut impls = vec![];
         let mut extern_fns = vec![];
 
-        // Second pass: fully analyze all program statements.
+        // Third pass: fully analyze all program statements.
         for statement in &module.statements {
             match statement {
-                Statement::FunctionDeclaration(_) => match AStatement::from(ctx, &statement) {
-                    AStatement::FunctionDeclaration(func) => {
-                        fns.push(func);
-                    }
-                    _ => unreachable!(),
-                },
-
-                Statement::ExternFn(_) => match AStatement::from(ctx, &statement) {
-                    AStatement::ExternFn(func) => {
-                        extern_fns.push(func);
-                    }
-                    _ => unreachable!(),
-                },
-
-                Statement::Impl(_) => match AStatement::from(ctx, &statement) {
-                    AStatement::Impl(impl_) => {
-                        impls.push(impl_);
-                    }
-                    _ => unreachable!(),
-                },
-
-                Statement::Const(_)
-                | Statement::StructDeclaration(_)
-                | Statement::EnumDeclaration(_) => {
-                    AStatement::from(ctx, &statement);
+                Statement::FunctionDeclaration(func) => {
+                    let a_fn = AFn::from(ctx, func);
+                    ctx.insert_fn(a_fn.clone());
+                    fns.push(a_fn);
                 }
 
-                Statement::SpecDeclaration(_) => {
-                    // We can safely skip specs here because they'll be full analyzed in
-                    // `analyze_specs`.
+                Statement::ExternFn(extern_fn) => {
+                    extern_fns.push(AExternFn::from(ctx, extern_fn));
                 }
 
-                Statement::Use(_) => {
-                    // We can skip `use` statements since they're handled in `analyze_module`.
+                Statement::Impl(impl_) => {
+                    impls.push(AImpl::from(ctx, impl_));
                 }
+
+                Statement::Const(const_) => {
+                    AConst::from(ctx, const_);
+                }
+
+                Statement::StructDeclaration(struct_type) => {
+                    AStructType::from(ctx, struct_type, false);
+                }
+
+                Statement::EnumDeclaration(enum_type) => {
+                    AEnumType::from(ctx, enum_type, false);
+                }
+
+                // These statements should already have been analyzed above.
+                Statement::SpecDeclaration(_) | Statement::Use(_) => {}
 
                 other => {
                     ctx.insert_err(AnalyzeError::new(
                         ErrorKind::InvalidStatement,
-                        "expected use, type, constant, spec, or function declaration",
+                        "statement not valid in this context",
                         other,
                     ));
                 }
@@ -103,14 +97,22 @@ impl AModule {
     }
 }
 
-/// Defines top-level types and specs in the program context without deeply analyzing their fields,
-/// so they can be referenced later. This will simply check for type name collisions and
-/// containment cycles. We do this before fully analyzing types to prevent infinite recursion.
-fn define_types(ctx: &mut ProgramContext, module: &Module) {
-    // First pass: Define all types without analyzing their fields. In this pass, we will only
-    // check that there are no type name collisions.
+/// Walks through statements in the program and inserts information about un-analyzed types, consts,
+/// and impls into the program context so we can look them up and analyzet them later. Then, checks
+/// for type containment cycles and detects illegal types.
+fn define_symbols(ctx: &mut ProgramContext, module: &Module) {
+    // First pass: just insert un-analyzed impls headers, consts, and types so we can look the up
+    // when we need to.
     for statement in &module.statements {
         match statement {
+            Statement::Impl(impl_) => {
+                ctx.insert_unchecked_impl(impl_.typ.clone(), impl_.maybe_spec.clone());
+            }
+
+            Statement::Const(const_decl) => {
+                ctx.try_insert_unchecked_const(const_decl.clone());
+            }
+
             Statement::StructDeclaration(struct_type) => {
                 ctx.try_insert_unchecked_struct_type(struct_type.clone());
             }
@@ -153,35 +155,12 @@ fn define_types(ctx: &mut ProgramContext, module: &Module) {
     }
 }
 
-/// Stores un-analyzed impl headers (the impl type and the optional spec type) in the current
-/// module context so they can be looked up later to figure out if a type implements a spec.
-fn define_impls(ctx: &mut ProgramContext, module: &Module) {
-    for statement in &module.statements {
-        match statement {
-            Statement::Impl(impl_) => {
-                ctx.insert_unchecked_impl(impl_.typ.clone(), impl_.maybe_spec.clone());
-            }
-            _ => {}
-        }
-    }
-}
-
-/// Stores un-analyzed constant declarations in the program context
-/// so they can be fetched and analyzed later when they're used.
-fn define_consts(ctx: &mut ProgramContext, module: &Module) {
-    for statement in &module.statements {
-        if let Statement::Const(const_decl) = statement {
-            ctx.try_insert_unchecked_const(const_decl.clone());
-        }
-    }
-}
-
 /// Analyzes all specs declared in the module.
-fn define_specs(ctx: &mut ProgramContext, module: &Module) {
+fn analyze_specs(ctx: &mut ProgramContext, module: &Module) {
     for statement in &module.statements {
         match statement {
             Statement::SpecDeclaration(spec) => {
-                define_spec(ctx, spec);
+                analyze_spec(ctx, spec);
             }
             _ => {}
         }
@@ -191,7 +170,7 @@ fn define_specs(ctx: &mut ProgramContext, module: &Module) {
 /// Analyzes all top-level function signatures (this includes those inside specs) and defines them
 /// in the program context so they can be referenced later. This will not perform any analysis of
 /// function bodies.
-fn define_fns(ctx: &mut ProgramContext, module: &Module) {
+fn analyze_fn_sigs(ctx: &mut ProgramContext, module: &Module) {
     for statement in &module.statements {
         match statement {
             Statement::FunctionDeclaration(func) => {
@@ -427,7 +406,7 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     ctx.insert_impl(impl_type_key, maybe_spec_tk, fn_type_keys);
 }
 
-fn define_spec(ctx: &mut ProgramContext, spec: &Spec) {
+fn analyze_spec(ctx: &mut ProgramContext, spec: &Spec) {
     // Make sure this spec name is not a duplicate.
     if ctx.get_spec_type(None, spec.name.as_str()).is_some() {
         ctx.insert_err(AnalyzeError::new(
