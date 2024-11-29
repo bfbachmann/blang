@@ -6,7 +6,7 @@ use {Allocator}: "std/mem/allocator.bl"
 
 /// Performs buffered writes to a file given its descriptor.
 pub struct FileWriter {
-    buf_writer: Buffered[BaseFileWriter]
+    buf_writer: Buffered[UnbufferedFileWriter]
 }
 
 impl FileWriter {
@@ -14,7 +14,7 @@ impl FileWriter {
     /// with the given file descriptor.
     pub fn new(al: *mut Allocator, fd: uint) -> FileWriter {
         return FileWriter{
-            buf_writer: Buffered[BaseFileWriter].new(al, BaseFileWriter{fd: fd})
+            buf_writer: Buffered[UnbufferedFileWriter].new(al, UnbufferedFileWriter{fd: fd})
         }
     }
 
@@ -44,11 +44,11 @@ impl FileWriter: Write {
 }
 
 /// Writes directly to a file.
-struct BaseFileWriter {
+struct UnbufferedFileWriter {
     fd: uint
 }
 
-impl BaseFileWriter: Write {
+impl UnbufferedFileWriter: Write {
     fn write(*mut self, bytes: Slice[u8]) {
         @io.write(self^.fd, bytes.ptr(), bytes.len())
     }
