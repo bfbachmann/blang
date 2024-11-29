@@ -35,6 +35,7 @@ impl AModule {
 
         // Analyze the module now that dependencies have all been analyzed.
         // First pass: define types and functions in the module without analyzing them yet.
+        define_impls(ctx, module);
         define_consts(ctx, module);
         define_types(ctx, module);
         define_specs(ctx, module);
@@ -148,6 +149,19 @@ fn define_types(ctx: &mut ProgramContext, module: &Module) {
             ctx.remove_unchecked_struct_type(type_name.as_str());
             ctx.remove_unchecked_enum_type(type_name.as_str());
             ctx.insert_invalid_type_name(type_name);
+        }
+    }
+}
+
+/// Stores un-analyzed impl headers (the impl type and the optional spec type) in the current
+/// module context so they can be looked up later to figure out if a type implements a spec.
+fn define_impls(ctx: &mut ProgramContext, module: &Module) {
+    for statement in &module.statements {
+        match statement {
+            Statement::Impl(impl_) => {
+                ctx.insert_unchecked_impl(impl_.typ.clone(), impl_.maybe_spec.clone());
+            }
+            _ => {}
         }
     }
 }

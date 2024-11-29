@@ -25,6 +25,8 @@ use crate::parser::ast::r#enum::EnumType;
 use crate::parser::ast::r#struct::StructType;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::spec::Spec;
+use crate::parser::ast::symbol::Symbol;
+use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::module::Module;
 
 #[derive(Debug, Hash, Clone, PartialEq, Eq)]
@@ -207,6 +209,8 @@ struct ModuleContext {
     unchecked_specs: HashMap<String, Spec>,
     /// Maps constant names to un-analyzed constant values.
     unchecked_consts: HashMap<String, Const>,
+    // Contains impl types and their specs for all unchecked impls blocks.
+    unchecked_impls: Vec<(UnresolvedType, Option<Symbol>)>,
     /// Maps mangled function names to the type keys of analyzed function signatures.
     fn_types: HashMap<String, TypeKey>,
     /// Maps function names to analyzed functions.
@@ -239,6 +243,7 @@ impl ModuleContext {
             unchecked_enum_types: Default::default(),
             unchecked_specs: Default::default(),
             unchecked_consts: Default::default(),
+            unchecked_impls: vec![],
             fn_types: Default::default(),
             funcs: Default::default(),
             const_values: Default::default(),
@@ -477,7 +482,7 @@ impl ProgramContext {
     /// Checks that the given type implements the set of specs on the given
     /// generic type. Returns type keys for specs not implemented by the type.
     pub fn get_missing_spec_impls(
-        &self,
+        &mut self,
         type_key: TypeKey,
         generic_type_key: TypeKey,
     ) -> Vec<TypeKey> {
@@ -488,16 +493,18 @@ impl ProgramContext {
             .spec_type_keys;
         let is_primitive = self.must_get_type(type_key).is_primitive();
 
-        for spec_type_key in spec_type_keys {
+        for spec_type_key in spec_type_keys.clone() {
             // TODO: Remove Clone check hack. Primitive types should actually implement clone in
             // some intrinsics module.
-            let spec_is_clone = self.must_get_type(*spec_type_key).to_spec_type().name == "Clone";
+            let spec_is_clone = self.must_get_type(spec_type_key).to_spec_type().name == "Clone";
             if is_primitive && spec_is_clone {
                 continue;
             }
 
-            if !self.type_has_spec_impl(type_key, *spec_type_key) {
-                missing_spec_type_keys.push(*spec_type_key);
+            if !self.type_has_spec_impl(type_key, spec_type_key)
+                && !self.type_has_unchecked_spec_impl(type_key, spec_type_key)
+            {
+                missing_spec_type_keys.push(spec_type_key);
             }
         }
 
@@ -505,10 +512,36 @@ impl ProgramContext {
     }
 
     /// Returns true if the type with the given key implements the spec with the given key.
-    pub fn type_has_spec_impl(&self, type_key: TypeKey, spec_type_key: TypeKey) -> bool {
+    pub fn type_has_spec_impl(&mut self, type_key: TypeKey, spec_type_key: TypeKey) -> bool {
         self.type_impls
             .get(&type_key)
             .is_some_and(|i| i.spec_impls.contains_key(&spec_type_key))
+    }
+
+    /// Returns true if type given type has an impl for the given spec that has not yet been
+    /// analyzed.
+    fn type_has_unchecked_spec_impl(&mut self, type_key: TypeKey, spec_type_key: TypeKey) -> bool {
+        // We haven't yet analyzed an impl block on the type for the given spec, so let's see
+        // if it appears in the unchecked impls.
+        if self.type_declared_in_cur_mod(type_key) {
+            // TODO: this is expensive, we should only have to do it once. I'm not going to bother
+            // fixing it for now, though, because it should be rare that this is needed anyway.
+            for (impl_type, maybe_spec_type) in self.cur_mod_ctx().unchecked_impls.clone() {
+                if let Some(spec) = maybe_spec_type {
+                    let impl_tk = self.resolve_maybe_polymorphic_type(&Type::Unresolved(impl_type));
+                    if impl_tk != type_key {
+                        continue;
+                    }
+
+                    let impl_spec_tk = self.resolve_type(&spec.as_unresolved_type());
+                    if impl_spec_tk == spec_type_key {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
     }
 
     /// Returns a mapping from error start position to the error that occurred there.
@@ -1645,6 +1678,16 @@ impl ProgramContext {
         }
 
         mod_ctx.unchecked_consts.insert(name, const_decl);
+    }
+
+    /// Inserts an un-analyzed impl header (the impl type and optional spec being implemented)
+    /// into the current module context so we can look it up later to see if that type implements
+    /// that spec. That lookup should only be necessary if we're trying to figure out if a type
+    /// implements a spec before we've analyzed the impl where the spec is implemented for the type.
+    pub fn insert_unchecked_impl(&mut self, impl_type: UnresolvedType, maybe_spec: Option<Symbol>) {
+        self.cur_mod_ctx_mut()
+            .unchecked_impls
+            .push((impl_type, maybe_spec));
     }
 
     /// Removes the un-analyzed struct type with the given name from the current

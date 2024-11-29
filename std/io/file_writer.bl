@@ -4,18 +4,6 @@ use {Slice}: "std/types/slice.bl"
 use {Buffered}: "std/io/buffer.bl"
 use {Allocator}: "std/mem/allocator.bl"
 
-// TODO: Move this struct definition to the bottom of this file. It's up here
-// at the moment to work around a bug in the compiler.
-struct BaseFileWriter {
-    fd: uint
-}
-
-impl BaseFileWriter: Write {
-    fn write(*mut self, bytes: Slice[u8]) {
-        @io.write(self^.fd, bytes.ptr(), bytes.len())
-    }
-}
-
 /// Performs buffered writes to a file given its descriptor.
 pub struct FileWriter {
     buf_writer: Buffered[BaseFileWriter]
@@ -52,5 +40,16 @@ impl FileWriter: Write {
     /// for the data, it will be flushed. Otherwise, flushes will be avoided.
     pub fn write(*mut self, bytes: Slice[u8]) {
         self^.buf_writer.write(bytes)
+    }
+}
+
+/// Writes directly to a file.
+struct BaseFileWriter {
+    fd: uint
+}
+
+impl BaseFileWriter: Write {
+    fn write(*mut self, bytes: Slice[u8]) {
+        @io.write(self^.fd, bytes.ptr(), bytes.len())
     }
 }

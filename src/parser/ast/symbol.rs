@@ -8,6 +8,7 @@ use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::r#type::Type;
+use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::ParseResult;
 use crate::parser::module::Module;
 
@@ -141,5 +142,10 @@ impl Symbol {
                 end_pos: Module::prev_position(tokens),
             },
         })
+    }
+
+    /// Returns the symbol as an unresolved type.
+    pub fn as_unresolved_type(&self) -> Type {
+        Type::Unresolved(UnresolvedType::from_symbol(self.clone()))
     }
 }
