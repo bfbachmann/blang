@@ -1848,7 +1848,7 @@ mod tests {
 
         // Add the function and its type to the context so they can be retrieved when analyzing
         // the expression that calls the function.
-        ctx.insert_fn(a_fn.clone());
+        ctx.insert_fn(a_fn.signature.clone());
         ctx.insert_type(AType::from_fn_sig(a_fn.signature.clone()));
 
         // Analyze the function call expression.
@@ -1905,7 +1905,7 @@ mod tests {
 
         // Add the function and its type to the context, so they can be retrieved when analyzing
         // the expression that calls the function.
-        ctx.insert_fn(a_fn.clone());
+        ctx.insert_fn(a_fn.signature.clone());
         ctx.insert_type(AType::from_fn_sig(a_fn.signature.clone()));
 
         // Analyze the function call expression.
@@ -2004,7 +2004,7 @@ mod tests {
 
         // Add the function and its type to the context, so they can be retrieved when analyzing
         // the expression that calls the function.
-        ctx.insert_fn(a_fn.clone());
+        ctx.insert_fn(a_fn.signature.clone());
         ctx.insert_type(AType::from_fn_sig(a_fn.signature.clone()));
 
         // Analyze the function call expression.
@@ -2101,7 +2101,7 @@ mod tests {
 
         // Add the function and its type to the context so they can be retrieved when analyzing
         // the expression that calls the function.
-        ctx.insert_fn(a_fn.clone());
+        ctx.insert_fn(a_fn.signature.clone());
         ctx.insert_type(AType::from_fn_sig(a_fn.signature.clone()));
 
         // Analyze the function call expression.

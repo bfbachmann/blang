@@ -92,7 +92,7 @@ impl AStatement {
                 // Analyze the function and add it to the program context so we can reference it
                 // later.
                 let a_fn = AFn::from(ctx, fn_decl);
-                ctx.insert_fn(a_fn.clone());
+                ctx.insert_fn(a_fn.signature.clone());
                 AStatement::FunctionDeclaration(a_fn)
             }
 

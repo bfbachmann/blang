@@ -3,7 +3,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::analyzer::ast::array::AArrayType;
 use crate::analyzer::ast::expr::AExpr;
-use crate::analyzer::ast::func::{AFn, AFnSig};
+use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::generic::AGenericType;
 use crate::analyzer::ast::params::{AParam, AParams};
 use crate::analyzer::ast::pointer::APointerType;
@@ -213,9 +213,9 @@ struct ModuleContext {
     unchecked_impls: Vec<(UnresolvedType, Option<Symbol>)>,
     /// Maps mangled function names to the type keys of analyzed function signatures.
     fn_types: HashMap<String, TypeKey>,
-    /// Maps function names to analyzed functions.
-    // TODO: Remove this field. We really should not need this to find existing functions.
-    funcs: HashMap<String, AFn>,
+    /// Maps function names to analyzed function signatures only for regular functions (i.e. not
+    /// function expressions, types, or member functions).
+    funcs: HashMap<String, AFnSig>,
     /// Maps constant names to their values.
     const_values: HashMap<String, AExpr>,
     /// Maps struct type name to struct type key.
@@ -2320,15 +2320,15 @@ impl ProgramContext {
 
     /// Adds the given function to the program context, so it can be looked up by full name in the
     /// future.
-    pub fn insert_fn(&mut self, func: AFn) {
+    pub fn insert_fn(&mut self, sig: AFnSig) {
         self.cur_mod_ctx_mut()
             .funcs
-            .insert(func.signature.mangled_name.clone(), func);
+            .insert(sig.mangled_name.clone(), sig);
     }
 
-    /// Tries to locate and return the function with the given full name in the
+    /// Tries to locate and return the signature of the function with the given full name in the
     /// current module context.
-    pub fn get_fn(&self, maybe_mod_name: Option<&String>, name: &str) -> Option<&AFn> {
+    pub fn get_fn(&self, maybe_mod_name: Option<&String>, name: &str) -> Option<&AFnSig> {
         let mod_ctx = self.get_mod_ctx(maybe_mod_name);
         mod_ctx.funcs.get(name)
     }

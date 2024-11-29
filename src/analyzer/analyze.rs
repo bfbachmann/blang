@@ -69,11 +69,11 @@ pub fn analyze_modules(modules: Vec<Module>) -> ProgramAnalysis {
     analyze_module(&mut ctx, &mods, &mut analyzed_mods, &vec![], &root_mod_path);
 
     // Try to find the name of the main function in the root module.
-    let maybe_main_fn_mangled_name = match ctx.get_fn(
+    let maybe_main_fn_mangled_name = match ctx.get_fn_sig_by_mangled_name(
         None,
         ctx.mangle_name(None, None, None, "main", true).as_str(),
     ) {
-        Some(main_fn) => Some(main_fn.signature.mangled_name.clone()),
+        Some(sig) => Some(sig.mangled_name.clone()),
         None => None,
     };
 

@@ -51,7 +51,7 @@ impl AModule {
             match statement {
                 Statement::FunctionDeclaration(func) => {
                     let a_fn = AFn::from(ctx, func);
-                    ctx.insert_fn(a_fn.clone());
+                    ctx.insert_fn(a_fn.signature.clone());
                     fns.push(a_fn);
                 }
 

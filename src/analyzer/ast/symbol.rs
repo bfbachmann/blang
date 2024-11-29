@@ -356,8 +356,8 @@ fn get_type_key_for_symbol(
         // Search for a function with the given name. Functions take precedence over extern
         // functions.
         let mangled_name_with_path = ctx.mangle_name(maybe_mod_name, None, None, name, true);
-        if let Some(func) = ctx.get_fn(maybe_mod_name, mangled_name_with_path.as_str()) {
-            return (Some(func.signature.type_key), None);
+        if let Some(sig) = ctx.get_fn(maybe_mod_name, mangled_name_with_path.as_str()) {
+            return (Some(sig.type_key), None);
         };
 
         // Search for an extern function with the given name.

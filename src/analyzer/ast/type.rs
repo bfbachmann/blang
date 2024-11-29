@@ -158,8 +158,8 @@ impl AType {
         ) {
             return AType::from_fn_sig(fn_sig.clone());
         }
-        if let Some(fn_type) = ctx.get_fn(maybe_mod_name, type_name) {
-            return AType::from_fn_sig(fn_type.signature.clone());
+        if let Some(sig) = ctx.get_fn(maybe_mod_name, type_name) {
+            return AType::from_fn_sig(sig.clone());
         }
 
         // The type has not yet been analyzed, so make sure the type has at least been
