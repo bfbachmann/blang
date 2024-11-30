@@ -318,47 +318,9 @@ impl AFnSig {
         target_type_key: TypeKey,
         replacement_type_key: TypeKey,
     ) {
-        fn replace_tk(
-            ctx: &mut ProgramContext,
-            tk: &mut TypeKey,
-            target_tk: TypeKey,
-            replacement_tk: TypeKey,
-        ) {
-            if *tk == target_tk {
-                *tk = replacement_tk;
-                return;
-            }
-
-            if let Some(new_tk) =
-                ctx.monomorphize_type(*tk, &HashMap::from([(target_tk, replacement_tk)]))
-            {
-                *tk = new_tk;
-            }
-        }
-
-        // Make type key replacements in the function signature.
-        for arg in &mut self.args {
-            replace_tk(
-                ctx,
-                &mut arg.type_key,
-                target_type_key,
-                replacement_type_key,
-            )
-        }
-
-        if let Some(ret_tk) = &mut self.maybe_ret_type_key {
-            replace_tk(ctx, ret_tk, target_type_key, replacement_type_key);
-        }
-
-        if let Some(impl_tk) = &mut self.maybe_impl_type_key {
-            replace_tk(ctx, impl_tk, target_type_key, replacement_type_key);
-        }
-
-        // Re-mangle the name based on the updated type info.
-        // TODO: Not sure this is right for all cases.
-        self.mangled_name = ctx.remangle_name(
-            self.mangled_name.as_str(),
-            self.maybe_impl_type_key.unwrap(),
+        self.replace_types(
+            ctx,
+            &HashMap::from([(target_type_key, replacement_type_key)]),
         );
 
         // Define the new type in the program context.
@@ -367,7 +329,8 @@ impl AFnSig {
         ctx.replace_type(new_fn_type_key, AType::Function(Box::new(self.clone())));
     }
 
-    pub fn replace_types(
+    /// Replaces type keys in `self` using `type_mappings`.
+    fn replace_types(
         &mut self,
         ctx: &mut ProgramContext,
         type_mappings: &HashMap<TypeKey, TypeKey>,
