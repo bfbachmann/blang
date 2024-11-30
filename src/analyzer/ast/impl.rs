@@ -188,7 +188,7 @@ fn check_spec_impl(
 ) -> (bool, Vec<AnalyzeError>) {
     // Find the spec being referred to.
     let spec_type = match ctx.must_get_type(spec_tk) {
-        AType::Spec(spec_type) => spec_type,
+        AType::Spec(spec_type) => spec_type.clone(),
         _ => {
             return (
                 false,
@@ -207,13 +207,13 @@ fn check_spec_impl(
     let mut missing_fn_names = vec![];
     let mut extra_fn_names: HashSet<String> = HashSet::from_iter(member_fns.keys().cloned());
     for fn_type_key in spec_type.member_fn_type_keys.values() {
-        let spec_fn_sig = ctx.must_get_type(*fn_type_key).to_fn_sig();
+        let spec_fn_sig = ctx.must_get_type(*fn_type_key).to_fn_sig().clone();
 
         // Check if this impl has a function with the same name.
         match member_fns.get(spec_fn_sig.name.as_str()) {
             Some((a_fn, raw_fn)) => {
                 // Make sure the function was defined correctly.
-                if !a_fn.signature.is_same_as(ctx, spec_fn_sig) {
+                if !a_fn.signature.implements(ctx, &spec_fn_sig) {
                     spec_impl_errs.push(
                         AnalyzeError::new(
                             ErrorKind::IncorrectSpecFnInImpl,

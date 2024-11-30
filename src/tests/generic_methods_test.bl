@@ -1,5 +1,10 @@
 use proc: "std/libc/proc.bl"
 use {assert}: "std/backtrace/panic.bl"
+use {Clone}: "std/specs/clone.bl"
+
+spec DoClone {
+    fn do_clone[A: Clone](*self, a: *A) -> A
+}
 
 struct Thing {}
 
@@ -9,8 +14,15 @@ impl Thing {
     }
 }
 
+impl Thing: DoClone {
+    fn do_clone[A: Clone](*self, a: *A) -> A {
+        return a.clone()
+    }
+}
+
 fn main() {
     assert(Thing.test[str]("sup!") == "sup!", "expected 'sup!'")
+    assert(Thing{}.do_clone[int](&1) == 1, "expected 1")
 
     @proc.exit(0)
 }

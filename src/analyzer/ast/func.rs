@@ -247,6 +247,68 @@ impl AFnSig {
         }
     }
 
+    /// Returns true only if `self` is a valid implementation of `other`. This is supposed to be
+    /// used to check if member function `self` correctly implements member function `other` from a
+    /// spec.
+    pub fn implements(&self, ctx: &mut ProgramContext, other: &AFnSig) -> bool {
+        if self.args.len() != other.args.len()
+            || self.maybe_ret_type_key.is_some() != other.maybe_ret_type_key.is_some()
+        {
+            return false;
+        }
+
+        match (&self.params, &other.params) {
+            (Some(these_params), Some(other_params)) => {
+                if these_params.params.len() != other_params.params.len() {
+                    return false;
+                }
+
+                // Check that the params are compatible.
+                let mut type_mappings = HashMap::new();
+                for (this_param, other_param) in
+                    these_params.params.iter().zip(other_params.params.iter())
+                {
+                    let this_param_type = ctx
+                        .must_get_type(this_param.generic_type_key)
+                        .to_generic_type();
+                    let other_param_type = ctx
+                        .must_get_type(other_param.generic_type_key)
+                        .to_generic_type();
+
+                    if this_param_type.spec_type_keys.len() != other_param_type.spec_type_keys.len()
+                    {
+                        return false;
+                    }
+
+                    for (this_spec_tk, other_spec_tk) in this_param_type
+                        .spec_type_keys
+                        .iter()
+                        .zip(other_param_type.spec_type_keys.iter())
+                    {
+                        if this_spec_tk != other_spec_tk {
+                            return false;
+                        }
+                    }
+
+                    type_mappings.insert(this_param.generic_type_key, other_param.generic_type_key);
+                }
+
+                // At this point we know the generic params are compatible, so we can replace
+                // all generic param type keys in this function signature with those of the other
+                // and see if the resulting signature match matches `other`.
+                let mut this = self.clone();
+                this.replace_types(ctx, &type_mappings);
+                return this.is_same_as(ctx, &other);
+            }
+
+            (None, None) => {}
+
+            _ => return false,
+        }
+
+        return self.is_same_as(ctx, other);
+    }
+
     /// Updates this function signature by replacing any instances of the
     /// `target_type_key` inside it with `replacement_type_key`. Also records
     /// the new function signature as a new type in the program context.
@@ -303,6 +365,47 @@ impl AFnSig {
         let new_fn_type_key = ctx.insert_type(AType::Function(Box::new(self.clone())));
         self.type_key = new_fn_type_key;
         ctx.replace_type(new_fn_type_key, AType::Function(Box::new(self.clone())));
+    }
+
+    pub fn replace_types(
+        &mut self,
+        ctx: &mut ProgramContext,
+        type_mappings: &HashMap<TypeKey, TypeKey>,
+    ) {
+        fn replace_tk(
+            ctx: &mut ProgramContext,
+            tk: &mut TypeKey,
+            type_mappings: &HashMap<TypeKey, TypeKey>,
+        ) {
+            if let Some(replacement_tk) = type_mappings.get(tk) {
+                *tk = *replacement_tk;
+                return;
+            }
+
+            if let Some(new_tk) = ctx.monomorphize_type(*tk, type_mappings) {
+                *tk = new_tk;
+            }
+        }
+
+        // Make type key replacements in the function signature.
+        for arg in &mut self.args {
+            replace_tk(ctx, &mut arg.type_key, type_mappings)
+        }
+
+        if let Some(ret_tk) = &mut self.maybe_ret_type_key {
+            replace_tk(ctx, ret_tk, type_mappings);
+        }
+
+        if let Some(impl_tk) = &mut self.maybe_impl_type_key {
+            replace_tk(ctx, impl_tk, type_mappings);
+        }
+
+        // Re-mangle the name based on the updated type info.
+        // TODO: Not sure this is right for all cases.
+        self.mangled_name = ctx.remangle_name(
+            self.mangled_name.as_str(),
+            self.maybe_impl_type_key.unwrap(),
+        );
     }
 
     /// Returns a string containing the human-readable version of this function signature.
