@@ -24,7 +24,7 @@ use crate::parser::ast::r#const::Const;
 use crate::parser::ast::r#enum::EnumType;
 use crate::parser::ast::r#struct::StructType;
 use crate::parser::ast::r#type::Type;
-use crate::parser::ast::spec::Spec;
+use crate::parser::ast::spec::SpecType;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::module::Module;
@@ -206,7 +206,7 @@ struct ModuleContext {
     /// Maps un-analyzed enum names to un-analyzed enums.
     unchecked_enum_types: HashMap<String, EnumType>,
     /// Maps un-analyzed specs names to un-analyzed specs.
-    unchecked_specs: HashMap<String, Spec>,
+    unchecked_specs: HashMap<String, SpecType>,
     /// Maps constant names to un-analyzed constant values.
     unchecked_consts: HashMap<String, Const>,
     // Contains impl types and their specs for all unchecked impls blocks.
@@ -951,9 +951,7 @@ impl ProgramContext {
             AType::Array(_) => self.monomorphize_array_type(type_key, type_mappings),
             AType::Function(_) => self.monomorphize_fn_type(type_key, type_mappings),
             AType::Pointer(_) => self.monomorphize_ptr_type(type_key, type_mappings),
-            AType::Spec(_) => {
-                todo!()
-            }
+            AType::Spec(_) => self.monomorphize_spec_type(type_key, type_mappings),
 
             // These types can't be monomorphized.
             AType::Bool
@@ -990,7 +988,7 @@ impl ProgramContext {
 
         let mut replaced_tks = false;
         for field in &mut struct_type.fields {
-            if self.replace_tk(&mut field.type_key, type_mappings) {
+            if self.replace_tks(&mut field.type_key, type_mappings) {
                 replaced_tks = true;
             }
         }
@@ -1038,7 +1036,7 @@ impl ProgramContext {
         let mut enum_type = self.must_get_type(type_key).to_enum_type().clone();
         for variant in &mut enum_type.variants.values_mut() {
             if let Some(variant_tk) = &mut variant.maybe_type_key {
-                if self.replace_tk(variant_tk, type_mappings) {
+                if self.replace_tks(variant_tk, type_mappings) {
                     replaced_tks = true;
                 }
             }
@@ -1078,19 +1076,19 @@ impl ProgramContext {
         let mut fn_sig = self.must_get_type(type_key).to_fn_sig().clone();
 
         for arg in &mut fn_sig.args {
-            if self.replace_tk(&mut arg.type_key, type_mappings) {
+            if self.replace_tks(&mut arg.type_key, type_mappings) {
                 replaced_tks = true;
             }
         }
 
         if let Some(ret_type_key) = &mut fn_sig.maybe_ret_type_key {
-            if self.replace_tk(ret_type_key, type_mappings) {
+            if self.replace_tks(ret_type_key, type_mappings) {
                 replaced_tks = true;
             }
         }
 
         if let Some(impl_type_key) = &mut fn_sig.maybe_impl_type_key {
-            if self.replace_tk(impl_type_key, type_mappings) {
+            if self.replace_tks(impl_type_key, type_mappings) {
                 replaced_tks = true;
             }
         }
@@ -1139,7 +1137,7 @@ impl ProgramContext {
         let mut tuple_type = self.must_get_type(type_key).to_tuple_type().clone();
         let mut replaced_tks = false;
         for field in &mut tuple_type.fields {
-            if self.replace_tk(&mut field.type_key, type_mappings) {
+            if self.replace_tks(&mut field.type_key, type_mappings) {
                 replaced_tks = true;
             }
         }
@@ -1158,7 +1156,7 @@ impl ProgramContext {
     ) -> Option<TypeKey> {
         let mut array_type = self.must_get_type(type_key).to_array_type().clone();
         if let Some(elem_tk) = &mut array_type.maybe_element_type_key {
-            if self.replace_tk(elem_tk, type_mappings) {
+            if self.replace_tks(elem_tk, type_mappings) {
                 return Some(self.insert_type(AType::Array(array_type)));
             }
         }
@@ -1172,14 +1170,35 @@ impl ProgramContext {
         type_mappings: &HashMap<TypeKey, TypeKey>,
     ) -> Option<TypeKey> {
         let mut ptr_type = self.must_get_type(type_key).to_ptr_type().clone();
-        if self.replace_tk(&mut ptr_type.pointee_type_key, type_mappings) {
+        if self.replace_tks(&mut ptr_type.pointee_type_key, type_mappings) {
             return Some(self.insert_type(AType::Pointer(ptr_type)));
         }
 
         None
     }
 
-    fn replace_tk(&mut self, tk: &mut TypeKey, type_mappings: &HashMap<TypeKey, TypeKey>) -> bool {
+    fn monomorphize_spec_type(
+        &mut self,
+        type_key: TypeKey,
+        type_mappings: &HashMap<TypeKey, TypeKey>,
+    ) -> Option<TypeKey> {
+        let mut spec_type = self.must_get_type(type_key).to_spec_type().clone();
+        let mut replaced_tks = false;
+
+        for fn_tk in spec_type.member_fn_type_keys.values_mut() {
+            if let Some(new_tk) = self.monomorphize_fn_type(*fn_tk, type_mappings) {
+                *fn_tk = new_tk;
+                replaced_tks = true;
+            }
+        }
+
+        match replaced_tks {
+            true => Some(self.insert_type(AType::Spec(spec_type))),
+            false => None,
+        }
+    }
+
+    fn replace_tks(&mut self, tk: &mut TypeKey, type_mappings: &HashMap<TypeKey, TypeKey>) -> bool {
         // Check if we can just replace the type key itself based on the provided mapping.
         if let Some(replacement_tk) = type_mappings.get(tk) {
             *tk = *replacement_tk;
@@ -1205,7 +1224,7 @@ impl ProgramContext {
             let mut param_tks = vec![];
             for replaced_param in &mono.replaced_params {
                 let mut param_tk = replaced_param.replacement_type_key;
-                self.replace_tk(&mut param_tk, type_mappings);
+                self.replace_tks(&mut param_tk, type_mappings);
                 param_tks.push(param_tk);
             }
 
@@ -1332,7 +1351,12 @@ impl ProgramContext {
         // the fact that this type has been monomorphized.
         let mut mono = Monomorphization {
             poly_type_key,
-            mono_type_key: self.unknown_type_key(),
+            // Since we haven't actually computed the monomorphization yet, we'll set its resulting
+            // mono type key to the poly type key for now. This way we'll avoid infinite recursive
+            // monomorphization of the type in cases where is references itself. Later (below),
+            // after the type has been monomorphized, we'll replace all instances of this poly type
+            // key with the correct mono type key.
+            mono_type_key: poly_type_key,
             replaced_params: vec![],
         };
         let mut type_mappings: HashMap<TypeKey, TypeKey> = HashMap::new();
@@ -1394,6 +1418,9 @@ impl ProgramContext {
             // It turns out the type doesn't need monomorphization.
             None => return poly_type_key,
         };
+
+        // TODO: Replace all instances of the polymorphic type key with the new monomorphic type key
+        // now that we've completed the monomorphization.
 
         // Insert the monomorphization so we know we need to generate code
         // for it during codegen.
@@ -1658,7 +1685,7 @@ impl ProgramContext {
 
     /// Tries to insert the un-analyzed spec into the current module context.
     /// Does nothing if the spec has a name that is already used.
-    pub fn try_insert_unchecked_spec(&mut self, spec: Spec) {
+    pub fn try_insert_unchecked_spec(&mut self, spec: SpecType) {
         let name = spec.name.clone();
         if self.check_type_name_not_used(name.as_str(), &spec) {
             self.cur_mod_ctx_mut().unchecked_specs.insert(name, spec);
@@ -2189,11 +2216,6 @@ impl ProgramContext {
         self.cur_mod_ctx().unchecked_enum_types.get(name)
     }
 
-    /// Returns the un-analyzed spec with the given name.
-    pub fn get_unchecked_spec(&self, name: &str) -> Option<&Spec> {
-        self.cur_mod_ctx().unchecked_specs.get(name)
-    }
-
     /// Tries to locate and return the un-analyzed constant with the given name.
     pub fn get_unchecked_const(&self, name: &str) -> Option<&Const> {
         self.cur_mod_ctx().unchecked_consts.get(name)
@@ -2460,7 +2482,9 @@ impl ProgramContext {
                 format!("{}{}", enum_type.name, self.display_param_types(type_key))
             }
 
-            AType::Spec(s) => s.name.clone(),
+            AType::Spec(spec_type) => {
+                format!("{}{}", spec_type.name, self.display_param_types(type_key))
+            }
 
             AType::Tuple(tuple_type) => {
                 let mut s = format!("{{");
@@ -2484,32 +2508,7 @@ impl ProgramContext {
                 None => "[]".to_string(),
             },
 
-            AType::Function(fn_sig) => {
-                let name = fn_sig.name.as_str();
-                let mut s = format!("fn {}", name);
-
-                if let Some(params) = &fn_sig.params {
-                    s += params.display(self).as_str();
-                }
-
-                s += "(";
-
-                for (i, arg) in fn_sig.args.iter().enumerate() {
-                    if i == 0 {
-                        s += format!("{}", arg.display(self)).as_str();
-                    } else {
-                        s += format!(", {}", arg.display(self)).as_str();
-                    }
-                }
-
-                s += ")";
-
-                if let Some(tk) = &fn_sig.maybe_ret_type_key {
-                    s += format!(" -> {}", self.display_type(*tk)).as_str();
-                }
-
-                s
-            }
+            AType::Function(fn_sig) => fn_sig.display(self, true),
 
             AType::Pointer(ptr_type) => format!(
                 "*{}{}",
@@ -2532,7 +2531,12 @@ impl ProgramContext {
         if let Some(mono) = self.type_monomorphizations.get(&type_key) {
             params += "[";
             for (i, replaced_param) in mono.replaced_params.iter().enumerate() {
-                let param_display = self.display_type(replaced_param.replacement_type_key);
+                // Prevent infinite recursion.
+                let param_display = if replaced_param.replacement_type_key == type_key {
+                    self.display_type(replaced_param.param_type_key)
+                } else {
+                    self.display_type(replaced_param.replacement_type_key)
+                };
 
                 match i {
                     0 => {

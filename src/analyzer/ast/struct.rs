@@ -129,7 +129,6 @@ impl AStructType {
         }
 
         // Update the type in the type store now that we've analyzed its fields.
-        let has_params = maybe_params.is_some();
         let a_struct_type = AStructType {
             name: struct_type.name.clone(),
             mangled_name,
@@ -138,7 +137,7 @@ impl AStructType {
         };
         ctx.replace_type(type_key, AType::Struct(a_struct_type.clone()));
 
-        if has_params {
+        if a_struct_type.maybe_params.is_some() {
             // We've analyzed all the fields on this struct, but it's possible that some of the
             // fields had types that were monomorphizations of this struct type. For example, in
             // this struct

@@ -372,9 +372,13 @@ impl AFnSig {
     }
 
     /// Returns a string containing the human-readable version of this function signature.
-    pub fn display(&self, ctx: &ProgramContext) -> String {
-        let name = self.name.as_str();
-        let mut s = format!("fn {}", name);
+    pub fn display(&self, ctx: &ProgramContext, as_type: bool) -> String {
+        let mut s = match as_type {
+            true => "fn ".to_string(),
+            false => {
+                format!("fn {}", self.name)
+            }
+        };
 
         if let Some(params) = &self.params {
             s += params.display(ctx).as_str();
@@ -383,10 +387,15 @@ impl AFnSig {
         s += "(";
 
         for (i, arg) in self.args.iter().enumerate() {
+            let arg_display = match as_type {
+                true => ctx.display_type(arg.type_key),
+                false => arg.display(ctx),
+            };
+
             if i == 0 {
-                s += format!("{}", arg.display(ctx)).as_str();
+                s += format!("{}", arg_display).as_str();
             } else {
-                s += format!(", {}", arg.display(ctx)).as_str();
+                s += format!(", {}", arg_display).as_str();
             }
         }
 
@@ -497,6 +506,6 @@ impl AFn {
 
     /// Returns the human-readable version fo this function.
     pub fn display(&self, ctx: &ProgramContext) -> String {
-        format!("{} {{ ... }}", self.signature.display(ctx))
+        format!("{} {{ ... }}", self.signature.display(ctx, false))
     }
 }

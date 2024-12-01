@@ -31,6 +31,11 @@ fn deref[T](ref: *Ref[T]) -> *mut T {
     return ref^.ptr
 }
 
+// Test monomorphization of parameterized types that refer to themselves.
+struct Thing[T] {
+    f: fn (Thing[T])
+}
+
 fn main() {
     // Test parameterized structs and functions that use them.
     let msg = "test\0"
@@ -45,6 +50,12 @@ fn main() {
     // Check that we can initialize parameterized structs inline.
     let ref = Ref[int]{ptr: &mut 9}
     assert(ref.ptr^ == 9, "expected 9")
+
+    // Just checking that this compiles.
+    // TODO: This is super broken.
+    // let thing = Thing[int]{
+    //     f: fn (thing: Thing[int]) {}
+    // }
 
     exit(0)
 }

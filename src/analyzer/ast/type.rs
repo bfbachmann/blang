@@ -501,6 +501,7 @@ impl AType {
             AType::Function(fn_sig) => fn_sig.params.as_ref(),
             AType::Struct(struct_type) => struct_type.maybe_params.as_ref(),
             AType::Enum(enum_type) => enum_type.maybe_params.as_ref(),
+            AType::Spec(spec_type) => spec_type.maybe_params.as_ref(),
             _ => None,
         }
     }

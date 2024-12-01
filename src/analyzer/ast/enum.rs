@@ -111,7 +111,6 @@ impl AEnumType {
             }
             None => None,
         };
-        let has_params = maybe_params.is_some();
 
         // Update the stored type with the resolved parameters. It's important that we do this
         // before analyzing any fields because the field types may reference this type, in
@@ -167,7 +166,7 @@ impl AEnumType {
         };
         ctx.replace_type(type_key, AType::Enum(a_enum_type.clone()));
 
-        if has_params {
+        if a_enum_type.maybe_params.is_some() {
             // We've analyzed all the variants on this enum, but it's possible that some of the
             // variants had types that were monomorphizations of this enum type. For example, in
             // this enum

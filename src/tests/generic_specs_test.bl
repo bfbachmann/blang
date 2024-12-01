@@ -1,0 +1,29 @@
+use {exit}: "std/libc/proc.bl"
+
+use {assert}: "std/backtrace/panic.bl"
+
+spec Set[T] {
+    fn set(*mut self, t: T)
+}
+
+struct Thing {
+    s: str
+}
+
+impl Thing: Set[str] {
+    fn set(*mut self, s: str) {
+        self^.s = s
+    }
+}
+
+fn do_set[T: Set[str]](t: *mut T, s: str) {
+    t.set(s)
+}
+
+fn main() {
+    let mut thing = Thing{s: "wrong"}
+    do_set[Thing](&mut thing, "new")
+    assert(thing.s == "new", "expected 'new'")
+
+    exit(0)
+}

@@ -41,7 +41,7 @@ fn main() {
         .subcommand_required(true)
         .arg_required_else_help(true)
         .arg(
-            arg!(--time "Dump compile time information to HTML")
+            arg!(--time "Dump compile time information as HTML")
                 .required(false)
                 .action(ArgAction::SetTrue),
         );

@@ -6,6 +6,7 @@ use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#impl::AImpl;
 use crate::analyzer::ast::r#struct::AStructType;
+use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
@@ -15,7 +16,7 @@ use crate::parser::ast::ext::Extern;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#type::Type;
-use crate::parser::ast::spec::Spec;
+use crate::parser::ast::spec::SpecType;
 use crate::parser::ast::statement::Statement;
 use crate::parser::module::Module;
 
@@ -264,75 +265,43 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     let is_default_impl = impl_.maybe_spec.is_none();
     let maybe_spec_tk = match &impl_.maybe_spec {
         Some(spec) => {
-            let maybe_spec_tk = 'find: {
-                // Try to find the analyzed spec type. It might not be there if it has not
-                // yet been analyzed.
-                if let Some(spec_type_key) =
-                    ctx.get_type_key_by_type_name(spec.maybe_mod_name.as_ref(), spec.name.as_str())
-                {
-                    break 'find Some(spec_type_key);
-                }
-
-                // Try to find the un-analyzed spec type and analyze it.
-                if spec.maybe_mod_name.is_none() {
-                    if let Some(unchecked_spec) = ctx.get_unchecked_spec(spec.name.as_str()) {
-                        ASpecType::from(ctx, &unchecked_spec.clone());
-                        let spec_type_key = ctx
-                            .get_type_key_by_type_name(None, spec.name.as_str())
-                            .unwrap();
-
-                        break 'find Some(spec_type_key);
-                    }
-                }
-
-                None
-            };
-
-            match maybe_spec_tk {
-                Some(spec_tk) => {
-                    if ctx.must_get_type(spec_tk).is_spec() {
-                        // Make sure there isn't already an impl defined for this spec on this type.
-                        if ctx.type_has_spec_impl(impl_type_key, spec_tk) {
-                            ctx.insert_err(AnalyzeError::new(
-                                ErrorKind::DuplicateSpecImpl,
-                                format_code!(
-                                    "{} already implements {}",
-                                    ctx.display_type(impl_type_key),
-                                    ctx.display_type(spec_tk),
-                                )
-                                .as_str(),
-                                &Span {
-                                    start_pos: impl_.start_pos().clone(),
-                                    end_pos: impl_.maybe_spec.as_ref().unwrap().span.end_pos,
-                                },
-                            ));
-
-                            None
-                        } else {
-                            Some(spec_tk)
-                        }
-                    } else {
+            // Try to find the analyzed spec type. It might not be there if it has not
+            // yet been analyzed.
+            let spec_tk = ctx.resolve_type(&spec.as_unresolved_type());
+            let spec_type = ctx.must_get_type(spec_tk);
+            match spec_type {
+                AType::Spec(_) => {
+                    // Make sure there isn't already an impl defined for this spec on this type.
+                    if ctx.type_has_spec_impl(impl_type_key, spec_tk) {
                         ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::ExpectedSpec,
+                            ErrorKind::DuplicateSpecImpl,
                             format_code!(
-                                "type {} is not a spec",
-                                ctx.display_type(spec_tk).as_str()
+                                "{} already implements {}",
+                                ctx.display_type(impl_type_key),
+                                ctx.display_type(spec_tk),
                             )
                             .as_str(),
-                            spec,
+                            &Span {
+                                start_pos: impl_.start_pos().clone(),
+                                end_pos: impl_.maybe_spec.as_ref().unwrap().span.end_pos,
+                            },
                         ));
 
                         None
+                    } else {
+                        Some(spec_tk)
                     }
                 }
 
-                None => {
+                AType::Unknown(_) => None,
+
+                _ => {
                     ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::UndefSpec,
-                        format_code!("spec {} not defined", spec.name).as_str(),
+                        ErrorKind::ExpectedSpec,
+                        format_code!("type {} is not a spec", ctx.display_type(spec_tk).as_str())
+                            .as_str(),
                         spec,
                     ));
-
                     None
                 }
             }
@@ -406,7 +375,7 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     ctx.insert_impl(impl_type_key, maybe_spec_tk, fn_type_keys);
 }
 
-fn analyze_spec(ctx: &mut ProgramContext, spec: &Spec) {
+fn analyze_spec(ctx: &mut ProgramContext, spec: &SpecType) {
     // Make sure this spec name is not a duplicate.
     if ctx.get_spec_type(None, spec.name.as_str()).is_some() {
         ctx.insert_err(AnalyzeError::new(

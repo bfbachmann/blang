@@ -20,7 +20,7 @@ use crate::parser::ast::r#struct::StructType;
 use crate::parser::ast::r#use::UsedModule;
 use crate::parser::ast::r#yield::Yield;
 use crate::parser::ast::ret::Ret;
-use crate::parser::ast::spec::Spec;
+use crate::parser::ast::spec::SpecType;
 use crate::parser::ast::var_assign::VariableAssignment;
 use crate::parser::ast::var_dec::VariableDeclaration;
 use crate::parser::error::ParseResult;
@@ -46,7 +46,7 @@ pub enum Statement {
     ExternFn(Extern),
     Const(Const),
     Impl(Impl),
-    SpecDeclaration(Spec),
+    SpecDeclaration(SpecType),
     Use(UsedModule),
 }
 
@@ -303,7 +303,7 @@ impl Statement {
 
             // If the next tokens are `spec` or `pub spec`, it must be a spec declaration.
             (TokenKind::Spec, _) | (TokenKind::Pub, TokenKind::Spec) => {
-                let spec_ = Spec::from(tokens)?;
+                let spec_ = SpecType::from(tokens)?;
                 Ok(Statement::SpecDeclaration(spec_))
             }
 

@@ -52,19 +52,20 @@ impl AParam {
     fn from(ctx: &mut ProgramContext, param: &Param, poly_type_key: TypeKey) -> Self {
         let mut required_spec_type_keys = vec![];
         for required_spec in &param.required_specs {
-            // Make sure the spec exists.
-            match ctx.get_type_key_by_type_name(
-                required_spec.maybe_mod_name.as_ref(),
-                required_spec.name.as_str(),
-            ) {
-                Some(type_key) if ctx.must_get_type(type_key).is_spec() => {
-                    required_spec_type_keys.push(type_key);
+            // Try resolve the spec type.
+            let spec_tk = ctx.resolve_type(&required_spec.as_unresolved_type());
+            let spec_type = ctx.must_get_type(spec_tk);
+            match spec_type {
+                AType::Spec(_) => {
+                    required_spec_type_keys.push(spec_tk);
                 }
+
+                AType::Unknown(_) => {}
 
                 _ => {
                     ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::UndefSpec,
-                        format_code!("spec {} is not defined", required_spec).as_str(),
+                        ErrorKind::ExpectedSpec,
+                        format_code!("type {} is not a spec", ctx.display_type(spec_tk)).as_str(),
                         required_spec,
                     ));
                 }

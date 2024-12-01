@@ -875,7 +875,7 @@ mod tests {
             fn test[T: Thing](t: T) {}
             "#,
         );
-        check_result(result, Some(ErrorKind::UndefSpec));
+        check_result(result, Some(ErrorKind::UndefType));
     }
 
     #[test]
@@ -2001,7 +2001,7 @@ mod tests {
             impl BlaStruct: Bla {}
             "#,
         );
-        check_result(result, Some(ErrorKind::UndefSpec));
+        check_result(result, Some(ErrorKind::UndefType));
     }
 
     #[test]

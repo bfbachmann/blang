@@ -96,12 +96,12 @@ impl AFnCall {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::WrongNumberOfArgs,
                 format!(
-                    "{} expects {} {}, but found {}",
-                    format_code!("{}", fn_type.display(ctx)),
+                    "{} expects {} argument{}, but found {}",
+                    format_code!("{}", fn_type.display(ctx, false)),
                     expected_args,
                     match expected_args {
-                        1 => "argument",
-                        _ => "arguments",
+                        1 => "",
+                        _ => "s",
                     },
                     actual_args
                 )

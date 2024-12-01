@@ -74,6 +74,7 @@ locatable_impl!(FunctionSignature);
 
 impl FunctionSignature {
     /// Creates a new function signature with default start and end positions.
+    #[cfg(test)]
     pub fn new_with_default_pos(
         name: &str,
         args: Vec<Argument>,

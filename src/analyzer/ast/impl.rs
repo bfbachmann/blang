@@ -90,11 +90,17 @@ impl AImpl {
         // If this block implements a spec, resolve it and track it in the program context while
         // we analyze its functions.
         let maybe_spec_tk = match &impl_.maybe_spec {
-            Some(spec) => match ctx
-                .get_type_key_by_type_name(spec.maybe_mod_name.as_ref(), spec.name.as_str())
-            {
-                Some(spec_tk) => {
-                    if !ctx.must_get_type(spec_tk).is_spec() {
+            Some(spec) => {
+                let spec_tk = ctx.resolve_type(&spec.as_unresolved_type());
+                match ctx.must_get_type(spec_tk) {
+                    AType::Spec(_) => {
+                        ctx.set_cur_spec_type_key(Some(spec_tk));
+                        Some(spec_tk)
+                    }
+
+                    AType::Unknown(_) => None,
+
+                    _ => {
                         ctx.insert_err(AnalyzeError::new(
                             ErrorKind::ExpectedSpec,
                             format_code!(
@@ -106,21 +112,9 @@ impl AImpl {
                         ));
 
                         None
-                    } else {
-                        ctx.set_cur_spec_type_key(Some(spec_tk));
-                        Some(spec_tk)
                     }
                 }
-                None => {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::UndefSpec,
-                        format_code!("spec {} is not defined", spec).as_str(),
-                        spec,
-                    ));
-
-                    None
-                }
-            },
+            }
 
             None => None,
         };
@@ -228,8 +222,8 @@ fn check_spec_impl(
                         .with_detail(
                             format_code!(
                                 "Spec {} defines the function as {}.",
-                                spec.name,
-                                spec_fn_sig.display(ctx),
+                                ctx.display_type(spec_tk),
+                                spec_fn_sig.display(ctx, false),
                             )
                             .as_str(),
                         ),
