@@ -1,0 +1,14 @@
+struct StrData {
+    ptr: *u8
+    len: uint
+}
+
+impl str {
+    pub fn ptr(self) -> *u8 {
+        return (&self as *StrData)^.ptr
+    }
+
+    pub fn len(self) -> uint {
+        return (&self as *StrData)^.len
+    }
+}

@@ -3,7 +3,6 @@ use std::path::PathBuf;
 
 use flamer::flame;
 
-use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::module::AModule;
 use crate::analyzer::control_flow::analyze_module_fns;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
@@ -11,9 +10,6 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::fmt::hierarchy_to_string;
 use crate::lexer::pos::Position;
-use crate::parser::ast::arg::Argument;
-use crate::parser::ast::func_sig::FunctionSignature;
-use crate::parser::ast::r#type::Type;
 use crate::parser::module::Module;
 
 /// An analyzed source file along with any errors or warnings that occurred during its analysis.
@@ -65,7 +61,13 @@ pub fn analyze_modules(modules: Vec<Module>) -> ProgramAnalysis {
     let mod_paths = mods.keys().map(|k| k.to_str().unwrap()).collect();
     let mut ctx = ProgramContext::new(root_mod_path.to_str().unwrap(), mod_paths);
 
-    define_intrinsics(&mut ctx);
+    // Analyze builtins first.
+    for path in mods.keys() {
+        if path.starts_with("std/builtins") {
+            analyze_module(&mut ctx, &mods, &mut analyzed_mods, &vec![], path);
+        }
+    }
+
     analyze_module(&mut ctx, &mods, &mut analyzed_mods, &vec![], &root_mod_path);
 
     // Try to find the name of the main function in the root module.
@@ -152,29 +154,4 @@ pub fn analyze_module(
         mod_path.into(),
         AnalyzedModule::new(analyzed_module, errs, std::mem::take(&mut ctx.warnings)),
     );
-}
-
-/// Defines all intrinsic (built-in) functions, methods, values, and types.
-fn define_intrinsics(ctx: &mut ProgramContext) {
-    // Generate the method `len(self: str) -> uint`.
-    let maybe_impl_tk = ctx.get_cur_self_type_key();
-    let str_type_key = ctx.str_type_key();
-    let fn_name = "len";
-    ctx.set_cur_self_type_key(Some(str_type_key));
-    let fn_sig = AFnSig::from(
-        ctx,
-        &FunctionSignature::new_with_default_pos(
-            fn_name,
-            vec![Argument::new_with_default_pos(
-                "self",
-                Type::new_unresolved("Self"),
-                false,
-            )],
-            Some(Type::new_unresolved("uint")),
-        ),
-    );
-    let fn_tk = fn_sig.type_key;
-    ctx.insert_member_fn(str_type_key, None, fn_sig);
-    ctx.mark_member_fn_pub(str_type_key, fn_tk);
-    ctx.set_cur_self_type_key(maybe_impl_tk);
 }

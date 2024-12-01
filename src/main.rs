@@ -251,7 +251,7 @@ fn parse_source_files(input_path: &str) -> Result<Vec<Module>, String> {
     };
 
     // Get the project root directory and main file paths.
-    let main_paths = if is_dir {
+    let mut file_paths = if is_dir {
         let root_path = fs::canonicalize(input_path).unwrap();
         let main_path = root_path.join("main.bl");
 
@@ -287,8 +287,25 @@ fn parse_source_files(input_path: &str) -> Result<Vec<Module>, String> {
         vec![main_path.to_path_buf()]
     };
 
+    // Include builtins.
+    match fs::read_dir("std/builtins") {
+        Ok(entries) => {
+            for entry in entries {
+                match entry {
+                    Ok(entry) => {
+                        file_paths.push(entry.path());
+                    }
+
+                    Err(err) => return Err(err.to_string()),
+                }
+            }
+        }
+
+        Err(err) => return Err(err.to_string()),
+    };
+
     // Parse all source files by following imports.
-    let mut files_to_parse = VecDeque::from(main_paths);
+    let mut files_to_parse = VecDeque::from(file_paths);
     let mut parsed_mod_paths: HashSet<PathBuf> = HashSet::new();
     let mut parsed_mods = vec![];
     let mut parse_error_count = 0;
@@ -618,9 +635,13 @@ mod tests {
         let entries = fs::read_dir("std").expect("should succeed");
         for entry in entries {
             let lib_path = entry.unwrap().path();
+            if lib_path.starts_with("std/builtins") {
+                continue;
+            }
+
             let output_path = format!("bin/{}.o", lib_path.file_stem().unwrap().to_str().unwrap());
 
-            // Compile the program.
+            // Compile the library.
             compile(
                 lib_path.to_str().unwrap(),
                 true,

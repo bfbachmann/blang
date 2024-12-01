@@ -1276,26 +1276,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         call: &AFnCall,
         fn_sig: &AFnSig,
     ) -> Option<BasicValueEnum<'ctx>> {
-        if fn_sig.mangled_name.ends_with("str.len") {
-            let ll_str_value = self.gen_expr(call.args.first().unwrap());
-            let ll_str_len = if ll_str_value.is_pointer_value() {
-                self.builder
-                    .build_struct_gep(
-                        self.ctx.i8_type(),
-                        ll_str_value.into_pointer_value(),
-                        1,
-                        "len",
-                    )
-                    .unwrap()
-                    .as_basic_value_enum()
-            } else {
-                self.builder
-                    .build_extract_value(ll_str_value.into_struct_value(), 1, "len")
-                    .unwrap()
-            };
-
-            return Some(ll_str_len);
-        } else if fn_sig.mangled_name.ends_with(".clone")
+        if fn_sig.mangled_name.ends_with(".clone")
             && fn_sig
                 .maybe_impl_type_key
                 .is_some_and(|tk| self.type_converter.get_type(tk).is_primitive())

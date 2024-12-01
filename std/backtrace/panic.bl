@@ -6,15 +6,15 @@ pub fn panic(msg: str) {
     let panic_str = "panic: "
     let iovecs = [
         @io.IOVec{
-            base_ptr: panic_str as *u8
+            base_ptr: panic_str.ptr()
             iov_len: panic_str.len()
         },
         @io.IOVec{
-            base_ptr: msg as *u8
+            base_ptr: msg.ptr()
             iov_len: msg.len()
         },
         @io.IOVec{
-            base_ptr: "\n" as *u8
+            base_ptr: "\n".ptr()
             iov_len: 1
         },
     ]

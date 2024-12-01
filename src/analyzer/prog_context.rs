@@ -351,10 +351,12 @@ impl ProgramContext {
 
         // Set up primitive type keys.
         let mut primitive_type_keys = HashMap::new();
+        let mut type_declaration_mods = HashMap::new();
         for typ in AType::primitives() {
             let name = typ.name().to_string();
-            let key = type_store.insert_type(typ);
-            primitive_type_keys.insert(name, key);
+            let type_key = type_store.insert_type(typ);
+            primitive_type_keys.insert(name.clone(), type_key);
+            type_declaration_mods.insert(type_key, format!("std/builtins/{}.bl", name));
         }
 
         // Initialize empty module contexts.
@@ -376,7 +378,7 @@ impl ProgramContext {
             fn_type_keys: Default::default(),
             type_impls: Default::default(),
             pub_struct_field_names: Default::default(),
-            type_declaration_mods: Default::default(),
+            type_declaration_mods,
             params: vec![],
             monomorphized_types: Default::default(),
             type_monomorphizations: Default::default(),
