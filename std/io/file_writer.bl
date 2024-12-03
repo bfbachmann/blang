@@ -1,8 +1,8 @@
-use io: "std/libc/io.bl"
-use {Write, Writer}: "std/io/writer.bl"
-use {Slice}: "std/types/slice.bl"
-use {Buffered}: "std/io/buffer.bl"
-use {Allocator}: "std/mem/allocator.bl"
+use "std/libc/io.bl" @io
+use "std/io/writer.bl" {Write, Writer}
+use "std/types/slice.bl" {Slice}
+use "std/io/buffer.bl" {Buffered}
+use "std/mem/allocator.bl" {Allocator}
 
 /// Performs buffered writes to a file given its descriptor.
 pub struct FileWriter {

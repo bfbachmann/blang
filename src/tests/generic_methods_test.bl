@@ -1,6 +1,6 @@
-use proc: "std/libc/proc.bl"
-use {assert}: "std/backtrace/panic.bl"
-use {Clone}: "std/specs/clone.bl"
+use "std/libc/proc.bl" @proc
+use "std/backtrace/panic.bl" {assert}
+use "std/specs/clone.bl" {Clone}
 
 spec DoClone {
     fn do_clone[A: Clone](*self, a: *A) -> A

@@ -1,7 +1,7 @@
-use panic: "std/backtrace/panic.bl"
-use {Clone}: "std/specs/clone.bl"
-use {Allocator}: "std/mem/allocator.bl"
-use {Slice, SliceMut}: "std/types/slice.bl"
+use "std/backtrace/panic.bl" @panic
+use "std/specs/clone.bl" {Clone}
+use "std/mem/allocator.bl" {Allocator}
+use "std/types/slice.bl" {Slice, SliceMut}
 
 /// A resizeable array of values of type T.
 pub struct Array[T] {

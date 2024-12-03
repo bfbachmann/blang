@@ -1,9 +1,9 @@
-use {exit}: "std/libc/proc.bl"
-use {panic}: "std/backtrace/panic.bl"
-use {List}: "std/types/list.bl"
-use {Clone}: "std/specs/clone.bl"
-use {Ord, Order}: "std/specs/ord.bl"
-use {LibcAllocator}: "std/mem/libc_allocator.bl"
+use "std/libc/proc.bl" {exit}
+use "std/backtrace/panic.bl" {panic}
+use "std/types/list.bl" {List}
+use "std/specs/clone.bl" {Clone}
+use "std/specs/ord.bl" {Ord, Order}
+use "std/mem/libc_allocator.bl" {LibcAllocator}
 
 fn main() {
     // Created a list and populate it.

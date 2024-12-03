@@ -1,4 +1,4 @@
-use {malloc, calloc, realloc, free, memcpy}: "std/libc/mem.bl"
+use "std/libc/mem.bl" {malloc, calloc, realloc, free, memcpy}
 
 /// Allocates space on the heap for `count` values of type `T` and returns a pointer
 /// to the allocated region.

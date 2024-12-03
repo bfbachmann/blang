@@ -1,6 +1,6 @@
-use proc: "std/libc/proc.bl"
-use io: "std/libc/io.bl"
-use {backtrace, backtrace_symbols_fd}: "std/libc/signal.bl"
+use "std/libc/proc.bl" @proc
+use "std/libc/io.bl" @io
+use "std/libc/signal.bl" {backtrace, backtrace_symbols_fd}
 
 pub fn panic(msg: str) {
     let panic_str = "panic: "

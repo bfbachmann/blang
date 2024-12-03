@@ -1,7 +1,7 @@
-use {exit}: "std/libc/proc.bl"
+use "std/libc/proc.bl" {exit}
 
-use {assert}: "std/backtrace/panic.bl"
-use {Test}: "src/tests/specs_2.bl"
+use "std/backtrace/panic.bl" {assert}
+use "src/tests/specs_2.bl" {Test}
 
 struct Thing {}
 

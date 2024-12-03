@@ -1,6 +1,6 @@
-use io: "std/libc/io.bl"
-use proc: "std/libc/proc.bl"
-use {assert}: "std/backtrace/panic.bl"
+use "std/libc/io.bl" @io
+use "std/libc/proc.bl" @proc
+use "std/backtrace/panic.bl" {assert}
 
 spec Call {
     fn call(*mut self)

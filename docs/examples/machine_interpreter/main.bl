@@ -1,11 +1,11 @@
-use {exit}: "std/libc/proc.bl"
-use {calloc, free}: "std/libc/mem.bl"
-use {fopen, fseek, fread, ftell, rewind, fclose, seek_end}: "std/libc/file.bl"
-use {LibcAllocator}: "std/mem/libc_allocator.bl"
+use "std/libc/proc.bl" {exit}
+use "std/libc/mem.bl" {calloc, free}
+use "std/libc/file.bl" {fopen, fseek, fread, ftell, rewind, fclose, seek_end}
+use "std/mem/libc_allocator.bl" {LibcAllocator}
 
-use {Parser}: "docs/examples/machine_interpreter/parser.bl"
-use {Machine, ExecStatus}: "docs/examples/machine_interpreter/machine.bl"
-use {assert}: "std/backtrace/panic.bl"
+use "docs/examples/machine_interpreter/parser.bl" {Parser}
+use "docs/examples/machine_interpreter/machine.bl" {Machine, ExecStatus}
+use "std/backtrace/panic.bl" {assert}
 
 fn main() {
     // Use libc for memory management.

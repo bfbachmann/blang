@@ -1,5 +1,5 @@
-use mem: "std/libc/mem.bl"
-use {Allocate, Allocator}: "std/mem/allocator.bl"
+use "std/libc/mem.bl" @mem
+use "std/mem/allocator.bl" {Allocate, Allocator}
 
 /// Just wraps libc's memory management API.
 pub struct LibcAllocator {}

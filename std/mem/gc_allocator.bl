@@ -1,4 +1,4 @@
-use {Allocate, Allocator}: "std/mem/allocator.bl"
+use "std/mem/allocator.bl" {Allocate, Allocator}
 
 // These functions need to be linked from a compiled version of the
 // Boehm-Demers-Weiser Garbage Collector. See https://www.hboehm.info/gc/.

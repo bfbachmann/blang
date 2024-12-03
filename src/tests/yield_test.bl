@@ -1,6 +1,6 @@
-use {exit}: "std/libc/proc.bl"
+use "std/libc/proc.bl" {exit}
 
-use {assert}: "std/backtrace/panic.bl"
+use "std/backtrace/panic.bl" {assert}
 
 fn main() {
     // Check conditional yields.

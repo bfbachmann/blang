@@ -1,6 +1,6 @@
-use {exit}: "std/libc/proc.bl"
+use "std/libc/proc.bl" {exit}
 
-use {assert}: "std/backtrace/panic.bl"
+use "std/backtrace/panic.bl" {assert}
 
 // Checks that we can use loops to calculate 25 primes between 1 and 100 (inclusive).
 fn main() {

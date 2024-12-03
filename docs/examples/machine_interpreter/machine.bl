@@ -1,6 +1,6 @@
-use {Instruction, InstKind}: "docs/examples/machine_interpreter/parser.bl"
-use {print_str}: "docs/examples/machine_interpreter/utils.bl"
-use {List}: "std/types/list.bl"
+use "docs/examples/machine_interpreter/parser.bl" {Instruction, InstKind}
+use "docs/examples/machine_interpreter/utils.bl" {print_str}
+use "std/types/list.bl" {List}
 
 const mem_size: uint = 1024
 

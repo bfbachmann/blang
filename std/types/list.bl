@@ -1,10 +1,10 @@
-use panic: "std/backtrace/panic.bl"
-use mem: "std/libc/mem.bl"
+use "std/backtrace/panic.bl" @panic
+use "std/libc/mem.bl" @mem
 
-use {replace}: "std/mem/mem.bl"
-use {Clone}: "std/specs/clone.bl"
-use {Allocator}: "std/mem/allocator.bl"
-use {SliceMut}: "std/types/slice.bl"
+use "std/mem/mem.bl" {replace}
+use "std/specs/clone.bl" {Clone}
+use "std/mem/allocator.bl" {Allocator}
+use "std/types/slice.bl" {SliceMut}
 
 /// The minimum capacity of the list once it has been allocated.
 const min_cap: uint = 4

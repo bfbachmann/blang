@@ -1,4 +1,4 @@
-use mem: "std/libc/mem.bl"
+use "std/libc/mem.bl" @mem
 
 /// Strings are heap-allocated sequences of bytes.
 pub struct String {

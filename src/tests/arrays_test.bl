@@ -2,9 +2,9 @@
 // that makes use of arrays: fixed-size, stack-allocated chunks of 
 // memory that contain continuous values of the same type.
 
-use {exit}: "std/libc/proc.bl"
+use "std/libc/proc.bl" {exit}
 
-use {assert}: "std/backtrace/panic.bl"
+use "std/backtrace/panic.bl" {assert}
 
 fn do_nothing() {}
 

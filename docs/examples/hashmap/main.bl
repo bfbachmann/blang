@@ -1,12 +1,12 @@
-use proc: "std/libc/proc.bl"
-use mem: "std/libc/mem.bl"
-use {assert}: "std/backtrace/panic.bl"
+use "std/libc/proc.bl" @proc
+use "std/libc/mem.bl" @mem
+use "std/backtrace/panic.bl" {assert}
 
-use {Eq}: "std/specs/eq.bl"
-use {LibcAllocator}: "std/mem/libc_allocator.bl"
-use {Hash, HashWriter}: "std/types/hasher.bl"
-use {Slice}: "std/types/slice.bl"
-use {HashMap}: "docs/examples/hashmap/hashmap.bl"
+use "std/specs/eq.bl" {Eq}
+use "std/mem/libc_allocator.bl" {LibcAllocator}
+use "std/types/hasher.bl" {Hash, HashWriter}
+use "std/types/slice.bl" {Slice}
+use "docs/examples/hashmap/hashmap.bl" {HashMap}
 
 struct Key {
     s: str

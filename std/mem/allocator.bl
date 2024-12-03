@@ -1,4 +1,4 @@
-use io: "std/libc/io.bl"
+use "std/libc/io.bl" @io
 
 /// Any type that can allocate, reallocate, and free memory.
 pub spec Allocate {

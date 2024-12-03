@@ -1,10 +1,10 @@
-use {malloc, realloc, free}: "std/libc/mem.bl"
-use {strtol, strncmp}: "std/libc/string.bl"
-use {Clone}: "std/specs/clone.bl"
-use {List}: "std/types/list.bl"
-use {Allocator}: "std/mem/allocator.bl"
+use "std/libc/mem.bl" {malloc, realloc, free}
+use "std/libc/string.bl" {strtol, strncmp}
+use "std/specs/clone.bl" {Clone}
+use "std/types/list.bl" {List}
+use "std/mem/allocator.bl" {Allocator}
 
-use {assert}: "std/backtrace/panic.bl"
+use "std/backtrace/panic.bl" {assert}
 
 /// Represents a machine instruction.
 pub struct Instruction {

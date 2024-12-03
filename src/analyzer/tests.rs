@@ -1602,7 +1602,7 @@ mod tests {
         let result = analyze(
             r#"
                 fn main() {
-                    use mem: "std/libc/mem.bl"
+                    use "std/libc/mem.bl" @mem
                 }
             "#,
         );
@@ -2160,7 +2160,7 @@ mod tests {
             (
                 "impl.bl".to_string(),
                 r#"
-                    use {Thing}: "thing.bl"
+                    use "thing.bl" {Thing}
                     fn test() {
                         Thing.do_nothing()
                     }
@@ -2197,7 +2197,7 @@ mod tests {
             (
                 "main.bl".to_string(),
                 r#"
-                    use {Thing}: "thing.bl"
+                    use "thing.bl" {Thing}
                     fn main() {
                         Thing.bing()
                     }
@@ -2239,7 +2239,7 @@ mod tests {
             (
                 "main.bl".to_string(),
                 r#"
-                    use {Thing}: "bing.bl"
+                    use "bing.bl" {Thing}
                     fn main() {
                         Thing.bing()
                     }
@@ -2278,7 +2278,7 @@ mod tests {
             (
                 "impl.bl".to_string(),
                 r#"
-                    use {Thing}: "thing.bl"
+                    use "thing.bl" {Thing}
                     fn test() {
                         let invalid = Thing{priv_field: 1}
                     }
@@ -2312,7 +2312,7 @@ mod tests {
             (
                 "impl.bl".to_string(),
                 r#"
-                    use {Thing}: "thing.bl"
+                    use "thing.bl" {Thing}
                     fn test() {
                         let illegal = Thing.new().priv_field
                     }

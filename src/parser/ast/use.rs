@@ -128,6 +128,12 @@ impl Display for UsedModule {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "use ")?;
 
+        write!(f, "{} ", self.path)?;
+
+        if let Some(alias) = &self.maybe_alias {
+            write!(f, "@{} ", alias)?;
+        }
+
         if self.identifiers.len() > 0 {
             write!(f, "{{")?;
 
@@ -141,12 +147,6 @@ impl Display for UsedModule {
             write!(f, "}} from ")?;
         }
 
-        write!(f, "{}", self.path)?;
-
-        if let Some(alias) = &self.maybe_alias {
-            write!(f, "as {}", alias)?;
-        }
-
         Ok(())
     }
 }
@@ -155,9 +155,9 @@ impl UsedModule {
     /// Parses a `use` statement from the given token sequence. Expects token sequences of
     /// the forms
     ///
-    ///     use <name>: "path/to/file.bl"
-    ///     use {<ident>, ...}: "path/to/file.bl"
-    ///     use <name> {<ident>, ...}: "path/to/file.bl"
+    ///     use "path/to/file.bl" @<name>
+    ///     use "path/to/file.bl" {<ident>, ...}
+    ///     use "path/to/file.bl" @<name> {<ident>, ...}
     ///
     /// where
     /// - `name` is an identifier used to name the module being used
@@ -166,22 +166,22 @@ impl UsedModule {
         let start_pos = Module::parse_expecting(tokens, TokenKind::Use)?
             .span
             .start_pos;
+        let path = ModulePath::from(tokens)?;
 
-        // Parse the optional module alias.
+        // Parse the optional `@<name>`.
         let maybe_alias = match tokens.peek_next() {
             Some(Token {
-                kind: TokenKind::Identifier(alias),
+                kind: TokenKind::At,
                 ..
             }) => {
-                let result = Some(alias.to_owned());
                 tokens.next();
-                result
+                Some(Module::parse_identifier(tokens)?)
             }
 
             _ => None,
         };
 
-        // Parse the optional identifiers being imported from the module.
+        // Parse the identifiers being imported from the module.
         let identifiers = if Module::parse_optional(tokens, TokenKind::LeftBrace).is_some() {
             let mut idents = vec![Symbol::from_identifier(tokens)?];
             while Module::parse_optional(tokens, TokenKind::Comma).is_some() {
@@ -200,22 +200,18 @@ impl UsedModule {
             if let Some(token) = tokens.next() {
                 return Err(ParseError::new_with_token(
                     ErrorKind::UnexpectedToken,
-                    format_code!("expected identifier or {}, but found {}", "{", token).as_str(),
+                    format_code!("expected {} or {}, but found {}", "@", "{", token).as_str(),
                     token.clone(),
                 ));
             }
 
             return Err(ParseError::new(
                 ErrorKind::UnexpectedToken,
-                format_code!("expected identifier or {}, but found EOF", "{").as_str(),
+                format_code!("expected {} or {}, but found EOF", "@", "{").as_str(),
                 None,
                 Default::default(),
             ));
         }
-
-        Module::parse_expecting(tokens, TokenKind::Colon)?;
-
-        let path = ModulePath::from(tokens)?;
 
         Ok(UsedModule {
             span: Span {

@@ -1,5 +1,5 @@
-use panic: "std/backtrace/panic.bl"
-use {Clone}: "std/specs/clone.bl"
+use "std/backtrace/panic.bl" @panic
+use "std/specs/clone.bl" {Clone}
 
 /// A bounded pointer to contiguous values of type T.
 pub struct Slice[T] {

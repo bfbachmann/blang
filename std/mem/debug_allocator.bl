@@ -1,7 +1,7 @@
-use io: "std/libc/io.bl"
-use panic: "std/backtrace/panic.bl"
-use {Allocate, Allocator}: "std/mem/allocator.bl"
-use {List}: "std/types/list.bl"
+use "std/libc/io.bl" @io
+use "std/backtrace/panic.bl" @panic
+use "std/mem/allocator.bl" {Allocate, Allocator}
+use "std/types/list.bl" {List}
 
 /// A block of heap-allocated memory.
 struct Block {

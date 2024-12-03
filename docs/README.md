@@ -445,13 +445,13 @@ Constants, types, and functions can be imported from other modules with `use` st
 from the module at `my_project/some_dir/thing.bl`, we can do the following.
 
 ```
-use {Thing}: "my_project/some_dir/thing.bl"
+use "my_project/some_dir/thing.bl" {Thing}
 ```
 
 Whole modules can also be imported with aliases and used as follows.
 
 ```
-use mem: "std/libc/mem.bl"
+use "std/libc/mem.bl" @mem
 
 fn clone_bytes(src: *u8, len: uint) -> *mut u8 {
     // Use the `malloc` function from the `mem` module.
@@ -465,8 +465,8 @@ fn clone_bytes(src: *u8, len: uint) -> *mut u8 {
 These two methods of importing from a foreign module can also be combined as follows.
 
 ```
-use io {stdout}: "std/libc/io.bl"
-use proc: "std/libc/proc.bl"
+use "std/libc/io.bl" @io {stdout}
+use "std/libc/proc.bl" @proc
 
 fn die(msg: str) {
     @io.write(stdout, msg as *u8, msg.len())

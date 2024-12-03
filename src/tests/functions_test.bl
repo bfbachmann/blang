@@ -1,6 +1,6 @@
-use {exit}: "std/libc/proc.bl"
+use "std/libc/proc.bl" {exit}
 
-use {assert}: "std/backtrace/panic.bl"
+use "std/backtrace/panic.bl" {assert}
 
 // Check that we can link with a custom symbol name.
 extern "strtol" fn atoi(s: *u8, end: *mut *u8, base: int) -> int

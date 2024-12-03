@@ -1,14 +1,14 @@
-use {puts}: "std/libc/io.bl"
-use {exit}: "std/libc/proc.bl"
-use {heap_realloc, heap_free}: "std/mem/mem.bl"
-use {panic}: "std/backtrace/panic.bl"
-use {Allocator}: "std/mem/allocator.bl"
-use {LibcAllocator}: "std/mem/libc_allocator.bl"
+use "std/libc/io.bl" {puts}
+use "std/libc/proc.bl" {exit}
+use "std/mem/mem.bl" {heap_realloc, heap_free}
+use "std/backtrace/panic.bl" {panic}
+use "std/mem/allocator.bl" {Allocator}
+use "std/mem/libc_allocator.bl" {LibcAllocator}
 
 // List is the data type being tested.
-use {List}: "std/types/list.bl"
+use "std/types/list.bl" {List}
 
-use {assert}: "std/backtrace/panic.bl"
+use "std/backtrace/panic.bl" {assert}
 
 spec ToInt {
     fn to_int(self) -> int

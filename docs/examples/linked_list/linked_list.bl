@@ -1,6 +1,6 @@
-use {exit}: "std/libc/proc.bl"
-use {malloc, free}: "std/libc/mem.bl"
-use {assert}: "std/backtrace/panic.bl"
+use "std/libc/proc.bl" {exit}
+use "std/libc/mem.bl" {malloc, free}
+use "std/backtrace/panic.bl" {assert}
 
 /// A node in a linked list.
 struct Node {

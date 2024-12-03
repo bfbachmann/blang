@@ -1,4 +1,4 @@
-use {Writer}: "std/io/writer.bl"
+use "std/io/writer.bl" {Writer}
 
 /// Any type that can be read into a writer.
 pub spec Read {

@@ -1,7 +1,7 @@
-use {exit}: "std/libc/proc.bl"
+use "std/libc/proc.bl" {exit}
 
-use {assert}: "std/backtrace/panic.bl"
-use io: "std/libc/io.bl"
+use "std/backtrace/panic.bl" {assert}
+use "std/libc/io.bl" @io
 
 struct Thing {
     i: i64

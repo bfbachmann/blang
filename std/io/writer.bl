@@ -1,4 +1,4 @@
-use {Slice}: "std/types/slice.bl"
+use "std/types/slice.bl" {Slice}
 
 /// Any type to which bytes can be written.
 pub spec Write {

@@ -1,9 +1,9 @@
-use mem: "std/libc/mem.bl"
-use {Read}: "std/io/reader.bl"
-use {Write, Writer}: "std/io/writer.bl"
-use {Array}: "std/types/array.bl"
-use {Slice}: "std/types/slice.bl"
-use {Allocator}: "std/mem/allocator.bl"
+use "std/libc/mem.bl" @mem
+use "std/io/reader.bl" {Read}
+use "std/io/writer.bl" {Write, Writer}
+use "std/types/array.bl" {Array}
+use "std/types/slice.bl" {Slice}
+use "std/mem/allocator.bl" {Allocator}
 
 /// A growable IO buffer that can be used to temporarily store data in memory.
 pub struct Buffer {
