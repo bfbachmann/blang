@@ -79,7 +79,7 @@ impl Slice {
 impl Slice[u8] {
     /// Creates a slice from the given str.
     pub fn from_str(s: str) -> Slice[u8] {
-        return Slice[u8].new(s as *u8, s.len())
+        return Slice[u8].new(s.ptr(), s.len())
     }
 }
 

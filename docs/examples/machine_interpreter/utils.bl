@@ -1,5 +1,5 @@
 use "std/libc/io.bl" {write, stdout}
 
 pub fn print_str(s: str) {
-    write(stdout, s as *u8, s.len())
+    write(stdout, s.ptr(), s.len())
 }

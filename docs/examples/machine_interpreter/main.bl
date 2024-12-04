@@ -12,7 +12,7 @@ fn main() {
     let mut allocator = LibcAllocator.new().dynamic()
 
     // Open file for reading.
-    let file = fopen("docs/examples/machine_interpreter/program.txt\0" as *u8, "rb\0" as *u8)
+    let file = fopen("docs/examples/machine_interpreter/program.txt\0".ptr(), "rb\0".ptr())
     assert(file as uint != 0, "failed to open file")
 
     // Figure out how many bytes are in the file.

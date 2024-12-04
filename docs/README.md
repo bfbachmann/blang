@@ -469,7 +469,7 @@ use "std/libc/io.bl" @io {stdout}
 use "std/libc/proc.bl" @proc
 
 fn die(msg: str) {
-    @io.write(stdout, msg as *u8, msg.len())
+    @io.write(stdout, msg.ptr(), msg.len())
     @proc.exit(1)
 }
 ```
@@ -488,6 +488,6 @@ fn main() {
     let ptr: *i64 = 100 as *i64
 
     // Casting between pointer types.
-    let x_u8_ptr = ptr as *u8
+    let x_u8_ptr = ptr.ptr()
 }
 ```

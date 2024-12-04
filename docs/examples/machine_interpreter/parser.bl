@@ -353,6 +353,6 @@ impl Parser {
     /// Returns `true` if the program buffer starting at the parser's current position
     /// contains `s`.
     fn buf_starts_with(*self, s: str) -> bool {
-        return strncmp(self.buf_at_cursor(), s as *u8, s.len()) == 0
+        return strncmp(self.buf_at_cursor(), s.ptr(), s.len()) == 0
     }
 }

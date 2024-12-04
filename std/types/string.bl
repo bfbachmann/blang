@@ -9,7 +9,7 @@ impl String {
     /// Creates a new `String` from the given `str`.
     pub fn from_str(s: str) -> String {
         let ptr = @mem.malloc(s.len())
-        @mem.memcpy(ptr, s as *u8, s.len())
+        @mem.memcpy(ptr, s.ptr(), s.len())
         return String{
             bytes: Slice[u8].new(ptr, s.len())
         }

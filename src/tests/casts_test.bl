@@ -94,7 +94,7 @@ fn main() {
 
     // String casting.
     {
-        assert(("Test" as *u8)^ == 84, "expected 84")
+        assert(("Test".ptr())^ == 84, "expected 84")
     }
 
     // Char casting.

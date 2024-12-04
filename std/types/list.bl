@@ -99,7 +99,7 @@ impl List {
         let is_last_entry = i + 1 == len
         if !is_last_entry {
             @mem.memmove(
-                self^.data.ptr_at(i) as *mut u8, 
+                self^.data.ptr_at(i) as *mut u8,
                 self^.data.ptr_at(i + 1) as *u8, 
                 (len - 1 - i) * sizeof T,
             )
