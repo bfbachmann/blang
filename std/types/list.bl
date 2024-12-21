@@ -4,7 +4,7 @@ use "std/libc/mem.bl" @mem
 use "std/mem/mem.bl" {replace}
 use "std/specs/clone.bl" {Clone}
 use "std/mem/allocator.bl" {Allocator}
-use "std/types/slice.bl" {SliceMut}
+use "std/types/slice.bl" {Slice, SliceMut}
 
 /// The minimum capacity of the list once it has been allocated.
 const min_cap: uint = 4
@@ -118,6 +118,11 @@ impl List {
     pub fn extend(*mut self, mut values: List[T]) {
         values.drain_into(self)
         values.free()
+    }
+
+    /// Returns a slice that refereces the data currently in the list.
+    pub fn as_slice(*self) -> Slice[T] {
+        return self^.data.as_slice().slice_left(self^.len)
     }
 
     /// Removes all elements from the list and appends them to `other` without

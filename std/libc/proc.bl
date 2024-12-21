@@ -1,2 +1,9 @@
 pub extern fn exit(code: uint)
+pub extern fn fork() -> int
+pub extern fn execve(pathname: *u8, argv: **u8, envp: **u8) -> int
+pub extern fn execvp(pathname: *u8, argv: **u8) -> int
+pub extern fn waitpid(pid: int, status: *mut int, options: int) -> int
 pub extern fn abort()
+pub extern fn getcwd(path: *mut u8, size: uint) -> *u8
+pub extern fn getenv(name: *u8) -> *u8
+pub extern fn chdir(path: *u8) -> int

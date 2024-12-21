@@ -54,9 +54,10 @@ impl Slice {
     /// Returns a slice that points to elements from index `start` (incluive) 
     /// to `end` (exclusive).
     pub fn slice(*self, start: uint, end: uint) -> Slice[T] {
-        @panic.assert(end > start, "slice end must be greater than start")
-        @panic.assert(start < self^.len, "slice start out of bounds")
+        @panic.assert(start < self^.len or start == 0, "slice start out of bounds")
         @panic.assert(end <= self^.len, "slice end out of bounds")
+        @panic.assert(end >= start, "slice end cannot be less than start")
+
         return Slice[T]{
             ptr: self^.ptr.(start as int)
             len: end - start

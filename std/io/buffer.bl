@@ -42,6 +42,22 @@ impl Buffer {
         }
     }
 
+    /// Empties the buffer.
+    pub fn drain(*mut self) {
+        self^.cursor = 0
+    }
+
+    /// Returns a slice pointing to the data that has been written to the
+    /// buffer at the time of this call.
+    pub fn as_slice(*self) -> Slice[u8] {
+        return self^.buf.as_slice().slice_left(self^.cursor)
+    }
+
+    /// Returns the number of bytes written to the buffer.
+    pub fn len(*self) -> uint {
+        return self^.cursor
+    }
+
     /// Grows the memory region assigned to the buffer to fit `num_new` 
     /// additional bytes.
     pub fn grow_to_fit(*mut self, num_new: uint) {

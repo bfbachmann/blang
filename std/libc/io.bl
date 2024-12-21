@@ -1,5 +1,5 @@
-pub extern fn puts(msg: str) -> uint
-pub extern fn read(fd: uint, buf: *u8, size: uint) -> int
+pub extern fn puts(msg: *u8) -> uint
+pub extern fn read(fd: uint, buf: *mut u8, size: uint) -> int
 pub extern fn fflush(fd: uint)
 pub extern fn write(fd: uint, ptr: *u8, nbytes: uint) -> int
 pub extern fn writev(fd: uint, iovec: *IOVec, iovcnt: uint) -> int
