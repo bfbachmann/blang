@@ -205,11 +205,8 @@ fn main() {
         age: 36
     }
 
-    // Struct values are not copied automatically, so this is a move.
-    let new_user = user
-
-    // This line would cause a use-after-move compile error.
-    let username = user.username  // error: cannot use `user.username` because `user` was already moved
+    // Struct values are copied automatically, like in C.
+    let user_copy = user
 }
 ```
 
@@ -227,11 +224,8 @@ enum Result {
 fn main() {
     let result = Result::Err("failed!")
 
-    // Enum values are not copied automatically, so this is a move.
+    // Enum values are copied automatically, like in C.
     let new_result = result
-
-    // This line would cause a use-after-move compile error.
-    let other_result = result  // error: cannot use `result` because `result` was already moved
 }
 ```
 
@@ -243,11 +237,9 @@ Tuples are like structs, except their fields are identified by index rather than
 fn main() {
     let values: { str, i64, bool } = { "thing", 1, true }
 
-    // Tuple values are not copied automatically, so this is a move.
+    // Tuple values are copied automatically, like in C.
     let new_values = values
-
-    // This line would cause a use-after-move compile error.
-    let msg = values.(0)  // error: cannot use `values.(0)` because `values` was already moved
+    let msg = values.(0)
 }
 ```
 
