@@ -1,7 +1,6 @@
 use "std/libc/proc.bl" {exit}
 use "std/backtrace/panic.bl" {panic}
 use "std/types/list.bl" {List}
-use "std/specs/clone.bl" {Clone}
 use "std/specs/ord.bl" {Ord, Order}
 use "std/mem/libc_allocator.bl" {LibcAllocator}
 
@@ -24,7 +23,7 @@ fn main() {
     exit(0)
 }
 
-/// Just contains an int and can be ordered and cloned.
+/// Just contains an int and can be ordered.
 struct Value {
     v: int
 }
@@ -40,17 +39,11 @@ impl Value: Order {
     }
 }
 
-impl Value: Clone {
-    fn clone(*self) -> Value {
-        return Value{v: self^.v}
-    }
-}
-
 /// Returns true only if the list is sorted in ascending order.
-fn is_sorted[T: Order + Clone](list: *List[T]) -> bool {
+fn is_sorted[T: Order](list: *List[T]) -> bool {
     for let mut i = 0uint, i < list.len() - 1, i += 1 {
         let ival = list.get(i)
-        let jval = list.get(i + 1).clone()
+        let jval = list.get(i + 1)
         if ival.compare(&jval) ~~ Ord::Greater {
             return false
         }
@@ -60,9 +53,9 @@ fn is_sorted[T: Order + Clone](list: *List[T]) -> bool {
 }
 
 /// Sorts the list in ascending order.
-fn sort[T: Order + Clone](list: *mut List[T]) {
+fn sort[T: Order](list: *mut List[T]) {
     for let mut i = 0uint, i < list.len() - 1, {} {
-        let cur_value = list.get(i).clone()
+        let cur_value = list.get(i)
         let result = find_min[T](list, i + 1)
         let min_index = result.(0)
         let min_value = result.(1)
@@ -76,12 +69,12 @@ fn sort[T: Order + Clone](list: *mut List[T]) {
 }
 
 /// Finds the minimum value from the `start` index to the end of the list (inclusive).
-fn find_min[T: Order + Clone](list: *List[T], start: uint) -> {uint, T} {
-    let mut min_value = list.get(start).clone()
+fn find_min[T: Order](list: *List[T], start: uint) -> {uint, T} {
+    let mut min_value = list.get(start)
     let mut min_index = start
 
     for let mut i = start + 1, i < list.len(), i += 1 {
-        let v = list.get(i).clone()
+        let v = list.get(i)
         if v.compare(&min_value) ~~ Ord::Lesser {
             min_value = v
             min_index = i

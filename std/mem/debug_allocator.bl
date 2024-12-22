@@ -102,12 +102,14 @@ impl DebugAllocator: Allocate {
         @panic.assert(found, "cannot realloc dangling pointer")
 
         let index = result.(0)
-        let block = self^.blocks.get_mut(index)
+        let mut block = self^.blocks.get(index)
         @panic.assert(block^.ptr == ptr, "cannot relloc using non-base pointer")
 
         block^.ptr = self^.allocator.realloc(block^.ptr, size)
         @panic.assert(block^.ptr != null, "failed to reallocate memory")
         block^.size = size
+
+        self^.blocks.replace(index, block)
 
         return block^.ptr
     }

@@ -72,7 +72,7 @@ fn main() {
 
         let mut sum: uint = 0
         for let mut i: uint = 0, i < 10, i += 1 {
-            let value = list.get(i)^
+            let value = list.get(i)
             assert(value == i, "wrong value returned by get()")
             sum += value
         }

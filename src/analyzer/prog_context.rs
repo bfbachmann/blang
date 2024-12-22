@@ -463,7 +463,6 @@ impl ProgramContext {
             || mod_ctx.unchecked_struct_types.contains_key(name)
             || mod_ctx.unchecked_enum_types.contains_key(name)
             || mod_ctx.unchecked_specs.contains_key(name)
-            || self.is_reserved_type_name(name)
         {
             self.insert_err(AnalyzeError::new(
                 ErrorKind::DuplicateType,
@@ -475,11 +474,6 @@ impl ProgramContext {
         }
 
         return true;
-    }
-
-    /// Returns true if `name` is a reserved type name that cannot be used by users.
-    fn is_reserved_type_name(&self, name: &str) -> bool {
-        name == "Clone" && !self.cur_mod_path.ends_with("std/specs/clone.bl")
     }
 
     /// Checks that the given type implements the set of specs on the given

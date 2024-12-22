@@ -1,5 +1,0 @@
-/// Clone is any type that can be cloned from a pointer.
-pub spec Clone {
-    /// Produces a clone of `self` by copying from the pointer.
-    fn clone(*self) -> Self
-}

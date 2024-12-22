@@ -1,4 +1,3 @@
-use "std/specs/clone.bl" {Clone}
 use "std/types/array.bl" {Array}
 use "std/mem/allocator.bl" {Allocator}
 

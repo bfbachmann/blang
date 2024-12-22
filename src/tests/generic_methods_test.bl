@@ -1,6 +1,9 @@
 use "std/libc/proc.bl" @proc
 use "std/backtrace/panic.bl" {assert}
-use "std/specs/clone.bl" {Clone}
+
+spec Clone {
+    fn test(*self) -> Self
+}
 
 spec DoClone {
     fn do_clone[A: Clone](*self, a: *A) -> A
@@ -16,7 +19,7 @@ impl Thing {
 
 impl Thing: DoClone {
     fn do_clone[A: Clone](*self, a: *A) -> A {
-        return a.clone()
+        return a^
     }
 }
 

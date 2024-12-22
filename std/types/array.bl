@@ -1,5 +1,4 @@
 use "std/backtrace/panic.bl" @panic
-use "std/specs/clone.bl" {Clone}
 use "std/mem/allocator.bl" {Allocator}
 use "std/types/slice.bl" {Slice, SliceMut}
 

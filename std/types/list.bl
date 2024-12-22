@@ -2,7 +2,6 @@ use "std/backtrace/panic.bl" @panic
 use "std/libc/mem.bl" @mem
 
 use "std/mem/mem.bl" {replace}
-use "std/specs/clone.bl" {Clone}
 use "std/mem/allocator.bl" {Allocator}
 use "std/types/slice.bl" {Slice, SliceMut}
 
@@ -68,24 +67,18 @@ impl List {
         self.remove(self^.len - 1)
     }
 
-    /// Returns a pointer to the value at index `i` in the list.
+    /// Returns the value at index `i` in the list.
     /// Panics if `i` is out of bounds.
-    pub fn get(*self, i: uint) -> *T {
+    pub fn get(*self, i: uint) -> T {
         self.check_bounds(i)
-        return self^.data.ptr_at(i)
-    }
-
-    /// Returns a mutating pointer to the value at index `i` in the list.
-    /// Panics if `i` is out of bounds.
-    pub fn get_mut(*mut self, i: uint) -> *mut T {
-        self.check_bounds(i)
-        return self^.data.ptr_at(i)
+        return self^.data.ptr_at(i)^
     }
 
     /// Replaces the value at index `i` in the list with `t` and returns the
     /// existing value at index `i`. Panics if `i` is out of bounds.
     pub fn replace(*mut self, i: uint, t: T) -> T {
-        return replace[T](self.get_mut(i), t)
+        self.check_bounds(i)
+        return replace[T](self^.data.ptr_at(i), t)
     }
 
     /// Remove the value at index `i` from the list.

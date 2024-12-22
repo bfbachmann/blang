@@ -58,7 +58,7 @@ impl Machine {
             self^.pc += 1
         {
             let inst = self^.instructions.get(self^.pc)
-            let result = self.exec_inst(inst)
+            let result = self.exec_inst(&inst)
             if result.status ~~ ExecStatus::Err {
                 return result
             }

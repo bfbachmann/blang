@@ -44,7 +44,7 @@ fn main() {
     assert(deref_msg == msg, "expected \"test\"")
 
     // Test methods on parameterized structs.
-    let clone = ref.clone()
+    let clone = ref
     assert(clone.get_ptr()^ == msg, "expected \"test\"")
 
     // Check that we can initialize parameterized structs inline.

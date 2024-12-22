@@ -1,6 +1,5 @@
 use "std/libc/mem.bl" {malloc, realloc, free}
 use "std/libc/string.bl" {strtol, strncmp}
-use "std/specs/clone.bl" {Clone}
 use "std/types/list.bl" {List}
 use "std/mem/allocator.bl" {Allocator}
 
@@ -17,15 +16,6 @@ impl Instruction {
         return Instruction{
             kind: InstKind::JumpIf0
             operands: {1, 0}
-        }
-    }
-}
-
-impl Instruction: Clone {
-    fn clone(*self) -> Instruction {
-        return Instruction{
-            kind: self^.kind.clone()
-            operands: {self^.operands.(0), self^.operands.(1)}
         }
     }
 }
@@ -53,20 +43,6 @@ pub enum InstKind {
     /// Example: Jump to instruction 3 if the value at address 8 is 0.
     ///     jumpif0 #8 #3
     JumpIf0
-}
-
-impl InstKind: Clone {
-    fn clone(*self) -> InstKind {
-        if self^ ~~ InstKind::Store {
-            return InstKind::Store
-        } elsif self^ ~~ InstKind::Copy {
-            return InstKind::Copy
-        } elsif self^ ~~ InstKind::Add {
-            return InstKind::Add
-        } else {
-            return InstKind::JumpIf0
-        }
-    }
 }
 
 /// Indicates whether parsing succeeded.

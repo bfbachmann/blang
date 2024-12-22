@@ -1,21 +1,9 @@
 use "std/backtrace/panic.bl" @panic
-use "std/specs/clone.bl" {Clone}
 
 /// A bounded pointer to contiguous values of type T.
 pub struct Slice[T] {
     ptr: *T
     len: uint
-}
-
-impl Slice: Clone {
-    /// Returns a shallow clone of the slice (i.e. does not clone any 
-    /// underlying data).
-    pub fn clone(*self) -> Slice[T] {
-        return Slice[T]{
-            ptr: self^.ptr
-            len: self^.len
-        }
-    }
 }
 
 impl Slice {
@@ -90,17 +78,6 @@ impl Slice[u8] {
 pub struct SliceMut[T] {
     ptr: *mut T
     len: uint
-}
-
-impl SliceMut: Clone {
-    /// Returns a shallow clone of the slice (i.e. does not clone any 
-    /// underlying data).
-    pub fn clone(*self) -> SliceMut[T] {
-        return SliceMut[T]{
-            ptr: self^.ptr
-            len: self^.len
-        }
-    }
 }
 
 impl SliceMut {
