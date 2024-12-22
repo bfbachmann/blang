@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use flamer::flame;
 
 use crate::analyzer::ast::module::AModule;
-use crate::analyzer::control_flow::analyze_module_fns;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::warn::AnalyzeWarning;
@@ -135,14 +134,6 @@ pub fn analyze_module(
     }
 
     let analyzed_module = AModule::from(ctx, module);
-
-    // Perform move checks and add any errors to our list of errors only if semantic analysis
-    // passed. We only do this if analysis returned zero errors because otherwise the move
-    // checker could raise superfluous errors.
-    if ctx.errors().is_empty() {
-        // Do control and data flow analysis.
-        analyze_module_fns(ctx, &analyzed_module);
-    }
 
     // Append the import cycle errors to the module analysis errors.
     let mut errs = std::mem::take(&mut ctx.errors);

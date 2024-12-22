@@ -278,12 +278,6 @@ impl AType {
         }
     }
 
-    /// Returns true only if this type is moved on assignment or when passed as an argument.
-    pub fn requires_move(&self) -> bool {
-        // TODO: Return false if the type implements auto-copy.
-        self.is_composite() || self.is_generic()
-    }
-
     /// Returns true if this type is unknown.
     pub fn is_unknown(&self) -> bool {
         matches!(self, AType::Unknown(_))

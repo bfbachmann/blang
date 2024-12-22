@@ -6,7 +6,7 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::passes::PassManager;
-use inkwell::types::{AnyType, BasicTypeEnum};
+use inkwell::types::{AnyType, AnyTypeEnum, BasicTypeEnum};
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
 
 use crate::analyzer::ast::expr::AExpr;
@@ -595,11 +595,19 @@ pub fn gen_fn_sig<'a, 'ctx>(
 
         // Add the "sret" attribute to the first argument to tell LLVM that it is being used to
         // pass the return value.
+        let ll_ret_type = type_converter
+            .get_basic_type(sig.maybe_ret_type_key.unwrap())
+            .as_any_type_enum();
         add_fn_arg_attrs(
             ctx,
             ll_fn_val,
             0,
-            vec!["sret", "writeonly", "noalias", "nonnull"],
+            vec![
+                ("sret", Some(ll_ret_type)),
+                ("writeonly", None),
+                ("noalias", None),
+                ("nonnull", None),
+            ],
         );
 
         1
@@ -609,14 +617,22 @@ pub fn gen_fn_sig<'a, 'ctx>(
     for i in args_offset..ll_fn_val.count_params() {
         let arg = sig.args.get((i - args_offset) as usize).unwrap();
         let arg_type = type_converter.get_type(arg.type_key);
+        let is_composite = arg_type.is_composite();
+        let is_mut_ptr = arg_type.is_mut_ptr();
 
         // Set the argument name.
         let ll_arg = ll_fn_val.get_nth_param(i).unwrap();
         ll_arg.set_name(arg.name.as_str());
 
         // Add appropriate attributes for optimization.
-        if ll_arg.is_pointer_value() && !arg_type.is_mut_ptr() && !arg.is_mut {
-            add_fn_arg_attrs(ctx, ll_fn_val, i, vec!["readonly"])
+        // Mark the argument as pass-by-value if it's of some composite value that could be mutated.
+        if is_composite && arg.is_mut {
+            let ll_attr_type = type_converter
+                .get_basic_type(arg.type_key)
+                .as_any_type_enum();
+            add_fn_arg_attrs(ctx, ll_fn_val, i, vec![("byval", Some(ll_attr_type))]);
+        } else if ll_arg.is_pointer_value() && !is_mut_ptr && !arg.is_mut {
+            add_fn_arg_attrs(ctx, ll_fn_val, i, vec![("readonly", None)])
         }
     }
 
@@ -628,16 +644,19 @@ fn add_fn_arg_attrs<'ctx>(
     ctx: &'ctx Context,
     fn_val: FunctionValue<'ctx>,
     arg_index: u32,
-    attrs: Vec<&str>,
+    attrs: Vec<(&str, Option<AnyTypeEnum>)>,
 ) {
-    let param = fn_val.get_nth_param(arg_index).unwrap();
-    let param_type = param.get_type().as_any_type_enum();
+    for (attr_name, maybe_attr_type) in attrs {
+        let attr_kind = Attribute::get_named_enum_kind_id(attr_name);
 
-    for attr in attrs {
-        let attr_kind = Attribute::get_named_enum_kind_id(attr);
         // Make sure the attribute is properly defined.
         assert_ne!(attr_kind, 0);
-        let attr = ctx.create_type_attribute(attr_kind, param_type);
+
+        let attr = match maybe_attr_type {
+            Some(typ) => ctx.create_type_attribute(attr_kind, typ),
+            None => ctx.create_enum_attribute(attr_kind, 0),
+        };
+
         fn_val.add_attribute(AttributeLoc::Param(arg_index), attr);
     }
 }

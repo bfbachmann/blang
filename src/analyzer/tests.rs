@@ -419,60 +419,6 @@ mod tests {
     }
 
     #[test]
-    fn illegal_move() {
-        let result = analyze(
-            r#"
-            struct T {}
-
-            fn main() {
-                let t = T{}
-                let t1 = t
-                let t2 = t
-            }
-            "#,
-        );
-        check_result(result, Some(ErrorKind::UseOfMovedValue));
-    }
-
-    #[test]
-    fn illegal_move_in_method() {
-        let result = analyze(
-            r#"
-            struct T {}
-
-            impl T {
-                fn nothing() {
-                    let t = T{}
-                    let tt = t
-                    let illegal = t
-                }
-            }
-            "#,
-        );
-        check_result(result, Some(ErrorKind::UseOfMovedValue));
-    }
-
-    #[test]
-    fn illegal_member_move() {
-        let result = analyze(
-            r#"
-            struct Inner {}
-
-            struct T {
-                inner: Inner
-            }
-
-            fn main() {
-                let t = T{inner: Inner{}}
-                let t1 = t
-                let t2 = t.inner
-            }
-            "#,
-        );
-        check_result(result, Some(ErrorKind::UseOfMovedValue));
-    }
-
-    #[test]
     fn undefined_type_in_struct() {
         let result = analyze(
             r#"
@@ -482,201 +428,6 @@ mod tests {
             "#,
         );
         check_result(result, Some(ErrorKind::UndefType));
-    }
-
-    #[test]
-    fn illegal_loop_move() {
-        let result = analyze(
-            r#"
-            struct T {}
-
-            fn main() {
-                let t = T{}
-
-                loop {
-                    let a = t
-                }
-            }
-            "#,
-        );
-        check_result(result, Some(ErrorKind::UseOfMovedValue));
-    }
-
-    #[test]
-    fn loop_move() {
-        let result = analyze(
-            r#"
-            struct T {}
-
-            fn main() {
-                let t = T{}
-
-                loop {
-                    let a = t
-                    break
-                }
-            }
-            "#,
-        );
-        check_result(result, None);
-    }
-
-    #[test]
-    fn nested_loop_move() {
-        let result = analyze(
-            r#"
-            struct T {}
-
-            fn main() {
-                let t = T{}
-
-                loop {
-                    loop {
-                        let a = t
-                        break
-                    }
-                    return
-                }
-            }
-            "#,
-        );
-        check_result(result, None);
-    }
-
-    #[test]
-    fn illegal_nested_loop_move() {
-        let result = analyze(
-            r#"
-            struct T {}
-
-            fn main() {
-                let t = T{}
-
-                loop {
-                    loop {
-                        if true {
-                            let a = t
-                        }
-                    }
-                    return
-                }
-            }
-            "#,
-        );
-        check_result(result, Some(ErrorKind::UseOfMovedValue));
-    }
-
-    #[test]
-    fn move_in_branch_with_break() {
-        let result = analyze(
-            r#"
-            fn main() {
-                struct T {}
-                let t = T{}
-                loop {
-                    if true {
-                        let a = t
-                        break
-                    }
-
-                    let a = t
-                    return
-                }
-            }
-            "#,
-        );
-        check_result(result, None);
-    }
-
-    #[test]
-    fn illegal_move_in_loop_with_return() {
-        let result = analyze(
-            r#"
-            fn main() {
-                struct T {}
-                let t = T{}
-                loop {
-                    if true {
-                        let a = t
-                        break
-                    }
-
-                    let a = t
-                    return
-                }
-
-                let a = t
-            }
-            "#,
-        );
-        check_result(result, Some(ErrorKind::UseOfMovedValue));
-    }
-
-    #[test]
-    fn illegal_move_in_branch_with_break() {
-        let result = analyze(
-            r#"
-            fn main() {
-                struct T {}
-                let t = T{}
-                loop {
-                    if true {
-                        let a = t
-                        break
-                    }
-                }
-
-                let b = t
-            }
-            "#,
-        );
-        check_result(result, Some(ErrorKind::UseOfMovedValue));
-    }
-
-    #[test]
-    fn move_in_branch_with_return() {
-        let result = analyze(
-            r#"
-            fn main() {
-                struct T {}
-                let t = T{}
-                loop {
-                    if true {
-                        let a = t
-                        return
-                    }
-                }
-
-                let b = t
-            }
-            "#,
-        );
-        check_result(result, None);
-    }
-
-    #[test]
-    fn partial_moves() {
-        let result = analyze(
-            r#"
-            struct Inner {}
-
-            struct T {
-                inner1: Inner,
-                inner2: Inner,
-            }
-
-            fn main() {
-                let t = T{
-                    inner1: Inner{},
-                    inner2: Inner{},
-                }
-
-                let i1 = t.inner1
-                let i2 = t.inner2
-            }
-            "#,
-        );
-        check_result(result, None);
     }
 
     #[test]
@@ -980,44 +731,6 @@ mod tests {
     }
 
     #[test]
-    fn redefined_moved_value() {
-        let result = analyze(
-            r#"
-            struct S {}
-
-            fn main() {
-                let a = S{}
-                let aa = a
-                let aa = aa
-                let aa = aa
-            }
-            "#,
-        );
-        check_result(result, None);
-    }
-
-    #[test]
-    fn define_and_move_in_loop() {
-        let result = analyze(
-            r#"
-            struct S {}
-
-            fn main() {
-                loop {
-                    let s = S{}
-                    if true {
-                        take(s)
-                    }
-                }
-            }
-
-            fn take(s: S) {}
-            "#,
-        );
-        check_result(result, None);
-    }
-
-    #[test]
     fn invalid_deref() {
         let result = analyze(
             r#"
@@ -1163,21 +876,7 @@ mod tests {
     }
 
     #[test]
-    fn use_of_moved_array() {
-        let result = analyze(
-            r#"
-            fn main() {
-                let array = [true]
-                let moved = array
-                let illegal = array.(0)
-            }
-        "#,
-        );
-        check_result(result, Some(ErrorKind::UseOfMovedValue));
-    }
-
-    #[test]
-    fn legal_move_out_of_array() {
+    fn copy_out_of_array() {
         let result = analyze(
             r#"
                 fn main() {
@@ -1187,94 +886,6 @@ mod tests {
             "#,
         );
         check_result(result, None);
-    }
-
-    #[test]
-    fn illegal_move_out_of_array() {
-        let result = analyze(
-            r#"
-                fn main() {
-                    let array = [[true]]
-                    let legal = array.(0)
-                    let illegal = array.(0)
-                }
-            "#,
-        );
-        check_result(result, Some(ErrorKind::UseOfMovedValue));
-    }
-
-    #[test]
-    fn illegal_move_in_array_index() {
-        let result = analyze(
-            r#"
-            fn take(array: [int; 2]) -> uint {
-                return 1
-            }
-
-            fn main() {
-                let array = [1, 2]
-                let illegal = array.(take(array))
-            }
-        "#,
-        );
-        check_result(result, Some(ErrorKind::UseOfMovedValue));
-    }
-
-    #[test]
-    fn illegal_move_in_enum_init() {
-        let result = analyze(
-            r#"
-            struct Thing {}
-
-            enum Test {
-                One(Thing)
-                Two
-            }
-
-            fn main() {
-                let thing = Thing{}
-                let moved = thing
-                let test = Test::One(thing)
-            }
-        "#,
-        );
-        check_result(result, Some(ErrorKind::UseOfMovedValue));
-    }
-
-    #[test]
-    fn illegal_move_in_struct_init() {
-        let result = analyze(
-            r#"
-            struct Thing {}
-
-            struct Test {
-                thing: Thing
-            }
-
-            fn main() {
-                let thing = Thing{}
-                let moved = thing
-                let test = Test{thing: thing}
-            }
-        "#,
-        );
-        check_result(result, Some(ErrorKind::UseOfMovedValue));
-    }
-
-    #[test]
-    fn illegal_move_in_tuple_init() {
-        let result = analyze(
-            r#"
-            struct Thing {}
-
-            fn main() {
-                let thing = Thing{}
-                let moved = thing
-                let test = {thing}
-            }
-        "#,
-        );
-        check_result(result, Some(ErrorKind::UseOfMovedValue));
     }
 
     #[test]
@@ -1366,20 +977,6 @@ mod tests {
     }
 
     #[test]
-    fn illegal_move_by_deref() {
-        let result = analyze(
-            r#"
-            struct State {}
-
-            fn main() {
-                let new = (&State{})^
-            }
-        "#,
-        );
-        check_result(result, Some(ErrorKind::IllegalMove));
-    }
-
-    #[test]
     fn legal_ptr_deref_with_member_access() {
         let result = analyze(
             r#"
@@ -1392,21 +989,6 @@ mod tests {
             "#,
         );
         check_result(result, None);
-    }
-
-    #[test]
-    fn illegal_ptr_deref_with_member_access() {
-        let result = analyze(
-            r#"
-            struct State {i: {}}
-
-            fn main() {
-                let state_ptr = &State{i: {}}
-                let i = state_ptr^.i
-            }
-        "#,
-        );
-        check_result(result, Some(ErrorKind::IllegalMove));
     }
 
     #[test]
@@ -1546,55 +1128,6 @@ mod tests {
             "#,
         );
         check_result(result, Some(ErrorKind::UndefSymbol));
-    }
-
-    #[test]
-    fn legal_repeated_move_in_array_init() {
-        let result = analyze(
-            r#"
-                struct Test {}
-                fn main() {
-                    let a = [Test{}; 2]
-                }
-            "#,
-        );
-        check_result(result, None);
-    }
-
-    #[test]
-    fn legal_move_before_reassign_in_array_init() {
-        let result = analyze(
-            r#"
-                struct Test {
-                    inner: {}
-                }
-
-                fn main() {
-                    let mut t = Test{inner: {}}
-                    loop {
-                        take(t.inner)
-                        t.inner = {}
-                    }
-                }
-
-                fn take(inner: {}) {}
-            "#,
-        );
-        check_result(result, None);
-    }
-
-    #[test]
-    fn illegal_repeated_move_in_array_init() {
-        let result = analyze(
-            r#"
-                struct Test {}
-                fn main() {
-                    let t = Test{}
-                    let a = [t; 2]
-                }
-            "#,
-        );
-        check_result(result, Some(ErrorKind::UseOfMovedValue));
     }
 
     #[test]
