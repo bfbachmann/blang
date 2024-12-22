@@ -1743,8 +1743,8 @@ mod tests {
                 thing.value %= 2
 
 
-                thing.b and= false
-                thing.b or= true
+                thing.b &&= false
+                thing.b ||= true
             }
         "#,
         );

@@ -424,7 +424,7 @@ mod tests {
 
     #[test]
     fn invalid_missing_close_paren() {
-        let raw = r#"do(((x+3) > 2) or other"#;
+        let raw = r#"do(((x+3) > 2) || other"#;
         let tokens = lex(raw).expect("should not error");
         let result = Module::from("", &mut Stream::from(tokens));
         assert!(matches!(
@@ -440,7 +440,7 @@ mod tests {
 
     #[test]
     fn invalid_start_of_expression() {
-        let raw = r#"do(and true)"#;
+        let raw = r#"do(&& true)"#;
         let tokens = lex(raw).expect("should not error");
         let result = Module::from("", &mut Stream::from(tokens));
         assert!(matches!(
@@ -452,12 +452,12 @@ mod tests {
                     kind: TokenKind::LogicalAnd,
                     span: Span {
                         start_pos: Position { line: 1, col: 4 },
-                        end_pos: Position { line: 1, col: 7 },
+                        end_pos: Position { line: 1, col: 6 },
                     }
                 }),
                 span: Span {
                     start_pos: Position { line: 1, col: 4 },
-                    end_pos: Position { line: 1, col: 7 },
+                    end_pos: Position { line: 1, col: 6 },
                 }
             })
         ));

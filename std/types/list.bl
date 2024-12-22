@@ -109,7 +109,7 @@ impl List {
 
         // Check if we should shrink the list to conserve memory.
         let new_cap = self.capacity() / growth_factor
-        if new_cap >= min_cap and self^.len * growth_factor <= new_cap {
+        if new_cap >= min_cap && self^.len * growth_factor <= new_cap {
             self.resize(new_cap)
         }
     }

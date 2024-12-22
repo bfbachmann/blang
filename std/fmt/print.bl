@@ -70,17 +70,17 @@ impl Format: Print {
         for let mut i: uint = 0, i < fmt_len, i += 1 {
             let cur_char = fmt.ptr_at(i)^
             last_char = from {
-                if last_char == '\\' as u8 and cur_char == '\\' as u8 {
+                if last_char == '\\' as u8 && cur_char == '\\' as u8 {
                     write_substr(writer, &fmt, substr_start, i + 1)
                     substr_start = i + 1
                     
                     yield 0u8
-                } elsif last_char != '\\' as u8 and cur_char == '%' as u8 {
+                } elsif last_char != '\\' as u8 && cur_char == '%' as u8 {
                     write_substr(writer, &fmt, substr_start, i)
                     substr_start = i + 1
 
                     print_next_arg(writer, &self^.args, &mut arg_i)
-                } elsif last_char == '\\' as u8 and cur_char == '%' as u8 {
+                } elsif last_char == '\\' as u8 && cur_char == '%' as u8 {
                     write_substr(writer, &fmt, substr_start, i - 1)
                     
                     writer.write(Slice[u8].from_str("%"))

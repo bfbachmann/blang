@@ -41,13 +41,13 @@ pub enum TokenKind {
     ForwardSlashEqual,
     #[token("%=")]
     PercentEqual,
-    #[token("and")]
+    #[token("&&")]
     LogicalAnd,
-    #[token("or")]
+    #[token("||")]
     LogicalOr,
-    #[token("and=")]
+    #[token("&&=")]
     LogicalAndEqual,
-    #[token("or=")]
+    #[token("||=")]
     LogicalOrEqual,
     #[token("band")]
     BitwiseAnd,
@@ -246,8 +246,8 @@ impl TokenKind {
             TokenKind::PercentEqual => "%=".to_string(),
             TokenKind::LogicalAnd => "and".to_string(),
             TokenKind::LogicalOr => "or".to_string(),
-            TokenKind::LogicalAndEqual => "and=".to_string(),
-            TokenKind::LogicalOrEqual => "or=".to_string(),
+            TokenKind::LogicalAndEqual => "&&=".to_string(),
+            TokenKind::LogicalOrEqual => "||=".to_string(),
             TokenKind::LogicalNot => "!".to_string(),
             TokenKind::BitwiseNot => "bnot".to_string(),
             TokenKind::BitwiseAnd => "band".to_string(),

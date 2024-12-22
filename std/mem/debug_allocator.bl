@@ -15,11 +15,11 @@ impl Block {
     }
 
     fn contains(*self, ptr: *u8) -> bool {
-        return ptr >= self^.ptr and ptr < self.end_ptr()
+        return ptr >= self^.ptr && ptr < self.end_ptr()
     }
 
     fn contains_range(*self, ptr: *u8, size: uint) -> bool {
-        return self^.size >= size and self.contains(ptr)
+        return self^.size >= size && self.contains(ptr)
     }
 }
 

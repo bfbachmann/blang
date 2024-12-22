@@ -55,7 +55,7 @@ impl Node {
         if index > 0 {
             target = self.node_at(index - 1)
         }
-        if target == null or !target.has_next() {
+        if target == null || !target.has_next() {
             return null
         }
 

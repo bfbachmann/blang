@@ -316,8 +316,8 @@ impl Parser {
     /// Parses all spaces at the current location in the program buffer.
     fn parse_spaces(*mut self) {
         while self.try_parse(" ")
-            or self.try_parse("\t")
-            or self.try_parse("\n")
+            || self.try_parse("\t")
+            || self.try_parse("\n")
         {}
     }
 

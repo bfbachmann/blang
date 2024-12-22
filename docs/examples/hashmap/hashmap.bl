@@ -59,7 +59,7 @@ impl HashMap {
             // If the entry pointer is `null`, it means that the entry is either empty
             // or a tombstone. Either way, we can use it to store the mapping.
             // If the entry already holds this key, we just need to overwrite it.
-            if entry_ptr == null or entry_ptr^.key.eq(&k) {
+            if entry_ptr == null || entry_ptr^.key.eq(&k) {
                 self^.table.set(index, Mapping[K, V].new(k, v))
                 break
             }
@@ -85,7 +85,7 @@ impl HashMap {
             }
 
             let entry_ptr = self^.table.get(index)
-            if entry_ptr != null and entry_ptr^.key.eq(k) {
+            if entry_ptr != null && entry_ptr^.key.eq(k) {
                 return &entry_ptr^.value
             }
         }
@@ -106,7 +106,7 @@ impl HashMap {
             }
 
             let entry_ptr = self^.table.get(index)
-            if entry_ptr != null and entry_ptr^.key.eq(k) {
+            if entry_ptr != null && entry_ptr^.key.eq(k) {
                 self^.table.delete(index)
                 self^.num_allocated -= 1
                 return
@@ -149,7 +149,7 @@ impl HashMap {
                 }
 
                 let entry_ptr = self^.table.get(index)
-                if entry_ptr != null and entry_ptr^.key.eq(k) {
+                if entry_ptr != null && entry_ptr^.key.eq(k) {
                     return {index, true}
                 }
             } elsif self^.table.entry_is_empty(index) {

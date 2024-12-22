@@ -48,8 +48,8 @@ impl VariableAssignment {
     ///     <target> *= <expr>
     ///     <target> /= <expr>
     ///     <target> %= <expr>
-    ///     <target> and= <expr>
-    ///     <target> or= <expr>
+    ///     <target> &&= <expr>
+    ///     <target> ||= <expr>
     ///     <target> band= <expr>
     ///     <target> bor= <expr>
     ///     <target> bxor= <expr>
