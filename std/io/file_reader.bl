@@ -1,0 +1,52 @@
+use "std/libc/io.bl" @io
+use "std/io/reader.bl" {Read}
+use "std/io/writer.bl" {Writer}
+use "std/types/array.bl" {Array}
+use "std/mem/allocator.bl" {Allocator}
+
+const buf_size: uint = 1024 * 8
+
+/// Reads from a file using its descriptor.
+pub struct FileReader {
+    fd: uint
+    read_buf: Array[u8]
+}
+
+impl FileReader {
+    /// Creates a reader that can read from the file with descriptor `fd`.
+    pub fn new(al: *mut Allocator, fd: uint) -> FileReader {
+        return FileReader{
+            fd: fd
+            // Don't allocate any memory upfront.
+            read_buf: Array[u8].new(al)
+        }
+    }
+
+    /// Frees all memory associated with the file reader.
+    pub fn free(self) {
+        self.read_buf.free()
+    }
+}
+
+impl FileReader: Read {
+    fn read(*mut self, writer: *mut Writer) {
+        // Only allocated now if we still need to.
+        if self^.read_buf.len() == 0 {
+            self^.read_buf.resize(buf_size)
+        }
+
+        loop {
+            let bytes_read = @io.read(self^.fd, self^.read_buf.mut_ptr_at(0), buf_size)
+            if bytes_read > 0 {
+                writer.write(self^.read_buf.as_slice().slice_left(bytes_read as uint))
+                if bytes_read as uint == buf_size {
+                    continue
+                }
+            }
+            
+            // TODO: Handle read errors.
+
+            break
+        }
+    }
+}

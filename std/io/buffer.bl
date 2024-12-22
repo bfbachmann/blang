@@ -28,6 +28,11 @@ impl Buffer {
         }
     }
 
+    /// Returns a writer that can write to this buffer.
+    pub fn writer(*mut self) -> Writer {
+        return Writer.new[Buffer](self)
+    }
+
     /// Returns true if the buffer has enough room for a write of the given
     /// size in bytes.
     pub fn can_fit(*self, num_bytes: uint) -> bool {
@@ -56,6 +61,12 @@ impl Buffer {
     /// Returns the number of bytes written to the buffer.
     pub fn len(*self) -> uint {
         return self^.cursor
+    }
+
+    /// Returns the buffer's capacity (the nubmer of bytes that can be written
+    /// to it before it is full).
+    pub fn capacity(*self) -> uint {
+        return self^.buf.len()
     }
 
     /// Grows the memory region assigned to the buffer to fit `num_new` 

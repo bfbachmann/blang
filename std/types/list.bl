@@ -145,15 +145,8 @@ impl List {
         self^.len = 0
     }
 
-    /// Removes all elements from the list an returns them as a new list.
-    pub fn drain(*mut self) -> List[T] {
-        let mut new_list = List[T].new(self^.allocator)
-        self.drain_into(&mut new_list)
-        return new_list
-    }
-
     /// Empties the list, but doesn't free or resize its unerlying memory.
-    pub fn empty(*mut self) {
+    pub fn drain(*mut self) {
         self^.len = 0
     }
 
