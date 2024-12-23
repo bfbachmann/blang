@@ -11,15 +11,15 @@ struct Block {
 
 impl Block {
     fn end_ptr(*self) -> *u8 {
-        return self^.ptr.(self^.size as int)
+        return self.ptr.(self.size as int)
     }
 
     fn contains(*self, ptr: *u8) -> bool {
-        return ptr >= self^.ptr && ptr < self.end_ptr()
+        return ptr >= self.ptr && ptr < self.end_ptr()
     }
 
     fn contains_range(*self, ptr: *u8, size: uint) -> bool {
-        return self^.size >= size && self.contains(ptr)
+        return self.size >= size && self.contains(ptr)
     }
 }
 
@@ -56,13 +56,13 @@ impl DebugAllocator {
         }
 
         let index = result.(0)
-        return self^.blocks.get(index).contains_range(ptr, size)
+        return self.blocks.get(index).contains_range(ptr, size)
     }
 
     fn block_index(*self, ptr: *u8) -> {uint, bool} {
         // TODO: This is really slow. Think of a faster way to search.
-        for let mut i = 0uint, i < self^.blocks.len(), i += 1 {
-            let block = self^.blocks.get(i)
+        for let mut i = 0uint, i < self.blocks.len(), i += 1 {
+            let block = self.blocks.get(i)
             if block.contains(ptr) {
                 return {i, true}
             }
@@ -73,7 +73,7 @@ impl DebugAllocator {
 
     /// Prints information about allocated memory blocks.
     pub fn print_summary(*self) {
-        let len = self^.blocks.len()
+        let len = self.blocks.len()
         for let mut i = 0uint, i < len, i += 1 {
             // TODO: Print detailed info about block.
             @io.puts("allocated block\0")
@@ -84,9 +84,9 @@ impl DebugAllocator {
 impl DebugAllocator: Allocate {
     /// Allocates `size` bytes on the heap an returns the pointer.
     pub fn alloc(*mut self, size: uint) -> *mut u8 {
-        let ptr = self^.allocator.alloc(size)
+        let ptr = self.allocator.alloc(size)
         @panic.assert(ptr != null, "failed to allocate memory")
-        self^.blocks.push(Block{
+        self.blocks.push(Block{
             ptr: ptr
             size: size
         })
@@ -102,14 +102,14 @@ impl DebugAllocator: Allocate {
         @panic.assert(found, "cannot realloc dangling pointer")
 
         let index = result.(0)
-        let mut block = self^.blocks.get(index)
-        @panic.assert(block^.ptr == ptr, "cannot relloc using non-base pointer")
+        let mut block = self.blocks.get(index)
+        @panic.assert(block.ptr == ptr, "cannot relloc using non-base pointer")
 
-        block^.ptr = self^.allocator.realloc(block^.ptr, size)
-        @panic.assert(block^.ptr != null, "failed to reallocate memory")
-        block^.size = size
+        block.ptr = self.allocator.realloc(block.ptr, size)
+        @panic.assert(block.ptr != null, "failed to reallocate memory")
+        block.size = size
 
-        self^.blocks.replace(index, block)
+        self.blocks.replace(index, block)
 
         return block^.ptr
     }

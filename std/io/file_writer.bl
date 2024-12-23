@@ -25,7 +25,7 @@ impl FileWriter {
 
     /// Flushes the underlying buffer to the file.
     pub fn flush(*mut self) {
-        self^.buf_writer.flush()
+        self.buf_writer.flush()
     }
 
     /// Flushes the underlying buffer to the file and frees all memory
@@ -39,7 +39,7 @@ impl FileWriter: Write {
     /// Writes data into the buffer. If the buffer is full or is too small
     /// for the data, it will be flushed. Otherwise, flushes will be avoided.
     pub fn write(*mut self, bytes: Slice[u8]) {
-        self^.buf_writer.write(bytes)
+        self.buf_writer.write(bytes)
     }
 }
 
@@ -50,6 +50,6 @@ struct UnbufferedFileWriter {
 
 impl UnbufferedFileWriter: Write {
     fn write(*mut self, bytes: Slice[u8]) {
-        @io.write(self^.fd, bytes.ptr(), bytes.len())
+        @io.write(self.fd, bytes.ptr(), bytes.len())
     }
 }

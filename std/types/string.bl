@@ -30,7 +30,7 @@ impl String {
 
     /// Returns a pointer to the bytes in the string.
     pub fn ptr(*self) -> *u8 {
-        return self^.bytes.ptr()
+        return self.bytes.ptr()
     }
 
     /// Returns the length of the string in bytes.

@@ -31,7 +31,7 @@ impl Array {
     /// this function because it might move all the data in the array,
     /// which would invalidate any existing pointers to its data.
     pub fn resize(*mut self, len: uint) {
-        let ptr = self^.allocator.realloc(
+        let ptr = self.allocator.realloc(
             self^.data.ptr() as *mut u8, 
             sizeof T * len,
         ) as *mut T

@@ -24,7 +24,7 @@ impl Caller {
 
 impl Caller: Call {
     fn call(*mut self) {
-        self^.func(self^.data)
+        self.func(self.data)
     }
 }
 
@@ -34,7 +34,7 @@ struct Inner {
 
 impl Inner: Call {
     fn call(*mut self) {
-        self^.i += 1
+        self.i += 1
     }
 }
 
@@ -44,7 +44,7 @@ struct Inner2 {
 
 impl Inner2: Call {
     fn call(*mut self) {
-        self^.s = "bla"
+        self.s = "bla"
     }
 }
 

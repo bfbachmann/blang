@@ -31,14 +31,14 @@ impl FileReader {
 impl FileReader: Read {
     fn read(*mut self, writer: *mut Writer) {
         // Only allocated now if we still need to.
-        if self^.read_buf.len() == 0 {
-            self^.read_buf.resize(buf_size)
+        if self.read_buf.len() == 0 {
+            self.read_buf.resize(buf_size)
         }
 
         loop {
-            let bytes_read = @io.read(self^.fd, self^.read_buf.mut_ptr_at(0), buf_size)
+            let bytes_read = @io.read(self.fd, self.read_buf.mut_ptr_at(0), buf_size)
             if bytes_read > 0 {
-                writer.write(self^.read_buf.as_slice().slice_left(bytes_read as uint))
+                writer.write(self.read_buf.as_slice().slice_left(bytes_read as uint))
                 if bytes_read as uint == buf_size {
                     continue
                 }

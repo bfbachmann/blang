@@ -10,12 +10,12 @@ struct Ref[T] {
 impl Ref {
     fn clone(*self) -> Ref[T] {
         return Ref[T]{
-            ptr: self^.ptr
+            ptr: self.ptr
         }
     }
 
     fn get_ptr(*self) -> *T {
-        return self^.ptr
+        return self.ptr
     }
 }
 
@@ -28,7 +28,7 @@ fn heap[T](t: *T) -> Ref[T] {
 }
 
 fn deref[T](ref: *Ref[T]) -> *mut T {
-    return ref^.ptr
+    return ref.ptr
 }
 
 // Test monomorphization of parameterized types that refer to themselves.

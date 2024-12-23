@@ -36,44 +36,44 @@ impl Buffer {
     /// Returns true if the buffer has enough room for a write of the given
     /// size in bytes.
     pub fn can_fit(*self, num_bytes: uint) -> bool {
-        return self^.buf.len() - self^.cursor >= num_bytes
+        return self.buf.len() - self.cursor >= num_bytes
     }
 
     /// Empties the contents of the buffer into `writer`.
     pub fn drain_into[W: Write](*mut self, writer: *mut W) {
-        if self^.cursor > 0 {
-            writer.write(self^.buf.as_slice().slice_left(self^.cursor))
-            self^.cursor = 0
+        if self.cursor > 0 {
+            writer.write(self.buf.as_slice().slice_left(self.cursor))
+            self.cursor = 0
         }
     }
 
     /// Empties the buffer.
     pub fn drain(*mut self) {
-        self^.cursor = 0
+        self.cursor = 0
     }
 
     /// Returns a slice pointing to the data that has been written to the
     /// buffer at the time of this call.
     pub fn as_slice(*self) -> Slice[u8] {
-        return self^.buf.as_slice().slice_left(self^.cursor)
+        return self.buf.as_slice().slice_left(self.cursor)
     }
 
     /// Returns the number of bytes written to the buffer.
     pub fn len(*self) -> uint {
-        return self^.cursor
+        return self.cursor
     }
 
     /// Returns the buffer's capacity (the nubmer of bytes that can be written
     /// to it before it is full).
     pub fn capacity(*self) -> uint {
-        return self^.buf.len()
+        return self.buf.len()
     }
 
     /// Grows the memory region assigned to the buffer to fit `num_new` 
     /// additional bytes.
     pub fn grow_to_fit(*mut self, num_new: uint) {
-        let mut len = self^.buf.len()
-        let min_new_len = self^.cursor + num_new
+        let mut len = self.buf.len()
+        let min_new_len = self.cursor + num_new
 
         if min_new_len <= len {
             return
@@ -87,7 +87,7 @@ impl Buffer {
             len *= 2
         }
 
-        self^.buf.resize(len)
+        self.buf.resize(len)
     }
 
     /// Frees all memory associated with the buffer.
@@ -100,16 +100,16 @@ impl Buffer: Write {
     /// Writes `bytes` to the buffer. The buffer will try to grow automatically
     /// if it can't fit all the bytes.
     pub fn write(*mut self, bytes: Slice[u8]) {
-        let len = self^.buf.len()
+        let len = self.buf.len()
         let bytes_len = bytes.len()
         if bytes_len == 0 {
             return
         }
 
         self.grow_to_fit(bytes_len)
-        let start = self^.buf.mut_ptr_at(self^.cursor)
+        let start = self.buf.mut_ptr_at(self.cursor)
         @mem.memcpy(start, bytes.ptr_at(0), bytes_len)
-        self^.cursor += bytes_len
+        self.cursor += bytes_len
     }
 }
 
@@ -117,7 +117,7 @@ impl Buffer: Read {
     /// Copies the contents of the buffer into the given writer. This does not
     /// change the state of the buffer.
     pub fn read(*mut self, writer: *mut Writer) {
-        writer.write(self^.buf.as_slice().slice_left(self^.cursor))
+        writer.write(self.buf.as_slice().slice_left(self.cursor))
     }
 }
 
@@ -145,7 +145,7 @@ impl Buffered {
 
     /// Flushes the buffer to the underlying writer.
     pub fn flush(*mut self) {
-        self^.buf.drain_into[W](&mut self^.writer)
+        self.buf.drain_into[W](&mut self.writer)
     }
 
     /// Frees all memory associated with the buffered writer.
@@ -162,8 +162,8 @@ impl Buffered: Write {
         let num_bytes = bytes.len()
 
         // If the bytes fit in the buffer, just write them to the buffer.
-        if self^.buf.can_fit(bytes.len()) {
-            self^.buf.write(bytes)
+        if self.buf.can_fit(bytes.len()) {
+            self.buf.write(bytes)
             return
         }
         
@@ -172,10 +172,10 @@ impl Buffered: Write {
 
         // If the bytes still don't fit in the buffer, write them directly to
         // the underlying writer.
-        if !self^.buf.can_fit(bytes.len()) {
-            self^.writer.write(bytes)
+        if !self.buf.can_fit(bytes.len()) {
+            self.writer.write(bytes)
         } else {
-            self^.buf.write(bytes)
+            self.buf.write(bytes)
         }
     }
 }

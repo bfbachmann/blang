@@ -25,7 +25,7 @@ impl Slice {
 
     /// Returns the number of elements in the slice.
     pub fn len(*self) -> uint {
-        return self^.len
+        return self.len
     }
 
     /// Returns a pointer to the base of the slice.

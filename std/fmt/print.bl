@@ -61,7 +61,7 @@ impl Format {
 impl Format: Print {
     /// Prints the format into the given writer.
     pub fn print(*self, writer: *mut Writer) {
-        let fmt = Slice[u8].from_str(self^.fmt)
+        let fmt = Slice[u8].from_str(self.fmt)
         let fmt_len = fmt.len()
         let mut last_char = 0u8
         let mut substr_start = 0uint
@@ -79,7 +79,7 @@ impl Format: Print {
                     write_substr(writer, &fmt, substr_start, i)
                     substr_start = i + 1
 
-                    print_next_arg(writer, &self^.args, &mut arg_i)
+                    print_next_arg(writer, &self.args, &mut arg_i)
                 } elsif last_char == '\\' as u8 && cur_char == '%' as u8 {
                     write_substr(writer, &fmt, substr_start, i - 1)
                     
@@ -130,6 +130,6 @@ impl Arg {
 
 impl Arg: Print {
     fn print(*self, writer: *mut Writer) {
-        self^.print_fn(self^.data, writer)
+        self.print_fn(self.data, writer)
     }
 }

@@ -26,6 +26,6 @@ impl Reader {
 impl Reader: Read {
     /// Reads data out of the underlying reader into `writer`.
     pub fn read(*mut self, writer: *mut Writer) {
-        self^.read_fn(self^.underlying, writer)
+        self.read_fn(self.underlying, writer)
     }
 }

@@ -12,7 +12,7 @@ struct Thing {
 
 impl Thing: Set[str] {
     fn set(*mut self, s: str) {
-        self^.s = s
+        self.s = s
     }
 }
 

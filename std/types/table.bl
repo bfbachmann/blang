@@ -31,7 +31,7 @@ impl Table {
 
     /// Returns the current number of entries in the table.
     pub fn len(*self) -> uint {
-        return self^.entries.len()
+        return self.entries.len()
     }
 
     /// Writes `t` into the entry at index `i`.

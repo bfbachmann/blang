@@ -985,7 +985,7 @@ mod tests {
     
                 fn main() {
                     let state_ptr = &State{i: 0}
-                    let i = state_ptr^.i
+                    let i = state_ptr.i
                 }
             "#,
         );
@@ -1295,7 +1295,7 @@ mod tests {
             
             impl Thing {
                 fn set_value(*mut self, value: int) {
-                    self^.value = value
+                    self.value = value
                 }
             }
             
@@ -1318,7 +1318,7 @@ mod tests {
 
             impl Thing {
                 fn set_value(*mut self, value: int) {
-                    self^.value = value
+                    self.value = value
                 }
             }
 

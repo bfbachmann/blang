@@ -39,7 +39,7 @@ impl Allocator {
 impl Allocator: Allocate {
     /// Calls alloc on the underlying allocator and returns the result.
     pub fn alloc(*mut self, size: uint) -> *mut u8 {
-        return self^.alloc_fn(self^.allocator, size)
+        return self.alloc_fn(self^.allocator, size)
     }
     
     /// Calls realloc on the underlying allocator and returns the result.

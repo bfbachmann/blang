@@ -45,40 +45,40 @@ impl List {
 
     /// Returns the current length of the list.
     pub fn len(*self) -> uint {
-        return self^.len
+        return self.len
     }
 
     /// Returns the current capacity of the list (i.e. how many entries it 
     /// could store before it would need to allocate more space for them).
     pub fn capacity(*self) -> uint {
-        return self^.data.len()
+        return self.data.len()
     }
 
     /// Appends `t` to the end of the list.
     pub fn push(*mut self, t: T) {
         self.grow_to_fit(1)
-        self^.data.ptr_at(self^.len)^ = t
-        self^.len += 1
+        self.data.ptr_at(self.len)^ = t
+        self.len += 1
     }
 
     /// Removes the value at the end of the list. Panics if the list if empty.
     pub fn pop(*mut self) {
-        @panic.assert(self^.len > 0, "cannot pop from empty list")
-        self.remove(self^.len - 1)
+        @panic.assert(self.len > 0, "cannot pop from empty list")
+        self.remove(self.len - 1)
     }
 
     /// Returns the value at index `i` in the list.
     /// Panics if `i` is out of bounds.
     pub fn get(*self, i: uint) -> T {
         self.check_bounds(i)
-        return self^.data.ptr_at(i)^
+        return self.data.ptr_at(i)^
     }
 
     /// Replaces the value at index `i` in the list with `t` and returns the
     /// existing value at index `i`. Panics if `i` is out of bounds.
     pub fn replace(*mut self, i: uint, t: T) -> T {
         self.check_bounds(i)
-        return replace[T](self^.data.ptr_at(i), t)
+        return replace[T](self.data.ptr_at(i), t)
     }
 
     /// Remove the value at index `i` from the list.
@@ -88,7 +88,7 @@ impl List {
         
         // We only need to move entries left by one if the element we removed
         // was not the last one.
-        let len = self^.len
+        let len = self.len
         let is_last_entry = i + 1 == len
         if !is_last_entry {
             @mem.memmove(

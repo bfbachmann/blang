@@ -68,8 +68,8 @@ fn main() {
         let mut t = T{i: 0, b: false}
         let ptr = &mut t
         ptr^ = T{i: -23, b: true}
-        assert(ptr^.i == -23, "14")
-        assert(ptr^.b == true, "15")
+        assert(ptr.i == -23, "14")
+        assert(ptr.b == true, "15")
     }
 
     // Check that we can cast pointer types.
@@ -108,9 +108,9 @@ fn main() {
         ]
         let ptr = &x as *Thing
 
-        assert(ptr.(2)^.b == true, "expected true")
-        assert(ptr.(1)^.i == -38, "expected -38")
-        assert(ptr.(1).(-1)^.i == 3, "expected 3")
+        assert(ptr.(2).b == true, "expected true")
+        assert(ptr.(1).i == -38, "expected -38")
+        assert(ptr.(1).(-1).i == 3, "expected 3")
     }
 
     // Check that mutating data via pointers derived from struct pointers works.
@@ -121,12 +121,12 @@ fn main() {
 
         let mut container = Container{value: 1}
         let container_ptr: *mut Container = &mut container
-        let value_ptr: *mut int = &mut container_ptr^.value
+        let value_ptr: *mut int = &mut container_ptr.value
 
         value_ptr^ = 2
 
         assert(value_ptr^ == 2, "value_ptr^ is wrong")
-        assert(container_ptr^.value == 2, "container_ptr^.value is wrong")
+        assert(container_ptr.value == 2, "container_ptr.value is wrong")
         assert(container.value == 2, "container.value is wrong")
     }
 
@@ -150,8 +150,8 @@ fn take(ptr: *u64) {
 
 fn take_t(t: *T) -> T {
     return T{
-        i: t^.i
-        b: t^.b
+        i: t.i
+        b: t.b
     }
 }
 

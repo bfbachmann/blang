@@ -26,6 +26,6 @@ impl Writer {
 impl Writer: Write {
     /// Writes `bytes` to the underlying writer.
     pub fn write(*mut self, bytes: Slice[u8]) {
-        self^.write_fn(self^.underlying, bytes)
+        self.write_fn(self^.underlying, bytes)
     }
 }
