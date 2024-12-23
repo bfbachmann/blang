@@ -542,6 +542,7 @@ impl ProgramContext {
     }
 
     /// Returns a mapping from error start position to the error that occurred there.
+    #[cfg(test)]
     pub fn errors(&self) -> &HashMap<Position, AnalyzeError> {
         &self.errors
     }

@@ -50,8 +50,9 @@ mod tests {
     ) {
         for analyzed_mod in &program_analysis.analyzed_modules {
             let expected_errs = mod_errs.get(analyzed_mod.module.path.as_str()).unwrap();
-            assert_eq!(analyzed_mod.errors.len(), expected_errs.len());
-            for err in &analyzed_mod.errors {
+            let actual_errs = &analyzed_mod.errors;
+            assert_eq!(actual_errs.len(), expected_errs.len());
+            for err in actual_errs {
                 assert!(expected_errs.contains(&err.kind));
             }
         }
@@ -1860,7 +1861,7 @@ mod tests {
                     }
         
                     impl Thing {
-                        fn new() -> Thing {
+                        pub fn new() -> Thing {
                             return Thing{priv_field: 0}
                         }
                     }

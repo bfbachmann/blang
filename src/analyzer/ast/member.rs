@@ -1,8 +1,9 @@
 use std::fmt::{Display, Formatter};
 
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
+use crate::analyzer::ast::generic::AGenericType;
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::fmt::format_code_vec;
@@ -43,7 +44,6 @@ impl AMemberAccess {
         // Analyze the expression whose member is being accessed.
         let mut base_expr = AExpr::from(ctx, access.base_expr.clone(), None, true, false);
         let base_type = ctx.must_get_type(base_expr.type_key).clone();
-        let base_type_string = ctx.display_type(base_expr.type_key);
 
         // Abort early if the expression failed analysis.
         let placeholder = AMemberAccess {
@@ -79,47 +79,23 @@ impl AMemberAccess {
         }
 
         // Try to resolve the member on the base expression type.
-        let (maybe_field_type_key, base_type_key, base_expr_is_ptr) = match try_resolve_member(
-            ctx,
-            access,
-            &base_expr,
-            &base_type,
-            member_name,
-            prefer_method,
-            &base_type_string,
-        ) {
-            Ok(values) => values,
-            Err(_) => {
-                return placeholder;
-            }
-        };
-
-        // If we failed to find a field on this type with a matching name, check for a member
-        // function with a matching name.
-        let (mut member_type_key, is_method) = match maybe_field_type_key {
-            Some(tk) => (tk, false),
-            None => {
-                match try_resolve_method(
-                    ctx,
-                    access,
-                    base_expr,
-                    base_type_key,
-                    member_name,
-                    base_expr_is_ptr,
-                    &base_type_string,
-                ) {
-                    Ok((base, member_tk, is_method)) => {
-                        base_expr = base;
-                        (member_tk, is_method)
-                    }
-                    Err(_) => return placeholder,
+        let mut member_type_key =
+            match try_resolve_member(ctx, access, &mut base_expr, member_name, prefer_method) {
+                Ok(values) => values,
+                Err(err) => {
+                    ctx.insert_err(err);
+                    return placeholder;
                 }
-            }
+            };
+
+        let member_type = ctx.must_get_type(member_type_key);
+        let (maybe_mem_fn_sig, is_method) = match member_type {
+            AType::Function(fn_sig) if fn_sig.maybe_impl_type_key.is_some() => (Some(fn_sig), true),
+            _ => (None, false),
         };
 
         // Handle polymorphic methods.
-        if is_method {
-            let fn_sig = ctx.must_get_type(member_type_key).to_fn_sig();
+        if let Some(fn_sig) = maybe_mem_fn_sig {
             let missing_params = access.member_symbol.params.is_empty();
 
             match &fn_sig.params {
@@ -136,7 +112,7 @@ impl AMemberAccess {
                             AnalyzeError::new(
                                 ErrorKind::UnresolvedParams,
                                 "unresolved parameters",
-                                access,
+                                &access.member_symbol,
                             )
                             .with_detail(
                                 format!(
@@ -202,154 +178,258 @@ impl AMemberAccess {
     }
 }
 
+/// Tries to resolve the member on the given base expression.
 fn try_resolve_member(
     ctx: &mut ProgramContext,
     access: &MemberAccess,
-    base_expr: &AExpr,
-    base_type: &AType,
+    base_expr: &mut AExpr,
     member_name: &String,
     prefer_method: bool,
-    base_type_string: &String,
-) -> Result<(Option<TypeKey>, TypeKey, bool), ()> {
-    // Check if the member access is accessing a field on a struct type or
-    // a member function or method on a type.
-    let (maybe_field_type_key, base_type_key, base_expr_is_ptr) = match base_type {
-        // Only match struct field types if the base expression is not a type. We'll also avoid
-        // matching struct fields if there is already a method with a matching name and
-        // `prefer_methods` is `true`.
-        AType::Struct(struct_type) => {
-            let base_expr_is_type = base_expr.kind.is_type();
-            let found_method =
-                match ctx.get_or_monomorphize_member_fn(base_expr.type_key, member_name.as_str()) {
-                    // There are no matching methods on this type.
-                    Ok(None) => false,
-                    // There is at least one matching method on this type.
-                    _ => true,
-                };
-            let use_method = prefer_method && found_method;
+) -> AnalyzeResult<TypeKey> {
+    let not_found_err = AnalyzeError::new(
+        ErrorKind::UndefMember,
+        format_code!(
+            "type {} has no member {}",
+            ctx.display_type(base_expr.type_key),
+            member_name
+        )
+        .as_str(),
+        &access.member_symbol,
+    );
+    let use_of_private_field_err = AnalyzeError::new(
+        ErrorKind::UseOfPrivateValue,
+        format_code!("field {} is not public", member_name).as_str(),
+        &access.member_symbol,
+    );
 
-            // Only try to locate the member as a struct field if we're not looking for a
-            // method.
-            if base_expr_is_type || use_method {
-                (None, base_expr.type_key, false)
-            } else {
-                let maybe_field_type_key = struct_type.get_field_type_key(member_name.as_str());
-
-                // Only allow access to the struct field if the struct type is
-                // local to this module or if the field is public.
-                if maybe_field_type_key.is_some()
-                    && !ctx.struct_field_is_accessible(base_expr.type_key, member_name.as_str())
-                {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::UseOfPrivateValue,
-                        format_code!("field {} is not public", member_name).as_str(),
-                        access,
-                    ));
+    if base_expr.kind.is_type() {
+        return match ctx.must_get_type(base_expr.type_key) {
+            AType::Generic(generic_type) => {
+                match resolve_generic_method(
+                    ctx,
+                    &generic_type.clone(),
+                    member_name,
+                    base_expr,
+                    access,
+                ) {
+                    Some(fn_tk) => Ok(fn_tk),
+                    None => Err(not_found_err),
                 }
-
-                (maybe_field_type_key, base_expr.type_key, false)
             }
-        }
 
-        // For pointer types, we'll try to use the pointee type to resolve methods
-        // or member functions.
-        AType::Pointer(ptr_type) => (None, ptr_type.pointee_type_key, true),
+            _ => resolve_concrete_method(ctx, access, base_expr, member_name),
+        };
+    }
 
-        // If the base expression type is generic, it means we're accessing a
-        // method defined via a generic constraint (spec).
-        AType::Generic(generic_type) => {
-            // We need to locate the member function by searching the spec
-            // constraints for this generic type.
-            let mut matching_fns = vec![];
-            let mut matching_specs_names = vec![];
-            'next_spec: for spec_tk in &generic_type.spec_type_keys {
-                let spec = ctx.must_get_type(*spec_tk).to_spec_type();
-                for (fn_name, fn_tk) in &spec.member_fn_type_keys {
-                    if fn_name == member_name.as_str() {
-                        let fn_type = ctx.must_get_type(*fn_tk).to_fn_sig();
-                        matching_fns.push(fn_type);
-                        matching_specs_names.push(spec.name.as_str());
-                        continue 'next_spec;
+    if prefer_method {
+        // First try resolve the member as a method. If no such method exists, then fall back to
+        // searching for struct fields.
+        return match resolve_concrete_method(ctx, access, base_expr, member_name) {
+            // We found it!
+            Ok(member_tk) => Ok(member_tk),
+
+            Err(err) => match &err.kind {
+                // No matching method was found.
+                ErrorKind::UndefMember => match resolve_struct_field(ctx, base_expr, member_name) {
+                    // We found a matching struct field.
+                    Ok(field_tk) => Ok(field_tk),
+
+                    // We found a matching struct field, but it's private.
+                    Err(Some(private_field_tk)) => {
+                        ctx.insert_err(use_of_private_field_err);
+                        Ok(private_field_tk)
                     }
-                }
-            }
 
-            // There may be multiple specs that have functions with matching names,
-            // or none at all.
-            match matching_fns.len() {
-                0 => {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::UndefMember,
-                        format_code!("type {} has no member {}", base_type_string, member_name)
-                            .as_str(),
-                        access,
-                    ));
+                    // No matching struct field was found.
+                    Err(None) => Err(err),
+                },
 
-                    return Err(());
-                }
+                // One or more matching methods was found, but the method use is invalid.
+                _ => Err(err),
+            },
+        };
+    }
 
-                1 => {
-                    // We found a matching member function. We just need to
-                    // change any spec type keys into type keys that match
-                    // the base generic type the function is being called on.
-                    let mut fn_sig = matching_fns[0].clone();
-                    fn_sig.replace_type_and_define(
-                        ctx,
-                        fn_sig.maybe_impl_type_key.unwrap(),
-                        base_expr.type_key,
-                    );
-                    (None, base_expr.type_key, false)
-                }
+    // First try resolve the member as a struct field. If no such field exists, then fall back
+    // to searching for matching methods.
+    match resolve_struct_field(ctx, base_expr, member_name) {
+        // We found a matching struct field.
+        Ok(field_tk) => return Ok(field_tk),
 
-                _ => {
-                    ctx.insert_err(
-                        AnalyzeError::new(
-                            ErrorKind::AmbiguousAccess,
-                            "ambiguous member access",
-                            access,
-                        )
-                        .with_detail(
-                            format!(
-                                "{} is ambiguous because all of the following \
-                                specs used in constraints for generic type {} contain \
-                                functions named {}: {}.",
-                                format_code!(access),
-                                format_code!(generic_type.name),
-                                format_code!(member_name),
-                                format_code_vec(&matching_specs_names, ", "),
-                            )
-                            .as_str(),
-                        )
-                        .with_help(
-                            format_code!(
-                                "Consider calling the function via its type like this: {}.",
-                                format!("{}.{}", matching_specs_names[0], member_name)
-                            )
-                            .as_str(),
-                        ),
-                    );
+        // We found a matching struct field that can't be accessed in this context (it's private).
+        Err(Some(private_field_tk)) => {
+            match resolve_concrete_method(ctx, access, base_expr, member_name) {
+                // We found a matching method, so we'll use that.
+                Ok(member_tk) => Ok(member_tk),
+                Err(err) => match &err.kind {
+                    // We didn't find a matching method, so we'll return the field type and record
+                    // an error indicating that it can't be accessed in this context.
+                    ErrorKind::UndefMember => {
+                        ctx.insert_err(use_of_private_field_err);
+                        Ok(private_field_tk)
+                    }
 
-                    return Err(());
-                }
+                    // We found at least one method, but the way it's used is invalid.
+                    _ => Err(err),
+                },
             }
         }
 
-        _ => (None, base_expr.type_key, false),
-    };
-
-    Ok((maybe_field_type_key, base_type_key, base_expr_is_ptr))
+        // We found no matching struct fields. Just search for matching methods.
+        Err(None) => resolve_concrete_method(ctx, access, base_expr, member_name),
+    }
 }
 
-fn try_resolve_method(
+/// Tries to resolve the member as a struct field.
+/// Returns
+/// - `Ok(field_tk)` if the field was resolved successfully
+/// - `Err(Some(field_tk))` if the field was resolved but is not accessible in this context
+/// - `Err(None)` if no such field exists.
+fn resolve_struct_field(
+    ctx: &mut ProgramContext,
+    base_expr: &mut AExpr,
+    member_name: &str,
+) -> Result<TypeKey, Option<TypeKey>> {
+    let base_type = ctx.must_get_type(base_expr.type_key);
+    let (struct_type, struct_tk, needs_deref) = match base_type {
+        AType::Struct(struct_type) => (struct_type, base_expr.type_key, false),
+        AType::Pointer(ptr_type) => match ctx.must_get_type(ptr_type.pointee_type_key) {
+            AType::Struct(struct_type) => (struct_type, ptr_type.pointee_type_key, true),
+            _ => return Err(None),
+        },
+        _ => {
+            return Err(None);
+        }
+    };
+
+    return match struct_type.get_field_type_key(member_name) {
+        Some(field_tk) => {
+            // Only allow access to the struct field if the struct type is
+            // local to this module or if the field is public.
+            match ctx.struct_field_is_accessible(struct_tk, member_name) {
+                true => {
+                    if needs_deref {
+                        *base_expr = AExpr::new(
+                            AExprKind::UnaryOperation(
+                                Operator::Defererence,
+                                Box::new(base_expr.clone()),
+                            ),
+                            struct_tk,
+                            base_expr.span().clone(),
+                        );
+                    }
+                    Ok(field_tk)
+                }
+                false => Err(Some(field_tk)),
+            }
+        }
+
+        None => Err(None),
+    };
+}
+
+/// Tries to resolve the member as a method on a generic type.
+fn resolve_generic_method(
+    ctx: &mut ProgramContext,
+    generic_type: &AGenericType,
+    member_name: &str,
+    base_expr: &AExpr,
+    access: &MemberAccess,
+) -> Option<TypeKey> {
+    // We need to locate the member function by searching the spec
+    // constraints for this generic type.
+    let mut matching_fns = vec![];
+    let mut matching_specs_names = vec![];
+    'next_spec: for spec_tk in &generic_type.spec_type_keys {
+        let spec = ctx.must_get_type(*spec_tk).to_spec_type();
+        for (fn_name, fn_tk) in &spec.member_fn_type_keys {
+            if fn_name == member_name {
+                let fn_type = ctx.must_get_type(*fn_tk).to_fn_sig();
+                matching_fns.push(fn_type);
+                matching_specs_names.push(spec.name.as_str());
+                continue 'next_spec;
+            }
+        }
+    }
+
+    // There may be multiple specs that have functions with matching names,
+    // or none at all.
+    match matching_fns.len() {
+        0 => {
+            let base_type_str = ctx.display_type(base_expr.type_key);
+            ctx.insert_err(AnalyzeError::new(
+                ErrorKind::UndefMember,
+                format_code!("type {} has no member {}", base_type_str, member_name).as_str(),
+                &access.member_symbol,
+            ));
+
+            None
+        }
+
+        1 => {
+            // We found a matching member function. We just need to
+            // change any spec type keys into type keys that match
+            // the base generic type the function is being called on.
+            let mut fn_sig = matching_fns[0].clone();
+            fn_sig.replace_type_and_define(
+                ctx,
+                fn_sig.maybe_impl_type_key.unwrap(),
+                base_expr.type_key,
+            );
+
+            Some(fn_sig.type_key)
+        }
+
+        _ => {
+            ctx.insert_err(
+                AnalyzeError::new(
+                    ErrorKind::AmbiguousAccess,
+                    "ambiguous member access",
+                    &access.member_symbol,
+                )
+                .with_detail(
+                    format!(
+                        "{} is ambiguous because all of the following \
+                        specs used in constraints for generic type {} contain \
+                        functions named {}: {}.",
+                        format_code!(access),
+                        format_code!(generic_type.name),
+                        format_code!(member_name),
+                        format_code_vec(&matching_specs_names, ", "),
+                    )
+                    .as_str(),
+                )
+                .with_help(
+                    format_code!(
+                        "Consider calling the function via its type like this: {}.",
+                        format!("{}.{}", matching_specs_names[0], member_name)
+                    )
+                    .as_str(),
+                ),
+            );
+
+            None
+        }
+    }
+}
+
+/// Tries to resolve the member on a concrete (non-generic) type.
+fn resolve_concrete_method(
     ctx: &mut ProgramContext,
     access: &MemberAccess,
-    mut base_expr: AExpr,
-    base_type_key: TypeKey,
+    base_expr: &mut AExpr,
     member_name: &String,
-    base_expr_is_ptr: bool,
-    base_type_string: &String,
-) -> Result<(AExpr, TypeKey, bool), ()> {
+) -> AnalyzeResult<TypeKey> {
+    // If the base expression type is a pointer, then we'll try resolving the method on the pointee
+    // type.
+    let (base_type_key, base_expr_is_ptr) = match ctx.must_get_type(base_expr.type_key) {
+        AType::Pointer(ptr_type) => (ptr_type.pointee_type_key, true),
+        _ => (base_expr.type_key, false),
+    };
+
     match ctx.get_or_monomorphize_member_fn(base_type_key, member_name.as_str()) {
+        // We found a single matching member function. We just need to check that it's being used
+        // correctly.
         Ok(Some(member_fn_sig)) => {
             let called_via_type = base_expr.kind.is_type();
             let (takes_self, maybe_self_type_key) = match member_fn_sig.args.first() {
@@ -367,7 +447,7 @@ fn try_resolve_method(
                 ctx.insert_err(AnalyzeError::new(
                     ErrorKind::UseOfPrivateValue,
                     format_code!("function {} is not public", member_name).as_str(),
-                    access,
+                    &access.member_symbol,
                 ))
             }
 
@@ -376,24 +456,20 @@ fn try_resolve_method(
             // takes `self` as its first argument.
             if !called_via_type {
                 if !takes_self {
-                    ctx.insert_err(
-                        AnalyzeError::new(
-                            ErrorKind::UndefMember,
-                            format_code!("{} is not a method", member_name).as_str(),
-                            access,
-                        )
-                        .with_help(
-                            format_code!(
-                                "Consider accessing this function via its type ({}), \
+                    return Err(AnalyzeError::new(
+                        ErrorKind::UndefMember,
+                        format_code!("{} is not a method", member_name).as_str(),
+                        &access.member_symbol,
+                    )
+                    .with_help(
+                        format_code!(
+                            "Consider accessing this function via its type ({}), \
                                 or add {} as the first argument to make it a method.",
-                                format!("{}.{}", ctx.display_type(base_type_key), member_name),
-                                "self"
-                            )
-                            .as_str(),
-                        ),
-                    );
-
-                    return Err(());
+                            format!("{}.{}", ctx.display_type(base_type_key), member_name),
+                            "self"
+                        )
+                        .as_str(),
+                    ));
                 }
 
                 // At this point we know it's a valid method call on a
@@ -407,66 +483,61 @@ fn try_resolve_method(
                         true => {
                             // Record an error if we're not allowed to get a
                             // `&mut` to the base expression.
-                            base_expr.check_referencable_as_mut(ctx, &base_expr);
+                            base_expr.check_referencable_as_mut(ctx, base_expr);
                             Operator::MutReference
                         }
                         false => Operator::Reference,
                     };
 
                     let span = base_expr.span().clone();
-                    base_expr = AExpr::new(
-                        AExprKind::UnaryOperation(op, Box::new(base_expr)),
+                    *base_expr = AExpr::new(
+                        AExprKind::UnaryOperation(op, Box::new(base_expr.clone())),
                         self_arg_type_key,
                         span,
                     );
                 } else if self_arg_type.is_mut_ptr() {
                     // Record an error here because we're trying to call
                     // a method that requires `*mut T` with only a `*T`.
-                    base_expr.check_referencable_as_mut(ctx, &base_expr);
+                    base_expr.check_referencable_as_mut(ctx, base_expr);
                 }
             }
 
-            Ok((base_expr, member_type_key, true))
+            Ok(member_type_key)
         }
 
-        Ok(None) => {
-            // Error and return a placeholder value since we couldn't
-            // locate the member being accessed.
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::UndefMember,
-                format_code!("type {} has no member {}", base_type_string, member_name).as_str(),
-                access,
-            ));
+        // Error and return a placeholder value since we couldn't
+        // locate the member being accessed.
+        Ok(None) => Err(AnalyzeError::new(
+            ErrorKind::UndefMember,
+            format_code!(
+                "type {} has no member {}",
+                ctx.display_type(base_expr.type_key),
+                member_name
+            )
+            .as_str(),
+            &access.member_symbol,
+        )),
 
-            Ok((base_expr, ctx.unknown_type_key(), false))
-        }
-
-        Err(_) => {
-            // Many matching member functions were found by the given name, so this
-            // reference is ambiguous.
-            ctx.insert_err(
-                AnalyzeError::new(
-                    ErrorKind::AmbiguousAccess,
-                    format_code!(
-                        "ambiguous access to member {} on type {}",
-                        member_name,
-                        base_type_string,
-                    )
-                    .as_str(),
-                    access,
-                )
-                .with_detail(
-                    format_code!(
-                        "There are multiple methods named {} on type {}.",
-                        member_name,
-                        base_type_string
-                    )
-                    .as_str(),
-                )
-                .with_help("Consider referring to the method via its type or spec."),
-            );
-
-            Ok((base_expr, ctx.unknown_type_key(), false))
-        }
+        // Many matching member functions were found by the given name, so this
+        // reference is ambiguous.
+        Err(_) => Err(AnalyzeError::new(
+            ErrorKind::AmbiguousAccess,
+            format_code!(
+                "ambiguous access to member {} on type {}",
+                member_name,
+                ctx.display_type(base_expr.type_key),
+            )
+            .as_str(),
+            &access.member_symbol,
+        )
+        .with_detail(
+            format_code!(
+                "There are multiple methods named {} on type {}.",
+                member_name,
+                ctx.display_type(base_expr.type_key)
+            )
+            .as_str(),
+        )
+        .with_help("Consider referring to the method via its type or spec.")),
     }
 }

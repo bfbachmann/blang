@@ -22,6 +22,7 @@ fn do_set[T: Set[str]](t: *mut T, s: str) {
 
 fn main() {
     let mut thing = Thing{s: "wrong"}
+    assert(thing.s == "wrong", "expected 'wrong'")
     do_set[Thing](&mut thing, "new")
     assert(thing.s == "new", "expected 'new'")
 
