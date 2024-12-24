@@ -2,7 +2,7 @@ use "std/libc/proc.bl" @proc
 use "std/backtrace/panic.bl" {assert}
 
 spec Clone {
-    fn test(*self) -> Self
+    fn clone(*self) -> Self
 }
 
 spec DoClone {
@@ -23,9 +23,19 @@ impl Thing: DoClone {
     }
 }
 
+struct Other {
+    value: uint
+}
+
+impl Other: Clone {
+    fn clone(*self) -> Other {
+        return Other{value: self.value}
+    }
+}
+
 fn main() {
     assert(Thing.test[str]("sup!") == "sup!", "expected 'sup!'")
-    assert(Thing{}.do_clone[int](&1) == 1, "expected 1")
+    assert(Thing{}.do_clone[Other](&Other{value: 2}).value == 2, "expected 2")
 
     @proc.exit(0)
 }

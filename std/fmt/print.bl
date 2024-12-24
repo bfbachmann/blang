@@ -133,3 +133,15 @@ impl Arg: Print {
         self.print_fn(self.data, writer)
     }
 }
+
+impl str: Print {
+    fn print(*self, writer: *mut Writer) {
+        writer.write(Slice[u8].from_str(self^))
+    }
+}
+
+impl Slice[u8]: Print {
+    fn print(*self, writer: *mut Writer) {
+        writer.write(self^)
+    }
+}

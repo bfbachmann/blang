@@ -4,7 +4,7 @@ use crate::analyzer::ast::ext::AExternFn;
 use crate::analyzer::ast::func::{analyze_fn_sig, AFn, AFnSig};
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::r#enum::AEnumType;
-use crate::analyzer::ast::r#impl::AImpl;
+use crate::analyzer::ast::r#impl::{is_legal_impl, AImpl};
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::spec::ASpecType;
@@ -244,11 +244,6 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     // resolving type `Self`.
     let impl_type_key = ctx.resolve_maybe_polymorphic_type(&Type::Unresolved(impl_.typ.clone()));
 
-    // Skip the impl if it's illegal.
-    if !ctx.type_declared_in_cur_mod(impl_type_key) {
-        return;
-    }
-
     // If there are parameters for this impl, push them to the program context
     // so we can resolve them when we're analyzing member functions.
     let typ = ctx.must_get_type(impl_type_key);
@@ -309,6 +304,11 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
 
         None => None,
     };
+
+    // Skip the impl if it's illegal.
+    if !is_legal_impl(ctx, impl_type_key, maybe_spec_tk) {
+        return;
+    }
 
     ctx.set_cur_self_type_key(Some(impl_type_key));
     ctx.set_cur_spec_type_key(maybe_spec_tk);

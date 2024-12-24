@@ -488,16 +488,8 @@ impl ProgramContext {
             .must_get_type(generic_type_key)
             .to_generic_type()
             .spec_type_keys;
-        let is_primitive = self.must_get_type(type_key).is_primitive();
 
         for spec_type_key in spec_type_keys.clone() {
-            // TODO: Remove Clone check hack. Primitive types should actually implement clone in
-            // some intrinsics module.
-            let spec_is_clone = self.must_get_type(spec_type_key).to_spec_type().name == "Clone";
-            if is_primitive && spec_is_clone {
-                continue;
-            }
-
             if !self.type_has_spec_impl(type_key, spec_type_key)
                 && !self.type_has_unchecked_spec_impl(type_key, spec_type_key)
             {
@@ -520,7 +512,7 @@ impl ProgramContext {
     fn type_has_unchecked_spec_impl(&mut self, type_key: TypeKey, spec_type_key: TypeKey) -> bool {
         // We haven't yet analyzed an impl block on the type for the given spec, so let's see
         // if it appears in the unchecked impls.
-        if self.type_declared_in_cur_mod(type_key) {
+        if self.type_declared_in_cur_mod(type_key) || self.type_declared_in_cur_mod(spec_type_key) {
             // TODO: this is expensive, we should only have to do it once. I'm not going to bother
             // fixing it for now, though, because it should be rare that this is needed anyway.
             for (impl_type, maybe_spec_type) in self.cur_mod_ctx().unchecked_impls.clone() {
@@ -1485,12 +1477,16 @@ impl ProgramContext {
             )
             .with_detail(
                 format!(
-                    "Type {} does not implement the following specs required \
-                    by parameter {} on {}: {}",
+                    "{} does not implement spec{} {} required \
+                    by parameter {} in {}.",
                     format_code!(param_type_display),
+                    match missing_spec_names.len() {
+                        1 => "",
+                        _ => "s",
+                    },
+                    format_code_vec(&missing_spec_names, ", "),
                     format_code!(expected_param.name),
                     format_code!(type_display),
-                    format_code_vec(&missing_spec_names, ", ")
                 )
                 .as_str(),
             ));
@@ -2503,7 +2499,7 @@ impl ProgramContext {
                 None => "[]".to_string(),
             },
 
-            AType::Function(fn_sig) => fn_sig.display(self, true),
+            AType::Function(fn_sig) => fn_sig.display(self),
 
             AType::Pointer(ptr_type) => format!(
                 "*{}{}",

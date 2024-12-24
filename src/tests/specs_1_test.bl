@@ -47,9 +47,17 @@ fn get_value_2[T: Get2]() -> int {
     return T.get_value()
 }
 
+// Check that we can implement local specs on foreign types.
+impl str: Get1 {
+    fn get_value() -> int {
+        return 1
+    }
+}
+
 fn main() {
     assert(call_test[Thing]() == 784, "expected 784")
     assert(get_value_1[Getter]() == 1, "expected 1")
     assert(get_value_2[Getter]() == 2, "expected 2")
+    assert(get_value_1[str]() == 1, "expected 1")
     exit(0)
 }

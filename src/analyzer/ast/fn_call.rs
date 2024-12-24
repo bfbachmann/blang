@@ -97,7 +97,7 @@ impl AFnCall {
                 ErrorKind::WrongNumberOfArgs,
                 format!(
                     "{} expects {} argument{}, but found {}",
-                    format_code!("{}", fn_type.display(ctx, false)),
+                    format_code!("{}", fn_type.display(ctx)),
                     expected_args,
                     match expected_args {
                         1 => "",

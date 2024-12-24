@@ -29,6 +29,11 @@ impl AImpl {
     /// Performs semantic analysis on an `impl` block and returns the analyzed
     /// result.
     pub fn from(ctx: &mut ProgramContext, impl_: &Impl) -> AImpl {
+        let placeholder = AImpl {
+            type_key: ctx.unknown_type_key(),
+            member_fns: vec![],
+        };
+
         // Make sure the `impl` block is not being defined inside a function.
         if ctx.is_in_fn() {
             ctx.insert_err(AnalyzeError::new(
@@ -37,10 +42,7 @@ impl AImpl {
                 impl_,
             ));
 
-            return AImpl {
-                type_key: ctx.unknown_type_key(),
-                member_fns: vec![],
-            };
+            return placeholder;
         }
 
         // Get the type key of the type for this impl.
@@ -50,28 +52,7 @@ impl AImpl {
         // Abort early if the type failed analysis.
         let typ = ctx.must_get_type(type_key);
         if typ.is_unknown() {
-            return AImpl {
-                type_key: ctx.unknown_type_key(),
-                member_fns: vec![],
-            };
-        }
-
-        // Record an error and return early if the type was not defined in this module.
-        if !ctx.type_declared_in_cur_mod(parent_tk) {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::IllegalImpl,
-                format_code!(
-                    "cannot define impl for foreign type {}",
-                    ctx.display_type(type_key)
-                )
-                .as_str(),
-                &impl_.typ,
-            ));
-
-            return AImpl {
-                type_key: ctx.unknown_type_key(),
-                member_fns: vec![],
-            };
+            return placeholder;
         }
 
         // If there are parameters for this impl, push them to the program context
@@ -118,6 +99,49 @@ impl AImpl {
 
             None => None,
         };
+
+        // Record an error and return early if the type was not defined in this module.
+        match maybe_spec_tk {
+            Some(spec_tk) => {
+                if !is_legal_spec_impl(ctx, parent_tk, spec_tk) {
+                    ctx.insert_err(
+                        AnalyzeError::new(
+                            ErrorKind::IllegalImpl,
+                            format_code!(
+                                "cannot implement foreign spec {} for foreign type {}",
+                                ctx.display_type(spec_tk),
+                                ctx.display_type(type_key)
+                            )
+                            .as_str(),
+                            &impl_.typ,
+                        )
+                        .with_detail(
+                            "Either the type or the spec being implemented must be \
+                                defined in this module.",
+                        ),
+                    );
+
+                    return placeholder;
+                }
+            }
+
+            None => {
+                if !is_legal_impl(ctx, parent_tk, None) {
+                    ctx.insert_err(AnalyzeError::new(
+                        ErrorKind::IllegalImpl,
+                        format_code!(
+                            "cannot define {} for foreign type {}",
+                            "impl",
+                            ctx.display_type(type_key)
+                        )
+                        .as_str(),
+                        &impl_.typ,
+                    ));
+
+                    return placeholder;
+                }
+            }
+        }
 
         // Analyze member functions.
         let mut member_fns: HashMap<String, (AFn, &Function)> = HashMap::new();
@@ -223,7 +247,7 @@ fn check_spec_impl(
                             format_code!(
                                 "Spec {} defines the function as {}.",
                                 ctx.display_type(spec_tk),
-                                spec_fn_sig.display(ctx, false),
+                                spec_fn_sig.display(ctx),
                             )
                             .as_str(),
                         ),
@@ -294,4 +318,37 @@ fn check_spec_impl(
 
     let spec_is_pub = ctx.type_is_pub(spec_tk);
     (spec_is_pub, spec_impl_errs)
+}
+
+/// Returns whether the `impl` block for type `impl_tk` (optionally for spec `maybe_spec_tk`) is
+/// legal. The impl would be considered legal if any of the following are true
+/// - `maybe_spec_tk` is `None` (i.e. it's a default `impl`), and `impl_tk` refers to a local type
+/// - neither the impl type or the spec type are foreign.
+pub fn is_legal_impl(
+    ctx: &mut ProgramContext,
+    impl_tk: TypeKey,
+    maybe_spec_tk: Option<TypeKey>,
+) -> bool {
+    match maybe_spec_tk {
+        Some(spec_tk) => is_legal_spec_impl(ctx, impl_tk, spec_tk),
+        None => ctx.type_declared_in_cur_mod(impl_tk),
+    }
+}
+
+/// Returns whether the given spec can be implemented for the given type. Spec `S` can be
+/// implemented for type `T` only if `S` and/or `T` were defined in the current module. In other
+/// words, the `impl` is illegal if both `S` and `T` are foreign types.
+pub fn is_legal_spec_impl(ctx: &mut ProgramContext, impl_tk: TypeKey, spec_tk: TypeKey) -> bool {
+    if !ctx.type_declared_in_cur_mod(impl_tk) {
+        let poly_spec_tk = match ctx.type_monomorphizations.get(&spec_tk) {
+            Some(mono) => mono.poly_type_key,
+            None => spec_tk,
+        };
+
+        if !ctx.type_declared_in_cur_mod(poly_spec_tk) {
+            return false;
+        }
+    }
+
+    true
 }

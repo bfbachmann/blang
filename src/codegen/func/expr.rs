@@ -18,7 +18,7 @@ use crate::analyzer::ast::tuple::ATupleInit;
 use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::parser::ast::op::Operator;
 
-use super::{get_mangled_fn_name, FnCodeGen};
+use super::{mangle_fn_name, FnCodeGen};
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles an arbitrary expression.
@@ -81,7 +81,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 // Shouldn't need to generate anything here. The function should already
                 // have been generated. We just need to return it.
                 let mangled_name =
-                    get_mangled_fn_name(self.type_converter, &anon_fn.signature, true);
+                    mangle_fn_name(self.type_converter, &anon_fn.signature, true);
                 self.module
                     .get_function(&mangled_name)
                     .expect(format!("function {mangled_name} should exist").as_str())

@@ -494,11 +494,6 @@ fn walk_type_key(collector: &mut MonoItemCollector, type_key: TypeKey) {
                 None => mapped_impl_tk,
             };
 
-            // Nothing to do if this is a method on a primitive type (i.e. intrinsic).
-            if collector.get_type(poly_impl_tk).is_primitive() {
-                return;
-            }
-
             // Find the actual method on the original type.
             match collector.ctx.get_spec_impl_by_fn(type_key) {
                 Some(spec_tk) => {
