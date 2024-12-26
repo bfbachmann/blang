@@ -276,8 +276,13 @@ impl AEnumVariantInit {
                 // This enum type has no such variant. Record the error and return a placeholder
                 // value.
                 ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::TypeIsNotEnum,
-                    format_code!("enum {} has no variant", enum_init.variant_name).as_str(),
+                    ErrorKind::UndefType,
+                    format_code!(
+                        "enum type {} has no variant {}",
+                        ctx.display_type(enum_type_key),
+                        enum_init.variant_name
+                    )
+                    .as_str(),
                     enum_init,
                 ));
 

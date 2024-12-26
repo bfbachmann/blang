@@ -157,8 +157,8 @@ pub enum TokenKind {
     If,
     #[token("else")]
     Else,
-    #[token("elsif")]
-    Elsif,
+    #[token("match")]
+    Match,
     #[token("for")]
     For,
     #[token("while")]
@@ -305,7 +305,7 @@ impl TokenKind {
             TokenKind::Mut => "mut".to_string(),
             TokenKind::If => "if".to_string(),
             TokenKind::Else => "else".to_string(),
-            TokenKind::Elsif => "elsif".to_string(),
+            TokenKind::Match => "match".to_string(),
             TokenKind::For => "for".to_string(),
             TokenKind::While => "while".to_string(),
             TokenKind::Loop => "loop".to_string(),

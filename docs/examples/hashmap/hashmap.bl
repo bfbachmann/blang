@@ -152,7 +152,7 @@ impl HashMap {
                 if entry_ptr != null && entry_ptr^.key.eq(k) {
                     return {index, true}
                 }
-            } elsif self^.table.entry_is_empty(index) {
+            } else if self^.table.entry_is_empty(index) {
                 return {index, true}
             }
         }

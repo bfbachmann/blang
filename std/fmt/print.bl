@@ -75,12 +75,12 @@ impl Format: Print {
                     substr_start = i + 1
                     
                     yield 0u8
-                } elsif last_char != '\\' as u8 && cur_char == '%' as u8 {
+                } else if last_char != '\\' as u8 && cur_char == '%' as u8 {
                     write_substr(writer, &fmt, substr_start, i)
                     substr_start = i + 1
 
                     print_next_arg(writer, &self.args, &mut arg_i)
-                } elsif last_char == '\\' as u8 && cur_char == '%' as u8 {
+                } else if last_char == '\\' as u8 && cur_char == '%' as u8 {
                     write_substr(writer, &fmt, substr_start, i - 1)
                     
                     writer.write(Slice[u8].from_str("%"))

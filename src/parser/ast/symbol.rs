@@ -148,4 +148,14 @@ impl Symbol {
     pub fn as_unresolved_type(&self) -> Type {
         Type::Unresolved(UnresolvedType::from_symbol(self.clone()))
     }
+
+    /// Returns true if the symbol is the wildcard symbol `_`.
+    pub fn is_wildcard(&self) -> bool {
+        self.name == "_" && self.maybe_mod_name.is_none() && self.params.is_empty()
+    }
+
+    /// Returns true if the symbol is just a simple identifier (i.e. no params or mod name).
+    pub fn is_name_only(&self) -> bool {
+        self.params.is_empty() && self.maybe_mod_name.is_none()
+    }
 }

@@ -7,7 +7,9 @@ use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::passes::PassManager;
 use inkwell::types::{AnyType, AnyTypeEnum, BasicTypeEnum};
-use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
+use inkwell::values::{
+    AnyValue, BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue,
+};
 
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::func::{AFn, AFnSig};
@@ -503,6 +505,47 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 .build_extract_value(ll_enum_value.into_struct_value(), 0, "variant_number")
                 .unwrap()
                 .into_int_value()
+        }
+    }
+
+    /// If `as_ptr` is true, returns a pointer to the value field in the enum. Otherwise, returns
+    /// the value itself.
+    fn get_enum_inner_val(
+        &mut self,
+        enum_tk: TypeKey,
+        inner_tk: TypeKey,
+        ll_enum_value: BasicValueEnum<'ctx>,
+        as_ptr: bool,
+    ) -> BasicValueEnum<'ctx> {
+        let ll_enum_type = self.type_converter.get_basic_type(enum_tk);
+
+        match ll_enum_value.is_pointer_value() {
+            true => {
+                let ll_inner_val_ptr = self
+                    .builder
+                    .build_struct_gep(
+                        ll_enum_type,
+                        ll_enum_value.into_pointer_value(),
+                        1,
+                        "enum_inner_val_ptr",
+                    )
+                    .unwrap();
+
+                match as_ptr {
+                    true => ll_inner_val_ptr.as_basic_value_enum(),
+                    false => self.load_if_basic(ll_inner_val_ptr, inner_tk, "enum_inner_val"),
+                }
+            }
+
+            false => {
+                assert!(
+                    !as_ptr,
+                    "cannot load enum inner value as pointer from non-pointer value"
+                );
+                self.builder
+                    .build_extract_value(ll_enum_value.into_struct_value(), 1, "enum_inner_val")
+                    .unwrap()
+            }
         }
     }
 }

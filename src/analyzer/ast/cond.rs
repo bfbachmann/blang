@@ -15,7 +15,7 @@ use crate::{locatable_impl, util};
 pub struct ABranch {
     pub cond: Option<AExpr>,
     pub body: AClosure,
-    span: Span,
+    pub span: Span,
 }
 
 impl PartialEq for ABranch {

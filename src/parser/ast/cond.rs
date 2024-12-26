@@ -59,13 +59,13 @@ impl Conditional {
     /// Parses conditionals. Expects token sequences of the forms
     ///
     ///     if <if_cond> <body>
-    ///     elsif <elsif_cond> <body>
+    ///     else if <else_if_cond> <body>
     ///     else <body>
     ///
     /// where
-    ///  - the `elsif` and `else` branches are optional, and the `elsif` branch is repeatable
+    ///  - the `else if` and `else` branches are optional, and the `else if` branch is repeatable
     ///  - `if_cond` is an expression that represents the `if` branch condition
-    ///  - `elsif_cond` is an expression that represents the `elsif` branch condition
+    ///  - `else_if_cond` is an expression that represents the `else if` branch condition
     ///  - `body` is a statement that represents the branch body.
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
         // The first token should be `if`.
@@ -74,22 +74,11 @@ impl Conditional {
         // Parse the rest of the branch (the expression and the closure).
         let branch = Branch::from(tokens, true)?;
 
-        // We now have the first `if` branch. Continue by adding other `elsif` branches until
+        // We now have the first `if` branch. Continue by adding other `else if` branches until
         // there are none left.
         let mut branches = vec![branch];
         loop {
             match tokens.peek_next() {
-                Some(&Token {
-                    kind: TokenKind::Elsif,
-                    ..
-                }) => {
-                    // Move past the `elsif` token.
-                    tokens.next();
-
-                    // Parse the rest of the branch and add it to the list of branches.
-                    let branch = Branch::from(tokens, true)?;
-                    branches.push(branch);
-                }
                 Some(&Token {
                     kind: TokenKind::Else,
                     ..
@@ -97,15 +86,31 @@ impl Conditional {
                     // Move past the `else` token.
                     tokens.next();
 
-                    // Parse the rest of the branch and add it to the list of branches, then break
-                    // because we're reached the end of the conditional.
-                    let branch = Branch::from(tokens, false)?;
-                    branches.push(branch);
-                    break;
+                    match tokens.peek_next() {
+                        // `else if` branch
+                        Some(Token {
+                            kind: TokenKind::If,
+                            ..
+                        }) => {
+                            // Move past the `if` token.
+                            tokens.next();
+                            let branch = Branch::from(tokens, true)?;
+                            branches.push(branch);
+                        }
+
+                        // `else` branch.
+                        _ => {
+                            // Parse the rest of the branch and add it to the list of branches, then break
+                            // because we're reached the end of the conditional.
+                            let branch = Branch::from(tokens, false)?;
+                            branches.push(branch);
+                            break;
+                        }
+                    }
                 }
+
                 _ => {
-                    // The next token is not `elsif` or `else`, so we assume it's some new
-                    // statement and break.
+                    // The next token is not `else`, so we assume it's some new statement and break.
                     break;
                 }
             }

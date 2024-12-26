@@ -26,6 +26,7 @@ pub mod index;
 pub mod int_lit;
 pub mod lambda;
 pub mod r#loop;
+pub mod r#match;
 pub mod member;
 pub mod op;
 pub mod params;

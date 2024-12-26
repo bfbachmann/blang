@@ -185,7 +185,7 @@ mod tests {
 
                     if i == 10 {
                         break
-                    } elsif i % 2 == 0 {
+                    } else if i % 2 == 0 {
                         print("i is even")
                     } else {
                         print("i is odd")
@@ -1350,7 +1350,7 @@ mod tests {
                 fn main() {
                     let result = from if true {
                         yield 1
-                    } elsif false {
+                    } else if false {
                         yield "bing"
                     } else {
                         yield 3
@@ -1474,11 +1474,11 @@ mod tests {
     }
 
     #[test]
-    fn cond_ending_with_elsif() {
+    fn cond_ending_with_else_if() {
         let result = analyze(
             r#"
             fn main() {
-                if true {} elsif false {}
+                if true {} else if false {}
             }
             "#,
         );

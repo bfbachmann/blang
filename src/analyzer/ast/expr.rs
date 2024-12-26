@@ -487,8 +487,7 @@ impl AExpr {
             ctx.insert_err(
                 AnalyzeError::new(
                     ErrorKind::InvalidMutRef,
-                    format_code!("cannot get mutating pointer to constant value {}", symbol)
-                        .as_str(),
+                    format_code!("cannot mutably reference constant value {}", symbol).as_str(),
                     loc,
                 )
                 .with_help(
@@ -500,8 +499,7 @@ impl AExpr {
             ctx.insert_err(
                 AnalyzeError::new(
                     ErrorKind::InvalidMutRef,
-                    format_code!("cannot get mutating pointer to immutable value {}", symbol)
-                        .as_str(),
+                    format_code!("cannot mutably reference immutable value {}", symbol).as_str(),
                     loc,
                 )
                 .with_help(format_code!("Consider declaring {} as mutable.", symbol).as_str()),
@@ -817,7 +815,7 @@ impl AExpr {
 /// Checks that the operands of a binary operation are compatible with the operator and one
 /// another. If successful, returns the type key of the operands (their types should be the
 /// same).
-fn check_operand_types(
+pub fn check_operand_types(
     ctx: &ProgramContext,
     left_expr: &AExpr,
     op: &Operator,
@@ -1468,6 +1466,44 @@ fn analyze_from(
     ));
     let statement = AStatement::from(ctx, &from.statement);
 
+    // Make sure the statement is a valid kind.
+    let valid_statement = match &statement {
+        AStatement::Loop(loop_)
+            if loop_.maybe_init.is_none()
+                && loop_.maybe_cond.is_none()
+                && loop_.maybe_update.is_none() =>
+        {
+            true
+        }
+        AStatement::Match(_) | AStatement::Conditional(_) | AStatement::Closure(_) => true,
+        _ => {
+            ctx.insert_err(
+                AnalyzeError::new(
+                    ErrorKind::InvalidStatement,
+                    format_code!("invalid {} expression", "from").as_str(),
+                    from,
+                )
+                .with_detail(
+                    format_code!(
+                        "The statement following {} must be a conditional, {}, {}, or closure.",
+                        "from",
+                        "match",
+                        "loop",
+                    )
+                    .as_str(),
+                )
+                .with_help(
+                    format_code!(
+                        "Consider wrapping the statement following {} in a closure.",
+                        "from"
+                    )
+                    .as_str(),
+                ),
+            );
+            false
+        }
+    };
+
     // Determined the yielded type key based on the type key that was set on
     // the `from` block scope. This will be the expected yield type key if one
     // was specified, or it will be a value determined based on the type of
@@ -1480,7 +1516,9 @@ fn analyze_from(
 
     // Make sure all possible branches of the statement yield a value.
     let mut closure = AClosure::new(vec![statement], from.statement.span().clone());
-    check_closure_yields(ctx, &closure, &ScopeKind::FromBody);
+    if valid_statement {
+        check_closure_yields(ctx, &closure, &ScopeKind::FromBody);
+    }
 
     AExpr {
         type_key,
@@ -1756,7 +1794,7 @@ mod tests {
     #[test]
     fn analyze_var() {
         let mut ctx = ProgramContext::new("test", vec!["test"]);
-        ctx.insert_symbol(ScopedSymbol::new("myvar", ctx.str_type_key(), false));
+        ctx.insert_scoped_symbol(ScopedSymbol::new("myvar", ctx.str_type_key(), false));
         let result = AExpr::from(
             &mut ctx,
             Expression::Symbol(Symbol::new_with_default_pos("myvar")),

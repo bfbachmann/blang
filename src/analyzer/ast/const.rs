@@ -52,7 +52,7 @@ impl AConst {
         let value = AExpr::from(ctx, const_decl.value.clone(), declared_tk, false, false);
 
         // Add the symbol to the program context so it can be used later.
-        ctx.insert_symbol(ScopedSymbol::new_const(
+        ctx.insert_scoped_symbol(ScopedSymbol::new_const(
             const_decl.name.as_str(),
             value.type_key,
             ctx.get_cur_mod_path().to_owned(),

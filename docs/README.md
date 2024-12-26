@@ -28,7 +28,7 @@ The language and compiler are still very young, so they still lack some critical
     * [Tuples: `{...}`](#tuples-)
     * [Arrays: `[...]`](#arrays-)
     * [Implementations, Methods, and Method Calls: `impl`, `fn`](#implementations-methods-and-method-calls-impl-fn)
-    * [Conditionals: `if`, `elsif`, `else`](#conditionals-if-elsif-else)
+    * [Conditionals: `if`, `else if`, `else`](#conditionals-if-elsif-else)
     * [Loops: `for`, `while`, `loop`](#loops-for-while-loop)
         * [`for` loops](#for-loops)
         * [`while` loops](#while-loops)
@@ -306,7 +306,7 @@ fn apply_discounts(user: *User) {
 Arbitrarily many `impl` blocks can be declared for the same type. This way, logic associated with a type can easily
 be split up over multiple files.
 
-### Conditionals: `if`, `elsif`, `else`
+### Conditionals: `if`, `else if`, `else`
 
 ```
 enum Cmp {
@@ -318,7 +318,7 @@ enum Cmp {
 fn compare(a: i64, b: i64) -> Cmp {
     if a > b {
         return Cmp::GreaterThan
-    } elsif a < b {
+    } else if a < b {
         return Cmp::LessThan
     } else {
         return Cmp::Equal

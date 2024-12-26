@@ -80,8 +80,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AExprKind::AnonFunction(anon_fn) => {
                 // Shouldn't need to generate anything here. The function should already
                 // have been generated. We just need to return it.
-                let mangled_name =
-                    mangle_fn_name(self.type_converter, &anon_fn.signature, true);
+                let mangled_name = mangle_fn_name(self.type_converter, &anon_fn.signature, true);
                 self.module
                     .get_function(&mangled_name)
                     .expect(format!("function {mangled_name} should exist").as_str())
@@ -1030,7 +1029,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Compiles a comparison operation expression.
-    fn gen_cmp_op(
+    pub(crate) fn gen_cmp_op(
         &mut self,
         mut ll_lhs: BasicValueEnum<'ctx>,
         left_type_key: TypeKey,
@@ -1148,7 +1147,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Generates code for integer value comparisons.
-    fn gen_int_cmp(
+    pub fn gen_int_cmp(
         &mut self,
         op: &Operator,
         ll_lhs: BasicValueEnum<'ctx>,

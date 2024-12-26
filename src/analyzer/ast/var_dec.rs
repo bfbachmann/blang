@@ -44,7 +44,7 @@ impl AVarDecl {
         };
 
         // The variable expression is valid. Add it to the program context.
-        ctx.insert_symbol(ScopedSymbol::new(
+        ctx.insert_scoped_symbol(ScopedSymbol::new(
             var_decl.name.as_str(),
             rich_expr.type_key,
             var_decl.is_mut,

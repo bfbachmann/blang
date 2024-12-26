@@ -1528,7 +1528,6 @@ impl ProgramContext {
     }
 
     /// Returns the type key for the analyzer-internal `<none>` type.
-    #[cfg(test)]
     pub fn none_type_key(&self) -> TypeKey {
         *self.primitive_type_keys.get("<none>").unwrap()
     }
@@ -1936,7 +1935,7 @@ impl ProgramContext {
                         a_symbol.type_key,
                         used_mod.path.raw.clone(),
                     );
-                    self.insert_symbol(scoped_symbol);
+                    self.insert_scoped_symbol(scoped_symbol);
                 }
             }
         }
@@ -2311,7 +2310,7 @@ impl ProgramContext {
     /// Adds the symbol type key to the current scope in the current module context.
     /// This will only make the symbol resolvable within the current module.
     /// If there was already a symbol with the same name, returns the old symbol.
-    pub fn insert_symbol(&mut self, symbol: ScopedSymbol) -> Option<ScopedSymbol> {
+    pub fn insert_scoped_symbol(&mut self, symbol: ScopedSymbol) -> Option<ScopedSymbol> {
         self.cur_mod_ctx_mut()
             .stack
             .back_mut()

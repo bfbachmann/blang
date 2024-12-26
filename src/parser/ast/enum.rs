@@ -199,7 +199,7 @@ impl PartialEq for EnumVariantInit {
     fn eq(&self, other: &Self) -> bool {
         self.typ == other.typ
             && self.variant_name == other.variant_name
-            && util::opts_eq(&self.maybe_value, &other.maybe_value)
+            && self.maybe_value == other.maybe_value
     }
 }
 

@@ -5,6 +5,7 @@ use crate::analyzer::analyze::ProgramAnalysis;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::ext::AExternFn;
 use crate::analyzer::ast::func::AFn;
+use crate::analyzer::ast::r#match::APattern;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::prog_context::ProgramContext;
@@ -326,6 +327,25 @@ fn walk_statement(collector: &mut MonoItemCollector, statement: AStatement) {
                 }
 
                 for statement in branch.body.statements {
+                    walk_statement(collector, statement);
+                }
+            }
+        }
+
+        AStatement::Match(match_) => {
+            for case in match_.cases {
+                match case.pattern {
+                    APattern::Expr(expr) => {
+                        walk_expr(collector, expr);
+                    }
+                    APattern::LetEnumVariant(_, _, _, _) | APattern::Wildcard => {}
+                }
+
+                if let Some(cond) = case.maybe_cond {
+                    walk_expr(collector, cond);
+                }
+
+                for statement in case.body.statements {
                     walk_statement(collector, statement);
                 }
             }

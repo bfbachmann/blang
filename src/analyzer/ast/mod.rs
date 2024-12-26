@@ -12,6 +12,7 @@ pub mod generic;
 pub mod r#impl;
 pub mod index;
 pub mod r#loop;
+pub mod r#match;
 pub mod member;
 pub mod module;
 pub mod params;

@@ -542,6 +542,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
 ///     <tuple_init>
 ///     <struct_init>
 ///     <enum_init>
+///     <pattern>
 ///     <literal>
 ///     <symbol>
 ///     <from>

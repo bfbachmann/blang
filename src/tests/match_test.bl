@@ -1,0 +1,27 @@
+use "std/libc/proc.bl" @proc
+use "std/backtrace/panic.bl" {panic}
+
+enum MyEnum {
+    A(int)
+    B(bool)
+    C
+}
+
+fn main() {
+    let mut value = MyEnum::A(5)
+    match &mut value {
+        let MyEnum::A(v) {
+            v^ *= 2
+        }
+        _ {}
+    }
+
+    match value {
+        let MyEnum::A(v) if v == 10 {}
+        _ {
+            panic("expected MyEnum::(10)")
+        }
+    }
+
+    @proc.exit(0)
+}

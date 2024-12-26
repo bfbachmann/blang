@@ -4,6 +4,7 @@ use std::fmt::Formatter;
 use crate::analyzer::ast::arg::AArg;
 use crate::analyzer::ast::cond::ACond;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
+use crate::analyzer::ast::r#match::{AMatch, APattern};
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
@@ -478,6 +479,32 @@ fn search_statement(statement: &AStatement, is_match: &impl Fn(&AStatement) -> b
             false
         }
 
+        AStatement::Match(match_) => {
+            for case in &match_.cases {
+                match &case.pattern {
+                    APattern::Expr(pattern) => {
+                        if search_expr(pattern, &|expr| search_expr_for_statement(expr, is_match)) {
+                            return true;
+                        }
+                    }
+
+                    APattern::LetEnumVariant(_, _, _, _) | APattern::Wildcard => {}
+                }
+
+                if let Some(cond) = &case.maybe_cond {
+                    if search_expr(cond, &|expr| search_expr_for_statement(expr, is_match)) {
+                        return true;
+                    }
+                }
+
+                if search_closure(&case.body, is_match) {
+                    return true;
+                }
+            }
+
+            false
+        }
+
         AStatement::Loop(loop_) => {
             if let Some(init) = &loop_.maybe_init {
                 if is_match(init) {
@@ -586,6 +613,32 @@ fn search_statement_for_expr(statement: &AStatement, is_match: &impl Fn(&AExpr) 
 
             false
         }
+
+        AStatement::Match(match_) => {
+            for case in &match_.cases {
+                match &case.pattern {
+                    APattern::Expr(expr) => {
+                        if search_expr(expr, is_match) {
+                            return true;
+                        }
+                    }
+                    APattern::Wildcard | APattern::LetEnumVariant(_, _, _, _) => {}
+                }
+
+                if let Some(cond) = &case.maybe_cond {
+                    if search_expr(cond, is_match) {
+                        return true;
+                    }
+                }
+
+                if search_closure_for_expr(&case.body, is_match) {
+                    return true;
+                }
+            }
+
+            false
+        }
+
         AStatement::Loop(loop_) => {
             if let Some(init) = &loop_.maybe_init {
                 if search_statement_for_expr(init, is_match) {
@@ -643,7 +696,7 @@ pub fn check_closure_yields(ctx: &mut ProgramContext, closure: &AClosure, kind: 
     // One of the following yield conditions must be satisfied by the final
     // statement in the closure.
     //  1. It is a yield statement.
-    //  2. It is an exhaustive conditional where each branch closure satisfies these yield
+    //  2. It is an exhaustive conditional/match where each branch closure satisfies these yield
     //     conditions.
     //  3. It is a loop that contains a yield anywhere that satisfies these yield conditions
     //     and has no breaks.
@@ -663,7 +716,11 @@ pub fn check_closure_yields(ctx: &mut ProgramContext, closure: &AClosure, kind: 
 
                 // If it's a conditional, make sure it is exhaustive and recurse on each branch.
                 Some(AStatement::Conditional(cond)) => {
-                    check_cond_yields(ctx, &cond);
+                    check_cond_yields(ctx, cond);
+                }
+
+                Some(AStatement::Match(match_)) => {
+                    check_match_yields(ctx, match_);
                 }
 
                 // If it's a loop, recurse on the loop body.
@@ -759,6 +816,13 @@ fn check_cond_yields(ctx: &mut ProgramContext, cond: &ACond) {
 
     for branch in &cond.branches {
         check_closure_yields(ctx, &branch.body, &ScopeKind::BranchBody);
+    }
+}
+
+/// Checks that all cases in the given match statement yield.
+fn check_match_yields(ctx: &mut ProgramContext, match_: &AMatch) {
+    for case in &match_.cases {
+        check_closure_yields(ctx, &case.body, &ScopeKind::BranchBody)
     }
 }
 

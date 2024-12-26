@@ -15,7 +15,7 @@ use crate::parser::module::Module;
 pub struct VariableAssignment {
     pub target: Expression,
     pub value: Expression,
-    span: Span,
+    pub span: Span,
 }
 
 locatable_impl!(VariableAssignment);

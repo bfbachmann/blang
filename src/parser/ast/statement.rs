@@ -16,6 +16,7 @@ use crate::parser::ast::r#const::Const;
 use crate::parser::ast::r#enum::EnumType;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#loop::Loop;
+use crate::parser::ast::r#match::Match;
 use crate::parser::ast::r#struct::StructType;
 use crate::parser::ast::r#use::UsedModule;
 use crate::parser::ast::r#yield::Yield;
@@ -36,6 +37,7 @@ pub enum Statement {
     Closure(Closure),
     FunctionCall(FuncCall),
     Conditional(Conditional),
+    Match(Match),
     Loop(Box<Loop>),
     Break(Break),
     Continue(Continue),
@@ -74,6 +76,9 @@ impl fmt::Display for Statement {
             }
             Statement::Conditional(_) => {
                 write!(f, "if ...")
+            }
+            Statement::Match(_) => {
+                write!(f, "match ...")
             }
             Statement::Loop(_) => {
                 write!(f, "loop {{ ... }}")
@@ -138,6 +143,7 @@ impl Locatable for Statement {
             Statement::Closure(closure) => closure.start_pos(),
             Statement::FunctionCall(call) => call.start_pos(),
             Statement::Conditional(cond) => cond.start_pos(),
+            Statement::Match(match_) => match_.start_pos(),
             Statement::Loop(l) => l.start_pos(),
             Statement::Break(br) => br.start_pos(),
             Statement::Continue(cont) => cont.start_pos(),
@@ -161,6 +167,7 @@ impl Locatable for Statement {
             Statement::Closure(closure) => closure.end_pos(),
             Statement::FunctionCall(call) => call.end_pos(),
             Statement::Conditional(cond) => cond.end_pos(),
+            Statement::Match(match_) => match_.end_pos(),
             Statement::Loop(l) => l.end_pos(),
             Statement::Break(br) => br.end_pos(),
             Statement::Continue(cont) => cont.end_pos(),
@@ -184,6 +191,7 @@ impl Locatable for Statement {
             Statement::Closure(closure) => closure.span(),
             Statement::FunctionCall(call) => call.span(),
             Statement::Conditional(cond) => cond.span(),
+            Statement::Match(match_) => match_.span(),
             Statement::Loop(l) => l.span(),
             Statement::Break(br) => br.span(),
             Statement::Continue(cont) => cont.span(),
@@ -208,6 +216,7 @@ impl Statement {
     ///  - closure (see `Closure::from`)
     ///  - expression (see `Expression::from`)
     ///  - conditional (see `Conditional::from`)
+    ///  - match (see `Match::from`)
     ///  - loop (see `Loop::from`)
     ///  - break
     ///  - continue
@@ -276,6 +285,9 @@ impl Statement {
                 let cond = Conditional::from(tokens)?;
                 Ok(Statement::Conditional(cond))
             }
+
+            // If the first token is `match`, is must be a match statement.
+            (TokenKind::Match, _) => Ok(Statement::Match(Match::from(tokens)?)),
 
             // If the first token is `for`, `while` or `loop`, it must be a loop.
             (TokenKind::For | TokenKind::While | TokenKind::Loop, _) => {

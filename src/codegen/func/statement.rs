@@ -39,6 +39,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AStatement::Conditional(cond) => {
                 self.gen_cond(cond)?;
             }
+            AStatement::Match(match_) => {
+                self.gen_match(match_)?;
+            }
             AStatement::Loop(closure) => {
                 self.gen_loop(closure)?;
             }

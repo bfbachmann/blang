@@ -459,7 +459,7 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> Result<Program
     // Die if analysis failed.
     if err_count > 0 {
         return Err(format!(
-            "analysis failed due to previous {}",
+            "analysis failed with {}",
             match err_count {
                 1 => "error".to_string(),
                 n => format!("{} errors", n),

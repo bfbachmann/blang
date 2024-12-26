@@ -9,7 +9,7 @@ use crate::parser::ast::expr::Expression;
 use crate::parser::error::ParseResult;
 use crate::parser::module::Module;
 
-/// Represents a branch in a conditional. `if` and `elsif` branches must have condition
+/// Represents a branch in a conditional. `if` and `else if` branches must have condition
 /// expressions, but `else` branches must not.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Branch {

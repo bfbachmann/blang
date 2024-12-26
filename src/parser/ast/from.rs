@@ -23,21 +23,10 @@ impl From {
     /// the form
     ///
     ///     from <statement>
-    ///
-    /// where
-    /// - `statement` is a closure, conditional, or loop statement
-    ///   (see `Statement::from`).
     pub fn from(tokens: &mut Stream<Token>) -> ParseResult<From> {
         let start_pos = Module::parse_expecting(tokens, TokenKind::From)?
             .span
             .start_pos;
-
-        // The next statement should be a closure, conditional, or loop.
-        Module::parse_expecting_any(
-            tokens,
-            vec![TokenKind::LeftBrace, TokenKind::If, TokenKind::Loop],
-        )?;
-        tokens.rewind(1);
 
         let statement = Box::new(Statement::from(tokens)?);
 

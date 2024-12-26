@@ -10,6 +10,7 @@ use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#impl::AImpl;
 use crate::analyzer::ast::r#loop::ALoop;
+use crate::analyzer::ast::r#match::AMatch;
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::r#yield::AYield;
 use crate::analyzer::ast::ret::ARet;
@@ -29,6 +30,7 @@ pub enum AStatement {
     Closure(AClosure),
     FunctionCall(AFnCall),
     Conditional(ACond),
+    Match(AMatch),
     Loop(Box<ALoop>),
     Break,
     Continue,
@@ -51,6 +53,7 @@ impl fmt::Display for AStatement {
             AStatement::Closure(v) => write!(f, "{}", v),
             AStatement::FunctionCall(v) => write!(f, "{}", v),
             AStatement::Conditional(v) => write!(f, "{}", v),
+            AStatement::Match(v) => write!(f, "{}", v),
             AStatement::Loop(v) => write!(f, "{}", v),
             AStatement::Break => write!(f, "break"),
             AStatement::Continue => write!(f, "continue"),
@@ -107,6 +110,8 @@ impl AStatement {
             Statement::FunctionCall(call) => AStatement::FunctionCall(AFnCall::from(ctx, call)),
 
             Statement::Conditional(cond) => AStatement::Conditional(ACond::from(ctx, cond)),
+
+            Statement::Match(match_) => AStatement::Match(AMatch::from(ctx, match_)),
 
             Statement::Loop(loop_) => AStatement::Loop(Box::new(ALoop::from(ctx, &loop_))),
 
@@ -201,7 +206,7 @@ mod tests {
                 let mut a = a * 2
                 if a > 10 {
                     return true
-                } elsif a > 5 {
+                } else if a > 5 {
                     return false
                 } else {
                     return true
@@ -220,7 +225,7 @@ mod tests {
                 let mut mut_a = a * 2
                 if mut_a > 10 {
                     return true
-                } elsif mut_a > 5 {
+                } else if mut_a > 5 {
                     return false
                 } else {
                     mut_a = 2
@@ -249,7 +254,7 @@ mod tests {
                 let mut mut_a = a * 2
                 if mut_a > 10 {
                     return true
-                } elsif mut_a > 5 {
+                } else if mut_a > 5 {
                     return false
                 }
             }
@@ -276,7 +281,7 @@ mod tests {
                 let mut mut_a = a * 2
                 if mut_a > 10 {
                     return true
-                } elsif mut_a > 5 {
+                } else if mut_a > 5 {
                     return false
                 } else {
                     loop {

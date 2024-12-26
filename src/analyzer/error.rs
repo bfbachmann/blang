@@ -9,6 +9,7 @@ pub enum ErrorKind {
     MismatchedTypes,
     ExpectedReturnValue,
     ExpectedExpr,
+    ExpectedIdent,
     DuplicateFunction,
     DuplicateConst,
     InvalidConst,
@@ -61,6 +62,7 @@ pub enum ErrorKind {
     NonSpecFnInImpl,
     IncorrectSpecFnInImpl,
     IllegalSelfArg,
+    MatchNotExhaustive,
 }
 
 impl fmt::Display for ErrorKind {
@@ -68,6 +70,7 @@ impl fmt::Display for ErrorKind {
         match self {
             ErrorKind::MismatchedTypes => write!(f, "mismatched types"),
             ErrorKind::ExpectedReturnValue => write!(f, "expected return value"),
+            ErrorKind::ExpectedIdent => write!(f, "expected identifier"),
             ErrorKind::DuplicateFunction => write!(f, "duplicate function"),
             ErrorKind::DuplicateConst => write!(f, "duplicate constant"),
             ErrorKind::InvalidConst => write!(f, "invalid constant declaration"),
@@ -123,6 +126,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::IncorrectSpecFnInImpl => {
                 write!(f, "spec function not implemented correctly")
             }
+            ErrorKind::MatchNotExhaustive => write!(f, "match not exhaustive"),
         }
     }
 }
