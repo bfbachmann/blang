@@ -35,3 +35,11 @@ fn main() {
 
     @proc.exit(0)
 }
+
+// Make sure return checks work for match statements.
+fn test() -> bool {
+    match "test" {
+    case "thing": return true
+    case: return false
+    }
+}
