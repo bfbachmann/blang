@@ -8,6 +8,7 @@ enum MyEnum {
 }
 
 fn main() {
+    // Check that we can match against an enum by reference.
     let mut value = MyEnum::A(5)
     match &mut value {
     case let MyEnum::A(v):
@@ -16,10 +17,20 @@ fn main() {
         other^ = MyEnum::C
     }
 
+    // Check that we can match against an enum by value.
     match value {
     case let MyEnum::A(v) if v == 10:
     case: 
         panic("expected MyEnum::(10)")
+    }
+
+    // Check that we can match exhaustively against bools. This test case exists
+    // because (at the moment) it is the only case where the last match branch
+    // can match against an expression that requires evaluation but is always
+    // guaranteed to match (because of exhaustiveness).
+    match true {
+    case true:
+    case false:
     }
 
     @proc.exit(0)

@@ -250,7 +250,7 @@ impl APattern {
                     )
                     .with_detail("This expression is not valid inside a pattern.")
                     .with_help(
-                        format!(
+                        format_code!(
                             "If you're trying to match against an existing value, remove {} from \
                             this case.",
                             "let"

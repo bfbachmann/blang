@@ -137,18 +137,26 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // Generate code for each match case.
         for (i, case) in match_.cases.iter().enumerate() {
+            let is_last_case = i + 1 == match_.cases.len();
+
             // Generate the code for the pattern match expression, if any.
             let ll_cmp_result = match &case.pattern {
                 APattern::Expr(expr) => {
                     let ll_expr = self.gen_expr(expr);
-                    let ll_result = self.gen_cmp_op(
-                        ll_expr,
-                        target_tk,
-                        &Operator::EqualTo,
-                        ll_target,
-                        target_is_signed,
-                    );
-                    Some(ll_result)
+
+                    match is_last_case {
+                        true => None,
+                        false => {
+                            let ll_result = self.gen_cmp_op(
+                                ll_expr,
+                                target_tk,
+                                &Operator::EqualTo,
+                                ll_target,
+                                target_is_signed,
+                            );
+                            Some(ll_result)
+                        }
+                    }
                 }
 
                 APattern::LetSymbol(_, var_name) => {
@@ -172,7 +180,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
                     // Don't do a comparison if this is the last case, as it's guaranteed
                     // to match anyway (because match cases are exhaustive).
-                    match i + 1 == match_.cases.len() {
+                    match is_last_case {
                         // Last case.
                         true => None,
 
