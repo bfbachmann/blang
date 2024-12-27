@@ -29,6 +29,7 @@ The language and compiler are still very young, so they still lack some critical
     * [Arrays: `[...]`](#arrays-)
     * [Implementations, Methods, and Method Calls: `impl`, `fn`](#implementations-methods-and-method-calls-impl-fn)
     * [Conditionals: `if`, `else if`, `else`](#conditionals-if-elsif-else)
+    * [Pattern Matching: `match`](#pattern-matching-match)
     * [Loops: `for`, `while`, `loop`](#loops-for-while-loop)
         * [`for` loops](#for-loops)
         * [`while` loops](#while-loops)
@@ -322,6 +323,32 @@ fn compare(a: i64, b: i64) -> Cmp {
         return Cmp::LessThan
     } else {
         return Cmp::Equal
+    }
+}
+```
+
+### Pattern Matching: `match`
+
+`match` expressions can be used to check values for equality, or for certain patterns.
+Match cases must be exhaustive.
+
+```
+enum SearchError {
+    NotFound
+    InvalidQuery
+    Internal(uint)
+}
+
+fn handle_err(err: SearchError) {
+    match err {
+    case let SearchError::NotFound:
+        // ...
+    case let SearchError::Internal(code) if code == 1:
+        handle_fatal_internal(code)
+    case let SearchError::Internal(code):
+        handle_internal(code)
+    case:
+        // handle default case
     }
 }
 ```
