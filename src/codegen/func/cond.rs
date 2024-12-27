@@ -151,6 +151,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     Some(ll_result)
                 }
 
+                APattern::LetSymbol(_, var_name) => {
+                    self.create_var(var_name, target_tk, ll_target);
+                    None
+                }
+
                 APattern::LetEnumVariant(_, var_name, var_tk, variant_num) => {
                     // Assign the enum inner value to the bound variable in the pattern if it's not
                     // a wildcard.

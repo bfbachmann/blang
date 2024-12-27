@@ -338,7 +338,9 @@ fn walk_statement(collector: &mut MonoItemCollector, statement: AStatement) {
                     APattern::Expr(expr) => {
                         walk_expr(collector, expr);
                     }
-                    APattern::LetEnumVariant(_, _, _, _) | APattern::Wildcard => {}
+                    APattern::LetEnumVariant(_, _, _, _)
+                    | APattern::LetSymbol(_, _)
+                    | APattern::Wildcard => {}
                 }
 
                 if let Some(cond) = case.maybe_cond {

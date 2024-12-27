@@ -488,7 +488,9 @@ fn search_statement(statement: &AStatement, is_match: &impl Fn(&AStatement) -> b
                         }
                     }
 
-                    APattern::LetEnumVariant(_, _, _, _) | APattern::Wildcard => {}
+                    APattern::LetEnumVariant(_, _, _, _)
+                    | APattern::LetSymbol(_, _)
+                    | APattern::Wildcard => {}
                 }
 
                 if let Some(cond) = &case.maybe_cond {
@@ -622,7 +624,9 @@ fn search_statement_for_expr(statement: &AStatement, is_match: &impl Fn(&AExpr) 
                             return true;
                         }
                     }
-                    APattern::Wildcard | APattern::LetEnumVariant(_, _, _, _) => {}
+                    APattern::Wildcard
+                    | APattern::LetEnumVariant(_, _, _, _)
+                    | APattern::LetSymbol(_, _) => {}
                 }
 
                 if let Some(cond) = &case.maybe_cond {

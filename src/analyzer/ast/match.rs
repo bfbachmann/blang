@@ -21,6 +21,7 @@ use crate::parser::ast::r#type::Type;
 pub enum APattern {
     Expr(AExpr),
     LetEnumVariant(bool, String, TypeKey, usize),
+    LetSymbol(bool, String),
     Wildcard,
 }
 
@@ -54,9 +55,15 @@ impl APattern {
                 APattern::Expr(expr)
             }
 
-            // Enum variant pattern.
-            PatternKind::LetEnumVariant(is_mut, binding) => {
-                // Resolve the enum type.
+            PatternKind::LetBinding(is_mut, Expression::Symbol(sym)) if sym.is_name_only() => {
+                if sym.is_wildcard() {
+                    APattern::Wildcard
+                } else {
+                    APattern::LetSymbol(*is_mut, sym.name.clone())
+                }
+            }
+
+            PatternKind::LetBinding(is_mut, Expression::EnumInit(binding)) => {
                 let enum_tk = ctx.resolve_type(&Type::Unresolved(binding.typ.clone()));
 
                 // Figure out how we're supposed to bind variables inside enum patterns based on
@@ -163,7 +170,7 @@ impl APattern {
                         if maybe_inner_tk.is_some() {
                             ctx.insert_err(
                                 AnalyzeError::new(
-                                    ErrorKind::ExpectedIdent,
+                                    ErrorKind::InvalidPattern,
                                     format_code!("expected identifier or wildcard {}", "_")
                                         .as_str(),
                                     binding,
@@ -214,7 +221,7 @@ impl APattern {
                     other => {
                         ctx.insert_err(
                             AnalyzeError::new(
-                                ErrorKind::ExpectedIdent,
+                                ErrorKind::InvalidPattern,
                                 format_code!("expected identifier or wildcard {}", "_").as_str(),
                                 other,
                             )
@@ -230,6 +237,27 @@ impl APattern {
                         )
                     }
                 }
+            }
+
+            // TODO: Support more kinds of patterns.
+            PatternKind::LetBinding(_, expr) => {
+                ctx.insert_err(
+                    AnalyzeError::new(
+                        ErrorKind::InvalidPattern,
+                        "invalid pattern expression",
+                        expr,
+                    )
+                    .with_detail("This expression is not valid inside a pattern.")
+                    .with_help(
+                        format!(
+                            "If you're trying to match against an existing value, remove {} from \
+                            this case.",
+                            "let"
+                        )
+                        .as_str(),
+                    ),
+                );
+                APattern::Expr(AExpr::new_null_ptr(ctx, None))
             }
         }
     }
@@ -251,10 +279,18 @@ impl AMatchCase {
         // Create a new scope for the rest of the case. If there's a pattern binding, we'll define
         // that as a variable in this scope.
         ctx.push_scope(Scope::new(ScopeKind::BranchBody, vec![], None));
-        if let APattern::LetEnumVariant(is_mut, var_name, var_tk, _) = &pattern {
-            if !var_name.is_empty() {
+        match &pattern {
+            APattern::LetEnumVariant(is_mut, var_name, var_tk, _) if !var_name.is_empty() => {
                 ctx.insert_scoped_symbol(ScopedSymbol::new(var_name, *var_tk, *is_mut));
             }
+            APattern::LetSymbol(is_mut, var_name) => {
+                ctx.insert_scoped_symbol(ScopedSymbol::new(
+                    var_name,
+                    match_target.type_key,
+                    *is_mut,
+                ));
+            }
+            _ => {}
         }
 
         // Analyze the condition, if there is one.
@@ -339,7 +375,7 @@ impl AMatch {
 
             // Update exhaustiveness info.
             match (&a_case.pattern, &a_case.maybe_cond) {
-                (APattern::Wildcard, None) => {
+                (APattern::Wildcard, None) | (APattern::LetSymbol(_, _), None) => {
                     exhaustive = true;
                 }
 

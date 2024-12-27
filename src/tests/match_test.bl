@@ -10,17 +10,16 @@ enum MyEnum {
 fn main() {
     let mut value = MyEnum::A(5)
     match &mut value {
-        let MyEnum::A(v) {
-            v^ *= 2
-        }
-        _ {}
+    case let MyEnum::A(v):
+        v^ *= 2
+    case let other:
+        other^ = MyEnum::C
     }
 
     match value {
-        let MyEnum::A(v) if v == 10 {}
-        _ {
-            panic("expected MyEnum::(10)")
-        }
+    case let MyEnum::A(v) if v == 10:
+    case: 
+        panic("expected MyEnum::(10)")
     }
 
     @proc.exit(0)

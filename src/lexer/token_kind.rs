@@ -159,6 +159,8 @@ pub enum TokenKind {
     Else,
     #[token("match")]
     Match,
+    #[token("case")]
+    Case,
     #[token("for")]
     For,
     #[token("while")]
@@ -306,6 +308,7 @@ impl TokenKind {
             TokenKind::If => "if".to_string(),
             TokenKind::Else => "else".to_string(),
             TokenKind::Match => "match".to_string(),
+            TokenKind::Case => "case".to_string(),
             TokenKind::For => "for".to_string(),
             TokenKind::While => "while".to_string(),
             TokenKind::Loop => "loop".to_string(),
