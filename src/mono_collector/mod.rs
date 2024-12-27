@@ -335,8 +335,10 @@ fn walk_statement(collector: &mut MonoItemCollector, statement: AStatement) {
         AStatement::Match(match_) => {
             for case in match_.cases {
                 match case.pattern {
-                    APattern::Expr(expr) => {
-                        walk_expr(collector, expr);
+                    APattern::Exprs(exprs) => {
+                        for expr in exprs {
+                            walk_expr(collector, expr);
+                        }
                     }
                     APattern::LetEnumVariant(_, _, _, _)
                     | APattern::LetSymbol(_, _)

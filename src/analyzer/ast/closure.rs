@@ -1,7 +1,6 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use crate::{format_code, locatable_impl, util};
 use crate::analyzer::ast::arg::AArg;
 use crate::analyzer::ast::cond::ACond;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
@@ -18,6 +17,7 @@ use crate::parser::ast::closure::Closure;
 use crate::parser::ast::cont::Continue;
 use crate::parser::ast::r#break::Break;
 use crate::parser::ast::r#type::Type;
+use crate::{format_code, locatable_impl, util};
 
 /// Represents a semantically valid and fully analyzed closure.
 #[derive(Debug, Clone)]
@@ -489,9 +489,13 @@ fn search_statement(statement: &AStatement, is_match: &impl Fn(&AStatement) -> b
         AStatement::Match(match_) => {
             for case in &match_.cases {
                 match &case.pattern {
-                    APattern::Expr(pattern) => {
-                        if search_expr(pattern, &|expr| search_expr_for_statement(expr, is_match)) {
-                            return true;
+                    APattern::Exprs(patterns) => {
+                        for pattern in patterns {
+                            if search_expr(pattern, &|expr| {
+                                search_expr_for_statement(expr, is_match)
+                            }) {
+                                return true;
+                            }
                         }
                     }
 
@@ -626,9 +630,11 @@ fn search_statement_for_expr(statement: &AStatement, is_match: &impl Fn(&AExpr) 
         AStatement::Match(match_) => {
             for case in &match_.cases {
                 match &case.pattern {
-                    APattern::Expr(expr) => {
-                        if search_expr(expr, is_match) {
-                            return true;
+                    APattern::Exprs(exprs) => {
+                        for expr in exprs {
+                            if search_expr(expr, is_match) {
+                                return true;
+                            }
                         }
                     }
                     APattern::Wildcard

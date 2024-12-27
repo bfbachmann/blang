@@ -139,23 +139,59 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         for (i, case) in match_.cases.iter().enumerate() {
             let is_last_case = i + 1 == match_.cases.len();
 
-            // Generate the code for the pattern match expression, if any.
+            // Generate the code for the pattern match expressions, if any.
             let ll_cmp_result = match &case.pattern {
-                APattern::Expr(expr) => {
-                    let ll_expr = self.gen_expr(expr);
+                APattern::Exprs(exprs) => {
+                    let mut exprs_iter = exprs.iter();
+                    let mut ll_phi_args = vec![];
+
+                    // Generate the first comparison expression.
+                    let ll_expr = self.gen_expr(exprs_iter.next().unwrap());
+                    let mut ll_cmp_result = self.gen_cmp_op(
+                        ll_expr,
+                        target_tk,
+                        &Operator::EqualTo,
+                        ll_target,
+                        target_is_signed,
+                    );
+                    ll_phi_args
+                        .push((ll_cmp_result.as_basic_value_enum(), self.cur_block.unwrap()));
+                    let ll_end_block = self.append_block("pattern_end");
+
+                    // Generate remaining comparison expressions.
+                    while let Some(expr) = exprs_iter.next() {
+                        let ll_next_pattern_block = self.append_block("next_pattern");
+                        self.builder.build_conditional_branch(
+                            ll_cmp_result,
+                            ll_end_block,
+                            ll_next_pattern_block,
+                        );
+
+                        self.set_current_block(ll_next_pattern_block);
+                        let ll_expr = self.gen_expr(expr);
+                        ll_cmp_result = self.gen_cmp_op(
+                            ll_expr,
+                            target_tk,
+                            &Operator::EqualTo,
+                            ll_target,
+                            target_is_signed,
+                        );
+                        ll_phi_args
+                            .push((ll_cmp_result.as_basic_value_enum(), self.cur_block.unwrap()));
+                    }
+
+                    // Branch to the pattern end block and build a phi node that gets results from
+                    // the expression comparison blocks.
+                    self.builder.build_unconditional_branch(ll_end_block);
+                    self.set_current_block(ll_end_block);
+                    let ll_phi_val = self.builder.build_phi(self.ctx.bool_type(), "pattern_phi");
+                    for (ll_phi_arg, ll_block) in ll_phi_args {
+                        ll_phi_val.add_incoming(&[(&ll_phi_arg, ll_block)]);
+                    }
 
                     match is_last_case {
                         true => None,
-                        false => {
-                            let ll_result = self.gen_cmp_op(
-                                ll_expr,
-                                target_tk,
-                                &Operator::EqualTo,
-                                ll_target,
-                                target_is_signed,
-                            );
-                            Some(ll_result)
-                        }
+                        false => Some(ll_phi_val.as_basic_value().into_int_value()),
                     }
                 }
 

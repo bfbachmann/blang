@@ -20,7 +20,7 @@ use crate::parser::ast::r#type::Type;
 /// A pattern that appears in a `match` case.
 #[derive(Debug, Clone, PartialEq)]
 pub enum APattern {
-    Expr(AExpr),
+    Exprs(Vec<AExpr>),
     LetEnumVariant(bool, String, TypeKey, usize),
     LetSymbol(bool, String),
     Wildcard,
@@ -37,23 +37,28 @@ impl APattern {
             PatternKind::Wildcard => APattern::Wildcard,
 
             // Arbitrary expression (to check for equality against the target).
-            PatternKind::Expr(expr) => {
-                let expr =
-                    AExpr::from(ctx, expr.clone(), Some(match_target.type_key), false, false);
+            PatternKind::Exprs(exprs) => {
+                let mut a_exprs = vec![];
+                for expr in exprs {
+                    let a_expr =
+                        AExpr::from(ctx, expr.clone(), Some(match_target.type_key), false, false);
 
-                // Skip further checks if the expression already failed analysis.
-                if expr.type_key != ctx.unknown_type_key() {
-                    // Make sure that this expression can be compared with the target for equality.
-                    if let Err(errs) =
-                        check_operand_types(ctx, match_target, &Operator::EqualTo, &expr)
-                    {
-                        for err in errs {
-                            ctx.insert_err(err);
+                    // Skip further checks if the expression already failed analysis.
+                    if a_expr.type_key != ctx.unknown_type_key() {
+                        // Make sure that this expression can be compared with the target for equality.
+                        if let Err(errs) =
+                            check_operand_types(ctx, match_target, &Operator::EqualTo, &a_expr)
+                        {
+                            for err in errs {
+                                ctx.insert_err(err);
+                            }
                         }
                     }
+
+                    a_exprs.push(a_expr);
                 }
 
-                APattern::Expr(expr)
+                APattern::Exprs(a_exprs)
             }
 
             PatternKind::LetBinding(is_mut, Expression::Symbol(sym)) if sym.is_name_only() => {
@@ -258,7 +263,7 @@ impl APattern {
                         .as_str(),
                     ),
                 );
-                APattern::Expr(AExpr::new_null_ptr(ctx, None))
+                APattern::Exprs(vec![])
             }
         }
     }
@@ -386,17 +391,21 @@ impl AMatch {
                     exhaustive = unmatched_variants.is_empty() && matching_enum;
                 }
 
-                (APattern::Expr(expr), None) if target_type.is_bool() => match &expr.kind {
-                    AExprKind::BoolLiteral(true) => {
-                        unmatched_variants.remove(&1);
-                        exhaustive = unmatched_variants.is_empty();
+                (APattern::Exprs(exprs), None) if target_type.is_bool() => {
+                    for expr in exprs {
+                        match &expr.kind {
+                            AExprKind::BoolLiteral(true) => {
+                                unmatched_variants.remove(&1);
+                                exhaustive = unmatched_variants.is_empty();
+                            }
+                            AExprKind::BoolLiteral(false) => {
+                                unmatched_variants.remove(&0);
+                                exhaustive = unmatched_variants.is_empty();
+                            }
+                            _ => {}
+                        }
                     }
-                    AExprKind::BoolLiteral(false) => {
-                        unmatched_variants.remove(&0);
-                        exhaustive = unmatched_variants.is_empty();
-                    }
-                    _ => {}
-                },
+                }
 
                 _ => {}
             };

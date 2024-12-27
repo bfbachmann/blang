@@ -22,7 +22,7 @@ pub struct Pattern {
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum PatternKind {
     LetBinding(bool, Expression),
-    Expr(Expression),
+    Exprs(Vec<Expression>),
     Wildcard,
 }
 
@@ -72,12 +72,18 @@ impl Pattern {
             });
         }
 
-        // Handle arbitrary expression.
-        let expr = Expression::from(tokens)?;
-        let span = expr.span().clone();
+        // Handle arbitrary expressions.
+        let mut exprs = vec![Expression::from(tokens)?];
+        while Module::parse_optional(tokens, TokenKind::Comma).is_some() {
+            exprs.push(Expression::from(tokens)?);
+        }
+
         Ok(Pattern {
-            kind: PatternKind::Expr(expr),
-            span,
+            span: Span {
+                start_pos: exprs.first().unwrap().start_pos().clone(),
+                end_pos: exprs.last().unwrap().end_pos().clone(),
+            },
+            kind: PatternKind::Exprs(exprs),
         })
     }
 }

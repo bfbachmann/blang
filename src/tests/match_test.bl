@@ -33,6 +33,12 @@ fn main() {
     case false:
     }
 
+    // Check that we can match multiple expressions in one case.
+    match 3 {
+    case 1, 2, 3, 4:
+    case: panic("should not match")
+    }
+
     @proc.exit(0)
 }
 
