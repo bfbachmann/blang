@@ -40,6 +40,7 @@ fn main() {
 fn test() -> bool {
     match "test" {
     case "thing": return true
+    // Check that we can omit the pattern and just use `if`.
     case if false: return true
     case: return false
     }

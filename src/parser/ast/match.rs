@@ -34,6 +34,7 @@ impl Pattern {
     ///     let [mut] <expr>
     ///     <expr>
     ///     _
+    ///     <empty>
     fn from(tokens: &mut Stream<Token>) -> ParseResult<Pattern> {
         // Handle empty pattern.
         if Module::next_token_is_one_of(tokens, &vec![TokenKind::Colon, TokenKind::If]) {
