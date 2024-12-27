@@ -17,6 +17,7 @@ use crate::parser::ast::op::Operator;
 use crate::parser::ast::r#match::{Match, MatchCase, PatternKind};
 use crate::parser::ast::r#type::Type;
 
+/// A pattern that appears in a `match` case.
 #[derive(Debug, Clone, PartialEq)]
 pub enum APattern {
     Expr(AExpr),
@@ -263,6 +264,7 @@ impl APattern {
     }
 }
 
+/// An analyzed `match` case.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AMatchCase {
     pub pattern: APattern,
@@ -320,12 +322,12 @@ impl AMatchCase {
     }
 }
 
+/// An analyzed `match` statement.
 #[derive(Debug, Clone)]
 pub struct AMatch {
     pub target: AExpr,
     pub cases: Vec<AMatchCase>,
     pub ret_type_key: Option<TypeKey>,
-    pub span: Span,
 }
 
 impl PartialEq for AMatch {
@@ -343,6 +345,7 @@ impl Display for AMatch {
 }
 
 impl AMatch {
+    /// Performs semantic analysis on the given match statement.
     pub fn from(ctx: &mut ProgramContext, match_: &Match) -> AMatch {
         let target = AExpr::from(ctx, match_.target.clone(), None, false, false);
         let target_type = ctx.must_get_type(target.type_key).clone();
@@ -354,7 +357,7 @@ impl AMatch {
         let mut warns = vec![];
 
         for case in &match_.cases {
-            // If the case is unreachable, insert a warning and skip it.
+            // If the case is unreachable, so insert a warning.
             if exhaustive {
                 warns.push(AnalyzeWarning::new(
                     WarnKind::UnreachableCode,
@@ -367,7 +370,6 @@ impl AMatch {
                         },
                     },
                 ));
-                continue;
             }
 
             // Analyze the case.
@@ -387,11 +389,11 @@ impl AMatch {
                 (APattern::Expr(expr), None) if target_type.is_bool() => match &expr.kind {
                     AExprKind::BoolLiteral(true) => {
                         unmatched_variants.remove(&1);
-                        exhaustive = unmatched_variants.is_empty() && target_type.is_bool();
+                        exhaustive = unmatched_variants.is_empty();
                     }
                     AExprKind::BoolLiteral(false) => {
                         unmatched_variants.remove(&0);
-                        exhaustive = unmatched_variants.is_empty() && target_type.is_bool();
+                        exhaustive = unmatched_variants.is_empty();
                     }
                     _ => {}
                 },
@@ -403,6 +405,10 @@ impl AMatch {
                 ret_type_key = a_case.ret_type_key;
             }
             cases.push(a_case);
+        }
+
+        for warn in warns {
+            ctx.insert_warn(warn);
         }
 
         if !exhaustive {
@@ -438,7 +444,6 @@ impl AMatch {
             target,
             cases,
             ret_type_key,
-            span: match_.span.clone(),
         }
     }
 }

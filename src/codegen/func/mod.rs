@@ -7,9 +7,7 @@ use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::passes::PassManager;
 use inkwell::types::{AnyType, AnyTypeEnum, BasicTypeEnum};
-use inkwell::values::{
-    AnyValue, BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue,
-};
+use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
 
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::func::{AFn, AFnSig};

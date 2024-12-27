@@ -408,11 +408,6 @@ impl AType {
         )
     }
 
-    /// Returns true if this is an enum type.
-    pub fn is_enum(&self) -> bool {
-        matches!(self, AType::Enum(_))
-    }
-
     /// Returns the struct type corresponding to this type. Panics if this type is not a
     /// struct type.
     pub fn to_struct_type(&self) -> &AStructType {

@@ -1689,6 +1689,255 @@ mod tests {
     }
 
     #[test]
+    fn inexhaustive_match() {
+        let result = analyze(
+            r#"
+            enum Thing {
+                One
+                Two
+            }
+            
+            fn main() {
+                match Thing::One {
+                case let Thing::One:
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MatchNotExhaustive));
+    }
+
+    #[test]
+    fn inexhaustive_match_with_if() {
+        let result = analyze(
+            r#"
+            enum Thing {
+                One
+                Two
+            }
+
+            fn main() {
+                match Thing::One {
+                case let Thing::One:
+                case let Thing::Two if false:
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MatchNotExhaustive));
+    }
+
+    #[test]
+    fn inexhaustive_match_against_int() {
+        let result = analyze(
+            r#"
+            fn main() {
+                match 1 {
+                case 1:
+                case 2:
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MatchNotExhaustive));
+    }
+
+    #[test]
+    fn inexhaustive_match_against_bool() {
+        let result = analyze(
+            r#"
+            fn main() {
+                match true {
+                case true:
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MatchNotExhaustive));
+    }
+
+    #[test]
+    fn exhaustive_match_against_bool() {
+        let result = analyze(
+            r#"
+            fn main() {
+                match true {
+                case true:
+                case false:
+                }
+            }
+            "#,
+        );
+        check_result(result, None);
+    }
+
+    #[test]
+    fn unreachable_match_case() {
+        let mut analysis = get_analysis(
+            r#"
+            fn main() {
+                match true {
+                case true:
+                case false:
+                case:
+                }
+            }
+            "#,
+        )
+        .analyzed_modules
+        .remove(0);
+        assert!(analysis.errors.is_empty());
+        assert_eq!(analysis.warnings.len(), 1);
+        assert!(matches!(
+            analysis.warnings.remove(0),
+            AnalyzeWarning {
+                kind: WarnKind::UnreachableCode,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn match_case_expr_type_mismatch() {
+        let result = analyze(
+            r#"
+            enum Thing {
+                One(int)
+            }
+            fn main() {
+                match Thing::One(1) {
+                case 1:
+                case:
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
+
+    #[test]
+    fn invalid_let_pattern_binding() {
+        let result = analyze(
+            r#"
+            enum Thing {
+                One(int)
+            }
+            fn main() {
+                match Thing::One(1) {
+                case let invalid():
+                case:
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::InvalidPattern));
+    }
+
+    #[test]
+    fn invalid_binding_expr_in_enum_pattern() {
+        let result = analyze(
+            r#"
+            enum Thing {
+                One(int)
+            }
+            fn main() {
+                match Thing::One(1) {
+                case let Thing::One(invalid()):
+                case:
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::InvalidPattern));
+    }
+
+    #[test]
+    fn missing_enum_inner_value_binding_in_pattern() {
+        let result = analyze(
+            r#"
+            enum Thing {
+                One(int)
+            }
+            fn main() {
+                match Thing::One(1) {
+                case let Thing::One:
+                case:
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::InvalidPattern));
+    }
+
+    #[test]
+    fn invalid_enum_inner_value_binding_in_empty_variant() {
+        let result = analyze(
+            r#"
+            enum Thing {
+                One
+            }
+            fn main() {
+                match Thing::One {
+                case let Thing::One(invalid):
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
+
+    #[test]
+    fn invalid_enum_case_for_non_enum() {
+        let result = analyze(
+            r#"
+            enum Thing {
+                One
+            }
+            fn main() {
+                match "test" {
+                case let Thing::One:
+                case:
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
+
+    #[test]
+    fn wrong_enum_type_in_pattern() {
+        let result = analyze(
+            r#"
+            enum A { One }
+            enum B { One }
+            fn main() {
+                match A::One {
+                case let B::One:
+                case:
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
+
+    #[test]
+    fn unmatchable_type_in_match_case() {
+        let result = analyze(
+            r#"
+            struct Thing {}
+            fn main() {
+                match Thing{} {
+                case Thing{}:
+                case:
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
+
+    #[test]
     fn private_member_access() {
         let mods = vec![
             (
