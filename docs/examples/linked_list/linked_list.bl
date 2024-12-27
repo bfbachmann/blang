@@ -12,19 +12,19 @@ impl Node {
     /// Heap-allocates a new node and returns the pointer.
     fn new(value: int, next: *mut Node) -> *mut Node {
         let ptr = malloc(sizeof Node) as *mut Node
-        ptr^.value = value
-        ptr^.next = next
+        ptr.value = value
+        ptr.next = next
         return ptr
     }
 
     /// Returns true if this node has a next node.
     fn has_next(*self) -> bool {
-        return self^.next != null
+        return self.next != null
     }
 
     /// Returns the last node in this list.
     fn tail(*mut self) -> *mut Node {
-        for let mut head = self, head.has_next(), head = head^.next {}
+        for let mut head = self, head.has_next(), head = head.next {}
         return head
     }
 
@@ -40,10 +40,10 @@ impl Node {
         }
 
         // Append our tail to the new node's tail.
-        node.tail()^.next = target^.next
+        node.tail().next = target.next
 
         // Make our tail the new node.
-        target^.next = node
+        target.next = node
 
         return true
     }
@@ -59,8 +59,8 @@ impl Node {
             return null
         }
 
-        let to_remove = target^.next
-        target^.next = to_remove^.next
+        let to_remove = target.next
+        target.next = to_remove.next
         return to_remove
     }
 
@@ -72,7 +72,7 @@ impl Node {
                 return null
             }
 
-            head = head^.next
+            head = head.next
         }
 
         return head
@@ -86,9 +86,9 @@ impl Node {
         for
             let mut head = self,
             head != null,
-            head = head^.next
+            head = head.next
         {
-            if head^.value == target {
+            if head.value == target {
                 return {true, i}
             }
 
@@ -107,7 +107,7 @@ impl Node {
                 return
             }
 
-            let next = head^.next
+            let next = head.next
             free(head as *mut u8)
             head = next
         }
@@ -125,8 +125,8 @@ fn main() {
     head.insert(Node.new(20, Node.new(-48, null)), 4)
 
     // Make sure values were inserted correctly.
-    assert(head.node_at(4)^.value == 20, "node 4 is wrong\0")
-    assert(head.node_at(5)^.value == -48, "node 5 is wrong\0")
+    assert(head.node_at(4).value == 20, "node 4 is wrong\0")
+    assert(head.node_at(5).value == -48, "node 5 is wrong\0")
 
     // Check that we can determine the index of the inserted values.
     let result_20 = head.index_of(20)
@@ -137,12 +137,12 @@ fn main() {
     assert(result_48.(1) == 5, "index of value -48 is wrong\0")
 
     // Remove the inserted values.
-    assert(head.remove(5)^.value == -48, "removed node 5 is wrong\0")
-    assert(head.remove(4)^.value == 20, "removed node 4 is wrong\0")
+    assert(head.remove(5).value == -48, "removed node 5 is wrong\0")
+    assert(head.remove(4).value == 20, "removed node 4 is wrong\0")
 
     // Make sure all values are in the right place.
     for let mut i = 0, i < 10, i += 1 {
-        assert(head.node_at(i as uint)^.value == 9 - i, "wrong value left in list\0")
+        assert(head.node_at(i as uint).value == 9 - i, "wrong value left in list\0")
     }
 
     // Free the list.

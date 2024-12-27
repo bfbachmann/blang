@@ -53,11 +53,11 @@ impl Machine {
     /// Executes the program associated with the machine and returns a result
     /// indicating whether execution succeeded.
     pub fn exec_prog(*mut self) -> ExecResult {
-        for self^.pc = 0,
-            self^.pc < self^.instructions.len(),
-            self^.pc += 1
+        for self.pc = 0,
+            self.pc < self.instructions.len(),
+            self.pc += 1
         {
-            let inst = self^.instructions.get(self^.pc)
+            let inst = self.instructions.get(self.pc)
             let result = self.exec_inst(&inst)
             if result.status ~~ ExecStatus::Err {
                 return result
@@ -70,24 +70,24 @@ impl Machine {
 
     /// Executes an instruction.
     fn exec_inst(*mut self, inst: *Instruction) -> ExecResult {
-        if inst^.kind ~~ InstKind::Store {
+        if inst.kind ~~ InstKind::Store {
             print_str("store\n")
-            return self.store(inst^.operands.(0), inst^.operands.(1) as uint)
+            return self.store(inst.operands.(0), inst.operands.(1) as uint)
         }
 
-        if inst^.kind ~~ InstKind::Copy {
+        if inst.kind ~~ InstKind::Copy {
             print_str("copy\n")
-            return self.copy(inst^.operands.(0) as uint, inst^.operands.(1) as uint)
+            return self.copy(inst.operands.(0) as uint, inst.operands.(1) as uint)
         }
 
-        if inst^.kind ~~ InstKind::Add {
+        if inst.kind ~~ InstKind::Add {
             print_str("add\n")
-            return self.add(inst^.operands.(0) as uint, inst^.operands.(1) as uint)
+            return self.add(inst.operands.(0) as uint, inst.operands.(1) as uint)
         }
 
-        if inst^.kind ~~ InstKind::JumpIf0 {
+        if inst.kind ~~ InstKind::JumpIf0 {
             print_str("jumpif0\n")
-            return self.jumpif0(inst^.operands.(0) as uint, inst^.operands.(1) as uint)
+            return self.jumpif0(inst.operands.(0) as uint, inst.operands.(1) as uint)
         }
 
         return ExecResult.new_err("unimplemented instruction")
@@ -99,7 +99,7 @@ impl Machine {
             return ExecResult.new_err("store address out of bounds")
         }
 
-        self^.memory.(addr) = value
+        self.memory.(addr) = value
         return ExecResult.new_ok()
     }
 
@@ -113,7 +113,7 @@ impl Machine {
             return ExecResult.new_err("copy destination address out of bounds")
         }
 
-        self^.memory.(dst_addr) = self^.memory.(src_addr)
+        self.memory.(dst_addr) = self.memory.(src_addr)
         return ExecResult.new_ok()
     }
 
@@ -127,7 +127,7 @@ impl Machine {
             return ExecResult.new_err("add destination address out of bounds")
         }
 
-        self^.memory.(dst_addr) += self^.memory.(src_addr)
+        self.memory.(dst_addr) += self.memory.(src_addr)
         return ExecResult.new_ok()
     }
 
@@ -137,12 +137,12 @@ impl Machine {
             return ExecResult.new_err("jumpif0 source address out of bounds")
         }
 
-        if dst_inst >= self^.instructions.len() {
+        if dst_inst >= self.instructions.len() {
             return ExecResult.new_err("jumpif0 destination address out of bounds")
         }
 
-        if self^.memory.(src_addr) == 0 {
-            self^.pc = dst_inst - 1
+        if self.memory.(src_addr) == 0 {
+            self.pc = dst_inst - 1
         }
 
         return ExecResult.new_ok()
@@ -150,7 +150,7 @@ impl Machine {
 
     /// Returns the int in memory at the given index.
     pub fn memory_at(*self, index: uint) -> int {
-        return self^.memory.(index)
+        return self.memory.(index)
     }
 
     /// Frees memory associated with this machine.

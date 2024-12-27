@@ -5,10 +5,10 @@ struct StrData {
 
 impl str {
     pub fn ptr(self) -> *u8 {
-        return (&self as *StrData)^.ptr
+        return (&self as *StrData).ptr
     }
 
     pub fn len(self) -> uint {
-        return (&self as *StrData)^.len
+        return (&self as *StrData).len
     }
 }

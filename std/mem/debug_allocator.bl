@@ -111,7 +111,7 @@ impl DebugAllocator: Allocate {
 
         self.blocks.replace(index, block)
 
-        return block^.ptr
+        return block.ptr
     }
 
     /// Frees memory pointed to by `ptr`.
@@ -121,10 +121,10 @@ impl DebugAllocator: Allocate {
         @panic.assert(found, "cannot free dangling pointer")
 
         let index = result.(0)
-        let block = self^.blocks.get(index)
-        @panic.assert(block^.ptr == ptr, "cannot free using non-base pointer")
+        let block = self.blocks.get(index)
+        @panic.assert(block.ptr == ptr, "cannot free using non-base pointer")
         
-        self^.allocator.free(block^.ptr)
-        self^.blocks.remove(index)
+        self.allocator.free(block.ptr)
+        self.blocks.remove(index)
     }
 }

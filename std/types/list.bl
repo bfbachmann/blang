@@ -92,17 +92,17 @@ impl List {
         let is_last_entry = i + 1 == len
         if !is_last_entry {
             @mem.memmove(
-                self^.data.ptr_at(i) as *mut u8,
-                self^.data.ptr_at(i + 1) as *u8, 
+                self.data.ptr_at(i) as *mut u8,
+                self.data.ptr_at(i + 1) as *u8,
                 (len - 1 - i) * sizeof T,
             )
         }
 
-        self^.len -= 1
+        self.len -= 1
 
         // Check if we should shrink the list to conserve memory.
         let new_cap = self.capacity() / growth_factor
-        if new_cap >= min_cap && self^.len * growth_factor <= new_cap {
+        if new_cap >= min_cap && self.len * growth_factor <= new_cap {
             self.resize(new_cap)
         }
     }
@@ -115,32 +115,32 @@ impl List {
 
     /// Returns a slice that refereces the data currently in the list.
     pub fn as_slice(*self) -> Slice[T] {
-        return self^.data.as_slice().slice_left(self^.len)
+        return self.data.as_slice().slice_left(self.len)
     }
 
     /// Removes all elements from the list and appends them to `other` without
     /// freeing or resizing any of the memory that backs this list.
     pub fn drain_into(*mut self, other: *mut List[T]) {
-        if self^.len == 0 {
+        if self.len == 0 {
             return
         }
 
-        other.grow_to_fit(self^.len)
+        other.grow_to_fit(self.len)
 
-        let dst = other^.data.ptr_at(other.len())
-        let src = self^.data.ptr()
+        let dst = other.data.ptr_at(other.len())
+        let src = self.data.ptr()
         @mem.memmove(
             dst as *mut u8,
             src as *u8,
-            self^.len * sizeof T
+            self.len * sizeof T
         )
 
-        self^.len = 0
+        self.len = 0
     }
 
     /// Empties the list, but doesn't free or resize its unerlying memory.
     pub fn drain(*mut self) {
-        self^.len = 0
+        self.len = 0
     }
 
     /// Frees the memory allocated for this list.
@@ -152,17 +152,17 @@ impl List {
 
     /// Returns true if the list has no elements.
     pub fn is_empty(*self) -> bool {
-        return self^.len == 0
+        return self.len == 0
     }
 
     /// Returns true if the list is full.
     pub fn is_full(*self) -> bool {
-        return self^.len == self.capacity()
+        return self.len == self.capacity()
     }
 
     /// Grows the memory that backs the list so it can fit `count` new values.
     fn grow_to_fit(*mut self, count: uint) {
-        let desired_cap = self^.len + count
+        let desired_cap = self.len + count
         let cap = self.capacity()
         if cap >= desired_cap {
             return
@@ -177,7 +177,7 @@ impl List {
         // Keep multiplying the capacity by the growth factor until it's big
         // enough. This ensures efficient geometric growth, even if this 
         // function is called repeatedly with small values for `count`.
-        while new_cap < self^.len + count {
+        while new_cap < self.len + count {
             new_cap *= growth_factor
         }
 
@@ -186,12 +186,12 @@ impl List {
 
     /// Resized the unerlying memory segment.
     fn resize(*mut self, new_cap: uint) {
-        let ptr = @mem.realloc(self^.data.ptr() as *mut u8, new_cap * sizeof T)
-        self^.data = SliceMut[T].new(ptr as *mut T, new_cap)
+        let ptr = @mem.realloc(self.data.ptr() as *mut u8, new_cap * sizeof T)
+        self.data = SliceMut[T].new(ptr as *mut T, new_cap)
     }
 
     /// Panics if `i` is outside of the array bounds.
     fn check_bounds(*self, i: uint) {
-        @panic.assert(i < self^.len, "list index out of bounds")
+        @panic.assert(i < self.len, "list index out of bounds")
     }
 }

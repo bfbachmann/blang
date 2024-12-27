@@ -289,7 +289,7 @@ impl User {
     }
 
     fn is_senior(*self) -> bool {
-        return self^.age
+        return self.age
     }
 }
 

@@ -30,9 +30,9 @@ struct Value {
 
 impl Value: Order {
     fn compare(*self, other: *Value) -> Ord {
-        if self^.v > other^.v {
+        if self.v > other.v {
             return Ord::Greater
-        } else if self^.v < other^.v {
+        } else if self.v < other.v {
             return Ord::Lesser
         }
         return Ord::Equal

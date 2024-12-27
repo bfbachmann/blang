@@ -32,32 +32,32 @@ impl Array {
     /// which would invalidate any existing pointers to its data.
     pub fn resize(*mut self, len: uint) {
         let ptr = self.allocator.realloc(
-            self^.data.ptr() as *mut u8, 
+            self.data.ptr() as *mut u8,
             sizeof T * len,
         ) as *mut T
-        self^.data = SliceMut[T].new(ptr, len)
+        self.data = SliceMut[T].new(ptr, len)
     }
 
     /// Returns a pointer to the element at index `i`. Panics if `i`
     /// is out of bounds.
     pub fn ptr_at(*self, i: uint) -> *T {
-        return self^.data.ptr_at(i)
+        return self.data.ptr_at(i)
     }
 
     /// Returns a mutating pointer to the element at index `i`. Panics if
     /// `i` is out of bounds.
     pub fn mut_ptr_at(*mut self, i: uint) -> *mut T {
-        return self^.data.ptr_at(i)
+        return self.data.ptr_at(i)
     }
 
     /// Returns the nubmer of elements in the array.
     pub fn len(*self) -> uint {
-        return self^.data.len()
+        return self.data.len()
     }
 
     /// Returns a slice that references the data in the array.
     pub fn as_slice(*self) -> Slice[T] {
-        return self^.data.as_slice()
+        return self.data.as_slice()
     }
 
     /// Frees all heap memory allocated for the array.

@@ -36,59 +36,59 @@ impl Table {
 
     /// Writes `t` into the entry at index `i`.
     pub fn set(*mut self, i: uint, t: T) {
-        let entry_ptr = self^.entries.mut_ptr_at(i)
-        entry_ptr^.status = EntryStatus::Occupied
-        entry_ptr^.value = t
+        let entry_ptr = self.entries.mut_ptr_at(i)
+        entry_ptr.status = EntryStatus::Occupied
+        entry_ptr.value = t
     }
 
     /// Returns a pointer to the value at index `i` in the table. Returns `null`
     /// if the entry at `i` is empty.
     pub fn get(*self, i: uint) -> *T {
-        let entry_ptr = self^.entries.ptr_at(i)
-        if entry_ptr^.status !~ EntryStatus::Occupied {
+        let entry_ptr = self.entries.ptr_at(i)
+        if entry_ptr.status !~ EntryStatus::Occupied {
             return null
         }
 
-        return &entry_ptr^.value
+        return &entry_ptr.value
     }
 
     /// Returns a `*mut` to the entry at index `i`, even if it is not occupied.
     pub fn get_mut(*mut self, i: uint) -> *mut T {
-        return &mut self^.entries.mut_ptr_at(i)^.value
+        return &mut self.entries.mut_ptr_at(i).value
     }
 
     /// Deletes the entry at index `i`. This marks the entry as deleted if it 
     /// was previously occupied. Otherwise, does nothing.
     pub fn delete(*mut self, i: uint) {
-        let entry_ptr = self^.entries.mut_ptr_at(i)
-        if entry_ptr^.status ~~ EntryStatus::Occupied {
-            entry_ptr^.status = EntryStatus::Deleted
+        let entry_ptr = self.entries.mut_ptr_at(i)
+        if entry_ptr.status ~~ EntryStatus::Occupied {
+            entry_ptr.status = EntryStatus::Deleted
         }
     }
 
     /// Returns `true` if the entry at index `i` is occupied.
     pub fn entry_is_occupied(*self, i: uint) -> bool {
-        return self^.entries.ptr_at(i)^.status ~~ EntryStatus::Occupied
+        return self.entries.ptr_at(i).status ~~ EntryStatus::Occupied
     }
 
     /// Returns `true` if the entry at index `i` was deleted.
     pub fn entry_is_deleted(*self, i: uint) -> bool {
-        return self^.entries.ptr_at(i)^.status ~~ EntryStatus::Deleted
+        return self.entries.ptr_at(i).status ~~ EntryStatus::Deleted
     }
 
     /// Returns `true` if the entry at index `i` is empty.
     pub fn entry_is_empty(*self, i: uint) -> bool {
-        return self^.entries.ptr_at(i)^.status ~~ EntryStatus::Empty
+        return self.entries.ptr_at(i).status ~~ EntryStatus::Empty
     }
 
     /// Resizes the table so it can hold `len` entries.
     pub fn resize(*mut self, len: uint) {
-        let old_len = self^.entries.len()
-        self^.entries.resize(len)
+        let old_len = self.entries.len()
+        self.entries.resize(len)
 
         // Set new entry statuses to emtpy.
         for let mut i = old_len, i < len, i += 1 {
-            self^.entries.mut_ptr_at(i)^.status = EntryStatus::Empty
+            self.entries.mut_ptr_at(i).status = EntryStatus::Empty
         }
     }
 

@@ -46,34 +46,34 @@ impl Hasher {
     /// Returns a `HashWriter` that can write to this `Hasher`.
     pub fn writer(*mut self) -> HashWriter {
         return HashWriter{
-            underlying: self^.underlying
-            write_fn: self^.write_fn
-            sum_fn: self^.sum_fn
+            underlying: self.underlying
+            write_fn: self.write_fn
+            sum_fn: self.sum_fn
         }
     }
 }
 
 impl Hasher: BuildHash {
     pub fn reset(*mut self) {
-        self^.reset_fn(self^.underlying)
+        self.reset_fn(self.underlying)
     }
 
     pub fn write(*mut self, bytes: Slice[u8]) {
-        self^.write_fn(self^.underlying, bytes)
+        self.write_fn(self.underlying, bytes)
     }
 
     pub fn sum(*self) -> u64 {
-        return self^.sum_fn(self^.underlying)
+        return self.sum_fn(self.underlying)
     }
 }
 
 impl Hasher: WriteHash {
     pub fn write(*mut self, bytes: Slice[u8]) {
-        self^.write_fn(self^.underlying, bytes)
+        self.write_fn(self.underlying, bytes)
     }
 
     pub fn sum(*self) -> u64 {
-        return self^.sum_fn(self^.underlying)
+        return self.sum_fn(self.underlying)
     }
 }
 
@@ -101,10 +101,10 @@ impl HashWriter {
 
 impl HashWriter: WriteHash {
     pub fn write(*mut self, bytes: Slice[u8]) {
-        self^.write_fn(self^.underlying, bytes)
+        self.write_fn(self.underlying, bytes)
     }
 
     pub fn sum(*self) -> u64 {
-        return self^.sum_fn(self^.underlying)
+        return self.sum_fn(self.underlying)
     }
 }

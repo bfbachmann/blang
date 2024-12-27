@@ -112,7 +112,7 @@ impl Parser {
     /// Parses the instructions stored in the parser and returns the result. This function
     /// will abort with an error message if the program is syntactically invalid.
     pub fn parse_instructions(*mut self) -> List[Instruction] {
-        let mut instructions = List[Instruction].new(self^.allocator)
+        let mut instructions = List[Instruction].new(self.allocator)
         loop {
             let result = self.try_parse_inst()
             assert(result.status !~ ParseStatus::Err, result.msg)
@@ -132,12 +132,12 @@ impl Parser {
         self.parse_spaces()
 
         // Check if we're at the end of the buffer
-        if self^.cursor >= self^.buf_len {
+        if self.cursor >= self.buf_len {
             return ParseResult.new_done()
         }
 
         // Increment instruction counter
-        self^.inst_count += 1
+        self.inst_count += 1
 
         // Try parse an instruction
         {
@@ -310,20 +310,20 @@ impl Parser {
 
     /// Moves the parser's cursor in the buffer by the given offset.
     fn move_cursor(*mut self, offset: int) {
-        let new_cursor = (self^.cursor as int + offset) as uint
+        let new_cursor = (self.cursor as int + offset) as uint
 
         // Make sure not to overrun the buffer
-        if new_cursor >= self^.buf_len {
-            self^.cursor = self^.buf_len
+        if new_cursor >= self.buf_len {
+            self.cursor = self.buf_len
             return
         }
 
-        self^.cursor = new_cursor
+        self.cursor = new_cursor
     }
 
     /// Returns a pointer to the parser's current position in the program buffer.
     fn buf_at_cursor(*self) -> *u8 {
-        return self^.buf.(self^.cursor as int)
+        return self.buf.(self.cursor as int)
     }
 
     /// Returns `true` if the program buffer starting at the parser's current position
