@@ -35,6 +35,14 @@ impl Pattern {
     ///     <expr>
     ///     _
     fn from(tokens: &mut Stream<Token>) -> ParseResult<Pattern> {
+        // Handle empty pattern.
+        if Module::next_token_is_one_of(tokens, &vec![TokenKind::Colon, TokenKind::If]) {
+            return Ok(Pattern {
+                kind: PatternKind::Wildcard,
+                span: Default::default(),
+            });
+        }
+
         // Check for wildcard pattern.
         match tokens.peek_next() {
             Some(Token {
@@ -83,32 +91,20 @@ pub struct MatchCase {
 impl MatchCase {
     /// Parses a match case from the token stream. Expects token sequences of the forms
     ///
+    ///     case: <statement>...
     ///     case <pattern>: <statement>...
     ///     case <pattern> if <cond>: <statement>...
+    ///     case if <cond>: <statement>...
     fn from(tokens: &mut Stream<Token>) -> ParseResult<MatchCase> {
-        let case_token = Module::parse_expecting(tokens, TokenKind::Case)?;
+        Module::parse_expecting(tokens, TokenKind::Case)?;
 
-        let (pattern, maybe_cond) = if Module::parse_optional(tokens, TokenKind::Colon).is_some() {
-            // Default (empty) case.
-            (
-                Pattern {
-                    kind: PatternKind::Wildcard,
-                    span: case_token.span,
-                },
-                None,
-            )
-        } else {
-            // Case with pattern and optional condition.
-            let pattern = Pattern::from(tokens)?;
-            let maybe_cond = match Module::parse_optional(tokens, TokenKind::If) {
-                Some(_) => Some(Expression::from(tokens)?),
-                None => None,
-            };
-
-            Module::parse_expecting(tokens, TokenKind::Colon)?;
-
-            (pattern, maybe_cond)
+        let pattern = Pattern::from(tokens)?;
+        let maybe_cond = match Module::parse_optional(tokens, TokenKind::If) {
+            Some(_) => Some(Expression::from(tokens)?),
+            None => None,
         };
+
+        Module::parse_expecting(tokens, TokenKind::Colon)?;
 
         let body_start = Module::current_position(tokens);
 
