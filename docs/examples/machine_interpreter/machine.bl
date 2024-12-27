@@ -70,26 +70,21 @@ impl Machine {
 
     /// Executes an instruction.
     fn exec_inst(*mut self, inst: *Instruction) -> ExecResult {
-        if inst.kind ~~ InstKind::Store {
+        match inst.kind {
+        case let InstKind::Store:
             print_str("store\n")
             return self.store(inst.operands.(0), inst.operands.(1) as uint)
-        }
-
-        if inst.kind ~~ InstKind::Copy {
+        case let InstKind::Copy:
             print_str("copy\n")
             return self.copy(inst.operands.(0) as uint, inst.operands.(1) as uint)
-        }
-
-        if inst.kind ~~ InstKind::Add {
+        case let InstKind::Add:
             print_str("add\n")
             return self.add(inst.operands.(0) as uint, inst.operands.(1) as uint)
-        }
-
-        if inst.kind ~~ InstKind::JumpIf0 {
+        case let InstKind::JumpIf0:
             print_str("jumpif0\n")
             return self.jumpif0(inst.operands.(0) as uint, inst.operands.(1) as uint)
         }
-
+        
         return ExecResult.new_err("unimplemented instruction")
     }
 
