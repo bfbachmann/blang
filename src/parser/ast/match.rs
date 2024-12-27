@@ -38,9 +38,10 @@ impl Pattern {
     fn from(tokens: &mut Stream<Token>) -> ParseResult<Pattern> {
         // Handle empty pattern.
         if Module::next_token_is_one_of(tokens, &vec![TokenKind::Colon, TokenKind::If]) {
+            let prev_token = tokens.prev().unwrap();
             return Ok(Pattern {
                 kind: PatternKind::Wildcard,
-                span: Default::default(),
+                span: prev_token.span,
             });
         }
 

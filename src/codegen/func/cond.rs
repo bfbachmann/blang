@@ -1,9 +1,9 @@
-use inkwell::values::BasicValue;
+use inkwell::values::{BasicValue, BasicValueEnum, IntValue};
 
 use crate::analyzer::ast::cond::ACond;
 use crate::analyzer::ast::r#match::{AMatch, APattern};
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::type_store::GetType;
+use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::codegen::error::CodeGenResult;
 use crate::parser::ast::op::Operator;
 
@@ -140,106 +140,16 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             let is_last_case = i + 1 == match_.cases.len();
 
             // Generate the code for the pattern match expressions, if any.
-            let ll_cmp_result = match &case.pattern {
-                APattern::Exprs(exprs) => {
-                    let mut exprs_iter = exprs.iter();
-                    let mut ll_phi_args = vec![];
-
-                    // Generate the first comparison expression.
-                    let ll_expr = self.gen_expr(exprs_iter.next().unwrap());
-                    let mut ll_cmp_result = self.gen_cmp_op(
-                        ll_expr,
-                        target_tk,
-                        &Operator::EqualTo,
-                        ll_target,
-                        target_is_signed,
-                    );
-                    ll_phi_args
-                        .push((ll_cmp_result.as_basic_value_enum(), self.cur_block.unwrap()));
-                    let ll_end_block = self.append_block("pattern_end");
-
-                    // Generate remaining comparison expressions.
-                    while let Some(expr) = exprs_iter.next() {
-                        let ll_next_pattern_block = self.append_block("next_pattern");
-                        self.builder.build_conditional_branch(
-                            ll_cmp_result,
-                            ll_end_block,
-                            ll_next_pattern_block,
-                        );
-
-                        self.set_current_block(ll_next_pattern_block);
-                        let ll_expr = self.gen_expr(expr);
-                        ll_cmp_result = self.gen_cmp_op(
-                            ll_expr,
-                            target_tk,
-                            &Operator::EqualTo,
-                            ll_target,
-                            target_is_signed,
-                        );
-                        ll_phi_args
-                            .push((ll_cmp_result.as_basic_value_enum(), self.cur_block.unwrap()));
-                    }
-
-                    // Branch to the pattern end block and build a phi node that gets results from
-                    // the expression comparison blocks.
-                    self.builder.build_unconditional_branch(ll_end_block);
-                    self.set_current_block(ll_end_block);
-                    let ll_phi_val = self.builder.build_phi(self.ctx.bool_type(), "pattern_phi");
-                    for (ll_phi_arg, ll_block) in ll_phi_args {
-                        ll_phi_val.add_incoming(&[(&ll_phi_arg, ll_block)]);
-                    }
-
-                    match is_last_case {
-                        true => None,
-                        false => Some(ll_phi_val.as_basic_value().into_int_value()),
-                    }
-                }
-
-                APattern::LetSymbol(_, var_name) => {
-                    self.create_var(var_name, target_tk, ll_target);
-                    None
-                }
-
-                APattern::LetEnumVariant(_, var_name, var_tk, variant_num) => {
-                    // Assign the enum inner value to the bound variable in the pattern if it's not
-                    // a wildcard.
-                    if !var_name.is_empty() {
-                        // Extract the value from inside the enum.
-                        let (load_ptr, var_tk) = match target_type {
-                            AType::Pointer(_) => (true, target_tk),
-                            _ => (false, *var_tk),
-                        };
-                        let ll_inner_val =
-                            self.get_enum_inner_val(target_enum_tk, var_tk, ll_target, load_ptr);
-                        self.create_var(var_name, var_tk, ll_inner_val);
-                    }
-
-                    // Don't do a comparison if this is the last case, as it's guaranteed
-                    // to match anyway (because match cases are exhaustive).
-                    match is_last_case {
-                        // Last case.
-                        true => None,
-
-                        // Not last case.
-                        false => {
-                            let ll_target_variant = ll_target_variant_num.unwrap();
-                            let ll_num_type = ll_target_variant.get_type();
-                            let ll_pattern_variant =
-                                ll_num_type.const_int(*variant_num as u64, false);
-                            let ll_result = self.gen_int_cmp(
-                                &Operator::EqualTo,
-                                ll_target_variant.as_basic_value_enum(),
-                                ll_pattern_variant.as_basic_value_enum(),
-                                false,
-                            );
-
-                            Some(ll_result)
-                        }
-                    }
-                }
-
-                APattern::Wildcard => None,
-            };
+            let ll_cmp_result = self.gen_pattern_cmp(
+                &case.pattern,
+                target_tk,
+                target_enum_tk,
+                ll_target,
+                ll_target_variant_num,
+                &target_type,
+                target_is_signed,
+                is_last_case,
+            );
 
             // Generate code to branch based on whether the pattern matched.
             let ll_then_block = self.append_block(format!("match_case_{i}_then").as_str());
@@ -327,5 +237,118 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         Ok(())
+    }
+
+    /// Generates code that compares a pattern to a match target. Returns the result of the
+    /// comparison, if any.
+    fn gen_pattern_cmp(
+        &mut self,
+        pattern: &APattern,
+        target_tk: TypeKey,
+        target_enum_tk: TypeKey,
+        ll_target: BasicValueEnum<'ctx>,
+        ll_target_variant_num: Option<IntValue<'ctx>>,
+        target_type: &AType,
+        target_is_signed: bool,
+        is_last_case: bool,
+    ) -> Option<IntValue<'ctx>> {
+        match pattern {
+            APattern::Exprs(exprs) => {
+                let mut exprs_iter = exprs.iter();
+                let mut ll_phi_args = vec![];
+
+                // Generate the first comparison expression.
+                let ll_expr = self.gen_expr(exprs_iter.next().unwrap());
+                let mut ll_cmp_result = self.gen_cmp_op(
+                    ll_expr,
+                    target_tk,
+                    &Operator::EqualTo,
+                    ll_target,
+                    target_is_signed,
+                );
+                ll_phi_args.push((ll_cmp_result.as_basic_value_enum(), self.cur_block.unwrap()));
+                let ll_end_block = self.append_block("pattern_end");
+
+                // Generate remaining comparison expressions.
+                while let Some(expr) = exprs_iter.next() {
+                    let ll_next_pattern_block = self.append_block("next_pattern");
+                    self.builder.build_conditional_branch(
+                        ll_cmp_result,
+                        ll_end_block,
+                        ll_next_pattern_block,
+                    );
+
+                    self.set_current_block(ll_next_pattern_block);
+                    let ll_expr = self.gen_expr(expr);
+                    ll_cmp_result = self.gen_cmp_op(
+                        ll_expr,
+                        target_tk,
+                        &Operator::EqualTo,
+                        ll_target,
+                        target_is_signed,
+                    );
+                    ll_phi_args
+                        .push((ll_cmp_result.as_basic_value_enum(), self.cur_block.unwrap()));
+                }
+
+                // Branch to the pattern end block and build a phi node that gets results from
+                // the expression comparison blocks.
+                self.builder.build_unconditional_branch(ll_end_block);
+                self.set_current_block(ll_end_block);
+                let ll_phi_val = self.builder.build_phi(self.ctx.bool_type(), "pattern_phi");
+                for (ll_phi_arg, ll_block) in ll_phi_args {
+                    ll_phi_val.add_incoming(&[(&ll_phi_arg, ll_block)]);
+                }
+
+                match is_last_case {
+                    true => None,
+                    false => Some(ll_phi_val.as_basic_value().into_int_value()),
+                }
+            }
+
+            APattern::LetSymbol(_, var_name) => {
+                self.create_var(var_name, target_tk, ll_target);
+                None
+            }
+
+            APattern::LetEnumVariant(_, var_name, var_tk, variant_num) => {
+                // Assign the enum inner value to the bound variable in the pattern if it's not
+                // a wildcard.
+                if !var_name.is_empty() {
+                    // Extract the value from inside the enum.
+                    let (load_ptr, var_tk) = match target_type {
+                        AType::Pointer(_) => (true, target_tk),
+                        _ => (false, *var_tk),
+                    };
+                    let ll_inner_val =
+                        self.get_enum_inner_val(target_enum_tk, var_tk, ll_target, load_ptr);
+                    self.create_var(var_name, var_tk, ll_inner_val);
+                }
+
+                // Don't do a comparison if this is the last case, as it's guaranteed
+                // to match anyway (because match cases are exhaustive).
+                match is_last_case {
+                    // Last case.
+                    true => None,
+
+                    // Not last case.
+                    false => {
+                        let ll_target_variant = ll_target_variant_num.unwrap();
+                        let ll_num_type = ll_target_variant.get_type();
+                        let ll_pattern_variant = ll_num_type.const_int(*variant_num as u64, false);
+                        let ll_result = self.gen_int_cmp(
+                            &Operator::EqualTo,
+                            ll_target_variant.as_basic_value_enum(),
+                            ll_pattern_variant.as_basic_value_enum(),
+                            false,
+                        );
+
+                        Some(ll_result)
+                    }
+                }
+            }
+
+            APattern::Wildcard => None,
+        }
     }
 }
