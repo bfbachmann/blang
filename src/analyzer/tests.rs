@@ -1436,6 +1436,22 @@ mod tests {
     }
 
     #[test]
+    fn missing_return_in_match() {
+        let result = analyze(
+            r#"
+                fn thing(v: int) -> int {
+                    match v {
+                    case 0: return 0
+                    case let x if x > 0: return 1
+                    case:
+                    }
+                }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MissingReturn));
+    }
+
+    #[test]
     fn missing_return_in_for_loop() {
         let result = analyze(
             r#"

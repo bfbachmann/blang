@@ -1,6 +1,7 @@
 use std::fmt;
 use std::fmt::Formatter;
 
+use crate::{format_code, locatable_impl, util};
 use crate::analyzer::ast::arg::AArg;
 use crate::analyzer::ast::cond::ACond;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
@@ -17,7 +18,6 @@ use crate::parser::ast::closure::Closure;
 use crate::parser::ast::cont::Continue;
 use crate::parser::ast::r#break::Break;
 use crate::parser::ast::r#type::Type;
-use crate::{format_code, locatable_impl, util};
 
 /// Represents a semantically valid and fully analyzed closure.
 #[derive(Debug, Clone)]
@@ -202,6 +202,13 @@ pub fn check_closure_returns(ctx: &mut ProgramContext, closure: &AClosure, kind:
                 // If it's an inline closure, recurse on the closure.
                 Some(AStatement::Closure(closure)) => {
                     check_closure_returns(ctx, &closure, &ScopeKind::InlineClosure);
+                }
+
+                // If it's a match statement, make sure all cases return.
+                Some(AStatement::Match(match_)) => {
+                    for case in &match_.cases {
+                        check_closure_returns(ctx, &case.body, &ScopeKind::BranchBody);
+                    }
                 }
 
                 _ => {
