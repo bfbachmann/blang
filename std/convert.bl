@@ -1,6 +1,9 @@
 use "std/types/slice.bl" {Slice}
 
-
+/// Converts an int to a sequence of bytes (basically a string) and an offset.
+/// The byte array contains the characters of the string representation of `val`
+/// and the offset marks the position in the array at which the string starts
+/// (because not all ints will require all 65 bytes).
 pub fn int_to_str(val: int) -> {[u8; 65], uint} {
     const digits = "0001020304050607080910111213141516171819\
         2021222324252627282930313233343536373839\
@@ -42,6 +45,7 @@ pub fn int_to_str(val: int) -> {[u8; 65], uint} {
     return {str_bytes, i}
 }
 
+/// Converts `b` into a `str`.
 pub fn bool_to_str(b: bool) -> str {
     if b {
         return "true"
