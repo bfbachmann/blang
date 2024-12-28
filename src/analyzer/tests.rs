@@ -2144,4 +2144,82 @@ mod tests {
             ]),
         );
     }
+
+    #[test]
+    fn private_type_access_via_mod() {
+        let mods = vec![
+            (
+                "impl.bl".to_string(),
+                r#"
+                    use "thing.bl" @thing
+                    fn test() {
+                        let t = @thing.Thing{}
+                    }
+                "#
+                .to_string(),
+            ),
+            ("thing.bl".to_string(), r#"struct Thing {}"#.to_string()),
+        ];
+
+        let analysis = analyze_program(mods);
+        check_mod_errs(
+            &analysis,
+            HashMap::from([
+                ("impl.bl".to_string(), vec![ErrorKind::UseOfPrivateValue]),
+                ("thing.bl".to_string(), vec![]),
+            ]),
+        );
+    }
+
+    #[test]
+    fn private_fn_access_via_mod() {
+        let mods = vec![
+            (
+                "impl.bl".to_string(),
+                r#"
+                    use "thing.bl" @thing
+                    fn test() {
+                        @thing.test()
+                    }
+                "#
+                .to_string(),
+            ),
+            ("thing.bl".to_string(), r#"fn test() {}"#.to_string()),
+        ];
+
+        let analysis = analyze_program(mods);
+        check_mod_errs(
+            &analysis,
+            HashMap::from([
+                ("impl.bl".to_string(), vec![ErrorKind::UseOfPrivateValue]),
+                ("thing.bl".to_string(), vec![]),
+            ]),
+        );
+    }
+
+    #[test]
+    fn private_const_access_via_mod() {
+        let mods = vec![
+            (
+                "impl.bl".to_string(),
+                r#"
+                    use "thing.bl" @thing
+                    fn test() {
+                        let t = @thing.test
+                    }
+                "#
+                .to_string(),
+            ),
+            ("thing.bl".to_string(), r#"const test = 1"#.to_string()),
+        ];
+
+        let analysis = analyze_program(mods);
+        check_mod_errs(
+            &analysis,
+            HashMap::from([
+                ("impl.bl".to_string(), vec![ErrorKind::UseOfPrivateValue]),
+                ("thing.bl".to_string(), vec![]),
+            ]),
+        );
+    }
 }

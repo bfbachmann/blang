@@ -814,7 +814,7 @@ impl ProgramContext {
                 unresolved_type.maybe_mod_name.as_ref(),
                 unresolved_type.name.as_str(),
             ) {
-                return if unresolved_type.params.is_empty() {
+                let (resolved_tk, poly_tk) = if unresolved_type.params.is_empty() {
                     // No parameters were provided, so this type should either be monomorphic, or
                     // `allow_polymorph` should be `true`.
                     let resolved_type = self.must_get_type(tk);
@@ -828,16 +828,29 @@ impl ProgramContext {
                         return self.unknown_type_key();
                     }
 
-                    tk
+                    (tk, tk)
                 } else {
                     // Parameters were provided for the type, so we need to monomorphize it before
                     // returning it.
-                    self.monomorphize_parameterized_type(
+                    let mono_tk = self.monomorphize_parameterized_type(
                         tk,
                         unresolved_type.params.as_ref(),
                         unresolved_type,
-                    )
+                    );
+
+                    (mono_tk, tk)
                 };
+
+                // If the type is foreign, make sure it's public.
+                if unresolved_type.maybe_mod_name.is_some() && !self.type_is_pub(poly_tk) {
+                    self.insert_err(AnalyzeError::new(
+                        ErrorKind::UseOfPrivateValue,
+                        format_code!("type {} is not public", self.display_type(poly_tk)).as_str(),
+                        typ,
+                    ));
+                }
+
+                return resolved_tk;
             }
         }
 
@@ -1850,7 +1863,7 @@ impl ProgramContext {
                 // module.
                 let mut symbol = symbol.clone();
                 symbol.maybe_mod_name = Some(mod_name.clone());
-                let a_symbol = ASymbol::from(self, &symbol, true, true, true, None);
+                let a_symbol = ASymbol::from(self, &symbol, true, true, true);
 
                 // Record an error and skip the symbol if its type could not be
                 // resolved.
@@ -1881,7 +1894,7 @@ impl ProgramContext {
                 if !is_pub {
                     self.insert_err(AnalyzeError::new(
                         ErrorKind::UseOfPrivateValue,
-                        format_code!("{} is not public", a_symbol).as_str(),
+                        format_code!("{} is not public", symbol.name).as_str(),
                         &symbol,
                     ));
                 }
@@ -2148,6 +2161,18 @@ impl ProgramContext {
     /// declared public.
     pub fn member_fn_is_accessible(&self, type_key: TypeKey, fn_type_key: TypeKey) -> bool {
         self.type_declared_in_cur_mod(type_key) || self.member_fn_is_pub(type_key, fn_type_key)
+    }
+
+    /// Returns true if the func with the given name from the given module is public.
+    pub fn fn_is_pub(&self, mod_name: &String, name: &str) -> bool {
+        let mod_ctx = self.get_mod_ctx(Some(mod_name));
+        mod_ctx.pub_fn_names.contains(name)
+    }
+
+    /// Returns true if the constant with the given name from the given module is public.
+    pub fn const_is_pub(&self, mod_name: &String, name: &str) -> bool {
+        let mod_ctx = self.get_mod_ctx(Some(mod_name));
+        mod_ctx.pub_const_names.contains(name)
     }
 
     /// Returns true if the given type was declared in the current module.

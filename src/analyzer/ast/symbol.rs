@@ -30,9 +30,6 @@ pub struct ASymbol {
     /// function (or is a function argument). In other words, it will be false if the symbol
     /// refers to a declared function, type, or constant.
     pub is_var: bool,
-    /// This will be true if this symbol refers to a method (either on a type or an instance of
-    /// a type).
-    pub is_method: bool,
     /// The path of the module from whence the symbol comes.
     pub maybe_mod_path: Option<String>,
     span: Span,
@@ -62,7 +59,6 @@ impl ASymbol {
             is_type: false,
             is_const: true,
             is_var: false,
-            is_method: false,
             maybe_mod_path: None,
             span: Default::default(),
         }
@@ -81,7 +77,6 @@ impl ASymbol {
         include_fns: bool,
         allow_type: bool,
         no_params: bool,
-        maybe_impl_type_key: Option<TypeKey>,
     ) -> Self {
         let mut var_name = symbol.name.clone();
 
@@ -106,61 +101,20 @@ impl ASymbol {
         // TODO: Refactor
         let (mut maybe_type_key, maybe_symbol) = get_type_key_for_symbol(ctx, symbol, include_fns);
 
-        let mut is_method = false;
-        if maybe_type_key.is_none() && include_fns {
-            // We could not find the variable, constant, or function with the given name, so if
-            // there is an impl_type_key, check if this function is defined as a member function on
-            // that type.
-            if let Some(impl_type_key) = maybe_impl_type_key {
-                match ctx.get_or_monomorphize_member_fn(impl_type_key, var_name.as_str()) {
-                    // There is exactly one matching member function.
-                    Ok(Some(fn_sig)) => {
-                        maybe_type_key = Some(fn_sig.type_key);
-                        is_method = true;
-                    }
-
-                    // There are many member functions by that name.
-                    Err(_) => {
-                        let type_display = ctx.display_type(impl_type_key);
-                        ctx.insert_err(
-                            AnalyzeError::new(
-                                ErrorKind::AmbiguousAccess,
-                                format_code!(
-                                    "ambiguous access to member {} on type {}",
-                                    var_name,
-                                    type_display
-                                )
-                                .as_str(),
-                                symbol,
-                            )
-                            .with_detail(
-                                format_code!(
-                                    "There are multiple methods named {} on type {}.",
-                                    var_name,
-                                    type_display
-                                )
-                                .as_str(),
-                            )
-                            .with_help("Consider referring to the method via its type or spec."),
-                        );
-
-                        return ASymbol::new_with_default_pos(
-                            symbol.name.as_str(),
-                            ctx.unknown_type_key(),
-                        );
-                    }
-
-                    // There are no matching member functions.
-                    Ok(None) => {}
-                }
-            }
-        };
-
         // If the symbol still has not been resolved, check if it's a type.
         let mut is_type = false;
         if maybe_type_key.is_none() {
             match ctx.get_type_key_by_type_name(symbol.maybe_mod_name.as_ref(), var_name.as_str()) {
                 Some(tk) if !ctx.must_get_type(tk).is_unknown() => {
+                    // Make sure the type is public if it's foreign.
+                    if symbol.maybe_mod_name.is_some() && !ctx.type_is_pub(tk) {
+                        ctx.insert_err(AnalyzeError::new(
+                            ErrorKind::UseOfPrivateValue,
+                            format_code!("type {} is not public", ctx.display_type(tk)).as_str(),
+                            symbol,
+                        ));
+                    }
+
                     maybe_type_key = Some(tk);
                     is_type = true;
                 }
@@ -289,7 +243,6 @@ impl ASymbol {
             is_type,
             is_const,
             is_var,
-            is_method,
             maybe_mod_path,
             span: symbol.span,
         }
@@ -297,7 +250,7 @@ impl ASymbol {
 
     /// Returns true if this symbol represents the `null` intrinsic value.
     pub fn is_null_intrinsic(&self) -> bool {
-        self.name == "null" && !self.is_method && self.is_const && !self.is_var
+        self.name == "null" && self.is_const && !self.is_var
     }
 
     /// Creates a new symbol representing the `null` intrinsic.
@@ -323,7 +276,6 @@ impl ASymbol {
             is_type: false,
             is_const: true,
             is_var: false,
-            is_method: false,
             maybe_mod_path: None,
             span,
         }
@@ -342,7 +294,21 @@ fn get_type_key_for_symbol(
 
     // Search for a variable with the given name. Variables take precedence over functions.
     if let Some(scoped_symbol) = ctx.get_scoped_symbol(maybe_mod_name, name) {
-        return (Some(scoped_symbol.type_key), Some(scoped_symbol.clone()));
+        let result = (Some(scoped_symbol.type_key), Some(scoped_symbol.clone()));
+
+        // If it's a foreign symbol, then make sure it's public.
+        match maybe_mod_name {
+            Some(mod_name) if !ctx.const_is_pub(mod_name, name) => {
+                ctx.insert_err(AnalyzeError::new(
+                    ErrorKind::UseOfPrivateValue,
+                    format_code!("constant {} is not public", name).as_str(),
+                    symbol,
+                ));
+            }
+            _ => {}
+        }
+
+        return result;
     }
 
     // Check if the symbol refers to a constant that has not yet been analyzed.
@@ -352,24 +318,42 @@ fn get_type_key_for_symbol(
         return (Some(symbol.type_key), Some(symbol.clone()));
     }
 
-    if include_fns {
-        // Search for a function with the given name. Functions take precedence over extern
-        // functions.
-        let mangled_name_with_path = ctx.mangle_name(maybe_mod_name, None, None, name, true);
-        if let Some(sig) = ctx.get_fn(maybe_mod_name, mangled_name_with_path.as_str()) {
-            return (Some(sig.type_key), None);
-        };
+    // Check if the symbol refers to a function.
+    let maybe_fn_tk = 'check_fns: {
+        if include_fns {
+            // Search for a function with the given name. Functions take precedence over extern
+            // functions.
+            let mangled_name_with_path = ctx.mangle_name(maybe_mod_name, None, None, name, true);
+            if let Some(sig) = ctx.get_fn(maybe_mod_name, mangled_name_with_path.as_str()) {
+                break 'check_fns Some(sig.type_key);
+            };
 
-        // Search for an extern function with the given name.
-        let mangled_name_without_path = ctx.mangle_name(maybe_mod_name, None, None, name, false);
-        if let Some(fn_sig) =
-            ctx.get_fn_sig_by_mangled_name(maybe_mod_name, mangled_name_without_path.as_str())
-        {
-            return (Some(fn_sig.type_key), None);
+            // Search for an extern function with the given name.
+            let mangled_name_without_path =
+                ctx.mangle_name(maybe_mod_name, None, None, name, false);
+            if let Some(fn_sig) =
+                ctx.get_fn_sig_by_mangled_name(maybe_mod_name, mangled_name_without_path.as_str())
+            {
+                break 'check_fns Some(fn_sig.type_key);
+            }
         }
+
+        None
+    };
+
+    // If we found a foreign function, then we should make sure it's public.
+    match (maybe_fn_tk, maybe_mod_name) {
+        (Some(_), Some(mod_name)) if !ctx.fn_is_pub(mod_name, &symbol.name) => {
+            ctx.insert_err(AnalyzeError::new(
+                ErrorKind::UseOfPrivateValue,
+                format_code!("function {} is not public", name).as_str(),
+                symbol,
+            ));
+        }
+        _ => {}
     }
 
-    (None, None)
+    (maybe_fn_tk, None)
 }
 
 /// Tries to locate an intrinsic that matches the given symbol and returns it

@@ -590,7 +590,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Compile the function call and return the result.
         let result = match &call.fn_expr.kind {
             AExprKind::Symbol(symbol) => {
-                if self.is_var_module_fn(&symbol) || symbol.is_method {
+                if self.is_var_module_fn(&symbol) {
                     // The function is being called directly, so we can just look it up by name in
                     // the module and compile this as a direct call.
                     let fn_name = self.get_full_symbol_name(symbol);
