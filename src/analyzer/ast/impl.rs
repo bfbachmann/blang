@@ -151,7 +151,7 @@ impl AImpl {
         }
 
         // Check that this `impl` actually implements the spec it claims to.
-        let (implements_pub_spec, spec_impl_errs) = match maybe_spec_tk {
+        let spec_impl_errs = match maybe_spec_tk {
             Some(spec_tk) => check_spec_impl(
                 ctx,
                 type_key,
@@ -159,23 +159,11 @@ impl AImpl {
                 spec_tk,
                 &member_fns,
             ),
-            None => (false, vec![]),
+            None => vec![],
         };
 
         for err in spec_impl_errs {
             ctx.insert_err(err);
-        }
-
-        // Record public member functions, so we can check whether they're accessible
-        // whenever they're used. We'll also consider the member function public if
-        // it is an implementation of a function from a public spec.
-        let mut fns = vec![];
-        for (a_fn, raw_fn) in member_fns.into_values() {
-            if raw_fn.is_pub || implements_pub_spec {
-                ctx.mark_member_fn_pub(type_key, a_fn.signature.type_key);
-            }
-
-            fns.push(a_fn);
         }
 
         // We can pop the params and the current `Self` type key from the program
@@ -189,33 +177,29 @@ impl AImpl {
 
         AImpl {
             type_key,
-            member_fns: fns,
+            member_fns: member_fns.into_values().map(|(func, _)| func).collect(),
         }
     }
 }
 
 /// Checks that `member_fns` declared in an impl for the given type properly implement `spec`.
-/// Returns a tuple where the first value indicates whether the spec implemented is public and the
-/// second contains errors from the impl block.
+/// Returns errors from failed checks.
 fn check_spec_impl(
     ctx: &mut ProgramContext,
     type_key: TypeKey,
     spec: &Symbol,
     spec_tk: TypeKey,
     member_fns: &HashMap<String, (AFn, &Function)>,
-) -> (bool, Vec<AnalyzeError>) {
+) -> Vec<AnalyzeError> {
     // Find the spec being referred to.
     let spec_type = match ctx.must_get_type(spec_tk) {
         AType::Spec(spec_type) => spec_type.clone(),
         _ => {
-            return (
-                false,
-                vec![AnalyzeError::new(
-                    ErrorKind::ExpectedSpec,
-                    format_code!("{} is not a spec", ctx.display_type(spec_tk)).as_str(),
-                    spec,
-                )],
-            )
+            return vec![AnalyzeError::new(
+                ErrorKind::ExpectedSpec,
+                format_code!("{} is not a spec", ctx.display_type(spec_tk)).as_str(),
+                spec,
+            )]
         }
     };
 
@@ -316,8 +300,7 @@ fn check_spec_impl(
         );
     }
 
-    let spec_is_pub = ctx.type_is_pub(spec_tk);
-    (spec_is_pub, spec_impl_errs)
+    spec_impl_errs
 }
 
 /// Returns whether the `impl` block for type `impl_tk` (optionally for spec `maybe_spec_tk`) is

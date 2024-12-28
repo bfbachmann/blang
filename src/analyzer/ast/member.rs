@@ -446,7 +446,7 @@ fn resolve_concrete_method(
             ) {
                 ctx.insert_err(AnalyzeError::new(
                     ErrorKind::UseOfPrivateValue,
-                    format_code!("function {} is not public", member_name).as_str(),
+                    format_code!("member function {} is not public", member_name).as_str(),
                     &access.member_symbol,
                 ))
             }

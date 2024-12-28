@@ -7,30 +7,44 @@ use "std/mem/allocator.bl" {Allocator}
 use "std/mem/libc_allocator.bl" {LibcAllocator}
 use "std/io/file_writer.bl" {FileWriter}
 
-/// Prints the given format to stdout with a newline at the end.
+/// Prints `p` to stdout with a newline at the end.
+pub fn println[P: Print](p: *P) {
+    println_fd[P](@io.stdout, p)
+}
+
+/// Prints `p` to stderr with a newline at the end.
+pub fn eprintln[P: Print](p: *P) {
+    println_fd[P](@io.stderr, p)
+}
+
+/// Prints `p` to `fd` with a newline at the end.
+pub fn println_fd[P: Print](fd: uint, p: *P) {
+    let mut allocator = LibcAllocator.new().dynamic()
+    printf_fd(fd, Format.new(&mut allocator, "%\n").arg[P](p))
+}
+
+/// Prints `format` to stdout.
 pub fn printf(format: Format) {
-    print[Format](&format)
+    printf_fd(@io.stdout, format)
+}
+
+/// Prints `format` to stderr.
+pub fn eprintf(format: Format) {
+    printf_fd(@io.stderr, format)
+}
+
+/// Prints `format` to `fd`.
+pub fn printf_fd(fd: uint, format: Format) {
+    print_fd[Format](fd, &format)
     format.free()
 }
 
-/// Prints the given value to stdout with a newline at the end.
-pub fn print[P: Print](p: *P) {
+/// Prints `p` to `fd`.
+pub fn print_fd[P: Print](fd: uint, p: *P) {
     let mut allocator = LibcAllocator.new().dynamic()
-    printf_nl(Format.new(&mut allocator, "%\n").arg[P](p))
-}
-
-/// Prints the given format to stdout.
-pub fn printf_nl(format: Format) {
-    print_nl[Format](&format)
-    format.free()
-}
-
-/// Prints the given value to stdout.
-pub fn print_nl[P: Print](p: *P) {
-    let mut allocator = LibcAllocator.new().dynamic()
-    let mut stdout_writer = FileWriter.new(&mut allocator, @io.stdout)
-    p.print(&mut stdout_writer.dynamic())
-    stdout_writer.free()
+    let mut writer = FileWriter.new(&mut allocator, fd)
+    p.print(&mut writer.dynamic())
+    writer.free()
 }
 
 /// Any type that can be printed into a writer.
@@ -149,6 +163,12 @@ impl Arg: Print {
 impl str: Print {
     fn print(*self, writer: *mut Writer) {
         writer.write(Slice[u8].from_str(self^))
+    }
+}
+
+impl char: Print {
+    fn print(*self, writer: *mut Writer) {
+        (self^ as u32).print(writer)
     }
 }
 

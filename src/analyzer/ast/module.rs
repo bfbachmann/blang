@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::analyzer::ast::ext::AExternFn;
 use crate::analyzer::ast::func::{analyze_fn_sig, AFn, AFnSig};
@@ -310,11 +310,15 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
         return;
     }
 
+    // Check if the spec being implemented is public.
+    let is_pub_spec = maybe_spec_tk.is_some_and(|tk| ctx.type_is_pub(tk));
+
     ctx.set_cur_self_type_key(Some(impl_type_key));
     ctx.set_cur_spec_type_key(maybe_spec_tk);
 
     // Analyze each member function signature.
     let mut fn_type_keys = HashMap::new();
+    let mut pub_fn_tks = HashSet::new();
     for member_fn in &impl_.member_fns {
         let fn_sig = AFnSig::from(ctx, &member_fn.signature);
 
@@ -360,6 +364,11 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
         }
 
         fn_type_keys.insert(fn_sig.name.clone(), fn_sig.type_key);
+
+        // Mark the member function as pub if the spec is pub or
+        if member_fn.is_pub || is_pub_spec {
+            pub_fn_tks.insert(fn_sig.type_key);
+        }
     }
 
     ctx.set_cur_spec_type_key(None);
@@ -373,6 +382,13 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     // spec it claims it does. This is just to prevent redundant error
     // messages when the corresponding type gets used.
     ctx.insert_impl(impl_type_key, maybe_spec_tk, fn_type_keys);
+
+    // Record public member functions, so we can check whether they're accessible
+    // whenever they're used. We'll also consider the member function public if
+    // it is an implementation of a function from a public spec.
+    for fn_tk in pub_fn_tks {
+        ctx.mark_member_fn_pub(impl_type_key, fn_tk);
+    }
 }
 
 fn analyze_spec(ctx: &mut ProgramContext, spec: &SpecType) {

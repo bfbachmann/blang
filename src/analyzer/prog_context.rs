@@ -1801,6 +1801,11 @@ impl ProgramContext {
 
     /// Returns true if the type with the given name in the given module is public.
     pub fn type_is_pub(&self, type_key: TypeKey) -> bool {
+        let type_key = match self.type_monomorphizations.get(&type_key) {
+            Some(mono) => mono.poly_type_key,
+            None => type_key,
+        };
+
         self.pub_type_keys.contains(&type_key) || self.must_get_type(type_key).is_primitive()
     }
 
