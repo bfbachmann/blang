@@ -1,0 +1,49 @@
+use "std/types/slice.bl" {Slice}
+
+const digits = "0001020304050607080910111213141516171819\
+    2021222324252627282930313233343536373839\
+    4041424344454647484950515253545556575859\
+    6061626364656667686970717273747576777879\
+    8081828384858687888990919293949596979899"
+
+pub fn int_to_str(val: int) -> {[u8; 65], uint} {
+    let digit_bytes = Slice[u8].from_str(digits)
+    let mut str_bytes = [0u8; 65]
+    let mut i = 65uint
+    let mut u = from if val >= 0 {
+        yield val as uint
+    } else { 
+        yield -val as uint
+    }
+
+    while u >= 100 {
+        let is = u % 100 * 2
+        u /= 100
+        i -= 2
+        str_bytes.(i+1) = digit_bytes.get(is+1)
+        str_bytes.(i) = digit_bytes.get(is)
+    }
+
+    let is = u * 2
+    i -= 1
+    str_bytes.(i) = digit_bytes.get(is+1)
+
+    if u >= 10 {
+        i -= 1
+        str_bytes.(i) = digit_bytes.get(is)
+    }
+
+    if val < 0 {
+        i -= 1
+        str_bytes.(i) = '-' as u8
+    }
+
+    return {str_bytes, i}
+}
+
+pub fn bool_to_str(b: bool) -> str {
+    if b {
+        return "true"
+    }
+    return "false"
+}

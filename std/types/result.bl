@@ -1,0 +1,37 @@
+/// Represents the result of an operation that may fail. This can either be
+/// `Ok(T)` for success, or `Err(E)` for failure.
+pub enum Result[T, E] {
+    Ok(T)
+    Err(E)
+}
+
+impl Result {
+    /// Unwraps the result, returning `T`, or panics if the result is `Err`.
+    pub fn unwrap(self) -> T {
+        match self {
+        case let Result[T, E]::Ok(t):
+            return t
+        case:
+            panic("unwrap of result Err")
+
+            // TODO: Use unreachable statement when supported
+            let ptr: *T = null
+            return ptr^
+        }
+    }
+
+    /// Returns true if this is an `Ok` result.
+    pub fn is_ok(*self) -> bool {
+        match self {
+        case let Result[T, E]::Ok(_):
+            return true
+        case:
+            return false
+        }
+    }
+
+    /// Returns true if this is an `Err` result.
+    pub fn is_err(*self) -> bool {
+        return !self.is_ok()
+    }
+}

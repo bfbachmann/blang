@@ -131,7 +131,8 @@ mod tests {
 
     #[test]
     fn parse_function_declaration() {
-        let tokens = tokenize(r#"fn my_fn(arg1: str, arg2: i64) -> str { let s = "hello world!"; }"#);
+        let tokens =
+            tokenize(r#"fn my_fn(arg1: str, arg2: i64) -> str { let s = "hello world!"; }"#);
         let result = Function::from(&mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,

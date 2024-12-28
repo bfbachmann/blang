@@ -1,4 +1,5 @@
 use "std/libc/io.bl" @io
+use "std/convert.bl" @convert
 use "std/types/slice.bl" {Slice}
 use "std/types/list.bl" {List}
 use "std/io/writer.bl" {Writer}
@@ -6,14 +7,26 @@ use "std/mem/allocator.bl" {Allocator}
 use "std/mem/libc_allocator.bl" {LibcAllocator}
 use "std/io/file_writer.bl" {FileWriter}
 
-/// Prints the given format to stdout.
+/// Prints the given format to stdout with a newline at the end.
 pub fn printf(format: Format) {
     print[Format](&format)
     format.free()
 }
 
-/// Prints the given value to stdout.
+/// Prints the given value to stdout with a newline at the end.
 pub fn print[P: Print](p: *P) {
+    let mut allocator = LibcAllocator.new().dynamic()
+    printf_nl(Format.new(&mut allocator, "%\n").arg[P](p))
+}
+
+/// Prints the given format to stdout.
+pub fn printf_nl(format: Format) {
+    print_nl[Format](&format)
+    format.free()
+}
+
+/// Prints the given value to stdout.
+pub fn print_nl[P: Print](p: *P) {
     let mut allocator = LibcAllocator.new().dynamic()
     let mut stdout_writer = FileWriter.new(&mut allocator, @io.stdout)
     p.print(&mut stdout_writer.dynamic())
@@ -27,7 +40,7 @@ pub spec Print {
 
 /// A format string (literal) and arguments to be formatted.
 pub struct Format {
-    fmt: str
+    fmt: Slice[u8]
     args: List[Arg]
 }
 
@@ -35,7 +48,7 @@ impl Format {
     /// Create a new format.
     pub fn new(al: *mut Allocator, fmt: str) -> Format {
         return Format{
-            fmt: fmt
+            fmt: Slice[u8].from_str(fmt)
             args: List[Arg].new(al)
         }
     }
@@ -61,27 +74,26 @@ impl Format {
 impl Format: Print {
     /// Prints the format into the given writer.
     pub fn print(*self, writer: *mut Writer) {
-        let fmt = Slice[u8].from_str(self.fmt)
-        let fmt_len = fmt.len()
+        let fmt_len = self.fmt.len()
         let mut last_char = 0u8
         let mut substr_start = 0uint
         let mut arg_i = 0uint
 
         for let mut i: uint = 0, i < fmt_len, i += 1 {
-            let cur_char = fmt.ptr_at(i)^
+            let cur_char = self.fmt.ptr_at(i)^
             last_char = from {
                 if last_char == '\\' as u8 && cur_char == '\\' as u8 {
-                    write_substr(writer, &fmt, substr_start, i + 1)
+                    write_substr(writer, &self.fmt, substr_start, i + 1)
                     substr_start = i + 1
                     
                     yield 0u8
                 } else if last_char != '\\' as u8 && cur_char == '%' as u8 {
-                    write_substr(writer, &fmt, substr_start, i)
+                    write_substr(writer, &self.fmt, substr_start, i)
                     substr_start = i + 1
 
                     print_next_arg(writer, &self.args, &mut arg_i)
                 } else if last_char == '\\' as u8 && cur_char == '%' as u8 {
-                    write_substr(writer, &fmt, substr_start, i - 1)
+                    write_substr(writer, &self.fmt, substr_start, i - 1)
                     
                     writer.write(Slice[u8].from_str("%"))
                     substr_start = i + 1
@@ -92,7 +104,7 @@ impl Format: Print {
         }
 
         // Read remaining format substring, if any.
-        write_substr(writer, &fmt, substr_start, i)
+        write_substr(writer, &self.fmt, substr_start, i)
     }
 }
 
@@ -140,8 +152,77 @@ impl str: Print {
     }
 }
 
+impl bool: Print {
+    fn print(*self, writer: *mut Writer) {
+        writer.write(Slice[u8].from_str(@convert.bool_to_str(self^)))
+    }
+}
+
 impl Slice[u8]: Print {
     fn print(*self, writer: *mut Writer) {
         writer.write(self^)
+    }
+}
+
+impl int: Print {
+    fn print(*self, writer: *mut Writer) {
+        let result = @convert.int_to_str(self^)
+        let bytes = &result.(0) as *u8
+        let offset = result.(1) as int
+        writer.write(Slice[u8].new(bytes.(offset), 65 - offset as uint))
+    }
+}
+
+impl uint: Print {
+    fn print(*self, writer: *mut Writer) {
+        (self^ as int).print(writer)
+    }
+}
+
+impl u64: Print {
+    fn print(*self, writer: *mut Writer) {
+        (self^ as int).print(writer)
+    }
+}
+
+impl u32: Print {
+    fn print(*self, writer: *mut Writer) {
+        (self^ as int).print(writer)
+    }
+}
+
+impl u16: Print {
+    fn print(*self, writer: *mut Writer) {
+        (self^ as int).print(writer)
+    }
+}
+
+impl u8: Print {
+    fn print(*self, writer: *mut Writer) {
+        (self^ as int).print(writer)
+    }
+}
+
+impl i64: Print {
+    fn print(*self, writer: *mut Writer) {
+        (self^ as int).print(writer)
+    }
+}
+
+impl i32: Print {
+    fn print(*self, writer: *mut Writer) {
+        (self^ as int).print(writer)
+    }
+}
+
+impl i16: Print {
+    fn print(*self, writer: *mut Writer) {
+        (self^ as int).print(writer)
+    }
+}
+
+impl i8: Print {
+    fn print(*self, writer: *mut Writer) {
+        (self^ as int).print(writer)
     }
 }

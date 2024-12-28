@@ -39,6 +39,11 @@ impl Slice {
         return self.ptr.(i as int)
     }
 
+    /// Returns the value at index `i` in the slice.
+    pub fn get(*self, i: uint) -> T {
+        return self.ptr_at(i)^
+    }
+
     /// Returns a slice that points to elements from index `start` (incluive) 
     /// to `end` (exclusive).
     pub fn slice(*self, start: uint, end: uint) -> Slice[T] {

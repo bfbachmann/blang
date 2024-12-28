@@ -1,0 +1,31 @@
+/// An optional value that is either `Some(T)` or `None`.
+pub enum Opt[T] {
+    Some(T)
+    None
+}
+
+impl Opt {
+    /// Unwraps `Some(T)`, returning `T`, or panics if the value is `None`.
+    pub fn unwrap(self) -> T {
+        match self {
+        case let Opt[T]::Some(inner):
+            return inner
+        case:
+            panic("unwrap of optional None")
+
+            // TODO: Use unreachable statement when supported
+            let ptr: *T = null
+            return ptr^
+        }
+    }
+
+    /// Returns true if the value is `None`.
+    pub fn is_none(*self) -> bool {
+        return self ~~ Opt[T]::None
+    }
+
+    /// Returns true if the value is `Some(T)`.
+    pub fn is_some(*self) -> bool {
+        return !self.is_none()
+    }
+}
