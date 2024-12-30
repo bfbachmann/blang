@@ -45,7 +45,7 @@ impl AIndex {
         };
 
         // The collection expression must be of an array, tuple, or pointer type.
-        let collection_type = ctx.must_get_type(collection_expr.type_key);
+        let collection_type = ctx.get_type(collection_expr.type_key);
         let (maybe_collection_len, mut result_type_key, is_tuple) = match collection_type {
             AType::Array(array_type) => match array_type.maybe_element_type_key {
                 Some(elem_tk) => (Some(array_type.len), elem_tk, false),
@@ -120,7 +120,7 @@ impl AIndex {
 
                 // If the collection is a tuple, set the result type to the type
                 // of the tuple field at the specified index.
-                if let AType::Tuple(tuple_type) = ctx.must_get_type(collection_expr.type_key) {
+                if let AType::Tuple(tuple_type) = ctx.get_type(collection_expr.type_key) {
                     result_type_key = tuple_type.get_field_type_key(i as usize).unwrap();
                 }
             } else if is_tuple {

@@ -666,13 +666,59 @@ mod tests {
     }
 
     #[test]
-    fn unresolved_params() {
+    fn inferred_fn_call_params() {
         let result = analyze(
             r#"
             fn test[A, B](a: A, b: B) {}
 
             fn main() {
                 test(1, 2)
+            }
+            "#,
+        );
+        check_result(result, None);
+    }
+
+    #[test]
+    fn mismatched_inferred_fn_call_params() {
+        let result = analyze(
+            r#"
+            fn test[A](a: A, b: A) {}
+
+            fn main() {
+                test(1, "wrong")
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
+
+    #[test]
+    fn invalid_inferred_fn_call_params() {
+        let result = analyze(
+            r#"
+            spec Test {
+                fn test()
+            }
+
+            fn test[T: Test](t: T) {}
+
+            fn main() {
+                test(1)
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::SpecNotSatisfied));
+    }
+
+    #[test]
+    fn type_annotations_needed() {
+        let result = analyze(
+            r#"
+            fn test[T]() {}
+
+            fn main() {
+                test()
             }
             "#,
         );

@@ -136,7 +136,7 @@ impl AType {
         // Check if this is a generic type parameter.
         if let Some(param) = ctx.get_param(type_name) {
             return AType::Generic(
-                ctx.must_get_type(param.generic_type_key)
+                ctx.get_type(param.generic_type_key)
                     .to_generic_type()
                     .clone(),
             );
@@ -259,8 +259,8 @@ impl AType {
             (AType::Tuple(t1), AType::Tuple(t2)) => t1.is_same_as(ctx, t2),
             (AType::Array(a1), AType::Array(a2)) => a1.is_same_as(ctx, a2),
             (AType::Pointer(p1), AType::Pointer(p2)) => {
-                let p1_pointee_type = ctx.must_get_type(p1.pointee_type_key);
-                let p2_pointee_type = ctx.must_get_type(p2.pointee_type_key);
+                let p1_pointee_type = ctx.get_type(p1.pointee_type_key);
+                let p2_pointee_type = ctx.get_type(p2.pointee_type_key);
                 let same_pointee_types = p1_pointee_type.is_same_as(ctx, p2_pointee_type, false);
                 same_pointee_types && (ignore_mutability || p1.is_mut == p2.is_mut)
             }

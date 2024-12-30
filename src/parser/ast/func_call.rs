@@ -7,15 +7,15 @@ use crate::parser::ast::expr::Expression;
 
 /// Represents a function call.
 #[derive(Eq, Debug, Clone)]
-pub struct FuncCall {
+pub struct FnCall {
     pub fn_expr: Expression,
     pub args: Vec<Expression>,
     pub(crate) span: Span,
 }
 
-locatable_impl!(FuncCall);
+locatable_impl!(FnCall);
 
-impl Display for FuncCall {
+impl Display for FnCall {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}(", self.fn_expr)?;
 
@@ -30,7 +30,7 @@ impl Display for FuncCall {
     }
 }
 
-impl Hash for FuncCall {
+impl Hash for FnCall {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.fn_expr.hash(state);
         for arg in &self.args {
@@ -39,15 +39,15 @@ impl Hash for FuncCall {
     }
 }
 
-impl PartialEq for FuncCall {
+impl PartialEq for FnCall {
     fn eq(&self, other: &Self) -> bool {
         self.fn_expr == other.fn_expr && self.args == other.args
     }
 }
 
-impl FuncCall {
-    pub fn new(fn_expr: Expression, args: Vec<Expression>, end_pos: Position) -> FuncCall {
-        FuncCall {
+impl FnCall {
+    pub fn new(fn_expr: Expression, args: Vec<Expression>, end_pos: Position) -> FnCall {
+        FnCall {
             span: Span {
                 start_pos: fn_expr.start_pos().clone(),
                 end_pos,
@@ -58,8 +58,8 @@ impl FuncCall {
     }
 
     #[cfg(test)]
-    pub fn new_with_default_pos(fn_expr: Expression, args: Vec<Expression>) -> FuncCall {
-        FuncCall {
+    pub fn new_with_default_pos(fn_expr: Expression, args: Vec<Expression>) -> FnCall {
+        FnCall {
             fn_expr,
             args,
             span: Default::default(),

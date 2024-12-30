@@ -35,7 +35,7 @@ impl AVarAssign {
         // expression already failed analysis. If the target turns out not to be
         // assignable, we'll skip type checks for the assigned expression to avoid
         // redundant errors.
-        let maybe_expected_right_type_key = match !ctx.must_get_type(target.type_key).is_unknown()
+        let maybe_expected_right_type_key = match !ctx.get_type(target.type_key).is_unknown()
             && check_assignable(ctx, assign, &target)
         {
             true => Some(target.type_key),
@@ -132,7 +132,7 @@ fn check_assignable<T: Locatable>(ctx: &mut ProgramContext, loc: &T, target_expr
 
         // We're assigning to a value via a pointer. Make sure the pointer is `*mut`.
         AExprKind::UnaryOperation(Operator::Defererence, operand) => {
-            if let AType::Pointer(pointer_type) = ctx.must_get_type(operand.type_key) {
+            if let AType::Pointer(pointer_type) = ctx.get_type(operand.type_key) {
                 if !pointer_type.is_mut {
                     ctx.insert_err(AnalyzeError::new(
                         ErrorKind::ImmutableAssignment,

@@ -13,7 +13,7 @@ use crate::parser::ast::f32_lit::F32Lit;
 use crate::parser::ast::f64_lit::F64Lit;
 use crate::parser::ast::from::From;
 use crate::parser::ast::func::Function;
-use crate::parser::ast::func_call::FuncCall;
+use crate::parser::ast::func_call::FnCall;
 use crate::parser::ast::i16_lit::I16Lit;
 use crate::parser::ast::i32_lit::I32Lit;
 use crate::parser::ast::i64_lit::I64Lit;
@@ -60,7 +60,7 @@ pub enum Expression {
     UintLiteral(UintLit),
     StrLiteral(StrLit),
     CharLiteral(CharLit),
-    FunctionCall(Box<FuncCall>),
+    FunctionCall(Box<FnCall>),
     AnonFunction(Box<Function>),
     Lambda(Box<Function>),
     StructInit(StructInit),
@@ -475,7 +475,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                     if let Some(Token { span, .. }) =
                         Module::parse_optional(tokens, TokenKind::RightParen)
                     {
-                        expr = Expression::FunctionCall(Box::new(FuncCall::new(
+                        expr = Expression::FunctionCall(Box::new(FnCall::new(
                             expr,
                             args,
                             span.end_pos,
@@ -494,7 +494,7 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                         tokens,
                         vec![TokenKind::Comma, TokenKind::RightParen],
                     )? {
-                        expr = Expression::FunctionCall(Box::new(FuncCall::new(
+                        expr = Expression::FunctionCall(Box::new(FnCall::new(
                             expr,
                             args,
                             span.end_pos,
@@ -658,7 +658,7 @@ mod tests {
     use crate::lexer::token_kind::TokenKind;
     use crate::parser::ast::bool_lit::BoolLit;
     use crate::parser::ast::expr::Expression;
-    use crate::parser::ast::func_call::FuncCall;
+    use crate::parser::ast::func_call::FnCall;
     use crate::parser::ast::int_lit::IntLit;
     use crate::parser::ast::op::Operator;
     use crate::parser::ast::str_lit::StrLit;
@@ -742,7 +742,7 @@ mod tests {
     fn parse_function_call() {
         assert_eq!(
             parse("call(3 * 2 - 2, other(!thing, 1 > var % 2))").unwrap(),
-            Expression::FunctionCall(Box::new(FuncCall::new(
+            Expression::FunctionCall(Box::new(FnCall::new(
                 Expression::Symbol(Symbol::new(
                     "call",
                     Span {
@@ -781,7 +781,7 @@ mod tests {
                             },
                         }))
                     ),
-                    Expression::FunctionCall(Box::new(FuncCall::new(
+                    Expression::FunctionCall(Box::new(FnCall::new(
                         Expression::Symbol(Symbol::new(
                             "other",
                             Span {
@@ -952,7 +952,7 @@ mod tests {
                     )),
                     Operator::Multiply,
                     Box::new(Expression::BinaryOperation(
-                        Box::new(Expression::FunctionCall(Box::new(FuncCall::new(
+                        Box::new(Expression::FunctionCall(Box::new(FnCall::new(
                             Expression::Symbol(Symbol::new(
                                 "call",
                                 Span {
@@ -1133,7 +1133,7 @@ mod tests {
             result,
             Expression::UnaryOperation(
                 Operator::Subtract,
-                Box::new(Expression::FunctionCall(Box::new(FuncCall::new(
+                Box::new(Expression::FunctionCall(Box::new(FnCall::new(
                     Expression::Symbol(Symbol::new(
                         "f",
                         Span {
@@ -1291,7 +1291,7 @@ mod tests {
                         Operator::Subtract,
                         Box::new(Expression::UnaryOperation(
                             Operator::Subtract,
-                            Box::new(Expression::FunctionCall(Box::new(FuncCall {
+                            Box::new(Expression::FunctionCall(Box::new(FnCall {
                                 fn_expr: Expression::Symbol(Symbol {
                                     maybe_mod_name: None,
                                     name: "call".to_string(),

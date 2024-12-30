@@ -66,26 +66,26 @@ fn get_second[T](tup: {T, T}) -> T {
 }
 
 // Test functions that have pointer arguments that contain the function params.
-fn deref[T](ptr: *int) -> int {
+fn deref[T](ptr: *T) -> T {
     return ptr^
 }
 
 // Test functions that have array arguments that contain the function params.
-fn nth[T](array: [int; 4], n: uint) -> int {
+fn nth[T](array: [T; 4], n: uint) -> T {
     return array.(n)
 }
 
 fn main() {
     assert(get_default_str[Thing]() == "default\0", "expected \"default\"\0")
 
-    let thing_ptr = heap[Thing](Thing{s: "bing bong!\0"})
+    let thing_ptr = heap(Thing{s: "bing bong!\0"})
     assert(thing_ptr.s == "bing bong!\0", "expected \"bing bong!\"\0")
-    heap_free[Thing](thing_ptr)
+    heap_free(thing_ptr)
 
-   assert(apply[int](double, -7) == -14, "expected -14\0")
-   assert(get_second[int]({2, 9}) == 9, "expected 9\0")
-   assert(deref[int](&17) == 17, "expected 17\0")
-   assert(nth[int]([1, 2, 3, 4], 2) == 3, "expected 3\0")
+    assert(apply(double, -7) == -14, "expected -14\0")
+    assert(get_second({2, 9}) == 9, "expected 9\0")
+    assert(deref(&17) == 17, "expected 17\0")
+    assert(nth([1, 2, 3, 4], 2) == 3, "expected 3\0")
 
     exit(0)
 }

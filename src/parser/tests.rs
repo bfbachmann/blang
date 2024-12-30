@@ -12,7 +12,7 @@ mod tests {
     use crate::parser::ast::cond::Conditional;
     use crate::parser::ast::expr::{parse_expr, Expression};
     use crate::parser::ast::func::Function;
-    use crate::parser::ast::func_call::FuncCall;
+    use crate::parser::ast::func_call::FnCall;
     use crate::parser::ast::func_sig::FunctionSignature;
     use crate::parser::ast::int_lit::IntLit;
     use crate::parser::ast::op::Operator;
@@ -337,7 +337,7 @@ mod tests {
         let result = parse_expr(&mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
-            Expression::FunctionCall(Box::new(FuncCall::new(
+            Expression::FunctionCall(Box::new(FnCall::new(
                 Expression::Symbol(Symbol::new(
                     "do_thing",
                     Span {
@@ -544,7 +544,7 @@ mod tests {
                                     end_pos: Position::new(4, 14),
                                 }
                             )])),
-                            Statement::FunctionCall(FuncCall::new(
+                            Statement::FunctionCall(FnCall::new(
                                 Expression::Symbol(Symbol::new(
                                     "print",
                                     Span {

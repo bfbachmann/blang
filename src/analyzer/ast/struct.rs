@@ -211,7 +211,7 @@ impl AStructInit {
     pub fn from(ctx: &mut ProgramContext, struct_init: &StructInit) -> Self {
         // Resolve the struct type.
         let type_key = ctx.resolve_type(&Type::Unresolved(struct_init.typ.clone()));
-        let struct_type = match ctx.must_get_type(type_key) {
+        let struct_type = match ctx.get_type(type_key) {
             AType::Unknown(_) => {
                 // The struct type has already failed semantic analysis, so we should avoid
                 // analyzing its initialization and just return some zero-value placeholder instead.

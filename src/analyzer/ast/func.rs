@@ -226,8 +226,8 @@ impl AFnSig {
 
         for (this_arg, other_arg) in self.args.iter().zip(other.args.iter()) {
             if this_arg.type_key != other_arg.type_key && {
-                let this_type = ctx.must_get_type(this_arg.type_key);
-                let other_type = ctx.must_get_type(other_arg.type_key);
+                let this_type = ctx.get_type(this_arg.type_key);
+                let other_type = ctx.get_type(other_arg.type_key);
                 !this_type.is_same_as(ctx, other_type, false)
             } {
                 return false;
@@ -238,8 +238,8 @@ impl AFnSig {
             (None, None) => true,
             (Some(this_ret_tk), Some(other_ret_tk)) => {
                 this_ret_tk == other_ret_tk || {
-                    let this_ret_type = ctx.must_get_type(this_ret_tk);
-                    let other_ret_type = ctx.must_get_type(other_ret_tk);
+                    let this_ret_type = ctx.get_type(this_ret_tk);
+                    let other_ret_type = ctx.get_type(other_ret_tk);
                     this_ret_type.is_same_as(ctx, other_ret_type, false)
                 }
             }
@@ -269,10 +269,10 @@ impl AFnSig {
                     these_params.params.iter().zip(other_params.params.iter())
                 {
                     let this_param_type = ctx
-                        .must_get_type(this_param.generic_type_key)
+                        .get_type(this_param.generic_type_key)
                         .to_generic_type();
                     let other_param_type = ctx
-                        .must_get_type(other_param.generic_type_key)
+                        .get_type(other_param.generic_type_key)
                         .to_generic_type();
 
                     if this_param_type.spec_type_keys.len() != other_param_type.spec_type_keys.len()

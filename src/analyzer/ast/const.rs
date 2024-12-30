@@ -59,7 +59,7 @@ impl AConst {
         ));
 
         // Just return a dummy value if the expression already failed analysis.
-        if ctx.must_get_type(value.type_key).is_unknown() {
+        if ctx.get_type(value.type_key).is_unknown() {
             return AConst::new_zero_value(ctx, const_decl.name.as_str());
         }
 

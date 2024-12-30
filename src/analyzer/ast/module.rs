@@ -246,7 +246,7 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
 
     // If there are parameters for this impl, push them to the program context
     // so we can resolve them when we're analyzing member functions.
-    let typ = ctx.must_get_type(impl_type_key);
+    let typ = ctx.get_type(impl_type_key);
     let has_params = match typ.params() {
         Some(params) => {
             ctx.push_params(params.clone());
@@ -263,7 +263,7 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
             // Try to find the analyzed spec type. It might not be there if it has not
             // yet been analyzed.
             let spec_tk = ctx.resolve_type(&spec.as_unresolved_type());
-            let spec_type = ctx.must_get_type(spec_tk);
+            let spec_type = ctx.get_type(spec_tk);
             match spec_type {
                 AType::Spec(_) => {
                     // Make sure there isn't already an impl defined for this spec on this type.
@@ -365,7 +365,7 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
 
         fn_type_keys.insert(fn_sig.name.clone(), fn_sig.type_key);
 
-        // Mark the member function as pub if the spec is pub or
+        // Mark the member function as pub if necessary.
         if member_fn.is_pub || is_pub_spec {
             pub_fn_tks.insert(fn_sig.type_key);
         }

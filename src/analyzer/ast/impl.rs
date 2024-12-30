@@ -50,7 +50,7 @@ impl AImpl {
         let parent_tk = ctx.get_poly_type_key(type_key).unwrap_or(type_key);
 
         // Abort early if the type failed analysis.
-        let typ = ctx.must_get_type(type_key);
+        let typ = ctx.get_type(type_key);
         if typ.is_unknown() {
             return placeholder;
         }
@@ -73,7 +73,7 @@ impl AImpl {
         let maybe_spec_tk = match &impl_.maybe_spec {
             Some(spec) => {
                 let spec_tk = ctx.resolve_type(&spec.as_unresolved_type());
-                match ctx.must_get_type(spec_tk) {
+                match ctx.get_type(spec_tk) {
                     AType::Spec(_) => {
                         ctx.set_cur_spec_type_key(Some(spec_tk));
                         Some(spec_tk)
@@ -192,7 +192,7 @@ fn check_spec_impl(
     member_fns: &HashMap<String, (AFn, &Function)>,
 ) -> Vec<AnalyzeError> {
     // Find the spec being referred to.
-    let spec_type = match ctx.must_get_type(spec_tk) {
+    let spec_type = match ctx.get_type(spec_tk) {
         AType::Spec(spec_type) => spec_type.clone(),
         _ => {
             return vec![AnalyzeError::new(
@@ -209,7 +209,7 @@ fn check_spec_impl(
     let mut missing_fn_names = vec![];
     let mut extra_fn_names: HashSet<String> = HashSet::from_iter(member_fns.keys().cloned());
     for fn_type_key in spec_type.member_fn_type_keys.values() {
-        let spec_fn_sig = ctx.must_get_type(*fn_type_key).to_fn_sig().clone();
+        let spec_fn_sig = ctx.get_type(*fn_type_key).to_fn_sig().clone();
 
         // Check if this impl has a function with the same name.
         match member_fns.get(spec_fn_sig.name.as_str()) {

@@ -107,7 +107,7 @@ impl AStatement {
                 None,
             )),
 
-            Statement::FunctionCall(call) => AStatement::FunctionCall(AFnCall::from(ctx, call)),
+            Statement::FunctionCall(call) => AStatement::FunctionCall(AFnCall::from(ctx, call, None)),
 
             Statement::Conditional(cond) => AStatement::Conditional(ACond::from(ctx, cond)),
 

@@ -10,7 +10,7 @@ use crate::parser::ast::cont::Continue;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::ext::Extern;
 use crate::parser::ast::func::Function;
-use crate::parser::ast::func_call::FuncCall;
+use crate::parser::ast::func_call::FnCall;
 use crate::parser::ast::r#break::Break;
 use crate::parser::ast::r#const::Const;
 use crate::parser::ast::r#enum::EnumType;
@@ -35,7 +35,7 @@ pub enum Statement {
     VariableAssignment(VariableAssignment),
     FunctionDeclaration(Function),
     Closure(Closure),
-    FunctionCall(FuncCall),
+    FunctionCall(FnCall),
     Conditional(Conditional),
     Match(Match),
     Loop(Box<Loop>),

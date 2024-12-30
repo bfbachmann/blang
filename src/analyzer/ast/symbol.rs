@@ -32,7 +32,7 @@ pub struct ASymbol {
     pub is_var: bool,
     /// The path of the module from whence the symbol comes.
     pub maybe_mod_path: Option<String>,
-    span: Span,
+    pub span: Span,
 }
 
 locatable_impl!(ASymbol);
@@ -77,6 +77,7 @@ impl ASymbol {
         include_fns: bool,
         allow_type: bool,
         no_params: bool,
+        allow_polymorph: bool,
     ) -> Self {
         let mut var_name = symbol.name.clone();
 
@@ -105,7 +106,7 @@ impl ASymbol {
         let mut is_type = false;
         if maybe_type_key.is_none() {
             match ctx.get_type_key_by_type_name(symbol.maybe_mod_name.as_ref(), var_name.as_str()) {
-                Some(tk) if !ctx.must_get_type(tk).is_unknown() => {
+                Some(tk) if !ctx.get_type(tk).is_unknown() => {
                     // Make sure the type is public if it's foreign.
                     if symbol.maybe_mod_name.is_some() && !ctx.type_is_pub(tk) {
                         ctx.insert_err(AnalyzeError::new(
@@ -129,7 +130,7 @@ impl ASymbol {
                 // match the function name. We have to do this because function names
                 // get mangled, and we have to be sure that the variables that reference
                 // them get mangled too.
-                match ctx.must_get_type(tk) {
+                match ctx.get_type(tk) {
                     AType::Function(fn_sig) if !fn_sig.name.is_empty() => {
                         var_name = fn_sig.mangled_name.clone();
                     }
@@ -204,31 +205,36 @@ impl ASymbol {
                 // No parameters were provided, so the type had better not be
                 // parameterized unless `no_params` is false or the symbol type is the current
                 // `impl` type.
-                let poly_type = ctx.must_get_type(var_type_key);
+                let poly_type = ctx.get_type(var_type_key);
                 if !no_params
                     && !ctx
                         .get_cur_self_type_key()
                         .is_some_and(|tk| tk == var_type_key)
                 {
-                    if let Some(params) = poly_type.params() {
-                        let param_names = params.params.iter().map(|p| p.name.as_str()).collect();
-                        ctx.insert_err(
-                            AnalyzeError::new(
-                                ErrorKind::UnresolvedParams,
-                                "unresolved parameters",
-                                symbol,
-                            )
-                            .with_detail(
-                                format!(
-                                    "{} has polymorphic type {} which requires that types \
-                                    be specified for parameters: {}.",
-                                    format_code!(symbol),
-                                    format_code!(ctx.display_type(var_type_key)),
-                                    format_code_vec(&param_names, ", "),
+                    match poly_type.params() {
+                        Some(params) if !allow_polymorph => {
+                            let param_names =
+                                params.params.iter().map(|p| p.name.as_str()).collect();
+                            ctx.insert_err(
+                                AnalyzeError::new(
+                                    ErrorKind::UnresolvedParams,
+                                    "unresolved parameters",
+                                    symbol,
                                 )
-                                .as_str(),
-                            ),
-                        )
+                                .with_detail(
+                                    format!(
+                                        "{} has polymorphic type {} which requires that types \
+                                        be specified for parameters: {}.",
+                                        format_code!(symbol),
+                                        format_code!(ctx.display_type(var_type_key)),
+                                        format_code_vec(&param_names, ", "),
+                                    )
+                                    .as_str(),
+                                ),
+                            )
+                        }
+
+                        _ => {}
                     }
                 }
 

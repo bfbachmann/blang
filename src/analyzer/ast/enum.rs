@@ -228,7 +228,7 @@ impl AEnumVariantInit {
     pub fn from(ctx: &mut ProgramContext, enum_init: &EnumVariantInit) -> Self {
         // Make sure the enum type exists.
         let enum_type_key = ctx.resolve_type(&Type::Unresolved(enum_init.typ.clone()));
-        let enum_type = match ctx.must_get_type(enum_type_key) {
+        let enum_type = match ctx.get_type(enum_type_key) {
             AType::Unknown(_) => {
                 // The enum type has already failed semantic analysis, so we should avoid
                 // analyzing its initialization and just return some zero-value placeholder instead.

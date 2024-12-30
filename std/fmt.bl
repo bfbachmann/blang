@@ -168,7 +168,34 @@ impl str: Print {
 
 impl char: Print {
     fn print(*self, writer: *mut Writer) {
-        (self^ as u32).print(writer)
+        let mut bytes = [0u8; 4]
+        let mut len = 1uint
+        let codepoint = self^ as u32
+
+        if (codepoint <= 0x7f) {
+            // 1-byte UTF-8 (ASCII)
+            bytes.(0) = (codepoint) as u8
+        } else if (codepoint <= 0x7ff) {
+            // 2-byte UTF-8
+            bytes.(0) = ((codepoint brs 6u32) bor 0xc0) as u8
+            bytes.(1) = ((codepoint band 0x3fu32) bor 0x80) as u8
+            len = 2
+        } else if (codepoint <= 0xffff) {
+            // 3-byte UTF-8
+            bytes.(0) = ((codepoint brs 12u32) bor 0xe0) as u8
+            bytes.(1) = (((codepoint brs 6u32) band 0x3f) bor 0x80) as u8
+            bytes.(2) = ((codepoint band 0x3fu32) bor 0x80) as u8
+            len = 3
+        } else {
+            // 4-byte UTF-8
+            bytes.(0) = ((codepoint brs 18u32) bor 0xf0) as u8
+            bytes.(1) = (((codepoint brs 12u32) band 0x3f) bor 0x80) as u8
+            bytes.(2) = (((codepoint brs 6u32) band 0x3f) bor 0x80) as u8
+            bytes.(3) = ((codepoint band 0x3fu32) bor 0x80) as u8
+            len = 4
+        }
+
+        writer.write(Slice[u8].new(&bytes as *u8, len))
     }
 }
 

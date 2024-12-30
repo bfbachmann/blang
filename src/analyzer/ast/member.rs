@@ -38,12 +38,13 @@ impl AMemberAccess {
         ctx: &mut ProgramContext,
         access: &MemberAccess,
         prefer_method: bool,
+        allow_polymorph: bool,
     ) -> AMemberAccess {
         let member_name = &access.member_symbol.name;
 
         // Analyze the expression whose member is being accessed.
         let mut base_expr = AExpr::from(ctx, access.base_expr.clone(), None, true, false);
-        let base_type = ctx.must_get_type(base_expr.type_key).clone();
+        let base_type = ctx.get_type(base_expr.type_key).clone();
 
         // Abort early if the expression failed analysis.
         let placeholder = AMemberAccess {
@@ -88,7 +89,7 @@ impl AMemberAccess {
                 }
             };
 
-        let member_type = ctx.must_get_type(member_type_key);
+        let member_type = ctx.get_type(member_type_key);
         let (maybe_mem_fn_sig, is_method) = match member_type {
             AType::Function(fn_sig) if fn_sig.maybe_impl_type_key.is_some() => (Some(fn_sig), true),
             _ => (None, false),
@@ -101,32 +102,34 @@ impl AMemberAccess {
             match &fn_sig.params {
                 Some(expected_params) => {
                     member_type_key = if missing_params {
-                        // The method is polymorphic, but no params were provided. Record and error
-                        // and set the member type to unknown.
-                        let param_names = expected_params
-                            .params
-                            .iter()
-                            .map(|p| p.name.as_str())
-                            .collect();
-                        ctx.insert_err(
-                            AnalyzeError::new(
-                                ErrorKind::UnresolvedParams,
-                                "unresolved parameters",
-                                &access.member_symbol,
-                            )
-                            .with_detail(
-                                format!(
-                                    "{} has polymorphic type {} which requires that types \
-                                    be specified for parameters: {}.",
-                                    format_code!(access),
-                                    format_code!(ctx.display_type(member_type_key)),
-                                    format_code_vec(&param_names, ", "),
+                        if !allow_polymorph {
+                            // The method is polymorphic, but no params were provided. Record an
+                            // error and set the member type to unknown.
+                            let param_names = expected_params
+                                .params
+                                .iter()
+                                .map(|p| p.name.as_str())
+                                .collect();
+                            ctx.insert_err(
+                                AnalyzeError::new(
+                                    ErrorKind::UnresolvedParams,
+                                    "unresolved parameters",
+                                    &access.member_symbol,
                                 )
-                                .as_str(),
-                            ),
-                        );
+                                .with_detail(
+                                    format!(
+                                        "{} has polymorphic type {} which requires that types \
+                                    be specified for parameters: {}.",
+                                        format_code!(access.member_symbol),
+                                        format_code!(ctx.display_type(member_type_key)),
+                                        format_code_vec(&param_names, ", "),
+                                    )
+                                    .as_str(),
+                                ),
+                            );
+                        }
 
-                        ctx.unknown_type_key()
+                        member_type_key
                     } else {
                         // Monomorphize the method and update the method type key.
                         ctx.monomorphize_parameterized_type(
@@ -203,7 +206,7 @@ fn try_resolve_member(
     );
 
     if base_expr.kind.is_type() {
-        return match ctx.must_get_type(base_expr.type_key) {
+        return match ctx.get_type(base_expr.type_key) {
             AType::Generic(generic_type) => {
                 match resolve_generic_method(
                     ctx,
@@ -290,10 +293,10 @@ fn resolve_struct_field(
     base_expr: &mut AExpr,
     member_name: &str,
 ) -> Result<TypeKey, Option<TypeKey>> {
-    let base_type = ctx.must_get_type(base_expr.type_key);
+    let base_type = ctx.get_type(base_expr.type_key);
     let (struct_type, struct_tk, needs_deref) = match base_type {
         AType::Struct(struct_type) => (struct_type, base_expr.type_key, false),
-        AType::Pointer(ptr_type) => match ctx.must_get_type(ptr_type.pointee_type_key) {
+        AType::Pointer(ptr_type) => match ctx.get_type(ptr_type.pointee_type_key) {
             AType::Struct(struct_type) => (struct_type, ptr_type.pointee_type_key, true),
             _ => return Err(None),
         },
@@ -341,10 +344,10 @@ fn resolve_generic_method(
     let mut matching_fns = vec![];
     let mut matching_specs_names = vec![];
     'next_spec: for spec_tk in &generic_type.spec_type_keys {
-        let spec = ctx.must_get_type(*spec_tk).to_spec_type();
+        let spec = ctx.get_type(*spec_tk).to_spec_type();
         for (fn_name, fn_tk) in &spec.member_fn_type_keys {
             if fn_name == member_name {
-                let fn_type = ctx.must_get_type(*fn_tk).to_fn_sig();
+                let fn_type = ctx.get_type(*fn_tk).to_fn_sig();
                 matching_fns.push(fn_type);
                 matching_specs_names.push(spec.name.as_str());
                 continue 'next_spec;
@@ -422,7 +425,7 @@ fn resolve_concrete_method(
 ) -> AnalyzeResult<TypeKey> {
     // If the base expression type is a pointer, then we'll try resolving the method on the pointee
     // type.
-    let (base_type_key, base_expr_is_ptr) = match ctx.must_get_type(base_expr.type_key) {
+    let (base_type_key, base_expr_is_ptr) = match ctx.get_type(base_expr.type_key) {
         AType::Pointer(ptr_type) => (ptr_type.pointee_type_key, true),
         _ => (base_expr.type_key, false),
     };
@@ -477,7 +480,7 @@ fn resolve_concrete_method(
                 // method requires a pointer, then we need to implicitly
                 // take a reference to the value.
                 let self_arg_type_key = maybe_self_type_key.unwrap();
-                let self_arg_type = ctx.must_get_type(self_arg_type_key);
+                let self_arg_type = ctx.get_type(self_arg_type_key);
                 if !base_expr_is_ptr && self_arg_type.is_ptr() {
                     let op = match self_arg_type.is_mut_ptr() {
                         true => {

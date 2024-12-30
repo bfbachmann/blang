@@ -485,7 +485,7 @@ impl ProgramContext {
     ) -> Vec<TypeKey> {
         let mut missing_spec_type_keys = vec![];
         let spec_type_keys = &self
-            .must_get_type(generic_type_key)
+            .get_type(generic_type_key)
             .to_generic_type()
             .spec_type_keys;
 
@@ -672,7 +672,7 @@ impl ProgramContext {
         let type_key = self.type_store.insert_type(typ);
 
         // Create an additional mapping to the new type key to avoid type duplication, if necessary.
-        let typ = self.must_get_type(type_key);
+        let typ = self.get_type(type_key);
         let maybe_mangled_type_name = match typ {
             AType::Struct(struct_type) => {
                 let mangled_name = struct_type.mangled_name.clone();
@@ -817,7 +817,7 @@ impl ProgramContext {
                 let (resolved_tk, poly_tk) = if unresolved_type.params.is_empty() {
                     // No parameters were provided, so this type should either be monomorphic, or
                     // `allow_polymorph` should be `true`.
-                    let resolved_type = self.must_get_type(tk);
+                    let resolved_type = self.get_type(tk);
                     if resolved_type.params().is_some() && !allow_polymorph {
                         self.insert_err(AnalyzeError::new(
                             ErrorKind::UnresolvedParams,
@@ -943,7 +943,7 @@ impl ProgramContext {
         type_key: TypeKey,
         type_mappings: &HashMap<TypeKey, TypeKey>,
     ) -> Option<TypeKey> {
-        let typ = self.must_get_type(type_key);
+        let typ = self.get_type(type_key);
         match typ {
             AType::Struct(_) => self.monomorphize_struct_type(type_key, type_mappings),
             AType::Enum(_) => self.monomorphize_enum_type(type_key, type_mappings),
@@ -979,7 +979,7 @@ impl ProgramContext {
         type_key: TypeKey,
         type_mappings: &HashMap<TypeKey, TypeKey>,
     ) -> Option<TypeKey> {
-        let mut struct_type = self.must_get_type(type_key).to_struct_type().clone();
+        let mut struct_type = self.get_type(type_key).to_struct_type().clone();
 
         // We can't monomorphize struct types that aren't parameterized.
         if struct_type.maybe_params.is_none() {
@@ -993,7 +993,7 @@ impl ProgramContext {
             }
         }
 
-        let has_replaced_param = match self.must_get_type(type_key).params() {
+        let has_replaced_param = match self.get_type(type_key).params() {
             Some(params) => params
                 .params
                 .iter()
@@ -1033,7 +1033,7 @@ impl ProgramContext {
         type_mappings: &HashMap<TypeKey, TypeKey>,
     ) -> Option<TypeKey> {
         let mut replaced_tks = false;
-        let mut enum_type = self.must_get_type(type_key).to_enum_type().clone();
+        let mut enum_type = self.get_type(type_key).to_enum_type().clone();
         for variant in &mut enum_type.variants.values_mut() {
             if let Some(variant_tk) = &mut variant.maybe_type_key {
                 if self.replace_tks(variant_tk, type_mappings) {
@@ -1073,7 +1073,7 @@ impl ProgramContext {
         type_mappings: &HashMap<TypeKey, TypeKey>,
     ) -> Option<TypeKey> {
         let mut replaced_tks = false;
-        let mut fn_sig = self.must_get_type(type_key).to_fn_sig().clone();
+        let mut fn_sig = self.get_type(type_key).to_fn_sig().clone();
 
         for arg in &mut fn_sig.args {
             if self.replace_tks(&mut arg.type_key, type_mappings) {
@@ -1134,7 +1134,7 @@ impl ProgramContext {
         type_key: TypeKey,
         type_mappings: &HashMap<TypeKey, TypeKey>,
     ) -> Option<TypeKey> {
-        let mut tuple_type = self.must_get_type(type_key).to_tuple_type().clone();
+        let mut tuple_type = self.get_type(type_key).to_tuple_type().clone();
         let mut replaced_tks = false;
         for field in &mut tuple_type.fields {
             if self.replace_tks(&mut field.type_key, type_mappings) {
@@ -1154,7 +1154,7 @@ impl ProgramContext {
         type_key: TypeKey,
         type_mappings: &HashMap<TypeKey, TypeKey>,
     ) -> Option<TypeKey> {
-        let mut array_type = self.must_get_type(type_key).to_array_type().clone();
+        let mut array_type = self.get_type(type_key).to_array_type().clone();
         if let Some(elem_tk) = &mut array_type.maybe_element_type_key {
             if self.replace_tks(elem_tk, type_mappings) {
                 return Some(self.insert_type(AType::Array(array_type)));
@@ -1169,7 +1169,7 @@ impl ProgramContext {
         type_key: TypeKey,
         type_mappings: &HashMap<TypeKey, TypeKey>,
     ) -> Option<TypeKey> {
-        let mut ptr_type = self.must_get_type(type_key).to_ptr_type().clone();
+        let mut ptr_type = self.get_type(type_key).to_ptr_type().clone();
         if self.replace_tks(&mut ptr_type.pointee_type_key, type_mappings) {
             return Some(self.insert_type(AType::Pointer(ptr_type)));
         }
@@ -1182,7 +1182,7 @@ impl ProgramContext {
         type_key: TypeKey,
         type_mappings: &HashMap<TypeKey, TypeKey>,
     ) -> Option<TypeKey> {
-        let mut spec_type = self.must_get_type(type_key).to_spec_type().clone();
+        let mut spec_type = self.get_type(type_key).to_spec_type().clone();
         let mut replaced_tks = false;
 
         for fn_tk in spec_type.member_fn_type_keys.values_mut() {
@@ -1198,14 +1198,20 @@ impl ProgramContext {
         }
     }
 
-    fn replace_tks(&mut self, tk: &mut TypeKey, type_mappings: &HashMap<TypeKey, TypeKey>) -> bool {
+    /// Replaces type keys inside the given type using `type_mappings`. If any type keys were
+    /// replaced, updates `tk`.
+    pub fn replace_tks(
+        &mut self,
+        tk: &mut TypeKey,
+        type_mappings: &HashMap<TypeKey, TypeKey>,
+    ) -> bool {
         // Check if we can just replace the type key itself based on the provided mapping.
         if let Some(replacement_tk) = type_mappings.get(tk) {
             *tk = *replacement_tk;
             return true;
         }
 
-        let typ = self.must_get_type(*tk);
+        let typ = self.get_type(*tk);
 
         let result = if let Some(params) = typ.params() {
             // The type is polymorphic, so we can use its defined parameters to extract
@@ -1237,8 +1243,9 @@ impl ProgramContext {
         // If we were able to find a polymorphic type, we can now do the monomorphization.
         if let Some((poly_tk, param_tks)) = result {
             let dummy_span = Span::default();
-            let dummy_spans = param_tks.iter().map(|_| &dummy_span).collect();
-            let mono_tk = self.try_execute_monomorphization(poly_tk, param_tks, dummy_spans);
+            let dummy_spans: Vec<&Span> = param_tks.iter().map(|_| &dummy_span).collect();
+            let mono_tk =
+                self.try_execute_monomorphization(poly_tk, param_tks, &dummy_spans, &dummy_span);
             if mono_tk != *tk {
                 *tk = mono_tk;
                 return true;
@@ -1264,16 +1271,46 @@ impl ProgramContext {
     /// monomorph by substituting type keys for generic types with those from
     /// the provided parameter types. Returns the type key for the monomorphized
     /// type.
-    pub fn monomorphize_parameterized_type<T: Locatable>(
+    pub fn monomorphize_parameterized_type(
         &mut self,
         poly_type_key: TypeKey,
         param_types: &Vec<Type>,
-        loc: &T,
+        loc: &impl Locatable,
+    ) -> TypeKey {
+        let param_type_keys: Vec<TypeKey> =
+            param_types.iter().map(|t| self.resolve_type(t)).collect();
+        let param_locs: Vec<&Type> = param_types.iter().map(|t| t).collect();
+        self.try_execute_monomorphization(poly_type_key, param_type_keys, &param_locs, loc)
+    }
+
+    /// Re-executes a monomorphization.
+    pub fn reexecute_monomorphization(&mut self, mono: Monomorphization) {
+        // Temporarily remove the cached monomorphization to force a new one.
+        let removed = self
+            .type_monomorphizations
+            .remove(&mono.mono_type_key)
+            .unwrap();
+
+        // Execute the same monomorphization again.
+        self.monomorphize_type(mono.poly_type_key, &mono.type_mappings())
+            .unwrap();
+
+        // Re-insert the monomorphization.
+        self.insert_monomorphization(removed);
+    }
+
+    // Tries to monomorphize the given polymorphic type using the given parameter types.
+    pub fn try_execute_monomorphization(
+        &mut self,
+        poly_type_key: TypeKey,
+        param_type_keys: Vec<TypeKey>,
+        param_locs: &Vec<&impl Locatable>,
+        loc: &impl Locatable,
     ) -> TypeKey {
         // Look up the type and make sure it's actually polymorphic.
-        let poly_type = self.must_get_type(poly_type_key).clone();
+        let poly_type = self.get_type(poly_type_key);
         let defined_params = match poly_type.params() {
-            Some(params) => &params.params,
+            Some(params) => params.params.clone(),
 
             // The type is not polymorphic.
             None => {
@@ -1297,7 +1334,7 @@ impl ProgramContext {
 
         // Make sure the right number of params were provided.
         let expected_num_params = defined_params.len();
-        let passed_num_params = param_types.len();
+        let passed_num_params = param_type_keys.len();
         if expected_num_params != passed_num_params {
             self.insert_err(AnalyzeError::new(
                 ErrorKind::WrongNumberOfParams,
@@ -1315,37 +1352,6 @@ impl ProgramContext {
             ));
             return poly_type_key;
         }
-
-        let param_type_keys: Vec<TypeKey> =
-            param_types.iter().map(|t| self.resolve_type(t)).collect();
-        let param_locs: Vec<&Type> = param_types.iter().map(|t| t).collect();
-        self.try_execute_monomorphization(poly_type_key, param_type_keys, param_locs)
-    }
-
-    /// Re-executes a monomorphization.
-    pub fn reexecute_monomorphization(&mut self, mono: Monomorphization) {
-        // Temporarily remove the cached monomorphization to force a new one.
-        let removed = self
-            .type_monomorphizations
-            .remove(&mono.mono_type_key)
-            .unwrap();
-
-        // Execute the same monomorphization again.
-        self.monomorphize_type(mono.poly_type_key, &mono.type_mappings())
-            .unwrap();
-
-        // Re-insert the monomorphization.
-        self.insert_monomorphization(removed);
-    }
-
-    fn try_execute_monomorphization<T: Locatable>(
-        &mut self,
-        poly_type_key: TypeKey,
-        param_type_keys: Vec<TypeKey>,
-        param_locs: Vec<&T>,
-    ) -> TypeKey {
-        let poly_type = self.must_get_type(poly_type_key);
-        let defined_params = poly_type.params().unwrap().params.clone();
 
         // Generate a monomorphization for this type. We'll use this to track
         // the fact that this type has been monomorphized.
@@ -1447,7 +1453,7 @@ impl ProgramContext {
         expected_param: &AParam,
         type_display: &String,
     ) -> AnalyzeResult<TypeKey> {
-        let passed_param_type = self.must_get_type(param_type_key);
+        let passed_param_type = self.get_type(param_type_key);
 
         // Skip further validation if the param value already failed analysis.
         if passed_param_type.is_unknown() {
@@ -1655,7 +1661,7 @@ impl ProgramContext {
     }
 
     /// Returns the type associated with the given key. Panics if there is no such type.
-    pub fn must_get_type(&self, type_key: TypeKey) -> &AType {
+    pub fn get_type(&self, type_key: TypeKey) -> &AType {
         self.type_store.get_type(type_key)
     }
 
@@ -1764,7 +1770,7 @@ impl ProgramContext {
     ) -> Option<&AFnSig> {
         let mod_ctx = self.get_mod_ctx(maybe_mod_name);
         match mod_ctx.fn_types.get(mangled_name) {
-            Some(tk) => Some(self.must_get_type(*tk).to_fn_sig()),
+            Some(tk) => Some(self.get_type(*tk).to_fn_sig()),
             None => None,
         }
     }
@@ -1780,7 +1786,7 @@ impl ProgramContext {
     pub fn set_cur_spec_type_key(&mut self, maybe_spec_type_key: Option<TypeKey>) {
         // Assert that the type is actually a spec.
         assert!(match maybe_spec_type_key {
-            Some(spec_tk) => self.must_get_type(spec_tk).is_spec(),
+            Some(spec_tk) => self.get_type(spec_tk).is_spec(),
             None => true,
         });
 
@@ -1806,7 +1812,7 @@ impl ProgramContext {
             None => type_key,
         };
 
-        self.pub_type_keys.contains(&type_key) || self.must_get_type(type_key).is_primitive()
+        self.pub_type_keys.contains(&type_key) || self.get_type(type_key).is_primitive()
     }
 
     /// Records the given name as a public function name in the current module.
@@ -1868,7 +1874,7 @@ impl ProgramContext {
                 // module.
                 let mut symbol = symbol.clone();
                 symbol.maybe_mod_name = Some(mod_name.clone());
-                let a_symbol = ASymbol::from(self, &symbol, true, true, true);
+                let a_symbol = ASymbol::from(self, &symbol, true, true, true, false);
 
                 // Record an error and skip the symbol if its type could not be
                 // resolved.
@@ -1994,14 +2000,14 @@ impl ProgramContext {
 
     /// Returns the type key of the spec that the given function on the given implements.
     pub fn get_spec_impl_by_fn(&self, fn_type_key: TypeKey) -> Option<TypeKey> {
-        let func = self.must_get_type(fn_type_key).to_fn_sig();
+        let func = self.get_type(fn_type_key).to_fn_sig();
         match func.maybe_impl_type_key {
             Some(impl_tk) => match self.type_impls.get(&impl_tk) {
                 Some(impls) => impls.get_spec_type_key(fn_type_key),
                 // If there is no type impl, then maybe the function's impl type is a spec.
                 // This can happen in cases where the function is actually a method on a generic
                 // type declared as a parameter that implements a spec.
-                None => match self.must_get_type(impl_tk).is_spec() {
+                None => match self.get_type(impl_tk).is_spec() {
                     true => Some(impl_tk),
                     false => None,
                 },
@@ -2030,7 +2036,7 @@ impl ProgramContext {
             // Exactly one function by that name was found for the type. This is the ideal case.
             1 => {
                 let tk = fn_tks.iter().next().unwrap();
-                let fn_sig = self.must_get_type(*tk).to_fn_sig();
+                let fn_sig = self.get_type(*tk).to_fn_sig();
                 Ok(Some(fn_sig.clone()))
             }
 
@@ -2104,7 +2110,7 @@ impl ProgramContext {
         // Monomorphize the function from the polymorphic parent type.
         let type_mappings = mono.type_mappings();
         let mono_fn_sig = match self.monomorphize_fn_type(poly_fn_tk, &type_mappings) {
-            Some(fn_tk) => self.must_get_type(fn_tk).to_fn_sig().clone(),
+            Some(fn_tk) => self.get_type(fn_tk).to_fn_sig().clone(),
             // Monomorphization failed.
             None => return Ok(None),
         };
@@ -2191,7 +2197,7 @@ impl ProgramContext {
     /// Returns true if the given type member function is public.
     fn member_fn_is_pub(&self, type_key: TypeKey, fn_type_key: TypeKey) -> bool {
         // Generic types always have public member fns.
-        if self.must_get_type(type_key).is_generic() {
+        if self.get_type(type_key).is_generic() {
             return true;
         }
 
@@ -2409,7 +2415,7 @@ impl ProgramContext {
         let mod_ctx = self.get_mod_ctx(maybe_mod_name);
         let mangled_name = self.mangle_name(maybe_mod_name, None, None, name, false);
         if let Some(tk) = mod_ctx.struct_type_keys.get(mangled_name.as_str()) {
-            return Some(self.must_get_type(*tk).to_struct_type());
+            return Some(self.get_type(*tk).to_struct_type());
         }
 
         None
@@ -2419,7 +2425,7 @@ impl ProgramContext {
     pub fn get_enum_type(&self, maybe_mod_name: Option<&String>, name: &str) -> Option<&AEnumType> {
         let mod_ctx = self.get_mod_ctx(maybe_mod_name);
         if let Some(tk) = mod_ctx.enum_type_keys.get(name) {
-            return Some(self.must_get_type(*tk).to_enum_type());
+            return Some(self.get_type(*tk).to_enum_type());
         }
 
         None
@@ -2429,7 +2435,7 @@ impl ProgramContext {
     pub fn get_spec_type(&self, maybe_mod_name: Option<&String>, name: &str) -> Option<&ASpecType> {
         let mod_ctx = self.get_mod_ctx(maybe_mod_name);
         if let Some(tk) = mod_ctx.spec_type_keys.get(name) {
-            return Some(self.must_get_type(*tk).to_spec_type());
+            return Some(self.get_type(*tk).to_spec_type());
         }
 
         None
@@ -2474,7 +2480,7 @@ impl ProgramContext {
     /// Returns a string containing the human-readable version of the type corresponding to the
     /// given type key.
     pub fn display_type(&self, type_key: TypeKey) -> String {
-        let typ = self.must_get_type(type_key);
+        let typ = self.get_type(type_key);
         match typ {
             AType::Bool
             | AType::Str

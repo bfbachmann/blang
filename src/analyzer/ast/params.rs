@@ -54,7 +54,7 @@ impl AParam {
         for required_spec in &param.required_specs {
             // Try resolve the spec type.
             let spec_tk = ctx.resolve_type(&required_spec.as_unresolved_type());
-            let spec_type = ctx.must_get_type(spec_tk);
+            let spec_type = ctx.get_type(spec_tk);
             match spec_type {
                 AType::Spec(_) => {
                     required_spec_type_keys.push(spec_tk);
@@ -83,12 +83,12 @@ impl AParam {
         // Define member functions for the generic type based on its spec constraints.
         // Also mark the generic type as implementing all the specs from its constraints.
         for spec_type_key in required_spec_type_keys {
-            let spec = ctx.must_get_type(spec_type_key).to_spec_type();
+            let spec = ctx.get_type(spec_type_key).to_spec_type();
             let spec_fn_tks: Vec<TypeKey> = spec.member_fn_type_keys.values().cloned().collect();
             let mut impl_fns = HashMap::new();
 
             for fn_type_key in spec_fn_tks {
-                let mut fn_sig = ctx.must_get_type(fn_type_key).to_fn_sig().clone();
+                let mut fn_sig = ctx.get_type(fn_type_key).to_fn_sig().clone();
                 fn_sig.replace_type_and_define(ctx, spec_type_key, generic_type_key);
                 impl_fns.insert(fn_sig.name, fn_sig.type_key);
             }
@@ -109,7 +109,7 @@ impl AParam {
         let mut s = self.name.clone();
 
         for (i, spec_type_key) in ctx
-            .must_get_type(self.generic_type_key)
+            .get_type(self.generic_type_key)
             .to_generic_type()
             .spec_type_keys
             .iter()

@@ -74,7 +74,7 @@ impl APattern {
 
                 // Figure out how we're supposed to bind variables inside enum patterns based on
                 // the target type.
-                let target_type = ctx.must_get_type(match_target.type_key);
+                let target_type = ctx.get_type(match_target.type_key);
                 let (target_tk, bind_as_ref, bind_ref_mut) = match target_type {
                     AType::Pointer(ptr_type) => (ptr_type.pointee_type_key, true, ptr_type.is_mut),
                     _ => (match_target.type_key, false, false),
@@ -104,7 +104,7 @@ impl APattern {
                 }
 
                 // Resolve the enum variant.
-                let enum_variant = match ctx.must_get_type(enum_tk) {
+                let enum_variant = match ctx.get_type(enum_tk) {
                     AType::Enum(enum_type) => match enum_type.variants.get(&binding.variant_name) {
                         Some(variant) => variant.clone(),
                         None => {
@@ -353,7 +353,7 @@ impl AMatch {
     /// Performs semantic analysis on the given match statement.
     pub fn from(ctx: &mut ProgramContext, match_: &Match) -> AMatch {
         let target = AExpr::from(ctx, match_.target.clone(), None, false, false);
-        let target_type = ctx.must_get_type(target.type_key).clone();
+        let target_type = ctx.get_type(target.type_key).clone();
 
         let mut cases = vec![];
         let mut exhaustive = false;
@@ -429,7 +429,7 @@ impl AMatch {
 
             if !unmatched_variants.is_empty() && matching_enum {
                 let mut variant_names = vec![];
-                let enum_type = ctx.must_get_type(enum_tk).to_enum_type();
+                let enum_type = ctx.get_type(enum_tk).to_enum_type();
                 for (variant_name, variant) in &enum_type.variants {
                     if unmatched_variants.contains(&variant.number) {
                         variant_names.push(variant_name.clone());
@@ -458,7 +458,7 @@ impl AMatch {
 }
 
 fn get_variants(ctx: &mut ProgramContext, type_key: TypeKey) -> (TypeKey, HashSet<usize>, bool) {
-    match ctx.must_get_type(type_key) {
+    match ctx.get_type(type_key) {
         AType::Enum(enum_type) => {
             let nums =
                 HashSet::from_iter(enum_type.variants.values().map(|variant| variant.number));
