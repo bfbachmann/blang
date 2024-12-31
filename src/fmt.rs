@@ -198,18 +198,7 @@ fn print_source_color(file_path: &str, span: &Span) {
 
             // The code spans multiple lines and this is neither the first nor the last.
             if mid_lines_printed == 3 {
-                let ws: String = line
-                    .chars()
-                    .take_while(|c| c.is_whitespace())
-                    .into_iter()
-                    .collect();
-
-                println!(
-                    "{} {}{}",
-                    format!("{:>width$}|", "", width = width).blue().bold(),
-                    ws,
-                    "// ...".red().bold()
-                );
+                println!("{}", ".".repeat(width + 1).blue().bold(),);
             } else if mid_lines_printed <= 1 {
                 println!(
                     "{} {}",
@@ -316,18 +305,7 @@ fn print_source_no_color(file_path: &str, span: &Span) {
 
             // The code spans multiple lines and this is neither the first nor the last.
             if mid_lines_printed == 3 {
-                let ws: String = line
-                    .chars()
-                    .take_while(|c| c.is_whitespace())
-                    .into_iter()
-                    .collect();
-
-                println!(
-                    "{} {}{}",
-                    format!("{:>width$}|", "", width = width),
-                    ws,
-                    "// ..."
-                );
+                println!("{}", ".".repeat(width + 1).blue().bold(),);
             } else if mid_lines_printed <= 1 {
                 println!(
                     "{} {}",

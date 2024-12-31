@@ -18,27 +18,26 @@ The language and compiler are still very young, so they still lack some critical
 
 <!-- TOC -->
 
-* [The Blang Programming Language](#the-blang-programming-language)
-    * [Function Declarations & Calls: `fn`](#function-declarations--calls-fn)
-    * [Variable Declarations: `let`](#variable-declarations-let)
-    * [Constant Declarations: `const`](#constant-declarations-const)
-    * [Statements as Expressions: `from`, `yield`](#statements-as-expressions-from-yield)
-    * [Structures: `struct`](#structures-struct)
-    * [Enumerations: `enum`](#enumerations-enum)
-    * [Tuples: `{...}`](#tuples-)
-    * [Arrays: `[...]`](#arrays-)
-    * [Implementations, Methods, and Method Calls: `impl`, `fn`](#implementations-methods-and-method-calls-impl-fn)
-    * [Conditionals: `if`, `else if`, `else`](#conditionals-if-elsif-else)
-    * [Pattern Matching: `match`](#pattern-matching-match)
-    * [Loops: `for`, `while`, `loop`](#loops-for-while-loop)
-        * [`for` loops](#for-loops)
-        * [`while` loops](#while-loops)
-        * [`loop` loops](#loop-loops)
-    * [Pointers and Memory Access: `*_`, `*mut _`, `&`, `&mut`, `^`](#pointers-and-memory-access-_-mut-_--mut-)
-    * [Externs: `extern`](#externs-extern)
-    * [Imports: `use`](#imports-use)
-    * [Type Casts: `as`](#type-casts-as)
-    * [Generics](#generics)
+* [Function Declarations & Calls: `fn`](#function-declarations--calls-fn)
+* [Variable Declarations: `let`](#variable-declarations-let)
+* [Constant Declarations: `const`](#constant-declarations-const)
+* [Statements as Expressions: `from`, `yield`](#statements-as-expressions-from-yield)
+* [Structures: `struct`](#structures-struct)
+* [Enumerations: `enum`](#enumerations-enum)
+* [Tuples: `{...}`](#tuples-)
+* [Arrays: `[...]`](#arrays-)
+* [Implementations, Methods, and Method Calls: `impl`, `fn`](#implementations-methods-and-method-calls-impl-fn)
+* [Conditionals: `if`, `else if`, `else`](#conditionals-if-elsif-else)
+* [Pattern Matching: `match`](#pattern-matching-match)
+* [Loops: `for`, `while`, `loop`](#loops-for-while-loop)
+    * [`for` loops](#for-loops)
+    * [`while` loops](#while-loops)
+    * [`loop` loops](#loop-loops)
+* [Pointers and Memory Access: `*_`, `*mut _`, `&`, `&mut`, `^`](#pointers-and-memory-access-_-mut-_--mut-)
+* [Externs: `extern`](#externs-extern)
+* [Imports: `use`](#imports-use)
+* [Type Casts: `as`](#type-casts-as)
+* [Generics](#generics)
 
 <!-- TOC -->
 
@@ -363,8 +362,8 @@ fn main() {
     let mut a = [1, 2, 3]
 
     // Double all elements in the array.
-    for let mut i: u64 = 0, i < 3, i = i + 1 {
-        a.(i) = a.(i) * 2
+    for let mut i = 0uint, i < 3, i = i + 1 {
+        a.(i) *= 2
     }
 }
 ```
