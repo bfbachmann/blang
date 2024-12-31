@@ -38,6 +38,7 @@ The language and compiler are still very young, so they still lack some critical
     * [Externs: `extern`](#externs-extern)
     * [Imports: `use`](#imports-use)
     * [Type Casts: `as`](#type-casts-as)
+    * [Generics](#generics)
 
 <!-- TOC -->
 
@@ -508,5 +509,66 @@ fn main() {
 
     // Casting between pointer types.
     let x_u8_ptr = ptr.ptr()
+}
+```
+
+### Generics
+
+Struct types, enum types, and functions can be declared with generic parameters.
+
+```
+/// Contains a value of arbitrary type `T`.
+struct Container[T] {
+    inner_value: T
+}
+
+/// Takes any value of type `T` and returns a container that contains it.
+fn new_container[T](t: T) -> Container[T] {
+    return Container[T]{inner_value: t}
+}
+```
+
+`impl` blocks for types that accept generic parameters inherit those parameters.
+
+```
+enum Opt[T] {
+    Some(T)
+    None
+}
+
+impl Opt {
+    fn is_none(*self) -> bool {
+        return self^ ~~ Opt[T]::None
+    }
+}
+```
+
+Generic parameters can have constraints in the form of specs.
+
+```
+/// Any type that can be added to itself (by reference) to produce a new value
+/// of the same type.
+spec Add {
+    fn add(*self, other: *Self) -> Self
+}
+
+struct Vec2 {
+    x: f64
+    y: f64
+}
+
+// Vec2 implements the `Add` spec.
+impl Vec2: Add {
+    fn add(*self, other: *Vec2) -> Vec2 {
+        return Vec2{
+            x: self.x + other.x
+            y: self.y + other.y
+        }
+    }
+}
+
+/// Sums any two values that implement `Add` and returns the result.
+fn sum[T: Add](a: *T, b: *T) -> T {
+    return a.add(b)
 }
 ```
