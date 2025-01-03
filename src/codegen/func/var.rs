@@ -20,7 +20,14 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         type_key: TypeKey,
         ll_val: BasicValueEnum<'ctx>,
     ) -> PointerValue<'ctx> {
-        let ll_dst_ptr = self.stack_alloc(name, type_key);
+        let ll_dst_ptr = if self.type_converter.get_type(type_key).is_enum() {
+            // Enums are allocated using their LLVM types because different variants need to be
+            // allocated as different types.
+            self.build_entry_alloc(name, ll_val.get_type())
+        } else {
+            self.stack_alloc(name, type_key)
+        };
+
         self.copy_value(ll_val, ll_dst_ptr, type_key);
         self.vars.insert(name.to_string(), ll_dst_ptr);
         ll_dst_ptr

@@ -501,13 +501,24 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         as_ptr: bool,
     ) -> BasicValueEnum<'ctx> {
         let ll_enum_type = self.type_converter.get_basic_type(enum_tk);
+        let ll_inner_type = self.type_converter.get_basic_type(inner_tk);
+        let ll_variant_type = self.ctx.struct_type(
+            &[
+                ll_enum_type
+                    .into_struct_type()
+                    .get_field_type_at_index(0)
+                    .unwrap(),
+                ll_inner_type,
+            ],
+            false,
+        );
 
         match ll_enum_value.is_pointer_value() {
             true => {
                 let ll_inner_val_ptr = self
                     .builder
                     .build_struct_gep(
-                        ll_enum_type,
+                        ll_variant_type,
                         ll_enum_value.into_pointer_value(),
                         1,
                         "enum_inner_val_ptr",

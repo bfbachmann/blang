@@ -273,14 +273,14 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 // Only append the variant value if there is one.
                 if let Some(val) = &enum_init.maybe_value {
                     let ll_enum_inner = self.gen_const_expr(val);
-                    let ll_struct_type = self.ctx.struct_type(
+                    let ll_variant_type = self.ctx.struct_type(
                         &[
                             ll_variant_num_type.as_basic_type_enum(),
                             ll_enum_inner.get_type(),
                         ],
                         false,
                     );
-                    ll_struct_type
+                    ll_variant_type
                         .const_named_struct(&[ll_variant_num, ll_enum_inner])
                         .as_basic_value_enum()
                 } else if ll_struct_type.count_fields() == 2 {
