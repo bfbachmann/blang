@@ -593,7 +593,8 @@ mod tests {
     use crate::codegen::program::{init_default_host_target, CodeGenConfig, OutputFormat};
     use crate::compile;
     use std::fs;
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
+    use std::process::Child;
 
     #[test]
     fn build_std_lib() {
@@ -642,8 +643,45 @@ mod tests {
         }
 
         let mut all_passed = true;
+        let mut clang_procs = vec![];
+
+        // Compile all the programs to IR and then spawn Clang processes to verify them and
+        // generate executables for them.
         for path in paths {
-            if !build_and_verify(path) {
+            let src_path_stem = path.file_stem().unwrap().to_str().unwrap();
+            let ir_path = format!("bin/{}.ll", src_path_stem);
+            let exe_path = format!("bin/{}", src_path_stem);
+
+            // Compile the source code to IR.
+            let target_machine = init_default_host_target().unwrap();
+            let codegen_config = CodeGenConfig::new_default(
+                &target_machine,
+                Path::new(&ir_path),
+                OutputFormat::LLVMIR,
+            );
+            compile(path.to_str().unwrap(), true, codegen_config).unwrap();
+
+            // Verify IR and build executable with Clang.
+            let clang_proc = clang_build_verify(&ir_path, &exe_path);
+            clang_procs.push((clang_proc, exe_path));
+        }
+
+        // Wait for all the Clang processes and make sure they succeeded. Then run executables and
+        // check that they also succeed.
+        for (clang_proc, exe_path) in clang_procs {
+            let clang_output = clang_proc.wait_with_output().unwrap();
+            if !clang_output.status.success() {
+                eprintln!("clang failed with {}", clang_output.status);
+                eprintln!("{}", String::from_utf8(clang_output.stderr).unwrap());
+                all_passed = false;
+                continue;
+            }
+
+            // Run the executable and make sure it succeeds.
+            let exe_output = std::process::Command::new(&exe_path).output().unwrap();
+            if !exe_output.status.success() {
+                eprintln!("{exe_path}: failed with {}", exe_output.status);
+                eprintln!("{}", String::from_utf8(exe_output.stderr).unwrap());
                 all_passed = false;
             }
         }
@@ -651,23 +689,8 @@ mod tests {
         assert!(all_passed);
     }
 
-    fn build_and_verify(src_path: PathBuf) -> bool {
-        let src_path_stem = src_path.file_stem().unwrap().to_str().unwrap();
-        let ir_path = format!("bin/{}.ll", src_path_stem);
-
-        // Compile the source code to IR.
-        let target_machine = init_default_host_target().unwrap();
-        let codegen_config =
-            CodeGenConfig::new_default(&target_machine, Path::new(&ir_path), OutputFormat::LLVMIR);
-        compile(src_path.to_str().unwrap(), true, codegen_config).unwrap();
-
-        // Use Clang to generate an executable from the IR, and to do some other checks on the IR.
-        // This is not normally necessary, as the compiler can directly output object files and
-        // invoke the system linker to create executables, but we're doing this because Clang will
-        // catch a ton of problems with our IR and UB in our programs that LLVM doesn't catch during
-        // normal codegen for some reason.
-        let exe_path = format!("bin/{}", src_path_stem);
-        let clang_output = std::process::Command::new("clang-18")
+    fn clang_build_verify(ir_path: &str, exe_path: &str) -> Child {
+        std::process::Command::new("clang-18")
             .args([
                 &ir_path,
                 "-O2",
@@ -682,22 +705,7 @@ mod tests {
                 "-o",
                 &exe_path,
             ])
-            .output()
-            .unwrap();
-        if !clang_output.status.success() {
-            eprintln!("{}: clang failed with {}", ir_path, clang_output.status);
-            eprintln!("{}", String::from_utf8(clang_output.stderr).unwrap());
-            return false;
-        }
-
-        // Run the executable.
-        let exe_output = std::process::Command::new(exe_path).output().unwrap();
-        if !exe_output.status.success() {
-            eprintln!("{}: failed with {}", ir_path, exe_output.status);
-            eprintln!("{}", String::from_utf8(exe_output.stderr).unwrap());
-            return false;
-        }
-
-        true
+            .spawn()
+            .unwrap()
     }
 }
