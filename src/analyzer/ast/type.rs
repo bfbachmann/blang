@@ -320,8 +320,13 @@ impl AType {
     }
 
     /// Returns true if this is a pointer type.
-    pub fn is_ptr(&self) -> bool {
+    pub fn is_any_ptr(&self) -> bool {
         matches!(self, AType::Pointer(_))
+    }
+
+    /// Returns true if this is a read-only pointer type.
+    pub fn is_readonly_ptr(&self) -> bool {
+        matches!(self, AType::Pointer(APointerType { is_mut: false, .. }))
     }
 
     /// Returns true if this is a mutating pointer type.

@@ -1,13 +1,11 @@
-use std::collections::{HashMap, HashSet};
-
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
-use inkwell::passes::PassManager;
 use inkwell::types::{AnyType, AnyTypeEnum, BasicTypeEnum};
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
+use std::collections::{HashMap, HashSet};
 
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::func::{AFn, AFnSig};
@@ -18,8 +16,7 @@ use crate::codegen::context::{
     BranchContext, CompilationContext, FnContext, FromContext, LoopContext, StatementContext,
 };
 use crate::codegen::convert::TypeConverter;
-use crate::codegen::error::{CodeGenError, CodeGenResult, ErrorKind};
-use crate::format_code;
+use crate::codegen::error::CodeGenResult;
 
 mod closure;
 mod cond;
@@ -33,7 +30,6 @@ mod var;
 pub struct FnCodeGen<'a, 'ctx> {
     ctx: &'ctx Context,
     builder: &'a Builder<'ctx>,
-    fpm: &'a PassManager<FunctionValue<'ctx>>,
     module: &'a Module<'ctx>,
     type_store: &'a TypeStore,
     type_converter: &'a mut TypeConverter<'ctx>,
@@ -53,7 +49,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     pub fn generate(
         context: &'ctx Context,
         builder: &'a Builder<'ctx>,
-        fpm: &'a PassManager<FunctionValue<'ctx>>,
         module: &'a Module<'ctx>,
         type_store: &'a TypeStore,
         type_converter: &'a mut TypeConverter<'ctx>,
@@ -64,7 +59,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let mut fn_compiler = FnCodeGen {
             ctx: context,
             builder,
-            fpm,
             module,
             type_store,
             type_converter,
@@ -327,28 +321,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // instruction), we have to insert one.
         let ctx = self.pop_ctx().to_fn();
         if !ctx.guarantees_return {
-            self.builder.build_return(None);
+            self.builder.build_return(None).unwrap();
         }
 
         // Verify and optimize the function.
-        if fn_val.verify(true) {
-            self.fpm.run_on(&fn_val);
-            Ok(fn_val)
-        } else {
-            fn_val.print_to_stderr();
-
-            println!("__ BEGIN MODULE __");
-            self.module.print_to_stderr();
-            println!("__ END MODULE __");
-            unsafe {
-                fn_val.delete();
-            }
-
-            Err(CodeGenError::new(
-                ErrorKind::FnVerificationFailed,
-                format_code!("failed to verify function {}", func.signature.mangled_name).as_str(),
-            ))
-        }
+        Ok(fn_val)
     }
 
     /// Copies the value `ll_src_val` of type `typ` to the address pointed to by `ll_dst_ptr`.
@@ -361,29 +338,30 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // If the source value is not a pointer, we don't have to copy data in memory, so we just
         // do a regular store.
         if !ll_src_val.is_pointer_value() {
-            self.builder.build_store(ll_dst_ptr, ll_src_val);
+            self.builder.build_store(ll_dst_ptr, ll_src_val).unwrap();
             return;
         }
 
-        let typ = self
-            .type_store
-            .get_type(self.type_converter.map_type_key(type_key));
+        let typ = self.type_converter.get_type(type_key);
         if typ.is_composite() {
             // Copy the value from the source pointer to the destination pointer.
             let ll_type_size = self.type_converter.const_int_size_of_type(type_key);
 
+            // TODO: I'm not sure about the alignment here at all.
+            let ll_align = self.type_converter.align_of_type(type_key);
+
             self.builder
                 .build_memcpy(
                     ll_dst_ptr,
-                    2,
+                    ll_align,
                     ll_src_val.into_pointer_value(),
-                    2,
+                    ll_align,
                     ll_type_size,
                 )
                 .unwrap();
         } else {
             // Store the expression value to the pointer address.
-            self.builder.build_store(ll_dst_ptr, ll_src_val);
+            self.builder.build_store(ll_dst_ptr, ll_src_val).unwrap();
         }
     }
 
@@ -410,7 +388,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         let ll_ptr = self
             .builder
-            .build_alloca(ll_typ, format!("{}_ptr", name).as_str());
+            .build_alloca(ll_typ, format!("{}_ptr", name).as_str())
+            .unwrap();
 
         // Make sure we continue from where we left off as our builder position may have changed
         // in this function.
@@ -435,6 +414,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         } else {
             self.builder
                 .build_load(self.type_converter.get_basic_type(type_key), ll_ptr, name)
+                .unwrap()
         }
     }
 
@@ -442,11 +422,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// be a pointer to a bool.
     fn get_bool(&self, ll_val: BasicValueEnum<'ctx>) -> IntValue<'ctx> {
         if ll_val.is_pointer_value() {
-            self.builder.build_ptr_to_int(
-                ll_val.into_pointer_value(),
-                self.ctx.bool_type(),
-                "ptr_to_bool",
-            )
+            self.builder
+                .build_ptr_to_int(
+                    ll_val.into_pointer_value(),
+                    self.ctx.bool_type(),
+                    "ptr_to_bool",
+                )
+                .unwrap()
         } else {
             ll_val.into_int_value()
         }
@@ -456,11 +438,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// a pointer to an int.
     fn get_int(&self, ll_val: BasicValueEnum<'ctx>) -> IntValue<'ctx> {
         if ll_val.is_pointer_value() {
-            self.builder.build_ptr_to_int(
-                ll_val.into_pointer_value(),
-                self.ctx.i64_type(),
-                "ptr_to_int",
-            )
+            self.builder
+                .build_ptr_to_int(
+                    ll_val.into_pointer_value(),
+                    self.ctx.i64_type(),
+                    "ptr_to_int",
+                )
+                .unwrap()
         } else {
             ll_val.into_int_value()
         }
@@ -497,6 +481,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 .unwrap();
             self.builder
                 .build_load(ll_variant_num_type, ll_variant_ptr, "variant_number")
+                .unwrap()
                 .into_int_value()
         } else {
             self.builder
@@ -618,82 +603,121 @@ pub fn gen_fn_sig<'a, 'ctx>(
         ctx.create_string_attribute("frame-pointer", "non-leaf"),
     );
 
-    let args_offset = if ll_fn_val.count_params() == sig.args.len() as u32 {
-        // The compiled function arguments match those of the original function signature, so
-        // just assign arg names and attributes normally.
-        0
-    } else {
+    let args_offset = if ll_fn_val.count_params() != sig.args.len() as u32 {
         // The compiled function arguments do not match those of the original function
         // signature. This means the function is taking an additional pointer as its first
         // argument, to which the result will be written. This is done for functions that
         // return structured types.
         let first_arg_val = ll_fn_val.get_first_param().unwrap();
         first_arg_val.set_name("ret_val_ptr");
-
-        // Add the "sret" attribute to the first argument to tell LLVM that it is being used to
-        // pass the return value.
-        let ll_ret_type = type_converter
-            .get_basic_type(sig.maybe_ret_type_key.unwrap())
-            .as_any_type_enum();
-        add_fn_arg_attrs(
-            ctx,
-            ll_fn_val,
-            0,
-            vec![
-                ("sret", Some(ll_ret_type)),
-                ("writeonly", None),
-                ("noalias", None),
-                ("nonnull", None),
-            ],
-        );
-
         1
+    } else {
+        0
     };
 
-    // Set argument names and attributes.
+    // Set remaining arg names.
     for i in args_offset..ll_fn_val.count_params() {
         let arg = sig.args.get((i - args_offset) as usize).unwrap();
-        let arg_type = type_converter.get_type(arg.type_key);
-        let is_composite = arg_type.is_composite();
-        let is_mut_ptr = arg_type.is_mut_ptr();
-
-        // Set the argument name.
         let ll_arg = ll_fn_val.get_nth_param(i).unwrap();
         ll_arg.set_name(arg.name.as_str());
+    }
 
-        // Add appropriate attributes for optimization.
-        // Mark the argument as pass-by-value if it's of some composite value that could be mutated.
-        if is_composite && arg.is_mut {
-            let ll_attr_type = type_converter
-                .get_basic_type(arg.type_key)
-                .as_any_type_enum();
-            add_fn_arg_attrs(ctx, ll_fn_val, i, vec![("byval", Some(ll_attr_type))]);
-        } else if ll_arg.is_pointer_value() && !is_mut_ptr && !arg.is_mut {
-            add_fn_arg_attrs(ctx, ll_fn_val, i, vec![("readonly", None)])
+    // Determine and attach function attributes.
+    for (ll_loc, ll_attrs) in get_fn_attrs(ctx, type_converter, ll_fn_val, sig) {
+        for ll_attr in ll_attrs {
+            ll_fn_val.add_attribute(ll_loc, ll_attr);
         }
     }
 
     mangled_name.clone()
 }
 
-/// Adds the given attributes to the function argument at the given index.
-fn add_fn_arg_attrs<'ctx>(
-    ctx: &'ctx Context,
-    fn_val: FunctionValue<'ctx>,
-    arg_index: u32,
-    attrs: Vec<(&str, Option<AnyTypeEnum>)>,
-) {
-    for (attr_name, maybe_attr_type) in attrs {
-        let attr_kind = Attribute::get_named_enum_kind_id(attr_name);
+/// Returns LLVM attributes to set on a function declaration or call site.
+pub(crate) fn get_fn_attrs(
+    ctx: &Context,
+    type_converter: &mut TypeConverter,
+    ll_fn_val: FunctionValue,
+    fn_sig: &AFnSig,
+) -> HashMap<AttributeLoc, Vec<Attribute>> {
+    let mut ll_attrs = HashMap::new();
 
-        // Make sure the attribute is properly defined.
-        assert_ne!(attr_kind, 0);
+    let arg_offset = if ll_fn_val.count_params() == fn_sig.args.len() as u32 {
+        0
+    } else {
+        let ll_ret_type = type_converter
+            .get_basic_type(fn_sig.maybe_ret_type_key.unwrap())
+            .as_any_type_enum();
+        ll_attrs.insert(
+            AttributeLoc::Param(0),
+            vec![
+                new_type_attr(ctx, "sret", ll_ret_type),
+                new_attr(ctx, "writeonly"),
+                new_attr(ctx, "noalias"),
+                new_attr(ctx, "nonnull"),
+                new_attr(ctx, "nocapture"),
+            ],
+        );
 
-        let attr = match maybe_attr_type {
-            Some(typ) => ctx.create_type_attribute(attr_kind, typ),
-            None => ctx.create_enum_attribute(attr_kind, 0),
+        1
+    };
+
+    for i in arg_offset..ll_fn_val.count_params() {
+        let arg = fn_sig.args.get((i - arg_offset) as usize).unwrap();
+        let arg_type = type_converter.get_type(arg.type_key);
+
+        if arg_type.is_composite() {
+            let ll_attr_type = type_converter
+                .get_basic_type(arg.type_key)
+                .as_any_type_enum();
+
+            // Mark the pointer argument as pass by value and not captured by the callee.
+            let mut ll_arg_attrs = vec![
+                new_type_attr(ctx, "byval", ll_attr_type),
+                new_attr(ctx, "nocapture"),
+            ];
+
+            // If the argument type has non-zero size, mark it as dereferenceable up to its size.
+            // Otherwise, just mark is as non-null and not undefined/poison.
+            let ll_type_size = type_converter.size_of_type(arg.type_key);
+            if ll_type_size > 0 {
+                ll_arg_attrs.push(new_enum_attr(ctx, "dereferenceable", ll_type_size));
+            } else {
+                ll_arg_attrs.push(new_attr(ctx, "nonnull"));
+                ll_arg_attrs.push(new_attr(ctx, "noundef"));
+            }
+
+            // Mark the pointer as readonly if the argument is immutable.
+            if !arg.is_mut {
+                ll_arg_attrs.push(new_attr(ctx, "readonly"));
+            }
+
+            ll_attrs.insert(AttributeLoc::Param(i), ll_arg_attrs);
+        } else if arg_type.is_readonly_ptr() {
+            ll_attrs.insert(AttributeLoc::Param(i), vec![new_attr(ctx, "readonly")]);
         };
-
-        fn_val.add_attribute(AttributeLoc::Param(arg_index), attr);
     }
+
+    ll_attrs
+}
+
+fn new_attr(ctx: &Context, name: &str) -> Attribute {
+    ctx.create_enum_attribute(new_attr_kind(name), 0)
+}
+
+fn new_enum_attr(ctx: &Context, name: &str, ll_attr_val: u64) -> Attribute {
+    ctx.create_enum_attribute(new_attr_kind(name), ll_attr_val)
+}
+
+pub(crate) fn new_type_attr<'ctx>(
+    ctx: &'ctx Context,
+    name: &str,
+    ll_attr_type: AnyTypeEnum,
+) -> Attribute {
+    ctx.create_type_attribute(new_attr_kind(name), ll_attr_type)
+}
+
+fn new_attr_kind(name: &str) -> u32 {
+    let ll_attr_kind = Attribute::get_named_enum_kind_id(name);
+    assert_ne!(ll_attr_kind, 0, "invalid attribute");
+    ll_attr_kind
 }

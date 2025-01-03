@@ -16,4 +16,4 @@ See [docs/examples](docs/examples) for runnable examples.
 
 ## Development Dependencies
 
-Rust, Cargo, and a working installation of LLVM (currently using v16.0.0).
+Rust, Cargo, and a working installation of LLVM (currently using v18.0.0).

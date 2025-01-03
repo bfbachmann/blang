@@ -11,7 +11,6 @@ use inkwell::values::IntValue;
 use inkwell::AddressSpace;
 use llvm_sys::core::LLVMFunctionType;
 use llvm_sys::prelude::LLVMTypeRef;
-use llvm_sys::target::LLVMStoreSizeOfType;
 
 use crate::analyzer::ast::array::AArrayType;
 use crate::analyzer::ast::func::AFnSig;
@@ -131,18 +130,15 @@ impl<'ctx> TypeConverter<'ctx> {
 
             AType::Array(array_type) => self.to_array_type(array_type).as_basic_type_enum(),
 
-            AType::Function(fn_sig) => self
-                .to_fn_type(fn_sig)
+            AType::Function(_) => self
+                .ctx
                 .ptr_type(AddressSpace::default())
                 .as_basic_type_enum(),
 
-            AType::Pointer(ptr_type) => {
-                let pointee_type = self.get_type(ptr_type.pointee_type_key);
-                let ll_pointee_type = self.to_basic_type(pointee_type);
-                ll_pointee_type
-                    .ptr_type(AddressSpace::default())
-                    .as_basic_type_enum()
-            }
+            AType::Pointer(_) => self
+                .ctx
+                .ptr_type(AddressSpace::default())
+                .as_basic_type_enum(),
 
             AType::Generic(generic) => {
                 panic!("unexpected generic type {}", generic.name)
@@ -198,22 +194,10 @@ impl<'ctx> TypeConverter<'ctx> {
             None => None,
         };
         let extra_arg_type = match ret_type {
-            Some(AType::Struct(struct_type)) => Some(
-                self.to_struct_type(struct_type)
-                    .ptr_type(AddressSpace::default()),
-            ),
-            Some(AType::Enum(enum_type)) => Some(
-                self.enum_to_struct_type(enum_type)
-                    .ptr_type(AddressSpace::default()),
-            ),
-            Some(AType::Tuple(tuple_type)) => Some(
-                self.tuple_to_struct_type(tuple_type)
-                    .ptr_type(AddressSpace::default()),
-            ),
-            Some(AType::Array(array_type)) => Some(
-                self.to_array_type(array_type)
-                    .ptr_type(AddressSpace::default()),
-            ),
+            Some(AType::Struct(_)) => Some(self.ctx.ptr_type(AddressSpace::default())),
+            Some(AType::Enum(_)) => Some(self.ctx.ptr_type(AddressSpace::default())),
+            Some(AType::Tuple(_)) => Some(self.ctx.ptr_type(AddressSpace::default())),
+            Some(AType::Array(_)) => Some(self.ctx.ptr_type(AddressSpace::default())),
             _ => None,
         };
 
@@ -305,18 +289,29 @@ impl<'ctx> TypeConverter<'ctx> {
         let ll_variant_num_type = self.enum_variant_num_field_type(enum_type.variants.len() as u64);
 
         // Create the struct type with two fields. The first stores the enum variant number and the
-        // second stores the enum variant value, if any.
+        // second stores the enum variant value, if any. We'll omit the second field in cases where
+        // none of the enum variants contain a value.
         let ll_enum_type = self.ctx.opaque_struct_type(enum_type.mangled_name.as_str());
-        ll_enum_type.set_body(
-            &[
-                ll_variant_num_type.as_basic_type_enum(),
-                self.ctx
-                    .i8_type()
-                    .array_type(self.max_enum_variant_size(enum_type) as u32)
-                    .as_basic_type_enum(),
-            ],
-            false,
-        );
+        let has_any_value = enum_type
+            .variants
+            .values()
+            .find(|v| v.maybe_type_key.is_some())
+            .is_some();
+
+        if has_any_value {
+            ll_enum_type.set_body(
+                &[
+                    ll_variant_num_type.as_basic_type_enum(),
+                    self.ctx
+                        .i8_type()
+                        .array_type(self.max_enum_variant_size(enum_type) as u32)
+                        .as_basic_type_enum(),
+                ],
+                false,
+            );
+        } else {
+            ll_enum_type.set_body(&[ll_variant_num_type.as_basic_type_enum()], false);
+        }
 
         ll_enum_type
     }
@@ -344,20 +339,28 @@ impl<'ctx> TypeConverter<'ctx> {
     /// Gets the LLVM metadata type that corresponds to the given type.
     fn to_metadata_type_enum(&self, typ: &AType) -> BasicMetadataTypeEnum<'ctx> {
         if typ.is_composite() {
-            BasicMetadataTypeEnum::from(self.to_basic_type(typ).ptr_type(AddressSpace::default()))
+            BasicMetadataTypeEnum::from(self.ctx.ptr_type(AddressSpace::default()))
         } else {
             BasicMetadataTypeEnum::from(self.to_basic_type(typ))
         }
     }
 
-    /// Returns the size of the given type in bytes.
+    /// Returns the size of the given type in bytes on the target machine, including padding. In
+    /// other words, this returns the number of bytes required to hold the type in memory on the
+    /// target system.
     pub fn size_of_type(&self, type_key: TypeKey) -> u64 {
-        unsafe {
-            LLVMStoreSizeOfType(
-                self.ll_target_machine.get_target_data().as_mut_ptr(),
-                self.to_basic_type(self.get_type(type_key)).as_type_ref(),
-            ) as u64
-        }
+        let ll_type = self.to_basic_type(self.get_type(type_key));
+        self.ll_target_machine
+            .get_target_data()
+            .get_store_size(&ll_type)
+    }
+
+    /// Returns the natural alignment of the given type in bytes.
+    pub fn align_of_type(&self, type_key: TypeKey) -> u32 {
+        let ll_type = self.to_basic_type(self.get_type(type_key));
+        self.ll_target_machine
+            .get_target_data()
+            .get_abi_alignment(&ll_type)
     }
 
     /// Returns the size of the given type in bytes as an LLVM constant integer.
@@ -404,7 +407,7 @@ fn gen_intrinsic_types(ctx: &Context, target_machine: &TargetMachine) {
     {
         let ll_struct_type = ctx.opaque_struct_type(AType::Str.name());
         let ll_field_types: [BasicTypeEnum; 2] = [
-            ctx.i8_type().ptr_type(AddressSpace::default()).into(),
+            ctx.ptr_type(AddressSpace::default()).into(),
             get_ptr_sized_int_type(ctx, target_machine),
         ];
         ll_struct_type.set_body(&ll_field_types, false);

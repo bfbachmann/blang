@@ -1,3 +1,4 @@
+use inkwell::types::BasicType;
 use inkwell::values::{
     ArrayValue, BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue, StructValue,
 };
@@ -268,16 +269,35 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let ll_variant_num = ll_variant_num_type
                     .const_int(enum_init.variant.number as u64, false)
                     .as_basic_value_enum();
-                let mut ll_field_values = vec![ll_variant_num];
 
                 // Only append the variant value if there is one.
                 if let Some(val) = &enum_init.maybe_value {
-                    ll_field_values.push(self.gen_const_expr(val));
+                    let ll_enum_inner = self.gen_const_expr(val);
+                    let ll_struct_type = self.ctx.struct_type(
+                        &[
+                            ll_variant_num_type.as_basic_type_enum(),
+                            ll_enum_inner.get_type(),
+                        ],
+                        false,
+                    );
+                    ll_struct_type
+                        .const_named_struct(&[ll_variant_num, ll_enum_inner])
+                        .as_basic_value_enum()
+                } else if ll_struct_type.count_fields() == 2 {
+                    ll_struct_type
+                        .const_named_struct(&[
+                            ll_variant_num,
+                            ll_struct_type
+                                .get_field_type_at_index(1)
+                                .unwrap()
+                                .const_zero(),
+                        ])
+                        .as_basic_value_enum()
+                } else {
+                    ll_struct_type
+                        .const_named_struct(&[ll_variant_num])
+                        .as_basic_value_enum()
                 }
-
-                ll_struct_type
-                    .const_named_struct(ll_field_values.as_slice())
-                    .as_basic_value_enum()
             }
 
             AExprKind::TypeCast(left_expr, target_type_key) => self

@@ -9,11 +9,11 @@ use inkwell::attributes::AttributeLoc;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
-use inkwell::passes::PassManager;
+use inkwell::passes::PassBuilderOptions;
 use inkwell::targets::{
     CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine, TargetTriple,
 };
-use inkwell::values::{BasicMetadataValueEnum, BasicValue, FunctionValue};
+use inkwell::values::{BasicMetadataValueEnum, BasicValue};
 use inkwell::OptimizationLevel;
 
 use crate::analyzer::ast::expr::AExpr;
@@ -30,7 +30,6 @@ use crate::mono_collector::{MonoItem, MonoProg};
 pub struct ProgramCodeGen<'a, 'ctx> {
     ctx: &'ctx Context,
     builder: &'a Builder<'ctx>,
-    fpm: &'a PassManager<FunctionValue<'ctx>>,
     module: &'a Module<'ctx>,
     fns: &'a HashMap<TypeKey, AFn>,
     extern_fns: &'a HashMap<TypeKey, AExternFn>,
@@ -54,6 +53,7 @@ pub enum OutputFormat {
 
 impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
     /// Compiles the program to LLVM IR.
+    #[flame]
     fn gen_program(&mut self) -> CodeGenResult<()> {
         // Generate extern functions.
         for extern_fn in self.extern_fns.values() {
@@ -102,7 +102,6 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                     FnCodeGen::generate(
                         self.ctx,
                         self.builder,
-                        self.fpm,
                         self.module,
                         self.type_store,
                         &mut self.type_converter,
@@ -133,12 +132,8 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                     .add_function("main", self.ctx.void_type().fn_type(&[], false), None);
             let ll_entry_block = self.ctx.append_basic_block(ll_wrapper_fn, "entry");
             self.builder.position_at_end(ll_entry_block);
-            self.builder.build_call(ll_main_fn, &[], "main");
-            self.builder.build_return(None);
-        }
-
-        if let Err(e) = self.module.verify() {
-            panic!("module verification failed: {}", e);
+            self.builder.build_call(ll_main_fn, &[], "main").unwrap();
+            self.builder.build_return(None).unwrap();
         }
 
         Ok(())
@@ -181,13 +176,14 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
         let ll_ret_val = self
             .builder
             .build_call(ll_extern_fn, ll_args.as_slice(), "extern_call")
+            .unwrap()
             .try_as_basic_value()
             .left();
         let ll_ret_val: Option<&dyn BasicValue> = match ll_ret_val.as_ref() {
             Some(ret_val) => Some(ret_val),
             None => None,
         };
-        self.builder.build_return(ll_ret_val);
+        self.builder.build_return(ll_ret_val).unwrap();
     }
 }
 
@@ -286,6 +282,30 @@ impl CodeGenConfig<'_> {
             linker_args: vec![],
         }
     }
+
+    pub fn optimization_pass_config(&self) -> (String, PassBuilderOptions) {
+        let optimization_pass_pipeline = match self.optimization_level {
+            OptimizationLevel::None => "default<O0>",
+            OptimizationLevel::Less => "default<O1>",
+            OptimizationLevel::Default => "default<O2>",
+            OptimizationLevel::Aggressive => "default<O3>",
+        };
+
+        let opts = PassBuilderOptions::create();
+        opts.set_verify_each(true);
+        opts.set_debug_logging(false);
+        opts.set_loop_interleaving(true);
+        opts.set_loop_vectorization(true);
+        opts.set_loop_slp_vectorization(true);
+        opts.set_loop_unrolling(true);
+        opts.set_forget_all_scev_in_loop_unroll(true);
+        opts.set_licm_mssa_opt_cap(1);
+        opts.set_licm_mssa_no_acc_for_promotion_cap(10);
+        opts.set_call_graph_profile(true);
+        opts.set_merge_functions(true);
+
+        (optimization_pass_pipeline.to_string(), opts)
+    }
 }
 
 /// Generates the program code for the given target. If there is no target, compiles the
@@ -302,23 +322,10 @@ pub fn generate(prog: MonoProg, config: CodeGenConfig) -> CodeGenResult<()> {
     module.set_triple(&config.target_machine.get_triple());
     module.set_data_layout(&data_layout);
 
-    // Set up function pass manager that performs LLVM IR optimization.
-    let fpm = PassManager::create(&module);
-    if config.optimization_level != OptimizationLevel::None {
-        fpm.add_instruction_combining_pass();
-        fpm.add_reassociate_pass();
-        fpm.add_gvn_pass();
-        fpm.add_cfg_simplification_pass();
-        fpm.add_basic_alias_analysis_pass();
-        fpm.add_promote_memory_to_register_pass();
-    }
-    fpm.initialize();
-
     // Create the program code generator and generate the program.
     let mut codegen = ProgramCodeGen {
         ctx: &ctx,
         builder: &builder,
-        fpm: &fpm,
         module: &module,
         fns: &prog.fns,
         extern_fns: &prog.extern_fns,
@@ -331,90 +338,26 @@ pub fn generate(prog: MonoProg, config: CodeGenConfig) -> CodeGenResult<()> {
     };
     codegen.gen_program()?;
 
-    // Create the output directory if it does not yet exist.
-    if let Some(parent_dir) = config.output_path.parent() {
-        if let Err(e) = fs::create_dir_all(parent_dir) {
-            return Err(CodeGenError::new(
-                ErrorKind::WriteOutFailed,
-                format!(
-                    "failed to create output directory {}: {}",
-                    parent_dir.display(),
-                    e
-                )
-                .as_str(),
-            ));
-        }
-    }
+    // Run optimization passes.
+    optimize(codegen.module, &config)?;
 
-    // Write output to file.
-    match config.output_format {
-        OutputFormat::LLVMIR => {
-            if let Err(e) = codegen.module.print_to_file(config.output_path) {
-                return Err(CodeGenError::new(
-                    ErrorKind::WriteOutFailed,
-                    e.to_string().as_str(),
-                ));
-            }
-        }
-
-        OutputFormat::LLVMBitcode => {
-            codegen.module.write_bitcode_to_path(config.output_path);
-        }
-
-        OutputFormat::Object | OutputFormat::Assembly | OutputFormat::Executable => {
-            let file_type = match config.output_format {
-                OutputFormat::Assembly => FileType::Assembly,
-                OutputFormat::Object | OutputFormat::Executable => FileType::Object,
-                _ => unreachable!(),
-            };
-
-            if config.output_format == OutputFormat::Executable {
-                // Write temporary object file.
-                let obj_file_path = config.output_path.with_extension("o");
-                {
-                    if let Err(msg) = config.target_machine.write_to_file(
-                        &module,
-                        file_type,
-                        obj_file_path.as_path(),
-                    ) {
-                        return Err(CodeGenError::new(
-                            ErrorKind::WriteOutFailed,
-                            msg.to_str().unwrap(),
-                        ));
-                    }
-                }
-
-                // To generate an executable, we need to invoke the system linker to link object
-                // files.
-                let result = link(
-                    config.linker,
-                    module.get_triple(),
-                    vec![obj_file_path.as_path()],
-                    &config.output_path,
-                    config.linker_args,
-                );
-
-                // Try to clean up object files before returning.
-                _ = remove_file(obj_file_path);
-                return result;
-            }
-
-            // TODO: Sometimes this call will cause a segfault when the module is not optimized.
-            // I have no idea why, but it's bad!
-            if let Err(msg) =
-                config
-                    .target_machine
-                    .write_to_file(&module, file_type, config.output_path)
-            {
-                return Err(CodeGenError::new(
-                    ErrorKind::WriteOutFailed,
-                    msg.to_str().unwrap(),
-                ));
-            }
-        }
-    };
+    // Write generated code to a file.
+    emit_to_file(codegen.module, config)?;
 
     Ok(())
+}
+
+/// Runs optimization passes on the LLVM module.
+#[flame]
+fn optimize(module: &Module, config: &CodeGenConfig) -> CodeGenResult<()> {
+    let (opt_pipeline, opts) = config.optimization_pass_config();
+    match module.run_passes(&opt_pipeline, config.target_machine, opts) {
+        Ok(_) => Ok(()),
+        Err(err) => Err(CodeGenError::new(
+            ErrorKind::OptimizationFailed,
+            &err.to_string(),
+        )),
+    }
 }
 
 /// Invokes the system linker to link the given object files into an executable that is created
@@ -481,5 +424,95 @@ fn link(
             ErrorKind::LinkingFailed,
             format!("failed to invoke linker \"{}\"\n{}", raw_cmd, err).as_str(),
         )),
+    }
+}
+
+/// Writes compilation output to a file.
+#[flame]
+fn emit_to_file(module: &Module, config: CodeGenConfig) -> CodeGenResult<()> {
+    // Create the output directory if it does not yet exist.
+    if let Some(parent_dir) = config.output_path.parent() {
+        if let Err(e) = fs::create_dir_all(parent_dir) {
+            return Err(CodeGenError::new(
+                ErrorKind::WriteOutFailed,
+                format!(
+                    "failed to create output directory {}: {}",
+                    parent_dir.display(),
+                    e
+                )
+                .as_str(),
+            ));
+        }
+    }
+
+    // Write output to file.
+    match config.output_format {
+        OutputFormat::LLVMIR => {
+            if let Err(e) = module.print_to_file(config.output_path) {
+                return Err(CodeGenError::new(
+                    ErrorKind::WriteOutFailed,
+                    e.to_string().as_str(),
+                ));
+            }
+
+            Ok(())
+        }
+
+        OutputFormat::LLVMBitcode => {
+            module.write_bitcode_to_path(config.output_path);
+            Ok(())
+        }
+
+        OutputFormat::Object | OutputFormat::Assembly | OutputFormat::Executable => {
+            let file_type = match config.output_format {
+                OutputFormat::Assembly => FileType::Assembly,
+                OutputFormat::Object | OutputFormat::Executable => FileType::Object,
+                _ => unreachable!(),
+            };
+
+            if config.output_format == OutputFormat::Executable {
+                // Write temporary object file.
+                let obj_file_path = config.output_path.with_extension("o");
+                {
+                    if let Err(msg) = config.target_machine.write_to_file(
+                        &module,
+                        file_type,
+                        obj_file_path.as_path(),
+                    ) {
+                        return Err(CodeGenError::new(
+                            ErrorKind::WriteOutFailed,
+                            msg.to_str().unwrap(),
+                        ));
+                    }
+                }
+
+                // To generate an executable, we need to invoke the system linker to link object
+                // files.
+                let result = link(
+                    config.linker,
+                    module.get_triple(),
+                    vec![obj_file_path.as_path()],
+                    &config.output_path,
+                    config.linker_args,
+                );
+
+                // Try to clean up object files before returning.
+                _ = remove_file(obj_file_path);
+                return result;
+            }
+
+            if let Err(msg) =
+                config
+                    .target_machine
+                    .write_to_file(&module, file_type, config.output_path)
+            {
+                return Err(CodeGenError::new(
+                    ErrorKind::WriteOutFailed,
+                    msg.to_str().unwrap(),
+                ));
+            }
+
+            Ok(())
+        }
     }
 }

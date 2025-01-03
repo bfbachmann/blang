@@ -11,8 +11,8 @@ lazy_static = "1.4.0"
 llvm-config = "0.1.0"
 regex = "1.8.4"
 target-lexicon = "0.12.8"
-llvm-sys = "160"
-inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm16-0"] }
+llvm-sys = "180"
+inkwell = { version = "0.5.0", features = ["llvm18-0"] }
 colored = "2.0.4"
 flame = "0.2.2"
 flamer = "0.5.0"

@@ -8,14 +8,14 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     pub(crate) fn gen_break(&mut self) {
         self.set_guarantees_terminator(true);
         let loop_end = self.get_or_create_loop_end_block();
-        self.builder.build_unconditional_branch(loop_end);
+        self.builder.build_unconditional_branch(loop_end).unwrap();
     }
 
     /// Compiles a continue statement.
     pub(crate) fn gen_continue(&mut self) {
         self.set_guarantees_terminator(true);
         let loop_begin = self.get_loop_begin_block();
-        self.builder.build_unconditional_branch(loop_begin);
+        self.builder.build_unconditional_branch(loop_begin).unwrap();
     }
 
     /// Compiles a loop.
@@ -29,7 +29,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Generate code for the loop initialization statement, if one exists.
         if let Some(init_statement) = &loop_.maybe_init {
             let init_block = self.append_block("loop_init");
-            self.builder.build_unconditional_branch(init_block);
+            self.builder.build_unconditional_branch(init_block).unwrap();
             self.set_current_block(init_block);
             self.gen_statement(init_statement)?;
 
@@ -43,7 +43,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Jump to the conditional block for the loop. We'll use this block to generate
         // code for the loop condition that runs before each iteration.
         {
-            self.builder.build_unconditional_branch(cond_block);
+            self.builder.build_unconditional_branch(cond_block).unwrap();
             self.set_current_block(cond_block);
 
             // If there is a loop condition, compile it and use the result to jump to the loop body block.
@@ -51,14 +51,16 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             match &loop_.maybe_cond {
                 Some(cond_expr) => {
                     let ll_cond_val = self.gen_expr(cond_expr);
-                    self.builder.build_conditional_branch(
-                        ll_cond_val.into_int_value(),
-                        body_block,
-                        self.get_or_create_loop_end_block(),
-                    );
+                    self.builder
+                        .build_conditional_branch(
+                            ll_cond_val.into_int_value(),
+                            body_block,
+                            self.get_or_create_loop_end_block(),
+                        )
+                        .unwrap();
                 }
                 None => {
-                    self.builder.build_unconditional_branch(body_block);
+                    self.builder.build_unconditional_branch(body_block).unwrap();
                 }
             };
         }
@@ -71,7 +73,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             // Branch back to the beginning of the loop if this block doesn't already terminate.
             if !self.current_block_has_terminator() {
-                self.builder.build_unconditional_branch(cond_block);
+                self.builder.build_unconditional_branch(cond_block).unwrap();
             }
         }
 
@@ -84,7 +86,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Branch back to the beginning of the loop if the body doesn't already have a terminator.
         if !self.current_block_has_terminator() {
             let begin_block = self.get_loop_begin_block();
-            self.builder.build_unconditional_branch(begin_block);
+            self.builder
+                .build_unconditional_branch(begin_block)
+                .unwrap();
         }
 
         // Pop the loop context now that we've compiled the loop.

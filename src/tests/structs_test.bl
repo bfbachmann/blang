@@ -69,6 +69,12 @@ fn main() {
         assert(t.int_val2 == 5, "23")
         assert(t.nested.int_val == -45, "24")
         assert(t.nested.bool_val == true, "25")
+
+        assert(t_copy.int_val1 == 9, "21")
+        assert(!t_copy.bool_val, "22")
+        assert(t_copy.int_val2 == 5, "23")
+        assert(t_copy.nested.int_val == -45, "24")
+        assert(t_copy.nested.bool_val == true, "25")
     }
 
     // Check that struct assignment works.

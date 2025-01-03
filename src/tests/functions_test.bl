@@ -111,7 +111,7 @@ fn main() {
 
     // Check that extern functions with custom link names work.
     {
-        assert(atoi("1234".ptr(), null, 10) == 1234, "expected 1234")
+        assert(atoi("1234\0".ptr(), null, 10) == 1234, "expected 1234")
     }
 
     exit(0)

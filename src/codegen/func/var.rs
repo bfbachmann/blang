@@ -77,15 +77,17 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                         .type_converter
                         .get_array_type(index.collection_expr.type_key);
                     unsafe {
-                        self.builder.build_in_bounds_gep(
-                            ll_array_type,
-                            ll_collection_ptr,
-                            &[
-                                self.ctx.i32_type().const_int(0, false),
-                                ll_index_val.into_int_value(),
-                            ],
-                            "elem_ptr",
-                        )
+                        self.builder
+                            .build_in_bounds_gep(
+                                ll_array_type,
+                                ll_collection_ptr,
+                                &[
+                                    self.ctx.i32_type().const_int(0, false),
+                                    ll_index_val.into_int_value(),
+                                ],
+                                "elem_ptr",
+                            )
+                            .unwrap()
                     }
                 }
             }

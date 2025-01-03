@@ -481,7 +481,7 @@ fn resolve_concrete_method(
                 // take a reference to the value.
                 let self_arg_type_key = maybe_self_type_key.unwrap();
                 let self_arg_type = ctx.get_type(self_arg_type_key);
-                if !base_expr_is_ptr && self_arg_type.is_ptr() {
+                if !base_expr_is_ptr && self_arg_type.is_any_ptr() {
                     let op = match self_arg_type.is_mut_ptr() {
                         true => {
                             // Record an error if we're not allowed to get a

@@ -590,46 +590,13 @@ fn default_output_file_path(src: &Path, output_format: OutputFormat) -> PathBuf 
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::path::{Path, PathBuf};
-    use std::process::Command;
-
     use crate::codegen::program::{init_default_host_target, CodeGenConfig, OutputFormat};
     use crate::compile;
-
-    /// Compiles and executes the code at the given path and asserts that
-    /// execution succeeded.
-    fn run_and_check_result(file_path: PathBuf) {
-        let target_machine = init_default_host_target().expect("should not fail");
-        let output_path = format!("bin/{}", file_path.file_stem().unwrap().to_str().unwrap());
-
-        // Compile the program.
-        compile(
-            file_path.to_str().unwrap(),
-            true,
-            CodeGenConfig::new_default(
-                &target_machine,
-                Path::new(&output_path),
-                OutputFormat::Executable,
-            ),
-        )
-        .expect("should succeed");
-
-        // Run the executable.
-        let output = Command::new(output_path.as_str())
-            .output()
-            .expect("should succeed");
-        eprintln!("{}", String::from_utf8(output.stderr).unwrap());
-        assert!(
-            output.status.success(),
-            "{} failed with {}",
-            file_path.to_str().unwrap(),
-            output.status,
-        );
-    }
+    use std::fs;
+    use std::path::{Path, PathBuf};
 
     #[test]
-    fn compile_std_lib() {
+    fn build_std_lib() {
         // Check that we can compile the standard library.
         let target = init_default_host_target().unwrap();
         let entries = fs::read_dir("std").expect("should succeed");
@@ -652,27 +619,85 @@ mod tests {
     }
 
     #[test]
-    fn run_all_test_files() {
-        // Check that all the `_test.bl` files in src/tests compile.
-        let entries = fs::read_dir("src/tests").expect("should succeed");
-        for entry in entries {
+    fn build_tests_and_examples() {
+        let mut paths = vec![];
+
+        let test_entries = fs::read_dir("src/tests").expect("should succeed");
+        for entry in test_entries {
             let file_path = entry.unwrap().path();
-            if !file_path.to_str().unwrap().ends_with("_test.bl") {
+            let path_str = file_path.to_str().unwrap();
+            if !path_str.ends_with("_test.bl") {
                 continue;
             }
 
-            run_and_check_result(file_path);
+            paths.push(file_path);
         }
-    }
 
-    #[test]
-    fn run_examples() {
-        let entries = fs::read_dir("docs/examples").expect("should succeed");
-        for entry in entries {
+        let example_entries = fs::read_dir("docs/examples").expect("should succeed");
+        for entry in example_entries {
             let entry = entry.unwrap();
             if entry.metadata().unwrap().is_dir() {
-                run_and_check_result(entry.path());
+                paths.push(entry.path());
             }
         }
+
+        let mut all_passed = true;
+        for path in paths {
+            if !build_and_verify(path) {
+                all_passed = false;
+            }
+        }
+
+        assert!(all_passed);
+    }
+
+    fn build_and_verify(src_path: PathBuf) -> bool {
+        let src_path_stem = src_path.file_stem().unwrap().to_str().unwrap();
+        let ir_path = format!("bin/{}.ll", src_path_stem);
+
+        // Compile the source code to IR.
+        let target_machine = init_default_host_target().unwrap();
+        let codegen_config =
+            CodeGenConfig::new_default(&target_machine, Path::new(&ir_path), OutputFormat::LLVMIR);
+        compile(src_path.to_str().unwrap(), true, codegen_config).unwrap();
+
+        // Use Clang to generate an executable from the IR, and to do some other checks on the IR.
+        // This is not normally necessary, as the compiler can directly output object files and
+        // invoke the system linker to create executables, but we're doing this because Clang will
+        // catch a ton of problems with our IR and UB in our programs that LLVM doesn't catch during
+        // normal codegen for some reason.
+        let exe_path = format!("bin/{}", src_path_stem);
+        let clang_output = std::process::Command::new("clang-18")
+            .args([
+                &ir_path,
+                "-O2",
+                "-fsanitize=undefined,address",
+                "-fstack-protector-all",
+                "-fno-sanitize-recover=all",
+                "-Wall",
+                "-Wno-override-module",
+                "-Wextra",
+                "-Wpedantic",
+                "-Werror",
+                "-o",
+                &exe_path,
+            ])
+            .output()
+            .unwrap();
+        if !clang_output.status.success() {
+            eprintln!("{}: clang failed with {}", ir_path, clang_output.status);
+            eprintln!("{}", String::from_utf8(clang_output.stderr).unwrap());
+            return false;
+        }
+
+        // Run the executable.
+        let exe_output = std::process::Command::new(exe_path).output().unwrap();
+        if !exe_output.status.success() {
+            eprintln!("{}: failed with {}", ir_path, exe_output.status);
+            eprintln!("{}", String::from_utf8(exe_output.stderr).unwrap());
+            return false;
+        }
+
+        true
     }
 }

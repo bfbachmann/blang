@@ -94,15 +94,15 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     self.copy_value(result, ll_ret_ptr.into_pointer_value(), ret_type_key);
 
                     // Return void.
-                    self.builder.build_return(None);
+                    self.builder.build_return(None).unwrap();
                 } else {
-                    self.builder.build_return(Some(&result));
+                    self.builder.build_return(Some(&result)).unwrap();
                 }
             }
 
             // The function has no return type, so return void.
             None => {
-                self.builder.build_return(None);
+                self.builder.build_return(None).unwrap();
             }
         }
     }
@@ -137,6 +137,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         ctx.yielded_vales.insert(ll_block, result);
 
         let ll_end_block = ctx.end_block;
-        self.builder.build_unconditional_branch(ll_end_block);
+        self.builder
+            .build_unconditional_branch(ll_end_block)
+            .unwrap();
     }
 }

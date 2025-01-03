@@ -643,7 +643,7 @@ impl AExpr {
 
             AExprKind::Symbol(symbol) => {
                 // Always coerce `null` to any pointer type.
-                if symbol.is_null_intrinsic() && target_type.is_ptr() {
+                if symbol.is_null_intrinsic() && target_type.is_any_ptr() {
                     self.type_key = target_type_key;
                     self.kind = AExprKind::Symbol(ASymbol::new_null(
                         ctx,
@@ -907,7 +907,7 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType, is_left_operand: b
         | Operator::Subtract
         | Operator::Multiply
         | Operator::Divide
-        | Operator::Modulo => operand_type.is_numeric() || operand_type.is_ptr(),
+        | Operator::Modulo => operand_type.is_numeric() || operand_type.is_any_ptr(),
 
         // Logical operators only work on bools.
         Operator::LogicalAnd | Operator::LogicalOr => operand_type == &AType::Bool,
@@ -928,7 +928,7 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType, is_left_operand: b
         // Equality operators work on most primitive types.
         Operator::EqualTo | Operator::NotEqualTo => {
             operand_type.is_numeric()
-                || operand_type.is_ptr()
+                || operand_type.is_any_ptr()
                 || matches!(operand_type, AType::Bool | AType::Str | AType::Char)
         }
 
@@ -939,7 +939,7 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType, is_left_operand: b
         Operator::GreaterThan
         | Operator::LessThan
         | Operator::GreaterThanOrEqual
-        | Operator::LessThanOrEqual => operand_type.is_numeric() || operand_type.is_ptr(),
+        | Operator::LessThanOrEqual => operand_type.is_numeric() || operand_type.is_any_ptr(),
 
         // If this happens, something is badly broken.
         other => panic!("unexpected operator {}", other),
