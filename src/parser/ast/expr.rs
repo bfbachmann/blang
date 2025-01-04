@@ -422,14 +422,12 @@ fn parse_from_rpn(rpn_queue: &mut VecDeque<OutNode>) -> ParseResult<Expression> 
             ))
         }
 
-        None => {
-            return Err(ParseError::new(
-                ErrorKind::UnexpectedEOF,
-                "unexpected end of expression",
-                None,
-                Default::default(),
-            ))
-        }
+        None => Err(ParseError::new(
+            ErrorKind::UnexpectedEOF,
+            "unexpected end of expression",
+            None,
+            Default::default(),
+        )),
     }
 }
 
