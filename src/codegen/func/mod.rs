@@ -634,7 +634,7 @@ pub fn gen_fn_sig<'a, 'ctx>(
     }
 
     // Determine and attach function attributes.
-    for (ll_loc, ll_attrs) in get_fn_attrs(ctx, type_converter, ll_fn_val, sig) {
+    for (ll_loc, ll_attrs) in get_fn_attrs(ctx, type_converter, sig) {
         for ll_attr in ll_attrs {
             ll_fn_val.add_attribute(ll_loc, ll_attr);
         }
@@ -647,12 +647,13 @@ pub fn gen_fn_sig<'a, 'ctx>(
 pub(crate) fn get_fn_attrs(
     ctx: &Context,
     type_converter: &mut TypeConverter,
-    ll_fn_val: FunctionValue,
     fn_sig: &AFnSig,
 ) -> HashMap<AttributeLoc, Vec<Attribute>> {
+    let ll_fn_type = type_converter.get_fn_type(fn_sig.type_key);
+    let ll_param_count = ll_fn_type.count_param_types();
     let mut ll_attrs = HashMap::new();
 
-    let arg_offset = if ll_fn_val.count_params() == fn_sig.args.len() as u32 {
+    let arg_offset = if ll_param_count == fn_sig.args.len() as u32 {
         0
     } else {
         let ll_ret_type = type_converter
@@ -672,7 +673,7 @@ pub(crate) fn get_fn_attrs(
         1
     };
 
-    for i in arg_offset..ll_fn_val.count_params() {
+    for i in arg_offset..ll_param_count {
         let arg = fn_sig.args.get((i - arg_offset) as usize).unwrap();
         let arg_type = type_converter.get_type(arg.type_key);
 

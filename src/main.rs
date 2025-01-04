@@ -499,45 +499,22 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> Result<Program
 #[flame]
 fn compile(src_path: &str, quiet: bool, config: CodeGenConfig) -> Result<(), String> {
     // Read and analyze the program.
-    let analyze_start = Instant::now();
+    let start_time = Instant::now();
     let prog_analysis = analyze(src_path, None)?;
     let prog = mono_prog(prog_analysis);
-    let analyze_duration = Instant::now() - analyze_start;
 
     // Compile the program.
-    let generate_start = Instant::now();
     if let Err(e) = generate(prog, config) {
         return Err(format!("{}", e));
     }
 
-    let generate_duration = Instant::now() - generate_start;
-    let total_duration = analyze_duration + generate_duration;
-
     // Print the success message with the compile time.
     if !quiet {
-        let analyze_time = format_duration(analyze_duration);
-        let generate_time = format_duration(generate_duration);
-        let total_time = format_duration(total_duration);
-        let align_width = [analyze_time.len(), generate_time.len(), total_time.len()]
-            .into_iter()
-            .reduce(usize::max)
-            .unwrap();
-
-        println!("Compiled {}.\n", src_path);
+        let total_duration = Instant::now() - start_time;
         println!(
-            "Analyze time:  {:>width$}",
-            format_duration(analyze_duration),
-            width = align_width
-        );
-        println!(
-            "Generate time: {:>width$}",
-            format_duration(generate_duration),
-            width = align_width
-        );
-        println!(
-            "Total time:    {:>width$}",
-            format_duration(total_duration),
-            width = align_width
+            "Compiled {} in {}.\n",
+            src_path,
+            format_duration(total_duration)
         );
     }
 

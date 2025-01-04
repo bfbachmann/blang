@@ -1,6 +1,5 @@
-use inkwell::attributes::AttributeLoc;
 use inkwell::intrinsics::Intrinsic;
-use inkwell::types::{AnyType, BasicType, BasicTypeEnum};
+use inkwell::types::{BasicType, BasicTypeEnum};
 use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, FloatValue, IntValue};
 use inkwell::{AddressSpace, FloatPredicate, IntPredicate};
 use regex::{Captures, Regex};
@@ -8,7 +7,6 @@ use regex::{Captures, Regex};
 use crate::analyzer::ast::array::AArrayInit;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::fn_call::AFnCall;
-use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::index::AIndex;
 use crate::analyzer::ast::member::AMemberAccess;
 use crate::analyzer::ast::r#enum::AEnumVariantInit;
@@ -19,7 +17,7 @@ use crate::analyzer::ast::tuple::ATupleInit;
 use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::parser::ast::op::Operator;
 
-use super::{get_fn_attrs, mangle_fn_name, new_type_attr, FnCodeGen};
+use super::{get_fn_attrs, mangle_fn_name, FnCodeGen};
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles an arbitrary expression.
@@ -509,12 +507,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     pub(crate) fn gen_call(&mut self, call: &AFnCall) -> Option<BasicValueEnum<'ctx>> {
         let fn_sig = self.type_store.get_type(call.fn_expr.type_key).to_fn_sig();
 
-        // Check if this is a call to an intrinsic function or method. If so, we'll use
-        // whatever result the custom intrinsic code generator returned.
-        if let Some(result) = self.maybe_gen_intrinsic_call(call, fn_sig) {
-            return Some(result);
-        }
-
         let (mut mangled_name, ll_fn_type) = match fn_sig.maybe_impl_type_key {
             Some(impl_tk) => {
                 if self.type_store.get_type(impl_tk).is_generic() {
@@ -603,7 +595,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         };
 
         // Compile call args.
-        let mut ll_arg_attrs = vec![];
         for (i, arg) in call.args.iter().enumerate() {
             let arg_tk = self.type_converter.map_type_key(arg.type_key);
             let arg_type = self.type_store.get_type(arg_tk);
@@ -620,21 +611,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             } else {
                 args.push(ll_arg_val.into());
             }
-
-            // Include the `byval` attribute on composite argument types to tell LLVM to pass these
-            // arguments by value (i.e. generate a copy of them before passing them to the callee).
-            if is_composite {
-                let ll_attr_type = self
-                    .type_converter
-                    .get_basic_type(arg_tk)
-                    .as_any_type_enum();
-                let ll_attr = new_type_attr(self.ctx, "byval", ll_attr_type);
-                ll_arg_attrs.push((AttributeLoc::Param(arg_offset + i as u32), ll_attr));
-            }
         }
 
         // Compile the function call and return the result.
-        let result = match &call.fn_expr.kind {
+        let ll_call = match &call.fn_expr.kind {
             AExprKind::Symbol(symbol) => {
                 if self.is_var_module_fn(&symbol) {
                     // The function is being called directly, so we can just look it up by name in
@@ -647,20 +627,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     // Build the call and attach attributes to it. For some undocumented reason,
                     // some attributes like `byval` need to be attached at the call site as well as
                     // the function declaration.
-                    let ll_call_site = self
-                        .builder
+                    self.builder
                         .build_call(ll_fn, args.as_slice(), symbol.name.as_str())
-                        .unwrap();
-
-                    for (ll_loc, ll_attrs) in
-                        get_fn_attrs(self.ctx, self.type_converter, ll_fn, fn_sig)
-                    {
-                        for ll_attr in ll_attrs {
-                            ll_call_site.add_attribute(ll_loc, ll_attr);
-                        }
-                    }
-
-                    ll_call_site.try_as_basic_value()
+                        .unwrap()
                 } else {
                     // The function is actually a variable, so we need to load the function pointer
                     // from the variable value and call it indirectly.
@@ -673,7 +642,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                             mangled_name.as_str(),
                         )
                         .unwrap()
-                        .try_as_basic_value()
                 }
             }
 
@@ -684,7 +652,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 self.builder
                     .build_call(ll_fn, args.as_slice(), access.member_name.as_str())
                     .unwrap()
-                    .try_as_basic_value()
             }
 
             _ => {
@@ -697,14 +664,21 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                         mangled_name.as_str(),
                     )
                     .unwrap()
-                    .try_as_basic_value()
             }
         };
+
+        // Attach argument attributes.
+        for (ll_loc, ll_attrs) in get_fn_attrs(self.ctx, self.type_converter, fn_sig) {
+            for ll_attr in ll_attrs {
+                ll_call.add_attribute(ll_loc, ll_attr);
+            }
+        }
 
         // If there is a return value, return it. Otherwise, check if this function has a defined
         // return type. If the function has a return type and the call had no return value, it means
         // the return value was written to the address pointed to by the first function argument.
         // This will only be the case for functions that return structured values.
+        let result = ll_call.try_as_basic_value();
         if result.left().is_some() {
             result.left()
         } else if call.maybe_ret_type_key.is_some() {
@@ -1384,32 +1358,5 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             Operator::Modulo => self.builder.build_float_rem(ll_lhs, ll_rhs, "rem").unwrap(),
             other => panic!("unexpected arithmetic operator {other}"),
         }
-    }
-
-    /// Checks if the given function call is a call to an intrinsic function. If so,
-    /// generates code for the intrinsic function call and returns the result.
-    fn maybe_gen_intrinsic_call(
-        &mut self,
-        call: &AFnCall,
-        fn_sig: &AFnSig,
-    ) -> Option<BasicValueEnum<'ctx>> {
-        if fn_sig.mangled_name.ends_with(".clone")
-            && fn_sig
-                .maybe_impl_type_key
-                .is_some_and(|tk| self.type_converter.get_type(tk).is_primitive())
-        {
-            // Compile the `*self` argument expression.
-            let ll_self_arg = self.gen_expr(call.args.first()?);
-            let ll_pointee_type = self
-                .type_converter
-                .get_basic_type(fn_sig.maybe_impl_type_key?);
-            return Some(
-                self.builder
-                    .build_load(ll_pointee_type, ll_self_arg.into_pointer_value(), "cloned")
-                    .unwrap(),
-            );
-        }
-
-        None
     }
 }
