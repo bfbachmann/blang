@@ -586,7 +586,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // need to add that argument. This should only be the case for functions that return
         // structured types.
         let mut args: Vec<BasicMetadataValueEnum> = vec![];
-        let arg_offset = if ll_fn_type.count_param_types() == call.args.len() as u32 + 1 {
+        if ll_fn_type.count_param_types() == call.args.len() as u32 + 1 {
             let ptr = self.stack_alloc("ret_val_ptr", call.maybe_ret_type_key?);
             args.push(ptr.into());
             1
