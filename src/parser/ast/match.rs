@@ -21,7 +21,7 @@ pub struct Pattern {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum PatternKind {
-    LetBinding(bool, Expression),
+    LetBinding(bool, Vec<Expression>),
     Exprs(Vec<Expression>),
     Wildcard,
 }
@@ -65,10 +65,16 @@ impl Pattern {
         if let Some(token) = Module::parse_optional(tokens, TokenKind::Let) {
             let start_pos = token.span.start_pos;
             let is_mut = Module::parse_optional(tokens, TokenKind::Mut).is_some();
-            let binding_expr = Expression::from(tokens)?;
-            let end_pos = binding_expr.end_pos().clone();
+
+            let mut exprs = vec![Expression::from(tokens)?];
+            while Module::parse_optional(tokens, TokenKind::Comma).is_some() {
+                exprs.push(Expression::from(tokens)?);
+            }
+
+            let end_pos = exprs.last().unwrap().end_pos().clone();
+
             return Ok(Pattern {
-                kind: PatternKind::LetBinding(is_mut, binding_expr),
+                kind: PatternKind::LetBinding(is_mut, exprs),
                 span: Span { start_pos, end_pos },
             });
         }

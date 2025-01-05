@@ -1,3 +1,4 @@
+use inkwell::basic_block::BasicBlock;
 use inkwell::values::{BasicValue, BasicValueEnum, IntValue};
 
 use crate::analyzer::ast::cond::ACond;
@@ -331,7 +332,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 None
             }
 
-            APattern::LetEnumVariant(_, var_name, var_tk, variant_num) => {
+            APattern::LetEnumVariants(_, var_name, var_tk, variant_nums) => {
                 // Assign the enum inner value to the bound variable in the pattern if it's not
                 // a wildcard.
                 if !var_name.is_empty() {
@@ -353,17 +354,45 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
                     // Not last case.
                     false => {
-                        let ll_target_variant = ll_target_variant_num.unwrap();
+                        let ll_target_variant = ll_target_variant_num?;
                         let ll_num_type = ll_target_variant.get_type();
-                        let ll_pattern_variant = ll_num_type.const_int(*variant_num as u64, false);
-                        let ll_result = self.gen_int_cmp(
-                            &Operator::EqualTo,
-                            ll_target_variant.as_basic_value_enum(),
-                            ll_pattern_variant.as_basic_value_enum(),
-                            false,
-                        );
 
-                        Some(ll_result)
+                        let ll_match_block = self.append_block("variant_matched");
+                        let ll_no_match_block = self.append_block("no_variant_matched");
+                        let ll_end_block = self.append_block("variant_check_end");
+
+                        let ll_switch_cases: Vec<(IntValue, BasicBlock)> = variant_nums
+                            .iter()
+                            .map(|num| (ll_num_type.const_int(*num as u64, false), ll_match_block))
+                            .collect();
+                        self.builder
+                            .build_switch(ll_target_variant, ll_no_match_block, &ll_switch_cases)
+                            .unwrap();
+
+                        self.set_current_block(ll_match_block);
+                        self.builder
+                            .build_unconditional_branch(ll_end_block)
+                            .unwrap();
+
+                        self.set_current_block(ll_no_match_block);
+                        self.builder
+                            .build_unconditional_branch(ll_end_block)
+                            .unwrap();
+
+                        self.set_current_block(ll_end_block);
+                        let ll_bool_type = self.ctx.bool_type();
+                        let ll_phi = self
+                            .builder
+                            .build_phi(ll_bool_type, "found_variant_match")
+                            .unwrap();
+
+                        let ll_true = ll_bool_type.const_int(1, false);
+                        let ll_false = ll_bool_type.const_int(0, false);
+                        ll_phi.add_incoming(&[(&ll_true.as_basic_value_enum(), ll_match_block)]);
+                        ll_phi
+                            .add_incoming(&[(&ll_false.as_basic_value_enum(), ll_no_match_block)]);
+
+                        Some(ll_phi.as_basic_value().into_int_value())
                     }
                 }
             }

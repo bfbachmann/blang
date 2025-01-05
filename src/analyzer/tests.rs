@@ -1932,6 +1932,23 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_var_pattern_binding() {
+        let result = analyze(
+            r#"
+            enum Thing {
+                One(int)
+            }
+            fn main() {
+                match Thing::One(1) {
+                case let x, y:
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::ConflictingPattern));
+    }
+
+    #[test]
     fn invalid_enum_inner_value_binding_in_empty_variant() {
         let result = analyze(
             r#"
@@ -1997,6 +2014,81 @@ mod tests {
             "#,
         );
         check_result(result, Some(ErrorKind::MismatchedTypes));
+    }
+
+    #[test]
+    fn inconsistent_pattern_binding_names() {
+        let result = analyze(
+            r#"
+            enum Thing { One(int), Two(int) }
+            fn main() {
+                match Thing::One(1) {
+                case let Thing::One(x), Thing::Two(y):
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::InconsistentPatternBindingNames));
+    }
+
+    #[test]
+    fn inconsistent_pattern_binding_types() {
+        let result = analyze(
+            r#"
+            enum Thing { One(int), Two(bool) }
+            fn main() {
+                match Thing::One(1) {
+                case let Thing::One(x), Thing::Two(x):
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::InconsistentPatternBindingTypes));
+    }
+
+    #[test]
+    fn illegal_pattern_binding() {
+        let result = analyze(
+            r#"
+            enum Thing { One(int), Two(bool) }
+            fn main() {
+                match Thing::One(1) {
+                case let Thing::One(_), Thing::Two(v):
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::IllegalPatternBinding));
+    }
+
+    #[test]
+    fn inconsistent_pattern_wildcard_binding() {
+        let result = analyze(
+            r#"
+            enum Thing { One(int), Two(bool) }
+            fn main() {
+                match Thing::One(1) {
+                case let Thing::One(v), Thing::Two(_):
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::InconsistentPatternBindingNames));
+    }
+
+    #[test]
+    fn duplicate_pattern() {
+        let result = analyze(
+            r#"
+            enum Thing { One(int), Two(bool) }
+            fn main() {
+                match Thing::One(1) {
+                case let Thing::One(_), Thing::Two(_), Thing::One(_):
+                }
+            }
+            "#,
+        );
+        check_result(result, Some(ErrorKind::DuplicatePattern));
     }
 
     #[test]

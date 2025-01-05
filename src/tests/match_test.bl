@@ -1,10 +1,11 @@
 use "std/libc/proc.bl" @proc
-use "std/backtrace/panic.bl" {panic}
+use "std/backtrace/panic.bl" {panic, assert}
 
 enum MyEnum {
     A(int)
     B(bool)
     C
+    D(bool)
 }
 
 fn main() {
@@ -37,6 +38,14 @@ fn main() {
     match 3 {
     case 1, 2, 3, 4:
     case: panic("should not match")
+    }
+
+    // Check that we can match multiple enum variants in one case.
+    match MyEnum::B(true) {
+    case let MyEnum::B(v), MyEnum::D(v):
+        assert(v == true, "expected true")
+    case:
+        panic("should not match")
     }
 
     @proc.exit(0)

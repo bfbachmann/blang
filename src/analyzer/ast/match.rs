@@ -21,7 +21,7 @@ use crate::parser::ast::r#type::Type;
 #[derive(Debug, Clone, PartialEq)]
 pub enum APattern {
     Exprs(Vec<AExpr>),
-    LetEnumVariant(bool, String, TypeKey, usize),
+    LetEnumVariants(bool, String, TypeKey, HashSet<usize>),
     LetSymbol(bool, String),
     Wildcard,
 }
@@ -61,210 +61,339 @@ impl APattern {
                 APattern::Exprs(a_exprs)
             }
 
-            PatternKind::LetBinding(is_mut, Expression::Symbol(sym)) if sym.is_name_only() => {
-                if sym.is_wildcard() {
-                    APattern::Wildcard
-                } else {
-                    APattern::LetSymbol(*is_mut, sym.name.clone())
-                }
-            }
+            PatternKind::LetBinding(is_mut, exprs) => match exprs.first().unwrap() {
+                Expression::Symbol(sym) if sym.is_name_only() => {
+                    let mut exprs_iter = exprs.iter();
+                    exprs_iter.next();
 
-            PatternKind::LetBinding(is_mut, Expression::EnumInit(binding)) => {
-                let enum_tk = ctx.resolve_type(&Type::Unresolved(binding.typ.clone()));
-
-                // Figure out how we're supposed to bind variables inside enum patterns based on
-                // the target type.
-                let target_type = ctx.get_type(match_target.type_key);
-                let (target_tk, bind_as_ref, bind_ref_mut) = match target_type {
-                    AType::Pointer(ptr_type) => (ptr_type.pointee_type_key, true, ptr_type.is_mut),
-                    _ => (match_target.type_key, false, false),
-                };
-
-                // Make sure the enum type matches the target type.
-                if enum_tk != target_tk
-                    && enum_tk != ctx.unknown_type_key()
-                    && target_tk != ctx.unknown_type_key()
-                {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::MismatchedTypes,
-                        format_code!(
-                            "expected pattern of type {}, but found {}",
-                            ctx.display_type(target_tk),
-                            ctx.display_type(enum_tk)
-                        )
-                        .as_str(),
-                        binding,
-                    ));
-                    return APattern::LetEnumVariant(
-                        *is_mut,
-                        "".to_string(),
-                        ctx.none_type_key(),
-                        usize::MAX,
-                    );
-                }
-
-                // Resolve the enum variant.
-                let enum_variant = match ctx.get_type(enum_tk) {
-                    AType::Enum(enum_type) => match enum_type.variants.get(&binding.variant_name) {
-                        Some(variant) => variant.clone(),
-                        None => {
-                            ctx.insert_err(AnalyzeError::new(
-                                ErrorKind::UndefType,
-                                format_code!(
-                                    "enum type {} has no variant {}",
-                                    ctx.display_type(enum_tk),
-                                    binding.variant_name
-                                )
-                                .as_str(),
-                                binding,
-                            ));
-                            return APattern::LetEnumVariant(
-                                *is_mut,
-                                "".to_string(),
-                                ctx.none_type_key(),
-                                usize::MAX,
-                            );
-                        }
-                    },
-
-                    _ => {
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::TypeIsNotEnum,
-                            format_code!(
-                                "type {} is not an enum, but is being used like one",
-                                ctx.display_type(enum_tk)
-                            )
-                            .as_str(),
-                            binding,
-                        ));
-                        return APattern::LetEnumVariant(
-                            *is_mut,
-                            "".to_string(),
-                            ctx.none_type_key(),
-                            usize::MAX,
-                        );
-                    }
-                };
-
-                // Make sure the variant type matches the match target type.
-                let (expr, inner_tk) = match (&binding.maybe_value, enum_variant.maybe_type_key) {
-                    (Some(var), Some(variant_inner_tk)) => (var, variant_inner_tk),
-
-                    (Some(var), None) => {
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::MismatchedTypes,
-                            format_code!(
-                                "enum variant {} has no associated value",
-                                format!(
-                                    "{}::{}",
-                                    ctx.display_type(enum_tk),
-                                    enum_variant.display(ctx),
-                                )
-                            )
-                            .as_str(),
-                            var.as_ref(),
-                        ));
-                        return APattern::LetEnumVariant(
-                            *is_mut,
-                            "".to_string(),
-                            ctx.none_type_key(),
-                            enum_variant.number,
-                        );
-                    }
-
-                    (None, maybe_inner_tk) => {
-                        if maybe_inner_tk.is_some() {
-                            ctx.insert_err(
-                                AnalyzeError::new(
-                                    ErrorKind::InvalidPattern,
-                                    format_code!("expected identifier or wildcard {}", "_")
-                                        .as_str(),
-                                    binding,
-                                )
-                                .with_detail(
-                                    format_code!(
-                                        "Enum variant {} has an associated value that must \
-                                        be bound to an identifier or wildcard in this pattern.",
-                                        enum_variant.display(ctx)
-                                    )
-                                    .as_str(),
-                                ),
-                            );
-                        }
-
-                        return APattern::LetEnumVariant(
-                            false,
-                            "".to_string(),
-                            maybe_inner_tk.unwrap_or(ctx.none_type_key()),
-                            enum_variant.number,
-                        );
-                    }
-                };
-
-                // If the match target has a pointer type, then the bound variable should also be
-                // a pointer with the same mutability. Otherwise, just use the enum inner type.
-                let binding_tk = match bind_as_ref {
-                    true => {
-                        let binding_type = AType::Pointer(APointerType {
-                            pointee_type_key: inner_tk,
-                            is_mut: bind_ref_mut,
-                        });
-                        ctx.insert_type(binding_type)
-                    }
-                    false => inner_tk,
-                };
-
-                // Make sure the match variable is declared correctly.
-                // TODO: Support recursive pattern matching.
-                match expr.as_ref() {
-                    Expression::Symbol(sym) if sym.is_name_only() => APattern::LetEnumVariant(
-                        *is_mut,
-                        sym.name.clone(),
-                        binding_tk,
-                        enum_variant.number,
-                    ),
-
-                    other => {
+                    while let Some(expr) = exprs_iter.next() {
                         ctx.insert_err(
                             AnalyzeError::new(
-                                ErrorKind::InvalidPattern,
-                                format_code!("expected identifier or wildcard {}", "_").as_str(),
-                                other,
+                                ErrorKind::ConflictingPattern,
+                                "conflicting patterns",
+                                expr,
                             )
                             .with_detail(
-                                "Enum patterns can only contain identifiers or wildcards.",
+                                "Variable binding patterns must appear alone in match cases.",
                             ),
                         );
-                        APattern::LetEnumVariant(
-                            *is_mut,
-                            "".to_string(),
-                            binding_tk,
-                            enum_variant.number,
-                        )
+                    }
+
+                    if sym.is_wildcard() {
+                        APattern::Wildcard
+                    } else {
+                        APattern::LetSymbol(*is_mut, sym.name.clone())
                     }
                 }
-            }
 
-            // TODO: Support more kinds of patterns.
-            PatternKind::LetBinding(_, expr) => {
-                ctx.insert_err(
-                    AnalyzeError::new(
-                        ErrorKind::InvalidPattern,
-                        "invalid pattern expression",
-                        expr,
+                Expression::EnumInit(_) => {
+                    let mut var_name = None;
+                    let mut var_tk = None;
+                    let mut variant_nums = HashSet::new();
+
+                    for (i, expr) in exprs.iter().enumerate() {
+                        analyze_enum_binding(
+                            ctx,
+                            expr,
+                            match_target,
+                            &mut var_name,
+                            &mut var_tk,
+                            &mut variant_nums,
+                            i == 0,
+                        );
+                    }
+
+                    APattern::LetEnumVariants(
+                        *is_mut,
+                        var_name.unwrap_or("".to_string()),
+                        var_tk.unwrap_or(ctx.none_type_key()),
+                        variant_nums,
                     )
-                    .with_detail("This expression is not valid inside a pattern.")
-                    .with_help(
-                        format_code!(
+                }
+
+                expr => {
+                    ctx.insert_err(
+                        AnalyzeError::new(
+                            ErrorKind::InvalidPattern,
+                            "invalid pattern expression",
+                            expr,
+                        )
+                        .with_detail("This expression is not valid inside a pattern.")
+                        .with_help(
+                            format_code!(
                             "If you're trying to match against an existing value, remove {} from \
                             this case.",
                             "let"
                         )
+                            .as_str(),
+                        ),
+                    );
+
+                    APattern::Exprs(vec![])
+                }
+            },
+        }
+    }
+}
+
+fn analyze_enum_binding(
+    ctx: &mut ProgramContext,
+    binding_expr: &Expression,
+    match_target: &AExpr,
+    maybe_expected_var_name: &mut Option<String>,
+    maybe_expected_var_tk: &mut Option<TypeKey>,
+    used_variant_nums: &mut HashSet<usize>,
+    is_first_pattern: bool,
+) {
+    let binding = match &binding_expr {
+        Expression::EnumInit(binding) => binding,
+        _ => {
+            ctx.insert_err(
+                AnalyzeError::new(
+                    ErrorKind::InvalidPattern,
+                    "expected enum variant",
+                    binding_expr,
+                )
+                .with_detail(
+                    "The first pattern in this case is an enum variant, so all \
+                    following patterns must also be enum variants.",
+                ),
+            );
+            return;
+        }
+    };
+
+    let enum_tk = ctx.resolve_type(&Type::Unresolved(binding.typ.clone()));
+
+    // Figure out how we're supposed to bind variables inside enum patterns based on
+    // the target type.
+    let target_type = ctx.get_type(match_target.type_key);
+    let (target_tk, bind_as_ref, bind_ref_mut) = match target_type {
+        AType::Pointer(ptr_type) => (ptr_type.pointee_type_key, true, ptr_type.is_mut),
+        _ => (match_target.type_key, false, false),
+    };
+
+    // Make sure the enum type matches the target type.
+    if enum_tk != target_tk
+        && enum_tk != ctx.unknown_type_key()
+        && target_tk != ctx.unknown_type_key()
+    {
+        ctx.insert_err(AnalyzeError::new(
+            ErrorKind::MismatchedTypes,
+            format_code!(
+                "expected pattern of type {}, but found {}",
+                ctx.display_type(target_tk),
+                ctx.display_type(enum_tk)
+            )
+            .as_str(),
+            binding,
+        ));
+        return;
+    }
+
+    // Resolve the enum variant.
+    let enum_variant = match ctx.get_type(enum_tk) {
+        AType::Enum(enum_type) => match enum_type.variants.get(&binding.variant_name) {
+            Some(variant) => variant.clone(),
+            None => {
+                ctx.insert_err(AnalyzeError::new(
+                    ErrorKind::UndefType,
+                    format_code!(
+                        "enum type {} has no variant {}",
+                        ctx.display_type(enum_tk),
+                        binding.variant_name
+                    )
+                    .as_str(),
+                    binding,
+                ));
+                return;
+            }
+        },
+
+        _ => {
+            ctx.insert_err(AnalyzeError::new(
+                ErrorKind::TypeIsNotEnum,
+                format_code!(
+                    "type {} is not an enum, but is being used like one",
+                    ctx.display_type(enum_tk)
+                )
+                .as_str(),
+                binding,
+            ));
+            return;
+        }
+    };
+
+    // Make sure the variant isn't already used.
+    if !used_variant_nums.insert(enum_variant.number) {
+        ctx.insert_err(
+            AnalyzeError::new(
+                ErrorKind::DuplicatePattern,
+                "duplicate pattern",
+                binding_expr,
+            )
+            .with_detail(
+                format_code!(
+                    "Variant {} is already used in this match case.",
+                    enum_variant.display(ctx),
+                )
+                .as_str(),
+            ),
+        );
+        return;
+    }
+
+    // Make sure the variant type matches the match target type.
+    let (expr, inner_tk) = match (&binding.maybe_value, enum_variant.maybe_type_key) {
+        (Some(var), Some(variant_inner_tk)) => (var, variant_inner_tk),
+
+        (Some(var), None) => {
+            ctx.insert_err(AnalyzeError::new(
+                ErrorKind::MismatchedTypes,
+                format_code!(
+                    "enum variant {} has no associated value",
+                    format!(
+                        "{}::{}",
+                        ctx.display_type(enum_tk),
+                        enum_variant.display(ctx),
+                    )
+                )
+                .as_str(),
+                var.as_ref(),
+            ));
+            return;
+        }
+
+        (None, maybe_inner_tk) => {
+            if maybe_inner_tk.is_some() {
+                ctx.insert_err(
+                    AnalyzeError::new(
+                        ErrorKind::InvalidPattern,
+                        format_code!("expected identifier or wildcard {}", "_").as_str(),
+                        binding,
+                    )
+                    .with_detail(
+                        format_code!(
+                            "Enum variant {} has an associated value that must \
+                            be bound to an identifier or wildcard in this pattern.",
+                            enum_variant.display(ctx)
+                        )
                         .as_str(),
                     ),
                 );
-                APattern::Exprs(vec![])
             }
+
+            return;
+        }
+    };
+
+    // If the match target has a pointer type, then the bound variable should also be
+    // a pointer with the same mutability. Otherwise, just use the enum inner type.
+    let binding_tk = match bind_as_ref {
+        true => {
+            let binding_type = AType::Pointer(APointerType {
+                pointee_type_key: inner_tk,
+                is_mut: bind_ref_mut,
+            });
+            ctx.insert_type(binding_type)
+        }
+        false => inner_tk,
+    };
+
+    // Make sure the match variable is declared correctly.
+    // TODO: Support recursive pattern matching.
+    match expr.as_ref() {
+        Expression::Symbol(sym) if sym.is_name_only() => {
+            // No need to check anything if this is the first pattern in the match case.
+            if is_first_pattern {
+                if !sym.is_wildcard() {
+                    *maybe_expected_var_name = Some(sym.name.clone());
+                    *maybe_expected_var_tk = Some(binding_tk);
+                }
+                return;
+            }
+
+            // Make sure the variable name matches what's expected.
+            match maybe_expected_var_name {
+                Some(expected_var_name) if expected_var_name != &sym.name => {
+                    ctx.insert_err(
+                        AnalyzeError::new(
+                            ErrorKind::InconsistentPatternBindingNames,
+                            "inconsistent bindings in match case",
+                            sym,
+                        )
+                        .with_help(
+                            format_code!(
+                                "This variable should be bound as {} to match the binding in the \
+                                first pattern for this case.",
+                                expected_var_name
+                            )
+                            .as_str(),
+                        ),
+                    );
+                    return;
+                }
+
+                None if sym.is_wildcard() => {
+                    return;
+                }
+
+                None => {
+                    ctx.insert_err(
+                        AnalyzeError::new(
+                            ErrorKind::IllegalPatternBinding,
+                            "inconsistent bindings in match case",
+                            sym,
+                        )
+                        .with_detail(
+                            "No variable can be bound here because no variable is bound in \
+                            the first pattern for this case.",
+                        )
+                        .with_help(
+                            format_code!(
+                                "Consider either changing {} to {} or moving this pattern to its own case.", sym.name, "_"
+                            )
+                            .as_str(),
+                        ),
+                    );
+                    return;
+                }
+
+                _ => {}
+            }
+
+            // Make sure the variable type matches what's expected.
+            if maybe_expected_var_tk.unwrap() != binding_tk {
+                ctx.insert_err(
+                    AnalyzeError::new(
+                        ErrorKind::InconsistentPatternBindingTypes,
+                        "inconsistent binding types in match case",
+                        sym,
+                    )
+                    .with_detail(
+                        format_code!(
+                            "Variable {} is bound with type {} in the first pattern, but \
+                                would have type {} in this binding.",
+                            sym.name,
+                            ctx.display_type(maybe_expected_var_tk.unwrap()),
+                            ctx.display_type(binding_tk)
+                        )
+                        .as_str(),
+                    )
+                    .with_help("Consider moving this pattern to its own match case."),
+                );
+            }
+        }
+
+        other => {
+            ctx.insert_err(
+                AnalyzeError::new(
+                    ErrorKind::InvalidPattern,
+                    format_code!("expected identifier or wildcard {}", "_").as_str(),
+                    other,
+                )
+                .with_detail("Enum patterns can only contain identifiers or wildcards."),
+            );
         }
     }
 }
@@ -287,7 +416,7 @@ impl AMatchCase {
         // that as a variable in this scope.
         ctx.push_scope(Scope::new(ScopeKind::BranchBody, vec![], None));
         match &pattern {
-            APattern::LetEnumVariant(is_mut, var_name, var_tk, _) if !var_name.is_empty() => {
+            APattern::LetEnumVariants(is_mut, var_name, var_tk, _) if !var_name.is_empty() => {
                 ctx.insert_scoped_symbol(ScopedSymbol::new(var_name, *var_tk, *is_mut));
             }
             APattern::LetSymbol(is_mut, var_name) => {
@@ -386,8 +515,10 @@ impl AMatch {
                     exhaustive = true;
                 }
 
-                (APattern::LetEnumVariant(_, _, _, variant_num), None) => {
-                    unmatched_variants.remove(variant_num);
+                (APattern::LetEnumVariants(_, _, _, variant_nums), None) => {
+                    for num in variant_nums {
+                        unmatched_variants.remove(num);
+                    }
                     exhaustive = unmatched_variants.is_empty() && matching_enum;
                 }
 
@@ -423,7 +554,7 @@ impl AMatch {
         if !exhaustive {
             let mut err = AnalyzeError::new(
                 ErrorKind::MatchNotExhaustive,
-                format_code!("{} is not exhaustive", "match").as_str(),
+                "match is not exhaustive",
                 match_,
             );
 

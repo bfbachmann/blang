@@ -340,7 +340,7 @@ fn walk_statement(collector: &mut MonoItemCollector, statement: AStatement) {
                             walk_expr(collector, expr);
                         }
                     }
-                    APattern::LetEnumVariant(_, _, _, _)
+                    APattern::LetEnumVariants(_, _, _, _)
                     | APattern::LetSymbol(_, _)
                     | APattern::Wildcard => {}
                 }

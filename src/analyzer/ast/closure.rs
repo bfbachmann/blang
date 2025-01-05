@@ -499,7 +499,7 @@ fn search_statement(statement: &AStatement, is_match: &impl Fn(&AStatement) -> b
                         }
                     }
 
-                    APattern::LetEnumVariant(_, _, _, _)
+                    APattern::LetEnumVariants(_, _, _, _)
                     | APattern::LetSymbol(_, _)
                     | APattern::Wildcard => {}
                 }
@@ -638,7 +638,7 @@ fn search_statement_for_expr(statement: &AStatement, is_match: &impl Fn(&AExpr) 
                         }
                     }
                     APattern::Wildcard
-                    | APattern::LetEnumVariant(_, _, _, _)
+                    | APattern::LetEnumVariants(_, _, _, _)
                     | APattern::LetSymbol(_, _) => {}
                 }
 

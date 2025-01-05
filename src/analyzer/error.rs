@@ -10,6 +10,11 @@ pub enum ErrorKind {
     ExpectedReturnValue,
     ExpectedExpr,
     InvalidPattern,
+    ConflictingPattern,
+    InconsistentPatternBindingNames,
+    InconsistentPatternBindingTypes,
+    IllegalPatternBinding,
+    DuplicatePattern,
     DuplicateFunction,
     DuplicateConst,
     InvalidConst,
@@ -71,6 +76,17 @@ impl fmt::Display for ErrorKind {
             ErrorKind::MismatchedTypes => write!(f, "mismatched types"),
             ErrorKind::ExpectedReturnValue => write!(f, "expected return value"),
             ErrorKind::InvalidPattern => write!(f, "invalid pattern"),
+            ErrorKind::ConflictingPattern => write!(f, "conflicting pattern"),
+            ErrorKind::InconsistentPatternBindingNames => {
+                write!(f, "inconsistent pattern binding names")
+            }
+            ErrorKind::InconsistentPatternBindingTypes => {
+                write!(f, "inconsistent pattern binding types")
+            }
+            ErrorKind::IllegalPatternBinding => {
+                write!(f, "illegal pattern binding")
+            }
+            ErrorKind::DuplicatePattern => write!(f, "duplicate pattern"),
             ErrorKind::DuplicateFunction => write!(f, "duplicate function"),
             ErrorKind::DuplicateConst => write!(f, "duplicate constant"),
             ErrorKind::InvalidConst => write!(f, "invalid constant declaration"),
