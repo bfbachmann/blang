@@ -107,7 +107,9 @@ impl AStatement {
                 None,
             )),
 
-            Statement::FunctionCall(call) => AStatement::FunctionCall(AFnCall::from(ctx, call, None)),
+            Statement::FunctionCall(call) => {
+                AStatement::FunctionCall(AFnCall::from(ctx, call, None))
+            }
 
             Statement::Conditional(cond) => AStatement::Conditional(ACond::from(ctx, cond)),
 
@@ -194,7 +196,7 @@ mod tests {
                 return b
             }
         "#;
-        let mut ctx = ProgramContext::new("test", vec!["test"]);
+        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
         analyze_statement(raw, &mut ctx);
         assert!(ctx.errors().is_empty());
     }
@@ -213,7 +215,7 @@ mod tests {
                 }
             }
         "#;
-        let mut ctx = ProgramContext::new("test", vec!["test"]);
+        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
         analyze_statement(raw, &mut ctx);
         assert!(ctx.errors().is_empty());
     }
@@ -232,7 +234,7 @@ mod tests {
                 }
             }
         "#;
-        let mut ctx = ProgramContext::new("test", vec!["test"]);
+        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
         analyze_statement(raw, &mut ctx);
         assert!(matches!(
             ctx.errors()
@@ -259,7 +261,7 @@ mod tests {
                 }
             }
         "#;
-        let mut ctx = ProgramContext::new("test", vec!["test"]);
+        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
         analyze_statement(raw, &mut ctx);
         assert!(matches!(
             ctx.errors()
@@ -293,7 +295,7 @@ mod tests {
                 }
             }
         "#;
-        let mut ctx = ProgramContext::new("test", vec!["test"]);
+        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
         analyze_statement(raw, &mut ctx);
         assert!(ctx.errors().is_empty());
     }
@@ -314,7 +316,7 @@ mod tests {
                 }
             }
         "#;
-        let mut ctx = ProgramContext::new("test", vec!["test"]);
+        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
         analyze_statement(raw, &mut ctx);
         assert!(matches!(
             ctx.errors()
@@ -338,7 +340,7 @@ mod tests {
                 }
             }
         "#;
-        let mut ctx = ProgramContext::new("test", vec!["test"]);
+        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
         analyze_statement(raw, &mut ctx);
         assert!(ctx.errors().is_empty());
     }
@@ -354,7 +356,7 @@ mod tests {
                 }
             }
         "#;
-        let mut ctx = ProgramContext::new("test", vec!["test"]);
+        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
         analyze_statement(raw, &mut ctx);
         assert!(ctx.errors().is_empty());
     }
@@ -372,7 +374,7 @@ mod tests {
                 }
             }
         "#;
-        let mut ctx = ProgramContext::new("test", vec!["test"]);
+        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
         analyze_statement(raw, &mut ctx);
         assert!(ctx.errors().is_empty());
     }
@@ -391,7 +393,7 @@ mod tests {
                 }
             }
         "#;
-        let mut ctx = ProgramContext::new("test", vec!["test"]);
+        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
         analyze_statement(raw, &mut ctx);
         assert!(ctx.errors().is_empty());
     }
@@ -405,7 +407,7 @@ mod tests {
                 return false
             }
         "#;
-        let mut ctx = ProgramContext::new("test", vec!["test"]);
+        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
         analyze_statement(raw, &mut ctx);
         assert!(ctx.errors().is_empty());
         assert!(matches!(
@@ -420,7 +422,7 @@ mod tests {
     #[test]
     fn return_outside_fn() {
         let raw = "return 1";
-        let mut ctx = ProgramContext::new("test", vec!["test"]);
+        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
         analyze_statement(raw, &mut ctx);
         assert!(matches!(
             ctx.errors()
@@ -449,7 +451,7 @@ mod tests {
                 }
             }
         "#;
-        let mut ctx = ProgramContext::new("test", vec!["test"]);
+        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
         analyze_statement(raw, &mut ctx);
         assert!(matches!(
             ctx.errors()
@@ -473,7 +475,7 @@ mod tests {
                 message: str,
             }
         "#;
-        let mut ctx = ProgramContext::new("test", vec!["test"]);
+        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
         let result = analyze_statement(raw, &mut ctx);
         assert!(ctx.errors().is_empty());
 

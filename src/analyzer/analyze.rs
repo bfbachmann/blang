@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use flamer::flame;
-
 use crate::analyzer::ast::module::AModule;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::warn::AnalyzeWarning;
+use crate::codegen::program::CodeGenConfig;
 use crate::fmt::hierarchy_to_string;
 use crate::lexer::pos::Position;
 use crate::parser::module::Module;
+use flamer::flame;
 
 /// An analyzed source file along with any errors or warnings that occurred during its analysis.
 #[derive(Debug)]
@@ -52,13 +52,13 @@ pub struct ProgramAnalysis {
 
 /// Analyzes all the given modules.
 #[flame]
-pub fn analyze_modules(modules: Vec<Module>) -> ProgramAnalysis {
+pub fn analyze_modules(modules: Vec<Module>, config: CodeGenConfig) -> ProgramAnalysis {
     let root_mod_path = PathBuf::from(&modules.first().unwrap().path);
     let mods: HashMap<PathBuf, Module> =
         HashMap::from_iter(modules.into_iter().map(|m| (PathBuf::from(&m.path), m)));
     let mut analyzed_mods: HashMap<PathBuf, AnalyzedModule> = HashMap::new();
     let mod_paths = mods.keys().map(|k| k.to_str().unwrap()).collect();
-    let mut ctx = ProgramContext::new(root_mod_path.to_str().unwrap(), mod_paths);
+    let mut ctx = ProgramContext::new(root_mod_path.to_str().unwrap(), mod_paths, config);
 
     // Analyze builtins first.
     for path in mods.keys() {

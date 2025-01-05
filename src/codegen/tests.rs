@@ -1,7 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use crate::analyzer::analyze::analyze_modules;
     use crate::codegen::program::{
         generate, init_default_host_target, CodeGenConfig, OutputFormat,
@@ -10,21 +8,20 @@ mod tests {
     use crate::lexer::stream::Stream;
     use crate::mono_collector::mono_prog;
     use crate::parser::module::Module;
+    use std::path::PathBuf;
 
     fn assert_compiles(code: &str) {
         let tokens = lex(code).expect("should not error");
         let module = Module::from("test", &mut Stream::from(tokens)).expect("should not error");
-        let analysis = analyze_modules(vec![module]);
+        let target_machine = init_default_host_target().unwrap();
+        let config = CodeGenConfig::new_default(
+            target_machine,
+            PathBuf::from("/dev/null"),
+            OutputFormat::Object,
+        );
+        let analysis = analyze_modules(vec![module], config);
         let prog = mono_prog(analysis);
-        generate(
-            prog,
-            CodeGenConfig::new_default(
-                &init_default_host_target().expect("should not error"),
-                Path::new("/dev/null"),
-                OutputFormat::Object,
-            ),
-        )
-        .expect("should not error");
+        generate(prog).expect("should not error");
     }
 
     #[test]

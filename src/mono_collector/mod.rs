@@ -1,6 +1,3 @@
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::hash::{Hash, Hasher};
-
 use crate::analyzer::analyze::ProgramAnalysis;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::ext::AExternFn;
@@ -10,6 +7,9 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
+use crate::codegen::program::CodeGenConfig;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::hash::{Hash, Hasher};
 
 /// Represents a monomorhic function. This will either be a function that is already
 /// monomorphic, or a polymorphic function with type mappings that map its generic parameters
@@ -176,6 +176,7 @@ impl MonoItemCollector {
 
 /// Stores information about a monomorphized program.
 pub struct MonoProg {
+    pub config: CodeGenConfig,
     pub type_store: TypeStore,
     /// A list of monomorphized functions.
     pub mono_items: Vec<MonoItem>,
@@ -240,6 +241,7 @@ pub fn mono_prog(analysis: ProgramAnalysis) -> MonoProg {
 
     MonoProg {
         mod_consts: collector.ctx.drain_mod_consts(),
+        config: collector.ctx.config,
         type_store: collector.ctx.type_store,
         mono_items: collector.complete_mono_items,
         fns: collector.fns,

@@ -1,6 +1,3 @@
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::hash::{Hash, Hasher};
-
 use crate::analyzer::ast::array::AArrayType;
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::func::AFnSig;
@@ -18,6 +15,10 @@ use crate::analyzer::mangling;
 use crate::analyzer::scope::{Scope, ScopeKind, ScopedSymbol};
 use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 use crate::analyzer::warn::AnalyzeWarning;
+#[cfg(not(test))]
+use crate::codegen::program::CodeGenConfig;
+#[cfg(test)]
+use crate::codegen::program::{init_default_host_target, CodeGenConfig, OutputFormat};
 use crate::fmt::format_code_vec;
 use crate::lexer::pos::{Locatable, Position, Span};
 use crate::parser::ast::r#const::Const;
@@ -28,6 +29,10 @@ use crate::parser::ast::spec::SpecType;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::module::Module;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::hash::{Hash, Hasher};
+#[cfg(test)]
+use std::path::PathBuf;
 
 #[derive(Debug, Hash, Clone, PartialEq, Eq)]
 pub struct ReplacedParam {
@@ -300,6 +305,7 @@ impl ModuleContext {
 
 /// Stores information about the program for reference during semantic analysis.
 pub struct ProgramContext {
+    pub config: CodeGenConfig,
     /// Stores all types that are successfully analyzed during semantic analysis.
     pub type_store: TypeStore,
     /// Maps polymorphic type keys to their monomorphizations.
@@ -344,9 +350,18 @@ pub struct ProgramContext {
 }
 
 impl ProgramContext {
+    /// Creates a new program context with the default config for the current host system.
+    #[cfg(test)]
+    pub fn new_with_host_target(root_mod_path: &str, mod_paths: Vec<&str>) -> Self {
+        let target_machine = init_default_host_target().unwrap();
+        let config =
+            CodeGenConfig::new_default(target_machine, PathBuf::new(), OutputFormat::Executable);
+        ProgramContext::new(root_mod_path, mod_paths, config)
+    }
+
     /// Creates a new program context. The program context will be initialized with stack containing
     /// a single scope representing the global scope and a type store containing primitive types.
-    pub fn new(root_mod_path: &str, mod_paths: Vec<&str>) -> Self {
+    pub fn new(root_mod_path: &str, mod_paths: Vec<&str>, config: CodeGenConfig) -> Self {
         let mut type_store = TypeStore::new();
 
         // Set up primitive type keys.
@@ -366,6 +381,7 @@ impl ProgramContext {
         }
 
         ProgramContext {
+            config,
             type_store,
             primitive_type_keys,
             pub_type_keys: Default::default(),

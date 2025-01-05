@@ -50,5 +50,8 @@ fn main() {
     assert(seek_end == 123, "expected 123")
     assert(@io.seek_end == 2, "expected 2")
 
+    // Make sure we can use `sizeof` expressions as const expressions.
+    assert([3u8; sizeof u64].(sizeof u64 - 2) == 3, "expected 3")
+
     exit(0)
 }

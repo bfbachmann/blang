@@ -8,13 +8,15 @@ use std::{fs, process};
 
 use clap::{arg, Arg, ArgAction, Command};
 use flamer::flame;
-use inkwell::targets::{RelocMode, TargetMachine};
+use inkwell::targets::RelocMode;
 use inkwell::OptimizationLevel;
 
 use parser::module::Module;
 
 use crate::analyzer::analyze::{analyze_modules, ProgramAnalysis};
-use crate::codegen::program::{generate, init_target, CodeGenConfig, OutputFormat};
+use crate::codegen::program::{
+    generate, init_default_host_target, init_target, CodeGenConfig, OutputFormat,
+};
 use crate::fmt::{display_err, format_duration};
 use crate::lexer::error::LexResult;
 use crate::lexer::lex::lex;
@@ -183,17 +185,21 @@ fn main() {
 
                 let quiet = sub_matches.get_flag("quiet");
 
-                let linker = sub_matches.get_one::<String>("linker");
+                let linker = match sub_matches.get_one::<String>("linker") {
+                    Some(l) => Some(l.to_owned()),
+                    None => None,
+                };
 
                 let linker_args = sub_matches
                     .get_many::<String>("linker-flag")
                     .unwrap_or_default()
+                    .cloned()
                     .collect();
 
                 let codegen_config = CodeGenConfig {
-                    output_path: &output_path,
+                    output_path,
                     output_format,
-                    target_machine: &target_machine,
+                    target_machine,
                     optimization_level,
                     linker,
                     linker_args,
@@ -209,7 +215,17 @@ fn main() {
         Some(("check", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(file_path) => {
                 let maybe_dump_path = sub_matches.get_one::<String>("dump");
-                if let Err(e) = analyze(file_path, maybe_dump_path) {
+                let target_machine = match init_default_host_target() {
+                    Ok(tm) => tm,
+                    Err(err) => fatalln!("failed to initialize target {err}"),
+                };
+                let config = CodeGenConfig::new_default(
+                    target_machine,
+                    PathBuf::new(),
+                    OutputFormat::LLVMIR,
+                );
+
+                if let Err(e) = analyze(file_path, maybe_dump_path, config) {
                     fatalln!("{}", e);
                 };
             }
@@ -218,12 +234,19 @@ fn main() {
 
         Some(("run", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
             Some(file_path) => {
-                let target_machine =
-                    match init_target(None, OptimizationLevel::Default, RelocMode::Default) {
-                        Ok(machine) => machine,
-                        Err(err) => fatalln!("{err}"),
-                    };
-                run(file_path, &target_machine);
+                let target_machine = match init_default_host_target() {
+                    Ok(tm) => tm,
+                    Err(err) => fatalln!("failed to initialize target {err}"),
+                };
+                let output_path =
+                    default_output_file_path(Path::new(file_path), OutputFormat::Executable);
+                let config = CodeGenConfig::new_default(
+                    target_machine,
+                    output_path,
+                    OutputFormat::Executable,
+                );
+
+                run(file_path, config);
             }
             _ => fatalln!("expected source path"),
         },
@@ -413,7 +436,11 @@ fn lex_source_file(input_path: &str) -> Result<LexResult<Vec<Token>>, String> {
 /// all source files therein will be analyzed. Returns the analyzed set of sources, or logs an
 /// error and exits with code 1.
 #[flame]
-fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> Result<ProgramAnalysis, String> {
+fn analyze(
+    input_path: &str,
+    maybe_dump_path: Option<&String>,
+    config: CodeGenConfig,
+) -> Result<ProgramAnalysis, String> {
     // Parse all targeted source files.
     let modules = parse_source_files(input_path)?;
     if modules.is_empty() {
@@ -421,7 +448,7 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> Result<Program
     }
 
     // Analyze the program.
-    let analysis = analyze_modules(modules);
+    let analysis = analyze_modules(modules, config);
 
     // Display warnings and errors that occurred.
     let mut err_count = 0;
@@ -500,11 +527,11 @@ fn analyze(input_path: &str, maybe_dump_path: Option<&String>) -> Result<Program
 fn compile(src_path: &str, quiet: bool, config: CodeGenConfig) -> Result<(), String> {
     // Read and analyze the program.
     let start_time = Instant::now();
-    let prog_analysis = analyze(src_path, None)?;
+    let prog_analysis = analyze(src_path, None, config)?;
     let prog = mono_prog(prog_analysis);
 
     // Compile the program.
-    if let Err(e) = generate(prog, config) {
+    if let Err(e) = generate(prog) {
         return Err(format!("{}", e));
     }
 
@@ -522,9 +549,11 @@ fn compile(src_path: &str, quiet: bool, config: CodeGenConfig) -> Result<(), Str
 }
 
 /// Compiles and runs Blang source code at the given path.
-fn run(src_path: &str, target_machine: &TargetMachine) {
+fn run(src_path: &str, config: CodeGenConfig) {
+    let output_path = config.output_path.to_str().unwrap().to_string();
+
     // Read and analyze the program.
-    let prog_analysis = match analyze(src_path, None) {
+    let prog_analysis = match analyze(src_path, None, config) {
         Ok(pa) => pa,
         Err(e) => fatalln!("{}", e),
     };
@@ -532,20 +561,13 @@ fn run(src_path: &str, target_machine: &TargetMachine) {
     // Find all relevant functions that we need to generate code for.
     let prog = mono_prog(prog_analysis);
 
-    // Set output executable path to the source path without the extension.
-    let src = Path::new(src_path);
-    let dst = default_output_file_path(src, OutputFormat::Executable);
-
     // Compile the program.
-    if let Err(e) = generate(
-        prog,
-        CodeGenConfig::new_default(target_machine, dst.as_path(), OutputFormat::Executable),
-    ) {
+    if let Err(e) = generate(prog) {
         fatalln!("{}", e);
     }
 
     // Run the program.
-    let io_err = process::Command::new(PathBuf::from(".").join(dst)).exec();
+    let io_err = process::Command::new(PathBuf::from(".").join(output_path)).exec();
     fatalln!("{}", io_err);
 }
 
@@ -570,13 +592,12 @@ mod tests {
     use crate::codegen::program::{init_default_host_target, CodeGenConfig, OutputFormat};
     use crate::compile;
     use std::fs;
-    use std::path::Path;
+    use std::path::PathBuf;
     use std::process::Child;
 
     #[test]
     fn build_std_lib() {
         // Check that we can compile the standard library.
-        let target = init_default_host_target().unwrap();
         let entries = fs::read_dir("std").expect("should succeed");
         for entry in entries {
             let lib_path = entry.unwrap().path();
@@ -590,7 +611,11 @@ mod tests {
             compile(
                 lib_path.to_str().unwrap(),
                 true,
-                CodeGenConfig::new_default(&target, Path::new(&output_path), OutputFormat::Object),
+                CodeGenConfig::new_default(
+                    init_default_host_target().unwrap(),
+                    PathBuf::from(output_path),
+                    OutputFormat::Object,
+                ),
             )
             .expect("should succeed");
         }
@@ -630,10 +655,9 @@ mod tests {
             let exe_path = format!("bin/{}", src_path_stem);
 
             // Compile the source code to IR.
-            let target_machine = init_default_host_target().unwrap();
             let codegen_config = CodeGenConfig::new_default(
-                &target_machine,
-                Path::new(&ir_path),
+                init_default_host_target().unwrap(),
+                PathBuf::from(&ir_path),
                 OutputFormat::LLVMIR,
             );
             compile(path.to_str().unwrap(), true, codegen_config).unwrap();

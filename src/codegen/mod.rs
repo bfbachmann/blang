@@ -2,7 +2,7 @@
 //! that comes from the analyzer.
 
 mod context;
-mod convert;
+pub mod convert;
 pub mod error;
 mod func;
 pub mod program;

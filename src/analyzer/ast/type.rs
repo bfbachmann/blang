@@ -1,6 +1,3 @@
-use std::fmt;
-use std::fmt::{Display, Formatter};
-
 use crate::analyzer::ast::array::AArrayType;
 use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::generic::AGenericType;
@@ -12,8 +9,13 @@ use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::ast::tuple::ATupleType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::type_store::TypeKey;
+use crate::codegen::convert::TypeConverter;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::unresolved::UnresolvedType;
+use inkwell::context::Context;
+use std::fmt;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AType {
@@ -509,4 +511,11 @@ impl AType {
             _ => None,
         }
     }
+}
+
+/// Returns the size of the given type in bytes on the target system (includes padding).
+pub fn size_of_type(ctx: &ProgramContext, type_key: TypeKey) -> u64 {
+    let ll_ctx = Context::create();
+    let converter = TypeConverter::new(&ll_ctx, &ctx.type_store, &ctx.config.target_machine);
+    converter.size_of_type(type_key)
 }
