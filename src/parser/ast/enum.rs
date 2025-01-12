@@ -19,7 +19,7 @@ use crate::{locatable_impl, util};
 pub struct EnumTypeVariant {
     pub name: String,
     pub maybe_type: Option<Type>,
-    span: Span,
+    pub span: Span,
 }
 
 impl PartialEq for EnumTypeVariant {
@@ -95,7 +95,7 @@ pub struct EnumType {
     pub maybe_params: Option<Params>,
     pub variants: Vec<EnumTypeVariant>,
     pub is_pub: bool,
-    span: Span,
+    pub span: Span,
 }
 
 impl PartialEq for EnumType {

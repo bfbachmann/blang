@@ -18,7 +18,7 @@ pub struct Impl {
     /// The spec being implemented for the type.
     pub maybe_spec: Option<Symbol>,
     pub member_fns: Vec<Function>,
-    span: Span,
+    pub span: Span,
 }
 
 impl PartialEq for Impl {

@@ -6,6 +6,7 @@ use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::ast::var_assign::AVarAssign;
 use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::fmt::vec_to_string;
+use crate::lexer::pos::Locatable;
 use crate::parser::ast::op::Operator;
 
 use super::{mangle_type_mapping, FnCodeGen};
@@ -35,11 +36,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Assigns the value to the variable with the given name. Panics if no such variable exists.
     pub(crate) fn assign_var(&mut self, assign: &AVarAssign) {
-        // Compile the expression value being assigned.
-        let ll_expr_val = self.gen_expr(&assign.val);
+        self.set_di_location(assign.target.start_pos());
 
         // Get a pointer to the target variable (or variable member).
         let ll_var_ptr = self.get_ptr_to(&assign.target);
+
+        // Compile the expression value being assigned.
+        let ll_expr_val = self.gen_expr(&assign.val);
 
         // Most primitive values can be assigned (i.e. copied) with a store instruction. Composite
         // values like structs need to be copied differently.
@@ -84,7 +87,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                         .type_converter
                         .get_array_type(index.collection_expr.type_key);
                     unsafe {
-                        self.builder
+                        self.ll_builder
                             .build_in_bounds_gep(
                                 ll_array_type,
                                 ll_collection_ptr,
@@ -217,7 +220,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             other => panic!("invalid member access on type {}", other),
         };
 
-        self.builder
+        self.ll_builder
             .build_struct_gep(
                 ll_base_expr_type,
                 ll_base_val.into_pointer_value(),
@@ -246,7 +249,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         match base_expr_type {
             AType::Struct(struct_type) => {
                 // Get the value of the struct field at the computed index.
-                self.builder
+                self.ll_builder
                     .build_extract_value(
                         ll_base_val.into_struct_value(),
                         struct_type.get_field_index(member_name).unwrap() as u32,
@@ -257,7 +260,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             AType::Tuple(tuple_type) => {
                 // Get the value of the tuple field at the computed index.
-                self.builder
+                self.ll_builder
                     .build_extract_value(
                         ll_base_val.into_struct_value(),
                         tuple_type.get_field_index(member_name) as u32,

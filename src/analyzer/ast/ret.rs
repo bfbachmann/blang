@@ -12,7 +12,7 @@ use crate::{format_code, locatable_impl, util};
 #[derive(Clone, Debug)]
 pub struct ARet {
     pub val: Option<AExpr>,
-    span: Span,
+    pub span: Span,
 }
 
 impl fmt::Display for ARet {

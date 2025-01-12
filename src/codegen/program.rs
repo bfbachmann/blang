@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::fs::remove_file;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -23,6 +22,7 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 use crate::codegen::convert::TypeConverter;
 use crate::codegen::error::{CodeGenError, CodeGenResult, ErrorKind};
+use crate::codegen::func::debug::new_di_ctx;
 use crate::codegen::func::{gen_fn_sig, FnCodeGen};
 use crate::mono_collector::{MonoItem, MonoProg};
 
@@ -39,6 +39,8 @@ pub struct ProgramCodeGen<'a, 'ctx> {
     type_store: &'a TypeStore,
     type_converter: TypeConverter<'ctx>,
     mod_consts: HashMap<String, HashMap<String, AExpr>>,
+    /// Whether to include debug info in the LLVM IR.
+    emit_debug_info: bool,
 }
 
 /// The type of output file to generate.
@@ -55,6 +57,16 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
     /// Compiles the program to LLVM IR.
     #[flame]
     fn gen_program(&mut self) -> CodeGenResult<()> {
+        // Set debug info metadata.
+        if self.emit_debug_info {
+            let debug_metadata_version = self.ctx.i32_type().const_int(3, false);
+            self.module.add_basic_value_flag(
+                "Debug Info Version",
+                inkwell::module::FlagBehavior::Warning,
+                debug_metadata_version,
+            );
+        }
+
         // Generate extern functions.
         for extern_fn in self.extern_fns.values() {
             self.gen_extern_fn(extern_fn);
@@ -82,10 +94,10 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                 &sig,
                 is_nested,
             );
-            self.type_converter.set_type_mapping(HashMap::new());
         }
 
         // Generate functions.
+        let mut di_ctxs = HashMap::new();
         for (i, item) in self.mono_items.iter().enumerate() {
             // Skip the root mono item because it's meaningless.
             if i == 0 {
@@ -99,9 +111,31 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
             match typ {
                 AType::Function(fn_sig) => {
                     let func = self.fns.get(&fn_sig.type_key).unwrap();
+
+                    let maybe_di_ctx = if self.emit_debug_info {
+                        let mod_path = func
+                            .signature
+                            .mangled_name
+                            .split("::")
+                            .next()
+                            .unwrap()
+                            .to_string();
+
+                        if let Some(di_ctx) = di_ctxs.get_mut(&mod_path) {
+                            Some(di_ctx)
+                        } else {
+                            let di_ctx = new_di_ctx(&mod_path, self.module);
+                            di_ctxs.insert(mod_path.clone(), di_ctx);
+                            Some(di_ctxs.get_mut(&mod_path).unwrap())
+                        }
+                    } else {
+                        None
+                    };
+
                     FnCodeGen::generate(
                         self.ctx,
                         self.builder,
+                        maybe_di_ctx,
                         self.module,
                         self.type_store,
                         &mut self.type_converter,
@@ -115,8 +149,10 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                     panic!("unexpected statement {other}")
                 }
             }
+        }
 
-            self.type_converter.set_type_mapping(HashMap::new());
+        for di_ctx in di_ctxs.into_values() {
+            di_ctx.di_builder.finalize();
         }
 
         // If a main function was defined, generate a wrapping main that calls it.
@@ -190,12 +226,12 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
 /// Initializes a target machine for the host system with default optimization level
 /// and reloc mode.
 pub fn init_default_host_target() -> Result<TargetMachine, CodeGenError> {
-    init_target(None, OptimizationLevel::Default, RelocMode::Default)
+    init_target_machine(None, OptimizationLevel::Default, RelocMode::Default)
 }
 
 /// Initialize the target machine from the given triple, or from information gathered from the host
 /// platform if the given target is None.
-pub fn init_target(
+pub fn init_target_machine(
     maybe_target_triple: Option<&String>,
     optimization_level: OptimizationLevel,
     reloc_mode: RelocMode,
@@ -263,6 +299,7 @@ pub struct CodeGenConfig {
     pub optimization_level: OptimizationLevel,
     pub linker: Option<String>,
     pub linker_args: Vec<String>,
+    pub emit_debug_info: bool,
 }
 
 impl CodeGenConfig {
@@ -279,6 +316,7 @@ impl CodeGenConfig {
             optimization_level: OptimizationLevel::Default,
             linker: None,
             linker_args: vec![],
+            emit_debug_info: false,
         }
     }
 
@@ -334,6 +372,7 @@ pub fn generate(prog: MonoProg) -> CodeGenResult<()> {
         type_store: &prog.type_store,
         type_converter: TypeConverter::new(&ctx, &prog.type_store, &prog.config.target_machine),
         mod_consts: prog.mod_consts,
+        emit_debug_info: prog.config.emit_debug_info,
     };
     codegen.gen_program()?;
 
@@ -462,56 +501,50 @@ fn emit_to_file(module: &Module, config: &CodeGenConfig) -> CodeGenResult<()> {
             Ok(())
         }
 
-        OutputFormat::Object | OutputFormat::Assembly | OutputFormat::Executable => {
-            let file_type = match config.output_format {
-                OutputFormat::Assembly => FileType::Assembly,
-                OutputFormat::Object | OutputFormat::Executable => FileType::Object,
-                _ => unreachable!(),
-            };
-
-            if config.output_format == OutputFormat::Executable {
-                // Write temporary object file.
-                let obj_file_path = config.output_path.with_extension("o");
-                {
-                    if let Err(msg) = config.target_machine.write_to_file(
-                        &module,
-                        file_type,
-                        obj_file_path.as_path(),
-                    ) {
-                        return Err(CodeGenError::new(
-                            ErrorKind::WriteOutFailed,
-                            msg.to_str().unwrap(),
-                        ));
-                    }
-                }
-
-                // To generate an executable, we need to invoke the system linker to link object
-                // files.
-                let result = link(
-                    &config.linker,
-                    module.get_triple(),
-                    vec![obj_file_path.as_path()],
-                    &config.output_path,
-                    &config.linker_args,
-                );
-
-                // Try to clean up object files before returning.
-                _ = remove_file(obj_file_path);
-                return result;
-            }
-
-            if let Err(msg) =
-                config
-                    .target_machine
-                    .write_to_file(&module, file_type, &config.output_path)
-            {
+        OutputFormat::Executable => {
+            // Write temporary object file.
+            let obj_file_path = config.output_path.with_extension("o");
+            if let Err(msg) = config.target_machine.write_to_file(
+                &module,
+                FileType::Object,
+                obj_file_path.as_path(),
+            ) {
                 return Err(CodeGenError::new(
                     ErrorKind::WriteOutFailed,
                     msg.to_str().unwrap(),
                 ));
             }
 
+            // To generate an executable, we need to invoke the system linker to link object
+            // files.
+            link(
+                &config.linker,
+                module.get_triple(),
+                vec![obj_file_path.as_path()],
+                &config.output_path,
+                &config.linker_args,
+            )?;
+
             Ok(())
+        }
+
+        OutputFormat::Object | OutputFormat::Assembly => {
+            let file_type = match config.output_format {
+                OutputFormat::Assembly => FileType::Assembly,
+                OutputFormat::Object => FileType::Object,
+                _ => unreachable!(),
+            };
+
+            match config
+                .target_machine
+                .write_to_file(&module, file_type, &config.output_path)
+            {
+                Ok(_) => Ok(()),
+                Err(msg) => Err(CodeGenError::new(
+                    ErrorKind::WriteOutFailed,
+                    msg.to_str().unwrap(),
+                )),
+            }
         }
     }
 }

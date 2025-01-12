@@ -17,7 +17,7 @@ pub struct Argument {
     pub name: String,
     pub typ: Type,
     pub is_mut: bool,
-    span: Span,
+    pub span: Span,
 }
 
 impl fmt::Display for Argument {

@@ -6,7 +6,7 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::format_code;
-use crate::lexer::pos::Locatable;
+use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::op::Operator;
 use crate::parser::ast::var_assign::VariableAssignment;
 
@@ -15,6 +15,7 @@ use crate::parser::ast::var_assign::VariableAssignment;
 pub struct AVarAssign {
     pub target: AExpr,
     pub val: AExpr,
+    pub span: Span,
 }
 
 impl fmt::Display for AVarAssign {
@@ -54,6 +55,7 @@ impl AVarAssign {
         AVarAssign {
             target,
             val: a_expr,
+            span: assign.span,
         }
     }
 }

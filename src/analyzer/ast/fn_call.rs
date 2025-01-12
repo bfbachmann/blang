@@ -18,6 +18,7 @@ pub struct AFnCall {
     pub fn_expr: AExpr,
     pub args: Vec<AExpr>,
     pub maybe_ret_type_key: Option<TypeKey>,
+    pub span: Span,
 }
 
 impl Display for AFnCall {
@@ -52,6 +53,7 @@ impl AFnCall {
             fn_expr: AExpr::new_with_default_pos(AExprKind::Unknown, ctx.unknown_type_key()),
             args: vec![],
             maybe_ret_type_key: Some(ctx.unknown_type_key()),
+            span: call.span,
         };
         let type_annotations_needed_err = AnalyzeError::new(
             ErrorKind::UnresolvedParams,
@@ -134,6 +136,7 @@ impl AFnCall {
                 fn_expr,
                 args: vec![],
                 maybe_ret_type_key: Some(ctx.unknown_type_key()),
+                span: call.span,
             };
         }
 
@@ -169,6 +172,7 @@ impl AFnCall {
                         fn_expr,
                         args: vec![],
                         maybe_ret_type_key: Some(ctx.unknown_type_key()),
+                        span: call.span,
                     };
                 }
             };
@@ -201,6 +205,7 @@ impl AFnCall {
                         fn_expr,
                         args,
                         maybe_ret_type_key,
+                        span: call.span,
                     };
                 }
 
@@ -247,6 +252,7 @@ impl AFnCall {
             fn_expr,
             args,
             maybe_ret_type_key,
+            span: call.span,
         }
     }
 

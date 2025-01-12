@@ -6,6 +6,7 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopedSymbol;
 use crate::analyzer::type_store::TypeKey;
+use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::r#const::Const;
 use crate::parser::ast::r#type::Type;
 use crate::{format_code, util};
@@ -16,6 +17,7 @@ pub struct AConst {
     pub name: String,
     pub declared_type_key: Option<TypeKey>,
     pub value: AExpr,
+    pub span: Span,
 }
 
 impl PartialEq for AConst {
@@ -90,15 +92,17 @@ impl AConst {
             name: const_decl.name.clone(),
             declared_type_key: declared_tk,
             value,
+            span: const_decl.span().clone(),
         }
     }
 
     /// Creates a new constant with the given name and a default value.
     fn new_zero_value(ctx: &mut ProgramContext, name: &str) -> Self {
-        return AConst {
+        AConst {
             name: name.to_string(),
             declared_type_key: None,
             value: AExpr::new_zero_value(ctx, Type::new_unresolved("<unknown>")),
-        };
+            span: Default::default(),
+        }
     }
 }

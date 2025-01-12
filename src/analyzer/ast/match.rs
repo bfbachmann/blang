@@ -405,6 +405,7 @@ pub struct AMatchCase {
     pub maybe_cond: Option<AExpr>,
     pub body: AClosure,
     pub ret_type_key: Option<TypeKey>,
+    pub span: Span,
 }
 
 impl AMatchCase {
@@ -452,6 +453,7 @@ impl AMatchCase {
             maybe_cond,
             body,
             ret_type_key,
+            span: case.span,
         }
     }
 }
@@ -462,6 +464,7 @@ pub struct AMatch {
     pub target: AExpr,
     pub cases: Vec<AMatchCase>,
     pub ret_type_key: Option<TypeKey>,
+    pub span: Span,
 }
 
 impl PartialEq for AMatch {
@@ -584,6 +587,7 @@ impl AMatch {
             target,
             cases,
             ret_type_key,
+            span: match_.span,
         }
     }
 }

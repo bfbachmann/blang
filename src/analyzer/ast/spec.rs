@@ -6,6 +6,7 @@ use crate::analyzer::ast::params::AParams;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
+use crate::lexer::pos::Span;
 use crate::parser::ast::spec::SpecType;
 
 /// Represents a set of functions that are associated with a type (i.e. a set
@@ -16,6 +17,7 @@ pub struct ASpecType {
     pub maybe_params: Option<AParams>,
     /// Maps member function name to the function type key.
     pub member_fn_type_keys: HashMap<String, TypeKey>,
+    pub span: Span,
 }
 
 impl Display for ASpecType {
@@ -33,6 +35,7 @@ impl ASpecType {
             name: spec_type.name.clone(),
             maybe_params: None,
             member_fn_type_keys: Default::default(),
+            span: spec_type.span,
         };
         let type_key = ctx.force_insert_type(AType::Spec(a_spec_type.clone()));
 
@@ -72,6 +75,7 @@ impl ASpecType {
             name: spec_type.name.clone(),
             maybe_params,
             member_fn_type_keys,
+            span: spec_type.span,
         };
 
         // Add the new spec to the program context so we can reference it by name later.

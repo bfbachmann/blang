@@ -1,23 +1,34 @@
-use inkwell::values::BasicValue;
-
+use super::FnCodeGen;
 use crate::analyzer::ast::r#yield::AYield;
 use crate::analyzer::ast::ret::ARet;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::type_store::GetType;
 use crate::codegen::error::CodeGenResult;
-
-use super::FnCodeGen;
+use crate::lexer::pos::Locatable;
+use inkwell::values::BasicValue;
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles a statement.
     pub(crate) fn gen_statement(&mut self, statement: &AStatement) -> CodeGenResult<()> {
+        self.set_di_location(statement.start_pos());
+
         match statement {
             AStatement::VariableDeclaration(var_decl) => {
                 // Get the value of the expression being assigned to the variable.
                 let ll_expr_val = self.gen_expr(&var_decl.val);
 
                 // Create and initialize the variable.
-                self.create_var(var_decl.name.as_str(), var_decl.type_key, ll_expr_val);
+                let ll_var_ptr =
+                    self.create_var(var_decl.name.as_str(), var_decl.type_key, ll_expr_val);
+
+                // Build debug info for the declaration.
+                self.gen_di_declare(
+                    &var_decl.name,
+                    &var_decl.span.start_pos,
+                    var_decl.type_key,
+                    ll_var_ptr,
+                    ll_expr_val,
+                );
             }
             AStatement::StructTypeDeclaration(_) | AStatement::EnumTypeDeclaration(_) => {
                 // Nothing to do here. Types are compiled upon initialization.
@@ -45,10 +56,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AStatement::Loop(closure) => {
                 self.gen_loop(closure)?;
             }
-            AStatement::Break => {
+            AStatement::Break(_) => {
                 self.gen_break();
             }
-            AStatement::Continue => {
+            AStatement::Continue(_) => {
                 self.gen_continue();
             }
             AStatement::Return(ret) => {
@@ -90,19 +101,19 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let expr_type = self.type_store.get_type(ret_type_key);
                 if expr_type.is_composite() {
                     // Copy the return value into the pointer from the first function argument.
-                    let ll_ret_ptr = self.fn_value.unwrap().get_first_param().unwrap();
+                    let ll_ret_ptr = self.ll_fn.unwrap().get_first_param().unwrap();
                     self.copy_value(result, ll_ret_ptr.into_pointer_value(), ret_type_key);
 
                     // Return void.
-                    self.builder.build_return(None).unwrap();
+                    self.ll_builder.build_return(None).unwrap();
                 } else {
-                    self.builder.build_return(Some(&result)).unwrap();
+                    self.ll_builder.build_return(Some(&result)).unwrap();
                 }
             }
 
             // The function has no return type, so return void.
             None => {
-                self.builder.build_return(None).unwrap();
+                self.ll_builder.build_return(None).unwrap();
             }
         }
     }
@@ -137,7 +148,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         ctx.yielded_vales.insert(ll_block, result);
 
         let ll_end_block = ctx.end_block;
-        self.builder
+        self.ll_builder
             .build_unconditional_branch(ll_end_block)
             .unwrap();
     }

@@ -10,7 +10,7 @@ use crate::parser::ast::expr::Expression;
 pub struct FnCall {
     pub fn_expr: Expression,
     pub args: Vec<Expression>,
-    pub(crate) span: Span,
+    pub span: Span,
 }
 
 locatable_impl!(FnCall);

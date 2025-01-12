@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::default::Default;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
@@ -25,7 +26,7 @@ pub struct AParam {
     pub name: String,
     pub poly_type_key: TypeKey,
     pub generic_type_key: TypeKey,
-    span: Span,
+    pub span: Span,
 }
 
 impl Hash for AParam {
@@ -73,11 +74,12 @@ impl AParam {
         }
 
         // Insert a new generic type with the required spec type keys.
-        let generic_type = AGenericType::new(
-            param.name.clone(),
+        let generic_type = AGenericType {
+            name: param.name.clone(),
+            spec_type_keys: HashSet::from_iter(required_spec_type_keys.clone()),
             poly_type_key,
-            required_spec_type_keys.clone(),
-        );
+            span: param.span,
+        };
         let generic_type_key = ctx.insert_type(AType::Generic(generic_type));
 
         // Define member functions for the generic type based on its spec constraints.
@@ -130,6 +132,7 @@ impl AParam {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AParams {
     pub params: Vec<AParam>,
+    pub span: Span,
 }
 
 impl Hash for AParams {
@@ -140,7 +143,10 @@ impl Hash for AParams {
 
 impl Default for AParams {
     fn default() -> Self {
-        AParams { params: vec![] }
+        AParams {
+            params: vec![],
+            span: Span::default(),
+        }
     }
 }
 
@@ -175,7 +181,10 @@ impl AParams {
             a_params.push(a_param);
         }
 
-        AParams { params: a_params }
+        AParams {
+            params: a_params,
+            span: params.span,
+        }
     }
 
     /// Returns the parameter with the given name, if one exists.

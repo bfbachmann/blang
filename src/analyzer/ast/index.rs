@@ -19,7 +19,7 @@ pub struct AIndex {
     pub collection_expr: AExpr,
     pub index_expr: AExpr,
     pub result_type_key: TypeKey,
-    span: Span,
+    pub span: Span,
 }
 
 locatable_impl!(AIndex);

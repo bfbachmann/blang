@@ -15,7 +15,7 @@ use parser::module::Module;
 
 use crate::analyzer::analyze::{analyze_modules, ProgramAnalysis};
 use crate::codegen::program::{
-    generate, init_default_host_target, init_target, CodeGenConfig, OutputFormat,
+    generate, init_default_host_target, init_target_machine, CodeGenConfig, OutputFormat,
 };
 use crate::fmt::{display_err, format_duration};
 use crate::lexer::error::LexResult;
@@ -65,6 +65,11 @@ fn main() {
             )
             .arg(
                 arg!(-q --quiet ... "Don't print log messages")
+                    .required(false)
+                    .action(ArgAction::SetTrue),
+            )
+            .arg(
+                arg!(-d --debug ... "Include debug info in output")
                     .required(false)
                     .action(ArgAction::SetTrue),
             )
@@ -131,7 +136,7 @@ fn main() {
                     None => RelocMode::Default,
                 };
 
-                let target_machine = match init_target(
+                let target_machine = match init_target_machine(
                     sub_matches.get_one::<String>("target"),
                     optimization_level,
                     reloc_mode,
@@ -184,6 +189,7 @@ fn main() {
                 };
 
                 let quiet = sub_matches.get_flag("quiet");
+                let debug = sub_matches.get_flag("debug");
 
                 let linker = match sub_matches.get_one::<String>("linker") {
                     Some(l) => Some(l.to_owned()),
@@ -203,6 +209,7 @@ fn main() {
                     optimization_level,
                     linker,
                     linker_args,
+                    emit_debug_info: debug,
                 };
 
                 if let Err(e) = compile(src_path, quiet, codegen_config) {

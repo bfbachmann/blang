@@ -6,6 +6,7 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::fmt::format_code_vec;
+use crate::lexer::pos::Span;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#type::Type;
@@ -17,6 +18,7 @@ use crate::{format_code, util};
 pub struct AImpl {
     pub type_key: TypeKey,
     pub member_fns: Vec<AFn>,
+    pub span: Span,
 }
 
 impl PartialEq for AImpl {
@@ -32,6 +34,7 @@ impl AImpl {
         let placeholder = AImpl {
             type_key: ctx.unknown_type_key(),
             member_fns: vec![],
+            span: impl_.span,
         };
 
         // Make sure the `impl` block is not being defined inside a function.
@@ -178,6 +181,7 @@ impl AImpl {
         AImpl {
             type_key,
             member_fns: member_fns.into_values().map(|(func, _)| func).collect(),
+            span: impl_.span,
         }
     }
 }

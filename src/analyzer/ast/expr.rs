@@ -345,7 +345,7 @@ impl AExprKind {
 pub struct AExpr {
     pub kind: AExprKind,
     pub type_key: TypeKey,
-    span: Span,
+    pub span: Span,
 }
 
 impl fmt::Display for AExpr {
@@ -717,6 +717,7 @@ impl AExpr {
                         params: None,
                     },
                     body: AClosure::new_empty(),
+                    span,
                 })),
                 type_key,
                 span,
@@ -1220,6 +1221,7 @@ fn analyze_anon_fn(ctx: &mut ProgramContext, anon_fn: Function, span: Span) -> A
     let a_fn = AFn {
         signature: AFnSig::from(ctx, &sig),
         body: a_closure,
+        span: anon_fn.span,
     };
     let type_key = a_fn.signature.type_key;
 
@@ -1889,6 +1891,7 @@ mod tests {
                     name: "first".to_string(),
                     type_key: ctx.bool_type_key(),
                     is_mut: false,
+                    span: Default::default(),
                 }],
                 maybe_ret_type_key: Some(ctx.str_type_key()),
                 type_key: fn_type_key,
@@ -1896,6 +1899,7 @@ mod tests {
                 params: None,
             },
             body: AClosure::new_empty(),
+            span: Default::default(),
         };
 
         // Add the function and its type to the context so they can be retrieved when analyzing
@@ -1930,6 +1934,7 @@ mod tests {
                         span: Default::default(),
                     }],
                     maybe_ret_type_key: Some(ctx.str_type_key()),
+                    span: Default::default(),
                 })),
                 type_key: ctx.str_type_key(),
                 span: Default::default(),
@@ -1953,6 +1958,7 @@ mod tests {
                 params: None,
             },
             body: AClosure::new_empty(),
+            span: Default::default(),
         };
 
         // Add the function and its type to the context, so they can be retrieved when analyzing
@@ -2039,11 +2045,13 @@ mod tests {
                         name: "arg1".to_string(),
                         type_key: ctx.bool_type_key(),
                         is_mut: false,
+                        span: Default::default(),
                     },
                     AArg {
                         name: "arg2".to_string(),
                         type_key: ctx.i64_type_key(),
                         is_mut: false,
+                        span: Default::default(),
                     },
                 ],
                 maybe_ret_type_key: Some(ctx.bool_type_key()),
@@ -2052,6 +2060,7 @@ mod tests {
                 params: None,
             },
             body: AClosure::new_empty(),
+            span: Default::default(),
         };
 
         // Add the function and its type to the context, so they can be retrieved when analyzing
@@ -2084,6 +2093,7 @@ mod tests {
                     ),
                     args: vec![],
                     maybe_ret_type_key: Some(ctx.unknown_type_key()),
+                    span: Default::default(),
                 })),
                 type_key: ctx.unknown_type_key(),
                 span: Default::default(),
@@ -2142,6 +2152,7 @@ mod tests {
                     name: "arg".to_string(),
                     type_key: ctx.bool_type_key(),
                     is_mut: false,
+                    span: Default::default(),
                 }],
                 maybe_ret_type_key: Some(ctx.bool_type_key()),
                 type_key: ctx.resolve_type(&Type::Function(Box::new(fn_sig))),
@@ -2149,6 +2160,7 @@ mod tests {
                 params: None,
             },
             body: AClosure::new_empty(),
+            span: Default::default(),
         };
 
         // Add the function and its type to the context so they can be retrieved when analyzing
@@ -2185,6 +2197,7 @@ mod tests {
                         span: Default::default(),
                     }],
                     maybe_ret_type_key: Some(ctx.bool_type_key()),
+                    span: Default::default(),
                 })),
                 ctx.bool_type_key(),
             )

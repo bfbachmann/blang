@@ -31,7 +31,7 @@ locatable_impl!(ABranch);
 pub struct ACond {
     pub branches: Vec<ABranch>,
     pub ret_type_key: Option<TypeKey>,
-    span: Span,
+    pub span: Span,
 }
 
 impl fmt::Display for ACond {

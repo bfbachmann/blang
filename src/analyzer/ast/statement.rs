@@ -19,6 +19,7 @@ use crate::analyzer::ast::var_dec::AVarDecl;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
+use crate::lexer::pos::{Locatable, Position, Span};
 use crate::parser::ast::statement::Statement;
 
 /// Represents a semantically valid and type-rich statement.
@@ -32,8 +33,8 @@ pub enum AStatement {
     Conditional(ACond),
     Match(AMatch),
     Loop(Box<ALoop>),
-    Break,
-    Continue,
+    Break(Span),
+    Continue(Span),
     Return(ARet),
     Yield(AYield),
     StructTypeDeclaration(AStructType),
@@ -55,8 +56,8 @@ impl fmt::Display for AStatement {
             AStatement::Conditional(v) => write!(f, "{}", v),
             AStatement::Match(v) => write!(f, "{}", v),
             AStatement::Loop(v) => write!(f, "{}", v),
-            AStatement::Break => write!(f, "break"),
-            AStatement::Continue => write!(f, "continue"),
+            AStatement::Break(_) => write!(f, "break"),
+            AStatement::Continue(_) => write!(f, "continue"),
             AStatement::Return(v) => write!(f, "{}", v),
             AStatement::Yield(v) => write!(f, "{}", v),
             AStatement::StructTypeDeclaration(s) => write!(f, "{}", s),
@@ -75,6 +76,38 @@ impl fmt::Display for AStatement {
                     impl_.member_fns.len()
                 )
             }
+        }
+    }
+}
+
+impl Locatable for AStatement {
+    fn start_pos(&self) -> &Position {
+        self.span().start_pos()
+    }
+
+    fn end_pos(&self) -> &Position {
+        self.span().end_pos()
+    }
+
+    fn span(&self) -> &Span {
+        match self {
+            AStatement::VariableDeclaration(var_decl) => &var_decl.val.span,
+            AStatement::VariableAssignment(assign) => &assign.target.span,
+            AStatement::FunctionDeclaration(func) => &func.span,
+            AStatement::Closure(closure) => &closure.span,
+            AStatement::FunctionCall(call) => &call.span,
+            AStatement::Conditional(cond) => &cond.span,
+            AStatement::Match(match_) => &match_.span,
+            AStatement::Loop(loop_) => &loop_.span,
+            AStatement::Break(span) => span,
+            AStatement::Continue(span) => span,
+            AStatement::Return(ret) => &ret.span,
+            AStatement::Yield(yield_) => &yield_.span,
+            AStatement::StructTypeDeclaration(decl) => &decl.span,
+            AStatement::EnumTypeDeclaration(decl) => &decl.span,
+            AStatement::ExternFn(ext) => &ext.span,
+            AStatement::Const(const_) => &const_.span,
+            AStatement::Impl(impl_) => &impl_.span,
         }
     }
 }
@@ -119,12 +152,12 @@ impl AStatement {
 
             Statement::Break(br) => {
                 analyze_break(ctx, &br);
-                AStatement::Break
+                AStatement::Break(br.span)
             }
 
             Statement::Continue(cont) => {
                 analyze_continue(ctx, &cont);
-                AStatement::Continue
+                AStatement::Continue(cont.span)
             }
 
             Statement::Return(ret) => {
@@ -179,6 +212,7 @@ mod tests {
     use crate::analyzer::prog_context::ProgramContext;
     use crate::analyzer::warn::AnalyzeWarning;
     use crate::lexer::lex::lex;
+    use crate::lexer::pos::{Position, Span};
     use crate::lexer::stream::Stream;
     use crate::parser::ast::statement::Statement;
 
@@ -491,16 +525,32 @@ mod tests {
                     AField {
                         name: "counter".to_string(),
                         type_key: ctx.i64_type_key(),
+                        span: Span {
+                            start_pos: Position { line: 3, col: 17 },
+                            end_pos: Position { line: 3, col: 29 },
+                        },
                     },
                     AField {
                         name: "is_even".to_string(),
                         type_key: ctx.bool_type_key(),
+                        span: Span {
+                            start_pos: Position { line: 4, col: 17 },
+                            end_pos: Position { line: 4, col: 30 },
+                        },
                     },
                     AField {
                         name: "message".to_string(),
                         type_key: ctx.str_type_key(),
+                        span: Span {
+                            start_pos: Position { line: 5, col: 17 },
+                            end_pos: Position { line: 5, col: 29 },
+                        },
                     },
                 ],
+                span: Span {
+                    start_pos: Position { line: 2, col: 13 },
+                    end_pos: Position { line: 6, col: 14 },
+                },
             })
         )
     }

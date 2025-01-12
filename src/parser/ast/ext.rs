@@ -12,34 +12,34 @@ use crate::parser::module::Module;
 
 /// Represents a set of external function declarations.
 #[derive(Clone, Debug, Eq)]
-pub struct Extern {
+pub struct ExternFn {
     pub fn_sig: FunctionSignature,
     pub maybe_link_name: Option<String>,
     pub is_pub: bool,
-    span: Span,
+    pub span: Span,
 }
 
-impl Hash for Extern {
+impl Hash for ExternFn {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.fn_sig.hash(state);
     }
 }
 
-impl PartialEq for Extern {
+impl PartialEq for ExternFn {
     fn eq(&self, other: &Self) -> bool {
         self.fn_sig == other.fn_sig
     }
 }
 
-impl Display for Extern {
+impl Display for ExternFn {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "extern {}", self.fn_sig)
     }
 }
 
-locatable_impl!(Extern);
+locatable_impl!(ExternFn);
 
-impl Extern {
+impl ExternFn {
     /// Attempts to parse an external function declaration from the token sequence.
     /// Expects token sequences of one of the following forms:
     ///
@@ -74,7 +74,7 @@ impl Extern {
         let fn_sig = FunctionSignature::from(tokens)?;
         let end_pos = fn_sig.end_pos().clone();
 
-        Ok(Extern {
+        Ok(ExternFn {
             fn_sig,
             maybe_link_name,
             is_pub,

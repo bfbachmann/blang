@@ -15,7 +15,7 @@ use crate::{locatable_impl, util};
 #[derive(Debug, Clone, Eq)]
 pub struct TupleType {
     pub field_types: Vec<Type>,
-    span: Span,
+    pub span: Span,
 }
 
 locatable_impl!(TupleType);

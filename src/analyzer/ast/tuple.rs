@@ -5,6 +5,7 @@ use crate::analyzer::ast::r#struct::AField;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
+use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::tuple::{TupleInit, TupleType};
 
@@ -13,6 +14,7 @@ use crate::parser::ast::tuple::{TupleInit, TupleType};
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct ATupleType {
     pub fields: Vec<AField>,
+    pub span: Span,
 }
 
 impl Display for ATupleType {
@@ -42,10 +44,14 @@ impl ATupleType {
             fields.push(AField {
                 name: field_index.to_string(),
                 type_key: ctx.resolve_type(field_type),
+                span: field_type.span().clone(),
             })
         }
 
-        ATupleType { fields }
+        ATupleType {
+            fields,
+            span: tuple_type.span,
+        }
     }
 
     /// Returns the type key of the field at the given index.
@@ -144,6 +150,7 @@ impl ATupleInit {
                 AField {
                     name: i.to_string(),
                     type_key: val.type_key,
+                    span: val.span,
                 },
                 val,
             ));
@@ -156,7 +163,10 @@ impl ATupleInit {
             values.push(value);
         }
 
-        let type_key = ctx.insert_type(AType::Tuple(ATupleType { fields }));
+        let type_key = ctx.insert_type(AType::Tuple(ATupleType {
+            fields,
+            span: tuple_init.span,
+        }));
 
         ATupleInit { type_key, values }
     }

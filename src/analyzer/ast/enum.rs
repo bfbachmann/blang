@@ -7,6 +7,7 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
+use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::r#enum::{EnumType, EnumVariantInit};
 use crate::parser::ast::r#type::Type;
@@ -60,6 +61,7 @@ pub struct AEnumType {
     pub mangled_name: String,
     pub maybe_params: Option<AParams>,
     pub variants: HashMap<String, AEnumTypeVariant>,
+    pub span: Span,
 }
 
 impl PartialEq for AEnumType {
@@ -99,6 +101,7 @@ impl AEnumType {
             mangled_name: mangled_name.clone(),
             maybe_params: None,
             variants: HashMap::new(),
+            span: enum_type.span,
         };
         let type_key = ctx.insert_type(AType::Enum(a_enum_type.clone()));
 
@@ -163,6 +166,7 @@ impl AEnumType {
             mangled_name,
             maybe_params,
             variants,
+            span: enum_type.span,
         };
         ctx.replace_type(type_key, AType::Enum(a_enum_type.clone()));
 
@@ -203,6 +207,7 @@ pub struct AEnumVariantInit {
     pub type_key: TypeKey,
     pub variant: AEnumTypeVariant,
     pub maybe_value: Option<Box<AExpr>>,
+    pub span: Span,
 }
 
 impl Display for AEnumVariantInit {
@@ -240,6 +245,7 @@ impl AEnumVariantInit {
                         maybe_type_key: None,
                     },
                     maybe_value: None,
+                    span: enum_init.span,
                 };
             }
 
@@ -265,6 +271,7 @@ impl AEnumVariantInit {
                         maybe_type_key: None,
                     },
                     maybe_value: None,
+                    span: enum_init.span,
                 };
             }
         };
@@ -294,6 +301,7 @@ impl AEnumVariantInit {
                         maybe_type_key: None,
                     },
                     maybe_value: None,
+                    span: enum_init.span,
                 };
             }
         };
@@ -320,6 +328,7 @@ impl AEnumVariantInit {
                         type_key: enum_type_key,
                         variant,
                         maybe_value: None,
+                        span: enum_init.span,
                     };
                 }
 
@@ -351,6 +360,7 @@ impl AEnumVariantInit {
                         type_key: enum_type_key,
                         variant,
                         maybe_value: None,
+                        span: enum_init.span,
                     };
                 }
 
@@ -362,6 +372,7 @@ impl AEnumVariantInit {
             type_key: enum_type_key,
             variant,
             maybe_value,
+            span: enum_init.span,
         }
     }
 

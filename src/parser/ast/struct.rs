@@ -22,7 +22,7 @@ pub struct StructField {
     pub name: String,
     pub typ: Type,
     pub is_pub: bool,
-    span: Span,
+    pub span: Span,
 }
 
 impl PartialEq for StructField {
@@ -47,7 +47,7 @@ pub struct StructType {
     pub maybe_params: Option<Params>,
     pub fields: Vec<StructField>,
     pub is_pub: bool,
-    span: Span,
+    pub span: Span,
 }
 
 impl Hash for StructType {

@@ -18,7 +18,7 @@ pub struct Loop {
     pub maybe_cond: Option<Expression>,
     pub maybe_update: Option<Statement>,
     pub body: Closure,
-    span: Span,
+    pub span: Span,
 }
 
 locatable_impl!(Loop);

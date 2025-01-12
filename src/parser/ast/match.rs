@@ -100,6 +100,7 @@ pub struct MatchCase {
     pub pattern: Pattern,
     pub maybe_cond: Option<Expression>,
     pub body: Closure,
+    pub span: Span,
 }
 
 impl MatchCase {
@@ -110,7 +111,9 @@ impl MatchCase {
     ///     case <pattern> if <cond>: <statement>...
     ///     case if <cond>: <statement>...
     fn from(tokens: &mut Stream<Token>) -> ParseResult<MatchCase> {
-        Module::parse_expecting(tokens, TokenKind::Case)?;
+        let start_pos = Module::parse_expecting(tokens, TokenKind::Case)?
+            .span
+            .start_pos;
 
         let pattern = Pattern::from(tokens)?;
         let maybe_cond = match Module::parse_optional(tokens, TokenKind::If) {
@@ -136,6 +139,10 @@ impl MatchCase {
         );
 
         Ok(MatchCase {
+            span: Span {
+                start_pos,
+                end_pos: body.end_pos().clone(),
+            },
             pattern,
             maybe_cond,
             body,

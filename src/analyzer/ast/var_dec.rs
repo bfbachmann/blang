@@ -5,6 +5,7 @@ use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopedSymbol;
 use crate::analyzer::type_store::TypeKey;
+use crate::lexer::pos::Span;
 use crate::parser::ast::var_dec::VariableDeclaration;
 
 /// Represents a semantically valid and type-rich variable declaration.
@@ -13,6 +14,7 @@ pub struct AVarDecl {
     pub type_key: TypeKey,
     pub name: String,
     pub val: AExpr,
+    pub span: Span,
 }
 
 impl fmt::Display for AVarDecl {
@@ -54,6 +56,7 @@ impl AVarDecl {
             type_key,
             name: var_decl.name.clone(),
             val: rich_expr,
+            span: var_decl.span,
         }
     }
 }
@@ -90,7 +93,8 @@ mod tests {
                 val: AExpr::new_with_default_pos(
                     AExprKind::StrLiteral("bingo".to_string()),
                     ctx.str_type_key()
-                )
+                ),
+                span: Default::default(),
             }
         );
         assert_eq!(
@@ -113,7 +117,8 @@ mod tests {
             AVarDecl {
                 type_key: ctx.bool_type_key(),
                 name: "my_var".to_string(),
-                val: AExpr::new_with_default_pos(AExprKind::BoolLiteral(true), ctx.bool_type_key())
+                val: AExpr::new_with_default_pos(AExprKind::BoolLiteral(true), ctx.bool_type_key()),
+                span: Default::default(),
             }
         );
         assert_eq!(

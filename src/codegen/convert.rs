@@ -317,7 +317,7 @@ impl<'ctx> TypeConverter<'ctx> {
     }
 
     /// Returns the LLVM IntType required to store the given number of enum variants.
-    fn enum_variant_num_field_type(&self, num_variants: u64) -> IntType<'ctx> {
+    pub(crate) fn enum_variant_num_field_type(&self, num_variants: u64) -> IntType<'ctx> {
         let bits_required = 64 - num_variants.leading_zeros();
         let bytes_required = (bits_required + 7) / 8;
         match bytes_required {

@@ -5,6 +5,7 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
+use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::array::{ArrayInit, ArrayType};
 
 /// An array type declaration.
@@ -12,6 +13,7 @@ use crate::parser::ast::array::{ArrayInit, ArrayType};
 pub struct AArrayType {
     pub maybe_element_type_key: Option<TypeKey>,
     pub len: u64,
+    pub span: Span,
 }
 
 impl PartialEq for AArrayType {
@@ -81,6 +83,7 @@ impl AArrayType {
         AArrayType {
             maybe_element_type_key,
             len,
+            span: array_type.span().clone(),
         }
     }
 
@@ -114,6 +117,7 @@ pub struct AArrayInit {
     pub maybe_repeat_count: Option<u64>,
     pub maybe_element_type_key: Option<TypeKey>,
     pub type_key: TypeKey,
+    pub span: Span,
 }
 
 impl Display for AArrayInit {
@@ -194,6 +198,7 @@ impl AArrayInit {
                         maybe_repeat_count: None,
                         maybe_element_type_key: None,
                         type_key: ctx.unknown_type_key(),
+                        span: Default::default(),
                     };
                 }
             }
@@ -232,6 +237,7 @@ impl AArrayInit {
                                 maybe_repeat_count: None,
                                 maybe_element_type_key: None,
                                 type_key: ctx.unknown_type_key(),
+                                span: Default::default(),
                             };
                         }
                     }
@@ -248,6 +254,7 @@ impl AArrayInit {
                 None => contained_values.len() as u64,
             },
             maybe_element_type_key,
+            span: array_init.span.clone(),
         }));
 
         AArrayInit {
@@ -255,6 +262,7 @@ impl AArrayInit {
             maybe_repeat_count,
             maybe_element_type_key,
             type_key,
+            span: array_init.span.clone(),
         }
     }
 

@@ -15,7 +15,7 @@ use crate::Locatable;
 #[derive(Clone, Debug)]
 pub struct AYield {
     pub value: AExpr,
-    span: Span,
+    pub span: Span,
 }
 
 impl fmt::Display for AYield {

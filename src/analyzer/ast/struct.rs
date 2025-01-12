@@ -9,6 +9,7 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::fmt::format_code_vec;
+use crate::lexer::pos::Span;
 use crate::parser::ast::r#struct::{StructInit, StructType};
 use crate::parser::ast::r#type::Type;
 use crate::{format_code, util};
@@ -18,6 +19,7 @@ use crate::{format_code, util};
 pub struct AField {
     pub name: String,
     pub type_key: TypeKey,
+    pub span: Span,
 }
 
 impl Display for AField {
@@ -33,6 +35,7 @@ pub struct AStructType {
     pub mangled_name: String,
     pub maybe_params: Option<AParams>,
     pub fields: Vec<AField>,
+    pub span: Span,
 }
 
 impl Display for AStructType {
@@ -76,6 +79,7 @@ impl AStructType {
             mangled_name: mangled_name.clone(),
             maybe_params: None,
             fields: vec![],
+            span: struct_type.span,
         };
         let type_key = ctx.insert_type(AType::Struct(a_struct_type.clone()));
 
@@ -125,6 +129,7 @@ impl AStructType {
             fields.push(AField {
                 name: field.name.clone(),
                 type_key: ctx.resolve_type(&field.typ),
+                span: field.span,
             });
         }
 
@@ -134,6 +139,7 @@ impl AStructType {
             mangled_name,
             maybe_params,
             fields,
+            span: struct_type.span,
         };
         ctx.replace_type(type_key, AType::Struct(a_struct_type.clone()));
 

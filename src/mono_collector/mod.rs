@@ -8,7 +8,7 @@ use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 use crate::codegen::program::CodeGenConfig;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 
 /// Represents a monomorhic function. This will either be a function that is already
@@ -35,11 +35,7 @@ impl Hash for MonoItem {
         // MonoItems should hash to the same value if they have the same function type key and
         // type mappings.
         self.type_key.hash(state);
-
-        let mut mappings: Vec<(TypeKey, TypeKey)> =
-            self.type_mappings.iter().map(|(k, v)| (*k, *v)).collect();
-        mappings.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
-        mappings.hash(state);
+        BTreeMap::from_iter(self.type_mappings.clone().into_iter()).hash(state);
     }
 }
 
@@ -120,22 +116,27 @@ impl MonoItemCollector {
         }
 
         let parent_item = self.complete_mono_items.get(self.cur_item_index).unwrap();
-        let func = self.fns.get(&type_key).unwrap();
         let is_nested = self.nested_fns.contains(&type_key);
-        let has_params = func.signature.is_parameterized();
-        let has_poly_impl_type = func
-            .signature
-            .maybe_impl_type_key
-            .is_some_and(|impl_tk| self.get_type(impl_tk).params().is_some());
 
         // Include type mappings from parent contexts if the item could possibly need them.
-        if is_nested || has_params || has_poly_impl_type {
+        if is_nested {
             for (k, v) in &parent_item.type_mappings {
                 // Don't overwrite mappings from child contexts.
                 if !type_mappings.contains_key(k) {
                     type_mappings.insert(*k, *v);
                 }
             }
+        }
+
+        // Sanity check: make sure nothing is mapped to a generic type.
+        for (k, v) in &mut type_mappings {
+            if self.get_type(*v).is_generic() {
+                *v = self.map_type_key(*k);
+            }
+            assert!(
+                !self.get_type(*v).is_generic(),
+                "{k} is mapped to generic type {v}"
+            );
         }
 
         let item = MonoItem {
@@ -376,8 +377,8 @@ fn walk_statement(collector: &mut MonoItemCollector, statement: AStatement) {
         }
 
         // Nothing to do here.
-        AStatement::Break
-        | AStatement::Continue
+        AStatement::Break(_)
+        | AStatement::Continue(_)
         | AStatement::StructTypeDeclaration(_)
         | AStatement::EnumTypeDeclaration(_) => {}
 
@@ -495,47 +496,65 @@ fn walk_type_key(collector: &mut MonoItemCollector, type_key: TypeKey) {
         None => (type_key, HashMap::new()),
     };
 
-    // If the type key already refers to an existing function, we're done.
-    if collector.fns.get(&type_key).is_some() {
-        collector.queue_item(type_key, type_mappings);
-        return;
-    }
-
     // Check if we need to find and monomorphize the function.
     match fn_sig.maybe_impl_type_key {
         Some(impl_tk) => {
-            // Check if the function is a method on a monomorphized type.
+            // Map the impl type key in case it is generic.
             let mapped_impl_tk = collector.map_type_key(impl_tk);
+
+            // Include type mappings from the monomorphization of the impl type, if any.
             let poly_impl_tk = match collector.ctx.type_monomorphizations.get(&mapped_impl_tk) {
                 Some(mono) => {
                     for replaced_param in &mono.replaced_params {
-                        type_mappings.insert(
-                            replaced_param.param_type_key,
-                            collector.map_type_key(replaced_param.replacement_type_key),
-                        );
+                        let replacement_tk =
+                            collector.map_type_key(replaced_param.replacement_type_key);
+                        type_mappings.insert(replaced_param.param_type_key, replacement_tk);
+                        update_type_mappings(collector, replacement_tk, &mut type_mappings);
                     }
 
                     mono.poly_type_key
                 }
-                None => mapped_impl_tk,
+
+                // Maybe the type is a monomorphization of itself with its own params, in which
+                // case the monomorphization won't exist, but we still need to include the params
+                // in the type mappings.
+                None => {
+                    if let Some(params) = collector.get_type(mapped_impl_tk).params() {
+                        for param in &params.params {
+                            type_mappings.insert(
+                                param.generic_type_key,
+                                collector.map_type_key(param.generic_type_key),
+                            );
+                        }
+                    }
+
+                    mapped_impl_tk
+                }
             };
 
             // Find the actual method on the original type.
             match collector.ctx.get_spec_impl_by_fn(type_key) {
                 Some(spec_tk) => {
-                    let fn_tk = collector
-                        .ctx
-                        .get_member_fn_from_spec_impl(poly_impl_tk, spec_tk, fn_sig.name.as_str())
-                        .expect(
-                            format!(
-                                "function `{}` should exist on type {poly_impl_tk} for spec {spec_tk}",
-                                fn_sig.name
-                            )
-                            .as_str(),
-                        );
-
-                    collector.queue_item(fn_tk, type_mappings);
+                    if let Some(fn_tk) = collector.ctx.get_member_fn_from_spec_impl(
+                        poly_impl_tk,
+                        spec_tk,
+                        fn_sig.name.as_str(),
+                    ) {
+                        collector.queue_item(fn_tk, type_mappings);
+                    } else if let Some(fn_tk) = collector.ctx.get_member_fn_from_spec_impl(
+                        mapped_impl_tk,
+                        spec_tk,
+                        &fn_sig.name,
+                    ) {
+                        collector.queue_item(fn_tk, type_mappings);
+                    } else {
+                        panic!(
+                            "function `{}` should exist on type {poly_impl_tk} for spec {spec_tk}",
+                            fn_sig.name,
+                        )
+                    }
                 }
+
                 None => {
                     // Since the function is not part of a spec implementation, we can
                     // search for it as a default member function. If we don't find it,
@@ -546,14 +565,44 @@ fn walk_type_key(collector: &mut MonoItemCollector, type_key: TypeKey) {
                         .get_default_member_fn(poly_impl_tk, fn_sig.name.as_str())
                     {
                         collector.queue_item(fn_tk, type_mappings);
+                    } else if let Some(fn_tk) = collector
+                        .ctx
+                        .get_default_member_fn(mapped_impl_tk, &fn_sig.name)
+                    {
+                        collector.queue_item(fn_tk, type_mappings);
                     }
                 }
             };
         }
 
         None => {
+            // If the type key already refers to an existing function, we're done.
+            if collector.fns.get(&type_key).is_some() {
+                collector.queue_item(type_key, type_mappings);
+                return;
+            }
+
             // This will be the case for extern functions. We'll track them separately.
             collector.used_extern_fns.insert(fn_sig.type_key);
+        }
+    }
+}
+
+fn update_type_mappings(
+    collector: &MonoItemCollector,
+    type_key: TypeKey,
+    type_mappings: &mut HashMap<TypeKey, TypeKey>,
+) {
+    if let Some(mono) = collector.ctx.type_monomorphizations.get(&type_key) {
+        for replaced_param in &mono.replaced_params {
+            let replacement_tk = collector.map_type_key(replaced_param.replacement_type_key);
+            if replacement_tk != replaced_param.replacement_type_key
+                && !type_mappings.contains_key(&replaced_param.replacement_type_key)
+            {
+                type_mappings.insert(replaced_param.replacement_type_key, replacement_tk);
+            }
+
+            update_type_mappings(collector, replacement_tk, type_mappings);
         }
     }
 }

@@ -5,6 +5,7 @@ use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
+use crate::lexer::pos::Span;
 use crate::parser::ast::r#loop::Loop;
 
 /// Represents an analyzed loop statement.
@@ -14,6 +15,7 @@ pub struct ALoop {
     pub maybe_cond: Option<AExpr>,
     pub maybe_update: Option<AStatement>,
     pub body: AClosure,
+    pub span: Span,
 }
 
 impl Display for ALoop {
@@ -69,6 +71,7 @@ impl ALoop {
             maybe_cond,
             maybe_update,
             body: AClosure::from(ctx, &loop_.body, ScopeKind::LoopBody, vec![], None),
+            span: loop_.span,
         }
     }
 }

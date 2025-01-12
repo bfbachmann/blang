@@ -12,7 +12,7 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_containment::{check_enum_containment, check_struct_containment};
 use crate::lexer::pos::{Locatable, Span};
-use crate::parser::ast::ext::Extern;
+use crate::parser::ast::ext::ExternFn;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#type::Type;
@@ -221,7 +221,7 @@ fn define_fn(ctx: &mut ProgramContext, func: &Function) {
     }
 }
 
-fn define_extern_fn(ctx: &mut ProgramContext, ext: &Extern) {
+fn define_extern_fn(ctx: &mut ProgramContext, ext: &ExternFn) {
     if ext.fn_sig.params.is_some() {
         ctx.insert_err(AnalyzeError::new(
             ErrorKind::InvalidExtern,

@@ -15,6 +15,7 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::ast::tuple::ATupleInit;
 use crate::analyzer::type_store::{GetType, TypeKey};
+use crate::lexer::pos::Locatable;
 use crate::parser::ast::op::Operator;
 
 use super::{get_fn_attrs, mangle_fn_name, FnCodeGen};
@@ -22,11 +23,11 @@ use super::{get_fn_attrs, mangle_fn_name, FnCodeGen};
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles an arbitrary expression.
     pub(crate) fn gen_expr(&mut self, expr: &AExpr) -> BasicValueEnum<'ctx> {
-        if expr.kind.is_const() {
-            return self.gen_const_expr(expr);
-        }
+        self.set_di_location(expr.start_pos());
 
-        match &expr.kind {
+        let ll_val = match &expr.kind {
+            _ if expr.kind.is_const() => self.gen_const_expr(expr),
+
             AExprKind::TypeCast(left_expr, target_type_key) => self
                 .gen_type_cast(left_expr, *target_type_key)
                 .as_basic_value_enum(),
@@ -94,7 +95,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AExprKind::Unknown => {
                 panic!("encountered unknown expression");
             }
-        }
+        };
+
+        ll_val
     }
 
     /// Generates code for a `from` expression.
@@ -125,7 +128,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         let ll_phi = self
-            .builder
+            .ll_builder
             .build_phi(ll_result_type, "from_result")
             .unwrap();
         for (ll_block, ll_value) in ctx.yielded_vales {
@@ -183,7 +186,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         for (i, field_val) in tuple_init.values.iter().enumerate() {
             // Get a pointer to the tuple field we're initializing.
             let ll_field_ptr = self
-                .builder
+                .ll_builder
                 .build_struct_gep(
                     ll_struct_type,
                     ll_struct_ptr,
@@ -244,7 +247,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
                 // Compute the pointer to the value at the given index in the collection.
                 let ll_elem_ptr = unsafe {
-                    self.builder
+                    self.ll_builder
                         .build_in_bounds_gep(
                             ll_array_type,
                             ll_collection_ptr,
@@ -268,7 +271,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     .type_converter
                     .get_basic_type(ptr_type.pointee_type_key);
                 unsafe {
-                    self.builder
+                    self.ll_builder
                         .build_in_bounds_gep(
                             ll_pointee_type,
                             ll_collection_val.into_pointer_value(),
@@ -302,7 +305,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             .type_converter
             .get_basic_type(array_init.maybe_element_type_key.unwrap());
         let ll_array_ptr = self
-            .builder
+            .ll_builder
             .build_array_alloca(
                 ll_elem_type,
                 self.ctx.i32_type().const_int(array_type.len, false),
@@ -324,10 +327,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let ll_index_type = self.ctx.i64_type();
                 let ll_index_ptr =
                     self.build_entry_alloc("array_index_ptr", ll_index_type.as_basic_type_enum());
-                self.builder
+                self.ll_builder
                     .build_store(ll_index_ptr, ll_index_type.const_int(0, false))
                     .unwrap();
-                self.builder
+                self.ll_builder
                     .build_unconditional_branch(ll_loop_cond)
                     .unwrap();
 
@@ -335,11 +338,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 // Otherwise, continue to loop body.
                 self.set_current_block(ll_loop_cond);
                 let ll_index = self
-                    .builder
+                    .ll_builder
                     .build_load(ll_index_type, ll_index_ptr, "array_index")
                     .unwrap();
                 let ll_continue = self
-                    .builder
+                    .ll_builder
                     .build_int_compare(
                         IntPredicate::ULT,
                         ll_index.into_int_value(),
@@ -347,18 +350,18 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                         "should_continue",
                     )
                     .unwrap();
-                self.builder
+                self.ll_builder
                     .build_conditional_branch(ll_continue, ll_loop_body, ll_loop_end)
                     .unwrap();
 
                 // Write the value into the current index in the array.
                 self.set_current_block(ll_loop_body);
                 let ll_index = self
-                    .builder
+                    .ll_builder
                     .build_load(ll_index_type, ll_index_ptr, "array_index")
                     .unwrap();
                 let ll_element_ptr = unsafe {
-                    self.builder
+                    self.ll_builder
                         .build_in_bounds_gep(
                             ll_elem_type,
                             ll_array_ptr,
@@ -374,28 +377,28 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     ll_element_ptr,
                     array_init.maybe_element_type_key.unwrap(),
                 );
-                self.builder
+                self.ll_builder
                     .build_unconditional_branch(ll_loop_update)
                     .unwrap();
 
                 // Increment the loop index and jump back to condition block.
                 self.set_current_block(ll_loop_update);
                 let ll_index = self
-                    .builder
+                    .ll_builder
                     .build_load(ll_index_type, ll_index_ptr, "array_index")
                     .unwrap();
                 let ll_new_index = self
-                    .builder
+                    .ll_builder
                     .build_int_add(
                         ll_index.into_int_value(),
                         ll_index_type.const_int(1, false),
                         "new_index",
                     )
                     .unwrap();
-                self.builder
+                self.ll_builder
                     .build_store(ll_index_ptr, ll_new_index)
                     .unwrap();
-                self.builder
+                self.ll_builder
                     .build_unconditional_branch(ll_loop_cond)
                     .unwrap();
 
@@ -407,7 +410,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 for (i, value) in array_init.values.iter().enumerate() {
                     let ll_index = self.ctx.i32_type().const_int(i as u64, false);
                     let ll_element_ptr = unsafe {
-                        self.builder
+                        self.ll_builder
                             .build_in_bounds_gep(
                                 ll_elem_type,
                                 ll_array_ptr,
@@ -440,10 +443,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // Set the number variant number on the struct.
         let ll_number_field_ptr = self
-            .builder
+            .ll_builder
             .build_struct_gep(ll_struct_type, ll_struct_ptr, 0, "enum.variant_number_ptr")
             .unwrap();
-        self.builder
+        self.ll_builder
             .build_store(
                 ll_number_field_ptr,
                 ll_variant_num_type.const_int(enum_init.variant.number as u64, false),
@@ -454,7 +457,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         if let Some(value) = &enum_init.maybe_value {
             let ll_value = self.gen_expr(value.as_ref());
             let ll_value_field_ptr = self
-                .builder
+                .ll_builder
                 .build_struct_gep(ll_struct_type, ll_struct_ptr, 1, "enum.value_ptr")
                 .unwrap();
 
@@ -486,7 +489,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             // Get a pointer to the struct field we're initializing.
             let ll_field_ptr = self
-                .builder
+                .ll_builder
                 .build_struct_gep(
                     ll_struct_type,
                     ll_struct_ptr,
@@ -505,6 +508,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Compiles a function call, returning the result if one exists.
     pub(crate) fn gen_call(&mut self, call: &AFnCall) -> Option<BasicValueEnum<'ctx>> {
+        self.set_di_location(&call.span.start_pos);
+
         let fn_sig = self.type_store.get_type(call.fn_expr.type_key).to_fn_sig();
 
         let (mut mangled_name, ll_fn_type) = match fn_sig.maybe_impl_type_key {
@@ -627,14 +632,14 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     // Build the call and attach attributes to it. For some undocumented reason,
                     // some attributes like `byval` need to be attached at the call site as well as
                     // the function declaration.
-                    self.builder
+                    self.ll_builder
                         .build_call(ll_fn, args.as_slice(), symbol.name.as_str())
                         .unwrap()
                 } else {
                     // The function is actually a variable, so we need to load the function pointer
                     // from the variable value and call it indirectly.
                     let ll_fn_ptr = self.get_var_value(&symbol).into_pointer_value();
-                    self.builder
+                    self.ll_builder
                         .build_indirect_call(
                             ll_fn_type,
                             ll_fn_ptr,
@@ -649,14 +654,14 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let ll_fn = self.module.get_function(mangled_name.as_str()).expect(
                     format!("failed to locate function {} in module", mangled_name).as_str(),
                 );
-                self.builder
+                self.ll_builder
                     .build_call(ll_fn, args.as_slice(), access.member_name.as_str())
                     .unwrap()
             }
 
             _ => {
                 let ll_fn_ptr = self.gen_expr(&call.fn_expr).into_pointer_value();
-                self.builder
+                self.ll_builder
                     .build_indirect_call(
                         ll_fn_type,
                         ll_fn_ptr,
@@ -706,7 +711,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
                 // Build the logical not as the result of the int compare == 0.
                 let result = self
-                    .builder
+                    .ll_builder
                     .build_int_compare(
                         IntPredicate::EQ,
                         int_operand,
@@ -756,12 +761,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 // Negate the operand.
                 let operand_type = self.type_store.get_type(operand_expr.type_key);
                 if operand_type.is_float() {
-                    self.builder
+                    self.ll_builder
                         .build_float_neg(ll_operand.into_float_value(), "neg")
                         .unwrap()
                         .as_basic_value_enum()
                 } else {
-                    self.builder
+                    self.ll_builder
                         .build_int_neg(ll_operand.into_int_value(), "neg")
                         .unwrap()
                         .as_basic_value_enum()
@@ -773,7 +778,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let ll_operand = self.gen_expr(operand_expr);
 
                 // Flip the operand's bits.
-                self.builder
+                self.ll_builder
                     .build_not(ll_operand.into_int_value(), "bnot")
                     .unwrap()
                     .as_basic_value_enum()
@@ -812,7 +817,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             // If the left operator was a pointer, then we just did pointer arithmetic and need
             // to return a pointer rather than an int.
             if ll_lhs.is_pointer_value() {
-                self.builder
+                self.ll_builder
                     .build_int_to_ptr(
                         result.into_int_value(),
                         self.ctx.ptr_type(AddressSpace::default()),
@@ -852,7 +857,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             // Casting `str` to a pointer.
             (AType::Str, AType::Pointer(_)) => {
                 let ll_str_ptr = if ll_src_val.is_pointer_value() {
-                    self.builder
+                    self.ll_builder
                         .build_struct_gep(
                             self.ctx.i8_type(),
                             ll_src_val.into_pointer_value(),
@@ -862,7 +867,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                         .unwrap()
                         .as_basic_value_enum()
                 } else {
-                    self.builder
+                    self.ll_builder
                         .build_extract_value(ll_src_val.into_struct_value(), 0, "ptr")
                         .unwrap()
                 };
@@ -881,7 +886,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             // Casting from pointer to numeric type.
             (AType::Pointer(_), dst) if dst.is_numeric() => self
-                .builder
+                .ll_builder
                 .build_ptr_to_int(
                     ll_src_val.into_pointer_value(),
                     ll_dst_type.into_int_type(),
@@ -892,7 +897,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             // Casting from numeric type to pointer.
             (src, AType::Pointer(_)) if src.is_numeric() => self
-                .builder
+                .ll_builder
                 .build_int_to_ptr(
                     ll_src_val.into_int_value(),
                     ll_dst_type.into_pointer_type(),
@@ -903,7 +908,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             // Regular bitcasts.
             (_, _) => self
-                .builder
+                .ll_builder
                 .build_bit_cast(
                     ll_src_val,
                     ll_dst_type,
@@ -934,7 +939,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         match (src_is_float, dst_is_float, dst_is_signed) {
             // Float to float.
             (true, true, _) => self
-                .builder
+                .ll_builder
                 .build_float_cast(
                     ll_src_val.into_float_value(),
                     ll_dst_type.into_float_type(),
@@ -949,7 +954,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     .unwrap()
                     .get_declaration(self.module, &[ll_dst_type, ll_src_val.get_type()])
                     .unwrap();
-                self.builder
+                self.ll_builder
                     .build_call(convert_fn, &[ll_src_val.into()], name.as_str())
                     .unwrap()
                     .try_as_basic_value()
@@ -963,7 +968,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     .unwrap()
                     .get_declaration(self.module, &[ll_dst_type, ll_src_val.get_type()])
                     .unwrap();
-                self.builder
+                self.ll_builder
                     .build_call(convert_fn, &[ll_src_val.into()], name.as_str())
                     .unwrap()
                     .try_as_basic_value()
@@ -976,7 +981,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 if src_size <= dst_size {
                     if src_is_signed {
                         // Sign-extended upcasts.
-                        self.builder
+                        self.ll_builder
                             .build_int_s_extend_or_bit_cast(
                                 ll_src_val.into_int_value(),
                                 ll_dst_type.into_int_type(),
@@ -986,7 +991,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                             .as_basic_value_enum()
                     } else {
                         // Zero-extended upcasts.
-                        self.builder
+                        self.ll_builder
                             .build_int_z_extend_or_bit_cast(
                                 ll_src_val.into_int_value(),
                                 ll_dst_type.into_int_type(),
@@ -997,7 +1002,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     }
                 } else {
                     // Truncating downcasts.
-                    self.builder
+                    self.ll_builder
                         .build_int_truncate_or_bit_cast(
                             ll_src_val.into_int_value(),
                             ll_dst_type.into_int_type(),
@@ -1011,7 +1016,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             // Int to float.
             (false, true, _) => {
                 if src_is_signed {
-                    self.builder
+                    self.ll_builder
                         .build_signed_int_to_float(
                             ll_src_val.into_int_value(),
                             ll_dst_type.into_float_type(),
@@ -1020,7 +1025,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                         .unwrap()
                         .as_basic_value_enum()
                 } else {
-                    self.builder
+                    self.ll_builder
                         .build_unsigned_int_to_float(
                             ll_src_val.into_int_value(),
                             ll_dst_type.into_float_type(),
@@ -1056,11 +1061,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Either short-circuit or compute the right expression based on the
         // left value.
         if op == &Operator::LogicalAnd {
-            self.builder
+            self.ll_builder
                 .build_conditional_branch(ll_lhs, right_block, end_block)
                 .unwrap();
         } else {
-            self.builder
+            self.ll_builder
                 .build_conditional_branch(ll_lhs, end_block, right_block)
                 .unwrap();
         }
@@ -1069,13 +1074,15 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         self.set_current_block(right_block);
         let ll_rhs = self.gen_expr(right_expr);
         let ll_rhs = self.get_int(ll_rhs);
-        self.builder.build_unconditional_branch(end_block).unwrap();
+        self.ll_builder
+            .build_unconditional_branch(end_block)
+            .unwrap();
 
         // Generate code that computes the result of the logical operation
         // based on the results from the two branches.
         self.set_current_block(end_block);
         let ll_phi = self
-            .builder
+            .ll_builder
             .build_phi(self.ctx.bool_type(), "logical_op_result")
             .unwrap();
         ll_phi.add_incoming(&[(&ll_lhs, left_block)]);
@@ -1103,7 +1110,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             };
 
             return self
-                .builder
+                .ll_builder
                 .build_int_compare(
                     predicate,
                     ll_left_variant,
@@ -1117,12 +1124,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let left_type = self.type_store.get_type(left_type_key);
         if left_type == &AType::Str {
             ll_lhs = self
-                .builder
+                .ll_builder
                 .build_extract_value(ll_lhs.into_struct_value(), 0, "left_ptr")
                 .unwrap()
                 .as_basic_value_enum();
             ll_rhs = self
-                .builder
+                .ll_builder
                 .build_extract_value(ll_rhs.into_struct_value(), 0, "right_ptr")
                 .unwrap()
                 .as_basic_value_enum();
@@ -1148,15 +1155,15 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let ll_rhs = self.gen_expr(right_expr).into_int_value();
 
         match op {
-            Operator::BitwiseAnd => self.builder.build_and(ll_lhs, ll_rhs, "band").unwrap(),
-            Operator::BitwiseOr => self.builder.build_or(ll_lhs, ll_rhs, "bor").unwrap(),
-            Operator::BitwiseXor => self.builder.build_xor(ll_lhs, ll_rhs, "bxor").unwrap(),
+            Operator::BitwiseAnd => self.ll_builder.build_and(ll_lhs, ll_rhs, "band").unwrap(),
+            Operator::BitwiseOr => self.ll_builder.build_or(ll_lhs, ll_rhs, "bor").unwrap(),
+            Operator::BitwiseXor => self.ll_builder.build_xor(ll_lhs, ll_rhs, "bxor").unwrap(),
             Operator::BitwiseLeftShift => self
-                .builder
+                .ll_builder
                 .build_left_shift(ll_lhs, ll_rhs, "bls")
                 .unwrap(),
             Operator::BitwiseRightShift => self
-                .builder
+                .ll_builder
                 .build_right_shift(ll_lhs, ll_rhs, false, "brs")
                 .unwrap(),
             _ => panic!("unexpected bitwise operator {op}"),
@@ -1175,32 +1182,32 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         match op {
             Operator::EqualTo => self
-                .builder
+                .ll_builder
                 .build_float_compare(FloatPredicate::OEQ, lhs, rhs, "eq")
                 .unwrap(),
 
             Operator::NotEqualTo => self
-                .builder
+                .ll_builder
                 .build_float_compare(FloatPredicate::ONE, lhs, rhs, "ne")
                 .unwrap(),
 
             Operator::GreaterThan => self
-                .builder
+                .ll_builder
                 .build_float_compare(FloatPredicate::OGT, lhs, rhs, "gt")
                 .unwrap(),
 
             Operator::LessThan => self
-                .builder
+                .ll_builder
                 .build_float_compare(FloatPredicate::OLT, lhs, rhs, "lt")
                 .unwrap(),
 
             Operator::GreaterThanOrEqual => self
-                .builder
+                .ll_builder
                 .build_float_compare(FloatPredicate::OGE, lhs, rhs, "ge")
                 .unwrap(),
 
             Operator::LessThanOrEqual => self
-                .builder
+                .ll_builder
                 .build_float_compare(FloatPredicate::OLE, lhs, rhs, "le")
                 .unwrap(),
 
@@ -1221,12 +1228,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         match op {
             Operator::EqualTo => self
-                .builder
+                .ll_builder
                 .build_int_compare(IntPredicate::EQ, lhs, rhs, "eq")
                 .unwrap(),
 
             Operator::NotEqualTo => self
-                .builder
+                .ll_builder
                 .build_int_compare(IntPredicate::NE, lhs, rhs, "ne")
                 .unwrap(),
 
@@ -1235,7 +1242,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     true => IntPredicate::SGT,
                     false => IntPredicate::UGT,
                 };
-                self.builder
+                self.ll_builder
                     .build_int_compare(ll_op, lhs, rhs, "gt")
                     .unwrap()
             }
@@ -1245,7 +1252,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     true => IntPredicate::SLT,
                     false => IntPredicate::ULT,
                 };
-                self.builder
+                self.ll_builder
                     .build_int_compare(ll_op, lhs, rhs, "lt")
                     .unwrap()
             }
@@ -1255,7 +1262,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     true => IntPredicate::SGE,
                     false => IntPredicate::UGE,
                 };
-                self.builder
+                self.ll_builder
                     .build_int_compare(ll_op, lhs, rhs, "ge")
                     .unwrap()
             }
@@ -1265,7 +1272,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     true => IntPredicate::SLE,
                     false => IntPredicate::ULE,
                 };
-                self.builder
+                self.ll_builder
                     .build_int_compare(ll_op, lhs, rhs, "le")
                     .unwrap()
             }
@@ -1307,26 +1314,35 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let ll_rhs = self.get_int(ll_rhs);
 
         match op {
-            Operator::Add => self.builder.build_int_add(ll_lhs, ll_rhs, "sum").unwrap(),
-            Operator::Subtract => self.builder.build_int_sub(ll_lhs, ll_rhs, "diff").unwrap(),
-            Operator::Multiply => self.builder.build_int_mul(ll_lhs, ll_rhs, "prod").unwrap(),
+            Operator::Add => self
+                .ll_builder
+                .build_int_add(ll_lhs, ll_rhs, "sum")
+                .unwrap(),
+            Operator::Subtract => self
+                .ll_builder
+                .build_int_sub(ll_lhs, ll_rhs, "diff")
+                .unwrap(),
+            Operator::Multiply => self
+                .ll_builder
+                .build_int_mul(ll_lhs, ll_rhs, "prod")
+                .unwrap(),
             Operator::Divide => match signed {
                 true => self
-                    .builder
+                    .ll_builder
                     .build_int_signed_div(ll_lhs, ll_rhs, "quot")
                     .unwrap(),
                 false => self
-                    .builder
+                    .ll_builder
                     .build_int_unsigned_div(ll_lhs, ll_rhs, "quot")
                     .unwrap(),
             },
             Operator::Modulo => match signed {
                 true => self
-                    .builder
+                    .ll_builder
                     .build_int_signed_rem(ll_lhs, ll_rhs, "rem")
                     .unwrap(),
                 false => self
-                    .builder
+                    .ll_builder
                     .build_int_unsigned_rem(ll_lhs, ll_rhs, "rem")
                     .unwrap(),
             },
@@ -1342,20 +1358,26 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         ll_rhs: FloatValue<'ctx>,
     ) -> FloatValue<'ctx> {
         match op {
-            Operator::Add => self.builder.build_float_add(ll_lhs, ll_rhs, "sum").unwrap(),
+            Operator::Add => self
+                .ll_builder
+                .build_float_add(ll_lhs, ll_rhs, "sum")
+                .unwrap(),
             Operator::Subtract => self
-                .builder
+                .ll_builder
                 .build_float_sub(ll_lhs, ll_rhs, "diff")
                 .unwrap(),
             Operator::Multiply => self
-                .builder
+                .ll_builder
                 .build_float_mul(ll_lhs, ll_rhs, "prod")
                 .unwrap(),
             Operator::Divide => self
-                .builder
+                .ll_builder
                 .build_float_div(ll_lhs, ll_rhs, "quot")
                 .unwrap(),
-            Operator::Modulo => self.builder.build_float_rem(ll_lhs, ll_rhs, "rem").unwrap(),
+            Operator::Modulo => self
+                .ll_builder
+                .build_float_rem(ll_lhs, ll_rhs, "rem")
+                .unwrap(),
             other => panic!("unexpected arithmetic operator {other}"),
         }
     }

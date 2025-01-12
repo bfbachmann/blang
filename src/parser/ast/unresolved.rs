@@ -13,7 +13,7 @@ pub struct UnresolvedType {
     pub maybe_mod_name: Option<String>,
     pub name: String,
     pub params: Vec<Type>,
-    span: Span,
+    pub span: Span,
 }
 
 impl PartialEq for UnresolvedType {

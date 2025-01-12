@@ -24,7 +24,7 @@ use crate::{format_code, locatable_impl, util};
 pub struct AClosure {
     pub statements: Vec<AStatement>,
     pub ret_type_key: Option<TypeKey>,
-    span: Span,
+    pub span: Span,
 }
 
 locatable_impl!(AClosure);
@@ -109,8 +109,8 @@ impl AClosure {
             // as containing such statements.
             let has_terminator = matches!(
                 a_statement,
-                AStatement::Break
-                    | AStatement::Continue
+                AStatement::Break(_)
+                    | AStatement::Continue(_)
                     | AStatement::Return(_)
                     | AStatement::Yield(_)
             );
@@ -125,8 +125,8 @@ impl AClosure {
                     format_code!(
                         "statements following {} will never be executed",
                         match a_statement {
-                            AStatement::Continue => "continue",
-                            AStatement::Break => "break",
+                            AStatement::Continue(_) => "continue",
+                            AStatement::Break(_) => "break",
                             AStatement::Yield(_) => "yield",
                             AStatement::Return(_) => "return",
                             _ => unreachable!(),
@@ -575,8 +575,8 @@ fn search_statement(statement: &AStatement, is_match: &impl Fn(&AStatement) -> b
         AStatement::Yield(yld) => search_expr_for_statement(&yld.value, is_match),
 
         // These statements don't contain other statements.
-        AStatement::Continue
-        | AStatement::Break
+        AStatement::Continue(_)
+        | AStatement::Break(_)
         | AStatement::FunctionDeclaration(_)
         | AStatement::StructTypeDeclaration(_)
         | AStatement::EnumTypeDeclaration(_)
@@ -685,8 +685,8 @@ fn search_statement_for_expr(statement: &AStatement, is_match: &impl Fn(&AExpr) 
 
         AStatement::Yield(yld) => search_expr(&yld.value, is_match),
 
-        AStatement::Break
-        | AStatement::Continue
+        AStatement::Break(_)
+        | AStatement::Continue(_)
         | AStatement::FunctionDeclaration(_)
         | AStatement::StructTypeDeclaration(_)
         | AStatement::EnumTypeDeclaration(_)
@@ -699,7 +699,7 @@ fn search_statement_for_expr(statement: &AStatement, is_match: &impl Fn(&AExpr) 
 /// Returns true if the closure contains a break at any level.
 fn closure_has_any_break(closure: &AClosure) -> bool {
     search_closure(closure, &|statement| match statement {
-        AStatement::Break => true,
+        AStatement::Break(_) => true,
         // Loops with conditions implicitly contain break statements because
         // the loop will be broken if the condition is ever false.
         AStatement::Loop(loop_) => loop_.maybe_cond.is_some(),

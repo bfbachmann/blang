@@ -8,7 +8,7 @@ use crate::parser::ast::closure::Closure;
 use crate::parser::ast::cond::Conditional;
 use crate::parser::ast::cont::Continue;
 use crate::parser::ast::expr::Expression;
-use crate::parser::ast::ext::Extern;
+use crate::parser::ast::ext::ExternFn;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::func_call::FnCall;
 use crate::parser::ast::r#break::Break;
@@ -45,7 +45,7 @@ pub enum Statement {
     Yield(Yield),
     StructDeclaration(StructType),
     EnumDeclaration(EnumType),
-    ExternFn(Extern),
+    ExternFn(ExternFn),
     Const(Const),
     Impl(Impl),
     SpecDeclaration(SpecType),
@@ -258,7 +258,7 @@ impl Statement {
             // If the next tokens are `extern` or `pub extern`, it's an
             // external function declaration.
             (TokenKind::Extern, _) | (TokenKind::Pub, TokenKind::Extern) => {
-                let ext = Extern::from(tokens)?;
+                let ext = ExternFn::from(tokens)?;
                 Ok(Statement::ExternFn(ext))
             }
 

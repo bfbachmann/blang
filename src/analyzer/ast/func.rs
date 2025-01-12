@@ -1,8 +1,3 @@
-use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::fmt::Formatter;
-use std::hash::{Hash, Hasher};
-
 use crate::analyzer::ast::arg::AArg;
 use crate::analyzer::ast::closure::{check_closure_returns, AClosure};
 use crate::analyzer::ast::params::AParams;
@@ -11,9 +6,14 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
 use crate::analyzer::type_store::TypeKey;
+use crate::lexer::pos::Span;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::func_sig::FunctionSignature;
 use crate::util;
+use std::collections::{HashMap, HashSet};
+use std::fmt;
+use std::fmt::Formatter;
+use std::hash::{Hash, Hasher};
 
 /// Represents a semantically valid function signature.
 #[derive(Debug, Clone, Eq)]
@@ -268,12 +268,10 @@ impl AFnSig {
                 for (this_param, other_param) in
                     these_params.params.iter().zip(other_params.params.iter())
                 {
-                    let this_param_type = ctx
-                        .get_type(this_param.generic_type_key)
-                        .to_generic_type();
-                    let other_param_type = ctx
-                        .get_type(other_param.generic_type_key)
-                        .to_generic_type();
+                    let this_param_type =
+                        ctx.get_type(this_param.generic_type_key).to_generic_type();
+                    let other_param_type =
+                        ctx.get_type(other_param.generic_type_key).to_generic_type();
 
                     if this_param_type.spec_type_keys.len() != other_param_type.spec_type_keys.len()
                     {
@@ -432,6 +430,7 @@ pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) {
 pub struct AFn {
     pub signature: AFnSig,
     pub body: AClosure,
+    pub span: Span,
 }
 
 impl fmt::Display for AFn {
@@ -497,6 +496,7 @@ impl AFn {
         AFn {
             signature,
             body: a_closure,
+            span: func.span,
         }
     }
 

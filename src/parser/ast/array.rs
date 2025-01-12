@@ -18,7 +18,7 @@ use crate::parser::module::Module;
 pub struct ArrayType {
     pub maybe_element_type: Option<Type>,
     pub length_expr: Expression,
-    span: Span,
+    pub span: Span,
 }
 
 locatable_impl!(ArrayType);

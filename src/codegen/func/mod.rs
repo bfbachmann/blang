@@ -1,12 +1,3 @@
-use inkwell::attributes::{Attribute, AttributeLoc};
-use inkwell::basic_block::BasicBlock;
-use inkwell::builder::Builder;
-use inkwell::context::Context;
-use inkwell::module::Module;
-use inkwell::types::{AnyType, AnyTypeEnum, BasicTypeEnum};
-use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
-use std::collections::{HashMap, HashSet};
-
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::r#const::AConst;
@@ -17,10 +8,21 @@ use crate::codegen::context::{
 };
 use crate::codegen::convert::TypeConverter;
 use crate::codegen::error::CodeGenResult;
+use crate::lexer::pos::Locatable;
+use inkwell::attributes::{Attribute, AttributeLoc};
+use inkwell::basic_block::BasicBlock;
+use inkwell::builder::Builder;
+use inkwell::context::Context;
+use inkwell::debug_info::{DICompileUnit, DebugInfoBuilder};
+use inkwell::module::Module;
+use inkwell::types::{AnyType, AnyTypeEnum, BasicTypeEnum};
+use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
+use std::collections::{HashMap, HashSet};
 
 mod closure;
 mod cond;
 mod r#const;
+pub mod debug;
 mod expr;
 mod r#loop;
 mod statement;
@@ -29,7 +31,8 @@ mod var;
 /// Uses LLVM to generate code for functions.
 pub struct FnCodeGen<'a, 'ctx> {
     ctx: &'ctx Context,
-    builder: &'a Builder<'ctx>,
+    ll_builder: &'a Builder<'ctx>,
+    di_ctx: Option<&'a mut DICtx<'ctx>>,
     module: &'a Module<'ctx>,
     type_store: &'a TypeStore,
     type_converter: &'a mut TypeConverter<'ctx>,
@@ -39,9 +42,15 @@ pub struct FnCodeGen<'a, 'ctx> {
     /// Stores constant values that are declared within a function.
     local_consts: HashMap<String, AConst>,
     vars: HashMap<String, PointerValue<'ctx>>,
-    fn_value: Option<FunctionValue<'ctx>>,
+    ll_fn: Option<FunctionValue<'ctx>>,
     stack: Vec<CompilationContext<'ctx>>,
     cur_block: Option<BasicBlock<'ctx>>,
+}
+
+/// The debug info context.
+pub struct DICtx<'ctx> {
+    pub di_builder: DebugInfoBuilder<'ctx>,
+    pub di_cu: DICompileUnit<'ctx>,
 }
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
@@ -49,6 +58,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     pub fn generate(
         context: &'ctx Context,
         builder: &'a Builder<'ctx>,
+        di_ctx: Option<&'a mut DICtx<'ctx>>,
         module: &'a Module<'ctx>,
         type_store: &'a TypeStore,
         type_converter: &'a mut TypeConverter<'ctx>,
@@ -58,7 +68,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     ) -> CodeGenResult<FunctionValue<'ctx>> {
         let mut fn_compiler = FnCodeGen {
             ctx: context,
-            builder,
+            ll_builder: builder,
+            di_ctx,
             module,
             type_store,
             type_converter,
@@ -66,7 +77,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             mod_consts,
             local_consts: Default::default(),
             vars: HashMap::new(),
-            fn_value: None,
+            ll_fn: None,
             stack: vec![],
             cur_block: None,
         };
@@ -76,7 +87,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Creates a new basic block for this function and returns it.
     fn append_block(&mut self, name: &str) -> BasicBlock<'ctx> {
-        self.ctx.append_basic_block(self.fn_value.unwrap(), name)
+        self.ctx.append_basic_block(self.ll_fn.unwrap(), name)
     }
 
     /// Positions at the end of `block`. Instructions created after this call will be placed at the
@@ -84,7 +95,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     fn set_current_block(&mut self, block: BasicBlock<'ctx>) -> Option<BasicBlock<'ctx>> {
         let prev = self.cur_block;
         self.cur_block = Some(block);
-        self.builder.position_at_end(block);
+        self.ll_builder.position_at_end(block);
         prev
     }
 
@@ -272,12 +283,16 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // Retrieve the function and create a new "entry" block at the start of the function
         // body.
-        let fn_val = self
+        let ll_fn = self
             .module
             .get_function(mangled_name.as_str())
             .expect(format!("function `{}` should exist", mangled_name).as_str());
 
-        self.fn_value = Some(fn_val);
+        self.ll_fn = Some(ll_fn);
+
+        // Attach debug info.
+        self.set_di_subprogram(func, &mangled_name);
+        self.set_di_location(func.body.start_pos());
 
         // Start building from the beginning of the entry block.
         let entry = self.append_block("entry");
@@ -287,22 +302,24 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Skip the first function argument if it is a special argument that holds the pointer to
         // the location to which the return value will be written. We'll know that this is the case
         // if the LLVM function value has one extra param (argument).
-        let ll_fn_params = if fn_val.count_params() == (func.signature.args.len() + 1) as u32 {
-            let mut params = fn_val.get_params();
-            params.remove(0);
-            params
-        } else {
-            fn_val.get_params()
-        };
+        let (ll_fn_params, mut arg_index) =
+            if ll_fn.count_params() == (func.signature.args.len() + 1) as u32 {
+                let mut params = ll_fn.get_params();
+                params.remove(0);
+                (params, 1)
+            } else {
+                (ll_fn.get_params(), 0)
+            };
 
         for (ll_arg_val, arg) in ll_fn_params.into_iter().zip(func.signature.args.iter()) {
+            // Insert debug info about the arg.
+            self.gen_di_fn_param(arg, arg_index);
+            arg_index += 1;
+
             let arg_type = self.type_store.get_type(arg.type_key);
 
-            // Structs and tuples are passed as pointers and don't need to be copied to the callee
-            // stack because they point to memory on the caller's stack that is safe to modify. In
-            // other words, when the caller wishes to pass a struct by value, the caller will
-            // allocate new space on its stack and store a copy of the struct there, and will then
-            // pass a pointer to that space to the callee.
+            // Composite types are passed as pointers and don't need to be copied to the callee
+            // stack because they point to memory on the caller's stack that is safe to modify.
             if arg_type.is_composite() {
                 self.vars
                     .insert(arg.name.to_string(), ll_arg_val.into_pointer_value());
@@ -321,11 +338,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // instruction), we have to insert one.
         let ctx = self.pop_ctx().to_fn();
         if !ctx.guarantees_return {
-            self.builder.build_return(None).unwrap();
+            self.ll_builder.build_return(None).unwrap();
         }
 
-        // Verify and optimize the function.
-        Ok(fn_val)
+        Ok(ll_fn)
     }
 
     /// Copies the value `ll_src_val` of type `typ` to the address pointed to by `ll_dst_ptr`.
@@ -338,7 +354,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // If the source value is not a pointer, we don't have to copy data in memory, so we just
         // do a regular store.
         if !ll_src_val.is_pointer_value() {
-            self.builder.build_store(ll_dst_ptr, ll_src_val).unwrap();
+            self.ll_builder.build_store(ll_dst_ptr, ll_src_val).unwrap();
             return;
         }
 
@@ -350,7 +366,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             // TODO: I'm not sure about the alignment here at all.
             let ll_align = self.type_converter.align_of_type(type_key);
 
-            self.builder
+            self.ll_builder
                 .build_memcpy(
                     ll_dst_ptr,
                     ll_align,
@@ -361,7 +377,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 .unwrap();
         } else {
             // Store the expression value to the pointer address.
-            self.builder.build_store(ll_dst_ptr, ll_src_val).unwrap();
+            self.ll_builder.build_store(ll_dst_ptr, ll_src_val).unwrap();
         }
     }
 
@@ -375,19 +391,19 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Allocates space on the stack in the current function's entry block to store
     /// a value of the given LLVM type.
     fn build_entry_alloc(&mut self, name: &str, ll_typ: BasicTypeEnum<'ctx>) -> PointerValue<'ctx> {
-        let entry = self.fn_value.unwrap().get_first_basic_block().unwrap();
+        let entry = self.ll_fn.unwrap().get_first_basic_block().unwrap();
 
         // Switch to the beginning of the entry block if we're not already there.
         let prev_block = match entry.get_first_instruction() {
             Some(first_instr) => {
-                self.builder.position_before(&first_instr);
+                self.ll_builder.position_before(&first_instr);
                 self.cur_block
             }
             None => self.set_current_block(entry),
         };
 
         let ll_ptr = self
-            .builder
+            .ll_builder
             .build_alloca(ll_typ, format!("{}_ptr", name).as_str())
             .unwrap();
 
@@ -412,7 +428,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         if typ.is_composite() {
             ll_ptr.as_basic_value_enum()
         } else {
-            self.builder
+            self.ll_builder
                 .build_load(self.type_converter.get_basic_type(type_key), ll_ptr, name)
                 .unwrap()
         }
@@ -422,7 +438,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// be a pointer to a bool.
     fn get_bool(&self, ll_val: BasicValueEnum<'ctx>) -> IntValue<'ctx> {
         if ll_val.is_pointer_value() {
-            self.builder
+            self.ll_builder
                 .build_ptr_to_int(
                     ll_val.into_pointer_value(),
                     self.ctx.bool_type(),
@@ -438,7 +454,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// a pointer to an int.
     fn get_int(&self, ll_val: BasicValueEnum<'ctx>) -> IntValue<'ctx> {
         if ll_val.is_pointer_value() {
-            self.builder
+            self.ll_builder
                 .build_ptr_to_int(
                     ll_val.into_pointer_value(),
                     self.ctx.i64_type(),
@@ -471,7 +487,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // number from the first field in the LLVM struct.
         if ll_enum_value.is_pointer_value() {
             let ll_variant_ptr = self
-                .builder
+                .ll_builder
                 .build_struct_gep(
                     ll_enum_type,
                     ll_enum_value.into_pointer_value(),
@@ -479,12 +495,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     format!("{}.variant_ptr", enum_type.name()).as_str(),
                 )
                 .unwrap();
-            self.builder
+            self.ll_builder
                 .build_load(ll_variant_num_type, ll_variant_ptr, "variant_number")
                 .unwrap()
                 .into_int_value()
         } else {
-            self.builder
+            self.ll_builder
                 .build_extract_value(ll_enum_value.into_struct_value(), 0, "variant_number")
                 .unwrap()
                 .into_int_value()
@@ -516,7 +532,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         match ll_enum_value.is_pointer_value() {
             true => {
                 let ll_inner_val_ptr = self
-                    .builder
+                    .ll_builder
                     .build_struct_gep(
                         ll_variant_type,
                         ll_enum_value.into_pointer_value(),
@@ -536,7 +552,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     !as_ptr,
                     "cannot load enum inner value as pointer from non-pointer value"
                 );
-                self.builder
+                self.ll_builder
                     .build_extract_value(ll_enum_value.into_struct_value(), 1, "enum_inner_val")
                     .unwrap()
             }

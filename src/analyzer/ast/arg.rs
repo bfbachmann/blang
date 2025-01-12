@@ -4,6 +4,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
+use crate::lexer::pos::Span;
 use crate::parser::ast::arg::Argument;
 
 /// Represents a semantically valid function argument.
@@ -12,6 +13,7 @@ pub struct AArg {
     pub name: String,
     pub type_key: TypeKey,
     pub is_mut: bool,
+    pub span: Span,
 }
 
 impl fmt::Display for AArg {
@@ -39,6 +41,7 @@ impl AArg {
             name: arg.name.to_string(),
             type_key: ctx.resolve_type(&arg.typ),
             is_mut: arg.is_mut,
+            span: arg.span.clone(),
         }
     }
 

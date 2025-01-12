@@ -16,7 +16,7 @@ pub struct PointerType {
     pub pointee_type: Type,
     /// Indicates whether the value being pointed to can be mutated via the pointer.
     pub is_mut: bool,
-    span: Span,
+    pub span: Span,
 }
 
 impl Display for PointerType {

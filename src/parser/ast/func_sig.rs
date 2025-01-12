@@ -20,7 +20,7 @@ pub struct FunctionSignature {
     pub args: Vec<Argument>,
     pub maybe_ret_type: Option<Type>,
     pub params: Option<Params>,
-    span: Span,
+    pub span: Span,
 }
 
 impl Hash for FunctionSignature {

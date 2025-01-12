@@ -17,7 +17,7 @@ pub struct Param {
     pub name: String,
     /// The specs that this parameter requires.
     pub required_specs: Vec<Symbol>,
-    span: Span,
+    pub span: Span,
 }
 
 impl Hash for Param {
@@ -91,7 +91,7 @@ locatable_impl!(Param);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Params {
     pub params: Vec<Param>,
-    span: Span,
+    pub span: Span,
 }
 
 impl Hash for Params {

@@ -6,6 +6,7 @@ use crate::analyzer::ast::r#match::{AMatch, APattern};
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::codegen::error::CodeGenResult;
+use crate::lexer::pos::Locatable;
 use crate::parser::ast::op::Operator;
 
 use super::FnCodeGen;
@@ -20,6 +21,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let mut else_branch_exists = false;
 
         for (i, branch) in cond.branches.iter().enumerate() {
+            self.set_di_location(branch.start_pos());
+
             // If there is a branch condition, it means we are on an `if` or `else if` branch.
             // Otherwise, it means we're on an `else` branch.
             if let Some(expr) = &branch.cond {
@@ -42,7 +45,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 // Branch from the current block based on the value of the conditional expression.
                 let ll_expr_val = self.gen_expr(expr);
                 let ll_cond_val = self.get_bool(ll_expr_val);
-                self.builder
+                self.ll_builder
                     .build_conditional_branch(ll_cond_val, then_block, else_block)
                     .unwrap();
 
@@ -68,7 +71,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     if end_block.is_none() {
                         end_block = Some(self.append_block("cond_end"));
                     }
-                    self.builder
+                    self.ll_builder
                         .build_unconditional_branch(end_block.unwrap())
                         .unwrap();
                 }
@@ -91,7 +94,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     if end_block.is_none() {
                         end_block = Some(self.append_block("cond_end"));
                     }
-                    self.builder
+                    self.ll_builder
                         .build_unconditional_branch(end_block.unwrap())
                         .unwrap();
                 }
@@ -167,14 +170,14 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     // the else block.
                     let ll_cond_block = self.append_block(format!("match_cond_{i}_if").as_str());
                     let ll_else_block = self.append_block(format!("match_case_{}", i + 1).as_str());
-                    self.builder
+                    self.ll_builder
                         .build_conditional_branch(ll_result, ll_cond_block, ll_else_block)
                         .unwrap();
 
                     // Generate code for the condition block.
                     self.set_current_block(ll_cond_block);
                     let ll_cond_value = self.gen_expr(cond);
-                    self.builder
+                    self.ll_builder
                         .build_conditional_branch(
                             ll_cond_value.into_int_value(),
                             ll_then_block,
@@ -189,7 +192,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 // block
                 (Some(ll_result), None) => {
                     let ll_else_block = self.append_block(format!("match_case_{}", i + 1).as_str());
-                    self.builder
+                    self.ll_builder
                         .build_conditional_branch(ll_result, ll_then_block, ll_else_block)
                         .unwrap();
                     Some(ll_else_block)
@@ -201,7 +204,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
                     // Generate code for the condition.
                     let ll_cond_value = self.gen_expr(cond);
-                    self.builder
+                    self.ll_builder
                         .build_conditional_branch(
                             ll_cond_value.into_int_value(),
                             ll_then_block,
@@ -214,7 +217,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
                 // Just branch directly to the then block.
                 (None, None) => {
-                    self.builder
+                    self.ll_builder
                         .build_unconditional_branch(ll_then_block)
                         .unwrap();
                     None
@@ -231,7 +234,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     None => Some(self.append_block("match_end")),
                     some => some,
                 };
-                self.builder
+                self.ll_builder
                     .build_unconditional_branch(ll_match_end_block.unwrap())
                     .unwrap();
             }
@@ -287,7 +290,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 // Generate remaining comparison expressions.
                 while let Some(expr) = exprs_iter.next() {
                     let ll_next_pattern_block = self.append_block("next_pattern");
-                    self.builder
+                    self.ll_builder
                         .build_conditional_branch(
                             ll_cmp_result,
                             ll_end_block,
@@ -309,12 +312,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
                 // Branch to the pattern end block and build a phi node that gets results from
                 // the expression comparison blocks.
-                self.builder
+                self.ll_builder
                     .build_unconditional_branch(ll_end_block)
                     .unwrap();
                 self.set_current_block(ll_end_block);
                 let ll_phi_val = self
-                    .builder
+                    .ll_builder
                     .build_phi(self.ctx.bool_type(), "pattern_phi")
                     .unwrap();
                 for (ll_phi_arg, ll_block) in ll_phi_args {
@@ -365,24 +368,24 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                             .iter()
                             .map(|num| (ll_num_type.const_int(*num as u64, false), ll_match_block))
                             .collect();
-                        self.builder
+                        self.ll_builder
                             .build_switch(ll_target_variant, ll_no_match_block, &ll_switch_cases)
                             .unwrap();
 
                         self.set_current_block(ll_match_block);
-                        self.builder
+                        self.ll_builder
                             .build_unconditional_branch(ll_end_block)
                             .unwrap();
 
                         self.set_current_block(ll_no_match_block);
-                        self.builder
+                        self.ll_builder
                             .build_unconditional_branch(ll_end_block)
                             .unwrap();
 
                         self.set_current_block(ll_end_block);
                         let ll_bool_type = self.ctx.bool_type();
                         let ll_phi = self
-                            .builder
+                            .ll_builder
                             .build_phi(ll_bool_type, "found_variant_match")
                             .unwrap();
 

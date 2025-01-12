@@ -19,7 +19,7 @@ pub struct AMemberAccess {
     pub member_name: String,
     pub member_type_key: TypeKey,
     pub is_method: bool,
-    span: Span,
+    pub span: Span,
 }
 
 locatable_impl!(AMemberAccess);
