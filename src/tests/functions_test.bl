@@ -7,7 +7,7 @@ extern "strtol" fn atoi(s: *u8, end: *mut *u8, base: int) -> int
 
 fn cumulative_sum(n: i64) -> i64 {
     let mut result: i64 = 0
-    for let mut i = n, i > 0, i -= 1 {
+    for let mut i = n; i > 0; i -= 1 {
         result = result + i
     }
 

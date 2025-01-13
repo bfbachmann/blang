@@ -32,7 +32,7 @@ impl Hash for Loop {
 impl Loop {
     /// Parses a loop. Expects token sequences of the form
     ///
-    ///     for <init>, <cond>, <update> <closure>
+    ///     for <init>; <cond>; <update> <closure>
     ///     while <cond> <closure>
     ///     loop <closure>
     ///
@@ -115,25 +115,25 @@ fn parse_for(tokens: &mut Stream<Token>) -> ParseResult<Loop> {
 
     // If this is a for loop, parse the init, condition, and update segments before the loop body.
     // Parse the optional initialization statement.
-    let maybe_init = if Module::next_token_is(tokens, &TokenKind::Comma) {
+    let maybe_init = if Module::next_token_is(tokens, &TokenKind::SemiColon) {
         None
     } else {
         Some(Statement::from(tokens)?)
     };
 
-    Module::parse_expecting(tokens, TokenKind::Comma)?;
+    Module::parse_expecting(tokens, TokenKind::SemiColon)?;
 
     // Parse the optional condition expression.
-    let maybe_cond = if Module::next_token_is(tokens, &TokenKind::Comma) {
+    let maybe_cond = if Module::next_token_is(tokens, &TokenKind::SemiColon) {
         None
     } else {
         Some(Expression::from(tokens)?)
     };
 
-    Module::parse_expecting(tokens, TokenKind::Comma)?;
+    Module::parse_expecting(tokens, TokenKind::SemiColon)?;
 
     // Parse the optional update statement.
-    let maybe_update = if Module::next_token_is(tokens, &TokenKind::Comma) {
+    let maybe_update = if Module::next_token_is(tokens, &TokenKind::SemiColon) {
         None
     } else {
         Some(Statement::from(tokens)?)

@@ -65,20 +65,20 @@ fn main() {
     {
         let mut allocator = LibcAllocator.new().dynamic()
         let mut list = List[uint].new(&mut allocator)
-        for let mut i: uint = 0, i < 10, i += 1 {
+        for let mut i: uint = 0; i < 10; i += 1 {
             list.push(i)
             assert(list.len() == i + 1, "list has wrong len after push()")
         }
 
         let mut sum: uint = 0
-        for let mut i: uint = 0, i < 10, i += 1 {
+        for let mut i: uint = 0; i < 10; i += 1 {
             let value = list.get(i)
             assert(value == i, "wrong value returned by get()")
             sum += value
         }
         assert(sum == 45, "expected 45")
 
-        for let mut i: uint = 10, !list.is_empty(), i -= 1 {
+        for let mut i: uint = 10; !list.is_empty(); i -= 1 {
             assert(list.len() == i, "list has wrong len after remove()")
             list.pop()
         }

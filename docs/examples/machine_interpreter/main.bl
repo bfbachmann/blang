@@ -40,7 +40,7 @@ fn main() {
     // For debugging purposes, sum the machine memory and use it as
     // the exit code.
     let mut sum = 0
-    for let mut i = 0uint, i < 10, i += 1 {
+    for let mut i = 0uint; i < 10; i += 1 {
         sum += machine.memory_at(i)
     }
 

@@ -53,8 +53,8 @@ impl Machine {
     /// Executes the program associated with the machine and returns a result
     /// indicating whether execution succeeded.
     pub fn exec_prog(*mut self) -> ExecResult {
-        for self.pc = 0,
-            self.pc < self.instructions.len(),
+        for self.pc = 0;
+            self.pc < self.instructions.len();
             self.pc += 1
         {
             let inst = self.instructions.get(self.pc)

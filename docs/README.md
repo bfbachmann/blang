@@ -362,7 +362,7 @@ fn main() {
     let mut a = [1, 2, 3]
 
     // Double all elements in the array.
-    for let mut i = 0uint, i < 3, i = i + 1 {
+    for let mut i = 0uint; i < 3; i = i + 1 {
         a.(i) *= 2
     }
 }

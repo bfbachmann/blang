@@ -534,6 +534,7 @@ fn analyze(
 fn compile(src_path: &str, quiet: bool, config: CodeGenConfig) -> Result<(), String> {
     // Read and analyze the program.
     let start_time = Instant::now();
+    let output_path = config.output_path.to_str().unwrap().to_string();
     let prog_analysis = analyze(src_path, None, config)?;
     let prog = mono_prog(prog_analysis);
 
@@ -546,8 +547,9 @@ fn compile(src_path: &str, quiet: bool, config: CodeGenConfig) -> Result<(), Str
     if !quiet {
         let total_duration = Instant::now() - start_time;
         println!(
-            "Compiled {} in {}.\n",
+            "Compiled {} ({}) in {}.\n",
             src_path,
+            output_path,
             format_duration(total_duration)
         );
     }

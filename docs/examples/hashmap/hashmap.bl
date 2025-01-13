@@ -53,7 +53,7 @@ impl HashMap {
         }
 
         let len = self.table.len()
-        for let mut index = self.hash_key(&k) % len, , index = (index + 1) % len {
+        for let mut index = self.hash_key(&k) % len;; index = (index + 1) % len {
             let entry_ptr = self.table.get(index)
 
             // If the entry pointer is `null`, it means that the entry is either empty
@@ -76,7 +76,7 @@ impl HashMap {
     pub fn get(*mut self, k: *K) -> *V {
         let len = self.table.len()
         let hash = self.hash_key(k)
-        for let mut count: uint = 0, count < len, count += 1 {
+        for let mut count: uint = 0; count < len; count += 1 {
             let index = (hash + count) % len
 
             // If the entry is empty, it means the key can't be in the map.
@@ -97,7 +97,7 @@ impl HashMap {
     pub fn delete(*mut self, k: *K) {
         let len = self.table.len()
         let hash = self.hash_key(k)
-        for let mut count: uint = 0, count < len, count += 1 {
+        for let mut count: uint = 0; count < len; count += 1 {
             let index = (hash + count) % len
 
             // If the entry is empty, it means the key can't be in the map.
@@ -139,7 +139,7 @@ impl HashMap {
         let hash = self.hash_key(k)
         let len = self.table.len()
 
-        for let mut count: uint = 0, count < len, count += 1 {
+        for let mut count: uint = 0; count < len; count += 1 {
             let index = (hash + (count * count + count) / 2) % len
 
             if find_occupied {
@@ -185,7 +185,7 @@ impl HashMap {
         )
 
         // Re-hash all the keys in the table and copy mappings into the new table.
-        for let mut i: uint = 0, i < old_len, i += 1 {
+        for let mut i: uint = 0; i < old_len; i += 1 {
             let entry_ptr = old_table.get(i)
             if entry_ptr != null {
                 let new_index = self.get_entry_index(&entry_ptr.key, false)

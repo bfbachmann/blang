@@ -24,7 +24,7 @@ impl Node {
 
     /// Returns the last node in this list.
     fn tail(*mut self) -> *mut Node {
-        for let mut head = self, head.has_next(), head = head.next {}
+        for let mut head = self; head.has_next(); head = head.next {}
         return head
     }
 
@@ -67,7 +67,7 @@ impl Node {
     /// Returns the node at `index` if it is in-bounds. Otherwise,
     /// returns null.
     fn node_at(*mut self, mut index: uint) -> *mut Node {
-        for let mut head = self, index > 0, index -= 1 {
+        for let mut head = self; index > 0; index -= 1 {
             if head == null {
                 return null
             }
@@ -84,8 +84,8 @@ impl Node {
     fn index_of(*self, target: int) -> {bool, uint} {
         let mut i: uint = 0
         for
-            let mut head = self,
-            head != null,
+            let mut head = self;
+            head != null;
             head = head.next
         {
             if head.value == target {
@@ -117,7 +117,7 @@ impl Node {
 fn main() {
     // Create a linked list containing values 9 down to 0.
     let mut head: *mut Node = null
-    for let mut i = 0, i < 10, i += 1 {
+    for let mut i = 0; i < 10; i += 1 {
         head = Node.new(i, head)
     }
 
@@ -141,7 +141,7 @@ fn main() {
     assert(head.remove(4).value == 20, "removed node 4 is wrong\0")
 
     // Make sure all values are in the right place.
-    for let mut i = 0, i < 10, i += 1 {
+    for let mut i = 0; i < 10; i += 1 {
         assert(head.node_at(i as uint).value == 9 - i, "wrong value left in list\0")
     }
 

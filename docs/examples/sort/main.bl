@@ -8,7 +8,7 @@ fn main() {
     // Created a list and populate it.
     let mut allocator = LibcAllocator.new().dynamic()
     let mut list = List[Value].new(&mut allocator)
-    for let mut i = 10, i >= 0, i -= 1 {
+    for let mut i = 10; i >= 0; i -= 1 {
         list.push(Value{v: i})
     }
 
@@ -41,7 +41,7 @@ impl Value: Order {
 
 /// Returns true only if the list is sorted in ascending order.
 fn is_sorted[T: Order](list: *List[T]) -> bool {
-    for let mut i = 0uint, i < list.len() - 1, i += 1 {
+    for let mut i = 0uint; i < list.len() - 1; i += 1 {
         let ival = list.get(i)
         let jval = list.get(i + 1)
         if ival.compare(&jval) ~~ Ord::Greater {
@@ -54,7 +54,7 @@ fn is_sorted[T: Order](list: *List[T]) -> bool {
 
 /// Sorts the list in ascending order.
 fn sort[T: Order](list: *mut List[T]) {
-    for let mut i = 0uint, i < list.len() - 1, {} {
+    for let mut i = 0uint; i < list.len() - 1; {} {
         let cur_value = list.get(i)
         let result = find_min[T](list, i + 1)
         let min_index = result.(0)
@@ -73,7 +73,7 @@ fn find_min[T: Order](list: *List[T], start: uint) -> {uint, T} {
     let mut min_value = list.get(start)
     let mut min_index = start
 
-    for let mut i = start + 1, i < list.len(), i += 1 {
+    for let mut i = start + 1; i < list.len(); i += 1 {
         let v = list.get(i)
         if v.compare(&min_value) ~~ Ord::Lesser {
             min_value = v

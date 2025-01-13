@@ -93,7 +93,7 @@ impl Format: Print {
         let mut substr_start = 0uint
         let mut arg_i = 0uint
 
-        for let mut i: uint = 0, i < fmt_len, i += 1 {
+        for let mut i: uint = 0; i < fmt_len; i += 1 {
             let cur_char = self.fmt.ptr_at(i)^
             last_char = from {
                 if last_char == '\\' as u8 && cur_char == '\\' as u8 {

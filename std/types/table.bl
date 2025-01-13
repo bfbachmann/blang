@@ -87,7 +87,7 @@ impl Table {
         self.entries.resize(len)
 
         // Set new entry statuses to emtpy.
-        for let mut i = old_len, i < len, i += 1 {
+        for let mut i = old_len; i < len; i += 1 {
             self.entries.mut_ptr_at(i).status = EntryStatus::Empty
         }
     }

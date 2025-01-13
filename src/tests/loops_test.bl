@@ -6,7 +6,7 @@ use "std/backtrace/panic.bl" {assert}
 fn main() {
     let mut prime_count = 0
 
-    for let mut n = 1, n <= 100, n += 1 {
+    for let mut n = 1; n <= 100; n += 1 {
         // 1 is not prime
         if n <= 1 {
             continue
@@ -24,7 +24,7 @@ fn main() {
         }
     
         let mut prime = true
-        for let mut i = 5, i * i <= n, i += 6 {
+        for let mut i = 5; i * i <= n; i += 6 {
             if n % i == 0 || n % (i + 2) == 0 {
                 prime = false
                 break
@@ -40,7 +40,7 @@ fn main() {
 
     // Check that we can `continue` at the end of the loop body.
     let mut sum = 0
-    for let mut i = 0, i < 10, i += 1 {
+    for let mut i = 0; i < 10; i += 1 {
         sum += i
         continue
     }

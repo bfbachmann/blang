@@ -14,7 +14,7 @@ fn main() {
     // Check closure yields.
     let y = from {
         let mut sum = 0
-        for let mut i = 0, i < 3, i += 1 {
+        for let mut i = 0; i < 3; i += 1 {
             sum += i
         }
         yield sum

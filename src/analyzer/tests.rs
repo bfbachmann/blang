@@ -1509,7 +1509,7 @@ mod tests {
         let result = analyze(
             r#"
                 fn thing() -> int {
-                    for let mut i = 0, i < 10, i += 1 {
+                    for let mut i = 0; i < 10; i += 1 {
                         return 1
                     }
                 }

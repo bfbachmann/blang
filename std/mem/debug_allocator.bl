@@ -61,7 +61,7 @@ impl DebugAllocator {
 
     fn block_index(*self, ptr: *u8) -> {uint, bool} {
         // TODO: This is really slow. Think of a faster way to search.
-        for let mut i = 0uint, i < self.blocks.len(), i += 1 {
+        for let mut i = 0uint; i < self.blocks.len(); i += 1 {
             let block = self.blocks.get(i)
             if block.contains(ptr) {
                 return {i, true}
@@ -74,7 +74,7 @@ impl DebugAllocator {
     /// Prints information about allocated memory blocks.
     pub fn print_summary(*self) {
         let len = self.blocks.len()
-        for let mut i = 0uint, i < len, i += 1 {
+        for let mut i = 0uint; i < len; i += 1 {
             // TODO: Print detailed info about block.
             @io.puts("allocated block\0")
         }
