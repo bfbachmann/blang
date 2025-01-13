@@ -30,7 +30,7 @@ impl Buffer {
 
     /// Returns a writer that can write to this buffer.
     pub fn writer(*mut self) -> Writer {
-        return Writer.new[Buffer](self)
+        return Writer.new(self)
     }
 
     /// Returns true if the buffer has enough room for a write of the given
@@ -145,7 +145,7 @@ impl Buffered {
 
     /// Flushes the buffer to the underlying writer.
     pub fn flush(*mut self) {
-        self.buf.drain_into[W](&mut self.writer)
+        self.buf.drain_into(&mut self.writer)
     }
 
     /// Frees all memory associated with the buffered writer.

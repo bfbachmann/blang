@@ -123,7 +123,7 @@ impl HashMap {
     fn hash_key(*mut self, k: *K) -> uint {
         if self.hasher == null {
             // Use the default hasher.
-            let mut hasher = Hasher.new[DJB2Hasher](&mut DJB2Hasher.new())
+            let mut hasher = Hasher.new(&mut DJB2Hasher.new())
             return k.hash(&mut hasher.writer()) as uint
         } else {
             self.hasher.reset()
@@ -179,7 +179,7 @@ impl HashMap {
         }
 
         // Replace the old table with a new one that is double the size.
-        let old_table = replace[Table[Mapping[K, V]]](
+        let old_table = replace(
             &mut self.table,
             Table[Mapping[K, V]].new(self.allocator, new_len),
         )
@@ -189,7 +189,7 @@ impl HashMap {
             let entry_ptr = old_table.get(i)
             if entry_ptr != null {
                 let new_index = self.get_entry_index(&entry_ptr.key, false)
-                copy[Mapping[K, V]](self.table.get_mut(i), entry_ptr)
+                copy(self.table.get_mut(i), entry_ptr)
             }
         }
 

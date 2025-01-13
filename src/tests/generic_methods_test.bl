@@ -34,8 +34,8 @@ impl Other: Clone {
 }
 
 fn main() {
-    assert(Thing.test[str]("sup!") == "sup!", "expected 'sup!'")
-    assert(Thing{}.do_clone[Other](&Other{value: 2}).value == 2, "expected 2")
+    assert(Thing.test("sup!") == "sup!", "expected 'sup!'")
+    assert(Thing{}.do_clone(&Other{value: 2}).value == 2, "expected 2")
 
     @proc.exit(0)
 }

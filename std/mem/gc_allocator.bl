@@ -18,7 +18,7 @@ impl GCAllocator {
     }
 
     pub fn dynamic(*mut self) -> Allocator {
-        return Allocator.new[GCAllocator](self)
+        return Allocator.new(self)
     }
 }
 

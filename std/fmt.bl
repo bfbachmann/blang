@@ -9,18 +9,18 @@ use "std/io/file_writer.bl" {FileWriter}
 
 /// Prints `p` to stdout with a newline at the end.
 pub fn println[P: Print](p: *P) {
-    println_fd[P](@io.stdout, p)
+    println_fd(@io.stdout, p)
 }
 
 /// Prints `p` to stderr with a newline at the end.
 pub fn eprintln[P: Print](p: *P) {
-    println_fd[P](@io.stderr, p)
+    println_fd(@io.stderr, p)
 }
 
 /// Prints `p` to `fd` with a newline at the end.
 pub fn println_fd[P: Print](fd: uint, p: *P) {
     let mut allocator = LibcAllocator.new().dynamic()
-    printf_fd(fd, Format.new(&mut allocator, "%\n").arg[P](p))
+    printf_fd(fd, Format.new(&mut allocator, "%\n").arg(p))
 }
 
 /// Prints `format` to stdout.
@@ -35,7 +35,7 @@ pub fn eprintf(format: Format) {
 
 /// Prints `format` to `fd`.
 pub fn printf_fd(fd: uint, format: Format) {
-    print_fd[Format](fd, &format)
+    print_fd(fd, &format)
     format.free()
 }
 
@@ -69,7 +69,7 @@ impl Format {
 
     /// Appends a printable argument to be formatted.
     pub fn arg[P: Print](mut self, p: *P) -> Format {
-        self.args.push(Arg.new[P](p))
+        self.args.push(Arg.new(p))
         return self
     }
 

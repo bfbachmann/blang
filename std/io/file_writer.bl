@@ -20,7 +20,7 @@ impl FileWriter {
 
     /// Returns a generic writer that calls this writer via dynamic dispatch.
     pub fn dynamic(*mut self) -> Writer {
-        return Writer.new[FileWriter](self)
+        return Writer.new(self)
     }
 
     /// Flushes the underlying buffer to the file.

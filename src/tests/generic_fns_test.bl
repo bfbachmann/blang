@@ -13,7 +13,7 @@ spec Default {
 
 // Test functions with params that have multiple spec constraints.
 fn get_default_str[T: Default + ToStr]() -> str {
-    return get_str[T](T.default())
+    return get_str(T.default())
 }
 
 fn get_str[T: ToStr](t: T) -> str {
@@ -38,7 +38,7 @@ impl Thing: ToStr {
 
 // Test functions with params that have no constraints.
 fn heap[T](t: T) -> *mut T {
-    let ptr = heap_alloc[T]()
+    let ptr: *mut T = heap_alloc()
     ptr^ = t
     return ptr
 }

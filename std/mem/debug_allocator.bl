@@ -43,7 +43,7 @@ impl DebugAllocator {
 
     /// Creates a new `Allocator` that dispatches to this allocator.
     pub fn dynamic(*mut self) -> Allocator {
-        return Allocator.new[DebugAllocator](self)
+        return Allocator.new(self)
     }
 
     /// Return true if `ptr` is valid and references a memory region capable of

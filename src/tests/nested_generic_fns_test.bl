@@ -52,12 +52,12 @@ impl Inner2: Call {
 // functions that inherit generic parameters from their parents.
 fn main() {
     let mut inner2 = Inner2{s: "bing"}
-    let mut c2 = Caller.new[Inner2](&mut inner2)
+    let mut c2 = Caller.new(&mut inner2)
     c2.call()
     assert(inner2.s == "bla", "expected bla")
 
     let mut inner = Inner{i: 0}
-    let mut c = Caller.new[Inner](&mut inner)
+    let mut c = Caller.new(&mut inner)
     c.call()
     assert(inner.i == 1, "expected 1")
 

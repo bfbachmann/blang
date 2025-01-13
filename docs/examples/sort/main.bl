@@ -13,10 +13,10 @@ fn main() {
     }
 
     // Sort the list.
-    sort[Value](&mut list)
+    sort(&mut list)
 
     // Check that the list is sorted correctly.
-    if !is_sorted[Value](&list) {
+    if !is_sorted(&list) {
         panic("list is not sorted")
     }
 
@@ -56,7 +56,7 @@ fn is_sorted[T: Order](list: *List[T]) -> bool {
 fn sort[T: Order](list: *mut List[T]) {
     for let mut i = 0uint; i < list.len() - 1; {} {
         let cur_value = list.get(i)
-        let result = find_min[T](list, i + 1)
+        let result = find_min(list, i + 1)
         let min_index = result.(0)
         let min_value = result.(1)
         if min_value.compare(&cur_value) ~~ Ord::Lesser {

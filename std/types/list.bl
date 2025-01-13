@@ -78,7 +78,7 @@ impl List {
     /// existing value at index `i`. Panics if `i` is out of bounds.
     pub fn replace(*mut self, i: uint, t: T) -> T {
         self.check_bounds(i)
-        return replace[T](self.data.ptr_at(i), t)
+        return replace(self.data.ptr_at(i), t)
     }
 
     /// Remove the value at index `i` from the list.

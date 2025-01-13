@@ -12,7 +12,7 @@ impl LibcAllocator {
 
     /// Creates a new `Allocator` that dispatches to this allocator.
     pub fn dynamic(*mut self) -> Allocator {
-        return Allocator.new[LibcAllocator](self)
+        return Allocator.new(self)
     }
 }
 

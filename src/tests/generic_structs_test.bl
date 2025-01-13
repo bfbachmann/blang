@@ -39,8 +39,8 @@ struct Thing[T] {
 fn main() {
     // Test parameterized structs and functions that use them.
     let msg = "test\0"
-    let ref = heap[str](&msg)
-    let deref_msg = deref[str](&ref)^
+    let ref = heap(&msg)
+    let deref_msg = deref(&ref)^
     assert(deref_msg == msg, "expected \"test\"")
 
     // Test methods on parameterized structs.

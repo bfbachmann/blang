@@ -25,7 +25,7 @@ pub fn copy[T](dst: *mut T, src: *T) {
 
 /// Moves `T` onto the heap and returns a pointer to it.
 pub fn heap[T](t: T) -> *mut T {
-    let ptr = heap_alloc[T](1)
+    let ptr: *mut T = heap_alloc(1)
     ptr^ = t
     return ptr
 }
@@ -33,7 +33,7 @@ pub fn heap[T](t: T) -> *mut T {
 /// Replaces the value pointed to by `dst` with `value` and returns the data
 /// pointed to by `dst`.
 pub fn replace[T](dst: *mut T, mut value: T) -> T {
-    swap[T](dst, &mut value)
+    swap(dst, &mut value)
     return value
 }
 
