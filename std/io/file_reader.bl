@@ -4,7 +4,7 @@ use "std/io/writer.bl" {Writer}
 use "std/types/array.bl" {Array}
 use "std/mem/allocator.bl" {Allocator}
 
-const buf_size: uint = 1024 * 8
+const buf_size: uint = 1024 * 4
 
 /// Reads from a file using its descriptor.
 pub struct FileReader {

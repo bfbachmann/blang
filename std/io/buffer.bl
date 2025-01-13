@@ -132,7 +132,7 @@ pub struct Buffered[W: Write] {
     buf: Buffer
 }
 
-const default_capacity: uint = 1024 * 8
+const default_capacity: uint = 1024 * 4
 
 impl Buffered {
     /// Creates a new buffered writer that writes to `W`.
