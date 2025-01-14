@@ -59,7 +59,7 @@ fn main() {
                     .value_parser(["default", "none", "less", "aggressive"]),
             )
             .arg(
-                arg!(--"reloc-mode" <RELOC_MODE> "Relocation mode")
+                arg!(-r --"reloc-mode" <RELOC_MODE> "Relocation mode")
                     .required(false)
                     .value_parser(["default", "pic", "dynamic-no-pic", "static"]),
             )
@@ -69,7 +69,7 @@ fn main() {
                     .action(ArgAction::SetTrue),
             )
             .arg(
-                arg!(name: -g "Generate source-level debug information")
+                arg!(-d --debug "Generate source-level debug information")
                     .required(false)
                     .action(ArgAction::SetTrue),
             )
