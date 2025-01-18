@@ -440,8 +440,7 @@ fn lex_source_file(input_path: &str) -> Result<LexResult<Vec<Token>>, String> {
 }
 
 /// Performs static analysis on the source code at the given path. If `input_path` is a directory,
-/// all source files therein will be analyzed. Returns the analyzed set of sources, or logs an
-/// error and exits with code 1.
+/// all source files therein will be analyzed. Returns the analyzed set of sources, or an error.
 #[flame]
 fn analyze(
     input_path: &str,
@@ -534,8 +533,15 @@ fn analyze(
 fn compile(src_path: &str, quiet: bool, config: CodeGenConfig) -> Result<(), String> {
     // Read and analyze the program.
     let start_time = Instant::now();
+    let is_exe = config.output_format == OutputFormat::Executable;
     let output_path = config.output_path.to_str().unwrap().to_string();
     let prog_analysis = analyze(src_path, None, config)?;
+
+    // Raise an error if there is no `fn main`.
+    if prog_analysis.maybe_main_fn_mangled_name.is_none() && is_exe {
+        return Err(format_code!("missing function {}", "main"));
+    }
+
     let prog = mono_prog(prog_analysis);
 
     // Compile the program.
@@ -561,18 +567,8 @@ fn compile(src_path: &str, quiet: bool, config: CodeGenConfig) -> Result<(), Str
 fn run(src_path: &str, config: CodeGenConfig) {
     let output_path = config.output_path.to_str().unwrap().to_string();
 
-    // Read and analyze the program.
-    let prog_analysis = match analyze(src_path, None, config) {
-        Ok(pa) => pa,
-        Err(e) => fatalln!("{}", e),
-    };
-
-    // Find all relevant functions that we need to generate code for.
-    let prog = mono_prog(prog_analysis);
-
-    // Compile the program.
-    if let Err(e) = generate(prog) {
-        fatalln!("{}", e);
+    if let Err(err) = compile(src_path, true, config) {
+        fatalln!("{}", err);
     }
 
     // Run the program.
