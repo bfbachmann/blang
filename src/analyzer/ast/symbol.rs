@@ -2,16 +2,17 @@ use std::fmt::{Display, Formatter};
 
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopedSymbol;
 use crate::analyzer::type_store::TypeKey;
 use crate::fmt::format_code_vec;
-use crate::lexer::pos::{Locatable, Position, Span};
+use crate::lexer::pos::Span;
 use crate::parser::ast::pointer::PointerType;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::unresolved::UnresolvedType;
+use crate::Locatable;
 use crate::{format_code, locatable_impl};
 
 /// A symbol that can represent a variable, variable access, function, type, or constant.
@@ -79,6 +80,9 @@ impl ASymbol {
         no_params: bool,
         allow_polymorph: bool,
     ) -> Self {
+        let plabeholder =
+            ASymbol::new_with_default_pos(symbol.name.as_str(), ctx.unknown_type_key());
+
         let mut var_name = symbol.name.clone();
 
         // Check for intrinsic symbols like `null`.
@@ -87,12 +91,14 @@ impl ASymbol {
         }
 
         // Return early if the mod name is invalid.
-        let maybe_mod_path = if let Some(mod_name) = symbol.maybe_mod_name.as_ref() {
-            if !ctx.check_mod_name(mod_name, symbol) {
-                return ASymbol::new_with_default_pos(symbol.name.as_str(), ctx.unknown_type_key());
+        let maybe_mod_path = if let Some(mod_sym) = symbol.maybe_mod_name.as_ref() {
+            match ctx.get_mod_path(mod_sym) {
+                Ok(maybe_path) => maybe_path.cloned(),
+                Err(err) => {
+                    ctx.insert_err(err);
+                    return plabeholder;
+                }
             }
-
-            ctx.get_mod_path(mod_name).cloned()
         } else {
             Some(ctx.get_cur_mod_path().to_owned())
         };
@@ -100,12 +106,23 @@ impl ASymbol {
         // Find the type key for the symbol.
         // Return a placeholder value if we failed to resolve the symbol type key.
         // TODO: Refactor
-        let (mut maybe_type_key, maybe_symbol) = get_type_key_for_symbol(ctx, symbol, include_fns);
+        let (mut maybe_type_key, maybe_symbol) =
+            get_type_key_for_symbol(ctx, symbol, include_fns).unwrap();
 
         // If the symbol still has not been resolved, check if it's a type.
         let mut is_type = false;
         if maybe_type_key.is_none() {
-            match ctx.get_type_key_by_type_name(symbol.maybe_mod_name.as_ref(), var_name.as_str()) {
+            let maybe_tk = match ctx
+                .get_type_key_by_type_name((*symbol.maybe_mod_name).as_ref(), var_name.as_str())
+            {
+                Ok(maybe_tk) => maybe_tk,
+                Err(err) => {
+                    ctx.insert_err(err);
+                    return plabeholder;
+                }
+            };
+
+            match maybe_tk {
                 Some(tk) if !ctx.get_type(tk).is_unknown() => {
                     // Make sure the type is public if it's foreign.
                     if symbol.maybe_mod_name.is_some() && !ctx.type_is_pub(tk) {
@@ -143,7 +160,7 @@ impl ASymbol {
                 // a placeholder value.
                 ctx.insert_err(AnalyzeError::new(
                     ErrorKind::UndefSymbol,
-                    format_code!("{} is not defined", symbol).as_str(),
+                    format_code!("{} is not defined in this scope", symbol).as_str(),
                     symbol,
                 ));
 
@@ -294,17 +311,19 @@ fn get_type_key_for_symbol(
     ctx: &mut ProgramContext,
     symbol: &Symbol,
     include_fns: bool,
-) -> (Option<TypeKey>, Option<ScopedSymbol>) {
-    let maybe_mod_name = symbol.maybe_mod_name.as_ref();
+) -> AnalyzeResult<(Option<TypeKey>, Option<ScopedSymbol>)> {
+    let maybe_mod_sym = (*symbol.maybe_mod_name).as_ref();
     let name = symbol.name.as_str();
 
     // Search for a variable with the given name. Variables take precedence over functions.
-    if let Some(scoped_symbol) = ctx.get_scoped_symbol(maybe_mod_name, name) {
+    let maybe_sym = ctx.get_scoped_symbol(maybe_mod_sym, name)?;
+
+    if let Some(scoped_symbol) = maybe_sym {
         let result = (Some(scoped_symbol.type_key), Some(scoped_symbol.clone()));
 
         // If it's a foreign symbol, then make sure it's public.
-        match maybe_mod_name {
-            Some(mod_name) if !ctx.const_is_pub(mod_name, name) => {
+        match maybe_mod_sym {
+            Some(mod_name) if !ctx.const_is_pub(&mod_name, name) => {
                 ctx.insert_err(AnalyzeError::new(
                     ErrorKind::UseOfPrivateValue,
                     format_code!("constant {} is not public", name).as_str(),
@@ -314,14 +333,14 @@ fn get_type_key_for_symbol(
             _ => {}
         }
 
-        return result;
+        return Ok(result);
     }
 
     // Check if the symbol refers to a constant that has not yet been analyzed.
     if let Some(const_) = ctx.get_unchecked_const(name) {
         let a_const = AConst::from(ctx, &const_.clone());
-        let symbol = ctx.get_scoped_symbol(None, a_const.name.as_str()).unwrap();
-        return (Some(symbol.type_key), Some(symbol.clone()));
+        let symbol = ctx.get_scoped_symbol(None, a_const.name.as_str())?.unwrap();
+        return Ok((Some(symbol.type_key), Some(symbol.clone())));
     }
 
     // Check if the symbol refers to a function.
@@ -329,16 +348,15 @@ fn get_type_key_for_symbol(
         if include_fns {
             // Search for a function with the given name. Functions take precedence over extern
             // functions.
-            let mangled_name_with_path = ctx.mangle_name(maybe_mod_name, None, None, name, true);
-            if let Some(sig) = ctx.get_fn(maybe_mod_name, mangled_name_with_path.as_str()) {
+            let mangled_name_with_path = ctx.mangle_name(maybe_mod_sym, None, None, name, true);
+            if let Some(sig) = ctx.get_fn(maybe_mod_sym, mangled_name_with_path.as_str())? {
                 break 'check_fns Some(sig.type_key);
             };
 
             // Search for an extern function with the given name.
-            let mangled_name_without_path =
-                ctx.mangle_name(maybe_mod_name, None, None, name, false);
+            let mangled_name_without_path = ctx.mangle_name(maybe_mod_sym, None, None, name, false);
             if let Some(fn_sig) =
-                ctx.get_fn_sig_by_mangled_name(maybe_mod_name, mangled_name_without_path.as_str())
+                ctx.get_fn_sig_by_mangled_name(maybe_mod_sym, mangled_name_without_path.as_str())?
             {
                 break 'check_fns Some(fn_sig.type_key);
             }
@@ -348,8 +366,8 @@ fn get_type_key_for_symbol(
     };
 
     // If we found a foreign function, then we should make sure it's public.
-    match (maybe_fn_tk, maybe_mod_name) {
-        (Some(_), Some(mod_name)) if !ctx.fn_is_pub(mod_name, &symbol.name) => {
+    match (maybe_fn_tk, maybe_mod_sym) {
+        (Some(_), Some(mod_sym)) if !ctx.fn_is_pub(mod_sym, &symbol.name) => {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::UseOfPrivateValue,
                 format_code!("function {} is not public", name).as_str(),
@@ -359,7 +377,7 @@ fn get_type_key_for_symbol(
         _ => {}
     }
 
-    (maybe_fn_tk, None)
+    Ok((maybe_fn_tk, None))
 }
 
 /// Tries to locate an intrinsic that matches the given symbol and returns it

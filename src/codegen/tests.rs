@@ -7,12 +7,14 @@ mod tests {
     use crate::lexer::lex::lex;
     use crate::lexer::stream::Stream;
     use crate::mono_collector::mono_prog;
-    use crate::parser::module::Module;
+    use crate::parser::file_parser::FileParser;
+    use crate::parser::src_file::SrcFile;
     use std::path::PathBuf;
 
     fn assert_compiles(code: &str) {
-        let tokens = lex(code).expect("should not error");
-        let module = Module::from("test", &mut Stream::from(tokens)).expect("should not error");
+        let tokens = lex(code, 0).expect("should not error");
+        let mut parser = FileParser::new(0, Stream::from(tokens));
+        let module = SrcFile::parse(&mut parser).expect("should not error");
         let target_machine = init_default_host_target().unwrap();
         let config = CodeGenConfig::new_default(
             target_machine,

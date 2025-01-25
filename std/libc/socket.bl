@@ -1,3 +1,5 @@
+mod libc
+
 pub extern fn socket(domain: int, type: int, protocol: int) -> int
 pub extern fn bind(sockfd: int, addr: *SockAddrIn, addrlen: u32) -> int
 pub extern fn listen(sockfd: int, backlog: int) -> int

@@ -1,6 +1,6 @@
 use "std/libc/proc.bl" {exit}
 
-use "std/backtrace/panic.bl" {assert}
+use "std/runtime" {assert}
 
 struct S {
     i: i64

@@ -1,8 +1,8 @@
-use "std/libc/io.bl" @io
-use "std/io/writer.bl" {Write, Writer}
-use "std/types/slice.bl" {Slice}
-use "std/io/buffer.bl" {Buffered}
-use "std/mem/allocator.bl" {Allocator}
+mod io
+
+use "std/libc" @libc
+use "std/types/slice" {Slice}
+use "std/allocator" {Allocator}
 
 /// Performs buffered writes to a file given its descriptor.
 pub struct FileWriter {
@@ -50,6 +50,6 @@ struct UnbufferedFileWriter {
 
 impl UnbufferedFileWriter: Write {
     fn write(*mut self, bytes: Slice[u8]) {
-        @io.write(self.fd, bytes.ptr(), bytes.len())
+        @libc.write(self.fd, bytes.ptr(), bytes.len())
     }
 }

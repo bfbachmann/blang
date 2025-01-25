@@ -19,7 +19,7 @@ use crate::analyzer::ast::var_dec::AVarDecl;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
-use crate::lexer::pos::{Locatable, Position, Span};
+use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::statement::Statement;
 
 /// Represents a semantically valid and type-rich statement.
@@ -81,14 +81,6 @@ impl fmt::Display for AStatement {
 }
 
 impl Locatable for AStatement {
-    fn start_pos(&self) -> &Position {
-        self.span().start_pos()
-    }
-
-    fn end_pos(&self) -> &Position {
-        self.span().end_pos()
-    }
-
     fn span(&self) -> &Span {
         match self {
             AStatement::VariableDeclaration(var_decl) => &var_decl.val.span,
@@ -215,10 +207,12 @@ mod tests {
     use crate::lexer::pos::{Position, Span};
     use crate::lexer::stream::Stream;
     use crate::parser::ast::statement::Statement;
+    use crate::parser::file_parser::FileParser;
 
     fn analyze_statement(raw: &str, ctx: &mut ProgramContext) -> AStatement {
-        let tokens = lex(raw).expect("should not error");
-        let statement = Statement::from(&mut Stream::from(tokens)).expect("should not error");
+        let tokens = lex(raw, 0).expect("should not error");
+        let mut parser = FileParser::new(0, Stream::from(tokens));
+        let statement = Statement::parse(&mut parser).expect("should not error");
         AStatement::from(ctx, &statement)
     }
 
@@ -526,6 +520,7 @@ mod tests {
                         name: "counter".to_string(),
                         type_key: ctx.i64_type_key(),
                         span: Span {
+                            file_id: 0,
                             start_pos: Position { line: 3, col: 17 },
                             end_pos: Position { line: 3, col: 29 },
                         },
@@ -534,6 +529,7 @@ mod tests {
                         name: "is_even".to_string(),
                         type_key: ctx.bool_type_key(),
                         span: Span {
+                            file_id: 0,
                             start_pos: Position { line: 4, col: 17 },
                             end_pos: Position { line: 4, col: 30 },
                         },
@@ -542,12 +538,14 @@ mod tests {
                         name: "message".to_string(),
                         type_key: ctx.str_type_key(),
                         span: Span {
+                            file_id: 0,
                             start_pos: Position { line: 5, col: 17 },
                             end_pos: Position { line: 5, col: 29 },
                         },
                     },
                 ],
                 span: Span {
+                    file_id: 0,
                     start_pos: Position { line: 2, col: 13 },
                     end_pos: Position { line: 6, col: 14 },
                 },

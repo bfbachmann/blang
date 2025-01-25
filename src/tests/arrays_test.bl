@@ -4,7 +4,7 @@
 
 use "std/libc/proc.bl" {exit}
 
-use "std/backtrace/panic.bl" {assert}
+use "std/runtime" {assert}
 
 fn do_nothing() {}
 

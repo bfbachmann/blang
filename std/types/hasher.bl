@@ -1,4 +1,6 @@
-use "std/types/slice.bl" {Slice}
+mod hasher
+
+use "std/types/slice" {Slice}
 
 /// Any type that can build a hash (essentially - a hash function with state).
 pub spec BuildHash {

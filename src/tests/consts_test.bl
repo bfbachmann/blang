@@ -1,7 +1,7 @@
 use "std/libc/proc.bl" {exit}
 
-use "std/backtrace/panic.bl" {assert}
-use "std/libc/io.bl" @io
+use "std/runtime" {assert}
+use "std/libc" @libc
 
 struct Thing {
     i: i64
@@ -48,7 +48,7 @@ fn main() {
 
     // Make sure there are no const name collisions across modules.
     assert(seek_end == 123, "expected 123")
-    assert(@io.seek_end == 2, "expected 2")
+    assert(@libc.seek_end == 2, "expected 2")
 
     // Make sure we can use `sizeof` expressions as const expressions.
     assert([3u8; sizeof u64].(sizeof u64 - 2) == 3, "expected 3")

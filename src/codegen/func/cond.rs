@@ -6,7 +6,6 @@ use crate::analyzer::ast::r#match::{AMatch, APattern};
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::codegen::error::CodeGenResult;
-use crate::lexer::pos::Locatable;
 use crate::parser::ast::op::Operator;
 
 use super::FnCodeGen;
@@ -21,7 +20,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let mut else_branch_exists = false;
 
         for (i, branch) in cond.branches.iter().enumerate() {
-            self.set_di_location(branch.start_pos());
+            self.set_di_location(&branch.span.start_pos);
 
             // If there is a branch condition, it means we are on an `if` or `else if` branch.
             // Otherwise, it means we're on an `else` branch.

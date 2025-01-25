@@ -104,7 +104,7 @@ pub fn display_err(
 }
 
 /// Formats the file location as a colored string.
-pub fn format_file_loc(path: &str, line: Option<usize>, col: Option<usize>) -> String {
+pub fn format_file_loc(path: &str, line: Option<u32>, col: Option<u32>) -> String {
     match (line, col) {
         (Some(l), Some(c)) if l > 0 && c > 0 => {
             format!("{} {}:{}:{}", "-->".blue().bold(), path, l, c)
@@ -140,7 +140,7 @@ fn print_source_color(file_path: &str, span: &Span) {
 
     let mut mid_lines_printed = 0;
     for (i, line) in reader.lines().enumerate() {
-        let line_num = i + 1;
+        let line_num = i as u32 + 1;
         if line_num < start_pos.line {
             continue;
         } else if line_num > end_pos.line {
@@ -150,8 +150,8 @@ fn print_source_color(file_path: &str, span: &Span) {
         let line = line.unwrap();
         if line_num == start_pos.line && start_pos.line == end_pos.line {
             // The code only spans one line.
-            let (left, right) = line.split_at(start_pos.col - 1);
-            let (mid, right) = right.split_at(end_pos.col - start_pos.col);
+            let (left, right) = line.split_at(start_pos.col as usize - 1);
+            let (mid, right) = right.split_at((end_pos.col - start_pos.col) as usize);
             println!(
                 "{pipe:>width$}",
                 pipe = "|".blue().bold(),
@@ -168,7 +168,7 @@ fn print_source_color(file_path: &str, span: &Span) {
             );
         } else if line_num == start_pos.line {
             // The code spans multiple lines and this is the first.
-            let (left, right) = line.split_at(start_pos.col - 1);
+            let (left, right) = line.split_at(start_pos.col as usize - 1);
             println!(
                 "{pipe:>width$}",
                 pipe = "|".blue().bold(),
@@ -184,7 +184,7 @@ fn print_source_color(file_path: &str, span: &Span) {
             );
         } else if line_num == end_pos.line {
             // The code spans multiple lines and this is the last.
-            let (left, right) = line.split_at(end_pos.col - 1);
+            let (left, right) = line.split_at(end_pos.col as usize - 1);
             println!(
                 "{} {}{}",
                 format!("{:>width$}|", line_num, width = width)
@@ -229,7 +229,7 @@ fn print_source_no_color(file_path: &str, span: &Span) {
 
     let mut mid_lines_printed = 0;
     for (i, line) in reader.lines().enumerate() {
-        let line_num = i + 1;
+        let line_num = i as u32 + 1;
         if line_num < start_pos.line {
             continue;
         } else if line_num > end_pos.line {
@@ -240,8 +240,8 @@ fn print_source_no_color(file_path: &str, span: &Span) {
 
         if line_num == start_pos.line && start_pos.line == end_pos.line {
             // The whole segment we're printing spans one line.
-            let (left, right) = line.split_at(start_pos.col - 1);
-            let (mid, right) = right.split_at(end_pos.col - start_pos.col);
+            let (left, right) = line.split_at(start_pos.col as usize - 1);
+            let (mid, right) = right.split_at((end_pos.col - start_pos.col) as usize);
             println!("{pipe:>width$}", pipe = "|", width = width + 1);
             println!(
                 "{} {}{}{}",
@@ -262,7 +262,7 @@ fn print_source_no_color(file_path: &str, span: &Span) {
             );
         } else if line_num == start_pos.line {
             // The segment we're printing spans multiple lines, and this is the first.
-            let (left, right) = line.split_at(start_pos.col - 1);
+            let (left, right) = line.split_at(start_pos.col as usize - 1);
             println!("{pipe:>width$}", pipe = "|", width = width + 1);
             println!(
                 "{} {}{}",
@@ -281,7 +281,7 @@ fn print_source_no_color(file_path: &str, span: &Span) {
             );
         } else if line_num == end_pos.line {
             // The segment we're printing spans multiple lines, and this is the last.
-            let (left, right) = line.split_at(end_pos.col - 1);
+            let (left, right) = line.split_at(end_pos.col as usize - 1);
             println!(
                 "{} {}{}",
                 format!("{:>width$}|", line_num, width = width),

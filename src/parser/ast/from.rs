@@ -1,12 +1,10 @@
-use crate::lexer::pos::Position;
-use crate::lexer::pos::{Locatable, Span};
-use crate::lexer::stream::Stream;
-use crate::lexer::token::Token;
+use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::statement::Statement;
 use crate::parser::error::ParseResult;
-use crate::parser::module::Module;
+use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 
 /// Represents a statement that yields a result. This language construct exists
 /// so statements can be used as expressions.
@@ -23,18 +21,13 @@ impl From {
     /// the form
     ///
     ///     from <statement>
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<From> {
-        let start_pos = Module::parse_expecting(tokens, TokenKind::From)?
-            .span
-            .start_pos;
+    pub fn from(parser: &mut FileParser) -> ParseResult<From> {
+        let start_pos = parser.parse_expecting(TokenKind::From)?.span.start_pos;
 
-        let statement = Box::new(Statement::from(tokens)?);
+        let statement = Box::new(Statement::parse(parser)?);
 
         Ok(From {
-            span: Span {
-                start_pos,
-                end_pos: statement.end_pos().clone(),
-            },
+            span: parser.new_span(start_pos, statement.span().end_pos),
             statement,
         })
     }

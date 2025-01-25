@@ -65,7 +65,10 @@ impl AStructType {
         // Check if the struct type is already defined in the program context. This will be the
         // case if we've already analyzed it in the process of analyzing another type that
         // contains this type.
-        if let Some(a_struct) = ctx.get_struct_type(None, struct_type.name.as_str()) {
+        if let Some(a_struct) = ctx
+            .get_struct_type(None, struct_type.name.as_str())
+            .unwrap()
+        {
             return a_struct.clone();
         }
 

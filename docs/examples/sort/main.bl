@@ -1,8 +1,10 @@
-use "std/libc/proc.bl" {exit}
-use "std/backtrace/panic.bl" {panic}
-use "std/types/list.bl" {List}
-use "std/specs/ord.bl" {Ord, Order}
-use "std/mem/libc_allocator.bl" {LibcAllocator}
+mod sort
+
+use "std/libc" @libc
+use "std/runtime" {panic}
+use "std/types/list" {List}
+use "std/specs" {Ord, Order}
+use "std/allocator" {LibcAllocator}
 
 fn main() {
     // Created a list and populate it.
@@ -20,7 +22,7 @@ fn main() {
         panic("list is not sorted")
     }
 
-    exit(0)
+    @libc.exit(0)
 }
 
 /// Just contains an int and can be ordered.

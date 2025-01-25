@@ -1,13 +1,13 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position, Span};
-use crate::lexer::stream::Stream;
+use crate::lexer::pos::{Span};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
-use crate::locatable_impl;
+use crate::locatable_impl; use crate::Locatable;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
+use crate::parser::file_parser::FileParser;
 
 /// Represents a boolean literal.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -47,8 +47,8 @@ impl BoolLit {
     }
 
     /// Attempts to parse a boolean literal from the given token sequence.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        match tokens.next() {
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
+        match parser.tokens.next() {
             Some(Token {
                 kind: TokenKind::BoolLiteral(value),
                 span,

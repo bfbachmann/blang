@@ -4,10 +4,11 @@ use std::hash::{Hash, Hasher};
 use crate::lexer::pos::Span;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
-use crate::locatable_impl; use crate::Locatable;
+use crate::locatable_impl;
 use crate::parser::ast::func_sig::FunctionSignature;
 use crate::parser::error::ParseResult;
 use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 
 /// Represents a set of external function declarations.
 #[derive(Clone, Debug, Eq)]
@@ -77,7 +78,7 @@ impl ExternFn {
             fn_sig,
             maybe_link_name,
             is_pub,
-            span: Span { start_pos, end_pos },
+            span: parser.new_span(start_pos, end_pos),
         })
     }
 }

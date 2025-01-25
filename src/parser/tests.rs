@@ -25,7 +25,8 @@ mod tests {
     use crate::parser::ast::var_assign::VariableAssignment;
     use crate::parser::ast::var_dec::VariableDeclaration;
     use crate::parser::error::{ErrorKind, ParseError};
-    use crate::parser::module::Module;
+    use crate::parser::file_parser::FileParser;
+    use crate::parser::src_file::SrcFile;
 
     fn tokenize(code: &str) -> Vec<Token> {
         lex(code).expect("should succeed")
@@ -34,7 +35,8 @@ mod tests {
     #[test]
     fn parse_identifier() {
         let tokens = tokenize("something");
-        let result = Module::parse_identifier(&mut Stream::from(tokens)).expect("should not error");
+        let mut parser = FileParser::new(0, Stream::from(tokens));
+        let result = parser.parse_identifier().expect("should not error");
         assert_eq!(result, "something");
     }
 
@@ -80,13 +82,13 @@ mod tests {
         }
         "#;
         let tokens = tokenize(raw_code);
-        Module::from("", &mut Stream::from(tokens)).expect("should not error");
+        SrcFile::parse("", &mut Stream::from(tokens)).expect("should not error");
 
         let tokens = tokenize("let i: i64 = 123 let j = 1231");
-        let result = Module::from("", &mut Stream::from(tokens)).expect("should not error");
+        let result = SrcFile::parse("", &mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
-            Module {
+            SrcFile {
                 path: "".to_string(),
                 used_mods: vec![],
                 statements: vec![
@@ -133,7 +135,7 @@ mod tests {
     fn parse_function_declaration() {
         let tokens =
             tokenize(r#"fn my_fn(arg1: str, arg2: i64) -> str { let s = "hello world!"; }"#);
-        let result = Function::from(&mut Stream::from(tokens)).expect("should not error");
+        let result = Function::parse(&mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
             Function::new(
@@ -210,7 +212,7 @@ mod tests {
         );
 
         let tokens = tokenize("fn bigboi(f: fn (str, i64) -> bool, i: i64) -> fn (bool) -> str {}");
-        let result = Function::from(&mut Stream::from(tokens)).expect("should not error");
+        let result = Function::parse(&mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
             Function::new(
@@ -377,7 +379,7 @@ mod tests {
     fn invalid_extra_comma() {
         let raw = r#"let i = call(,,)"#;
         let tokens = lex(raw).expect("should not error");
-        let result = Module::from("", &mut Stream::from(tokens));
+        let result = SrcFile::parse("", &mut Stream::from(tokens));
         assert!(matches!(
             result,
             Err(ParseError {
@@ -402,7 +404,8 @@ mod tests {
     fn invalid_extra_close_paren() {
         let raw = r#"let i = call())"#;
         let tokens = lex(raw).expect("should not error");
-        let result = Module::from("", &mut Stream::from(tokens));
+        let mut parser = FileParser::new(0, Stream::from(tokens));
+        let result = SrcFile::parse(&mut parser);
         assert!(matches!(
             result,
             Err(ParseError {
@@ -411,11 +414,13 @@ mod tests {
                 token: Some(Token {
                     kind: TokenKind::RightParen,
                     span: Span {
+                        file_id: 0,
                         start_pos: Position { line: 1, col: 15 },
                         end_pos: Position { line: 1, col: 16 },
                     }
                 }),
                 span: Span {
+                    file_id: 0,
                     start_pos: Position { line: 1, col: 15 },
                     end_pos: Position { line: 1, col: 16 },
                 }
@@ -427,7 +432,7 @@ mod tests {
     fn invalid_missing_close_paren() {
         let raw = r#"do(((x+3) > 2) || other"#;
         let tokens = lex(raw).expect("should not error");
-        let result = Module::from("", &mut Stream::from(tokens));
+        let result = SrcFile::parse("", &mut Stream::from(tokens));
         assert!(matches!(
             result,
             Err(ParseError {
@@ -443,7 +448,7 @@ mod tests {
     fn invalid_start_of_expression() {
         let raw = r#"do(&& true)"#;
         let tokens = lex(raw).expect("should not error");
-        let result = Module::from("", &mut Stream::from(tokens));
+        let result = SrcFile::parse("", &mut Stream::from(tokens));
         assert!(matches!(
             result,
             Err(ParseError {
@@ -474,10 +479,10 @@ mod tests {
             print(\"not dog\")
         }";
         let tokens = lex(raw).expect("should not error");
-        let result = Module::from("", &mut Stream::from(tokens)).expect("should not error");
+        let result = SrcFile::parse("", &mut Stream::from(tokens)).expect("should not error");
         assert_eq!(
             result,
-            Module {
+            SrcFile {
                 path: "".to_string(),
                 used_mods: vec![],
                 statements: vec![Statement::FunctionDeclaration(Function::new(
@@ -579,7 +584,7 @@ mod tests {
             return 4 / 2 + 8
         "#;
         let tokens = lex(raw).expect("should not error");
-        let result = Module::from("", &mut Stream::from(tokens));
+        let result = SrcFile::parse("", &mut Stream::from(tokens));
         assert!(matches!(
             result,
             Err(ParseError {
@@ -595,7 +600,7 @@ mod tests {
     fn parse_var_assignment() {
         let raw = "let thing: i64 = 234";
         let tokens = lex(raw).expect("should succeed");
-        Statement::from(&mut Stream::from(tokens)).expect("should not error");
+        Statement::parse(&mut Stream::from(tokens)).expect("should not error");
     }
 
     #[test]
@@ -607,7 +612,7 @@ mod tests {
             }
         "#;
         let tokens = lex(raw).expect("should succeed");
-        let result = Module::from("", &mut Stream::from(tokens));
+        let result = SrcFile::parse("", &mut Stream::from(tokens));
         assert!(matches!(
             result,
             Err(ParseError {
@@ -624,7 +629,7 @@ mod tests {
             (thing) = 2
         "#;
         let tokens = lex(raw).expect("should succeed");
-        let result = Module::from("", &mut Stream::from(tokens));
+        let result = SrcFile::parse("", &mut Stream::from(tokens));
         assert_eq!(
             result.unwrap().statements,
             vec![
@@ -675,7 +680,7 @@ mod tests {
         for path in ["/thing.bl", "../thing.bl", "path/../table.bl"] {
             let raw = format!(r#"use thing: "{path}""#);
             let tokens = lex(raw.as_str()).expect("should succeed");
-            let result = Module::from("", &mut Stream::from(tokens));
+            let result = SrcFile::parse("", &mut Stream::from(tokens));
             assert!(matches!(
                 result,
                 Err(ParseError {

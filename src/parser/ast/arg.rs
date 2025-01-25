@@ -1,15 +1,14 @@
 use std::fmt;
 
-use crate::lexer::pos::{Locatable, Position, Span};
-use crate::lexer::stream::Stream;
-use crate::lexer::token::Token;
+use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::pointer::PointerType;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
-use crate::parser::module::Module;
+use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 
 /// Represents a function argument declaration.
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
@@ -66,49 +65,46 @@ impl Argument {
     /// where
     ///  - `arg_type` is the type of the argument
     ///  - `arg_name` is an identifier representing the argument name
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
         // Get the argument starting position in the source code.
-        let start_pos = Module::current_position(tokens);
+        let start_pos = parser.current_position();
 
         // Handle the special cases of `*self` and `*mut self`.
-        if Module::parse_optional(tokens, TokenKind::Asterisk).is_some() {
-            let is_mut = Module::parse_optional(tokens, TokenKind::Mut).is_some();
-            let name = Module::parse_identifier(tokens)?;
+        if parser.parse_optional(TokenKind::Asterisk).is_some() {
+            let is_mut = parser.parse_optional(TokenKind::Mut).is_some();
+            let name = parser.parse_identifier()?;
             if name != "self" {
                 return Err(ParseError::new_with_token(
                     ErrorKind::ExpectedIdent,
                     format_code!("expected {}, but found {}", "self", name).as_str(),
-                    tokens.prev().unwrap().clone(),
+                    parser.tokens.prev().unwrap().clone(),
                 ));
             }
 
-            let end_pos = Module::prev_position(tokens);
+            let end_pos = parser.prev_position();
 
             return Ok(Argument::new(
                 name.as_str(),
                 Type::Pointer(Box::new(PointerType::new(
                     Type::Unresolved(UnresolvedType::new(
                         "Self",
-                        Span {
-                            start_pos,
-                            end_pos: Module::prev_position(tokens),
-                        },
+                        parser.new_span(start_pos, parser.prev_position()),
                     )),
                     is_mut,
-                    Span { start_pos, end_pos },
+                    parser.new_span(start_pos, end_pos),
                 ))),
                 is_mut,
-                Span { start_pos, end_pos },
+                parser.new_span(start_pos, end_pos),
             ));
         }
 
         // The argument can optionally be declared as mutable, so check for "mut".
-        let is_mut = Module::parse_optional(tokens, TokenKind::Mut).is_some();
+        let is_mut = parser.parse_optional(TokenKind::Mut).is_some();
 
         // The first token should be the argument name.
-        let mut end_pos = Module::current_position(tokens);
-        let name = Module::parse_identifier(tokens)?;
-        end_pos.col += name.len();
+        let mut end_pos = parser.current_position();
+        let name = parser.parse_identifier()?;
+        end_pos.col += name.len() as u32;
 
         // If the argument name is `self`, it doesn't need a type. Otherwise, it's a regular
         // argument with a type.
@@ -117,30 +113,27 @@ impl Argument {
                 name.as_str(),
                 Type::Unresolved(UnresolvedType::new(
                     "Self",
-                    Span {
-                        start_pos,
-                        end_pos: Module::prev_position(tokens),
-                    },
+                    parser.new_span(start_pos, parser.prev_position()),
                 )),
                 is_mut,
-                Span { start_pos, end_pos },
+                parser.new_span(start_pos, end_pos),
             ));
         }
 
         // The next token should be a colon.
-        Module::parse_expecting(tokens, TokenKind::Colon)?;
+        parser.parse_expecting(TokenKind::Colon)?;
 
         // The remaining tokens should form the argument type.
-        let arg_type = Type::from(tokens)?;
+        let arg_type = Type::parse(parser)?;
 
         // Get the argument ending position in the source code.
-        let end_pos = arg_type.end_pos().clone();
+        let end_pos = arg_type.span().end_pos;
 
         Ok(Argument::new(
             name.as_str(),
             arg_type,
             is_mut,
-            Span { start_pos, end_pos },
+            parser.new_span(start_pos, end_pos),
         ))
     }
 
@@ -151,24 +144,24 @@ impl Argument {
     ///
     /// where
     ///  - `arg_type` is the type of the argument
-    pub fn unnamed_from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+    pub fn parse_unnamed(parser: &mut FileParser) -> ParseResult<Self> {
         // Get the argument starting position in the source code.
-        let start_pos = Module::current_position(tokens);
+        let start_pos = parser.current_position();
 
         // Check for the optional "mut" keyword for mutable arguments.
-        let is_mut = Module::parse_optional(tokens, TokenKind::Mut).is_some();
+        let is_mut = parser.parse_optional(TokenKind::Mut).is_some();
 
         // The next token should be the argument type.
-        let arg_type = Type::from(tokens)?;
+        let arg_type = Type::parse(parser)?;
 
         // Get the argument ending position in the source code.
-        let end_pos = arg_type.end_pos().clone();
+        let end_pos = arg_type.span().end_pos;
 
         Ok(Argument::new(
             "",
             arg_type,
             is_mut,
-            Span { start_pos, end_pos },
+            parser.new_span(start_pos, end_pos),
         ))
     }
 }

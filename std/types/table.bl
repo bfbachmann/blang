@@ -1,5 +1,7 @@
-use "std/types/array.bl" {Array}
-use "std/mem/allocator.bl" {Allocator}
+mod table
+
+use "std/types/array" {Array}
+use "std/allocator" {Allocator}
 
 /// Manages a heap-allocated array of entries of type T. Each entry has a 
 /// status that indicates whether it is empty (was never occupied), occupied, 

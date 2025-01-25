@@ -1,6 +1,6 @@
-struct File {}
+mod libc
 
-pub const seek_end: int = 2
+struct File {}
 
 pub extern fn fopen(s: *u8, mode: *u8) -> *File
 pub extern fn fdopen(fd: uint, mode: *u8) -> *File

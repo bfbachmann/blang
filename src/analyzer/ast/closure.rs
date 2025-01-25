@@ -11,12 +11,13 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::{Scope, ScopeKind};
 use crate::analyzer::type_store::TypeKey;
 use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
-use crate::lexer::pos::{Locatable, Position, Span};
+use crate::lexer::pos::Span;
 use crate::parser::ast::arg::Argument;
 use crate::parser::ast::closure::Closure;
 use crate::parser::ast::cont::Continue;
 use crate::parser::ast::r#break::Break;
 use crate::parser::ast::r#type::Type;
+use crate::Locatable;
 use crate::{format_code, locatable_impl, util};
 
 /// Represents a semantically valid and fully analyzed closure.
@@ -91,8 +92,8 @@ impl AClosure {
         a_args: Vec<AArg>,
         expected_ret_type_key: Option<TypeKey>,
     ) -> Self {
-        let start_pos = closure.start_pos().clone();
-        let end_pos = closure.end_pos().clone();
+        let start_pos = closure.span().start_pos;
+        let end_pos = closure.span().end_pos;
 
         // Add a new scope to the program context, since each closure gets its own scope.
         let scope = Scope::new(kind, a_args, expected_ret_type_key);
@@ -147,7 +148,11 @@ impl AClosure {
         AClosure {
             statements: a_statements,
             ret_type_key: expected_ret_type_key,
-            span: Span { start_pos, end_pos },
+            span: Span {
+                file_id: closure.span().file_id,
+                start_pos,
+                end_pos,
+            },
         }
     }
 }

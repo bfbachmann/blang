@@ -2,15 +2,14 @@ use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
 use crate::fmt::vec_to_string;
-use crate::lexer::pos::{Locatable, Position, Span};
-use crate::lexer::stream::Stream;
-use crate::lexer::token::Token;
+use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::ParseResult;
-use crate::parser::module::Module;
+use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 
 /// Represents a named value. These can be variables, variable member accesses, functions,
 /// constants, or types. The value can also optionally include parameters (generics).
@@ -24,7 +23,7 @@ pub struct Symbol {
     ///
     /// In these cases, the module path specified with `@<mod_name>` is included
     /// in the symbol name and will be available via this field.
-    pub maybe_mod_name: Option<String>,
+    pub maybe_mod_name: Box<Option<Symbol>>,
     pub name: String,
     pub params: Vec<Type>,
     pub span: Span,
@@ -37,8 +36,8 @@ impl Display for Symbol {
         write!(
             f,
             "{}{}{}",
-            match &self.maybe_mod_name {
-                Some(name) => format!("@{}.", name),
+            match self.maybe_mod_name.as_ref() {
+                Some(sym) => format!("@{}.", sym.name),
                 None => "".to_string(),
             },
             self.name,
@@ -62,7 +61,7 @@ impl Symbol {
     /// Creates a new symbol.
     pub fn new(name: &str, span: Span) -> Self {
         Symbol {
-            maybe_mod_name: None,
+            maybe_mod_name: Box::new(None),
             name: name.to_string(),
             params: vec![],
             span,
@@ -70,10 +69,9 @@ impl Symbol {
     }
 
     /// Creates a new symbol with default (zero) start and end positions.
-    #[cfg(test)]
     pub fn new_with_default_pos(name: &str) -> Self {
         Symbol {
-            maybe_mod_name: None,
+            maybe_mod_name: Box::new(None),
             name: name.to_string(),
             params: vec![],
             span: Default::default(),
@@ -81,15 +79,12 @@ impl Symbol {
     }
 
     /// Attempts to parse a symbol from a single identifier.
-    pub fn from_identifier(tokens: &mut Stream<Token>) -> ParseResult<Symbol> {
-        let start_pos = Module::current_position(tokens);
-        let ident = Module::parse_identifier(tokens)?;
+    pub fn parse_as_identifier(parser: &mut FileParser) -> ParseResult<Symbol> {
+        let start_pos = parser.current_position();
+        let ident = parser.parse_identifier()?;
         Ok(Symbol::new(
             ident.as_str(),
-            Span {
-                start_pos,
-                end_pos: Module::prev_position(tokens),
-            },
+            parser.new_span(start_pos, parser.prev_position()),
         ))
     }
 
@@ -106,41 +101,38 @@ impl Symbol {
     /// - `mod_name` is an identifier that represents the module the symbol comes from
     /// - `param` is an expression representing a compile-time parameter (either a
     ///   generic type or a constant.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Symbol> {
-        let start_pos = Module::current_position(tokens);
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Symbol> {
+        let start_pos = parser.current_position();
 
         // Parse the optional module name.
-        let maybe_mod_name = if Module::parse_optional(tokens, TokenKind::At).is_some() {
-            let mod_name = Module::parse_identifier(tokens)?;
-            Module::parse_expecting(tokens, TokenKind::Dot)?;
+        let maybe_mod_name = if parser.parse_optional(TokenKind::At).is_some() {
+            let mod_name = Symbol::parse_as_identifier(parser)?;
+            parser.parse_expecting(TokenKind::Dot)?;
             Some(mod_name)
         } else {
             None
         };
 
         // Parse the symbol name.
-        let name = Module::parse_identifier(tokens)?;
+        let name = parser.parse_identifier()?;
 
         // Parse optional parameters.
         let mut params = vec![];
-        if Module::parse_optional(tokens, TokenKind::LeftBracket).is_some() {
-            while !Module::next_token_is(tokens, &TokenKind::RightBracket) {
-                params.push(Type::from(tokens)?);
-                if Module::parse_optional(tokens, TokenKind::Comma).is_none() {
-                    Module::parse_expecting(tokens, TokenKind::RightBracket)?;
+        if parser.parse_optional(TokenKind::LeftBracket).is_some() {
+            while !parser.next_token_is(&TokenKind::RightBracket) {
+                params.push(Type::parse(parser)?);
+                if parser.parse_optional(TokenKind::Comma).is_none() {
+                    parser.parse_expecting(TokenKind::RightBracket)?;
                     break;
                 }
             }
         }
 
         Ok(Symbol {
-            maybe_mod_name,
+            maybe_mod_name: Box::new(maybe_mod_name),
             name,
             params,
-            span: Span {
-                start_pos,
-                end_pos: Module::prev_position(tokens),
-            },
+            span: parser.new_span(start_pos, parser.prev_position()),
         })
     }
 

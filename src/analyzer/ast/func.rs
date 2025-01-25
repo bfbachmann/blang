@@ -102,7 +102,10 @@ impl AFnSig {
         // If this function signature has a name, we can try to locate it by its mangled name to
         // avoid re-analyzing it.
         if !is_anon {
-            if let Some(fn_sig) = ctx.get_fn_sig_by_mangled_name(None, mangled_name.as_str()) {
+            if let Some(fn_sig) = ctx
+                .get_fn_sig_by_mangled_name(None, mangled_name.as_str())
+                .unwrap()
+            {
                 return fn_sig.clone();
             }
         }
@@ -409,11 +412,11 @@ pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) {
     // Add the function to the program context with an empty body, making sure it doesn't already
     // exist. We'll replace the function body when we analyze it later.
     let mangled_name = ctx.mangle_name(None, None, None, sig.name.as_str(), true);
-    if ctx
+    let maybe_fn_sig = ctx
         .get_fn_sig_by_mangled_name(None, mangled_name.as_str())
-        .is_some()
-        || ctx.get_scoped_symbol(None, sig.name.as_str()).is_some()
-    {
+        .unwrap();
+    let maybe_sym = ctx.get_scoped_symbol(None, sig.name.as_str()).unwrap();
+    if maybe_fn_sig.is_some() || maybe_sym.is_some() {
         ctx.insert_err(AnalyzeError::new(
             ErrorKind::DuplicateFunction,
             format_code!("{} is already defined", sig.name).as_str(),
@@ -447,7 +450,11 @@ impl AFn {
         // Make sure there isn't already another function by the same name. There are already
         // checks for regular function name collisions in `analyze_fn_sig`, but those
         // won't detect nested function name collisions - that's what this is for.
-        if ctx.get_fn(None, signature.mangled_name.as_str()).is_some() {
+        if ctx
+            .get_fn(None, signature.mangled_name.as_str())
+            .unwrap()
+            .is_some()
+        {
             ctx.insert_err(AnalyzeError::new(
                 ErrorKind::DuplicateFunction,
                 format_code!("function {} is already defined", &signature.name).as_str(),

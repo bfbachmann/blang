@@ -1,3 +1,5 @@
+mod specs
+
 /// Any type that implements `Eq` can be compared to other instances of that type
 /// for equality.
 pub spec Eq {

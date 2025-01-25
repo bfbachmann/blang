@@ -292,7 +292,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // Attach debug info.
         self.set_di_subprogram(func, &mangled_name);
-        self.set_di_location(func.body.start_pos());
+        self.set_di_location(&func.body.span().start_pos);
 
         // Start building from the beginning of the entry block.
         let entry = self.append_block("entry");

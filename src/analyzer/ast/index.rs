@@ -5,10 +5,11 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::lexer::pos::{Locatable, Position, Span};
+use crate::lexer::pos::Span;
 use crate::locatable_impl;
 use crate::parser::ast::index::Index;
 use crate::parser::ast::r#type::Type;
+use crate::Locatable;
 
 /// Represents the access of some value at a specific index in a collection.
 /// The collection can either be an array, a tuple, or a pointer. If it is a

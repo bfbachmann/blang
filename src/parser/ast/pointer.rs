@@ -1,13 +1,12 @@
 use std::fmt::{Display, Formatter};
 
-use crate::lexer::pos::{Locatable, Position, Span};
-use crate::lexer::stream::Stream;
-use crate::lexer::token::Token;
+use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::r#type::Type;
 use crate::parser::error::ParseResult;
-use crate::parser::module::Module;
+use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 
 /// Represents a pointer to a value of some known type.
 #[derive(PartialEq, Clone, Eq, Hash, Debug)]
@@ -52,18 +51,13 @@ impl PointerType {
     ///     *mut <type>
     ///
     /// where
-    ///  - `type` is any type (see `Type::from`).
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<PointerType> {
-        let start_pos = Module::parse_expecting(tokens, TokenKind::Asterisk)?
-            .span
-            .start_pos;
-        let is_mut = Module::parse_optional(tokens, TokenKind::Mut).is_some();
-        let pointee_type = Type::from(tokens)?;
+    ///  - `type` is any type.
+    pub fn parse(parser: &mut FileParser) -> ParseResult<PointerType> {
+        let start_pos = parser.parse_expecting(TokenKind::Asterisk)?.span.start_pos;
+        let is_mut = parser.parse_optional(TokenKind::Mut).is_some();
+        let pointee_type = Type::parse(parser)?;
         Ok(PointerType {
-            span: Span {
-                start_pos,
-                end_pos: pointee_type.end_pos().clone(),
-            },
+            span: parser.new_span(start_pos, pointee_type.span().end_pos),
             pointee_type,
             is_mut,
         })

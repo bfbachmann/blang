@@ -1,13 +1,13 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position, Span};
-use crate::lexer::stream::Stream;
+use crate::lexer::pos::Span;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
-use crate::locatable_impl;
+use crate::locatable_impl; use crate::Locatable;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
+use crate::parser::file_parser::FileParser;
 
 /// Represents an unsigned 32 bit floating-point literal.
 #[derive(Debug, PartialEq, Clone)]
@@ -34,8 +34,8 @@ locatable_impl!(F32Lit);
 
 impl F32Lit {
     /// Attempts to parse a f32 literal from the token sequence.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        match tokens.next() {
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
+        match parser.tokens.next() {
             Some(&Token {
                 kind: TokenKind::F32Literal(value),
                 span,

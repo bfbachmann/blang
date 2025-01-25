@@ -1,8 +1,6 @@
 use std::fmt::{Debug, Display, Formatter};
 
-use crate::lexer::pos::Position;
 use crate::lexer::pos::Span;
-use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
@@ -10,7 +8,7 @@ use crate::parser::ast::closure::Closure;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::statement::Statement;
 use crate::parser::error::ParseResult;
-use crate::parser::module::Module;
+use crate::parser::file_parser::FileParser;
 use crate::Locatable;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -35,10 +33,10 @@ impl Pattern {
     ///     <expr>
     ///     _
     ///     <empty>
-    fn from(tokens: &mut Stream<Token>) -> ParseResult<Pattern> {
+    fn from(parser: &mut FileParser) -> ParseResult<Pattern> {
         // Handle empty pattern.
-        if Module::next_token_is_one_of(tokens, &vec![TokenKind::Colon, TokenKind::If]) {
-            let prev_token = tokens.prev().unwrap();
+        if parser.next_token_is_one_of(&vec![TokenKind::Colon, TokenKind::If]) {
+            let prev_token = parser.tokens.prev().unwrap();
             return Ok(Pattern {
                 kind: PatternKind::Wildcard,
                 span: prev_token.span,
@@ -46,13 +44,13 @@ impl Pattern {
         }
 
         // Check for wildcard pattern.
-        match tokens.peek_next() {
+        match parser.tokens.peek_next() {
             Some(Token {
                 kind: TokenKind::Identifier(ident),
                 span,
             }) if ident == "_" => {
                 let span = span.clone();
-                tokens.next();
+                parser.tokens.next();
                 return Ok(Pattern {
                     kind: PatternKind::Wildcard,
                     span,
@@ -62,34 +60,34 @@ impl Pattern {
         }
 
         // Check for `let` pattern.
-        if let Some(token) = Module::parse_optional(tokens, TokenKind::Let) {
+        if let Some(token) = parser.parse_optional(TokenKind::Let) {
             let start_pos = token.span.start_pos;
-            let is_mut = Module::parse_optional(tokens, TokenKind::Mut).is_some();
+            let is_mut = parser.parse_optional(TokenKind::Mut).is_some();
 
-            let mut exprs = vec![Expression::from(tokens)?];
-            while Module::parse_optional(tokens, TokenKind::Comma).is_some() {
-                exprs.push(Expression::from(tokens)?);
+            let mut exprs = vec![Expression::parse(parser)?];
+            while parser.parse_optional(TokenKind::Comma).is_some() {
+                exprs.push(Expression::parse(parser)?);
             }
 
-            let end_pos = exprs.last().unwrap().end_pos().clone();
+            let end_pos = exprs.last().unwrap().span().end_pos;
 
             return Ok(Pattern {
                 kind: PatternKind::LetBinding(is_mut, exprs),
-                span: Span { start_pos, end_pos },
+                span: parser.new_span(start_pos, end_pos),
             });
         }
 
         // Handle arbitrary expressions.
-        let mut exprs = vec![Expression::from(tokens)?];
-        while Module::parse_optional(tokens, TokenKind::Comma).is_some() {
-            exprs.push(Expression::from(tokens)?);
+        let mut exprs = vec![Expression::parse(parser)?];
+        while parser.parse_optional(TokenKind::Comma).is_some() {
+            exprs.push(Expression::parse(parser)?);
         }
 
         Ok(Pattern {
-            span: Span {
-                start_pos: exprs.first().unwrap().start_pos().clone(),
-                end_pos: exprs.last().unwrap().end_pos().clone(),
-            },
+            span: parser.new_span(
+                exprs.first().unwrap().span().start_pos,
+                exprs.last().unwrap().span().end_pos,
+            ),
             kind: PatternKind::Exprs(exprs),
         })
     }
@@ -110,39 +108,31 @@ impl MatchCase {
     ///     case <pattern>: <statement>...
     ///     case <pattern> if <cond>: <statement>...
     ///     case if <cond>: <statement>...
-    fn from(tokens: &mut Stream<Token>) -> ParseResult<MatchCase> {
-        let start_pos = Module::parse_expecting(tokens, TokenKind::Case)?
-            .span
-            .start_pos;
+    fn from(parser: &mut FileParser) -> ParseResult<MatchCase> {
+        let start_pos = parser.parse_expecting(TokenKind::Case)?.span.start_pos;
 
-        let pattern = Pattern::from(tokens)?;
-        let maybe_cond = match Module::parse_optional(tokens, TokenKind::If) {
-            Some(_) => Some(Expression::from(tokens)?),
+        let pattern = Pattern::from(parser)?;
+        let maybe_cond = match parser.parse_optional(TokenKind::If) {
+            Some(_) => Some(Expression::parse(parser)?),
             None => None,
         };
 
-        Module::parse_expecting(tokens, TokenKind::Colon)?;
+        parser.parse_expecting(TokenKind::Colon)?;
 
-        let body_start = Module::current_position(tokens);
+        let body_start = parser.current_position();
 
         let mut statements = vec![];
-        while !Module::next_token_is_one_of(tokens, &vec![TokenKind::Case, TokenKind::RightBrace]) {
-            statements.push(Statement::from(tokens)?);
+        while !parser.next_token_is_one_of(&vec![TokenKind::Case, TokenKind::RightBrace]) {
+            statements.push(Statement::parse(parser)?);
         }
 
         let body = Closure::new(
             statements,
-            Span {
-                start_pos: body_start,
-                end_pos: Module::current_position(tokens),
-            },
+            parser.new_span(body_start, parser.current_position()),
         );
 
         Ok(MatchCase {
-            span: Span {
-                start_pos,
-                end_pos: body.end_pos().clone(),
-            },
+            span: parser.new_span(start_pos, body.span().end_pos),
             pattern,
             maybe_cond,
             body,
@@ -175,29 +165,31 @@ impl Match {
     ///
     /// where
     /// - `target` is the match target expression
-    /// - `match_case` is a match case (see `MatchCase::from`)
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Match> {
-        let start_pos = Module::parse_expecting(tokens, TokenKind::Match)?
-            .span
-            .start_pos;
+    /// - `match_case` is a match case
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Match> {
+        let start_pos = parser.parse_expecting(TokenKind::Match)?.span.start_pos;
 
-        let target = Expression::from(tokens)?;
+        let target = Expression::parse(parser)?;
 
-        Module::parse_expecting(tokens, TokenKind::LeftBrace)?;
+        parser.parse_expecting(TokenKind::LeftBrace)?;
 
         let mut cases = vec![];
         let end_pos = loop {
-            if let Some(token) = Module::parse_optional(tokens, TokenKind::RightBrace) {
+            if let Some(token) = parser.parse_optional(TokenKind::RightBrace) {
                 break token.span.end_pos;
             }
 
-            cases.push(MatchCase::from(tokens)?);
+            cases.push(MatchCase::from(parser)?);
         };
 
         Ok(Match {
             target,
             cases,
-            span: Span { start_pos, end_pos },
+            span: Span {
+                file_id: parser.file_id,
+                start_pos,
+                end_pos,
+            },
         })
     }
 }

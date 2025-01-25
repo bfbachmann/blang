@@ -1,9 +1,11 @@
-use "std/backtrace/panic.bl" @panic
-use "std/libc/mem.bl" @mem
+mod list
 
-use "std/mem/mem.bl" {replace}
-use "std/mem/allocator.bl" {Allocator}
-use "std/types/slice.bl" {Slice, SliceMut}
+use "std/runtime" {assert}
+use "std/libc" @libc
+
+use "std/mem" {replace}
+use "std/allocator" {Allocator}
+use "std/types/slice" {Slice, SliceMut}
 
 /// The minimum capacity of the list once it has been allocated.
 const min_cap: uint = 4
@@ -63,7 +65,7 @@ impl List {
 
     /// Removes the value at the end of the list. Panics if the list if empty.
     pub fn pop(*mut self) {
-        @panic.assert(self.len > 0, "cannot pop from empty list")
+        assert(self.len > 0, "cannot pop from empty list")
         self.remove(self.len - 1)
     }
 
@@ -91,7 +93,7 @@ impl List {
         let len = self.len
         let is_last_entry = i + 1 == len
         if !is_last_entry {
-            @mem.memmove(
+            @libc.memmove(
                 self.data.ptr_at(i) as *mut u8,
                 self.data.ptr_at(i + 1) as *u8,
                 (len - 1 - i) * sizeof T,
@@ -129,7 +131,7 @@ impl List {
 
         let dst = other.data.ptr_at(other.len())
         let src = self.data.ptr()
-        @mem.memmove(
+        @libc.memmove(
             dst as *mut u8,
             src as *u8,
             self.len * sizeof T
@@ -146,7 +148,7 @@ impl List {
     /// Frees the memory allocated for this list.
     pub fn free(self) {
         if self.capacity() > 0 {
-            @mem.free(self.data.ptr() as *mut u8)
+            @libc.free(self.data.ptr() as *mut u8)
         }
     }
 
@@ -186,12 +188,12 @@ impl List {
 
     /// Resized the unerlying memory segment.
     fn resize(*mut self, new_cap: uint) {
-        let ptr = @mem.realloc(self.data.ptr() as *mut u8, new_cap * sizeof T)
+        let ptr = @libc.realloc(self.data.ptr() as *mut u8, new_cap * sizeof T)
         self.data = SliceMut[T].new(ptr as *mut T, new_cap)
     }
 
     /// Panics if `i` is outside of the array bounds.
     fn check_bounds(*self, i: uint) {
-        @panic.assert(i < self.len, "list index out of bounds")
+        assert(i < self.len, "list index out of bounds")
     }
 }

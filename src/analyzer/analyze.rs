@@ -8,7 +8,7 @@ use crate::analyzer::warn::AnalyzeWarning;
 use crate::codegen::program::CodeGenConfig;
 use crate::fmt::hierarchy_to_string;
 use crate::lexer::pos::Position;
-use crate::parser::module::Module;
+use crate::parser::{ModID, SrcInfo};
 use flamer::flame;
 
 /// An analyzed source file along with any errors or warnings that occurred during its analysis.
@@ -52,28 +52,40 @@ pub struct ProgramAnalysis {
 
 /// Analyzes all the given modules.
 #[flame]
-pub fn analyze_modules(modules: Vec<Module>, config: CodeGenConfig) -> ProgramAnalysis {
-    let root_mod_path = PathBuf::from(&modules.first().unwrap().path);
-    let mods: HashMap<PathBuf, Module> =
-        HashMap::from_iter(modules.into_iter().map(|m| (PathBuf::from(&m.path), m)));
-    let mut analyzed_mods: HashMap<PathBuf, AnalyzedModule> = HashMap::new();
-    let mod_paths = mods.keys().map(|k| k.to_str().unwrap()).collect();
-    let mut ctx = ProgramContext::new(root_mod_path.to_str().unwrap(), mod_paths, config);
+pub fn analyze_modules(
+    src_info: &SrcInfo,
+    root_mod_path: &str,
+    config: CodeGenConfig,
+) -> ProgramAnalysis {
+    let mut analyzed_mods: HashMap<ModID, AnalyzedModule> = HashMap::new();
+    let mod_paths = src_info
+        .mod_ids()
+        .into_iter()
+        .map(|mod_id| src_info.mod_info.get_by_id(mod_id).path.as_str())
+        .collect();
+    let mut ctx = ProgramContext::new(root_mod_path, mod_paths, config);
 
     // Analyze builtins first.
-    for path in mods.keys() {
-        if path.starts_with("std/builtins") {
-            analyze_module(&mut ctx, &mods, &mut analyzed_mods, &vec![], path);
-        }
-    }
+    let builtins_mod_id = src_info.mod_info.get_id_by_path("std/builtins").unwrap();
+    analyze_module(
+        src_info,
+        &mut ctx,
+        &mut analyzed_mods,
+        &vec![],
+        builtins_mod_id,
+    );
 
-    analyze_module(&mut ctx, &mods, &mut analyzed_mods, &vec![], &root_mod_path);
+    let root_mod_id = src_info.mod_info.get_id_by_path(root_mod_path).unwrap();
+    analyze_module(src_info, &mut ctx, &mut analyzed_mods, &vec![], root_mod_id);
 
     // Try to find the name of the main function in the root module.
-    let maybe_main_fn_mangled_name = match ctx.get_fn_sig_by_mangled_name(
-        None,
-        ctx.mangle_name(None, None, None, "main", true).as_str(),
-    ) {
+    let maybe_fn_sig = ctx
+        .get_fn_sig_by_mangled_name(
+            None,
+            ctx.mangle_name(None, None, None, "main", true).as_str(),
+        )
+        .unwrap();
+    let maybe_main_fn_mangled_name = match maybe_fn_sig {
         Some(sig) => Some(sig.mangled_name.clone()),
         None => None,
     };
@@ -87,25 +99,30 @@ pub fn analyze_modules(modules: Vec<Module>, config: CodeGenConfig) -> ProgramAn
 
 /// Recursively analyzes modules bottom-up by following imports.
 pub fn analyze_module(
+    src_info: &SrcInfo,
     ctx: &mut ProgramContext,
-    mods: &HashMap<PathBuf, Module>,
-    analyzed_mods: &mut HashMap<PathBuf, AnalyzedModule>,
+    analyzed_mods: &mut HashMap<ModID, AnalyzedModule>,
     mod_chain: &Vec<PathBuf>,
-    mod_path: &PathBuf,
+    mod_id: ModID,
 ) {
     // Append the module we're analyzing to the dependency chain.
     let mut new_mod_chain = mod_chain.clone();
+    let mod_info = src_info.mod_info.get_by_id(mod_id);
+    let mod_path = PathBuf::from(&mod_info.path);
     new_mod_chain.push(mod_path.clone());
-
-    let module = match mods.get(mod_path) {
-        Some(m) => m,
-        None => panic!("could not find module {}", mod_path.display()),
-    };
 
     // Make sure all modules that this module depends on are analyzed first.
     let mut import_cycle_errs = vec![];
-    for used_mod in &module.used_mods {
-        let used_mod_path = PathBuf::from(&used_mod.path.raw);
+    for used_mod in src_info.get_used_mods(mod_id) {
+        let used_mod_id = match src_info.mod_info.get_id_by_path(&used_mod.path.raw) {
+            Some(id) => id,
+            None => {
+                // Skip missing modules.
+                continue;
+            }
+        };
+        let used_mod_info = src_info.mod_info.get_by_id(used_mod_id);
+        let used_mod_path = PathBuf::from(&used_mod_info.path);
 
         // Record error and skip this import if it is cyclical.
         if new_mod_chain.contains(&used_mod_path) {
@@ -128,12 +145,13 @@ pub fn analyze_module(
         }
 
         // Analyze the module only if we have not already done so.
-        if !analyzed_mods.contains_key(&used_mod_path) {
-            analyze_module(ctx, mods, analyzed_mods, &new_mod_chain, &used_mod_path);
+        if !analyzed_mods.contains_key(&used_mod_id) {
+            analyze_module(src_info, ctx, analyzed_mods, &new_mod_chain, used_mod_id);
         }
     }
 
-    let analyzed_module = AModule::from(ctx, module);
+    let src_files = src_info.get_src_files(mod_id);
+    let analyzed_module = AModule::from(ctx, mod_info.path.clone(), src_files);
 
     // Append the import cycle errors to the module analysis errors.
     let mut errs = std::mem::take(&mut ctx.errors);
@@ -142,7 +160,7 @@ pub fn analyze_module(
     }
 
     analyzed_mods.insert(
-        mod_path.into(),
+        mod_id,
         AnalyzedModule::new(analyzed_module, errs, std::mem::take(&mut ctx.warnings)),
     );
 }

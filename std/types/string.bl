@@ -1,4 +1,6 @@
-use "std/libc/mem.bl" @mem
+mod string
+
+use "std/libc" @libc
 
 /// Strings are heap-allocated sequences of bytes.
 pub struct String {
@@ -8,8 +10,8 @@ pub struct String {
 impl String {
     /// Creates a new `String` from the given `str`.
     pub fn from_str(s: str) -> String {
-        let ptr = @mem.malloc(s.len())
-        @mem.memcpy(ptr, s.ptr(), s.len())
+        let ptr = @libc.malloc(s.len())
+        @libc.memcpy(ptr, s.ptr(), s.len())
         return String{
             bytes: Slice[u8].new(ptr, s.len())
         }
@@ -18,10 +20,10 @@ impl String {
     /// Creates a new `String` from the concatenation of `first` and `second`.
     pub fn concat(first: Slice[u8], second: Slice[u8]) -> String {
         let new_len = first.len() + second.len()
-        let ptr = @mem.malloc(new_len)
+        let ptr = @libc.malloc(new_len)
 
-        @mem.memcpy(ptr, first.ptr(), first.len())
-        @mem.memcpy(ptr.(first.len() as int), second.ptr(), second.len())
+        @libc.memcpy(ptr, first.ptr(), first.len())
+        @libc.memcpy(ptr.(first.len() as int), second.ptr(), second.len())
 
         return String{
             bytes: Slice[u8].new(ptr, new_len)
@@ -40,6 +42,6 @@ impl String {
 
     /// Frees heap space allocated for this `String`.
     pub fn free(self) {
-        @mem.free(self.ptr())
+        @libc.free(self.ptr())
     }
 }

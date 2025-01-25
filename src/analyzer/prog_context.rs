@@ -25,10 +25,10 @@ use crate::parser::ast::r#const::Const;
 use crate::parser::ast::r#enum::EnumType;
 use crate::parser::ast::r#struct::StructType;
 use crate::parser::ast::r#type::Type;
+use crate::parser::ast::r#use::UsedModule;
 use crate::parser::ast::spec::SpecType;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::unresolved::UnresolvedType;
-use crate::parser::module::Module;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 #[cfg(test)]
@@ -371,7 +371,7 @@ impl ProgramContext {
             let name = typ.name().to_string();
             let type_key = type_store.insert_type(typ);
             primitive_type_keys.insert(name.clone(), type_key);
-            type_declaration_mods.insert(type_key, format!("std/builtins/{}.bl", name));
+            type_declaration_mods.insert(type_key, "std/builtins".to_string());
         }
 
         // Initialize empty module contexts.
@@ -405,25 +405,24 @@ impl ProgramContext {
 
     /// Returns true only if the module name refers to a valid imported module.
     /// Otherwise, records an error and returns false.
-    pub fn check_mod_name<T: Locatable>(&mut self, mod_name: &String, loc: &T) -> bool {
+    pub fn check_mod_name(&self, mod_sym: &Symbol) -> AnalyzeResult<()> {
         let mod_ctx = self.cur_mod_ctx();
-        match mod_ctx.imported_mod_paths.contains_key(mod_name) {
-            true => true,
-            false => {
-                self.insert_err(AnalyzeError::new(
-                    ErrorKind::UndefMod,
-                    format_code!("module {} is not defined", mod_name).as_str(),
-                    loc,
-                ));
-
-                false
-            }
+        match mod_ctx.imported_mod_paths.contains_key(&mod_sym.name) {
+            true => Ok(()),
+            false => Err(AnalyzeError::new(
+                ErrorKind::UndefMod,
+                format_code!("module {} is not defined", mod_sym.name).as_str(),
+                mod_sym,
+            )),
         }
     }
 
     /// Returns the path of the module with the given name in the current context.
-    pub fn get_mod_path(&self, mod_name: &str) -> Option<&String> {
-        self.cur_mod_ctx().imported_mod_paths.get(mod_name)
+    pub fn get_mod_path(&self, mod_sym: &Symbol) -> AnalyzeResult<Option<&String>> {
+        match self.check_mod_name(mod_sym) {
+            Ok(_) => Ok(self.cur_mod_ctx().imported_mod_paths.get(&mod_sym.name)),
+            Err(err) => Err(err),
+        }
     }
 
     /// Returns the path of the current module in the current context.
@@ -447,17 +446,20 @@ impl ProgramContext {
             .unwrap()
     }
 
-    /// If `maybe_mod_name` is `Some`, returns the corresponding module context.
+    /// If `maybe_mod_sym` is `Some`, returns the corresponding module context (or an error if the
+    /// mod symbol is invalid).
     /// Otherwise, returns the current module context.
-    fn get_mod_ctx(&self, maybe_mod_name: Option<&String>) -> &ModuleContext {
+    fn get_mod_ctx(&self, maybe_mod_sym: Option<&Symbol>) -> AnalyzeResult<&ModuleContext> {
         let mod_ctx = self.cur_mod_ctx();
-        match maybe_mod_name {
-            Some(mod_name) => {
-                let mod_path = mod_ctx.imported_mod_paths.get(mod_name).unwrap();
-                self.module_contexts.get(mod_path).unwrap()
+
+        match maybe_mod_sym {
+            Some(mod_sym) => {
+                self.check_mod_name(mod_sym)?;
+                let mod_path = mod_ctx.imported_mod_paths.get(&mod_sym.name).unwrap();
+                Ok(self.module_contexts.get(mod_path).unwrap())
             }
 
-            None => mod_ctx,
+            None => Ok(mod_ctx),
         }
     }
 
@@ -788,13 +790,7 @@ impl ProgramContext {
     /// an error will be recorded.
     fn resolve_type_helper(&mut self, typ: &Type, allow_polymorph: bool) -> TypeKey {
         if let Type::Unresolved(unresolved_type) = typ {
-            if let Some(mod_name) = &unresolved_type.maybe_mod_name {
-                // Make sure the module name is valid before looking up the type
-                // in the corresponding module.
-                if !self.check_mod_name(mod_name, typ) {
-                    return self.unknown_type_key();
-                };
-            } else {
+            if unresolved_type.maybe_mod_name.is_none() {
                 if unresolved_type.name == "Self" {
                     return match self.get_cur_self_type_key() {
                         Some(tk) => tk,
@@ -826,10 +822,18 @@ impl ProgramContext {
                 }
             }
 
-            if let Some(tk) = self.get_type_key_by_type_name(
+            let maybe_tk = match self.get_type_key_by_type_name(
                 unresolved_type.maybe_mod_name.as_ref(),
                 unresolved_type.name.as_str(),
             ) {
+                Ok(maybe_tk) => maybe_tk,
+                Err(err) => {
+                    self.insert_err(err);
+                    return self.unknown_type_key();
+                }
+            };
+
+            if let Some(tk) = maybe_tk {
                 let (resolved_tk, poly_tk) = if unresolved_type.params.is_empty() {
                     // No parameters were provided, so this type should either be monomorphic, or
                     // `allow_polymorph` should be `true`.
@@ -918,40 +922,40 @@ impl ProgramContext {
     /// Tries to locate and return the type key associated with the type with the given name.
     pub fn get_type_key_by_type_name(
         &self,
-        maybe_mod_name: Option<&String>,
+        maybe_mod_sym: Option<&Symbol>,
         name: &str,
-    ) -> Option<TypeKey> {
-        if maybe_mod_name.is_none() {
+    ) -> AnalyzeResult<Option<TypeKey>> {
+        if maybe_mod_sym.is_none() {
             if let Some(tk) = self.primitive_type_keys.get(name) {
-                return Some(*tk);
+                return Ok(Some(*tk));
             }
 
             // Look for a generic param with a matching name.
             if let Some(param) = self.get_param(name) {
-                return Some(param.generic_type_key);
+                return Ok(Some(param.generic_type_key));
             }
         }
 
-        let mod_ctx = self.get_mod_ctx(maybe_mod_name);
+        let mod_ctx = self.get_mod_ctx(maybe_mod_sym)?;
 
         // Try searching for the mangled type name first. If that doesn't work, we'll try with the
         // regular name. We have to do this to account for cases where a type is defined inside a
         // function.
-        let mangled_name = self.mangle_name(maybe_mod_name, None, None, name, true);
+        let mangled_name = self.mangle_name(maybe_mod_sym, None, None, name, true);
         let typ = Type::new_unresolved(mangled_name.as_str());
         if let Some(tk) = mod_ctx.search_stack(|scope| scope.get_type_key(&typ)) {
-            return Some(tk);
+            return Ok(Some(tk));
         }
 
         // Try searching for the mangled name without the current path.
-        let mangled_name = self.mangle_name(maybe_mod_name, None, None, name, false);
+        let mangled_name = self.mangle_name(maybe_mod_sym, None, None, name, false);
         let typ = Type::new_unresolved(mangled_name.as_str());
         if let Some(tk) = mod_ctx.search_stack(|scope| scope.get_type_key(&typ)) {
-            return Some(tk);
+            return Ok(Some(tk));
         }
 
         let typ = Type::new_unresolved(name);
-        mod_ctx.search_stack(|scope| scope.get_type_key(&typ))
+        Ok(mod_ctx.search_stack(|scope| scope.get_type_key(&typ)))
     }
 
     pub fn monomorphize_type(
@@ -1721,7 +1725,10 @@ impl ProgramContext {
     /// Does nothing if the constant is already defined.
     pub fn try_insert_unchecked_const(&mut self, const_decl: Const) {
         let name = const_decl.name.clone();
-        let symbol_already_defined = self.get_scoped_symbol(None, name.as_str()).is_some();
+        let symbol_already_defined = self
+            .get_scoped_symbol(None, name.as_str())
+            .unwrap()
+            .is_some();
         let mod_ctx = self.cur_mod_ctx_mut();
         if symbol_already_defined || mod_ctx.unchecked_consts.get(name.as_str()).is_some() {
             self.insert_err(AnalyzeError::new(
@@ -1781,13 +1788,14 @@ impl ProgramContext {
     /// with the given name, or in the current module if `maybe_mod_name` is `None`.
     pub fn get_fn_sig_by_mangled_name(
         &self,
-        maybe_mod_name: Option<&String>,
+        maybe_mod_sym: Option<&Symbol>,
         mangled_name: &str,
-    ) -> Option<&AFnSig> {
-        let mod_ctx = self.get_mod_ctx(maybe_mod_name);
+    ) -> AnalyzeResult<Option<&AFnSig>> {
+        let mod_ctx = self.get_mod_ctx(maybe_mod_sym)?;
+
         match mod_ctx.fn_types.get(mangled_name) {
-            Some(tk) => Some(self.get_type(*tk).to_fn_sig()),
-            None => None,
+            Some(tk) => Ok(Some(self.get_type(*tk).to_fn_sig())),
+            None => Ok(None),
         }
     }
 
@@ -1839,11 +1847,21 @@ impl ProgramContext {
     /// Sets the current module in the program context to `module`.
     /// If any of the imports have names that collide with existing imports in this module,
     /// they will not be mapped and error will be recorded for each conflict.
-    pub fn set_cur_mod(&mut self, module: &Module) {
-        self.cur_mod_path = module.path.clone();
-        self.cur_mod_ctx_mut().imported_mod_paths = HashMap::with_capacity(module.used_mods.len());
+    pub fn set_cur_mod(&mut self, mod_path: String, used_mods: Vec<&UsedModule>) {
+        self.cur_mod_path = mod_path;
+        self.cur_mod_ctx_mut().imported_mod_paths = HashMap::with_capacity(used_mods.len());
 
-        for used_mod in &module.used_mods {
+        for used_mod in used_mods {
+            // Skip invalid mod paths.
+            if !self.module_contexts.contains_key(&used_mod.path.raw) {
+                self.insert_err(AnalyzeError::new(
+                    ErrorKind::UndefMod,
+                    format_code!("no such module {}", used_mod.path.raw).as_str(),
+                    &used_mod.path,
+                ));
+                continue;
+            }
+
             // If the import is declared with an alias, map it to the module path,
             // so we can resolve it later.
             let mod_name = if let Some(alias) = &used_mod.maybe_alias {
@@ -1889,7 +1907,7 @@ impl ProgramContext {
                 // Set the symbol's module name so it gets resolved from the right
                 // module.
                 let mut symbol = symbol.clone();
-                symbol.maybe_mod_name = Some(mod_name.clone());
+                symbol.maybe_mod_name = Box::new(Some(Symbol::new_with_default_pos(&mod_name)));
                 let a_symbol = ASymbol::from(self, &symbol, true, true, true, false);
 
                 // Record an error and skip the symbol if its type could not be
@@ -1909,7 +1927,7 @@ impl ProgramContext {
                 }
 
                 // Record an error if the symbol was not declared public.
-                let mod_ctx = self.get_mod_ctx(Some(&mod_name));
+                let mod_ctx = self.get_mod_ctx((*symbol.maybe_mod_name).as_ref()).unwrap();
                 let is_pub = if a_symbol.is_const {
                     mod_ctx.pub_const_names.contains(symbol.name.as_str())
                 } else if a_symbol.is_type {
@@ -2191,14 +2209,14 @@ impl ProgramContext {
     }
 
     /// Returns true if the func with the given name from the given module is public.
-    pub fn fn_is_pub(&self, mod_name: &String, name: &str) -> bool {
-        let mod_ctx = self.get_mod_ctx(Some(mod_name));
+    pub fn fn_is_pub(&self, mod_name: &Symbol, name: &str) -> bool {
+        let mod_ctx = self.get_mod_ctx(Some(mod_name)).unwrap();
         mod_ctx.pub_fn_names.contains(name)
     }
 
     /// Returns true if the constant with the given name from the given module is public.
-    pub fn const_is_pub(&self, mod_name: &String, name: &str) -> bool {
-        let mod_ctx = self.get_mod_ctx(Some(mod_name));
+    pub fn const_is_pub(&self, mod_name: &Symbol, name: &str) -> bool {
+        let mod_ctx = self.get_mod_ctx(Some(mod_name)).unwrap();
         mod_ctx.pub_const_names.contains(name)
     }
 
@@ -2308,15 +2326,15 @@ impl ProgramContext {
     /// If `include_path` is false, `path` will not be included.
     pub fn mangle_name(
         &self,
-        maybe_mod_name: Option<&String>,
+        maybe_mod_sym: Option<&Symbol>,
         maybe_impl_type_key: Option<TypeKey>,
         maybe_spec_type_key: Option<TypeKey>,
         name: &str,
         include_path: bool,
     ) -> String {
         let mod_ctx = self.cur_mod_ctx();
-        let mod_path = match maybe_mod_name {
-            Some(name) => mod_ctx.imported_mod_paths.get(name).unwrap(),
+        let mod_path = match maybe_mod_sym {
+            Some(mod_sym) => mod_ctx.imported_mod_paths.get(&mod_sym.name).unwrap(),
             None => self.cur_mod_path.as_str(),
         };
 
@@ -2377,11 +2395,12 @@ impl ProgramContext {
     /// function B, then we won't be able to resolve symbols defined in function B.
     pub fn get_scoped_symbol(
         &self,
-        maybe_mod_name: Option<&String>,
+        maybe_mod_sym: Option<&Symbol>,
         name: &str,
-    ) -> Option<&ScopedSymbol> {
-        let mod_ctx = self.get_mod_ctx(maybe_mod_name);
-        mod_ctx.search_stack_ref(|scope| scope.get_symbol(name), false)
+    ) -> AnalyzeResult<Option<&ScopedSymbol>> {
+        let mod_ctx = self.get_mod_ctx(maybe_mod_sym)?;
+
+        Ok(mod_ctx.search_stack_ref(|scope| scope.get_symbol(name), false))
     }
 
     /// Adds the given function to the program context, so it can be looked up by full name in the
@@ -2394,9 +2413,14 @@ impl ProgramContext {
 
     /// Tries to locate and return the signature of the function with the given full name in the
     /// current module context.
-    pub fn get_fn(&self, maybe_mod_name: Option<&String>, name: &str) -> Option<&AFnSig> {
-        let mod_ctx = self.get_mod_ctx(maybe_mod_name);
-        mod_ctx.funcs.get(name)
+    pub fn get_fn(
+        &mut self,
+        maybe_mod_sym: Option<&Symbol>,
+        name: &str,
+    ) -> AnalyzeResult<Option<&AFnSig>> {
+        let mod_ctx = self.get_mod_ctx(maybe_mod_sym)?;
+
+        Ok(mod_ctx.funcs.get(name))
     }
 
     /// Pushes `params` onto the parameter stack.
@@ -2424,37 +2448,47 @@ impl ProgramContext {
 
     /// Returns the struct type with the given name in the given module.
     pub fn get_struct_type(
-        &self,
-        maybe_mod_name: Option<&String>,
+        &mut self,
+        maybe_mod_sym: Option<&Symbol>,
         name: &str,
-    ) -> Option<&AStructType> {
-        let mod_ctx = self.get_mod_ctx(maybe_mod_name);
-        let mangled_name = self.mangle_name(maybe_mod_name, None, None, name, false);
+    ) -> AnalyzeResult<Option<&AStructType>> {
+        let mod_ctx = self.get_mod_ctx(maybe_mod_sym)?;
+
+        let mangled_name = self.mangle_name(maybe_mod_sym, None, None, name, false);
         if let Some(tk) = mod_ctx.struct_type_keys.get(mangled_name.as_str()) {
-            return Some(self.get_type(*tk).to_struct_type());
+            return Ok(Some(self.get_type(*tk).to_struct_type()));
         }
 
-        None
+        Ok(None)
     }
 
     /// Returns the enum type with the given name in the given module.
-    pub fn get_enum_type(&self, maybe_mod_name: Option<&String>, name: &str) -> Option<&AEnumType> {
-        let mod_ctx = self.get_mod_ctx(maybe_mod_name);
+    pub fn get_enum_type(
+        &mut self,
+        maybe_mod_sym: Option<&Symbol>,
+        name: &str,
+    ) -> AnalyzeResult<Option<&AEnumType>> {
+        let mod_ctx = self.get_mod_ctx(maybe_mod_sym)?;
+
         if let Some(tk) = mod_ctx.enum_type_keys.get(name) {
-            return Some(self.get_type(*tk).to_enum_type());
+            return Ok(Some(self.get_type(*tk).to_enum_type()));
         }
 
-        None
+        Ok(None)
     }
 
     /// Returns the spec type with the given name in the given module.
-    pub fn get_spec_type(&self, maybe_mod_name: Option<&String>, name: &str) -> Option<&ASpecType> {
-        let mod_ctx = self.get_mod_ctx(maybe_mod_name);
+    pub fn get_spec_type(
+        &self,
+        maybe_mod_sym: Option<&Symbol>,
+        name: &str,
+    ) -> AnalyzeResult<Option<&ASpecType>> {
+        let mod_ctx = self.get_mod_ctx(maybe_mod_sym)?;
         if let Some(tk) = mod_ctx.spec_type_keys.get(name) {
-            return Some(self.get_type(*tk).to_spec_type());
+            return Ok(Some(self.get_type(*tk).to_spec_type()));
         }
 
-        None
+        Ok(None)
     }
 
     /// Returns the expected return type key for the current function body scope.

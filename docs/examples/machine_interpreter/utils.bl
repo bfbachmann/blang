@@ -1,5 +1,7 @@
-use "std/libc/io.bl" {write, stdout}
+mod machine_interpreter
+
+use "std/libc" @libc
 
 pub fn print_str(s: str) {
-    write(stdout, s.ptr(), s.len())
+    @libc.write(@libc.stdout, s.ptr(), s.len())
 }

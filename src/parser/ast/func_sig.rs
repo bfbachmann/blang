@@ -1,15 +1,15 @@
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position, Span};
-use crate::lexer::stream::Stream;
+use crate::lexer::pos::{Position, Span};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::arg::Argument;
 use crate::parser::ast::params::Params;
 use crate::parser::ast::r#type::Type;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
-use crate::parser::module::Module;
+use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 use crate::{locatable_impl, util};
 
 /// Represents the name, arguments, and return type of a function. Anonymous functions
@@ -101,23 +101,6 @@ impl FunctionSignature {
         }
     }
 
-    /// Creates a new parameterized function signature for a named function.
-    pub fn new_parameterized(
-        name: &str,
-        args: Vec<Argument>,
-        return_type: Option<Type>,
-        params: Params,
-        span: Span,
-    ) -> Self {
-        FunctionSignature {
-            name: name.to_string(),
-            params: Some(params),
-            args,
-            maybe_ret_type: return_type,
-            span,
-        }
-    }
-
     /// Creates a new function signature for an anonymous function.
     pub fn new_anon(args: Vec<Argument>, return_type: Option<Type>, span: Span) -> Self {
         FunctionSignature {
@@ -136,37 +119,32 @@ impl FunctionSignature {
     ///      fn <fn_name><params>(<arg_name>: <arg_type>, ...) -> <return_type>
     ///
     /// where
-    ///  - `params` are optional generic parameters (see `Params::from`)
+    ///  - `params` are optional generic parameters
     ///  - `fn_name` is an identifier representing the name of the function
     ///  - `arg_type` is the type of the argument
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return type
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+    pub fn from(parser: &mut FileParser) -> ParseResult<Self> {
         // Record the function signature starting position.
-        let start_pos = Module::parse_expecting(tokens, TokenKind::Fn)?
-            .span
-            .start_pos;
+        let start_pos = parser.parse_expecting(TokenKind::Fn)?.span.start_pos;
 
-        let fn_name = Module::parse_identifier(tokens)?;
+        let fn_name = parser.parse_identifier()?;
 
         // Parse the optional generic parameters.
-        let params = match Module::next_token_is(tokens, &TokenKind::LeftBracket) {
-            true => Some(Params::from(tokens)?),
+        let params = match parser.next_token_is(&TokenKind::LeftBracket) {
+            true => Some(Params::parse(parser)?),
             false => None,
         };
 
         // The next tokens should represent function arguments and optional return type.
-        let fn_sig = FunctionSignature::from_args_and_return(tokens, true)?;
+        let fn_sig = FunctionSignature::parse_args_and_return(parser, true)?;
 
         Ok(FunctionSignature {
             name: fn_name,
             args: fn_sig.args,
             maybe_ret_type: fn_sig.maybe_ret_type,
             params,
-            span: Span {
-                start_pos,
-                end_pos: fn_sig.span.end_pos,
-            },
+            span: parser.new_span(start_pos, fn_sig.span.end_pos),
         })
     }
 
@@ -185,14 +163,14 @@ impl FunctionSignature {
     ///  - `arg_type` is the type of the argument
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return type
-    pub fn from_anon(tokens: &mut Stream<Token>, named: bool) -> ParseResult<Self> {
-        let start_pos = Module::current_position(tokens);
+    pub fn parse_anon(parser: &mut FileParser, named: bool) -> ParseResult<Self> {
+        let start_pos = parser.current_position();
 
         // The first token should be `fn`.
-        Module::parse_expecting(tokens, TokenKind::Fn)?;
+        parser.parse_expecting(TokenKind::Fn)?;
 
         // The next tokens should represent function arguments followed by the return type.
-        let mut fn_sig = FunctionSignature::from_args_and_return(tokens, named)?;
+        let mut fn_sig = FunctionSignature::parse_args_and_return(parser, named)?;
         fn_sig.span.start_pos = start_pos;
         Ok(fn_sig)
     }
@@ -211,22 +189,22 @@ impl FunctionSignature {
     ///  - `arg_type` is the type of the argument
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return value
-    fn from_args_and_return(tokens: &mut Stream<Token>, named: bool) -> ParseResult<Self> {
+    fn parse_args_and_return(parser: &mut FileParser, named: bool) -> ParseResult<Self> {
         // The next tokens should represent function arguments.
-        let (args, mut end_pos) = FunctionSignature::arg_declarations_from(tokens, named)?;
+        let (args, mut end_pos) = FunctionSignature::parse_arg_declarations(parser, named)?;
 
         // The next token should be `->` if there is a return type. Otherwise, there is no return
         // type and we're done.
         let mut maybe_ret_type = None;
-        match tokens.peek_next() {
+        match parser.tokens.peek_next() {
             Some(Token {
                 kind: TokenKind::Arrow,
                 ..
             }) => {
                 // Remove the `->` and parse the return type.
-                tokens.next();
-                let return_type = Type::from(tokens)?;
-                end_pos = return_type.end_pos().clone();
+                parser.tokens.next();
+                let return_type = Type::parse(parser)?;
+                end_pos = return_type.span().end_pos;
                 maybe_ret_type = Some(return_type);
             }
             _ => {}
@@ -235,12 +213,12 @@ impl FunctionSignature {
         Ok(FunctionSignature::new_anon(
             args,
             maybe_ret_type,
-            Span {
+            parser.new_span(
                 // We can leave the start position as default here because it will
                 // be set by the caller.
-                start_pos: Position::default(),
+                Position::default(),
                 end_pos,
-            },
+            ),
         ))
     }
 
@@ -256,22 +234,22 @@ impl FunctionSignature {
     /// where
     ///  - `arg_type` is the type of the argument
     ///  - `arg_name` is an identifier representing the argument name
-    fn arg_declarations_from(
-        tokens: &mut Stream<Token>,
+    fn parse_arg_declarations(
+        parser: &mut FileParser,
         named: bool,
     ) -> ParseResult<(Vec<Argument>, Position)> {
         // Record the starting position of the arguments.
-        let start_pos = Module::current_position(tokens);
+        let start_pos = parser.current_position();
         let end_pos: Position;
 
         // The first token should be the opening parenthesis.
-        Module::parse_expecting(tokens, TokenKind::LeftParen)?;
+        parser.parse_expecting(TokenKind::LeftParen)?;
 
         // The next token(s) should be arguments or a closing parenthesis.
         let mut args = vec![];
         loop {
             // The next token should be an argument, or `)`.
-            let token = tokens.next();
+            let token = parser.tokens.next();
             match token {
                 Some(
                     token @ Token {
@@ -286,11 +264,11 @@ impl FunctionSignature {
 
                 Some(_) => {
                     // The next few tokens represent an argument.
-                    tokens.rewind(1);
+                    parser.tokens.rewind(1);
                     let arg = if named {
-                        Argument::from(tokens)?
+                        Argument::parse(parser)?
                     } else {
-                        Argument::unnamed_from(tokens)?
+                        Argument::parse_unnamed(parser)?
                     };
 
                     args.push(arg);
@@ -306,17 +284,14 @@ impl FunctionSignature {
                         .as_str(),
                         None,
                         // TODO: These positions are technically wrong.
-                        Span {
-                            start_pos,
-                            end_pos: start_pos,
-                        },
+                        parser.new_span(start_pos, start_pos),
                     ));
                 }
             };
 
             // After the argument, the next token should be `,` or `)`.
             let token =
-                Module::parse_expecting_any(tokens, vec![TokenKind::Comma, TokenKind::RightParen])?;
+                parser.parse_expecting_any(vec![TokenKind::Comma, TokenKind::RightParen])?;
             match token {
                 Token {
                     kind: TokenKind::Comma,

@@ -1,4 +1,3 @@
-use crate::lexer::pos::Position;
 use crate::lexer::pos::Span;
 use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;

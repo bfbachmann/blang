@@ -4,7 +4,7 @@ use std::fmt::Formatter;
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::lexer::pos::{Locatable, Position, Span};
+use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::ret::Ret;
 use crate::{format_code, locatable_impl, util};
 
@@ -35,7 +35,7 @@ locatable_impl!(ARet);
 
 impl ARet {
     pub fn from(ctx: &mut ProgramContext, ret: &Ret) -> Self {
-        let span = ret.span().clone();
+        let span = ret.span;
 
         // Make sure we are inside a function body. If not, record the error and return a dummy
         // value.

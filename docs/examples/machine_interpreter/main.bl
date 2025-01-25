@@ -1,31 +1,28 @@
-use "std/libc/proc.bl" {exit}
-use "std/libc/mem.bl" {calloc, free}
-use "std/libc/file.bl" {fopen, fseek, fread, ftell, rewind, fclose, seek_end}
-use "std/mem/libc_allocator.bl" {LibcAllocator}
+mod machine_interpreter
 
-use "docs/examples/machine_interpreter/parser.bl" {Parser}
-use "docs/examples/machine_interpreter/machine.bl" {Machine, ExecStatus}
-use "std/backtrace/panic.bl" {assert}
+use "std/libc" @libc
+use "std/allocator" {LibcAllocator}
+use "std/runtime" {assert}
 
 fn main() {
     // Use libc for memory management.
     let mut allocator = LibcAllocator.new().dynamic()
 
     // Open file for reading.
-    let file = fopen("docs/examples/machine_interpreter/program.txt\0".ptr(), "rb\0".ptr())
+    let file = @libc.fopen("docs/examples/machine_interpreter/program.txt\0".ptr(), "rb\0".ptr())
     assert(file as uint != 0, "failed to open file")
 
     // Figure out how many bytes are in the file.
-    assert(fseek(file, 0, seek_end) == 0, "could not seek end of file")
-    let size_bytes = ftell(file)
+    assert(@libc.fseek(file, 0, @libc.seek_end) == 0, "could not seek end of file")
+    let size_bytes = @libc.ftell(file)
     assert(size_bytes != -1, "failed to get file cursor")
-    rewind(file)
+    @libc.rewind(file)
 
     // Allocate space to store the file contents and copy the file.
     // contents into the buffer.
-    let prog_data = calloc(1, size_bytes as uint + 1)
+    let prog_data = @libc.calloc(1, size_bytes as uint + 1)
     assert(prog_data as uint != 0, "failed to allocate memory")
-    let bytes_read = fread(prog_data, 1, size_bytes as uint, file)
+    let bytes_read = @libc.fread(prog_data, 1, size_bytes as uint, file)
     assert(bytes_read == size_bytes as uint, "failed to read file into memory")
 
     // Read instructions from the file.
@@ -45,7 +42,7 @@ fn main() {
     }
 
     machine.free()
-    free(prog_data)
-    fclose(file)
-    exit(sum as uint)
+    @libc.free(prog_data)
+    @libc.fclose(file)
+    @libc.exit(sum as uint)
 }

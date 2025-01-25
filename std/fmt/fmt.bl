@@ -1,20 +1,20 @@
-use "std/libc/io.bl" @io
-use "std/convert.bl" @convert
-use "std/types/slice.bl" {Slice}
-use "std/types/list.bl" {List}
-use "std/io/writer.bl" {Writer}
-use "std/mem/allocator.bl" {Allocator}
-use "std/mem/libc_allocator.bl" {LibcAllocator}
-use "std/io/file_writer.bl" {FileWriter}
+mod fmt
+
+use "std/libc" @libc
+use "std/convert" @convert
+use "std/types/slice" {Slice}
+use "std/types/list" {List}
+use "std/io" {Writer, FileWriter}
+use "std/allocator" {Allocator, LibcAllocator}
 
 /// Prints `p` to stdout with a newline at the end.
 pub fn println[P: Print](p: *P) {
-    println_fd(@io.stdout, p)
+    println_fd(@libc.stdout, p)
 }
 
 /// Prints `p` to stderr with a newline at the end.
 pub fn eprintln[P: Print](p: *P) {
-    println_fd(@io.stderr, p)
+    println_fd(@libc.stderr, p)
 }
 
 /// Prints `p` to `fd` with a newline at the end.
@@ -25,12 +25,12 @@ pub fn println_fd[P: Print](fd: uint, p: *P) {
 
 /// Prints `format` to stdout.
 pub fn printf(format: Format) {
-    printf_fd(@io.stdout, format)
+    printf_fd(@libc.stdout, format)
 }
 
 /// Prints `format` to stderr.
 pub fn eprintf(format: Format) {
-    printf_fd(@io.stderr, format)
+    printf_fd(@libc.stderr, format)
 }
 
 /// Prints `format` to `fd`.

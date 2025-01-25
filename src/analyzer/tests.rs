@@ -7,13 +7,15 @@ mod tests {
     use crate::codegen::program::{init_default_host_target, CodeGenConfig, OutputFormat};
     use crate::lexer::lex::lex;
     use crate::lexer::stream::Stream;
-    use crate::parser::module::Module;
+    use crate::parser::file_parser::FileParser;
+    use crate::parser::src_file::SrcFile;
     use std::collections::HashMap;
     use std::path::PathBuf;
 
     fn get_analysis(raw: &str) -> ProgramAnalysis {
-        let tokens = lex(raw).expect("should not error");
-        let module = Module::from("", &mut Stream::from(tokens)).expect("should not error");
+        let tokens = lex(raw, 0).expect("should not error");
+        let mut parser = FileParser::new(0, Stream::from(tokens));
+        let module = SrcFile::parse(&mut parser).expect("should not error");
         let target_machine = init_default_host_target().unwrap();
         let config =
             CodeGenConfig::new_default(target_machine, PathBuf::new(), OutputFormat::LLVMIR);
@@ -39,9 +41,9 @@ mod tests {
     fn analyze_program(mods: Vec<(String, String)>) -> ProgramAnalysis {
         let mut parsed_mods = vec![];
         for (mod_path, mod_code) in mods {
-            let tokens = lex(mod_code.as_str()).expect("lexing should succeed");
-            let parsed_mod = Module::from(mod_path.as_str(), &mut Stream::from(tokens))
-                .expect("should not error");
+            let tokens = lex(mod_code.as_str(), 0).expect("lexing should succeed");
+            let mut parser = FileParser::new(0, Stream::from(tokens.clone()));
+            let parsed_mod = SrcFile::parse(&mut parser).expect("should not error");
             parsed_mods.push(parsed_mod);
         }
 

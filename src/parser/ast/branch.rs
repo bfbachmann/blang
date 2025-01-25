@@ -1,13 +1,11 @@
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position, Span};
-use crate::lexer::stream::Stream;
-use crate::lexer::token::Token;
-use crate::locatable_impl;
+use crate::lexer::pos::Span;
+use crate::locatable_impl; use crate::Locatable;
 use crate::parser::ast::closure::Closure;
 use crate::parser::ast::expr::Expression;
 use crate::parser::error::ParseResult;
-use crate::parser::module::Module;
+use crate::parser::file_parser::FileParser;
 
 /// Represents a branch in a conditional. `if` and `else if` branches must have condition
 /// expressions, but `else` branches must not.
@@ -46,23 +44,23 @@ impl Branch {
     ///     <closure>
     ///
     /// where
-    ///  - `expr` is the branch condition expression (see `Expression::from`)
-    ///  - `closure` is the branch body closure (see `Closure::from`)
-    pub fn from(tokens: &mut Stream<Token>, with_condition: bool) -> ParseResult<Self> {
+    ///  - `expr` is the branch condition expression
+    ///  - `closure` is the branch body closure
+    pub fn from(parser: &mut FileParser, with_condition: bool) -> ParseResult<Self> {
         // Record the starting position of the branch.
-        let start_pos = Module::current_position(tokens);
+        let start_pos = parser.current_position();
 
         let mut cond_expr = None;
         if with_condition {
             // The following tokens should be an expression that represents the branch condition.
-            let expr = Expression::from(tokens)?;
+            let expr = Expression::parse(parser)?;
             cond_expr = Some(expr);
         }
 
         // The next tokens should either be `: <statement>` or just a closure.
-        let body = Closure::from(tokens)?;
-        let end_pos = body.end_pos().clone();
+        let body = Closure::parse(parser)?;
+        let end_pos = body.span().end_pos;
 
-        Ok(Branch::new(cond_expr, body, Span { start_pos, end_pos }))
+        Ok(Branch::new(cond_expr, body, parser.new_span(start_pos, end_pos)))
     }
 }

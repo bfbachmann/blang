@@ -1,8 +1,8 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position, Span};
-use crate::locatable_impl;
+use crate::lexer::pos::Span;
+use crate::locatable_impl; use crate::Locatable;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::symbol::Symbol;
 

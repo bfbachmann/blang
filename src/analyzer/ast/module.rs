@@ -11,14 +11,15 @@ use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_containment::{check_enum_containment, check_struct_containment};
-use crate::lexer::pos::{Locatable, Span};
-use crate::parser::ast::ext::ExternFn;
+use crate::lexer::pos::Span;
 use crate::parser::ast::func::Function;
+use crate::parser::ast::r#extern::ExternFn;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#type::Type;
+use crate::parser::ast::r#use::UsedModule;
 use crate::parser::ast::spec::SpecType;
 use crate::parser::ast::statement::Statement;
-use crate::parser::module::Module;
+use crate::parser::src_file::SrcFile;
 
 /// Represents a semantically analyzed source file.
 #[derive(Debug)]
@@ -31,66 +32,78 @@ pub struct AModule {
 
 impl AModule {
     /// Performs semantic analysis on the given module and returns a type-rich version of it.
-    pub fn from(ctx: &mut ProgramContext, module: &Module) -> AModule {
+    pub fn from(ctx: &mut ProgramContext, mod_path: String, src_files: Vec<&SrcFile>) -> AModule {
         // Set the current mod path in the program context so it can be used to
         // create unique identifiers for symbols in this module during analysis.
-        ctx.set_cur_mod(&module);
+        let mut used_mods: Vec<&UsedModule> = vec![];
+        for src_file in &src_files {
+            used_mods.extend(&src_file.used_mods);
+        }
+        ctx.set_cur_mod(mod_path.clone(), used_mods);
 
         // First pass: define types and functions in the module without analyzing them yet.
-        define_symbols(ctx, module);
+        for src_file in &src_files {
+            define_symbols(ctx, src_file);
+        }
 
         // Second pass: analyze specs and function signatures.
-        analyze_specs(ctx, module);
-        analyze_fn_sigs(ctx, module);
+        for src_file in &src_files {
+            analyze_specs(ctx, src_file);
+        }
+        for src_file in &src_files {
+            analyze_fn_sigs(ctx, src_file);
+        }
 
         let mut fns = vec![];
         let mut impls = vec![];
         let mut extern_fns = vec![];
 
         // Third pass: fully analyze all program statements.
-        for statement in &module.statements {
-            match statement {
-                Statement::FunctionDeclaration(func) => {
-                    let a_fn = AFn::from(ctx, func);
-                    ctx.insert_fn(a_fn.signature.clone());
-                    fns.push(a_fn);
-                }
+        for src_file in &src_files {
+            for statement in &src_file.statements {
+                match statement {
+                    Statement::FunctionDeclaration(func) => {
+                        let a_fn = AFn::from(ctx, func);
+                        ctx.insert_fn(a_fn.signature.clone());
+                        fns.push(a_fn);
+                    }
 
-                Statement::ExternFn(extern_fn) => {
-                    extern_fns.push(AExternFn::from(ctx, extern_fn));
-                }
+                    Statement::ExternFn(extern_fn) => {
+                        extern_fns.push(AExternFn::from(ctx, extern_fn));
+                    }
 
-                Statement::Impl(impl_) => {
-                    impls.push(AImpl::from(ctx, impl_));
-                }
+                    Statement::Impl(impl_) => {
+                        impls.push(AImpl::from(ctx, impl_));
+                    }
 
-                Statement::Const(const_) => {
-                    AConst::from(ctx, const_);
-                }
+                    Statement::Const(const_) => {
+                        AConst::from(ctx, const_);
+                    }
 
-                Statement::StructDeclaration(struct_type) => {
-                    AStructType::from(ctx, struct_type, false);
-                }
+                    Statement::StructDeclaration(struct_type) => {
+                        AStructType::from(ctx, struct_type, false);
+                    }
 
-                Statement::EnumDeclaration(enum_type) => {
-                    AEnumType::from(ctx, enum_type, false);
-                }
+                    Statement::EnumDeclaration(enum_type) => {
+                        AEnumType::from(ctx, enum_type, false);
+                    }
 
-                // These statements should already have been analyzed above.
-                Statement::SpecDeclaration(_) | Statement::Use(_) => {}
+                    // These statements should already have been analyzed above.
+                    Statement::SpecDeclaration(_) | Statement::Use(_) => {}
 
-                other => {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::InvalidStatement,
-                        "statement not valid in this context",
-                        other,
-                    ));
+                    other => {
+                        ctx.insert_err(AnalyzeError::new(
+                            ErrorKind::InvalidStatement,
+                            "statement not valid in this context",
+                            other,
+                        ));
+                    }
                 }
             }
         }
 
         AModule {
-            path: module.path.clone(),
+            path: mod_path,
             fns,
             impls,
             extern_fns,
@@ -101,10 +114,10 @@ impl AModule {
 /// Walks through statements in the program and inserts information about un-analyzed types, consts,
 /// and impls into the program context so we can look them up and analyzet them later. Then, checks
 /// for type containment cycles and detects illegal types.
-fn define_symbols(ctx: &mut ProgramContext, module: &Module) {
+fn define_symbols(ctx: &mut ProgramContext, src_files: &SrcFile) {
     // First pass: just insert un-analyzed impls headers, consts, and types so we can look the up
     // when we need to.
-    for statement in &module.statements {
+    for statement in &src_files.statements {
         match statement {
             Statement::Impl(impl_) => {
                 ctx.insert_unchecked_impl(impl_.typ.clone(), impl_.maybe_spec.clone());
@@ -157,7 +170,7 @@ fn define_symbols(ctx: &mut ProgramContext, module: &Module) {
 }
 
 /// Analyzes all specs declared in the module.
-fn analyze_specs(ctx: &mut ProgramContext, module: &Module) {
+fn analyze_specs(ctx: &mut ProgramContext, module: &SrcFile) {
     for statement in &module.statements {
         match statement {
             Statement::SpecDeclaration(spec) => {
@@ -171,7 +184,7 @@ fn analyze_specs(ctx: &mut ProgramContext, module: &Module) {
 /// Analyzes all top-level function signatures (this includes those inside specs) and defines them
 /// in the program context so they can be referenced later. This will not perform any analysis of
 /// function bodies.
-fn analyze_fn_sigs(ctx: &mut ProgramContext, module: &Module) {
+fn analyze_fn_sigs(ctx: &mut ProgramContext, module: &SrcFile) {
     for statement in &module.statements {
         match statement {
             Statement::FunctionDeclaration(func) => {
@@ -277,7 +290,8 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
                             )
                             .as_str(),
                             &Span {
-                                start_pos: impl_.start_pos().clone(),
+                                file_id: impl_.span.file_id,
+                                start_pos: impl_.span.start_pos,
                                 end_pos: impl_.maybe_spec.as_ref().unwrap().span.end_pos,
                             },
                         ));
@@ -393,7 +407,11 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
 
 fn analyze_spec(ctx: &mut ProgramContext, spec: &SpecType) {
     // Make sure this spec name is not a duplicate.
-    if ctx.get_spec_type(None, spec.name.as_str()).is_some() {
+    if ctx
+        .get_spec_type(None, spec.name.as_str())
+        .unwrap()
+        .is_some()
+    {
         ctx.insert_err(AnalyzeError::new(
             ErrorKind::DuplicateSpec,
             format_code!("another spec named {} already exists", spec.name).as_str(),

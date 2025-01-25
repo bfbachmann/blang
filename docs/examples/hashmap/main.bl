@@ -1,12 +1,12 @@
-use "std/libc/proc.bl" @proc
-use "std/libc/mem.bl" @mem
-use "std/backtrace/panic.bl" {assert}
+mod hashmap
 
-use "std/specs/eq.bl" {Eq}
-use "std/mem/libc_allocator.bl" {LibcAllocator}
-use "std/types/hasher.bl" {Hash, HashWriter}
-use "std/types/slice.bl" {Slice}
-use "docs/examples/hashmap/hashmap.bl" {HashMap}
+use "std/libc" @libc
+use "std/runtime" {assert}
+
+use "std/specs" {Eq}
+use "std/allocator" {LibcAllocator}
+use "std/types/hasher" {Hash, HashWriter}
+use "std/types/slice" {Slice}
 
 struct Key {
     s: str
@@ -46,5 +46,5 @@ fn main() {
     map.insert(Key{s: "d"}, "value: d")
     assert(map.get(&Key{s: "d"})^ == "value: d", "expected \"value: d\"")
 
-    @proc.exit(0)
+    @libc.exit(0)
 }

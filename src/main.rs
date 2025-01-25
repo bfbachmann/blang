@@ -1,29 +1,23 @@
-use std::collections::{HashSet, VecDeque};
 use std::fs::File;
 use std::io::prelude::*;
 use std::os::unix::prelude::CommandExt;
 use std::path::{Path, PathBuf};
+use std::process;
 use std::time::Instant;
-use std::{fs, process};
 
 use clap::{arg, Arg, ArgAction, Command};
 use flamer::flame;
 use inkwell::targets::RelocMode;
 use inkwell::OptimizationLevel;
 
-use parser::module::Module;
-
 use crate::analyzer::analyze::{analyze_modules, ProgramAnalysis};
 use crate::codegen::program::{
     generate, init_default_host_target, init_target_machine, CodeGenConfig, OutputFormat,
 };
 use crate::fmt::{display_err, format_duration};
-use crate::lexer::error::LexResult;
-use crate::lexer::lex::lex;
 use crate::lexer::pos::Locatable;
-use crate::lexer::stream::Stream;
-use crate::lexer::token::Token;
 use crate::mono_collector::mono_prog;
+use crate::parser::parse_mods;
 
 mod codegen;
 #[macro_use]
@@ -52,7 +46,11 @@ fn main() {
     let cmd = cmd.subcommand(
         Command::new("build")
             .about("Compile Blang source code")
-            .arg(arg!([SRC_PATH] "Path to the source code to compile").required(true))
+            .arg(
+                arg!([TARGET_MODULE] "The module to compile")
+                    .required(false)
+                    .default_value("main"),
+            )
             .arg(
                 arg!(-O --"optimization-level" <OPT_LEVEL> "Optimization level")
                     .required(false)
@@ -95,23 +93,29 @@ fn main() {
     let cmd = cmd.subcommand(
         Command::new("check")
             .about("Perform static analysis only")
-            .arg(arg!([SRC_PATH] "Path to the source code to check").required(true))
+            .arg(
+                arg!([TARGET_MODULE] "The module to check")
+                    .required(false)
+                    .default_value("main"),
+            )
             .arg(arg!(-d --dump <DUMP_PATH> "Dump the analyzed AST to a file").required(false)),
     );
 
     // Add the "run" subcommand for building and running a binary.
     let cmd = cmd.subcommand(
-        Command::new("run")
-            .about("Run Blang source code")
-            .arg(arg!([SRC_PATH] "Path to the source code to run").required(true)),
+        Command::new("run").about("Run Blang source code").arg(
+            arg!([TARGET_MODULE] "The module to run")
+                .required(false)
+                .default_value("main"),
+        ),
     );
 
     let matches = cmd.get_matches();
 
     // Handle the command.
     match matches.subcommand() {
-        Some(("build", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
-            Some(src_path) => {
+        Some(("build", sub_matches)) => match sub_matches.get_one::<String>("TARGET_MODULE") {
+            Some(target_mod) => {
                 let optimization_level = match sub_matches.get_one::<String>("optimization-level") {
                     Some(level) => match level.as_str() {
                         "default" => OptimizationLevel::Default,
@@ -183,8 +187,8 @@ fn main() {
                     None => {
                         // If no output path was specified, just use the default generated from the
                         // source file path.
-                        let src = Path::new(src_path);
-                        default_output_file_path(src, output_format)
+                        let src = Path::new(target_mod);
+                        default_output_path(src, output_format)
                     }
                 };
 
@@ -212,14 +216,14 @@ fn main() {
                     emit_debug_info: debug,
                 };
 
-                if let Err(e) = compile(src_path, quiet, codegen_config) {
+                if let Err(e) = compile(target_mod, quiet, codegen_config) {
                     fatalln!("{}", e);
                 }
             }
             _ => fatalln!("expected source path"),
         },
 
-        Some(("check", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
+        Some(("check", sub_matches)) => match sub_matches.get_one::<String>("TARGET_MODULE") {
             Some(file_path) => {
                 let maybe_dump_path = sub_matches.get_one::<String>("dump");
                 let target_machine = match init_default_host_target() {
@@ -239,14 +243,14 @@ fn main() {
             _ => fatalln!("expected source path"),
         },
 
-        Some(("run", sub_matches)) => match sub_matches.get_one::<String>("SRC_PATH") {
+        Some(("run", sub_matches)) => match sub_matches.get_one::<String>("TARGET_MODULE") {
             Some(file_path) => {
                 let target_machine = match init_default_host_target() {
                     Ok(tm) => tm,
                     Err(err) => fatalln!("failed to initialize target {err}"),
                 };
                 let output_path =
-                    default_output_file_path(Path::new(file_path), OutputFormat::Executable);
+                    default_output_path(Path::new(file_path), OutputFormat::Executable);
                 let config = CodeGenConfig::new_default(
                     target_machine,
                     output_path,
@@ -267,222 +271,63 @@ fn main() {
     };
 }
 
-/// Parses source code. If `input_path` is a directory, we'll try to locate and parse
-/// the `main.bl` file inside it along with any imported paths. Otherwise, the file
-/// at `input_path` and all its imports will be parsed.
-/// Prints parse errors and exits if there were any parse errors. Otherwise,
-/// returns parse sources.
-// TODO: Allow compilation of bare modules (without `main`).
-#[flame]
-fn parse_source_files(input_path: &str) -> Result<Vec<Module>, String> {
-    let is_dir = match fs::metadata(input_path) {
-        Ok(meta) => meta.is_dir(),
-        Err(err) => return Err(format!(r#"error reading "{}": {}"#, input_path, err)),
-    };
-
-    // Get the project root directory and main file paths.
-    let mut file_paths = if is_dir {
-        let root_path = fs::canonicalize(input_path).unwrap();
-        let main_path = root_path.join("main.bl");
-
-        if !main_path.exists() {
-            let mut paths = vec![];
-            match fs::read_dir(root_path.to_str().unwrap()) {
-                Ok(entries) => {
-                    // Collect all source files in the directory.
-                    for result in entries {
-                        match result {
-                            Ok(entry) => {
-                                let is_bl = entry.file_name().to_str().unwrap().ends_with(".bl");
-                                let is_file = entry.file_type().is_ok_and(|ft| ft.is_file());
-                                if is_file && is_bl {
-                                    paths.push(entry.path());
-                                }
-                            }
-                            _ => continue,
-                        };
-                    }
-                }
-
-                Err(err) => return Err(format!(r#"error reading "{}": {}"#, input_path, err)),
-            };
-
-            paths
-        } else {
-            let main_path = Path::new(input_path);
-            vec![main_path.join("main.bl")]
-        }
-    } else {
-        let main_path = Path::new(input_path);
-        vec![main_path.to_path_buf()]
-    };
-
-    // Include builtins.
-    match fs::read_dir("std/builtins") {
-        Ok(entries) => {
-            for entry in entries {
-                match entry {
-                    Ok(entry) => {
-                        file_paths.push(entry.path());
-                    }
-
-                    Err(err) => return Err(err.to_string()),
-                }
-            }
-        }
-
-        Err(err) => return Err(err.to_string()),
-    };
-
-    // Parse all source files by following imports.
-    let mut files_to_parse = VecDeque::from(file_paths);
-    let mut parsed_mod_paths: HashSet<PathBuf> = HashSet::new();
-    let mut parsed_mods = vec![];
-    let mut parse_error_count = 0;
-    while let Some(path) = files_to_parse.pop_front() {
-        let path = path.to_str().unwrap();
-
-        // Lex the source file and return early if there are any errors.
-        let tokens = match lex_source_file(path)? {
-            Ok(tokens) => tokens,
-            Err(err) => {
-                display_err(
-                    err.message.as_str(),
-                    None,
-                    None,
-                    input_path,
-                    &err.span,
-                    false,
-                );
-
-                return Err("analysis skipped due to previous error".to_string());
-            }
-        };
-
-        // Parse the source file and log any parse errors.
-        match Module::from(path, &mut Stream::from(tokens)) {
-            Ok(module) => {
-                for used_mod in &module.used_mods {
-                    let used_mod_path = PathBuf::from(used_mod.path.raw.as_str());
-
-                    // Make sure the path is actually a file we can access.
-                    if !used_mod_path.exists() {
-                        parse_error_count += 1;
-                        display_err(
-                            format_code!("{} does not exist", used_mod_path.display()).as_str(),
-                            None,
-                            None,
-                            path,
-                            used_mod.path.span(),
-                            false,
-                        );
-
-                        continue;
-                    }
-
-                    if used_mod_path.is_dir() {
-                        parse_error_count += 1;
-                        display_err(
-                            format_code!("{} is not a file", used_mod_path.display()).as_str(),
-                            None,
-                            None,
-                            path,
-                            used_mod.path.span(),
-                            false,
-                        );
-
-                        continue;
-                    }
-
-                    if !parsed_mod_paths.contains(&used_mod_path) {
-                        files_to_parse.push_back(used_mod_path)
-                    }
-                }
-
-                parsed_mod_paths.insert(Path::new(module.path.as_str()).to_path_buf());
-                parsed_mods.push(module);
-            }
-
-            Err(err) => {
-                parse_error_count += 1;
-                display_err(err.message.as_str(), None, None, path, err.span(), false)
-            }
-        };
-    }
-
-    // Abort if there are parse errors.
-    if parse_error_count > 0 {
-        return Err(format!(
-            "analysis skipped due to previous {}",
-            match parse_error_count {
-                1 => "error".to_string(),
-                n => format!("{} errors", n),
-            }
-        ));
-    }
-
-    Ok(parsed_mods)
-}
-
-/// Lexes a source file.
-fn lex_source_file(input_path: &str) -> Result<LexResult<Vec<Token>>, String> {
-    let full_path = match fs::canonicalize(input_path) {
-        Ok(p) => p,
-        Err(err) => return Err(format!("error reading {}: {}", input_path, err)),
-    };
-
-    let source_code = match fs::read_to_string(full_path) {
-        Ok(code) => code,
-        Err(err) => return Err(format!("error reading {}: {}", input_path, err)),
-    };
-
-    Ok(lex(source_code.as_str()))
-}
-
-/// Performs static analysis on the source code at the given path. If `input_path` is a directory,
-/// all source files therein will be analyzed. Returns the analyzed set of sources, or an error.
+/// Performs static analysis on the source code starting at the given module path. Returns the
+/// results of analysis, or an error message.
 #[flame]
 fn analyze(
-    input_path: &str,
+    target_mod_path: &str,
     maybe_dump_path: Option<&String>,
     config: CodeGenConfig,
 ) -> Result<ProgramAnalysis, String> {
     // Parse all targeted source files.
-    let modules = parse_source_files(input_path)?;
-    if modules.is_empty() {
-        return Err(format!("no source files found in {}", input_path));
+    let (src_info, errs) = parse_mods(target_mod_path);
+
+    if !errs.is_empty() {
+        for err in &errs {
+            match src_info.file_info.try_get_file_path_by_id(err.span.file_id) {
+                Some(file_path) => {
+                    display_err(&err.message, None, None, file_path, &err.span, false);
+                }
+                None => {
+                    eprintln!("{}", err.message);
+                }
+            };
+        }
+
+        return Err(format!("parsing failed with {} error(s)", errs.len()));
+    }
+
+    if src_info.mod_info.is_empty() {
+        return Err(format!(r#"no source files found in "{}""#, target_mod_path));
     }
 
     // Analyze the program.
-    let analysis = analyze_modules(modules, config);
+    let analysis = analyze_modules(&src_info, target_mod_path, config);
 
     // Display warnings and errors that occurred.
     let mut err_count = 0;
     for result in &analysis.analyzed_modules {
-        let path = result.module.path.clone();
-
         // Print warnings.
         for warn in &result.warnings {
-            display_err(
-                warn.message.as_str(),
-                None,
-                None,
-                path.as_str(),
-                &warn.span,
-                true,
-            );
+            let file_path = src_info
+                .file_info
+                .try_get_file_path_by_id(warn.span.file_id)
+                .unwrap();
+            display_err(&warn.message, None, None, file_path, &warn.span, true);
         }
 
         // Print errors.
+        err_count += result.errors.len();
         for err in &result.errors {
-            let path = result.module.path.clone();
-            err_count += 1;
-
+            let file_path = src_info
+                .file_info
+                .try_get_file_path_by_id(err.span.file_id)
+                .unwrap();
             display_err(
-                err.message.as_str(),
+                &err.message,
                 err.detail.as_ref(),
                 err.help.as_ref(),
-                path.as_str(),
+                file_path,
                 &err.span,
                 false,
             );
@@ -491,13 +336,7 @@ fn analyze(
 
     // Die if analysis failed.
     if err_count > 0 {
-        return Err(format!(
-            "analysis failed with {}",
-            match err_count {
-                1 => "error".to_string(),
-                n => format!("{} errors", n),
-            }
-        ));
+        return Err(format!("analysis failed with {err_count} error(s)"));
     }
 
     // Dump the AST to a file, if necessary.
@@ -526,16 +365,14 @@ fn analyze(
     Ok(analysis)
 }
 
-/// Compiles a source files for the given target ISA. If `src_path` points to a directory, all
-/// source files therein will be compiled. If there is no target, infers configuration
-/// for the current host system.
+/// Compiles a module.
 #[flame]
-fn compile(src_path: &str, quiet: bool, config: CodeGenConfig) -> Result<(), String> {
+fn compile(target_mod: &str, quiet: bool, config: CodeGenConfig) -> Result<(), String> {
     // Read and analyze the program.
     let start_time = Instant::now();
     let is_exe = config.output_format == OutputFormat::Executable;
     let output_path = config.output_path.to_str().unwrap().to_string();
-    let prog_analysis = analyze(src_path, None, config)?;
+    let prog_analysis = analyze(target_mod, None, config)?;
 
     // Raise an error if there is no `fn main`.
     if prog_analysis.maybe_main_fn_mangled_name.is_none() && is_exe {
@@ -554,7 +391,7 @@ fn compile(src_path: &str, quiet: bool, config: CodeGenConfig) -> Result<(), Str
         let total_duration = Instant::now() - start_time;
         println!(
             "Compiled {} ({}) in {}.\n",
-            src_path,
+            target_mod,
             output_path,
             format_duration(total_duration)
         );
@@ -577,7 +414,7 @@ fn run(src_path: &str, config: CodeGenConfig) {
 }
 
 /// Generates a new default output file path of the form `bin/<src>.<output_format>`.
-fn default_output_file_path(src: &Path, output_format: OutputFormat) -> PathBuf {
+fn default_output_path(src: &Path, output_format: OutputFormat) -> PathBuf {
     let file_stem = src.file_stem().unwrap_or_default();
     let mut path = PathBuf::from("bin");
     path.push(

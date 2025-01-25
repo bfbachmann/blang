@@ -1,12 +1,11 @@
 use super::FnCodeGen;
 use crate::analyzer::ast::closure::AClosure;
 use crate::codegen::error::CodeGenResult;
-use crate::lexer::pos::Locatable;
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles all statements in the closure.
     pub(crate) fn gen_closure(&mut self, closure: &AClosure) -> CodeGenResult<()> {
-        self.set_di_location(closure.start_pos());
+        self.set_di_location(&closure.span.start_pos);
 
         for (i, statement) in closure.statements.iter().enumerate() {
             // Create a new statement context that can store information about the statement

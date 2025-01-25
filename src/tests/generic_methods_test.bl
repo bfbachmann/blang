@@ -1,5 +1,5 @@
 use "std/libc/proc.bl" @proc
-use "std/backtrace/panic.bl" {assert}
+use "std/runtime" {assert}
 
 spec Clone {
     fn clone(*self) -> Self

@@ -1,9 +1,9 @@
-use "std/libc/mem.bl" @mem
-use "std/io/reader.bl" {Read}
-use "std/io/writer.bl" {Write, Writer}
-use "std/types/array.bl" {Array}
-use "std/types/slice.bl" {Slice}
-use "std/mem/allocator.bl" {Allocator}
+mod io
+
+use "std/libc" @libc
+use "std/types/array" {Array}
+use "std/types/slice" {Slice}
+use "std/allocator" {Allocator}
 
 /// A growable IO buffer that can be used to temporarily store data in memory.
 pub struct Buffer {
@@ -108,7 +108,7 @@ impl Buffer: Write {
 
         self.grow_to_fit(bytes_len)
         let start = self.buf.mut_ptr_at(self.cursor)
-        @mem.memcpy(start, bytes.ptr_at(0), bytes_len)
+        @libc.memcpy(start, bytes.ptr_at(0), bytes_len)
         self.cursor += bytes_len
     }
 }

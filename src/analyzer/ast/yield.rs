@@ -4,7 +4,6 @@ use std::fmt::Formatter;
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::lexer::pos::Position;
 use crate::lexer::pos::Span;
 use crate::locatable_impl;
 use crate::parser::ast::r#type::Type;

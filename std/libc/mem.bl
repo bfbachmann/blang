@@ -1,3 +1,5 @@
+mod libc
+
 pub extern fn memcpy(dst: *mut u8, src: *u8, n_bytes: uint) -> *mut u8
 pub extern fn memmove(dst: *mut u8, src: *u8, n_bytes: uint) -> *mut u8
 pub extern fn malloc(n_bytes: uint) -> *mut u8

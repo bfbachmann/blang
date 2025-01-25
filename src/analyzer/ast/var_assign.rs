@@ -77,7 +77,7 @@ fn check_assignable<T: Locatable>(ctx: &mut ProgramContext, loc: &T, target_expr
                 return false;
             }
 
-            let var = match ctx.get_scoped_symbol(None, symbol.name.as_str()) {
+            let var = match ctx.get_scoped_symbol(None, symbol.name.as_str()).unwrap() {
                 Some(v) => v,
                 None => {
                     // The variable does not exist. Record the error and skip any further checks.

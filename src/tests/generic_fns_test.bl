@@ -1,7 +1,7 @@
 use "std/libc/proc.bl" {exit}
 use "std/libc/mem.bl" {malloc, free}
 
-use "std/backtrace/panic.bl" {assert}
+use "std/runtime" {assert}
 
 spec ToStr {
     fn to_str(*self) -> str

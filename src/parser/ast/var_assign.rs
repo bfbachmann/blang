@@ -1,14 +1,13 @@
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position, Span};
-use crate::lexer::stream::Stream;
-use crate::lexer::token::Token;
+use crate::lexer::pos::{Position, Span};
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::op::Operator;
 use crate::parser::error::ParseResult;
-use crate::parser::module::Module;
+use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 
 /// Represents the assignment of some value (i.e. an expression) to a variable.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -30,10 +29,13 @@ impl Hash for VariableAssignment {
 impl VariableAssignment {
     /// Creates a new variable assignment.
     pub fn new(target: Expression, value: Expression, start_pos: Position) -> Self {
+        let value_span = value.span();
+
         VariableAssignment {
             span: Span {
+                file_id: value_span.file_id,
                 start_pos,
-                end_pos: value.end_pos().clone(),
+                end_pos: value_span.end_pos,
             },
             target,
             value,
@@ -57,19 +59,18 @@ impl VariableAssignment {
     ///     <target> brs= <expr>
     ///
     /// where
-    ///  - `target` is the target that is being assigned to (see `Expression::from`)
+    ///  - `target` is the target that is being assigned to
     ///  - `expr` is an expression representing the value assigned to the variable
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
         // Get the starting position of the variable assignment.
-        let start_pos = Module::current_position(tokens);
+        let start_pos = parser.current_position();
 
         // The next token should be an expression representing the target to which a value is being assigned.
-        let target = Expression::from(tokens)?;
+        let target = Expression::parse(parser)?;
 
         // The next token should be an assignment operator.
-        let assign_op = Module::parse_expecting_any(
-            tokens,
-            vec![
+        let assign_op = parser
+            .parse_expecting_any(vec![
                 TokenKind::Equal,
                 TokenKind::PlusEqual,
                 TokenKind::MinusEqual,
@@ -83,13 +84,12 @@ impl VariableAssignment {
                 TokenKind::BitwiseXorEqual,
                 TokenKind::BitwiseLeftShiftEqual,
                 TokenKind::BitwiseRightShiftEqual,
-            ],
-        )?
-        .kind;
+            ])?
+            .kind;
 
         // The rest should be an expression representing the assigned value or
         // operand.
-        let assign_operand = Expression::from(tokens)?;
+        let assign_operand = Expression::parse(parser)?;
 
         let value = match assign_op {
             TokenKind::Equal => assign_operand,

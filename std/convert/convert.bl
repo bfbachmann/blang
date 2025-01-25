@@ -1,4 +1,6 @@
-use "std/types/slice.bl" {Slice}
+mod convert
+
+use "std/types/slice" {Slice}
 
 /// Converts an int to a sequence of bytes (basically a string) and an offset.
 /// The byte array contains the characters of the string representation of `val`

@@ -1,30 +1,30 @@
-use "std/libc/proc.bl" @proc
-use "std/libc/io.bl" @io
-use "std/libc/signal.bl" {backtrace, backtrace_symbols_fd}
+mod runtime
+
+use "std/libc" @libc
 
 pub fn panic(msg: str) {
     let panic_str = "panic: "
     let iovecs = [
-        @io.IOVec{
+        @libc.IOVec{
             base_ptr: panic_str.ptr()
             iov_len: panic_str.len()
         },
-        @io.IOVec{
+        @libc.IOVec{
             base_ptr: msg.ptr()
             iov_len: msg.len()
         },
-        @io.IOVec{
+        @libc.IOVec{
             base_ptr: "\n".ptr()
             iov_len: 1
         },
     ]
-    @io.writev(@io.stderr, &iovecs as *@io.IOVec, 3)
+    @libc.writev(@libc.stderr, &iovecs as *@libc.IOVec, 3)
 
     const max_frames: uint = 512
     let frame_buf = &mut [null; max_frames] as *mut *u8
-    let num_frames = backtrace(frame_buf, max_frames)
-    backtrace_symbols_fd(frame_buf, num_frames, @io.stderr)
-    @proc.abort()
+    let num_frames = @libc.backtrace(frame_buf, max_frames)
+    @libc.backtrace_symbols_fd(frame_buf, num_frames, @libc.stderr)
+    @libc.abort()
 }
 
 pub fn assert(cond: bool, msg: str) {

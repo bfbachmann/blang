@@ -1,9 +1,9 @@
-use "std/libc/mem.bl" {malloc, realloc, free}
-use "std/libc/string.bl" {strtol, strncmp}
-use "std/types/list.bl" {List}
-use "std/mem/allocator.bl" {Allocator}
+mod machine_interpreter
 
-use "std/backtrace/panic.bl" {assert}
+use "std/libc" @libc
+use "std/types/list" {List}
+use "std/allocator" {Allocator}
+use "std/runtime" {assert}
 
 /// Represents a machine instruction.
 pub struct Instruction {
@@ -283,7 +283,7 @@ impl Parser {
     /// and returns the result with `true` if successful, and `false` otherwise.
     fn try_parse_int(*mut self) -> {int, bool} {
         let mut end_ptr = self.buf_at_cursor()
-        let value = strtol(end_ptr, &mut end_ptr, 10)
+        let value = @libc.strtol(end_ptr, &mut end_ptr, 10)
         let num_chars = end_ptr as int - self.buf_at_cursor() as int
         self.move_cursor(num_chars)
         return {value, num_chars > 0}
@@ -329,6 +329,6 @@ impl Parser {
     /// Returns `true` if the program buffer starting at the parser's current position
     /// contains `s`.
     fn buf_starts_with(*self, s: str) -> bool {
-        return strncmp(self.buf_at_cursor(), s.ptr(), s.len()) == 0
+        return @libc.strncmp(self.buf_at_cursor(), s.ptr(), s.len()) == 0
     }
 }

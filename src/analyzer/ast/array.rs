@@ -5,8 +5,9 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::lexer::pos::{Locatable, Span};
+use crate::lexer::pos::Span;
 use crate::parser::ast::array::{ArrayInit, ArrayType};
+use crate::Locatable;
 
 /// An array type declaration.
 #[derive(Clone, Hash, Eq, Debug)]

@@ -1,14 +1,15 @@
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position, Span};
+use crate::lexer::pos::Span;
 use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
+use crate::Locatable;
 
 /// Represents a return statement.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Ret {
     pub value: Option<Expression>,
-    span: Span,
+    pub span: Span,
 }
 
 impl Hash for Ret {

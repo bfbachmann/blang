@@ -1,14 +1,13 @@
 use std::fmt;
 
-use crate::lexer::pos::{Locatable, Position, Span};
-use crate::lexer::stream::Stream;
+use crate::lexer::pos::{Locatable, Span};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::closure::Closure;
 use crate::parser::ast::cond::Conditional;
 use crate::parser::ast::cont::Continue;
 use crate::parser::ast::expr::Expression;
-use crate::parser::ast::ext::ExternFn;
+use crate::parser::ast::r#extern::ExternFn;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::func_call::FnCall;
 use crate::parser::ast::r#break::Break;
@@ -26,7 +25,7 @@ use crate::parser::ast::var_assign::VariableAssignment;
 use crate::parser::ast::var_dec::VariableDeclaration;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
-use crate::parser::module::Module;
+use crate::parser::file_parser::FileParser;
 
 /// Represents a statement.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -135,54 +134,6 @@ impl fmt::Display for Statement {
 }
 
 impl Locatable for Statement {
-    fn start_pos(&self) -> &Position {
-        match self {
-            Statement::VariableDeclaration(var_dec) => var_dec.start_pos(),
-            Statement::VariableAssignment(var_assign) => var_assign.start_pos(),
-            Statement::FunctionDeclaration(func) => func.start_pos(),
-            Statement::Closure(closure) => closure.start_pos(),
-            Statement::FunctionCall(call) => call.start_pos(),
-            Statement::Conditional(cond) => cond.start_pos(),
-            Statement::Match(match_) => match_.start_pos(),
-            Statement::Loop(l) => l.start_pos(),
-            Statement::Break(br) => br.start_pos(),
-            Statement::Continue(cont) => cont.start_pos(),
-            Statement::Return(ret) => ret.start_pos(),
-            Statement::Yield(yld) => yld.start_pos(),
-            Statement::StructDeclaration(s) => s.start_pos(),
-            Statement::EnumDeclaration(e) => e.start_pos(),
-            Statement::ExternFn(e) => e.start_pos(),
-            Statement::Const(c) => c.start_pos(),
-            Statement::Use(u) => u.start_pos(),
-            Statement::Impl(i) => i.start_pos(),
-            Statement::SpecDeclaration(t) => t.start_pos(),
-        }
-    }
-
-    fn end_pos(&self) -> &Position {
-        match self {
-            Statement::VariableDeclaration(var_dec) => var_dec.end_pos(),
-            Statement::VariableAssignment(var_assign) => var_assign.end_pos(),
-            Statement::FunctionDeclaration(func) => func.end_pos(),
-            Statement::Closure(closure) => closure.end_pos(),
-            Statement::FunctionCall(call) => call.end_pos(),
-            Statement::Conditional(cond) => cond.end_pos(),
-            Statement::Match(match_) => match_.end_pos(),
-            Statement::Loop(l) => l.end_pos(),
-            Statement::Break(br) => br.end_pos(),
-            Statement::Continue(cont) => cont.end_pos(),
-            Statement::Return(ret) => ret.end_pos(),
-            Statement::Yield(yld) => yld.end_pos(),
-            Statement::StructDeclaration(s) => s.end_pos(),
-            Statement::EnumDeclaration(e) => e.end_pos(),
-            Statement::ExternFn(e) => e.end_pos(),
-            Statement::Const(c) => c.end_pos(),
-            Statement::Use(u) => u.end_pos(),
-            Statement::Impl(i) => i.end_pos(),
-            Statement::SpecDeclaration(t) => t.end_pos(),
-        }
-    }
-
     fn span(&self) -> &Span {
         match self {
             Statement::VariableDeclaration(var_dec) => var_dec.span(),
@@ -210,23 +161,24 @@ impl Locatable for Statement {
 
 impl Statement {
     /// Parses a statement. Statements can be any of the following:
-    ///  - variable declaration (see `VariableDeclaration::from`)
-    ///  - variable assignment (see `VariableAssignment::from`)
-    ///  - function declaration (see `Function::from`)
-    ///  - closure (see `Closure::from`)
-    ///  - expression (see `Expression::from`)
-    ///  - conditional (see `Conditional::from`)
-    ///  - match (see `Match::from`)
-    ///  - loop (see `Loop::from`)
+    ///  - module declaration
+    ///  - variable declaration
+    ///  - variable assignment
+    ///  - function declaration
+    ///  - closure
+    ///  - expression
+    ///  - conditional
+    ///  - match
+    ///  - loop
     ///  - break
     ///  - continue
     ///  - return (of the form `return <expr>` where `expr` is an expression)
-    ///  - struct declaration (see `Struct::from`)
-    ///  - extern function declaration (see `FunctionSignature::from_extern`)
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+    ///  - struct declaration
+    ///  - extern function declaration
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
         // Try to use the first two tokens to figure out what type of statement will follow.
         // This works because no valid statement can contain fewer than two tokens.
-        let (first, second) = (tokens.peek_next(), tokens.peek_ahead(1));
+        let (first, second) = (parser.tokens.peek_next(), parser.tokens.peek_ahead(1));
         match (&first, &second) {
             (None, None) => {
                 return Err(ParseError::new(
@@ -251,82 +203,82 @@ impl Statement {
             // If the first two tokens are "let <name>" or "let mut", it must be a variable
             // declaration.
             (TokenKind::Let, TokenKind::Identifier(_) | TokenKind::Mut) => {
-                let var_decl = VariableDeclaration::from(tokens)?;
+                let var_decl = VariableDeclaration::parse(parser)?;
                 Ok(Statement::VariableDeclaration(var_decl))
             }
 
             // If the next tokens are `extern` or `pub extern`, it's an
             // external function declaration.
             (TokenKind::Extern, _) | (TokenKind::Pub, TokenKind::Extern) => {
-                let ext = ExternFn::from(tokens)?;
+                let ext = ExternFn::parse(parser)?;
                 Ok(Statement::ExternFn(ext))
             }
 
             // If the nex tokens are `const` or `pub const`, it's a constant declaration.
             (TokenKind::Const, _) | (TokenKind::Pub, TokenKind::Const) => {
-                let const_decl = Const::from(tokens)?;
+                let const_decl = Const::parse(parser)?;
                 Ok(Statement::Const(const_decl))
             }
 
             // If the next tokens are `fn` or `pub fn`, it must be a function declaration.
             (TokenKind::Fn, _) | (TokenKind::Pub, TokenKind::Fn) => {
-                let fn_decl = Function::from(tokens)?;
+                let fn_decl = Function::parse(parser)?;
                 Ok(Statement::FunctionDeclaration(fn_decl))
             }
 
             // If the first token is `{`, it must be a closure.
             (TokenKind::LeftBrace, _) => {
-                let closure = Closure::from(tokens)?;
+                let closure = Closure::parse(parser)?;
                 Ok(Statement::Closure(closure))
             }
 
             // If the first token is `if`, it must be a conditional.
             (TokenKind::If, _) => {
-                let cond = Conditional::from(tokens)?;
+                let cond = Conditional::parse(parser)?;
                 Ok(Statement::Conditional(cond))
             }
 
             // If the first token is `match`, is must be a match statement.
-            (TokenKind::Match, _) => Ok(Statement::Match(Match::from(tokens)?)),
+            (TokenKind::Match, _) => Ok(Statement::Match(Match::parse(parser)?)),
 
             // If the first token is `for`, `while` or `loop`, it must be a loop.
             (TokenKind::For | TokenKind::While | TokenKind::Loop, _) => {
-                let cond = Loop::from(tokens)?;
+                let cond = Loop::parse(parser)?;
                 Ok(Statement::Loop(Box::new(cond)))
             }
 
             // If the first token is `break`, it must be a break statement.
             (TokenKind::Break, _) => {
-                let br = Break::from(tokens)?;
+                let br = Break::parse(parser)?;
                 Ok(Statement::Break(br))
             }
 
             // If the first token is `continue`, it must be a loop continue.
             (TokenKind::Continue, _) => {
-                let cont = Continue::from(tokens)?;
+                let cont = Continue::parse(parser)?;
                 Ok(Statement::Continue(cont))
             }
 
             // If the first token is `impl`, it's the implementation of member functions for a type.
             (TokenKind::Impl, _) => {
-                let impl_ = Impl::from(tokens)?;
+                let impl_ = Impl::parse(parser)?;
                 Ok(Statement::Impl(impl_))
             }
 
             // If the next tokens are `spec` or `pub spec`, it must be a spec declaration.
             (TokenKind::Spec, _) | (TokenKind::Pub, TokenKind::Spec) => {
-                let spec_ = SpecType::from(tokens)?;
+                let spec_ = SpecType::parse(parser)?;
                 Ok(Statement::SpecDeclaration(spec_))
             }
 
             // If the first token is `return`, it must be a return statement.
             (TokenKind::Return, _) => {
-                let ret_token = tokens.next().unwrap();
+                let ret_token = parser.tokens.next().unwrap();
                 let ret_token_span = ret_token.span;
 
                 // If the next token is `}` or is on the following line, it's an empty return.
                 // Otherwise, we expect an expression.
-                let no_ret_val = match tokens.peek_next() {
+                let no_ret_val = match parser.tokens.peek_next() {
                     Some(Token {
                         kind: TokenKind::RightBrace,
                         ..
@@ -343,78 +295,72 @@ impl Statement {
                     return Ok(Statement::Return(Ret::new(None, ret_token_span)));
                 }
 
-                let expr = Expression::from(tokens)?;
+                let expr = Expression::parse(parser)?;
                 Ok(Statement::Return(Ret::new(
                     Some(expr.clone()),
-                    Span {
-                        start_pos: ret_token_span.start_pos,
-                        end_pos: *expr.end_pos(),
-                    },
+                    parser.new_span(ret_token_span.start_pos, expr.span().end_pos),
                 )))
             }
 
             // If the first token is `yield`, it must be a yield statement.
             (TokenKind::Yield, _) => {
-                let yield_token = tokens.next().unwrap();
+                let yield_token = parser.tokens.next().unwrap();
                 let start_pos = yield_token.span.start_pos;
-                let expr = Expression::from(tokens)?;
-                let end_pos = *expr.end_pos();
+                let expr = Expression::parse(parser)?;
+                let end_pos = expr.span().end_pos;
                 Ok(Statement::Yield(Yield::new(
                     expr,
-                    Span { start_pos, end_pos },
+                    parser.new_span(start_pos, end_pos),
                 )))
             }
 
             // If the next tokens are `struct` or `pub struct`, it must be a struct declaration.
             (TokenKind::Struct, _) | (TokenKind::Pub, TokenKind::Struct) => {
-                let struct_decl = StructType::from(tokens)?;
+                let struct_decl = StructType::parse(parser)?;
                 Ok(Statement::StructDeclaration(struct_decl))
             }
 
             // If the next tokens are `enum` or `pub enum`, it must be an enum declaration.
             (TokenKind::Enum, _) | (TokenKind::Pub, TokenKind::Enum) => {
-                let enum_decl = EnumType::from(tokens)?;
+                let enum_decl = EnumType::parse(parser)?;
                 Ok(Statement::EnumDeclaration(enum_decl))
             }
 
             // If the first token is `use`, it's a use (import).
             (TokenKind::Use, _) => {
-                let use_mod = UsedModule::from(tokens)?;
+                let use_mod = UsedModule::parse(parser)?;
                 Ok(Statement::Use(use_mod))
             }
 
             // At this point the statement should be an assignment or a function call.
             (_, _) => {
-                let start_pos = Module::current_position(tokens);
-                let cursor = tokens.cursor();
+                let start_pos = parser.current_position();
+                let cursor = parser.tokens.cursor();
 
                 // Parse the expression.
-                let expr = Expression::from(tokens)?;
+                let expr = Expression::parse(parser)?;
 
                 // Check if this is an assignment.
-                if Module::next_token_is_one_of(
-                    tokens,
-                    &vec![
-                        TokenKind::Equal,
-                        TokenKind::PlusEqual,
-                        TokenKind::MinusEqual,
-                        TokenKind::ForwardSlashEqual,
-                        TokenKind::AsteriskEqual,
-                        TokenKind::PercentEqual,
-                        TokenKind::LogicalAndEqual,
-                        TokenKind::LogicalOrEqual,
-                        TokenKind::BitwiseAndEqual,
-                        TokenKind::BitwiseOrEqual,
-                        TokenKind::BitwiseXorEqual,
-                        TokenKind::BitwiseLeftShiftEqual,
-                        TokenKind::BitwiseRightShiftEqual,
-                    ],
-                ) {
+                if parser.next_token_is_one_of(&vec![
+                    TokenKind::Equal,
+                    TokenKind::PlusEqual,
+                    TokenKind::MinusEqual,
+                    TokenKind::ForwardSlashEqual,
+                    TokenKind::AsteriskEqual,
+                    TokenKind::PercentEqual,
+                    TokenKind::LogicalAndEqual,
+                    TokenKind::LogicalOrEqual,
+                    TokenKind::BitwiseAndEqual,
+                    TokenKind::BitwiseOrEqual,
+                    TokenKind::BitwiseXorEqual,
+                    TokenKind::BitwiseLeftShiftEqual,
+                    TokenKind::BitwiseRightShiftEqual,
+                ]) {
                     // Parse the expression being assigned and return the variable
                     // assignment.
-                    tokens.set_cursor(cursor);
-                    return Ok(Statement::VariableAssignment(VariableAssignment::from(
-                        tokens,
+                    parser.tokens.set_cursor(cursor);
+                    return Ok(Statement::VariableAssignment(VariableAssignment::parse(
+                        parser,
                     )?));
                 }
 
@@ -425,10 +371,7 @@ impl Statement {
                         ErrorKind::ExpectedStatement,
                         "expected statement, but found expression",
                         None,
-                        Span {
-                            start_pos,
-                            end_pos: Module::prev_position(tokens),
-                        },
+                        parser.new_span(start_pos, parser.prev_position()),
                     )),
                 }
             }

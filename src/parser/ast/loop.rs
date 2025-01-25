@@ -1,15 +1,14 @@
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position, Span};
-use crate::lexer::stream::Stream;
-use crate::lexer::token::Token;
+use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::closure::Closure;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::statement::Statement;
 use crate::parser::error::ParseResult;
-use crate::parser::module::Module;
+use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 
 /// Represents a closure that is executed repeatedly.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -42,113 +41,102 @@ impl Loop {
     /// - `update` is the update statement that runs at the end of each iteration
     /// - `statement` is a statement representing the loop body
     /// - `closure` is a closure representing the loop body.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let token = Module::parse_expecting_any(
-            tokens,
-            vec![TokenKind::Loop, TokenKind::While, TokenKind::For],
-        )?;
-        tokens.rewind(1);
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
+        let token =
+            parser.parse_expecting_any(vec![TokenKind::Loop, TokenKind::While, TokenKind::For])?;
+        parser.tokens.rewind(1);
 
         match &token.kind {
-            TokenKind::Loop => parse_loop(tokens),
-            TokenKind::While => parse_while(tokens),
-            TokenKind::For => parse_for(tokens),
+            TokenKind::Loop => parse_loop(parser),
+            TokenKind::While => parse_while(parser),
+            TokenKind::For => parse_for(parser),
             _ => unreachable!(),
         }
     }
 }
 
 /// Parses a `loop` loop.
-fn parse_loop(tokens: &mut Stream<Token>) -> ParseResult<Loop> {
+fn parse_loop(parser: &mut FileParser) -> ParseResult<Loop> {
     // Record the starting position of the loop.
-    let start_pos = Module::current_position(tokens);
+    let start_pos = parser.current_position();
 
     // The first token should be `loop`.
-    Module::parse_expecting(tokens, TokenKind::Loop)?;
+    parser.parse_expecting(TokenKind::Loop)?;
 
-    let body = Closure::from(tokens)?;
+    let body = Closure::parse(parser)?;
 
     Ok(Loop {
         maybe_init: None,
         maybe_cond: None,
         maybe_update: None,
-        span: Span {
-            start_pos,
-            end_pos: body.end_pos().clone(),
-        },
+        span: parser.new_span(start_pos, body.span().end_pos),
         body,
     })
 }
 
 /// Parse a `while` loop.
-fn parse_while(tokens: &mut Stream<Token>) -> ParseResult<Loop> {
+fn parse_while(parser: &mut FileParser) -> ParseResult<Loop> {
     // Record the starting position of the loop.
-    let start_pos = Module::current_position(tokens);
+    let start_pos = parser.current_position();
 
     // The first token should be `while`.
-    Module::parse_expecting(tokens, TokenKind::While)?;
+    parser.parse_expecting(TokenKind::While)?;
 
     // The next tokens should be the loop condition expression.
-    let maybe_cond = Some(Expression::from(tokens)?);
+    let maybe_cond = Some(Expression::parse(parser)?);
 
-    let body = Closure::from(tokens)?;
+    let body = Closure::parse(parser)?;
 
     Ok(Loop {
         maybe_init: None,
         maybe_cond,
         maybe_update: None,
-        span: Span {
-            start_pos,
-            end_pos: body.end_pos().clone(),
-        },
+        span: parser.new_span(start_pos, body.span().end_pos),
         body,
     })
 }
 
 /// Parses a `for` loop.
-fn parse_for(tokens: &mut Stream<Token>) -> ParseResult<Loop> {
+fn parse_for(parser: &mut FileParser) -> ParseResult<Loop> {
     // Record the starting position of the loop.
-    let start_pos = Module::current_position(tokens);
+    let start_pos = parser.current_position();
 
     // The first token should be `for`.
-    Module::parse_expecting(tokens, TokenKind::For)?;
+    parser.parse_expecting(TokenKind::For)?;
 
     // If this is a for loop, parse the init, condition, and update segments before the loop body.
     // Parse the optional initialization statement.
-    let maybe_init = if Module::next_token_is(tokens, &TokenKind::SemiColon) {
+    let maybe_init = if parser.next_token_is(&TokenKind::SemiColon) {
         None
     } else {
-        Some(Statement::from(tokens)?)
+        Some(Statement::parse(parser)?)
     };
 
-    Module::parse_expecting(tokens, TokenKind::SemiColon)?;
+    parser.parse_expecting(TokenKind::SemiColon)?;
 
     // Parse the optional condition expression.
-    let maybe_cond = if Module::next_token_is(tokens, &TokenKind::SemiColon) {
+    let maybe_cond = if parser.next_token_is(&TokenKind::SemiColon) {
         None
     } else {
-        Some(Expression::from(tokens)?)
+        Some(Expression::parse(parser)?)
     };
 
-    Module::parse_expecting(tokens, TokenKind::SemiColon)?;
+    parser.parse_expecting(TokenKind::SemiColon)?;
 
     // Parse the optional update statement.
-    let maybe_update = if Module::next_token_is(tokens, &TokenKind::SemiColon) {
+    let maybe_update = if parser.next_token_is(&TokenKind::SemiColon) {
         None
     } else {
-        Some(Statement::from(tokens)?)
+        Some(Statement::parse(parser)?)
     };
 
-    let body = Closure::from(tokens)?;
+    let body = Closure::parse(parser)?;
 
     Ok(Loop {
         maybe_init,
         maybe_cond,
         maybe_update,
-        span: Span {
-            start_pos,
-            end_pos: body.end_pos().clone(),
-        },
+        span: parser.new_span(start_pos, body.span().end_pos),
         body,
     })
 }

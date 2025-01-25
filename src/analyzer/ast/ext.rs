@@ -4,7 +4,7 @@ use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::lexer::pos::Span;
-use crate::parser::ast::ext::ExternFn;
+use crate::parser::ast::r#extern::ExternFn;
 
 /// An analyzed extern function declaration.
 #[derive(PartialEq, Clone, Debug)]

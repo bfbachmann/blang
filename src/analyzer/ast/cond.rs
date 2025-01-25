@@ -6,8 +6,9 @@ use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
 use crate::analyzer::type_store::TypeKey;
-use crate::lexer::pos::{Locatable, Position, Span};
+use crate::lexer::pos::Span;
 use crate::parser::ast::cond::Conditional;
+use crate::Locatable;
 use crate::{locatable_impl, util};
 
 /// Represents a semantically valid and type-rich branch.
@@ -79,6 +80,7 @@ impl ACond {
                 cond: rich_expr,
                 body: rich_closure,
                 span: Span {
+                    file_id: cond.span.file_id,
                     start_pos: branch.span.start_pos,
                     end_pos: branch.span.end_pos,
                 },
@@ -99,8 +101,9 @@ impl ACond {
 
         ACond {
             span: Span {
-                start_pos: rich_branches.first().unwrap().start_pos().clone(),
-                end_pos: rich_branches.last().unwrap().end_pos().clone(),
+                file_id: cond.span.file_id,
+                start_pos: rich_branches.first().unwrap().span().start_pos,
+                end_pos: rich_branches.last().unwrap().span().end_pos,
             },
             branches: rich_branches,
             ret_type_key: ret_type,

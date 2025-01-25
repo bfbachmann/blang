@@ -18,7 +18,7 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::{Scope, ScopeKind};
 use crate::analyzer::type_store::TypeKey;
-use crate::lexer::pos::{Locatable, Position, Span};
+use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::array::ArrayInit;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::from::From;
@@ -411,10 +411,7 @@ impl AExpr {
             allow_type,
             prefer_method,
             allow_polymorph,
-            Span {
-                start_pos: expr.start_pos().clone(),
-                end_pos: expr.end_pos().clone(),
-            },
+            expr.span().clone(),
         );
 
         // Try to (safely) coerce the expression to the right type (this may involve generic
@@ -481,7 +478,7 @@ impl AExpr {
             None => return,
         };
 
-        let scoped_symbol = match ctx.get_scoped_symbol(None, symbol.name.as_str()) {
+        let scoped_symbol = match ctx.get_scoped_symbol(None, symbol.name.as_str()).unwrap() {
             Some(scoped_symbol) => scoped_symbol,
             None => return,
         };
@@ -1719,10 +1716,6 @@ fn analyze_expr_with_pref(
         }
 
         Expression::AnonFunction(anon_fn) => analyze_anon_fn(ctx, *anon_fn, span),
-
-        Expression::Lambda(_) => {
-            todo!();
-        }
 
         Expression::UnaryOperation(ref op, ref right_expr) => {
             analyze_unary_op(ctx, op, &expr, right_expr, span)

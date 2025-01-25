@@ -1,3 +1,5 @@
+mod result
+
 /// Represents the result of an operation that may fail. This can either be
 /// `Ok(T)` for success, or `Err(E)` for failure.
 pub enum Result[T, E] {

@@ -1,5 +1,7 @@
-use "std/types/slice.bl" {Slice}
-use "std/types/hasher.bl" {BuildHash}
+mod hashmap
+
+use "std/types/slice" {Slice}
+use "std/types/hasher" {BuildHash}
 
 /// Implements the DJB2 hash function.
 pub struct DJB2Hasher {

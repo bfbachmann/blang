@@ -90,20 +90,18 @@ impl AType {
     /// Analyzes `typ` and returns an analyzed version of it.
     pub fn from(ctx: &mut ProgramContext, typ: &Type) -> AType {
         match typ {
-            Type::Unresolved(unresolved_type) => {
-                return AType::from_unresolved(ctx, unresolved_type);
-            }
+            Type::Unresolved(unresolved_type) => AType::from_unresolved(ctx, unresolved_type),
 
             Type::Function(sig) => AType::from_fn_sig(AFnSig::from(ctx, &*sig)),
 
             Type::Tuple(tuple_type) => {
                 let a_tuple_type = ATupleType::from(ctx, tuple_type);
-                return AType::Tuple(a_tuple_type);
+                AType::Tuple(a_tuple_type)
             }
 
             Type::Array(array_type) => {
                 let a_array_type = AArrayType::from(ctx, array_type);
-                return AType::Array(a_array_type);
+                AType::Array(a_array_type)
             }
 
             Type::Pointer(ptr_type) => {
@@ -112,19 +110,20 @@ impl AType {
                     return AType::Unknown("<unknown>".to_string());
                 }
 
-                return AType::Pointer(a_ptr_type);
+                AType::Pointer(a_ptr_type)
             }
         }
     }
 
     /// Tries to analyze/resolve the unresolved type.
     fn from_unresolved(ctx: &mut ProgramContext, unresolved_type: &UnresolvedType) -> AType {
-        let maybe_mod_name = unresolved_type.maybe_mod_name.as_ref();
+        let maybe_mod_sym = unresolved_type.maybe_mod_name.as_ref();
         let type_name = unresolved_type.name.as_str();
 
         // Return early if the mod name is invalid.
-        if let Some(mod_name) = maybe_mod_name {
-            if !ctx.check_mod_name(mod_name, unresolved_type) {
+        if let Some(mod_sym) = maybe_mod_sym {
+            if let Err(err) = ctx.check_mod_name(mod_sym) {
+                ctx.insert_err(err);
                 return AType::Unknown("<unknown>".to_string());
             }
         }
@@ -145,22 +144,25 @@ impl AType {
         }
 
         // If the type has already been analyzed, just return it.
-        if let Some(struct_type) = ctx.get_struct_type(maybe_mod_name, type_name) {
+        if let Some(struct_type) = ctx.get_struct_type(maybe_mod_sym, type_name).unwrap() {
             return AType::Struct(struct_type.clone());
         }
-        if let Some(enum_type) = ctx.get_enum_type(maybe_mod_name, type_name) {
+        if let Some(enum_type) = ctx.get_enum_type(maybe_mod_sym, type_name).unwrap() {
             return AType::Enum(enum_type.clone());
         }
-        if let Some(spec_type) = ctx.get_spec_type(maybe_mod_name, type_name) {
+        if let Some(spec_type) = ctx.get_spec_type(maybe_mod_sym, type_name).unwrap() {
             return AType::Spec(spec_type.clone());
         }
-        if let Some(fn_sig) = ctx.get_fn_sig_by_mangled_name(
-            maybe_mod_name,
-            ctx.mangle_name(None, None, None, type_name, false).as_str(),
-        ) {
+        if let Some(fn_sig) = ctx
+            .get_fn_sig_by_mangled_name(
+                maybe_mod_sym,
+                ctx.mangle_name(None, None, None, type_name, false).as_str(),
+            )
+            .unwrap()
+        {
             return AType::from_fn_sig(fn_sig.clone());
         }
-        if let Some(sig) = ctx.get_fn(maybe_mod_name, type_name) {
+        if let Some(sig) = ctx.get_fn(maybe_mod_sym, type_name).unwrap() {
             return AType::from_fn_sig(sig.clone());
         }
 
@@ -175,7 +177,7 @@ impl AType {
 
         ctx.insert_err(AnalyzeError::new(
             ErrorKind::UndefType,
-            format_code!("type {} is not defined", unresolved_type).as_str(),
+            format_code!("type {} is not defined in this scope", unresolved_type).as_str(),
             unresolved_type,
         ));
 

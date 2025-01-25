@@ -1,14 +1,12 @@
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::Position;
-use crate::lexer::pos::{Locatable, Span};
-use crate::lexer::stream::Stream;
-use crate::lexer::token::Token;
+use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::func_sig::FunctionSignature;
 use crate::parser::ast::params::Params;
 use crate::parser::error::ParseResult;
-use crate::parser::module::Module;
+use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 use crate::{locatable_impl, util};
 
 /// Represents a spec declaration.
@@ -49,35 +47,33 @@ impl SpecType {
     /// where
     ///  - `name` is an identifier representing the name of the spec
     ///  - `params` are generic parameters (optional)
-    ///  - `fn_sig` is a function signature in the spec (see `FunctionSignature::from`)
+    ///  - `fn_sig` is a function signature in the spec
     ///  - the `pub` keyword is optional.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let is_pub = Module::parse_optional(tokens, TokenKind::Pub).is_some();
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
+        let is_pub = parser.parse_optional(TokenKind::Pub).is_some();
 
         // Parse `spec` and get this spec declaration starting position.
-        let start_pos = Module::parse_expecting(tokens, TokenKind::Spec)?
-            .span
-            .start_pos;
+        let start_pos = parser.parse_expecting(TokenKind::Spec)?.span.start_pos;
 
         // Parse the spec name and left brace.
-        let name = Module::parse_identifier(tokens)?;
+        let name = parser.parse_identifier()?;
 
         // Parse optional generic parameters.
-        let maybe_params = match Module::next_token_is(tokens, &TokenKind::LeftBracket) {
-            true => Some(Params::from(tokens)?),
+        let maybe_params = match parser.next_token_is(&TokenKind::LeftBracket) {
+            true => Some(Params::parse(parser)?),
             false => None,
         };
 
-        Module::parse_expecting(tokens, TokenKind::LeftBrace)?;
+        parser.parse_expecting(TokenKind::LeftBrace)?;
 
         // Parse all the function signatures in the spec, followed by the closing brace.
         let mut fn_sigs = vec![];
         let end_pos = loop {
-            if let Some(token) = Module::parse_optional(tokens, TokenKind::RightBrace) {
+            if let Some(token) = parser.parse_optional(TokenKind::RightBrace) {
                 break token.span.end_pos;
             }
 
-            fn_sigs.push(FunctionSignature::from(tokens)?);
+            fn_sigs.push(FunctionSignature::from(parser)?);
         };
 
         Ok(SpecType {
@@ -85,7 +81,7 @@ impl SpecType {
             fn_sigs,
             maybe_params,
             is_pub,
-            span: Span { start_pos, end_pos },
+            span: parser.new_span(start_pos, end_pos),
         })
     }
 }

@@ -2,15 +2,16 @@ use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
 use crate::fmt::vec_to_string;
-use crate::lexer::pos::{Locatable, Position, Span};
+use crate::lexer::pos::Span;
 use crate::locatable_impl;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Symbol;
+use crate::Locatable;
 
 /// Represents a user-defined type that has not yet been resolved (i.e. is not primitive).
 #[derive(Debug, Clone, Eq)]
 pub struct UnresolvedType {
-    pub maybe_mod_name: Option<String>,
+    pub maybe_mod_name: Option<Symbol>,
     pub name: String,
     pub params: Vec<Type>,
     pub span: Span,
@@ -38,7 +39,7 @@ impl Display for UnresolvedType {
             f,
             "{}{}{}",
             match &self.maybe_mod_name {
-                Some(mod_name) => format!("@{mod_name}."),
+                Some(sym) => format!("@{}.", sym.name),
                 None => "".to_string(),
             },
             self.name,
@@ -66,7 +67,7 @@ impl UnresolvedType {
     /// Creates a new unresolved type from the given symbol.
     pub fn from_symbol(symbol: Symbol) -> UnresolvedType {
         UnresolvedType {
-            maybe_mod_name: symbol.maybe_mod_name,
+            maybe_mod_name: (*symbol.maybe_mod_name).clone(),
             name: symbol.name,
             params: symbol.params,
             span: symbol.span,

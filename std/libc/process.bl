@@ -1,3 +1,5 @@
+mod libc
+
 pub extern fn exit(code: uint)
 pub extern fn fork() -> int
 pub extern fn execve(pathname: *u8, argv: **u8, envp: **u8) -> int

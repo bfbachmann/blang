@@ -1,6 +1,7 @@
-use "std/libc/proc.bl" {exit}
-use "std/libc/mem.bl" {malloc, free}
-use "std/backtrace/panic.bl" {assert}
+mod linked_list
+
+use "std/libc" @libc
+use "std/runtime" {assert}
 
 /// A node in a linked list.
 struct Node {
@@ -11,7 +12,7 @@ struct Node {
 impl Node {
     /// Heap-allocates a new node and returns the pointer.
     fn new(value: int, next: *mut Node) -> *mut Node {
-        let ptr = malloc(sizeof Node) as *mut Node
+        let ptr = @libc.malloc(sizeof Node) as *mut Node
         ptr.value = value
         ptr.next = next
         return ptr
@@ -108,7 +109,7 @@ impl Node {
             }
 
             let next = head.next
-            free(head as *mut u8)
+            @libc.free(head as *mut u8)
             head = next
         }
     }
@@ -148,5 +149,5 @@ fn main() {
     // Free the list.
     head.free()
 
-    exit(0)
+    @libc.exit(0)
 }

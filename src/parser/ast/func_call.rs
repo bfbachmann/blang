@@ -1,9 +1,10 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position, Span};
+use crate::lexer::pos::{Position, Span};
 use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
+use crate::Locatable;
 
 /// Represents a function call.
 #[derive(Eq, Debug, Clone)]
@@ -47,9 +48,12 @@ impl PartialEq for FnCall {
 
 impl FnCall {
     pub fn new(fn_expr: Expression, args: Vec<Expression>, end_pos: Position) -> FnCall {
+        let span = fn_expr.span();
+
         FnCall {
             span: Span {
-                start_pos: fn_expr.start_pos().clone(),
+                file_id: span.file_id,
+                start_pos: span.start_pos,
                 end_pos,
             },
             fn_expr,

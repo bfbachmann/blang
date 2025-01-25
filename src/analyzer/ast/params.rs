@@ -9,8 +9,9 @@ use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::fmt::vec_to_string;
-use crate::lexer::pos::{Locatable, Position, Span};
+use crate::lexer::pos::Span;
 use crate::parser::ast::params::{Param, Params};
+use crate::Locatable;
 use crate::{format_code, locatable_impl};
 
 /// Represents a generic parameter. A generic parameter has a name and has either
@@ -102,7 +103,7 @@ impl AParam {
             name: param.name.clone(),
             generic_type_key,
             poly_type_key,
-            span: param.span().clone(),
+            span: param.span.clone(),
         }
     }
 

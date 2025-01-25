@@ -1,14 +1,13 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position, Span};
-use crate::lexer::stream::Stream;
-use crate::lexer::token::Token;
+use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::r#type::Type;
 use crate::parser::error::ParseResult;
-use crate::parser::module::Module;
+use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 
 /// Represents a `sizeof` statement. Note that `sizeof` expressions are not
 /// considered unary operations (i.e. `sizeof` is not an operator) because
@@ -41,20 +40,17 @@ impl SizeOf {
     ///
     /// where
     ///  - `type` is any type.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+    pub fn from(parser: &mut FileParser) -> ParseResult<Self> {
         // Parse the `sizeof` keyword.
-        let sizeof_token = Module::parse_expecting(tokens, TokenKind::SizeOf)?;
+        let sizeof_token = parser.parse_expecting(TokenKind::SizeOf)?;
 
         // Parse the type.
-        let typ = Type::from(tokens)?;
-        let end_pos = typ.end_pos().clone();
+        let typ = Type::parse(parser)?;
+        let end_pos = typ.span().end_pos;
 
         Ok(SizeOf {
             typ,
-            span: Span {
-                start_pos: sizeof_token.span.start_pos,
-                end_pos,
-            },
+            span: parser.new_span(sizeof_token.span.start_pos, end_pos),
         })
     }
 }

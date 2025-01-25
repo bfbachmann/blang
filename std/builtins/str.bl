@@ -1,3 +1,5 @@
+mod builtins
+
 struct StrData {
     ptr: *u8
     len: uint

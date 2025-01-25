@@ -1,11 +1,10 @@
-use "std/libc/mem.bl" {free}
-use "std/mem/mem.bl" {copy, replace}
-use "std/types/table.bl" {Table}
-use "std/specs/eq.bl" {Eq}
-use "std/types/hasher.bl" {Hash, Hasher}
-use "std/mem/allocator.bl" {Allocator}
+mod hashmap
 
-use "docs/examples/hashmap/djb2.bl" {DJB2Hasher}
+use "std/mem" {copy, replace}
+use "std/types/table" {Table}
+use "std/specs" {Eq}
+use "std/types/hasher" {Hash, Hasher}
+use "std/allocator" {Allocator}
 
 /// A mapping from a key to its value.
 struct Mapping[K, V] {

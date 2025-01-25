@@ -98,7 +98,10 @@ mod tests {
             }
         );
         assert_eq!(
-            ctx.get_scoped_symbol(None, "my_var").unwrap().type_key,
+            ctx.get_scoped_symbol(None, "my_var")
+                .unwrap()
+                .unwrap()
+                .type_key,
             ctx.str_type_key()
         );
 
@@ -122,7 +125,10 @@ mod tests {
             }
         );
         assert_eq!(
-            ctx.get_scoped_symbol(None, "my_var").unwrap().type_key,
+            ctx.get_scoped_symbol(None, "my_var")
+                .unwrap()
+                .unwrap()
+                .type_key,
             ctx.bool_type_key()
         );
     }

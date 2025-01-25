@@ -1,4 +1,6 @@
-use "std/backtrace/panic.bl" @panic
+mod slice
+
+use "std/runtime" {assert}
 
 /// A bounded pointer to contiguous values of type T.
 pub struct Slice[T] {
@@ -35,7 +37,7 @@ impl Slice {
 
     /// Returns a pointer to the element at index `i` in the slice.
     pub fn ptr_at(*self, i: uint) -> *T {
-        @panic.assert(i < self.len, "slice index out of bounds")
+        assert(i < self.len, "slice index out of bounds")
         return self.ptr.(i as int)
     }
 
@@ -47,9 +49,9 @@ impl Slice {
     /// Returns a slice that points to elements from index `start` (incluive) 
     /// to `end` (exclusive).
     pub fn slice(*self, start: uint, end: uint) -> Slice[T] {
-        @panic.assert(start < self.len || start == 0, "slice start out of bounds")
-        @panic.assert(end <= self.len, "slice end out of bounds")
-        @panic.assert(end >= start, "slice end cannot be less than start")
+        assert(start < self.len || start == 0, "slice start out of bounds")
+        assert(end <= self.len, "slice end out of bounds")
+        assert(end >= start, "slice end cannot be less than start")
 
         return Slice[T]{
             ptr: self.ptr.(start as int)
@@ -122,7 +124,7 @@ impl SliceMut {
 
     /// Returns a pointer to the element at index `i` in the slice.
     pub fn ptr_at(*self, i: uint) -> *mut T {
-        @panic.assert(i < self.len, "slice index out of bounds")
+        assert(i < self.len, "slice index out of bounds")
         return self.ptr.(i as int)
     }
 
@@ -137,9 +139,9 @@ impl SliceMut {
     /// Returns a slice that points to elements from index `start` (incluive) 
     /// to `end` (exclusive).
     pub fn slice(*self, start: uint, end: uint) -> SliceMut[T] {
-        @panic.assert(end > start, "slice end must be greater than start")
-        @panic.assert(start < self.len, "slice start out of bounds")
-        @panic.assert(end <= self.len, "slice end out of bounds")
+        assert(end > start, "slice end must be greater than start")
+        assert(start < self.len, "slice start out of bounds")
+        assert(end <= self.len, "slice end out of bounds")
         return SliceMut[T]{
             ptr: self.ptr.(start as int)
             len: end - start

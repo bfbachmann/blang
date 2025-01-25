@@ -10,7 +10,7 @@ use inkwell::values::BasicValue;
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles a statement.
     pub(crate) fn gen_statement(&mut self, statement: &AStatement) -> CodeGenResult<()> {
-        self.set_di_location(statement.start_pos());
+        self.set_di_location(&statement.span().start_pos);
 
         match statement {
             AStatement::VariableDeclaration(var_decl) => {

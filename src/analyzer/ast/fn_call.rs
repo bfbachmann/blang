@@ -9,8 +9,9 @@ use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::fmt::format_code_vec;
-use crate::lexer::pos::{Locatable, Span};
+use crate::lexer::pos::Span;
 use crate::parser::ast::func_call::FnCall;
+use crate::Locatable;
 
 /// Function call (can be either direct or indirect).
 #[derive(Clone, Debug, PartialEq)]

@@ -1,6 +1,6 @@
 use "std/libc/proc.bl" {exit}
 
-use "std/backtrace/panic.bl" {assert}
+use "std/runtime" {assert}
 use "src/tests/specs_2.bl" {Test}
 
 struct Thing {}

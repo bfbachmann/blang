@@ -15,7 +15,6 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::ast::tuple::ATupleInit;
 use crate::analyzer::type_store::{GetType, TypeKey};
-use crate::lexer::pos::Locatable;
 use crate::parser::ast::op::Operator;
 
 use super::{get_fn_attrs, mangle_fn_name, FnCodeGen};
@@ -23,7 +22,7 @@ use super::{get_fn_attrs, mangle_fn_name, FnCodeGen};
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles an arbitrary expression.
     pub(crate) fn gen_expr(&mut self, expr: &AExpr) -> BasicValueEnum<'ctx> {
-        self.set_di_location(expr.start_pos());
+        self.set_di_location(&expr.span.start_pos);
 
         let ll_val = match &expr.kind {
             _ if expr.kind.is_const() => self.gen_const_expr(expr),

@@ -2,21 +2,20 @@ use std::default::Default;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::Position;
-use crate::lexer::pos::{Locatable, Span};
-use crate::lexer::stream::Stream;
+use crate::lexer::pos::Span;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
-use crate::parser::module::Module;
+use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 
 /// The path to a module that is imported into a program.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct ModulePath {
     pub raw: String,
-    span: Span,
+    pub span: Span,
 }
 
 impl Hash for ModulePath {
@@ -35,8 +34,8 @@ impl Display for ModulePath {
 
 impl ModulePath {
     /// Parses a module path from the given token stream. A module path is just a string literal.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<ModulePath> {
-        match tokens.next() {
+    pub fn from(parser: &mut FileParser) -> ParseResult<ModulePath> {
+        match parser.tokens.next() {
             Some(
                 token @ Token {
                     kind: TokenKind::StrLiteral(path),
@@ -51,38 +50,6 @@ impl ModulePath {
                     ));
                 }
 
-                // Only perform additional path validation if we're not in test mode.
-                #[cfg(not(test))]
-                {
-                    use std::fs;
-
-                    let full_path = match fs::canonicalize(path) {
-                        Ok(p) => p,
-                        Err(err) => {
-                            return Err(ParseError::new_with_token(
-                                ErrorKind::InvalidModPath,
-                                format_code!("invalid module path {}: {err}", path).as_str(),
-                                token.clone(),
-                            ));
-                        }
-                    };
-
-                    // Make sure the path is valid.
-                    match fs::metadata(full_path) {
-                        Ok(_) => Ok(ModulePath {
-                            raw: path.to_string(),
-                            span: token.span,
-                        }),
-
-                        Err(_) => Err(ParseError::new_with_token(
-                            ErrorKind::ModNotFound,
-                            format_code!("module {} was not found", path).as_str(),
-                            token.clone(),
-                        )),
-                    }
-                }
-
-                #[cfg(test)]
                 Ok(ModulePath {
                     raw: path.to_string(),
                     span: token.span,
@@ -111,7 +78,7 @@ pub struct UsedModule {
     pub path: ModulePath,
     pub maybe_alias: Option<String>,
     pub identifiers: Vec<Symbol>,
-    span: Span,
+    pub span: Span,
 }
 
 impl Hash for UsedModule {
@@ -155,40 +122,41 @@ impl UsedModule {
     /// Parses a `use` statement from the given token sequence. Expects token sequences of
     /// the forms
     ///
-    ///     use "path/to/file.bl" @<name>
-    ///     use "path/to/file.bl" {<ident>, ...}
-    ///     use "path/to/file.bl" @<name> {<ident>, ...}
+    ///     use "path/to/mod" @<name>
+    ///     use "path/to/mod" {<ident>, ...}
+    ///     use "path/to/mod" @<name> {<ident>, ...}
     ///
     /// where
     /// - `name` is an identifier used to name the module being used
     /// - `ident` is any identifier to import from the given path.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<UsedModule> {
-        let start_pos = Module::parse_expecting(tokens, TokenKind::Use)?
-            .span
-            .start_pos;
-        let path = ModulePath::from(tokens)?;
+    pub fn parse(parser: &mut FileParser) -> ParseResult<UsedModule> {
+        let start_pos = parser.parse_expecting(TokenKind::Use)?.span.start_pos;
+        let path = ModulePath::from(parser)?;
+        let mut end_pos = path.span.end_pos;
 
         // Parse the optional `@<name>`.
-        let maybe_alias = match tokens.peek_next() {
+        let maybe_alias = match parser.tokens.peek_next() {
             Some(Token {
                 kind: TokenKind::At,
                 ..
             }) => {
-                tokens.next();
-                Some(Module::parse_identifier(tokens)?)
+                parser.tokens.next();
+                let ident = parser.parse_identifier()?;
+                end_pos = parser.prev_position();
+                Some(ident)
             }
 
             _ => None,
         };
 
         // Parse the identifiers being imported from the module.
-        let identifiers = if Module::parse_optional(tokens, TokenKind::LeftBrace).is_some() {
-            let mut idents = vec![Symbol::from_identifier(tokens)?];
-            while Module::parse_optional(tokens, TokenKind::Comma).is_some() {
-                idents.push(Symbol::from_identifier(tokens)?);
+        let identifiers = if parser.parse_optional(TokenKind::LeftBrace).is_some() {
+            let mut idents = vec![Symbol::parse_as_identifier(parser)?];
+            while parser.parse_optional(TokenKind::Comma).is_some() {
+                idents.push(Symbol::parse_as_identifier(parser)?);
             }
 
-            Module::parse_expecting(tokens, TokenKind::RightBrace)?;
+            end_pos = parser.parse_expecting(TokenKind::RightBrace)?.span.end_pos;
 
             idents
         } else {
@@ -197,7 +165,7 @@ impl UsedModule {
 
         // Make sure that some alias or identifiers were defined.
         if maybe_alias.is_none() && identifiers.is_empty() {
-            if let Some(token) = tokens.next() {
+            if let Some(token) = parser.tokens.next() {
                 return Err(ParseError::new_with_token(
                     ErrorKind::UnexpectedToken,
                     format_code!("expected {} or {}, but found {}", "@", "{", token).as_str(),
@@ -215,8 +183,9 @@ impl UsedModule {
 
         Ok(UsedModule {
             span: Span {
+                file_id: parser.file_id,
                 start_pos,
-                end_pos: path.end_pos().clone(),
+                end_pos,
             },
             path,
             maybe_alias,

@@ -1,5 +1,5 @@
 use "std/libc/proc.bl" @proc
-use "std/backtrace/panic.bl" {panic, assert}
+use "std/runtime" {panic, assert}
 
 enum MyEnum {
     A(int)

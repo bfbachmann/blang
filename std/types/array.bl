@@ -1,6 +1,7 @@
-use "std/backtrace/panic.bl" @panic
-use "std/mem/allocator.bl" {Allocator}
-use "std/types/slice.bl" {Slice, SliceMut}
+mod array
+
+use "std/allocator" {Allocator}
+use "std/types/slice" {Slice, SliceMut}
 
 /// A resizeable array of values of type T.
 pub struct Array[T] {

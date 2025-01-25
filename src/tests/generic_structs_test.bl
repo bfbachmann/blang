@@ -1,7 +1,7 @@
 use "std/libc/proc.bl" {exit}
 use "std/libc/mem.bl" {memcpy, malloc, free}
 
-use "std/backtrace/panic.bl" {assert}
+use "std/runtime" {assert}
 
 struct Ref[T] {
     ptr: *mut T

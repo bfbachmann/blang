@@ -7,10 +7,11 @@ use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::fmt::format_code_vec;
-use crate::lexer::pos::{Locatable, Position, Span};
+use crate::lexer::pos::Span;
 use crate::locatable_impl;
 use crate::parser::ast::member::MemberAccess;
 use crate::parser::ast::op::Operator;
+use crate::Locatable;
 
 /// Represents access to a member or field on a type or an instance of a type.
 #[derive(Debug, Clone)]

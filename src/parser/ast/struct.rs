@@ -2,8 +2,7 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position, Span};
-use crate::lexer::stream::Stream;
+use crate::lexer::pos::{Position, Span};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
@@ -14,7 +13,8 @@ use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
-use crate::parser::module::Module;
+use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 
 /// Represents a field in a struct with a type and a name.
 #[derive(Debug, Clone, Eq)]
@@ -110,34 +110,34 @@ impl StructType {
     ///  - `pub` is optional
     ///
     /// The commas after each field declaration are optional.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let is_pub = Module::parse_optional(tokens, TokenKind::Pub).is_some();
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
+        let is_pub = parser.parse_optional(TokenKind::Pub).is_some();
 
         // Record the starting position of the struct type declaration.
-        let start_pos = Module::current_position(tokens);
+        let start_pos = parser.current_position();
         let end_pos: Position;
 
         // The first token should be `struct`.
-        Module::parse_expecting(tokens, TokenKind::Struct)?;
+        parser.parse_expecting(TokenKind::Struct)?;
 
         // The next token might be the struct type name, which is optional.
         let mut name = "".to_string();
         if let Some(Token {
             kind: TokenKind::Identifier(_),
             ..
-        }) = tokens.peek_next()
+        }) = parser.tokens.peek_next()
         {
-            name = Module::parse_identifier(tokens)?;
+            name = parser.parse_identifier()?;
         }
 
         // Parse optional generic parameters.
-        let maybe_params = match Module::next_token_is(tokens, &TokenKind::LeftBracket) {
-            true => Some(Params::from(tokens)?),
+        let maybe_params = match parser.next_token_is(&TokenKind::LeftBracket) {
+            true => Some(Params::parse(parser)?),
             false => None,
         };
 
         // The next token should be `{`.
-        Module::parse_expecting(tokens, TokenKind::LeftBrace)?;
+        parser.parse_expecting(TokenKind::LeftBrace)?;
 
         // Parse struct fields until we reach `}`.
         let mut fields = vec![];
@@ -146,44 +146,41 @@ impl StructType {
             if let Some(Token {
                 kind: TokenKind::RightBrace,
                 ..
-            }) = tokens.peek_next()
+            }) = parser.tokens.peek_next()
             {
                 // Record the position of the last token in the struct type declaration.
-                let end_token = tokens.next().unwrap();
+                let end_token = parser.tokens.next().unwrap();
                 end_pos = end_token.span.end_pos;
                 break;
             }
 
             // Get the field start position.
-            let field_start_pos = Module::current_position(tokens);
+            let field_start_pos = parser.current_position();
 
             // Parse the optional `pub` keyword.
-            let is_pub = Module::parse_optional(tokens, TokenKind::Pub).is_some();
+            let is_pub = parser.parse_optional(TokenKind::Pub).is_some();
 
             // The next token should be the field name.
-            let field_name = Module::parse_identifier(tokens)?;
+            let field_name = parser.parse_identifier()?;
 
             // The next token should be a `:`.
-            Module::parse_expecting(tokens, TokenKind::Colon)?;
+            parser.parse_expecting(TokenKind::Colon)?;
 
             // The next tokens should represent the field type.
-            let field_type = Type::from(tokens)?;
+            let field_type = Type::parse(parser)?;
 
             // Get the field end position.
-            let field_end_pos = Module::prev_position(tokens);
+            let field_end_pos = parser.prev_position();
 
             // Parse the optional comma.
-            Module::parse_optional(tokens, TokenKind::Comma);
+            parser.parse_optional(TokenKind::Comma);
 
             // Add the field to the map. We'll check for field name collisions in the analyzer.
             fields.push(StructField {
                 name: field_name,
                 typ: field_type,
                 is_pub,
-                span: Span {
-                    start_pos: field_start_pos,
-                    end_pos: field_end_pos,
-                },
+                span: parser.new_span(field_start_pos, field_end_pos),
             });
         }
 
@@ -192,7 +189,7 @@ impl StructType {
             maybe_params,
             fields,
             is_pub,
-            span: Span { start_pos, end_pos },
+            span: parser.new_span(start_pos, end_pos),
         })
     }
 }
@@ -235,27 +232,27 @@ impl StructInit {
     ///  - `value` is the value being assigned to the field
     ///
     /// The commas after each field assignment are optional.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
         // Get the start position of the struct initialization in the source file.
-        let start_pos = Module::current_position(tokens);
+        let start_pos = parser.current_position();
         let end_pos: Position;
 
         // Parse the struct type symbol.
-        let typ = UnresolvedType::from_symbol(Symbol::from(tokens)?);
+        let typ = UnresolvedType::from_symbol(Symbol::parse(parser)?);
 
         // Parse `{`.
-        Module::parse_expecting(tokens, TokenKind::LeftBrace)?;
+        parser.parse_expecting(TokenKind::LeftBrace)?;
 
         // Parse struct field assignments until we hit `}`.
         let mut field_values = vec![];
         loop {
-            match tokens.next() {
+            match parser.tokens.next() {
                 Some(&Token {
                     kind: TokenKind::RightBrace,
                     ..
                 }) => {
                     // Set the end position of this struct initialization in the source file.
-                    end_pos = Module::prev_position(tokens);
+                    end_pos = parser.prev_position();
                     break;
                 }
 
@@ -264,14 +261,14 @@ impl StructInit {
                     ..
                 }) => {
                     // Parse `:` followed by the field value and record the field.
-                    tokens.rewind(1);
-                    let field_name = Symbol::from_identifier(tokens)?;
-                    Module::parse_expecting(tokens, TokenKind::Colon)?;
-                    let value = Expression::from(tokens)?;
+                    parser.tokens.rewind(1);
+                    let field_name = Symbol::parse_as_identifier(parser)?;
+                    parser.parse_expecting(TokenKind::Colon)?;
+                    let value = Expression::parse(parser)?;
                     field_values.push((field_name, value));
 
                     // Parse the optional comma.
-                    Module::parse_optional(tokens, TokenKind::Comma);
+                    parser.parse_optional(TokenKind::Comma);
                 }
 
                 Some(other) => {
@@ -297,7 +294,7 @@ impl StructInit {
         Ok(StructInit {
             typ,
             field_values,
-            span: Span { start_pos, end_pos },
+            span: parser.new_span(start_pos, end_pos),
         })
     }
 }

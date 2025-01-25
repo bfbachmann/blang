@@ -187,6 +187,8 @@ pub enum TokenKind {
     As,
     #[token("use")]
     Use,
+    #[token("mod")]
+    Mod,
     #[token("from")]
     From,
     #[token("yield")]
@@ -345,6 +347,7 @@ impl TokenKind {
             TokenKind::RefMut => "&mut".to_string(),
             TokenKind::Deref => "^".to_string(),
             TokenKind::Use => "use".to_string(),
+            TokenKind::Mod => "mod".to_string(),
             TokenKind::From => "from".to_string(),
             TokenKind::Yield => "yield".to_string(),
         }

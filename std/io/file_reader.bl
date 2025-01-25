@@ -1,8 +1,8 @@
-use "std/libc/io.bl" @io
-use "std/io/reader.bl" {Read}
-use "std/io/writer.bl" {Writer}
-use "std/types/array.bl" {Array}
-use "std/mem/allocator.bl" {Allocator}
+mod io
+
+use "std/libc" @libc
+use "std/types/array" {Array}
+use "std/allocator" {Allocator}
 
 const buf_size: uint = 1024 * 4
 
@@ -36,7 +36,7 @@ impl FileReader: Read {
         }
 
         loop {
-            let bytes_read = @io.read(self.fd, self.read_buf.mut_ptr_at(0), buf_size)
+            let bytes_read = @libc.read(self.fd, self.read_buf.mut_ptr_at(0), buf_size)
             if bytes_read > 0 {
                 writer.write(self.read_buf.as_slice().slice_left(bytes_read as uint))
                 if bytes_read as uint == buf_size {

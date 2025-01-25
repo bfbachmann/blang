@@ -1,8 +1,7 @@
 use std::fmt;
 use std::hash::Hash;
 
-use crate::lexer::pos::{Locatable, Position, Span};
-use crate::lexer::stream::Stream;
+use crate::lexer::pos::{Locatable, Span};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::array::ArrayType;
@@ -12,6 +11,7 @@ use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::tuple::TupleType;
 use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::ParseResult;
+use crate::parser::file_parser::FileParser;
 
 /// Represents a type referenced in a program.
 #[derive(Debug, Clone, Hash, Eq)]
@@ -62,26 +62,6 @@ impl fmt::Display for Type {
 }
 
 impl Locatable for Type {
-    fn start_pos(&self) -> &Position {
-        match self {
-            Type::Tuple(tuple_type) => tuple_type.start_pos(),
-            Type::Function(fn_sig) => fn_sig.start_pos(),
-            Type::Pointer(t) => t.start_pos(),
-            Type::Array(a) => a.start_pos(),
-            Type::Unresolved(unresolved) => unresolved.start_pos(),
-        }
-    }
-
-    fn end_pos(&self) -> &Position {
-        match self {
-            Type::Tuple(tuple_type) => tuple_type.end_pos(),
-            Type::Function(fn_sig) => fn_sig.end_pos(),
-            Type::Pointer(t) => t.end_pos(),
-            Type::Array(a) => a.end_pos(),
-            Type::Unresolved(unresolved) => unresolved.end_pos(),
-        }
-    }
-
     fn span(&self) -> &Span {
         match self {
             Type::Tuple(tuple_type) => tuple_type.span(),
@@ -95,13 +75,13 @@ impl Locatable for Type {
 
 impl Type {
     /// Parses a type.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        match tokens.peek_next() {
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
+        match parser.tokens.peek_next() {
             Some(Token {
                 kind: TokenKind::Fn,
                 ..
             }) => {
-                let sig = FunctionSignature::from_anon(tokens, false)?;
+                let sig = FunctionSignature::parse_anon(parser, false)?;
                 Ok(Type::Function(Box::new(sig)))
             }
 
@@ -109,7 +89,7 @@ impl Type {
                 kind: TokenKind::LeftBrace,
                 ..
             }) => {
-                let tuple_type = TupleType::from(tokens)?;
+                let tuple_type = TupleType::parse(parser)?;
                 Ok(Type::Tuple(tuple_type))
             }
 
@@ -117,18 +97,18 @@ impl Type {
                 kind: TokenKind::Asterisk,
                 ..
             }) => {
-                let ptr_type = PointerType::from(tokens)?;
+                let ptr_type = PointerType::parse(parser)?;
                 Ok(Type::Pointer(Box::new(ptr_type)))
             }
 
             Some(Token {
                 kind: TokenKind::LeftBracket,
                 ..
-            }) => Ok(Type::Array(Box::new(ArrayType::from(tokens)?))),
+            }) => Ok(Type::Array(Box::new(ArrayType::parse(parser)?))),
 
-            _ => Ok(Type::Unresolved(UnresolvedType::from_symbol(Symbol::from(
-                tokens,
-            )?))),
+            _ => Ok(Type::Unresolved(UnresolvedType::from_symbol(
+                Symbol::parse(parser)?,
+            ))),
         }
     }
 

@@ -1,9 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position, Span};
-use crate::lexer::stream::Stream;
-use crate::lexer::token::Token;
+use crate::lexer::pos::{Position, Span};
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::params::Params;
@@ -11,7 +9,8 @@ use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::ParseResult;
-use crate::parser::module::Module;
+use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 use crate::{locatable_impl, util};
 
 /// A variant of an enumerated type.
@@ -60,22 +59,22 @@ impl EnumTypeVariant {
     ///
     /// where
     ///  - `name` is the variant name
-    ///  - `type` is the optional variant type (see `Type::from`).
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let start_pos = Module::current_position(tokens);
-        let name = Module::parse_identifier(tokens)?;
+    ///  - `type` is the optional variant type.
+    pub fn from(parser: &mut FileParser) -> ParseResult<Self> {
+        let start_pos = parser.current_position();
+        let name = parser.parse_identifier()?;
 
         // Parse the optional variant type.
-        let (typ, end_pos) = match Module::parse_optional(tokens, TokenKind::LeftParen) {
+        let (typ, end_pos) = match parser.parse_optional(TokenKind::LeftParen) {
             Some(_) => {
                 // Parse `<type>)`.
-                let typ = Type::from(tokens)?;
-                let token = Module::parse_expecting(tokens, TokenKind::RightParen)?;
+                let typ = Type::parse(parser)?;
+                let token = parser.parse_expecting(TokenKind::RightParen)?;
                 (Some(typ), token.span.end_pos)
             }
             None => {
-                let mut end_pos = start_pos.clone();
-                end_pos.col += name.len();
+                let mut end_pos = start_pos;
+                end_pos.col += name.len() as u32;
                 (None, end_pos)
             }
         };
@@ -83,7 +82,7 @@ impl EnumTypeVariant {
         Ok(EnumTypeVariant {
             name,
             maybe_type: typ,
-            span: Span { start_pos, end_pos },
+            span: parser.new_span(start_pos, end_pos),
         })
     }
 }
@@ -145,35 +144,35 @@ impl EnumType {
     ///  - `name` is the name of the enum type
     ///  - `params` are optional generic parameters
     ///  - `variant_name` is the name of a variant of the enum type
-    ///  - `variant_type` is the optional variant type (see `Type::from`)
+    ///  - `variant_type` is the optional variant type
     ///  - `pub` is optional.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let is_pub = Module::parse_optional(tokens, TokenKind::Pub).is_some();
-        let start_pos = Module::current_position(tokens);
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
+        let is_pub = parser.parse_optional(TokenKind::Pub).is_some();
+        let start_pos = parser.current_position();
 
         // Parse `enum <name>`.
-        Module::parse_expecting(tokens, TokenKind::Enum)?;
-        let name = Module::parse_identifier(tokens)?;
+        parser.parse_expecting(TokenKind::Enum)?;
+        let name = parser.parse_identifier()?;
 
         // Parse optional parameters.
-        let maybe_params = match Module::next_token_is(tokens, &TokenKind::LeftBracket) {
-            true => Some(Params::from(tokens)?),
+        let maybe_params = match parser.next_token_is(&TokenKind::LeftBracket) {
+            true => Some(Params::parse(parser)?),
             false => None,
         };
 
-        Module::parse_expecting(tokens, TokenKind::LeftBrace)?;
+        parser.parse_expecting(TokenKind::LeftBrace)?;
 
         // Parse the enum variants ending with `}`.
         let mut variants = vec![];
         let end_pos = loop {
-            if let Some(token) = Module::parse_optional(tokens, TokenKind::RightBrace) {
+            if let Some(token) = parser.parse_optional(TokenKind::RightBrace) {
                 break token.span.end_pos;
             }
 
-            variants.push(EnumTypeVariant::from(tokens)?);
+            variants.push(EnumTypeVariant::from(parser)?);
 
             // Parse the optional comma.
-            Module::parse_optional(tokens, TokenKind::Comma);
+            parser.parse_optional(TokenKind::Comma);
         };
 
         Ok(EnumType {
@@ -181,7 +180,7 @@ impl EnumType {
             maybe_params,
             variants,
             is_pub,
-            span: Span { start_pos, end_pos },
+            span: parser.new_span(start_pos, end_pos),
         })
     }
 }
@@ -239,28 +238,26 @@ impl EnumVariantInit {
     ///  - `type` is the enum type symbol
     ///  - `variant_name` is an identifier representing the enum type variant
     ///  - `value` is an expression representing the optional value associated with the enum
-    ///    variant (see `Expression::from`).
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let start_pos = Module::current_position(tokens);
+    ///    variant.
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
+        let start_pos = parser.current_position();
 
         // Parse the enum type symbol followed by `::`.
-        let typ = UnresolvedType::from_symbol(Symbol::from(tokens)?);
-        Module::parse_expecting(tokens, TokenKind::DoubleColon)?;
+        let typ = UnresolvedType::from_symbol(Symbol::parse(parser)?);
+        parser.parse_expecting(TokenKind::DoubleColon)?;
 
         // In case there is no value in this initialization, compute the end position now.
-        let mut end_pos = match tokens.peek_next() {
+        let mut end_pos = match parser.tokens.peek_next() {
             Some(t) => t.span.end_pos,
             None => Position::default(),
         };
-        let variant_name = Module::parse_identifier(tokens)?;
+        let variant_name = parser.parse_identifier()?;
 
         // Parse the optional `(<value>)`.
-        let maybe_value = match Module::parse_optional(tokens, TokenKind::LeftParen) {
+        let maybe_value = match parser.parse_optional(TokenKind::LeftParen) {
             Some(_) => {
-                let expr = Expression::from(tokens)?;
-                end_pos = Module::parse_expecting(tokens, TokenKind::RightParen)?
-                    .span
-                    .end_pos;
+                let expr = Expression::parse(parser)?;
+                end_pos = parser.parse_expecting(TokenKind::RightParen)?.span.end_pos;
                 Some(Box::new(expr))
             }
             None => None,
@@ -270,7 +267,7 @@ impl EnumVariantInit {
             typ,
             variant_name,
             maybe_value,
-            span: Span { start_pos, end_pos },
+            span: parser.new_span(start_pos, end_pos),
         })
     }
 }

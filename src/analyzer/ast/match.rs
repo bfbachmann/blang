@@ -500,10 +500,11 @@ impl AMatch {
                     WarnKind::UnreachableCode,
                     "unreachable case",
                     &Span {
-                        start_pos: case.pattern.start_pos().clone(),
+                        file_id: match_.span.file_id,
+                        start_pos: case.pattern.span().start_pos,
                         end_pos: match &case.maybe_cond {
-                            Some(cond) => cond.end_pos().clone(),
-                            None => case.pattern.end_pos().clone(),
+                            Some(cond) => cond.span().end_pos,
+                            None => case.pattern.span().end_pos,
                         },
                     },
                 ));

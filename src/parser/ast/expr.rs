@@ -2,8 +2,7 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
-use crate::lexer::pos::{Locatable, Position, Span};
-use crate::lexer::stream::Stream;
+use crate::lexer::pos::{Locatable, Span};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::array::ArrayInit;
@@ -20,7 +19,6 @@ use crate::parser::ast::i64_lit::I64Lit;
 use crate::parser::ast::i8_lit::I8Lit;
 use crate::parser::ast::index::Index;
 use crate::parser::ast::int_lit::IntLit;
-use crate::parser::ast::lambda::LambdaDecl;
 use crate::parser::ast::member::MemberAccess;
 use crate::parser::ast::op::Operator;
 use crate::parser::ast::r#enum::EnumVariantInit;
@@ -37,7 +35,7 @@ use crate::parser::ast::u8_lit::U8Lit;
 use crate::parser::ast::uint_lit::UintLit;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
-use crate::parser::module::Module;
+use crate::parser::file_parser::FileParser;
 
 /// Represents basic and composite expressions. For basic expressions, see `Expression::from_basic`,
 /// and for composite expressions, see `Expression::from`.
@@ -62,7 +60,6 @@ pub enum Expression {
     CharLiteral(CharLit),
     FunctionCall(Box<FnCall>),
     AnonFunction(Box<Function>),
-    Lambda(Box<Function>),
     StructInit(StructInit),
     EnumInit(EnumVariantInit),
     TupleInit(TupleInit),
@@ -101,7 +98,6 @@ impl Display for Expression {
             Expression::CharLiteral(c) => write!(f, "{}", c),
             Expression::FunctionCall(call) => write!(f, "{}", call),
             Expression::AnonFunction(func) => write!(f, "{}", func),
-            Expression::Lambda(func) => write!(f, "{}", func),
             Expression::UnaryOperation(op, expr) => match op {
                 Operator::Defererence => write!(f, "{}{}", expr, op),
                 Operator::MutReference => write!(f, "{} {}", op, expr),
@@ -130,76 +126,6 @@ impl Display for Expression {
 }
 
 impl Locatable for Expression {
-    fn start_pos(&self) -> &Position {
-        match self {
-            Expression::Symbol(sym) => sym.start_pos(),
-            Expression::BoolLiteral(bool_lit) => bool_lit.start_pos(),
-            Expression::I8Literal(i) => i.start_pos(),
-            Expression::U8Literal(i) => i.start_pos(),
-            Expression::I16Literal(i) => i.start_pos(),
-            Expression::U16Literal(i) => i.start_pos(),
-            Expression::I32Literal(i) => i.start_pos(),
-            Expression::U32Literal(i) => i.start_pos(),
-            Expression::F32Literal(i) => i.start_pos(),
-            Expression::I64Literal(i) => i.start_pos(),
-            Expression::U64Literal(i) => i.start_pos(),
-            Expression::F64Literal(i) => i.start_pos(),
-            Expression::IntLiteral(i) => i.start_pos(),
-            Expression::UintLiteral(i) => i.start_pos(),
-            Expression::StrLiteral(string_lit) => string_lit.start_pos(),
-            Expression::CharLiteral(char_lit) => char_lit.start_pos(),
-            Expression::FunctionCall(fn_call) => fn_call.start_pos(),
-            Expression::AnonFunction(func) => func.start_pos(),
-            Expression::Lambda(func) => func.start_pos(),
-            Expression::UnaryOperation(_, expr) => expr.start_pos(),
-            Expression::StructInit(struct_init) => struct_init.start_pos(),
-            Expression::EnumInit(enum_init) => enum_init.start_pos(),
-            Expression::TupleInit(tuple_init) => tuple_init.start_pos(),
-            Expression::ArrayInit(array_init) => array_init.start_pos(),
-            Expression::BinaryOperation(left, _, _) => left.start_pos(),
-            Expression::SizeOf(so) => so.start_pos(),
-            Expression::Index(idx) => idx.start_pos(),
-            Expression::MemberAccess(m) => m.start_pos(),
-            Expression::TypeCast(expr, _) => expr.start_pos(),
-            Expression::From(from) => from.start_pos(),
-        }
-    }
-
-    fn end_pos(&self) -> &Position {
-        match self {
-            Expression::Symbol(sym) => sym.end_pos(),
-            Expression::BoolLiteral(bool_lit) => bool_lit.end_pos(),
-            Expression::I8Literal(i) => i.end_pos(),
-            Expression::U8Literal(i) => i.end_pos(),
-            Expression::I16Literal(i) => i.end_pos(),
-            Expression::U16Literal(i) => i.end_pos(),
-            Expression::I32Literal(i) => i.end_pos(),
-            Expression::U32Literal(i) => i.end_pos(),
-            Expression::F32Literal(i) => i.end_pos(),
-            Expression::I64Literal(i) => i.end_pos(),
-            Expression::U64Literal(i) => i.end_pos(),
-            Expression::F64Literal(i) => i.end_pos(),
-            Expression::IntLiteral(i) => i.end_pos(),
-            Expression::UintLiteral(i) => i.end_pos(),
-            Expression::StrLiteral(string_lit) => string_lit.end_pos(),
-            Expression::CharLiteral(char_lit) => char_lit.end_pos(),
-            Expression::FunctionCall(fn_call) => fn_call.end_pos(),
-            Expression::AnonFunction(func) => func.end_pos(),
-            Expression::Lambda(func) => func.end_pos(),
-            Expression::UnaryOperation(_, expr) => expr.end_pos(),
-            Expression::StructInit(struct_init) => struct_init.end_pos(),
-            Expression::EnumInit(enum_init) => enum_init.end_pos(),
-            Expression::TupleInit(tuple_init) => tuple_init.end_pos(),
-            Expression::ArrayInit(array_init) => array_init.end_pos(),
-            Expression::BinaryOperation(_, _, right) => right.end_pos(),
-            Expression::SizeOf(so) => so.end_pos(),
-            Expression::Index(idx) => idx.end_pos(),
-            Expression::MemberAccess(m) => m.end_pos(),
-            Expression::TypeCast(_, target_type) => target_type.end_pos(),
-            Expression::From(from) => from.end_pos(),
-        }
-    }
-
     fn span(&self) -> &Span {
         match self {
             Expression::Symbol(sym) => sym.span(),
@@ -220,7 +146,6 @@ impl Locatable for Expression {
             Expression::CharLiteral(char_lit) => char_lit.span(),
             Expression::FunctionCall(fn_call) => fn_call.span(),
             Expression::AnonFunction(func) => func.span(),
-            Expression::Lambda(func) => func.span(),
             Expression::UnaryOperation(_, expr) => expr.span(),
             Expression::StructInit(struct_init) => struct_init.span(),
             Expression::EnumInit(enum_init) => enum_init.span(),
@@ -239,11 +164,11 @@ impl Locatable for Expression {
 impl Expression {
     /// Parses a basic or composite expression from the given tokens. A basic expression can be any
     /// of the following:
-    ///  - a symbol (see `Symbol::from`)
+    ///  - a symbol
     ///  - a literal value
     ///  - a function call
     ///  - a unary operator followed by a composite expression (`<unary_op> <comp_expr>`)
-    ///  - a struct initialization (see `StructInit::from`)
+    ///  - a struct initialization
     /// whereas a composite expression can be any token sequence of the form
     ///
     ///     <basic_expr> <binary_op> <comp_expr>
@@ -256,8 +181,8 @@ impl Expression {
     /// This function implements a modified version of the shunting yard algorithm. The general
     /// structure is the same, but modifications have been made to handle negative values and
     /// function calls with arbitrary arguments.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
-        parse_expr(tokens)
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Expression> {
+        parse_expr(parser)
     }
 }
 
@@ -289,15 +214,15 @@ impl Display for OutNode {
 /// - `unop` is a unary operator
 /// - `comp` is a composite expression (an expression containing binary operators)
 /// - `type` is a type.
-pub fn parse_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
+pub fn parse_expr(parser: &mut FileParser) -> ParseResult<Expression> {
     let mut op_stack: VecDeque<Token> = VecDeque::new();
     let mut out_q: VecDeque<OutNode> = VecDeque::new();
 
     // Collect nodes into the output queue in RPN order.
-    while tokens.has_next() {
+    while parser.tokens.has_next() {
         // The expression must begin with either a basic expression (i.e. not a binary operator)
         // or a unary operator.
-        let token = tokens.peek_next().unwrap();
+        let token = parser.tokens.peek_next().unwrap();
 
         // Check if the expression is a unary operation, a `sizeof` (which is not considered
         // an operator because its operand is a type and not an expression), or just a basic
@@ -317,42 +242,42 @@ pub fn parse_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
             }
 
             // Parse all leading unary operators.
-            let mut unary_ops = parse_unary_operators(tokens);
+            let mut unary_ops = parse_unary_operators(parser);
 
             // Form new expression from chained unary operators.
-            let mut expr = parse_basic_expr(tokens)?;
+            let mut expr = parse_basic_expr(parser)?;
             while let Some(op) = unary_ops.pop() {
                 expr = Expression::UnaryOperation(op, Box::new(expr))
             }
 
             expr
         } else if token.kind == TokenKind::SizeOf {
-            Expression::SizeOf(SizeOf::from(tokens)?)
+            Expression::SizeOf(SizeOf::from(parser)?)
         } else {
-            parse_basic_expr(tokens)?
+            parse_basic_expr(parser)?
         };
 
         // Check if a type cast follows the expression.
         if let Some(Token {
             kind: TokenKind::As,
             ..
-        }) = tokens.peek_next()
+        }) = parser.tokens.peek_next()
         {
-            tokens.next();
-            let typ = Type::from(tokens)?;
+            parser.tokens.next();
+            let typ = Type::parse(parser)?;
             out_q.push_back(OutNode::Expr(Expression::TypeCast(Box::new(expr), typ)));
         } else {
             out_q.push_back(OutNode::Expr(expr));
         }
 
         // Check if the expression is followed by a binary operator.
-        match tokens.peek_next() {
+        match parser.tokens.peek_next() {
             // There are more tokens in the sequence that might be part of this expression.
             // Check for optional binary operator or `as` type cast operator.
             Some(t) => match Operator::from(&t.kind) {
                 Some(op) if op.is_binary() => {
                     let token = t.clone();
-                    tokens.next();
+                    parser.tokens.next();
 
                     // Do the part of the Shunting Yard algorithm where we push operations
                     // on the operator stack with lower precedence to the output queue.
@@ -390,15 +315,15 @@ pub fn parse_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
 }
 
 /// Parses and returns all sequential unary operators at the current position in the token stream.
-fn parse_unary_operators(tokens: &mut Stream<Token>) -> Vec<Operator> {
+fn parse_unary_operators(parser: &mut FileParser) -> Vec<Operator> {
     let mut unary_ops = vec![];
-    while let Some(token) = tokens.peek_next() {
+    while let Some(token) = parser.tokens.peek_next() {
         match Operator::from(&token.kind) {
             // Make sure the operator is unary and is not a deref (because derefs are suffix
             // operators).
             Some(op) if op.is_unary() && op != Operator::Defererence => {
                 unary_ops.push(op);
-                tokens.next();
+                parser.tokens.next();
             }
             _ => break,
         }
@@ -441,11 +366,11 @@ fn parse_from_rpn(rpn_queue: &mut VecDeque<OutNode>) -> ParseResult<Expression> 
 /// where
 /// - `unit` is a unitary expression (see `parse_unit`)
 /// - `comp` is a composite expression (see `parse_expr`).
-fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
-    let mut expr = parse_unit_expr(tokens)?;
+fn parse_basic_expr(parser: &mut FileParser) -> ParseResult<Expression> {
+    let mut expr = parse_unit_expr(parser)?;
 
     loop {
-        let token = match tokens.peek_next() {
+        let token = match parser.tokens.peek_next() {
             Some(t) => t,
             None => {
                 return Ok(expr);
@@ -464,15 +389,13 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
             //      let mut a = my_variable
             //      (a) = 10
             //
-            TokenKind::LeftParen if token.span.start_pos.line == expr.end_pos().line => {
-                tokens.next();
+            TokenKind::LeftParen if token.span.start_pos.line == expr.span().end_pos.line => {
+                parser.tokens.next();
 
                 // Collect call arguments.
                 let mut args = vec![];
                 loop {
-                    if let Some(Token { span, .. }) =
-                        Module::parse_optional(tokens, TokenKind::RightParen)
-                    {
+                    if let Some(Token { span, .. }) = parser.parse_optional(TokenKind::RightParen) {
                         expr = Expression::FunctionCall(Box::new(FnCall::new(
                             expr,
                             args,
@@ -481,17 +404,16 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                         break;
                     }
 
-                    let arg = parse_expr(tokens)?;
+                    let arg = parse_expr(parser)?;
                     args.push(arg);
 
                     if let Token {
                         kind: TokenKind::RightParen,
                         span,
                         ..
-                    } = Module::parse_expecting_any(
-                        tokens,
-                        vec![TokenKind::Comma, TokenKind::RightParen],
-                    )? {
+                    } =
+                        parser.parse_expecting_any(vec![TokenKind::Comma, TokenKind::RightParen])?
+                    {
                         expr = Expression::FunctionCall(Box::new(FnCall::new(
                             expr,
                             args,
@@ -503,28 +425,34 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
             }
 
             TokenKind::BeginIndex => {
-                tokens.next();
+                parser.tokens.next();
 
-                expr = Expression::Index(Box::new(Index::new(expr, parse_expr(tokens)?)));
-                Module::parse_expecting(tokens, TokenKind::RightParen)?;
+                let index_expr = parse_expr(parser)?;
+                let end_pos = parser.parse_expecting(TokenKind::RightParen)?.span.end_pos;
+
+                expr = Expression::Index(Box::new(Index {
+                    span: parser.new_span(expr.span().start_pos, end_pos),
+                    collection_expr: expr,
+                    index_expr,
+                }));
             }
 
             TokenKind::Dot => {
-                tokens.next();
+                parser.tokens.next();
 
-                let member_symbol = Symbol::from(tokens)?;
-                let start_pos = expr.start_pos().clone();
-                let end_pos = member_symbol.end_pos().clone();
+                let member_symbol = Symbol::parse(parser)?;
+                let start_pos = expr.span().start_pos;
+                let end_pos = member_symbol.span().end_pos;
 
                 expr = Expression::MemberAccess(Box::new(MemberAccess {
                     base_expr: expr,
                     member_symbol,
-                    span: Span { start_pos, end_pos },
+                    span: parser.new_span(start_pos, end_pos),
                 }));
             }
 
             TokenKind::Deref => {
-                tokens.next();
+                parser.tokens.next();
                 expr = Expression::UnaryOperation(Operator::Defererence, Box::new(expr));
             }
 
@@ -547,8 +475,8 @@ fn parse_basic_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
 ///
 /// where
 /// `comp` is a composite expression (see `parse_expr`).
-fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
-    let token = match tokens.peek_next() {
+fn parse_unit_expr(parser: &mut FileParser) -> ParseResult<Expression> {
+    let token = match parser.tokens.peek_next() {
         Some(t) => t,
         None => {
             return Err(ParseError::new(
@@ -562,55 +490,52 @@ fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
 
     let expr = match &token.kind {
         // Basic literals.
-        TokenKind::BoolLiteral(_) => Expression::BoolLiteral(BoolLit::from(tokens)?),
-        TokenKind::I8Literal(_) => Expression::I8Literal(I8Lit::from(tokens)?),
-        TokenKind::U8Literal(_) => Expression::U8Literal(U8Lit::from(tokens)?),
-        TokenKind::I16Literal(_) => Expression::I16Literal(I16Lit::from(tokens)?),
-        TokenKind::U16Literal(_) => Expression::U16Literal(U16Lit::from(tokens)?),
-        TokenKind::I32Literal(_) => Expression::I32Literal(I32Lit::from(tokens)?),
-        TokenKind::U32Literal(_) => Expression::U32Literal(U32Lit::from(tokens)?),
-        TokenKind::F32Literal(_) => Expression::F32Literal(F32Lit::from(tokens)?),
-        TokenKind::I64Literal(_) => Expression::I64Literal(I64Lit::from(tokens)?),
-        TokenKind::U64Literal(_) => Expression::U64Literal(U64Lit::from(tokens)?),
-        TokenKind::F64Literal(_) => Expression::F64Literal(F64Lit::from(tokens)?),
-        TokenKind::IntLiteral(_) => Expression::IntLiteral(IntLit::from(tokens)?),
-        TokenKind::UintLiteral(_) => Expression::UintLiteral(UintLit::from(tokens)?),
-        TokenKind::StrLiteral(_) => Expression::StrLiteral(StrLit::from(tokens)?),
-        TokenKind::CharLiteral(_) => Expression::CharLiteral(CharLit::from(tokens)?),
+        TokenKind::BoolLiteral(_) => Expression::BoolLiteral(BoolLit::parse(parser)?),
+        TokenKind::I8Literal(_) => Expression::I8Literal(I8Lit::parse(parser)?),
+        TokenKind::U8Literal(_) => Expression::U8Literal(U8Lit::parse(parser)?),
+        TokenKind::I16Literal(_) => Expression::I16Literal(I16Lit::parse(parser)?),
+        TokenKind::U16Literal(_) => Expression::U16Literal(U16Lit::parse(parser)?),
+        TokenKind::I32Literal(_) => Expression::I32Literal(I32Lit::parse(parser)?),
+        TokenKind::U32Literal(_) => Expression::U32Literal(U32Lit::parse(parser)?),
+        TokenKind::F32Literal(_) => Expression::F32Literal(F32Lit::parse(parser)?),
+        TokenKind::I64Literal(_) => Expression::I64Literal(I64Lit::parse(parser)?),
+        TokenKind::U64Literal(_) => Expression::U64Literal(U64Lit::parse(parser)?),
+        TokenKind::F64Literal(_) => Expression::F64Literal(F64Lit::parse(parser)?),
+        TokenKind::IntLiteral(_) => Expression::IntLiteral(IntLit::parse(parser)?),
+        TokenKind::UintLiteral(_) => Expression::UintLiteral(UintLit::parse(parser)?),
+        TokenKind::StrLiteral(_) => Expression::StrLiteral(StrLit::parse(parser)?),
+        TokenKind::CharLiteral(_) => Expression::CharLiteral(CharLit::parse(parser)?),
 
         // Composite value initialization.
-        TokenKind::LeftBracket => Expression::ArrayInit(Box::new(ArrayInit::from(tokens)?)),
-        TokenKind::LeftBrace => Expression::TupleInit(TupleInit::from(tokens)?),
+        TokenKind::LeftBracket => Expression::ArrayInit(Box::new(ArrayInit::parse(parser)?)),
+        TokenKind::LeftBrace => Expression::TupleInit(TupleInit::parse(parser)?),
 
         // Inline function declarations.
-        TokenKind::Fn => Expression::AnonFunction(Box::new(Function::from_anon(tokens)?)),
-        TokenKind::DollarSign => {
-            Expression::Lambda(Box::new(Function::from_lambda(LambdaDecl::from(tokens)?)))
-        }
+        TokenKind::Fn => Expression::AnonFunction(Box::new(Function::parse_anon(parser)?)),
 
         // Parenthesized expressions.
         TokenKind::LeftParen => {
-            tokens.next();
+            parser.tokens.next();
             // TODO: Set the expression start and end positions to match
             // parenthesis.
-            let expr = parse_expr(tokens)?;
-            Module::parse_expecting(tokens, TokenKind::RightParen)?;
+            let expr = parse_expr(parser)?;
+            parser.parse_expecting(TokenKind::RightParen)?;
             expr
         }
 
         // Any expression that begins with `@` or an identifier.
         TokenKind::Identifier(_) | TokenKind::At => {
-            let cursor_before_symbol = tokens.cursor();
-            let symbol = Symbol::from(tokens)?;
-            let cursor_after_symbol = tokens.cursor();
+            let cursor_before_symbol = parser.tokens.cursor();
+            let symbol = Symbol::parse(parser)?;
+            let cursor_after_symbol = parser.tokens.cursor();
 
-            match tokens.peek_next() {
+            match parser.tokens.peek_next() {
                 Some(Token {
                     kind: TokenKind::DoubleColon,
                     ..
                 }) => {
-                    tokens.set_cursor(cursor_before_symbol);
-                    Expression::EnumInit(EnumVariantInit::from(tokens)?)
+                    parser.tokens.set_cursor(cursor_before_symbol);
+                    Expression::EnumInit(EnumVariantInit::parse(parser)?)
                 }
 
                 Some(Token {
@@ -619,12 +544,12 @@ fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
                 }) => {
                     // This might be struct initialization, or just part of a conditional that is
                     // followed by the conditional closure.
-                    tokens.set_cursor(cursor_before_symbol);
-                    if let Ok(struct_init) = StructInit::from(tokens) {
+                    parser.tokens.set_cursor(cursor_before_symbol);
+                    if let Ok(struct_init) = StructInit::parse(parser) {
                         return Ok(Expression::StructInit(struct_init));
                     }
 
-                    tokens.set_cursor(cursor_after_symbol);
+                    parser.tokens.set_cursor(cursor_after_symbol);
                     Expression::Symbol(symbol)
                 }
 
@@ -633,7 +558,7 @@ fn parse_unit_expr(tokens: &mut Stream<Token>) -> ParseResult<Expression> {
         }
 
         // A `from` expression.
-        TokenKind::From => Expression::From(From::from(tokens)?),
+        TokenKind::From => Expression::From(From::from(parser)?),
 
         other => {
             return Err(ParseError::new_with_token(
@@ -662,10 +587,12 @@ mod tests {
     use crate::parser::ast::str_lit::StrLit;
     use crate::parser::ast::symbol::Symbol;
     use crate::parser::error::{ErrorKind, ParseError, ParseResult};
+    use crate::parser::file_parser::FileParser;
 
     fn parse(raw: &str) -> ParseResult<Expression> {
-        let tokens = lex(raw).expect("should succeed");
-        Expression::from(&mut Stream::from(tokens))
+        let tokens = lex(raw, 0).expect("should succeed");
+        let mut parser = FileParser::new(0, Stream::from(tokens));
+        Expression::parse(&mut parser)
     }
 
     #[test]
@@ -677,6 +604,7 @@ mod tests {
                 name: "my_var".to_string(),
                 params: vec![],
                 span: Span {
+                    file_id: 0,
                     start_pos: Position::new(1, 1),
                     end_pos: Position::new(1, 7),
                 },
@@ -691,6 +619,7 @@ mod tests {
             Expression::BoolLiteral(BoolLit::new(
                 true,
                 Span {
+                    file_id: 0,
                     start_pos: Position::new(1, 1),
                     end_pos: Position::new(1, 5)
                 }
@@ -701,6 +630,7 @@ mod tests {
             Expression::BoolLiteral(BoolLit::new(
                 false,
                 Span {
+                    file_id: 0,
                     start_pos: Position::new(1, 1),
                     end_pos: Position::new(1, 6)
                 },
@@ -715,6 +645,7 @@ mod tests {
                 value: 123,
                 has_suffix: false,
                 span: Span {
+                    file_id: 0,
                     start_pos: Position::new(1, 1),
                     end_pos: Position::new(1, 4),
                 },
@@ -729,6 +660,7 @@ mod tests {
             Expression::StrLiteral(StrLit {
                 value: r#"this is my "String""#.to_string(),
                 span: Span {
+                    file_id: 0,
                     start_pos: Position::new(1, 1),
                     end_pos: Position::new(1, 24),
                 },
@@ -744,6 +676,7 @@ mod tests {
                 Expression::Symbol(Symbol::new(
                     "call",
                     Span {
+                        file_id: 0,
                         start_pos: Position::new(1, 1),
                         end_pos: Position::new(1, 5)
                     },
@@ -755,6 +688,7 @@ mod tests {
                                 value: 3,
                                 has_suffix: false,
                                 span: Span {
+                                    file_id: 0,
                                     start_pos: Position::new(1, 6),
                                     end_pos: Position::new(1, 7),
                                 },
@@ -764,6 +698,7 @@ mod tests {
                                 value: 2,
                                 has_suffix: false,
                                 span: Span {
+                                    file_id: 0,
                                     start_pos: Position::new(1, 10),
                                     end_pos: Position::new(1, 11),
                                 },
@@ -774,6 +709,7 @@ mod tests {
                             value: 2,
                             has_suffix: false,
                             span: Span {
+                                file_id: 0,
                                 start_pos: Position::new(1, 14),
                                 end_pos: Position::new(1, 15),
                             },
@@ -783,6 +719,7 @@ mod tests {
                         Expression::Symbol(Symbol::new(
                             "other",
                             Span {
+                                file_id: 0,
                                 start_pos: Position::new(1, 17),
                                 end_pos: Position::new(1, 22)
                             }
@@ -795,6 +732,7 @@ mod tests {
                                     name: "thing".to_string(),
                                     params: vec![],
                                     span: Span {
+                                        file_id: 0,
                                         start_pos: Position::new(1, 24),
                                         end_pos: Position::new(1, 29),
                                     },
@@ -805,6 +743,7 @@ mod tests {
                                     value: 1,
                                     has_suffix: false,
                                     span: Span {
+                                        file_id: 0,
                                         start_pos: Position::new(1, 31),
                                         end_pos: Position::new(1, 32),
                                     },
@@ -816,6 +755,7 @@ mod tests {
                                         name: "var".to_string(),
                                         params: vec![],
                                         span: Span {
+                                            file_id: 0,
                                             start_pos: Position::new(1, 35),
                                             end_pos: Position::new(1, 38),
                                         },
@@ -825,6 +765,7 @@ mod tests {
                                         value: 2,
                                         has_suffix: false,
                                         span: Span {
+                                            file_id: 0,
                                             start_pos: Position::new(1, 41),
                                             end_pos: Position::new(1, 42),
                                         },
@@ -852,6 +793,7 @@ mod tests {
                                 value: 3,
                                 has_suffix: false,
                                 span: Span {
+                                    file_id: 0,
                                     start_pos: Position::new(1, 2),
                                     end_pos: Position::new(1, 3),
                                 },
@@ -861,6 +803,7 @@ mod tests {
                                 value: 6,
                                 has_suffix: false,
                                 span: Span {
+                                    file_id: 0,
                                     start_pos: Position::new(1, 6),
                                     end_pos: Position::new(1, 7),
                                 },
@@ -871,6 +814,7 @@ mod tests {
                             value: 3,
                             has_suffix: false,
                             span: Span {
+                                file_id: 0,
                                 start_pos: Position::new(1, 11),
                                 end_pos: Position::new(1, 12),
                             },
@@ -881,6 +825,7 @@ mod tests {
                         value: 5,
                         has_suffix: false,
                         span: Span {
+                            file_id: 0,
                             start_pos: Position::new(1, 15),
                             end_pos: Position::new(1, 16),
                         },
@@ -892,6 +837,7 @@ mod tests {
                         value: 298,
                         has_suffix: false,
                         span: Span {
+                            file_id: 0,
                             start_pos: Position::new(1, 19),
                             end_pos: Position::new(1, 22),
                         },
@@ -901,6 +847,7 @@ mod tests {
                         value: 3,
                         has_suffix: false,
                         span: Span {
+                            file_id: 0,
                             start_pos: Position::new(1, 25),
                             end_pos: Position::new(1, 26),
                         },
@@ -924,6 +871,7 @@ mod tests {
                                 name: "var".to_string(),
                                 params: vec![],
                                 span: Span {
+                                    file_id: 0,
                                     start_pos: Position::new(1, 2),
                                     end_pos: Position::new(1, 5),
                                 },
@@ -933,6 +881,7 @@ mod tests {
                                 value: 3,
                                 has_suffix: false,
                                 span: Span {
+                                    file_id: 0,
                                     start_pos: Position::new(1, 8),
                                     end_pos: Position::new(1, 9)
                                 },
@@ -943,6 +892,7 @@ mod tests {
                             value: 4,
                             has_suffix: false,
                             span: Span {
+                                file_id: 0,
                                 start_pos: Position::new(1, 13),
                                 end_pos: Position::new(1, 14)
                             },
@@ -954,6 +904,7 @@ mod tests {
                             Expression::Symbol(Symbol::new(
                                 "call",
                                 Span {
+                                    file_id: 0,
                                     start_pos: Position::new(2, 2),
                                     end_pos: Position::new(2, 6)
                                 }
@@ -961,6 +912,7 @@ mod tests {
                             vec![Expression::BoolLiteral(BoolLit {
                                 value: true,
                                 span: Span {
+                                    file_id: 0,
                                     start_pos: Position::new(2, 7),
                                     end_pos: Position::new(2, 11)
                                 },
@@ -972,6 +924,7 @@ mod tests {
                             value: 2,
                             has_suffix: false,
                             span: Span {
+                                file_id: 0,
                                 start_pos: Position::new(2, 15),
                                 end_pos: Position::new(2, 16)
                             },
@@ -983,6 +936,7 @@ mod tests {
                     value: 5,
                     has_suffix: false,
                     span: Span {
+                        file_id: 0,
                         start_pos: Position::new(3, 1),
                         end_pos: Position::new(3, 2)
                     },
@@ -1002,11 +956,13 @@ mod tests {
                 token: Some(Token {
                     kind: TokenKind::Colon,
                     span: Span {
+                        file_id: 0,
                         start_pos: Position { line: 1, col: 15 },
                         end_pos: Position { line: 1, col: 16 },
                     }
                 }),
                 span: Span {
+                    file_id: 0,
                     start_pos: Position { line: 1, col: 15 },
                     end_pos: Position { line: 1, col: 16 },
                 },
@@ -1027,6 +983,7 @@ mod tests {
                             value: 8,
                             has_suffix: false,
                             span: Span {
+                                file_id: 0,
                                 start_pos: Position::new(1, 2),
                                 end_pos: Position::new(1, 3),
                             },
@@ -1042,6 +999,7 @@ mod tests {
                                         value: 100,
                                         has_suffix: false,
                                         span: Span {
+                                            file_id: 0,
                                             start_pos: Position::new(1, 8),
                                             end_pos: Position::new(1, 11),
                                         },
@@ -1052,6 +1010,7 @@ mod tests {
                                     value: 2,
                                     has_suffix: false,
                                     span: Span {
+                                        file_id: 0,
                                         start_pos: Position::new(1, 14),
                                         end_pos: Position::new(1, 15)
                                     },
@@ -1062,6 +1021,7 @@ mod tests {
                                 value: 4,
                                 has_suffix: false,
                                 span: Span {
+                                    file_id: 0,
                                     start_pos: Position::new(1, 19),
                                     end_pos: Position::new(1, 20)
                                 },
@@ -1072,6 +1032,7 @@ mod tests {
                             value: 2,
                             has_suffix: false,
                             span: Span {
+                                file_id: 0,
                                 start_pos: Position::new(1, 23),
                                 end_pos: Position::new(1, 24)
                             },
@@ -1083,6 +1044,7 @@ mod tests {
                     value: 8,
                     has_suffix: false,
                     span: Span {
+                        file_id: 0,
                         start_pos: Position::new(1, 27),
                         end_pos: Position::new(1, 28)
                     },
@@ -1102,6 +1064,7 @@ mod tests {
                     value: 8,
                     has_suffix: false,
                     span: Span {
+                        file_id: 0,
                         start_pos: Position::new(1, 2),
                         end_pos: Position::new(1, 3),
                     },
@@ -1119,6 +1082,7 @@ mod tests {
                     name: "x".to_string(),
                     params: vec![],
                     span: Span {
+                        file_id: 0,
                         start_pos: Position::new(1, 2),
                         end_pos: Position::new(1, 3),
                     },
@@ -1135,6 +1099,7 @@ mod tests {
                     Expression::Symbol(Symbol::new(
                         "f",
                         Span {
+                            file_id: 0,
                             start_pos: Position::new(1, 2),
                             end_pos: Position::new(1, 3)
                         }
@@ -1180,6 +1145,7 @@ mod tests {
                         value: 1,
                         has_suffix: false,
                         span: Span {
+                            file_id: 0,
                             start_pos: Position::new(1, 4),
                             end_pos: Position::new(1, 5)
                         },
@@ -1189,6 +1155,7 @@ mod tests {
                         value: 0,
                         has_suffix: false,
                         span: Span {
+                            file_id: 0,
                             start_pos: Position::new(1, 6),
                             end_pos: Position::new(1, 7)
                         },
@@ -1199,6 +1166,7 @@ mod tests {
                     value: 1,
                     has_suffix: false,
                     span: Span {
+                        file_id: 0,
                         start_pos: Position::new(1, 9),
                         end_pos: Position::new(1, 10)
                     },
@@ -1240,6 +1208,7 @@ mod tests {
                                         name: "v".to_string(),
                                         params: vec![],
                                         span: Span {
+                                            file_id: 0,
                                             start_pos: Position { line: 1, col: 5 },
                                             end_pos: Position { line: 1, col: 6 },
                                         },
@@ -1253,6 +1222,7 @@ mod tests {
                                         name: "a".to_string(),
                                         params: vec![],
                                         span: Span {
+                                            file_id: 0,
                                             start_pos: Position { line: 1, col: 8 },
                                             end_pos: Position { line: 1, col: 9 },
                                         },
@@ -1266,6 +1236,7 @@ mod tests {
                         value: 2,
                         has_suffix: false,
                         span: Span {
+                            file_id: 0,
                             start_pos: Position { line: 1, col: 11 },
                             end_pos: Position { line: 1, col: 12 },
                         },
@@ -1281,6 +1252,7 @@ mod tests {
                                 value: 100,
                                 has_suffix: false,
                                 span: Span {
+                                    file_id: 0,
                                     start_pos: Position { line: 1, col: 16 },
                                     end_pos: Position { line: 1, col: 19 },
                                 },
@@ -1295,6 +1267,7 @@ mod tests {
                                     name: "call".to_string(),
                                     params: vec![],
                                     span: Span {
+                                        file_id: 0,
                                         start_pos: Position { line: 1, col: 23 },
                                         end_pos: Position { line: 1, col: 27 },
                                     },
@@ -1303,11 +1276,13 @@ mod tests {
                                     value: 1,
                                     has_suffix: false,
                                     span: Span {
+                                        file_id: 0,
                                         start_pos: Position { line: 1, col: 28 },
                                         end_pos: Position { line: 1, col: 29 },
                                     },
                                 })],
                                 span: Span {
+                                    file_id: 0,
                                     start_pos: Position { line: 1, col: 23 },
                                     end_pos: Position { line: 1, col: 30 },
                                 },
@@ -1334,6 +1309,7 @@ mod tests {
                             name: "b".to_string(),
                             params: vec![],
                             span: Span {
+                                file_id: 0,
                                 start_pos: Position::new(1, 4),
                                 end_pos: Position::new(1, 5),
                             },
@@ -1346,6 +1322,7 @@ mod tests {
                             value: 100,
                             has_suffix: false,
                             span: Span {
+                                file_id: 0,
                                 start_pos: Position::new(1, 8),
                                 end_pos: Position::new(1, 11),
                             },
@@ -1370,6 +1347,7 @@ mod tests {
             Expression::StrLiteral(StrLit {
                 value: string.replace('"', ""),
                 span: Span {
+                    file_id: 0,
                     start_pos: Position::new(1, 1),
                     end_pos: Position::new(6, 9),
                 },
@@ -1379,10 +1357,13 @@ mod tests {
 
     #[test]
     fn unclosed_str_lit() {
-        let result = lex(r#"
+        let result = lex(
+            r#"
             fn main() {
                 let a = "        ayyy
-            }"#);
+            }"#,
+            0,
+        );
         assert!(matches!(result, Err(_)));
     }
 }

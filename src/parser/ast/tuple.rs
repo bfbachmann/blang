@@ -1,15 +1,15 @@
 use std::fmt::{Display, Formatter};
-use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position, Span};
-use crate::lexer::stream::Stream;
+use crate::lexer::pos::Span;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::r#type::Type;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
-use crate::parser::module::Module;
+use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 use crate::{locatable_impl, util};
+use std::hash::{Hash, Hasher};
 
 /// Represents tuple type declaration.
 #[derive(Debug, Clone, Eq)]
@@ -69,18 +69,18 @@ impl TupleType {
     ///  - `type` is the type of the tuple field and can be repeated.
     ///
     /// Tuples can also be empty.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
         // Record the starting position of this statement.
-        let start_pos = Module::current_position(tokens);
+        let start_pos = parser.current_position();
 
         // The first token should be `{`.
-        Module::parse_expecting(tokens, TokenKind::LeftBrace)?;
+        parser.parse_expecting(TokenKind::LeftBrace)?;
 
         // The next tokens should be types followed by commas ending in `}`.
         let mut types = vec![];
         let end_pos;
         loop {
-            match tokens.peek_next() {
+            match parser.tokens.peek_next() {
                 Some(Token {
                     kind: TokenKind::Comma,
                     ..
@@ -89,7 +89,7 @@ impl TupleType {
                     return Err(ParseError::new_with_token(
                         ErrorKind::UnexpectedToken,
                         format_code!("expected type or {}", TokenKind::Comma).as_str(),
-                        tokens.next().unwrap().clone(),
+                        parser.tokens.next().unwrap().clone(),
                     ));
                 }
 
@@ -98,23 +98,22 @@ impl TupleType {
                     ..
                 }) => {
                     // Record the ending position of this statement.
-                    end_pos = tokens.next().unwrap().span.end_pos;
+                    end_pos = parser.tokens.next().unwrap().span.end_pos;
                     break;
                 }
 
                 _ => {
                     // The token is not a comma or `}`, so we're expecting it to be a type.
-                    let typ = Type::from(tokens)?;
+                    let typ = Type::parse(parser)?;
                     types.push(typ);
 
                     // The next token should be a comma or `}`.
                     if let token @ Token {
                         kind: TokenKind::RightBrace,
                         ..
-                    } = Module::parse_expecting_any(
-                        tokens,
-                        vec![TokenKind::Comma, TokenKind::RightBrace],
-                    )? {
+                    } =
+                        parser.parse_expecting_any(vec![TokenKind::Comma, TokenKind::RightBrace])?
+                    {
                         // Record the ending position of this statement.
                         end_pos = token.span.end_pos;
                         break;
@@ -125,7 +124,7 @@ impl TupleType {
 
         Ok(TupleType {
             field_types: types,
-            span: Span { start_pos, end_pos },
+            span: parser.new_span(start_pos, end_pos),
         })
     }
 }
@@ -178,18 +177,18 @@ impl TupleInit {
     ///  - `expr` is and expression representing a tuple field.
     ///
     /// Tuples can also be empty.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
         // Record the starting position of this statement.
-        let start_pos = Module::current_position(tokens);
+        let start_pos = parser.current_position();
 
         // The first token should be `{`.
-        Module::parse_expecting(tokens, TokenKind::LeftBrace)?;
+        parser.parse_expecting(TokenKind::LeftBrace)?;
 
         // The next tokens should be expressions followed by commas ending in `}`.
         let mut values = vec![];
         let end_pos;
         loop {
-            match tokens.peek_next() {
+            match parser.tokens.peek_next() {
                 Some(Token {
                     kind: TokenKind::Comma,
                     ..
@@ -198,7 +197,7 @@ impl TupleInit {
                     return Err(ParseError::new_with_token(
                         ErrorKind::UnexpectedToken,
                         format_code!("expected type or {}", TokenKind::Comma).as_str(),
-                        tokens.next().unwrap().clone(),
+                        parser.tokens.next().unwrap().clone(),
                     ));
                 }
 
@@ -207,23 +206,22 @@ impl TupleInit {
                     ..
                 }) => {
                     // Record the ending position of this statement.
-                    end_pos = tokens.next().unwrap().span.end_pos;
+                    end_pos = parser.tokens.next().unwrap().span.end_pos;
                     break;
                 }
 
                 _ => {
                     // The token is not a comma or `}`, so we're expecting it to be an expression.
-                    let val = Expression::from(tokens)?;
+                    let val = Expression::parse(parser)?;
                     values.push(val);
 
                     // The next token should be a comma or `}`.
                     if let token @ Token {
                         kind: TokenKind::RightBrace,
                         ..
-                    } = Module::parse_expecting_any(
-                        tokens,
-                        vec![TokenKind::Comma, TokenKind::RightBrace],
-                    )? {
+                    } =
+                        parser.parse_expecting_any(vec![TokenKind::Comma, TokenKind::RightBrace])?
+                    {
                         // Record the ending position of this statement.
                         end_pos = token.span.end_pos;
                         break;
@@ -234,7 +232,11 @@ impl TupleInit {
 
         Ok(TupleInit {
             values,
-            span: Span { start_pos, end_pos },
+            span: Span {
+                file_id: parser.file_id,
+                start_pos,
+                end_pos,
+            },
         })
     }
 }
