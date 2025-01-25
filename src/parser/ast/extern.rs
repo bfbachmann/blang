@@ -1,14 +1,13 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Locatable, Position, Span};
-use crate::lexer::stream::Stream;
+use crate::lexer::pos::Span;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
-use crate::locatable_impl;
+use crate::locatable_impl; use crate::Locatable;
 use crate::parser::ast::func_sig::FunctionSignature;
 use crate::parser::error::ParseResult;
-use crate::parser::module::Module;
+use crate::parser::file_parser::FileParser;
 
 /// Represents a set of external function declarations.
 #[derive(Clone, Debug, Eq)]
@@ -47,32 +46,32 @@ impl ExternFn {
     ///     pub extern "name" <fn_sig>
     ///
     /// where
-    ///  - `fn_sig` is a function signature (see `FunctionSignature::from`)
+    ///  - `fn_sig` is a function signature
     ///  - `name` is the optional name to link against in codegen
     ///  - `pub` is optional.
-    pub fn from(tokens: &mut Stream<Token>) -> ParseResult<Self> {
-        let is_pub = Module::parse_optional(tokens, TokenKind::Pub).is_some();
-        let start_pos = Module::current_position(tokens);
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
+        let is_pub = parser.parse_optional(TokenKind::Pub).is_some();
+        let start_pos = parser.current_position();
 
         // Parse the `extern` token.
-        Module::parse_expecting(tokens, TokenKind::Extern)?;
+        parser.parse_expecting(TokenKind::Extern)?;
 
         // Parse the optional extern name.
-        let maybe_link_name = match tokens.peek_next() {
+        let maybe_link_name = match parser.tokens.peek_next() {
             Some(Token {
                 kind: TokenKind::StrLiteral(name),
                 ..
             }) => {
                 let result = Some(name.clone());
-                tokens.next();
+                parser.tokens.next();
                 result
             }
             _ => None,
         };
 
         // Parse the function signature.
-        let fn_sig = FunctionSignature::from(tokens)?;
-        let end_pos = fn_sig.end_pos().clone();
+        let fn_sig = FunctionSignature::from(parser)?;
+        let end_pos = fn_sig.span().end_pos;
 
         Ok(ExternFn {
             fn_sig,
