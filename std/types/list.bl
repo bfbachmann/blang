@@ -15,20 +15,20 @@ const growth_factor: uint = 2
 
 /// An array of values of type T that resizes itself automatically.
 pub struct List[T] {
-    allocator: *mut Allocator
+    allocator: Allocator
     data: SliceMut[T]
     len: uint
 }
 
 impl List {
     /// Returns a new empty list.
-    pub fn new(al: *mut Allocator) -> List[T] {
+    pub fn new(al: Allocator) -> List[T] {
         return List[T].with_capacity(al, 0)
     }
 
     /// Returns a list with enough allocated memory to hold `cap` values of 
     /// type `T`.
-    pub fn with_capacity(al: *mut Allocator, cap: uint) -> List[T] {
+    pub fn with_capacity(mut al: Allocator, cap: uint) -> List[T] {
         let data = from if cap == 0 {
             yield SliceMut[T].new_empty()
         } else {
@@ -46,13 +46,13 @@ impl List {
     }
 
     /// Returns the current length of the list.
-    pub fn len(*self) -> uint {
+    pub fn len(self) -> uint {
         return self.len
     }
 
     /// Returns the current capacity of the list (i.e. how many entries it 
     /// could store before it would need to allocate more space for them).
-    pub fn capacity(*self) -> uint {
+    pub fn capacity(self) -> uint {
         return self.data.len()
     }
 
@@ -71,7 +71,7 @@ impl List {
 
     /// Returns the value at index `i` in the list.
     /// Panics if `i` is out of bounds.
-    pub fn get(*self, i: uint) -> T {
+    pub fn get(self, i: uint) -> T {
         self.check_bounds(i)
         return self.data.ptr_at(i)^
     }
@@ -116,7 +116,7 @@ impl List {
     }
 
     /// Returns a slice that refereces the data currently in the list.
-    pub fn as_slice(*self) -> Slice[T] {
+    pub fn as_slice(self) -> Slice[T] {
         return self.data.as_slice().slice_left(self.len)
     }
 
@@ -153,12 +153,12 @@ impl List {
     }
 
     /// Returns true if the list has no elements.
-    pub fn is_empty(*self) -> bool {
+    pub fn is_empty(self) -> bool {
         return self.len == 0
     }
 
     /// Returns true if the list is full.
-    pub fn is_full(*self) -> bool {
+    pub fn is_full(self) -> bool {
         return self.len == self.capacity()
     }
 
@@ -193,7 +193,7 @@ impl List {
     }
 
     /// Panics if `i` is outside of the array bounds.
-    fn check_bounds(*self, i: uint) {
+    fn check_bounds(self, i: uint) {
         assert(i < self.len, "list index out of bounds")
     }
 }

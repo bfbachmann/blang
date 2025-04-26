@@ -90,7 +90,7 @@ impl ParseResult {
 
 /// Parses a program from a character buffer.
 pub struct Parser {
-    allocator: *mut Allocator
+    allocator: Allocator
     buf: *u8
     buf_len: uint
     cursor: uint
@@ -99,7 +99,7 @@ pub struct Parser {
 
 impl Parser {
     /// Returns a new parser for parsing the instructions in `buf` with a length of `buf_len` bytes.
-    pub fn new(al: *mut Allocator, buf: *u8, buf_len: uint) -> Parser {
+    pub fn new(al: Allocator, buf: *u8, buf_len: uint) -> Parser {
         return Parser{
             allocator: al
             buf: buf
@@ -322,13 +322,13 @@ impl Parser {
     }
 
     /// Returns a pointer to the parser's current position in the program buffer.
-    fn buf_at_cursor(*self) -> *u8 {
+    fn buf_at_cursor(self) -> *u8 {
         return self.buf.(self.cursor as int)
     }
 
     /// Returns `true` if the program buffer starting at the parser's current position
     /// contains `s`.
-    fn buf_starts_with(*self, s: str) -> bool {
+    fn buf_starts_with(self, s: str) -> bool {
         return @libc.strncmp(self.buf_at_cursor(), s.ptr(), s.len()) == 0
     }
 }

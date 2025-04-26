@@ -13,7 +13,7 @@ pub struct Buffer {
 
 impl Buffer {
     /// Creates a new empty buffer.
-    pub fn new(al: *mut Allocator) -> Buffer {
+    pub fn new(al: Allocator) -> Buffer {
         return Buffer{
             buf: Array[u8].new(al)
             cursor: 0
@@ -21,7 +21,7 @@ impl Buffer {
     }
 
     /// Creates a new buffer with the given capacity.
-    pub fn new_with_capacity(al: *mut Allocator, cap: uint) -> Buffer {
+    pub fn new_with_capacity(al: Allocator, cap: uint) -> Buffer {
         return Buffer{
             buf: Array[u8].new_with_len(al, cap)
             cursor: 0
@@ -35,7 +35,7 @@ impl Buffer {
 
     /// Returns true if the buffer has enough room for a write of the given
     /// size in bytes.
-    pub fn can_fit(*self, num_bytes: uint) -> bool {
+    pub fn can_fit(self, num_bytes: uint) -> bool {
         return self.buf.len() - self.cursor >= num_bytes
     }
 
@@ -54,18 +54,18 @@ impl Buffer {
 
     /// Returns a slice pointing to the data that has been written to the
     /// buffer at the time of this call.
-    pub fn as_slice(*self) -> Slice[u8] {
+    pub fn as_slice(self) -> Slice[u8] {
         return self.buf.as_slice().slice_left(self.cursor)
     }
 
     /// Returns the number of bytes written to the buffer.
-    pub fn len(*self) -> uint {
+    pub fn len(self) -> uint {
         return self.cursor
     }
 
     /// Returns the buffer's capacity (the nubmer of bytes that can be written
     /// to it before it is full).
-    pub fn capacity(*self) -> uint {
+    pub fn capacity(self) -> uint {
         return self.buf.len()
     }
 
@@ -136,7 +136,7 @@ const default_capacity: uint = 1024 * 4
 
 impl Buffered {
     /// Creates a new buffered writer that writes to `W`.
-    pub fn new(al: *mut Allocator, writer: W) -> Buffered[W] {
+    pub fn new(al: Allocator, writer: W) -> Buffered[W] {
         return Buffered[W]{
             writer: writer
             buf: Buffer.new_with_capacity(al, default_capacity)

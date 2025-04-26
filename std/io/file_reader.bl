@@ -14,7 +14,7 @@ pub struct FileReader {
 
 impl FileReader {
     /// Creates a reader that can read from the file with descriptor `fd`.
-    pub fn new(al: *mut Allocator, fd: uint) -> FileReader {
+    pub fn new(al: Allocator, fd: uint) -> FileReader {
         return FileReader{
             fd: fd
             // Don't allocate any memory upfront.

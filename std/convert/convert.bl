@@ -7,6 +7,14 @@ use "std/types/slice" {Slice}
 /// and the offset marks the position in the array at which the string starts
 /// (because not all ints will require all 65 bytes).
 pub fn int_to_str(val: int) -> {[u8; 65], uint} {
+    return format_uint(val as uint, val < 0)
+}
+
+pub fn uint_to_str(val: uint) -> {[u8; 65], uint} {
+    return format_uint(val, false)
+}
+
+fn format_uint(mut u: uint, neg: bool) -> {[u8; 65], uint} {
     const digits = "0001020304050607080910111213141516171819\
         2021222324252627282930313233343536373839\
         4041424344454647484950515253545556575859\
@@ -16,11 +24,6 @@ pub fn int_to_str(val: int) -> {[u8; 65], uint} {
     let digit_bytes = Slice[u8].from_str(digits)
     let mut str_bytes = [0u8; 65]
     let mut i = 65uint
-    let mut u = from if val >= 0 {
-        yield val as uint
-    } else { 
-        yield -val as uint
-    }
 
     while u >= 100 {
         let is = u % 100 * 2
@@ -39,7 +42,7 @@ pub fn int_to_str(val: int) -> {[u8; 65], uint} {
         str_bytes.(i) = digit_bytes.get(is)
     }
 
-    if val < 0 {
+    if neg {
         i -= 1
         str_bytes.(i) = '-' as u8
     }

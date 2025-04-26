@@ -8,8 +8,8 @@ use "std/allocator" {LibcAllocator}
 
 fn main() {
     // Created a list and populate it.
-    let mut allocator = LibcAllocator.new().dynamic()
-    let mut list = List[Value].new(&mut allocator)
+    let mut al = LibcAllocator.new().dynamic()
+    let mut list = List[Value].new(al)
     for let mut i = 10; i >= 0; i -= 1 {
         list.push(Value{v: i})
     }

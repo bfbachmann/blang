@@ -11,7 +11,7 @@ use "std/libc" @libc
 use "std/fmt" {printf, Format, Print}
 
 fn main() {
-    let mut al = &mut LibcAllocator.new().dynamic()
+    let mut al = LibcAllocator.new().dynamic()
     let mut map = HashMap[int, int].new(al)
 
     let mut last_i = 1
@@ -109,7 +109,7 @@ impl DJB2Hasher: BuildHash {
 }
 
 pub struct HashMap[K: Hash + Eq, V] {
-    allocator: *mut Allocator
+    allocator: Allocator
     slots: Array[Slot[K, V]]
     len: uint
 }
@@ -126,7 +126,7 @@ pub struct Entry[K, V] {
 }
 
 impl HashMap {
-    pub fn new(al: *mut Allocator) -> Self {
+    pub fn new(al: Allocator) -> Self {
         return Self{
             allocator: al
             slots: Array[Slot[K, V]].new(al)
