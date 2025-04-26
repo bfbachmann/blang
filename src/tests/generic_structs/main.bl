@@ -53,10 +53,9 @@ fn main() {
 
     // Check that we can instantiate monomorphized types that refer to 
     // themselves.
-    // TODO: This is broken.
-    // let thing = Thing[int]{
-    //     f: fn (thing: Thing[int]) {}
-    // }
+    let thing = Thing[int]{
+        f: fn (thing: Thing[int]) {}
+    }
 
     exit(0)
 }
