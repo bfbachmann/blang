@@ -139,12 +139,4 @@ impl Params {
             span: parser.new_span(start_pos, end_pos),
         })
     }
-
-    /// Creates a new set of generic params with default (zero) start and end position.
-    pub fn new_with_default_pos() -> Self {
-        Params {
-            params: vec![],
-            span: Default::default(),
-        }
-    }
 }

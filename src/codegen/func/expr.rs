@@ -13,6 +13,7 @@ use crate::analyzer::ast::r#enum::AEnumVariantInit;
 use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::statement::AStatement;
+use crate::analyzer::ast::symbol::SymbolKind;
 use crate::analyzer::ast::tuple::ATupleInit;
 use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::parser::ast::op::Operator;
@@ -431,16 +432,27 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles enum variant initialization.
     fn gen_enum_variant_init(&mut self, enum_init: &AEnumVariantInit) -> BasicValueEnum<'ctx> {
         // Assemble the LLVM struct type for this enum value.
-        let ll_struct_type = self.type_converter.get_struct_type(enum_init.type_key);
+        let mut ll_struct_type = self.type_converter.get_struct_type(enum_init.type_key);
         let ll_variant_num_type = ll_struct_type
             .get_field_type_at_index(0)
             .unwrap()
             .into_int_type();
 
-        // Allocate space for the struct on the stack.
-        let ll_struct_ptr = self.stack_alloc("enum_init_ptr", enum_init.type_key);
+        // If we're storing a value in this enum, then we should access it as a struct containing
+        // the variant number type followed by the specific type of the value stored.
+        if let Some(value) = &enum_init.maybe_value {
+            let ll_value_type = self.type_converter.get_basic_type(value.type_key);
+            ll_struct_type = self.ctx.struct_type(
+                &[ll_variant_num_type.as_basic_type_enum(), ll_value_type],
+                false,
+            );
+        }
 
-        // Set the number variant number on the struct.
+        // Allocate space for the struct on the stack.
+        let ll_struct_ptr =
+            self.build_entry_alloc("enum_init_ptr", ll_struct_type.as_basic_type_enum());
+
+        // Set the variant number on the struct.
         let ll_number_field_ptr = self
             .ll_builder
             .build_struct_gep(ll_struct_type, ll_struct_ptr, 0, "enum.variant_number_ptr")
@@ -725,7 +737,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
 
             Operator::Reference | Operator::MutReference => match &operand_expr.kind {
-                AExprKind::Symbol(symbol) if !symbol.is_const => {
+                AExprKind::Symbol(symbol) if symbol.kind != SymbolKind::Const => {
                     self.get_var_ptr(symbol).as_basic_value_enum()
                 }
 

@@ -42,17 +42,6 @@ impl Argument {
         }
     }
 
-    /// Creates a new function argument with default (zero) start and end positions.
-    #[cfg(test)]
-    pub fn new_with_default_pos(name: &str, typ: Type, is_mut: bool) -> Self {
-        Argument {
-            name: name.to_string(),
-            typ,
-            is_mut,
-            span: Default::default(),
-        }
-    }
-
     /// Parses a function argument declaration. Expects token sequences of the forms
     ///
     ///     <arg_name>: <arg_type>

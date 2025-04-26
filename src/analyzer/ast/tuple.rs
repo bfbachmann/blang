@@ -126,7 +126,7 @@ impl ATupleInit {
     /// Creates a new empty tuple.
     pub fn new_empty(ctx: &mut ProgramContext) -> ATupleInit {
         ATupleInit {
-            type_key: ctx.resolve_type(&Type::Tuple(TupleType::new_with_default_pos(vec![]))),
+            type_key: ctx.resolve_type(&Type::Tuple(TupleType::new_with_default_span(vec![]))),
             values: vec![],
         }
     }

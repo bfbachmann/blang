@@ -2,7 +2,7 @@ use std::fmt;
 use std::fmt::Formatter;
 
 use crate::analyzer::ast::expr::AExpr;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::err_unexpected_yield;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::lexer::pos::Span;
 use crate::locatable_impl;
@@ -39,12 +39,7 @@ impl AYield {
         // Make sure we are inside a `from` block. If not, record the error and
         // return a dummy value.
         if !ctx.is_in_from_block() {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::UnexpectedYield,
-                format_code!("cannot {} from outside {} block", "yield", "from").as_str(),
-                yld,
-            ));
-
+            ctx.insert_err(err_unexpected_yield(yld.span));
             return AYield {
                 value: AExpr::new_zero_value(ctx, Type::new_unresolved("<unknown>")),
                 span,
@@ -52,7 +47,7 @@ impl AYield {
         }
 
         // We're yielding a value. Make sure the value is of the expected type.
-        let a_expr = match ctx.get_cur_expected_yield_type_key() {
+        let a_expr = match ctx.cur_expected_yield_type_key() {
             Some(expected_type_key) => AExpr::from(
                 ctx,
                 yld.value.clone(),

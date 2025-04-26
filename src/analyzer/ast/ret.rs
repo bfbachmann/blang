@@ -2,11 +2,11 @@ use std::fmt;
 use std::fmt::Formatter;
 
 use crate::analyzer::ast::expr::AExpr;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{err_empty_return, err_unexpected_return, err_unexpected_return_val};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::ret::Ret;
-use crate::{format_code, locatable_impl, util};
+use crate::{locatable_impl, util};
 
 /// Represents an analyzed return statement.
 #[derive(Clone, Debug)]
@@ -40,33 +40,19 @@ impl ARet {
         // Make sure we are inside a function body. If not, record the error and return a dummy
         // value.
         if !ctx.is_in_fn() {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::UnexpectedReturn,
-                format_code!("cannot {} from outside function body", "return").as_str(),
-                ret,
-            ));
-
+            ctx.insert_err(err_unexpected_return(ret.span));
             return ARet { val: None, span };
         }
 
         match &ret.value {
             Some(expr) => {
                 // We're returning a value. Make sure the value is of the expected type.
-                let a_expr = match ctx.get_cur_expected_ret_type_key() {
+                let a_expr = match ctx.cur_expected_ret_type_key() {
                     Some(expected_type_key) => {
                         AExpr::from(ctx, expr.clone(), Some(expected_type_key), false, false)
                     }
                     None => {
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::MismatchedTypes,
-                            format_code!(
-                                "cannot {} value from function with no return type",
-                                "return"
-                            )
-                            .as_str(),
-                            expr,
-                        ));
-
+                        ctx.insert_err(err_unexpected_return_val(ret.span));
                         AExpr::from(ctx, expr.clone(), None, false, false)
                     }
                 };
@@ -78,20 +64,10 @@ impl ARet {
             }
             None => {
                 // This is an empty return. Make sure we're not expecting a return type.
-                match ctx.get_cur_expected_ret_type_key() {
-                    Some(expected) => {
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::MismatchedTypes,
-                            format_code!(
-                                "expected return value of type {}, but found empty return",
-                                ctx.display_type(expected),
-                            )
-                            .as_str(),
-                            ret,
-                        ));
-                    }
-                    None => {}
-                };
+                if let Some(expected_tk) = ctx.cur_expected_ret_type_key() {
+                    let err = err_empty_return(ctx, expected_tk, ret.span);
+                    ctx.insert_err(err);
+                }
 
                 ARet { val: None, span }
             }

@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{err_invalid_array_size_type, err_mismatched_types};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::Span;
@@ -71,11 +71,7 @@ impl AArrayType {
                     u
                 }
                 None => {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::InvalidArraySize,
-                        format_code!("expected constant of type {}", "uint").as_str(),
-                        &array_type.length_expr,
-                    ));
+                    ctx.insert_err(err_invalid_array_size_type(*array_type.length_expr.span()));
                     0
                 }
             }
@@ -182,16 +178,9 @@ impl AArrayInit {
 
                 let value_type = ctx.get_type(value.type_key);
                 if !value_type.is_same_as(ctx, expected_type, false) {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::MismatchedTypes,
-                        format_code!(
-                            "expected value of type {}, but found {}",
-                            ctx.display_type(expected_type_key),
-                            ctx.display_type(value.type_key)
-                        )
-                        .as_str(),
-                        value,
-                    ));
+                    let err =
+                        err_mismatched_types(ctx, expected_type_key, value.type_key, value.span);
+                    ctx.insert_err(err);
 
                     // Just return an empty array since it's invalid.
                     return AArrayInit {
@@ -226,11 +215,7 @@ impl AArrayInit {
                     match expr.try_into_const_uint(ctx) {
                         Some(u) => Some(u),
                         None => {
-                            ctx.insert_err(AnalyzeError::new(
-                                ErrorKind::InvalidArraySize,
-                                format_code!("expected constant of type {}", "uint").as_str(),
-                                repeat_expr,
-                            ));
+                            ctx.insert_err(err_invalid_array_size_type(*repeat_expr.span()));
 
                             // Just return an empty array since it's invalid.
                             return AArrayInit {

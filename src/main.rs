@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::prelude::*;
 use std::os::unix::prelude::CommandExt;
@@ -11,6 +12,7 @@ use inkwell::targets::RelocMode;
 use inkwell::OptimizationLevel;
 
 use crate::analyzer::analyze::{analyze_modules, ProgramAnalysis};
+use crate::codegen::error::CodeGenError;
 use crate::codegen::program::{
     generate, init_default_host_target, init_target_machine, CodeGenConfig, OutputFormat,
 };
@@ -271,6 +273,29 @@ fn main() {
     };
 }
 
+#[derive(Debug)]
+enum AnalyzeProgError {
+    ParsingFailed(String),
+    ModNotFound(String),
+    NoSourceFiles(String),
+    AnalysisFailed(String),
+    WriteOutFailed(String),
+}
+
+impl Display for AnalyzeProgError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            AnalyzeProgError::ParsingFailed(s) => s,
+            AnalyzeProgError::ModNotFound(s) => s,
+            AnalyzeProgError::NoSourceFiles(s) => s,
+            AnalyzeProgError::AnalysisFailed(s) => s,
+            AnalyzeProgError::WriteOutFailed(s) => s,
+        };
+
+        write!(f, "{}", s)
+    }
+}
+
 /// Performs static analysis on the source code starting at the given module path. Returns the
 /// results of analysis, or an error message.
 #[flame]
@@ -278,15 +303,23 @@ fn analyze(
     target_mod_path: &str,
     maybe_dump_path: Option<&String>,
     config: CodeGenConfig,
-) -> Result<ProgramAnalysis, String> {
+) -> Result<ProgramAnalysis, AnalyzeProgError> {
     // Parse all targeted source files.
     let (src_info, errs) = parse_mods(target_mod_path);
 
     if !errs.is_empty() {
         for err in &errs {
             match src_info.file_info.try_get_file_path_by_id(err.span.file_id) {
-                Some(file_path) => {
-                    display_err(&err.message, None, None, file_path, &err.span, false);
+                Some(_) => {
+                    display_err(
+                        &src_info,
+                        &err.message,
+                        None,
+                        None,
+                        &err.span,
+                        false,
+                        &vec![],
+                    );
                 }
                 None => {
                     eprintln!("{}", err.message);
@@ -294,11 +327,24 @@ fn analyze(
             };
         }
 
-        return Err(format!("parsing failed with {} error(s)", errs.len()));
+        return Err(AnalyzeProgError::ParsingFailed(format!(
+            "parsing failed with {} error(s)",
+            errs.len()
+        )));
     }
 
     if src_info.mod_info.is_empty() {
-        return Err(format!(r#"no source files found in "{}""#, target_mod_path));
+        return Err(AnalyzeProgError::NoSourceFiles(format!(
+            r#"no source files found in "{}""#,
+            target_mod_path
+        )));
+    }
+
+    if src_info.mod_info.get_id_by_path(target_mod_path).is_none() {
+        return Err(AnalyzeProgError::ModNotFound(format!(
+            r#"module "{}" not found"#,
+            target_mod_path
+        )));
     }
 
     // Analyze the program.
@@ -309,34 +355,37 @@ fn analyze(
     for result in &analysis.analyzed_modules {
         // Print warnings.
         for warn in &result.warnings {
-            let file_path = src_info
-                .file_info
-                .try_get_file_path_by_id(warn.span.file_id)
-                .unwrap();
-            display_err(&warn.message, None, None, file_path, &warn.span, true);
+            display_err(
+                &src_info,
+                &warn.message,
+                None,
+                None,
+                &warn.span,
+                true,
+                &vec![],
+            );
         }
 
         // Print errors.
         err_count += result.errors.len();
         for err in &result.errors {
-            let file_path = src_info
-                .file_info
-                .try_get_file_path_by_id(err.span.file_id)
-                .unwrap();
             display_err(
+                &src_info,
                 &err.message,
                 err.detail.as_ref(),
                 err.help.as_ref(),
-                file_path,
                 &err.span,
                 false,
+                &err.notes,
             );
         }
     }
 
     // Die if analysis failed.
     if err_count > 0 {
-        return Err(format!("analysis failed with {err_count} error(s)"));
+        return Err(AnalyzeProgError::AnalysisFailed(format!(
+            "analysis failed with {err_count} error(s)"
+        )));
     }
 
     // Dump the AST to a file, if necessary.
@@ -344,46 +393,68 @@ fn analyze(
         let dst = Path::new(dump_path.as_str());
         let mut dst_file = match File::create(dst) {
             Err(err) => {
-                return Err(format!(
+                return Err(AnalyzeProgError::WriteOutFailed(format!(
                     "error opening file {}: {}",
                     dst.to_str().unwrap_or_default(),
                     err
-                ));
+                )));
             }
             Ok(result) => result,
         };
 
         if let Err(err) = write!(dst_file, "{:#?}", analysis.analyzed_modules) {
-            return Err(format!(
+            return Err(AnalyzeProgError::WriteOutFailed(format!(
                 "error writing AST to file {}: {}",
                 dst.to_str().unwrap_or_default(),
                 err
-            ));
+            )));
         }
     }
 
     Ok(analysis)
 }
 
+#[derive(Debug)]
+enum CompileProgError {
+    AnalysisFailed(AnalyzeProgError),
+    MissingMain,
+    CodeGenFailed(CodeGenError),
+}
+
+impl Display for CompileProgError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CompileProgError::AnalysisFailed(s) => s.fmt(f),
+            CompileProgError::MissingMain => {
+                write!(f, "{}", format_code!("missing function {}", "main"))
+            }
+            CompileProgError::CodeGenFailed(s) => write!(f, "{s}"),
+        }
+    }
+}
+
 /// Compiles a module.
 #[flame]
-fn compile(target_mod: &str, quiet: bool, config: CodeGenConfig) -> Result<(), String> {
+fn compile(target_mod: &str, quiet: bool, config: CodeGenConfig) -> Result<(), CompileProgError> {
     // Read and analyze the program.
     let start_time = Instant::now();
     let is_exe = config.output_format == OutputFormat::Executable;
     let output_path = config.output_path.to_str().unwrap().to_string();
-    let prog_analysis = analyze(target_mod, None, config)?;
+    let prog_analysis = match analyze(target_mod, None, config) {
+        Ok(p) => p,
+        Err(e) => return Err(CompileProgError::AnalysisFailed(e)),
+    };
 
     // Raise an error if there is no `fn main`.
     if prog_analysis.maybe_main_fn_mangled_name.is_none() && is_exe {
-        return Err(format_code!("missing function {}", "main"));
+        return Err(CompileProgError::MissingMain);
     }
 
     let prog = mono_prog(prog_analysis);
 
     // Compile the program.
     if let Err(e) = generate(prog) {
-        return Err(format!("{}", e));
+        return Err(CompileProgError::CodeGenFailed(e));
     }
 
     // Print the success message with the compile time.
@@ -432,7 +503,7 @@ fn default_output_path(src: &Path, output_format: OutputFormat) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use crate::codegen::program::{init_default_host_target, CodeGenConfig, OutputFormat};
-    use crate::compile;
+    use crate::{compile, AnalyzeProgError, CompileProgError};
     use std::fs;
     use std::path::PathBuf;
     use std::process::Child;
@@ -450,7 +521,7 @@ mod tests {
             let output_path = format!("bin/{}.o", lib_path.file_stem().unwrap().to_str().unwrap());
 
             // Compile the library.
-            compile(
+            let result = compile(
                 lib_path.to_str().unwrap(),
                 true,
                 CodeGenConfig::new_default(
@@ -458,8 +529,13 @@ mod tests {
                     PathBuf::from(output_path),
                     OutputFormat::Object,
                 ),
-            )
-            .expect("should succeed");
+            );
+
+            match result {
+                Ok(_) | Err(CompileProgError::AnalysisFailed(AnalyzeProgError::ModNotFound(_))) => {
+                }
+                Err(other) => panic!("{}", other),
+            }
         }
     }
 
@@ -469,20 +545,17 @@ mod tests {
 
         let test_entries = fs::read_dir("src/tests").expect("should succeed");
         for entry in test_entries {
-            let file_path = entry.unwrap().path();
-            let path_str = file_path.to_str().unwrap();
-            if !path_str.ends_with("_test.bl") {
-                continue;
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                paths.push(path);
             }
-
-            paths.push(file_path);
         }
 
         let example_entries = fs::read_dir("docs/examples").expect("should succeed");
         for entry in example_entries {
-            let entry = entry.unwrap();
-            if entry.metadata().unwrap().is_dir() {
-                paths.push(entry.path());
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                paths.push(path);
             }
         }
 

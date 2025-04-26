@@ -1,7 +1,8 @@
 use std::fmt::{Display, Formatter};
 
 use crate::analyzer::ast::func::AFnSig;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{err_dup_ident, err_invalid_extern, err_invalid_statement};
+use crate::analyzer::ident::{Ident, IdentKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::lexer::pos::Span;
 use crate::parser::ast::r#extern::ExternFn;
@@ -34,18 +35,37 @@ impl AExternFn {
         // Make sure we are not already inside a function. Extern functions cannot be
         // defined within other functions.
         if ctx.is_in_fn() {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::InvalidStatement,
-                "cannot declare external functions inside other functions",
-                ext,
-            ));
+            ctx.insert_err(err_invalid_statement(ext.span));
         }
 
-        // Analyze the function signature in the `extern` block.
-        AExternFn {
-            fn_sig: AFnSig::from(ctx, &ext.fn_sig),
+        if let Some(params) = &ext.signature.params {
+            ctx.insert_err(err_invalid_extern(params.span));
+        }
+
+        let fn_sig = AFnSig::from(ctx, &ext.signature);
+
+        if let Err(existing) = ctx.insert_ident(Ident {
+            name: ext.signature.name.clone(),
+            kind: IdentKind::ExternFn {
+                is_pub: ext.is_pub,
+                type_key: fn_sig.type_key,
+                mod_id: Some(ctx.cur_mod_id()),
+            },
+            span: ext.span, // TODO: use name span
+        }) {
+            let err = err_dup_ident(&existing.name, ext.span, existing.span);
+            ctx.insert_err(err);
+        }
+
+        let a_ext_fn = AExternFn {
+            fn_sig,
             maybe_link_name: ext.maybe_link_name.clone(),
             span: ext.span,
-        }
+        };
+
+        // TODO: don't clone.
+        ctx.insert_analyzed_extern_fn(a_ext_fn.clone());
+
+        a_ext_fn
     }
 }

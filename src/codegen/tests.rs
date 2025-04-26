@@ -9,19 +9,25 @@ mod tests {
     use crate::mono_collector::mono_prog;
     use crate::parser::file_parser::FileParser;
     use crate::parser::src_file::SrcFile;
+    use crate::parser::SrcInfo;
     use std::path::PathBuf;
 
-    fn assert_compiles(code: &str) {
-        let tokens = lex(code, 0).expect("should not error");
+    fn assert_compiles(raw: &str) {
+        let raw = "mod test\n".to_string() + raw;
+        let tokens = lex(&raw, 0).expect("should not error");
         let mut parser = FileParser::new(0, Stream::from(tokens));
-        let module = SrcFile::parse(&mut parser).expect("should not error");
+        let src_file = SrcFile::parse(&mut parser).expect("should not error");
+
         let target_machine = init_default_host_target().unwrap();
         let config = CodeGenConfig::new_default(
             target_machine,
             PathBuf::from("/dev/null"),
             OutputFormat::Object,
         );
-        let analysis = analyze_modules(vec![module], config);
+        let src_info = SrcInfo::new_test_file(src_file);
+
+        let analysis = analyze_modules(&src_info, "test", config);
+
         let prog = mono_prog(analysis);
         generate(prog).expect("should not error");
     }

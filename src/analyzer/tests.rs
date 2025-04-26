@@ -1,68 +1,105 @@
 #[cfg(test)]
 mod tests {
-    use crate::analyzer::analyze::{analyze_modules, ProgramAnalysis};
-    use crate::analyzer::ast::module::AModule;
-    use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
-    use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
+    use crate::analyzer::analyze::{analyze_modules, AnalyzedModule, ProgramAnalysis};
+    use crate::analyzer::error::ErrorKind;
+    use crate::analyzer::warn::WarnKind;
     use crate::codegen::program::{init_default_host_target, CodeGenConfig, OutputFormat};
     use crate::lexer::lex::lex;
     use crate::lexer::stream::Stream;
     use crate::parser::file_parser::FileParser;
     use crate::parser::src_file::SrcFile;
+    use crate::parser::SrcInfo;
     use std::collections::HashMap;
     use std::path::PathBuf;
 
     fn get_analysis(raw: &str) -> ProgramAnalysis {
-        let tokens = lex(raw, 0).expect("should not error");
+        let raw = "mod test\n".to_string() + raw;
+        let tokens = lex(&raw, 0).expect("should not error");
         let mut parser = FileParser::new(0, Stream::from(tokens));
-        let module = SrcFile::parse(&mut parser).expect("should not error");
+        let src_file = SrcFile::parse(&mut parser).expect("should not error");
+
         let target_machine = init_default_host_target().unwrap();
         let config =
             CodeGenConfig::new_default(target_machine, PathBuf::new(), OutputFormat::LLVMIR);
-        analyze_modules(vec![module], config)
+        let src_info = SrcInfo::new_test_file(src_file);
+
+        analyze_modules(&src_info, "test", config)
     }
 
-    fn analyze(raw: &str) -> AnalyzeResult<AModule> {
-        let mut analysis = get_analysis(raw).analyzed_modules.remove(0);
-        if analysis.errors.is_empty() {
-            Ok(analysis.module)
-        } else {
-            Err(analysis.errors.remove(0))
+    fn analyze(raw: &str) -> AnalyzedModule {
+        let analysis = get_analysis(raw);
+        for module in analysis.analyzed_modules {
+            if module.module.mod_id == analysis.ctx.cur_mod_id() {
+                return module;
+            }
+        }
+
+        unreachable!()
+    }
+
+    fn check_err(result: &AnalyzedModule, expected_kind: Option<ErrorKind>) {
+        match expected_kind {
+            Some(kind) => {
+                assert!(!result.errors.is_empty());
+                assert_eq!(result.errors.get(0).unwrap().kind, kind);
+            }
+
+            None => assert!(result.errors.is_empty()),
         }
     }
 
-    fn check_result(result: AnalyzeResult<AModule>, expected_err_kind: Option<ErrorKind>) {
-        match expected_err_kind {
-            Some(kind) => assert_eq!(result.unwrap_err().kind, kind),
-            None => assert!(result.is_ok()),
+    fn check_warn(result: &AnalyzedModule, expected_kind: Option<WarnKind>) {
+        match expected_kind {
+            Some(kind) => {
+                assert_eq!(result.warnings.get(0).unwrap().kind, kind);
+            }
+
+            None => assert!(result.warnings.is_empty()),
         }
     }
 
-    fn analyze_program(mods: Vec<(String, String)>) -> ProgramAnalysis {
-        let mut parsed_mods = vec![];
+    fn analyze_program(mods: Vec<(String, String)>) -> (ProgramAnalysis, SrcInfo) {
+        let mut parsed_mods = HashMap::new();
+        let mut file_id = 100;
+        let root_mod_path = mods.get(0).unwrap().0.clone();
+
         for (mod_path, mod_code) in mods {
-            let tokens = lex(mod_code.as_str(), 0).expect("lexing should succeed");
-            let mut parser = FileParser::new(0, Stream::from(tokens.clone()));
-            let parsed_mod = SrcFile::parse(&mut parser).expect("should not error");
-            parsed_mods.push(parsed_mod);
+            let tokens = lex(mod_code.as_str(), file_id).expect("lexing should succeed");
+            let mut parser = FileParser::new(file_id, Stream::from(tokens.clone()));
+            let src_file = SrcFile::parse(&mut parser).expect("should not error");
+
+            parsed_mods.insert(mod_path, vec![src_file]);
+            file_id += 1;
         }
 
         let target_machine = init_default_host_target().unwrap();
         let config =
             CodeGenConfig::new_default(target_machine, PathBuf::new(), OutputFormat::LLVMIR);
-        analyze_modules(parsed_mods, config)
+        let src_info = SrcInfo::new_test_mods(parsed_mods);
+        let analysis = analyze_modules(&src_info, &root_mod_path, config);
+
+        (analysis, src_info)
     }
 
     fn check_mod_errs(
         program_analysis: &ProgramAnalysis,
-        mod_errs: HashMap<String, Vec<ErrorKind>>,
+        src_info: &SrcInfo,
+        mod_path: &str,
+        expected_kind: Option<ErrorKind>,
     ) {
+        let mod_id = src_info.mod_info.get_id_by_path(mod_path).unwrap();
+
         for analyzed_mod in &program_analysis.analyzed_modules {
-            let expected_errs = mod_errs.get(analyzed_mod.module.path.as_str()).unwrap();
-            let actual_errs = &analyzed_mod.errors;
-            assert_eq!(actual_errs.len(), expected_errs.len());
-            for err in actual_errs {
-                assert!(expected_errs.contains(&err.kind));
+            if analyzed_mod.module.mod_id == mod_id {
+                match expected_kind {
+                    Some(kind) => {
+                        assert!(!analyzed_mod.errors.is_empty());
+                        assert_eq!(analyzed_mod.errors.get(0).unwrap().kind, kind);
+                    }
+                    None => {
+                        assert!(analyzed_mod.errors.is_empty());
+                    }
+                }
             }
         }
     }
@@ -76,7 +113,76 @@ mod tests {
         }
         "#;
         let result = analyze(raw);
-        check_result(result, None);
+        check_err(&result, None);
+    }
+
+    #[test]
+    fn fn_call_no_return() {
+        let raw = r#"
+        fn test() {}
+        
+        fn main() {
+            let i = test()
+        }
+        "#;
+        let result = analyze(raw);
+        check_err(&result, Some(ErrorKind::ExpectedReturnValue));
+    }
+
+    #[test]
+    fn fn_call_missing_arg() {
+        let raw = r#"
+        fn test(a: int, b: int) {}
+        
+        fn main() {
+            test(1)
+        }
+        "#;
+        let result = analyze(raw);
+        check_err(&result, Some(ErrorKind::WrongNumberOfArgs));
+    }
+
+    #[test]
+    fn fn_call_arg_type_mismatch() {
+        let raw = r#"
+        fn test(a: int, b: int) {}
+
+        fn main() {
+            test(true, 1)
+        }
+        "#;
+        let result = analyze(raw);
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
+    }
+
+    #[test]
+    fn binary_op_invalid_operand_types() {
+        let raw = r#"
+        fn main() {
+            let a = 1 + "test"
+        }
+        "#;
+        let result = analyze(raw);
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
+
+        let raw = r#"
+        fn main() {
+            let a = true - 10
+        }
+        "#;
+        let result = analyze(raw);
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
+    }
+
+    #[test]
+    fn unary_op_invalid_operand_type() {
+        let raw = r#"
+        fn main() {
+            let a = !2
+        }
+        "#;
+        let result = analyze(raw);
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -88,7 +194,7 @@ mod tests {
         }
         "#;
         let result = analyze(raw);
-        check_result(result, Some(ErrorKind::ImmutableAssignment));
+        check_err(&result, Some(ErrorKind::ImmutableAssignment));
     }
 
     #[test]
@@ -99,7 +205,7 @@ mod tests {
             }
         "#;
         let result = analyze(raw);
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -110,7 +216,7 @@ mod tests {
             }
         "#;
         let result = analyze(raw);
-        check_result(result, Some(ErrorKind::ImmutableAssignment));
+        check_err(&result, Some(ErrorKind::ImmutableAssignment));
     }
 
     #[test]
@@ -121,7 +227,7 @@ mod tests {
             let s = "hello world!"
         }"#;
         let result = analyze(raw);
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -132,7 +238,7 @@ mod tests {
         }
         "#;
         let result = analyze(raw);
-        check_result(result, Some(ErrorKind::UndefSymbol));
+        check_err(&result, Some(ErrorKind::UndefSymbol));
     }
 
     #[test]
@@ -142,7 +248,7 @@ mod tests {
         fn test(thing: str) {}
         "#;
         let result = analyze(raw);
-        check_result(result, Some(ErrorKind::DuplicateFunction));
+        check_err(&result, Some(ErrorKind::DuplicateIdentifier));
     }
 
     #[test]
@@ -159,7 +265,7 @@ mod tests {
         "#;
 
         let result = analyze(raw);
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -170,7 +276,7 @@ mod tests {
             r#"fn main[T]() {}"#,
         ] {
             let result = analyze(code);
-            check_result(result, Some(ErrorKind::InvalidMain));
+            check_err(&result, Some(ErrorKind::InvalidMain));
         }
     }
 
@@ -236,7 +342,7 @@ mod tests {
             fn check_struct(s: MyStruct) {}
         "#;
         let result = analyze(raw);
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -289,7 +395,7 @@ mod tests {
             }
         "#;
         let result = analyze(raw);
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -300,7 +406,7 @@ mod tests {
             }
         "#;
         let result = analyze(raw);
-        check_result(result, Some(ErrorKind::InfiniteSizedType));
+        check_err(&result, Some(ErrorKind::InfiniteSizedType));
     }
 
     #[test]
@@ -317,12 +423,13 @@ mod tests {
             }
         "#;
         let result = analyze(raw);
-        check_result(result, Some(ErrorKind::InfiniteSizedType));
+        check_err(&result, Some(ErrorKind::InfiniteSizedType));
     }
 
     #[test]
     fn indirect_struct_containment_cycle_via_tuple() {
-        let raw = r#"
+        let result = analyze(
+            r#"
             struct Inner {
                 count: i64,
                 outer: {Outer},
@@ -332,14 +439,15 @@ mod tests {
                 cond: bool,
                 inner: Inner,
             }
-        "#;
-        let result = analyze(raw);
-        check_result(result, Some(ErrorKind::InfiniteSizedType));
+        "#,
+        );
+        check_err(&result, Some(ErrorKind::InfiniteSizedType));
     }
 
     #[test]
     fn unreachable_code() {
-        let raw = r#"
+        let result = analyze(
+            r#"
             fn main() {
                 do_thing()
             }
@@ -348,17 +456,10 @@ mod tests {
                 return true
                 let a = 1
             }
-        "#;
-        let mut analysis = get_analysis(raw).analyzed_modules.remove(0);
-        assert!(analysis.errors.is_empty());
-        assert_eq!(analysis.warnings.len(), 1);
-        assert!(matches!(
-            analysis.warnings.remove(0),
-            AnalyzeWarning {
-                kind: WarnKind::UnreachableCode,
-                ..
-            }
-        ));
+        "#,
+        );
+        check_err(&result, None);
+        check_warn(&result, Some(WarnKind::UnreachableCode));
     }
 
     #[test]
@@ -369,13 +470,7 @@ mod tests {
             struct A {}
             "#,
         );
-        assert!(matches!(
-            result,
-            Err(AnalyzeError {
-                kind: ErrorKind::DuplicateType,
-                ..
-            })
-        ))
+        check_err(&result, Some(ErrorKind::DuplicateIdentifier));
     }
 
     #[test]
@@ -409,7 +504,7 @@ mod tests {
            }
         "#,
         );
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -424,7 +519,7 @@ mod tests {
 
         for prog in programs {
             let result = analyze(prog);
-            check_result(result, Some(ErrorKind::InvalidStatement));
+            check_err(&result, Some(ErrorKind::InvalidStatement));
         }
     }
 
@@ -437,7 +532,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::UndefType));
+        check_err(&result, Some(ErrorKind::UndefType));
     }
 
     #[test]
@@ -455,7 +550,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -468,7 +563,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::IndexOutOfBounds));
+        check_err(&result, Some(ErrorKind::IndexOutOfBounds));
     }
 
     #[test]
@@ -481,7 +576,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -493,7 +588,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::InvalidStatement));
+        check_err(&result, Some(ErrorKind::InvalidStatement));
     }
 
     #[test]
@@ -504,7 +599,7 @@ mod tests {
             const a = "test"
             "#,
         );
-        check_result(result, Some(ErrorKind::DuplicateConst));
+        check_err(&result, Some(ErrorKind::DuplicateIdentifier));
     }
 
     #[test]
@@ -514,7 +609,7 @@ mod tests {
             const a: {bool, i64, i64} = {1, 2, true}
             "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -528,7 +623,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::ImmutableAssignment));
+        check_err(&result, Some(ErrorKind::ImmutableAssignment));
     }
 
     #[test]
@@ -550,7 +645,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::DuplicateFunction));
+        check_err(&result, Some(ErrorKind::DuplicateFunction));
     }
 
     #[test]
@@ -563,7 +658,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::DuplicateEnumVariant));
+        check_err(&result, Some(ErrorKind::DuplicateEnumVariant));
     }
 
     #[test]
@@ -574,10 +669,10 @@ mod tests {
             struct E {}
             "#,
         );
-        check_result(result, Some(ErrorKind::DuplicateType));
+        check_err(&result, Some(ErrorKind::DuplicateIdentifier));
 
         let result = analyze(r#"enum i64 {}"#);
-        check_result(result, Some(ErrorKind::DuplicateType));
+        check_err(&result, Some(ErrorKind::DuplicateIdentifier));
     }
 
     #[test]
@@ -593,7 +688,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::InfiniteSizedType));
+        check_err(&result, Some(ErrorKind::InfiniteSizedType));
     }
 
     #[test]
@@ -605,7 +700,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::InfiniteSizedType));
+        check_err(&result, Some(ErrorKind::InfiniteSizedType));
     }
 
     #[test]
@@ -616,7 +711,7 @@ mod tests {
             spec A {}
             "#,
         );
-        check_result(result, Some(ErrorKind::DuplicateSpec));
+        check_err(&result, Some(ErrorKind::DuplicateIdentifier));
     }
 
     #[test]
@@ -626,7 +721,7 @@ mod tests {
             fn test(a: i64, a: bool) {}
             "#,
         );
-        check_result(result, Some(ErrorKind::DuplicateFnArg));
+        check_err(&result, Some(ErrorKind::DuplicateFnArg));
     }
 
     #[test]
@@ -636,7 +731,7 @@ mod tests {
             fn test[T: Thing](t: T) {}
             "#,
         );
-        check_result(result, Some(ErrorKind::UndefType));
+        check_err(&result, Some(ErrorKind::UndefType));
     }
 
     #[test]
@@ -657,7 +752,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::SpecNotSatisfied));
+        check_err(&result, Some(ErrorKind::SpecNotSatisfied));
     }
 
     #[test]
@@ -671,7 +766,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -685,7 +780,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -699,7 +794,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -717,7 +812,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::SpecNotSatisfied));
+        check_err(&result, Some(ErrorKind::SpecNotSatisfied));
     }
 
     #[test]
@@ -731,7 +826,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::UnresolvedParams));
+        check_err(&result, Some(ErrorKind::UnresolvedParams));
     }
 
     #[test]
@@ -744,7 +839,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::InvalidTypeCast));
+        check_err(&result, Some(ErrorKind::InvalidTypeCast));
     }
 
     #[test]
@@ -756,13 +851,13 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::ExpectedExpr));
+        check_err(&result, Some(ErrorKind::ExpectedExpr));
     }
 
     #[test]
     fn invalid_generic_extern_fn() {
         let result = analyze(r#"extern fn free[T](rawptr: T)"#);
-        check_result(result, Some(ErrorKind::InvalidExtern));
+        check_err(&result, Some(ErrorKind::InvalidExtern));
     }
 
     #[test]
@@ -774,7 +869,7 @@ mod tests {
             }
         "#,
         );
-        check_result(result, None);
+        check_err(&result, None);
 
         let result = analyze(
             r#"
@@ -783,7 +878,7 @@ mod tests {
             }
         "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -795,7 +890,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -808,7 +903,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::InvalidArraySize));
+        check_err(&result, Some(ErrorKind::InvalidArraySize));
     }
 
     #[test]
@@ -821,7 +916,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::InvalidArraySize));
+        check_err(&result, Some(ErrorKind::InvalidArraySize));
     }
 
     #[test]
@@ -833,7 +928,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -867,7 +962,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -901,13 +996,13 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::UndefMember));
+        check_err(&result, Some(ErrorKind::UndefMember));
     }
 
     #[test]
     fn array_index_out_of_bounds() {
         let result = analyze(r#"const oob = [1, 2, 3].(5)"#);
-        check_result(result, Some(ErrorKind::IndexOutOfBounds));
+        check_err(&result, Some(ErrorKind::IndexOutOfBounds));
     }
 
     #[test]
@@ -919,7 +1014,7 @@ mod tests {
             }"#,
         );
 
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
 
         let result = analyze(
             r#"
@@ -928,7 +1023,7 @@ mod tests {
             }"#,
         );
 
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -941,7 +1036,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -953,7 +1048,7 @@ mod tests {
             }
         "#,
         );
-        check_result(result, Some(ErrorKind::InvalidAssignmentTarget));
+        check_err(&result, Some(ErrorKind::InvalidAssignmentTarget));
     }
 
     #[test]
@@ -966,7 +1061,7 @@ mod tests {
             }
         "#,
         );
-        check_result(result, Some(ErrorKind::InvalidMutRef));
+        check_err(&result, Some(ErrorKind::InvalidMutRef));
     }
 
     #[test]
@@ -979,7 +1074,7 @@ mod tests {
             }
         "#,
         );
-        check_result(result, Some(ErrorKind::ImmutableAssignment));
+        check_err(&result, Some(ErrorKind::ImmutableAssignment));
     }
 
     #[test]
@@ -991,7 +1086,7 @@ mod tests {
             }
         "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -1004,7 +1099,7 @@ mod tests {
             }
         "#,
         );
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -1017,7 +1112,7 @@ mod tests {
             }
         "#,
         );
-        check_result(result, Some(ErrorKind::InvalidTypeCast));
+        check_err(&result, Some(ErrorKind::InvalidTypeCast));
     }
 
     #[test]
@@ -1029,7 +1124,7 @@ mod tests {
             }
         "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -1044,7 +1139,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -1057,7 +1152,7 @@ mod tests {
             const Z = 4
         "#,
         );
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -1072,7 +1167,7 @@ mod tests {
             }
         "#,
         );
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -1084,7 +1179,7 @@ mod tests {
             }
         "#,
         );
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -1094,7 +1189,7 @@ mod tests {
             const x: i8 = 123
         "#,
         );
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -1106,7 +1201,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, Some(ErrorKind::UndefSymbol));
+        check_err(&result, Some(ErrorKind::UndefSymbol));
     }
 
     #[test]
@@ -1122,7 +1217,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, Some(ErrorKind::UndefSymbol));
+        check_err(&result, Some(ErrorKind::UndefSymbol));
     }
 
     #[test]
@@ -1138,7 +1233,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, Some(ErrorKind::UndefType));
+        check_err(&result, Some(ErrorKind::UndefType));
     }
 
     #[test]
@@ -1154,7 +1249,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -1167,7 +1262,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, Some(ErrorKind::DuplicateFunction));
+        check_err(&result, Some(ErrorKind::DuplicateIdentifier));
     }
 
     #[test]
@@ -1183,7 +1278,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, Some(ErrorKind::UndefSymbol));
+        check_err(&result, Some(ErrorKind::UndefSymbol));
     }
 
     #[test]
@@ -1195,7 +1290,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, Some(ErrorKind::InvalidStatement));
+        check_err(&result, Some(ErrorKind::InvalidStatement));
     }
 
     #[test]
@@ -1210,7 +1305,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -1222,7 +1317,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -1234,7 +1329,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -1249,7 +1344,7 @@ mod tests {
                 )
                 .as_str(),
             );
-            check_result(result, Some(ErrorKind::LiteralOutOfRange));
+            check_err(&result, Some(ErrorKind::LiteralOutOfRange));
         }
     }
 
@@ -1262,7 +1357,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::LiteralOutOfRange));
+        check_err(&result, Some(ErrorKind::LiteralOutOfRange));
     }
 
     #[test]
@@ -1274,7 +1369,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::UndefMod));
+        check_err(&result, Some(ErrorKind::UndefMod));
     }
 
     #[test]
@@ -1286,14 +1381,14 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::UndefMod));
+        check_err(&result, Some(ErrorKind::UndefMod));
     }
 
     #[test]
     fn illegal_impls() {
         for code in [r#"impl int {}"#, r#"impl str {}"#] {
             let result = analyze(code);
-            check_result(result, Some(ErrorKind::IllegalImpl));
+            check_err(&result, Some(ErrorKind::IllegalImpl));
         }
     }
 
@@ -1312,7 +1407,7 @@ mod tests {
             }
         "#,
         );
-        check_result(result, Some(ErrorKind::UndefMember));
+        check_err(&result, Some(ErrorKind::UndefMember));
     }
 
     #[test]
@@ -1337,7 +1432,7 @@ mod tests {
             }
         "#,
         );
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -1360,7 +1455,7 @@ mod tests {
             }
         "#,
         );
-        check_result(result, Some(ErrorKind::InvalidMutRef));
+        check_err(&result, Some(ErrorKind::InvalidMutRef));
     }
 
     #[test]
@@ -1383,7 +1478,7 @@ mod tests {
             }
         "#,
         );
-        check_result(result, Some(ErrorKind::InvalidMutRef));
+        check_err(&result, Some(ErrorKind::InvalidMutRef));
     }
 
     #[test]
@@ -1395,7 +1490,7 @@ mod tests {
             }
         "#,
         );
-        check_result(result, Some(ErrorKind::InvalidAssignmentTarget));
+        check_err(&result, Some(ErrorKind::InvalidAssignmentTarget));
     }
 
     #[test]
@@ -1413,7 +1508,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -1429,7 +1524,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -1447,7 +1542,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, Some(ErrorKind::MissingYield));
+        check_err(&result, Some(ErrorKind::MissingYield));
     }
 
     #[test]
@@ -1467,7 +1562,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, Some(ErrorKind::MissingYield));
+        check_err(&result, Some(ErrorKind::MissingYield));
     }
 
     #[test]
@@ -1487,7 +1582,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, Some(ErrorKind::MissingReturn));
+        check_err(&result, Some(ErrorKind::MissingReturn));
     }
 
     #[test]
@@ -1503,7 +1598,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, Some(ErrorKind::MissingReturn));
+        check_err(&result, Some(ErrorKind::MissingReturn));
     }
 
     #[test]
@@ -1517,7 +1612,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, Some(ErrorKind::MissingReturn));
+        check_err(&result, Some(ErrorKind::MissingReturn));
     }
 
     #[test]
@@ -1529,7 +1624,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, Some(ErrorKind::UnexpectedYield));
+        check_err(&result, Some(ErrorKind::UnexpectedYield));
     }
 
     #[test]
@@ -1541,7 +1636,7 @@ mod tests {
                 }
             "#,
         );
-        check_result(result, Some(ErrorKind::SuperfluousTypeCast));
+        check_err(&result, Some(ErrorKind::SuperfluousTypeCast));
     }
 
     #[test]
@@ -1553,7 +1648,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -1563,7 +1658,7 @@ mod tests {
             struct Thing[T] { ptr: *mut Thing }
             "#,
         );
-        check_result(result, Some(ErrorKind::UnresolvedParams));
+        check_err(&result, Some(ErrorKind::UnresolvedParams));
     }
 
     #[test]
@@ -1580,7 +1675,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
@@ -1595,7 +1690,7 @@ mod tests {
             impl BlaStruct: Bla {}
             "#,
         );
-        check_result(result, Some(ErrorKind::SpecImplMissingFns));
+        check_err(&result, Some(ErrorKind::SpecImplMissingFns));
     }
 
     #[test]
@@ -1606,7 +1701,7 @@ mod tests {
             impl BlaStruct: Bla {}
             "#,
         );
-        check_result(result, Some(ErrorKind::UndefType));
+        check_err(&result, Some(ErrorKind::UndefType));
     }
 
     #[test]
@@ -1630,7 +1725,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::AmbiguousAccess));
+        check_err(&result, Some(ErrorKind::AmbiguousAccess));
     }
 
     #[test]
@@ -1646,7 +1741,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::SpecMemberAccess));
+        check_err(&result, Some(ErrorKind::SpecMemberAccess));
     }
 
     #[test]
@@ -1664,7 +1759,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::NonSpecFnInImpl));
+        check_err(&result, Some(ErrorKind::NonSpecFnInImpl));
     }
 
     #[test]
@@ -1675,7 +1770,7 @@ mod tests {
             impl BlaStruct: int {}
             "#,
         );
-        check_result(result, Some(ErrorKind::ExpectedSpec));
+        check_err(&result, Some(ErrorKind::ExpectedSpec));
 
         let result = analyze(
             r#"
@@ -1684,7 +1779,7 @@ mod tests {
             impl BlaStruct: Other {}
             "#,
         );
-        check_result(result, Some(ErrorKind::ExpectedSpec));
+        check_err(&result, Some(ErrorKind::ExpectedSpec));
     }
 
     #[test]
@@ -1701,7 +1796,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::IncorrectSpecFnInImpl));
+        check_err(&result, Some(ErrorKind::IncorrectSpecFnInImpl));
     }
 
     #[test]
@@ -1722,7 +1817,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::DuplicateSpecImpl));
+        check_err(&result, Some(ErrorKind::DuplicateSpecImpl));
     }
 
     #[test]
@@ -1739,7 +1834,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::UnexpectedParams));
+        check_err(&result, Some(ErrorKind::UnexpectedParams));
     }
 
     #[test]
@@ -1756,7 +1851,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::UnresolvedParams));
+        check_err(&result, Some(ErrorKind::UnresolvedParams));
     }
 
     #[test]
@@ -1775,7 +1870,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::MatchNotExhaustive));
+        check_err(&result, Some(ErrorKind::MatchNotExhaustive));
     }
 
     #[test]
@@ -1795,7 +1890,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::MatchNotExhaustive));
+        check_err(&result, Some(ErrorKind::MatchNotExhaustive));
     }
 
     #[test]
@@ -1810,7 +1905,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::MatchNotExhaustive));
+        check_err(&result, Some(ErrorKind::MatchNotExhaustive));
     }
 
     #[test]
@@ -1824,7 +1919,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::MatchNotExhaustive));
+        check_err(&result, Some(ErrorKind::MatchNotExhaustive));
     }
 
     #[test]
@@ -1839,12 +1934,12 @@ mod tests {
             }
             "#,
         );
-        check_result(result, None);
+        check_err(&result, None);
     }
 
     #[test]
     fn unreachable_match_case() {
-        let mut analysis = get_analysis(
+        let result = analyze(
             r#"
             fn main() {
                 match true {
@@ -1854,18 +1949,8 @@ mod tests {
                 }
             }
             "#,
-        )
-        .analyzed_modules
-        .remove(0);
-        assert!(analysis.errors.is_empty());
-        assert_eq!(analysis.warnings.len(), 1);
-        assert!(matches!(
-            analysis.warnings.remove(0),
-            AnalyzeWarning {
-                kind: WarnKind::UnreachableCode,
-                ..
-            }
-        ));
+        );
+        check_warn(&result, Some(WarnKind::UnreachableCode));
     }
 
     #[test]
@@ -1883,7 +1968,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -1901,7 +1986,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::InvalidPattern));
+        check_err(&result, Some(ErrorKind::InvalidPattern));
     }
 
     #[test]
@@ -1919,7 +2004,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::InvalidPattern));
+        check_err(&result, Some(ErrorKind::InvalidPattern));
     }
 
     #[test]
@@ -1937,7 +2022,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::InvalidPattern));
+        check_err(&result, Some(ErrorKind::InvalidPattern));
     }
 
     #[test]
@@ -1954,7 +2039,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::ConflictingPattern));
+        check_err(&result, Some(ErrorKind::ConflictingPattern));
     }
 
     #[test]
@@ -1971,7 +2056,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -1989,7 +2074,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -2006,7 +2091,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -2022,7 +2107,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::MismatchedTypes));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
@@ -2037,7 +2122,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::InconsistentPatternBindingNames));
+        check_err(&result, Some(ErrorKind::InconsistentPatternBindingNames));
     }
 
     #[test]
@@ -2052,7 +2137,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::InconsistentPatternBindingTypes));
+        check_err(&result, Some(ErrorKind::InconsistentPatternBindingTypes));
     }
 
     #[test]
@@ -2067,7 +2152,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::IllegalPatternBinding));
+        check_err(&result, Some(ErrorKind::IllegalPatternBinding));
     }
 
     #[test]
@@ -2082,7 +2167,7 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::InconsistentPatternBindingNames));
+        check_err(&result, Some(ErrorKind::InconsistentPatternBindingNames));
     }
 
     #[test]
@@ -2097,16 +2182,19 @@ mod tests {
             }
             "#,
         );
-        check_result(result, Some(ErrorKind::DuplicatePattern));
+        check_err(&result, Some(ErrorKind::DuplicatePattern));
     }
 
     #[test]
     fn private_member_access() {
         let mods = vec![
             (
-                "impl.bl".to_string(),
+                "a".to_string(),
                 r#"
-                    use "thing.bl" {Thing}
+                    mod a
+                    
+                    use "b" {Thing}
+
                     fn test() {
                         Thing.do_nothing()
                     }
@@ -2114,9 +2202,12 @@ mod tests {
                 .to_string(),
             ),
             (
-                "thing.bl".to_string(),
+                "b".to_string(),
                 r#"
+                    mod b
+                    
                     pub struct Thing {}
+
                     impl Thing {
                         fn do_nothing() {}
                     }
@@ -2125,14 +2216,14 @@ mod tests {
             ),
         ];
 
-        let analysis = analyze_program(mods);
+        let (analysis, src_info) = analyze_program(mods);
         check_mod_errs(
             &analysis,
-            HashMap::from([
-                ("impl.bl".to_string(), vec![ErrorKind::UseOfPrivateValue]),
-                ("thing.bl".to_string(), vec![]),
-            ]),
+            &src_info,
+            "a",
+            Some(ErrorKind::UseOfPrivateValue),
         );
+        check_mod_errs(&analysis, &src_info, "b", None);
     }
 
     #[test]
@@ -2141,9 +2232,12 @@ mod tests {
             // We should be able to use methods on the type that aren't marked pub as long
             // as they're part of the public spec implementation.
             (
-                "main.bl".to_string(),
+                "a".to_string(),
                 r#"
-                    use "thing.bl" {Thing}
+                    mod a
+                    
+                    use "b" {Thing}
+                    
                     fn main() {
                         Thing.bing()
                     }
@@ -2152,12 +2246,16 @@ mod tests {
             ),
             // Declare a type that implements the public spec.
             (
-                "thing.bl".to_string(),
+                "b".to_string(),
                 r#"
+                    mod b
+                    
                     pub spec Bing {
                         fn bing()
                     }
+                    
                     pub struct Thing {}
+                    
                     impl Thing: Bing {
                         fn bing() {}
                     }
@@ -2166,15 +2264,9 @@ mod tests {
             ),
         ];
 
-        let analysis = analyze_program(mods);
-        check_mod_errs(
-            &analysis,
-            HashMap::from([
-                ("main.bl".to_string(), vec![]),
-                ("bing.bl".to_string(), vec![]),
-                ("thing.bl".to_string(), vec![]),
-            ]),
-        );
+        let (analysis, src_info) = analyze_program(mods);
+        check_mod_errs(&analysis, &src_info, "a", None);
+        check_mod_errs(&analysis, &src_info, "b", None);
     }
 
     #[test]
@@ -2183,9 +2275,12 @@ mod tests {
             // We should not be able to use methods on the type that aren't marked pub because the
             // spec is private.
             (
-                "main.bl".to_string(),
+                "a".to_string(),
                 r#"
-                    use "bing.bl" {Thing}
+                    mod a
+
+                    use "b" {Thing}
+
                     fn main() {
                         Thing.bing()
                     }
@@ -2194,12 +2289,16 @@ mod tests {
             ),
             // Declare private spec and a type that implements it.
             (
-                "bing.bl".to_string(),
+                "b".to_string(),
                 r#"
+                    mod b
+
                     spec Bing {
                         fn bing()
                     }
+
                     pub struct Thing {}
+
                     impl Thing: Bing {
                         fn bing() {}
                     }
@@ -2208,23 +2307,26 @@ mod tests {
             ),
         ];
 
-        let analysis = analyze_program(mods);
+        let (analysis, src_info) = analyze_program(mods);
         check_mod_errs(
             &analysis,
-            HashMap::from([
-                ("main.bl".to_string(), vec![ErrorKind::UseOfPrivateValue]),
-                ("bing.bl".to_string(), vec![]),
-            ]),
-        )
+            &src_info,
+            "a",
+            Some(ErrorKind::UseOfPrivateValue),
+        );
+        check_mod_errs(&analysis, &src_info, "b", None);
     }
 
     #[test]
     fn private_struct_field_init() {
         let mods = vec![
             (
-                "impl.bl".to_string(),
+                "a".to_string(),
                 r#"
-                    use "thing.bl" {Thing}
+                    mod a
+                    
+                    use "b" {Thing}
+                    
                     fn test() {
                         let invalid = Thing{priv_field: 1}
                     }
@@ -2232,8 +2334,10 @@ mod tests {
                 .to_string(),
             ),
             (
-                "thing.bl".to_string(),
+                "b".to_string(),
                 r#"
+                    mod b
+                    
                     pub struct Thing {
                         priv_field: int
                     }
@@ -2242,23 +2346,26 @@ mod tests {
             ),
         ];
 
-        let analysis = analyze_program(mods);
+        let (analysis, src_info) = analyze_program(mods);
         check_mod_errs(
             &analysis,
-            HashMap::from([
-                ("impl.bl".to_string(), vec![ErrorKind::UseOfPrivateValue]),
-                ("thing.bl".to_string(), vec![]),
-            ]),
+            &src_info,
+            "a",
+            Some(ErrorKind::UseOfPrivateValue),
         );
+        check_mod_errs(&analysis, &src_info, "b", None);
     }
 
     #[test]
     fn private_struct_field_access() {
         let mods = vec![
             (
-                "impl.bl".to_string(),
+                "a".to_string(),
                 r#"
-                    use "thing.bl" {Thing}
+                    mod a
+                    
+                    use "b" {Thing}
+                    
                     fn test() {
                         let illegal = Thing.new().priv_field
                     }
@@ -2266,8 +2373,10 @@ mod tests {
                 .to_string(),
             ),
             (
-                "thing.bl".to_string(),
+                "b".to_string(),
                 r#"
+                    mod b
+                    
                     pub struct Thing {
                         priv_field: int
                     }
@@ -2282,91 +2391,349 @@ mod tests {
             ),
         ];
 
-        let analysis = analyze_program(mods);
+        let (analysis, src_info) = analyze_program(mods);
         check_mod_errs(
             &analysis,
-            HashMap::from([
-                ("impl.bl".to_string(), vec![ErrorKind::UseOfPrivateValue]),
-                ("thing.bl".to_string(), vec![]),
-            ]),
+            &src_info,
+            "a",
+            Some(ErrorKind::UseOfPrivateValue),
         );
+        check_mod_errs(&analysis, &src_info, "b", None);
     }
 
     #[test]
     fn private_type_access_via_mod() {
         let mods = vec![
             (
-                "impl.bl".to_string(),
+                "a".to_string(),
                 r#"
-                    use "thing.bl" @thing
+                    mod a
+                
+                    use "b" @thing
                     fn test() {
                         let t = @thing.Thing{}
                     }
                 "#
                 .to_string(),
             ),
-            ("thing.bl".to_string(), r#"struct Thing {}"#.to_string()),
+            (
+                "b".to_string(),
+                r#"
+                    mod b
+                    struct Thing {}
+                "#
+                .to_string(),
+            ),
         ];
 
-        let analysis = analyze_program(mods);
+        let (analysis, src_info) = analyze_program(mods);
         check_mod_errs(
             &analysis,
-            HashMap::from([
-                ("impl.bl".to_string(), vec![ErrorKind::UseOfPrivateValue]),
-                ("thing.bl".to_string(), vec![]),
-            ]),
+            &src_info,
+            "a",
+            Some(ErrorKind::UseOfPrivateValue),
         );
+        check_mod_errs(&analysis, &src_info, "b", None);
     }
 
     #[test]
     fn private_fn_access_via_mod() {
         let mods = vec![
             (
-                "impl.bl".to_string(),
+                "a".to_string(),
                 r#"
-                    use "thing.bl" @thing
+                    mod a
+                    
+                    use "b" @thing
+                    
                     fn test() {
                         @thing.test()
                     }
                 "#
                 .to_string(),
             ),
-            ("thing.bl".to_string(), r#"fn test() {}"#.to_string()),
+            (
+                "b".to_string(),
+                r#"
+                    mod b
+                    
+                    fn test() {}
+                "#
+                .to_string(),
+            ),
         ];
 
-        let analysis = analyze_program(mods);
+        let (analysis, src_info) = analyze_program(mods);
         check_mod_errs(
             &analysis,
-            HashMap::from([
-                ("impl.bl".to_string(), vec![ErrorKind::UseOfPrivateValue]),
-                ("thing.bl".to_string(), vec![]),
-            ]),
+            &src_info,
+            "a",
+            Some(ErrorKind::UseOfPrivateValue),
         );
+        check_mod_errs(&analysis, &src_info, "b", None);
     }
 
     #[test]
     fn private_const_access_via_mod() {
         let mods = vec![
             (
-                "impl.bl".to_string(),
+                "a".to_string(),
                 r#"
-                    use "thing.bl" @thing
+                    mod a
+                
+                    use "b" @b
+                    
                     fn test() {
-                        let t = @thing.test
+                        let t = @b.test
                     }
                 "#
                 .to_string(),
             ),
-            ("thing.bl".to_string(), r#"const test = 1"#.to_string()),
+            (
+                "b".to_string(),
+                r#"
+                    mod b
+                    
+                    const test = 1
+                "#
+                .to_string(),
+            ),
         ];
 
-        let analysis = analyze_program(mods);
+        let (analysis, src_info) = analyze_program(mods);
         check_mod_errs(
             &analysis,
-            HashMap::from([
-                ("impl.bl".to_string(), vec![ErrorKind::UseOfPrivateValue]),
-                ("thing.bl".to_string(), vec![]),
-            ]),
+            &src_info,
+            "a",
+            Some(ErrorKind::UseOfPrivateValue),
         );
+        check_mod_errs(&analysis, &src_info, "b", None);
+    }
+
+    #[test]
+    fn var_redeclared_in_child_scope() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let x = 1
+                { let x = 2 }
+            }
+            "#,
+        );
+        check_err(&result, None);
+    }
+
+    #[test]
+    fn var_redeclared_in_same_scope() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let x = 1
+                let x = 2
+            }
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::DuplicateIdentifier));
+    }
+
+    #[test]
+    fn return_in_conditional() {
+        let result = analyze(
+            r#"
+            fn thing(a: i64) -> bool {
+                let mut v = a * 2
+                if v > 10 {
+                    return true
+                } else if v > 5 {
+                    return false
+                } else {
+                    return true
+                }
+            }
+        "#,
+        );
+        check_err(&result, None);
+    }
+
+    #[test]
+    fn missing_return_in_conditional() {
+        let result = analyze(
+            r#"
+            fn thing(a: i64) -> bool {
+                let mut mut_a = a * 2
+                if mut_a > 10 {
+                    return true
+                } else if mut_a > 5 {
+                    return false
+                } else {
+                    mut_a = 2
+                }
+            }
+        "#,
+        );
+        check_err(&result, Some(ErrorKind::MissingReturn));
+    }
+
+    #[test]
+    fn non_exhaustive_conditional() {
+        let result = analyze(
+            r#"
+            fn thing(a: i64) -> bool {
+                let mut mut_a = a * 2
+                if mut_a > 10 {
+                    return true
+                } else if mut_a > 5 {
+                    return false
+                }
+            }
+        "#,
+        );
+        check_err(&result, Some(ErrorKind::MissingReturn));
+    }
+
+    #[test]
+    fn return_from_conditional_with_loop() {
+        let result = analyze(
+            r#"
+            fn thing(a: i64) -> bool {
+                let mut mut_a = a * 2
+                if mut_a > 10 {
+                    return true
+                } else if mut_a > 5 {
+                    return false
+                } else {
+                    loop {
+                        mut_a = mut_a * 2
+                        if mut_a > 50 {
+                            return true
+                        }
+                    }
+                }
+            }
+        "#,
+        );
+        check_err(&result, None);
+    }
+
+    #[test]
+    fn return_from_conditional_with_closure() {
+        let result = analyze(
+            r#"
+            fn thing(a: i64) -> bool {
+                let mut mut_a = a * 2
+                if a > 10 {
+                    return true
+                } else {
+                    {
+                        if mut_a > 50 {
+                            return true
+                        }
+                    }
+                }
+            }
+        "#,
+        );
+        check_err(&result, Some(ErrorKind::MissingReturn));
+    }
+
+    #[test]
+    fn loop_with_return() {
+        let result = analyze(
+            r#"
+            fn thing(a: i64) -> bool {
+                loop {
+                    return true
+                }
+            }
+        "#,
+        );
+        check_err(&result, None);
+    }
+
+    #[test]
+    fn loop_with_return_in_cond() {
+        let result = analyze(
+            r#"
+            fn thing(a: i64) -> bool {
+                loop {
+                    if a == 1 {
+                        return true
+                    }
+                }
+            }
+        "#,
+        );
+        check_err(&result, None);
+    }
+
+    #[test]
+    fn loop_with_return_in_closure() {
+        let result = analyze(
+            r#"
+            fn thing(a: i64) -> bool {
+                loop {
+                    loop {
+                        if a == 1 {
+                            return true
+                        }
+                    }
+                }
+            }
+        "#,
+        );
+        check_err(&result, None);
+    }
+
+    #[test]
+    fn loop_with_continue() {
+        let result = analyze(
+            r#"
+            fn thing(a: i64) -> bool {
+                let mut mut_a = a
+                loop {
+                    mut_a = mut_a - 1
+                    if mut_a == 1 {
+                        continue
+                    }
+                    return true
+                }
+            }
+        "#,
+        );
+        check_err(&result, None);
+    }
+
+    #[test]
+    fn statements_following_return() {
+        let result = analyze(
+            r#"
+            fn thing(a: i64) -> bool {
+                return true
+                a = 2
+                return false
+            }
+        "#,
+        );
+        check_err(&result, None);
+        check_warn(&result, Some(WarnKind::UnreachableCode));
+    }
+
+    #[test]
+    fn loop_with_return_and_break() {
+        let result = analyze(
+            r#"
+            fn thing(a: i64) -> bool {
+                loop {
+                    loop {
+                        if a == 1 {
+                            return true
+                        }
+                    }
+                    break
+                }
+            }
+        "#,
+        );
+        check_err(&result, Some(ErrorKind::MissingReturn));
     }
 }

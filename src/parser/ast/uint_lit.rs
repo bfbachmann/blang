@@ -32,7 +32,7 @@ impl Hash for UintLit {
 locatable_impl!(UintLit);
 
 impl UintLit {
-    pub fn new_with_default_pos(u: u64) -> UintLit {
+    pub fn new_with_default_span(u: u64) -> UintLit {
         UintLit {
             value: u,
             span: Default::default(),

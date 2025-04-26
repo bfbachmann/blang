@@ -16,7 +16,7 @@ pub struct Const {
     pub maybe_type: Option<Type>,
     pub value: Expression,
     pub is_pub: bool,
-    span: Span,
+    pub span: Span,
 }
 
 impl Hash for Const {

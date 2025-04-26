@@ -72,14 +72,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 self.local_consts
                     .insert(const_decl.name.clone(), const_decl.clone());
             }
-            AStatement::ExternFn(_) => {
-                // Nothing to do here. This is already handled in
-                // `ProgramCodeGen::gen_program`.
-            }
-            AStatement::Impl(_) => {
-                // These blocks should not occur inside functions.
-                unreachable!();
-            }
         };
 
         Ok(())

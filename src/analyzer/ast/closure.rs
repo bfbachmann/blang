@@ -6,11 +6,15 @@ use crate::analyzer::ast::cond::ACond;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::r#match::{AMatch, APattern};
 use crate::analyzer::ast::statement::AStatement;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{
+    err_dup_fn_arg, err_missing_return, err_missing_yield, err_unexpected_break,
+    err_unexpected_continue,
+};
+use crate::analyzer::ident::{Ident, IdentKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::{Scope, ScopeKind};
 use crate::analyzer::type_store::TypeKey;
-use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
+use crate::analyzer::warn::warn_unreachable_statements;
 use crate::lexer::pos::Span;
 use crate::parser::ast::arg::Argument;
 use crate::parser::ast::closure::Closure;
@@ -18,7 +22,7 @@ use crate::parser::ast::cont::Continue;
 use crate::parser::ast::r#break::Break;
 use crate::parser::ast::r#type::Type;
 use crate::Locatable;
-use crate::{format_code, locatable_impl, util};
+use crate::{locatable_impl, util};
 
 /// Represents a semantically valid and fully analyzed closure.
 #[derive(Debug, Clone)]
@@ -62,7 +66,7 @@ impl AClosure {
         }
     }
 
-    /// Performs semantic analysis on the given closure and returns a type-a version of it.
+    /// Performs semantic analysis on the given closure and returns analyzed version of it.
     pub fn from(
         ctx: &mut ProgramContext,
         closure: &Closure,
@@ -96,8 +100,20 @@ impl AClosure {
         let end_pos = closure.span().end_pos;
 
         // Add a new scope to the program context, since each closure gets its own scope.
-        let scope = Scope::new(kind, a_args, expected_ret_type_key);
-        ctx.push_scope(scope);
+        ctx.push_scope(Scope::new(kind, expected_ret_type_key));
+
+        for arg in a_args {
+            if let Err(_) = ctx.insert_ident(Ident {
+                name: arg.name.clone(),
+                kind: IdentKind::Variable {
+                    is_mut: arg.is_mut,
+                    type_key: arg.type_key,
+                },
+                span: arg.span,
+            }) {
+                ctx.insert_err(err_dup_fn_arg(&arg.name, arg.span));
+            }
+        }
 
         // Analyze all the statements in the closure and record return type.
         let mut a_statements = vec![];
@@ -121,21 +137,7 @@ impl AClosure {
             // never be executed.
             let is_last = i + 1 == num_statements;
             if has_terminator && !is_last {
-                ctx.insert_warn(AnalyzeWarning::new(
-                    WarnKind::UnreachableCode,
-                    format_code!(
-                        "statements following {} will never be executed",
-                        match a_statement {
-                            AStatement::Continue(_) => "continue",
-                            AStatement::Break(_) => "break",
-                            AStatement::Yield(_) => "yield",
-                            AStatement::Return(_) => "return",
-                            _ => unreachable!(),
-                        }
-                    )
-                    .as_str(),
-                    statement,
-                ));
+                ctx.insert_warn(warn_unreachable_statements(&a_statement, *statement.span()));
                 a_statements.push(a_statement);
                 break;
             }
@@ -172,7 +174,7 @@ pub fn check_closure_returns(ctx: &mut ProgramContext, closure: &AClosure, kind:
     match kind {
         // If this closure is a function body, branch body, or inline closure, we need to ensure
         // that the final statement satisfies the return conditions.
-        ScopeKind::FnBody(_)
+        ScopeKind::FnBody
         | ScopeKind::BranchBody
         | ScopeKind::FromBody
         | ScopeKind::InlineClosure => {
@@ -189,16 +191,10 @@ pub fn check_closure_returns(ctx: &mut ProgramContext, closure: &AClosure, kind:
                 // If it's a loop, recurse on the loop body.
                 Some(AStatement::Loop(loop_)) => {
                     if loop_.maybe_cond.is_some() {
-                        ctx.insert_err(
-                            AnalyzeError::new(
-                                ErrorKind::MissingReturn,
-                                format_code!("missing {}", "return").as_str(),
-                                closure,
-                            )
-                            .with_detail(
-                                "The last statement in this closure is a loop that is not guaranteed to return.",
-                            ),
-                        );
+                        ctx.insert_err(err_missing_return(
+                            Some("The last statement in this closure is a loop that is not guaranteed to return."),
+                            closure.span,
+                        ));
                     }
 
                     check_closure_returns(ctx, &loop_.body, &ScopeKind::LoopBody);
@@ -217,11 +213,7 @@ pub fn check_closure_returns(ctx: &mut ProgramContext, closure: &AClosure, kind:
                 }
 
                 _ => {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::MissingReturn,
-                        format_code!("missing {}", "return").as_str(),
-                        closure,
-                    ));
+                    ctx.insert_err(err_missing_return(None, closure.span));
                 }
             };
         }
@@ -230,18 +222,14 @@ pub fn check_closure_returns(ctx: &mut ProgramContext, closure: &AClosure, kind:
         // that satisfies the return conditions, and that it has no breaks.
         ScopeKind::LoopBody => {
             if closure_has_any_break(closure) || !closure_has_any_return(closure) {
-                ctx.insert_err(
-                    AnalyzeError::new(
-                        ErrorKind::MissingReturn,
-                        format_code!("missing {}", "return").as_str(),
-                        closure,
-                    )
-                    .with_detail(
-                        "The last statement in this closure is a loop that is not guaranteed to return.",
-                    ),
-                );
+                ctx.insert_err(err_missing_return(
+                    Some("The last statement in this closure is a loop that is not guaranteed to return."),
+                    closure.span,
+                ));
             }
         }
+
+        other => panic!("unexpected scope kind {:?}", other),
     };
 }
 
@@ -585,9 +573,7 @@ fn search_statement(statement: &AStatement, is_match: &impl Fn(&AStatement) -> b
         | AStatement::FunctionDeclaration(_)
         | AStatement::StructTypeDeclaration(_)
         | AStatement::EnumTypeDeclaration(_)
-        | AStatement::ExternFn(_)
-        | AStatement::Const(_)
-        | AStatement::Impl(_) => false,
+        | AStatement::Const(_) => false,
     }
 }
 
@@ -695,9 +681,7 @@ fn search_statement_for_expr(statement: &AStatement, is_match: &impl Fn(&AExpr) 
         | AStatement::FunctionDeclaration(_)
         | AStatement::StructTypeDeclaration(_)
         | AStatement::EnumTypeDeclaration(_)
-        | AStatement::ExternFn(_)
-        | AStatement::Const(_)
-        | AStatement::Impl(_) => false,
+        | AStatement::Const(_) => false,
     }
 }
 
@@ -727,7 +711,7 @@ pub fn check_closure_yields(ctx: &mut ProgramContext, closure: &AClosure, kind: 
     match kind {
         // If this closure is a function body, branch body, or inline closure, we need to ensure
         // that the final statement satisfies the yield conditions.
-        ScopeKind::FnBody(_)
+        ScopeKind::FnBody
         | ScopeKind::BranchBody
         | ScopeKind::FromBody
         | ScopeKind::InlineClosure => {
@@ -748,16 +732,10 @@ pub fn check_closure_yields(ctx: &mut ProgramContext, closure: &AClosure, kind: 
                 // If it's a loop, recurse on the loop body.
                 Some(AStatement::Loop(loop_)) => {
                     if loop_.maybe_cond.is_some() {
-                        ctx.insert_err(
-                            AnalyzeError::new(
-                                ErrorKind::MissingYield,
-                                format_code!("missing {}", "yield").as_str(),
-                                closure,
-                            )
-                            .with_detail(
-                                "The last statement in this closure is a loop that is not guaranteed to yield.",
-                            ),
-                        );
+                        ctx.insert_err(err_missing_yield(
+                            Some("The last statement in this closure is a loop that is not guaranteed to yield."),
+                            closure.span
+                        ));
                     }
 
                     check_closure_yields(ctx, &loop_.body, &ScopeKind::LoopBody);
@@ -769,11 +747,7 @@ pub fn check_closure_yields(ctx: &mut ProgramContext, closure: &AClosure, kind: 
                 }
 
                 _ => {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::MissingYield,
-                        format_code!("missing {}", "yield").as_str(),
-                        closure,
-                    ));
+                    ctx.insert_err(err_missing_yield(None, closure.span));
                 }
             };
         }
@@ -782,18 +756,14 @@ pub fn check_closure_yields(ctx: &mut ProgramContext, closure: &AClosure, kind: 
         // that satisfies the yield conditions, and that it has no breaks.
         ScopeKind::LoopBody => {
             if closure_has_any_break(closure) || !closure_has_any_yield(closure) {
-                ctx.insert_err(
-                    AnalyzeError::new(
-                        ErrorKind::MissingYield,
-                        format_code!("missing {}", "yield").as_str(),
-                        closure,
-                    )
-                    .with_detail(
-                        "The last statement in this closure is a loop that is not guaranteed to yield.",
-                    ),
-                );
+                ctx.insert_err(err_missing_yield(
+                    Some("The last statement in this closure is a loop that is not guaranteed to yield."),
+                    closure.span
+                ));
             }
         }
+
+        other => panic!("unexpected scope kind {:?}", other),
     };
 }
 
@@ -801,16 +771,10 @@ pub fn check_closure_yields(ctx: &mut ProgramContext, closure: &AClosure, kind: 
 /// conditions.
 fn check_cond_returns(ctx: &mut ProgramContext, cond: &ACond) {
     if !cond.is_exhaustive() {
-        ctx.insert_err(
-            AnalyzeError::new(
-                ErrorKind::MissingReturn,
-                format_code!("missing {}", "return").as_str(),
-                cond,
-            )
-            .with_detail(
-                "The last statement in this closure is a conditional that is not exhaustive",
-            ),
-        );
+        ctx.insert_err(err_missing_return(
+            Some("The last statement in this closure is a conditional that is not exhaustive."),
+            cond.span,
+        ));
         return;
     }
 
@@ -823,16 +787,10 @@ fn check_cond_returns(ctx: &mut ProgramContext, cond: &ACond) {
 /// conditions.
 fn check_cond_yields(ctx: &mut ProgramContext, cond: &ACond) {
     if !cond.is_exhaustive() {
-        ctx.insert_err(
-            AnalyzeError::new(
-                ErrorKind::MissingYield,
-                format_code!("missing {}", "yield").as_str(),
-                cond,
-            )
-            .with_detail(
-                "The last statement in this closure is a conditional that is not exhaustive",
-            ),
-        );
+        ctx.insert_err(err_missing_yield(
+            Some("The last statement in this closure is a conditional that is not exhaustive"),
+            cond.span,
+        ));
         return;
     }
 
@@ -852,11 +810,7 @@ fn check_match_yields(ctx: &mut ProgramContext, match_: &AMatch) {
 pub fn analyze_break(ctx: &mut ProgramContext, br: &Break) {
     // Make sure we are inside a loop closure.
     if !ctx.is_in_loop() {
-        ctx.insert_err(AnalyzeError::new(
-            ErrorKind::UnexpectedBreak,
-            "cannot break from outside a loop",
-            br,
-        ));
+        ctx.insert_err(err_unexpected_break(br.span));
     }
 }
 
@@ -864,10 +818,6 @@ pub fn analyze_break(ctx: &mut ProgramContext, br: &Break) {
 pub fn analyze_continue(ctx: &mut ProgramContext, cont: &Continue) {
     // Make sure we are inside a loop closure.
     if !ctx.is_in_loop() {
-        ctx.insert_err(AnalyzeError::new(
-            ErrorKind::UnexpectedContinue,
-            "cannot continue from outside a loop",
-            cont,
-        ));
+        ctx.insert_err(err_unexpected_continue(cont.span));
     }
 }

@@ -2,7 +2,10 @@ use crate::analyzer::ast::arg::AArg;
 use crate::analyzer::ast::closure::{check_closure_returns, AClosure};
 use crate::analyzer::ast::params::AParams;
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{
+    err_dup_fn_arg, err_dup_ident, err_illegal_self_arg, err_misplaced_self_arg,
+};
+use crate::analyzer::ident::{Ident, IdentKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
 use crate::analyzer::type_store::TypeKey;
@@ -81,13 +84,9 @@ impl AFnSig {
         // Only try to determine if this is a method on a type (i.e. it has a spec and impl
         // type key) if it's a named function signature.
         let is_anon = sig.name.is_empty();
-        let maybe_impl_type_key = match is_anon {
-            true => None,
-            false => ctx.get_cur_self_type_key(),
-        };
-        let maybe_spec_type_key = match is_anon {
-            true => None,
-            false => ctx.get_cur_spec_type_key(),
+        let (maybe_impl_type_key, maybe_spec_type_key) = match is_anon {
+            true => (None, None),
+            false => (ctx.get_cur_self_type_key(), ctx.get_cur_spec_type_key()),
         };
 
         // Mangle the function name so it's unique.
@@ -98,17 +97,6 @@ impl AFnSig {
             sig.name.as_str(),
             true,
         );
-
-        // If this function signature has a name, we can try to locate it by its mangled name to
-        // avoid re-analyzing it.
-        if !is_anon {
-            if let Some(fn_sig) = ctx
-                .get_fn_sig_by_mangled_name(None, mangled_name.as_str())
-                .unwrap()
-            {
-                return fn_sig.clone();
-            }
-        }
 
         // Create a mostly-empty function type and insert it into the program context.
         // We'll fill in the details later, we just need a type key for it now.
@@ -140,16 +128,8 @@ impl AFnSig {
         for (i, arg) in sig.args.iter().enumerate() {
             // Make sure the argument name wasn't already used if it's not empty.
             if !arg.name.is_empty() {
-                if arg_names.contains(arg.name.as_str()) {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::DuplicateFnArg,
-                        format_code!(
-                            "another argument named {} already exists for this function",
-                            &arg.name
-                        )
-                        .as_str(),
-                        arg,
-                    ));
+                if !arg_names.insert(arg.name.clone()) {
+                    ctx.insert_err(err_dup_fn_arg(&arg.name, arg.span));
 
                     // Skip this invalid argument
                     continue;
@@ -157,34 +137,17 @@ impl AFnSig {
 
                 if arg.name == "self" {
                     if ctx.get_cur_self_type_key().is_none() {
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::IllegalSelfArg,
-                            format_code!(
-                                "cannot declare argument {} outside of {} or {} block",
-                                "self",
-                                "spec",
-                                "impl"
-                            )
-                            .as_str(),
-                            arg,
-                        ));
+                        ctx.insert_err(err_illegal_self_arg(arg.span));
 
                         // Skip this invalid argument
                         continue;
                     } else if i != 0 {
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::IllegalSelfArg,
-                            format!("{} must always be the first argument, if present", "self",)
-                                .as_str(),
-                            arg,
-                        ));
+                        ctx.insert_err(err_misplaced_self_arg(arg.span));
 
                         // Skip this invalid argument
                         continue;
                     }
                 }
-
-                arg_names.insert(arg.name.clone());
             }
 
             let a_arg = AArg::from(ctx, &arg);
@@ -199,12 +162,6 @@ impl AFnSig {
 
         // Replace the type now that it has been fully analyzed.
         ctx.replace_type(a_fn_sig.type_key, AType::from_fn_sig(a_fn_sig.clone()));
-
-        // Track the function type by name in the current module, if it has a name. We do this
-        // so we can avoid reanalyzing it in the future.
-        if !a_fn_sig.name.is_empty() {
-            ctx.insert_fn_sig(a_fn_sig.mangled_name.as_str(), a_fn_sig.type_key);
-        }
 
         // We can clear the params from the program context now that we're
         // done analyzing this signature.
@@ -406,28 +363,6 @@ impl AFnSig {
     }
 }
 
-/// Performs semantic analysis on the function signature, ensuring it doesn't match any other
-/// function signature in the ProgramContext.
-pub fn analyze_fn_sig(ctx: &mut ProgramContext, sig: &FunctionSignature) {
-    // Add the function to the program context with an empty body, making sure it doesn't already
-    // exist. We'll replace the function body when we analyze it later.
-    let mangled_name = ctx.mangle_name(None, None, None, sig.name.as_str(), true);
-    let maybe_fn_sig = ctx
-        .get_fn_sig_by_mangled_name(None, mangled_name.as_str())
-        .unwrap();
-    let maybe_sym = ctx.get_scoped_symbol(None, sig.name.as_str()).unwrap();
-    if maybe_fn_sig.is_some() || maybe_sym.is_some() {
-        ctx.insert_err(AnalyzeError::new(
-            ErrorKind::DuplicateFunction,
-            format_code!("{} is already defined", sig.name).as_str(),
-            sig,
-        ));
-        return;
-    }
-
-    AFnSig::from(ctx, &sig);
-}
-
 /// Represents a semantically valid and type-a function.
 #[derive(PartialEq, Debug, Clone)]
 pub struct AFn {
@@ -446,20 +381,24 @@ impl AFn {
     /// Performs semantic analysis on the given function and returns an analyzed version of it.
     pub fn from(ctx: &mut ProgramContext, func: &Function) -> Self {
         let signature = AFnSig::from(ctx, &func.signature);
+        AFn::from_parts(ctx, func, signature)
+    }
 
-        // Make sure there isn't already another function by the same name. There are already
-        // checks for regular function name collisions in `analyze_fn_sig`, but those
-        // won't detect nested function name collisions - that's what this is for.
-        if ctx
-            .get_fn(None, signature.mangled_name.as_str())
-            .unwrap()
-            .is_some()
-        {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::DuplicateFunction,
-                format_code!("function {} is already defined", &signature.name).as_str(),
-                &func.signature,
-            ));
+    pub fn from_parts(ctx: &mut ProgramContext, func: &Function, signature: AFnSig) -> Self {
+        // Insert a symbol for the function as long as it's not a method or anonymous.
+        if !func.signature.name.is_empty() && signature.maybe_impl_type_key.is_none() {
+            if let Err(existing) = ctx.insert_ident(Ident {
+                name: func.signature.name.clone(),
+                kind: IdentKind::Fn {
+                    is_pub: func.is_pub,
+                    type_key: signature.type_key,
+                    mod_id: Some(ctx.cur_mod_id()),
+                },
+                span: func.signature.span, // TODO: use name span
+            }) {
+                let err = err_dup_ident(&func.signature.name, func.signature.span, existing.span);
+                ctx.insert_err(err);
+            }
         }
 
         // Before we analyze the function body, we'll define the function
@@ -473,25 +412,14 @@ impl AFn {
         let a_closure = AClosure::from(
             ctx,
             &func.body,
-            ScopeKind::FnBody(func.signature.name.clone()),
+            ScopeKind::FnBody,
             func.signature.args.clone(),
             func.signature.maybe_ret_type.clone(),
         );
 
         // Make sure the function return conditions are satisfied by the closure.
         if func.signature.maybe_ret_type.is_some() {
-            check_closure_returns(
-                ctx,
-                &a_closure,
-                &ScopeKind::FnBody(func.signature.name.clone()),
-            );
-        }
-
-        // Record the function name as public in the current module if necessary.
-        if func.is_pub {
-            if ctx.get_cur_self_type_key().is_none() {
-                ctx.insert_pub_fn_name(func.signature.name.as_str());
-            }
+            check_closure_returns(ctx, &a_closure, &ScopeKind::FnBody);
         }
 
         // Remove the function signature params now that we're done analyzing

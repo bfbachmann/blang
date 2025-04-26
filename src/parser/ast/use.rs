@@ -77,7 +77,7 @@ impl ModulePath {
 pub struct UsedModule {
     pub path: ModulePath,
     pub maybe_alias: Option<String>,
-    pub identifiers: Vec<Symbol>,
+    pub symbols: Vec<Symbol>,
     pub span: Span,
 }
 
@@ -85,7 +85,7 @@ impl Hash for UsedModule {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.path.hash(state);
         self.maybe_alias.hash(state);
-        self.identifiers.hash(state);
+        self.symbols.hash(state);
     }
 }
 
@@ -101,10 +101,10 @@ impl Display for UsedModule {
             write!(f, "@{} ", alias)?;
         }
 
-        if self.identifiers.len() > 0 {
+        if self.symbols.len() > 0 {
             write!(f, "{{")?;
 
-            for (i, ident) in self.identifiers.iter().enumerate() {
+            for (i, ident) in self.symbols.iter().enumerate() {
                 match i {
                     0 => write!(f, "{}", ident)?,
                     _ => write!(f, ", {}", ident)?,
@@ -150,21 +150,21 @@ impl UsedModule {
         };
 
         // Parse the identifiers being imported from the module.
-        let identifiers = if parser.parse_optional(TokenKind::LeftBrace).is_some() {
-            let mut idents = vec![Symbol::parse_as_identifier(parser)?];
+        let symbols = if parser.parse_optional(TokenKind::LeftBrace).is_some() {
+            let mut symbols = vec![Symbol::parse_as_identifier(parser)?];
             while parser.parse_optional(TokenKind::Comma).is_some() {
-                idents.push(Symbol::parse_as_identifier(parser)?);
+                symbols.push(Symbol::parse_as_identifier(parser)?);
             }
 
             end_pos = parser.parse_expecting(TokenKind::RightBrace)?.span.end_pos;
 
-            idents
+            symbols
         } else {
             vec![]
         };
 
         // Make sure that some alias or identifiers were defined.
-        if maybe_alias.is_none() && identifiers.is_empty() {
+        if maybe_alias.is_none() && symbols.is_empty() {
             if let Some(token) = parser.tokens.next() {
                 return Err(ParseError::new_with_token(
                     ErrorKind::UnexpectedToken,
@@ -189,7 +189,7 @@ impl UsedModule {
             },
             path,
             maybe_alias,
-            identifiers,
+            symbols,
         })
     }
 }

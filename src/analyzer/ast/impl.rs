@@ -2,23 +2,24 @@ use std::collections::{HashMap, HashSet};
 
 use crate::analyzer::ast::func::AFn;
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{
+    err_expected_spec, err_illegal_foreign_spec_impl, err_illegal_foreign_type_impl,
+    err_incorrect_spec_fn, err_invalid_statement, err_non_spec_impl, err_spec_impl_missing_fns,
+    AnalyzeError,
+};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::fmt::format_code_vec;
-use crate::lexer::pos::Span;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Symbol;
-use crate::{format_code, util};
+use crate::util;
 
 /// Represents a semantically valid `impl` block that declares member functions for a type.
 #[derive(Debug, Clone)]
 pub struct AImpl {
     pub type_key: TypeKey,
     pub member_fns: Vec<AFn>,
-    pub span: Span,
 }
 
 impl PartialEq for AImpl {
@@ -34,17 +35,11 @@ impl AImpl {
         let placeholder = AImpl {
             type_key: ctx.unknown_type_key(),
             member_fns: vec![],
-            span: impl_.span,
         };
 
         // Make sure the `impl` block is not being defined inside a function.
         if ctx.is_in_fn() {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::InvalidStatement,
-                format_code!("cannot declare {} inside function", "impl").as_str(),
-                impl_,
-            ));
-
+            ctx.insert_err(err_invalid_statement(impl_.span));
             return placeholder;
         }
 
@@ -85,16 +80,8 @@ impl AImpl {
                     AType::Unknown(_) => None,
 
                     _ => {
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::ExpectedSpec,
-                            format_code!(
-                                "type {} is not a spec",
-                                ctx.display_type(spec_tk).as_str()
-                            )
-                            .as_str(),
-                            spec,
-                        ));
-
+                        let err = err_expected_spec(ctx, spec_tk, spec.span);
+                        ctx.insert_err(err);
                         None
                     }
                 }
@@ -107,41 +94,15 @@ impl AImpl {
         match maybe_spec_tk {
             Some(spec_tk) => {
                 if !is_legal_spec_impl(ctx, parent_tk, spec_tk) {
-                    ctx.insert_err(
-                        AnalyzeError::new(
-                            ErrorKind::IllegalImpl,
-                            format_code!(
-                                "cannot implement foreign spec {} for foreign type {}",
-                                ctx.display_type(spec_tk),
-                                ctx.display_type(type_key)
-                            )
-                            .as_str(),
-                            &impl_.typ,
-                        )
-                        .with_detail(
-                            "Either the type or the spec being implemented must be \
-                                defined in this module.",
-                        ),
-                    );
-
-                    return placeholder;
+                    let err = err_illegal_foreign_spec_impl(ctx, spec_tk, type_key, impl_.typ.span);
+                    ctx.insert_err(err);
                 }
             }
 
             None => {
                 if !is_legal_impl(ctx, parent_tk, None) {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::IllegalImpl,
-                        format_code!(
-                            "cannot define {} for foreign type {}",
-                            "impl",
-                            ctx.display_type(type_key)
-                        )
-                        .as_str(),
-                        &impl_.typ,
-                    ));
-
-                    return placeholder;
+                    let err = err_illegal_foreign_type_impl(ctx, type_key, impl_.typ.span);
+                    ctx.insert_err(err);
                 }
             }
         }
@@ -149,7 +110,18 @@ impl AImpl {
         // Analyze member functions.
         let mut member_fns: HashMap<String, (AFn, &Function)> = HashMap::new();
         for mem_fn in &impl_.member_fns {
-            let a_fn = AFn::from(ctx, mem_fn);
+            // Locate the already-analyzed function signature.
+            let mem_fn_tk = match maybe_spec_tk {
+                Some(spec_tk) => ctx
+                    .get_member_fn_from_spec_impl(type_key, spec_tk, &mem_fn.signature.name)
+                    .unwrap(),
+                None => ctx
+                    .get_default_member_fn(type_key, &mem_fn.signature.name)
+                    .unwrap(),
+            };
+
+            let mem_fn_sig = ctx.get_type(mem_fn_tk).to_fn_sig();
+            let a_fn = AFn::from_parts(ctx, mem_fn, mem_fn_sig.clone());
             member_fns.insert(a_fn.signature.name.clone(), (a_fn, mem_fn));
         }
 
@@ -181,7 +153,6 @@ impl AImpl {
         AImpl {
             type_key,
             member_fns: member_fns.into_values().map(|(func, _)| func).collect(),
-            span: impl_.span,
         }
     }
 }
@@ -198,13 +169,7 @@ fn check_spec_impl(
     // Find the spec being referred to.
     let spec_type = match ctx.get_type(spec_tk) {
         AType::Spec(spec_type) => spec_type.clone(),
-        _ => {
-            return vec![AnalyzeError::new(
-                ErrorKind::ExpectedSpec,
-                format_code!("{} is not a spec", ctx.display_type(spec_tk)).as_str(),
-                spec,
-            )]
-        }
+        _ => return vec![err_expected_spec(ctx, spec_tk, spec.span)],
     };
 
     // Collect the names of all the functions that aren't implemented
@@ -220,26 +185,14 @@ fn check_spec_impl(
             Some((a_fn, raw_fn)) => {
                 // Make sure the function was defined correctly.
                 if !a_fn.signature.implements(ctx, &spec_fn_sig) {
-                    spec_impl_errs.push(
-                        AnalyzeError::new(
-                            ErrorKind::IncorrectSpecFnInImpl,
-                            format_code!(
-                                "function {} not implemented according to spec {}",
-                                a_fn.signature.name,
-                                spec.name
-                            )
-                            .as_str(),
-                            &raw_fn.signature,
-                        )
-                        .with_detail(
-                            format_code!(
-                                "Spec {} defines the function as {}.",
-                                ctx.display_type(spec_tk),
-                                spec_fn_sig.display(ctx),
-                            )
-                            .as_str(),
-                        ),
-                    );
+                    spec_impl_errs.push(err_incorrect_spec_fn(
+                        ctx,
+                        &a_fn.signature.name,
+                        &spec.name,
+                        spec_tk,
+                        &spec_fn_sig,
+                        raw_fn.signature.span,
+                    ));
                 }
 
                 // Remove the function name from the set of "extra" functions. Any
@@ -256,52 +209,23 @@ fn check_spec_impl(
 
     // Record an error if this impl is missing functions defined in the spec.
     if !missing_fn_names.is_empty() {
-        spec_impl_errs.push(
-            AnalyzeError::new(
-                ErrorKind::SpecImplMissingFns,
-                format_code!("spec {} not fully implemented", spec.name).as_str(),
-                spec,
-            )
-            .with_detail(
-                format!(
-                    "The following functions from spec {} are missing: {}.",
-                    format_code!(spec),
-                    format_code_vec(&missing_fn_names, ", "),
-                )
-                .as_str(),
-            ),
-        );
+        spec_impl_errs.push(err_spec_impl_missing_fns(
+            &spec.name,
+            &missing_fn_names,
+            spec.span,
+        ));
     }
 
     // Record an error for each function in this impl that is not part of the spec.
     for fn_name in extra_fn_names {
         let raw_func = member_fns.get(fn_name.as_str()).unwrap().1;
-
-        spec_impl_errs.push(
-            AnalyzeError::new(
-                ErrorKind::NonSpecFnInImpl,
-                format_code!("function {} is not defined in spec {}", fn_name, spec.name).as_str(),
-                &raw_func.signature,
-            )
-            .with_detail(
-                format_code!(
-                    "Spec {} does not contain a function named {}, so it should not appear \
-                            in this {} block.",
-                    spec.name,
-                    fn_name,
-                    "impl",
-                )
-                .as_str(),
-            )
-            .with_help(
-                format_code!(
-                    "Consider moving function {} to a default {} block.",
-                    fn_name,
-                    format!("impl {}", ctx.display_type(type_key))
-                )
-                .as_str(),
-            ),
-        );
+        spec_impl_errs.push(err_non_spec_impl(
+            ctx,
+            &spec.name,
+            &fn_name,
+            type_key,
+            raw_func.signature.span,
+        ));
     }
 
     spec_impl_errs

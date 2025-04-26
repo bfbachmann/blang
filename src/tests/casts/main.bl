@@ -1,0 +1,109 @@
+mod casts
+
+use "std/libc" {exit}
+
+use "std/runtime" {assert}
+
+fn main() {
+    // Numeric casting.
+    {
+        // Zero-extended upcast from u8.
+        assert(13u8 as i8 == 13i8, "1")
+        assert(255u8 as i32 == 255i32, "2")
+        assert(12u8 as u32 == 12u32, "3")
+        assert(43u8 as i64 == 43i64, "4")
+        assert(3u8 as u64 == 3u64, "5")
+        assert(8u8 as f32 == 8.0f32, "expected 8.0")
+        assert(98u8 as f64 == 98.0f64, "expected 98.0")
+
+        // Sign-extended upcast from i8.
+        assert(-89i8 as u8 == 167u8, "6")
+        assert(-32i8 as i32 == -32i32, "7")
+        assert(12i8 as u32 == 12u32, "8")
+        assert(-43i8 as i64 == -43i64, "9")
+        assert(3i8 as u64 == 3u64, "10")
+        assert(-83i8 as f32 == -83.0f32, "expected -83.0f32")
+        assert(47i8 as f64 == 47.0f64, "expected 47f64")
+
+        // Zero-extended upcast from u32.
+        assert(4_294_967_295u32 as i32 == -1i32, "11")
+        assert(43u32 as i64 == 43i64, "12")
+        assert(3u32 as u64 == 3u64, "13")
+        assert(23874u32 as f32 == 23874.0f32, "expected 23874f32")
+        assert(378u32 as f64 == 378.0f64, "expected 378.0f64")
+
+        // Truncated downcast from u32.
+        assert(4_294_967_295u32 as u8 == 255u8, "14")
+        assert(43u32 as i8 == 43i8, "15")
+
+        // Sign-extended upcast from i32.
+        assert(-43i32 as u32 == 4_294_967_253u32, "16")
+        assert(-43i32 as i64 == -43i64, "17")
+        assert(3i32 as u64 == 3u64, "18")
+        assert(-389i32 as f32 == -389.0f32, "expected -389f32")
+        assert(-293i32 as f64 == -293.0f64, "expected -293.0f64")
+
+        // Truncated downcast from i32.
+        assert(-99i32 as u8 == 157u8, "19")
+        assert(-43i32 as i8 == -43i8, "20")
+
+        // Zero-extended upcast from u64.
+        assert(18_446_744_073_709_551_615u64 as i64 == -1i64, "21")
+        assert(3782346u64 as f64 == 3782346.0f64, "expected 3782346.0f64")
+
+        // Truncated downcast from u64.
+        assert(999u64 as u8 == 231u8, "22")
+        assert(843u64 as i8 == 75i8, "23")
+        assert(3000u64 as u32 == 3000u32, "24")
+        assert(43_983_378_748u64 as i32 == 1_033_705_788i32, "25")
+        assert(738436u64 as f32 == 738436.0f32, "expected 738436.0f32")
+
+        // Sign-extended upcast from i64.
+        assert(-43i64 as u64 == 18_446_744_073_709_551_573u64, "26")
+        assert(-3234i64 as f64 == -3234.0f64, "expected -3234.0f64")
+
+        // Truncated downcast from i64.
+        assert(-999i64 as u8 == 25u8, "27")
+        assert(-843i64 as i8 == -75i8, "28")
+        assert(3000i64 as u32 == 3000u32, "29")
+        assert(9_223_372_036_854_775_807i64 as i32 == -1i32, "30")
+        assert(-734834i64 as f32 == -734834.0f32, "expected -734834.0f32")
+
+        // Extended upcasts from f32.
+        assert(-83.20f32 as i32 == -83i32, "expected -83")
+        assert(74.2f32 as u32 == 74u32, "expected 74")
+        assert(-3.4e2f32 as i64 == -340i64, "expected -340")
+        assert(12.32f32 as u64 == 12u64, "expected 12")
+        assert(89.3e-2f32 as f64 == 0.8930000066757202f64, "expected 0.8930000066757202")
+
+        // Truncated downcast from f32.
+        assert(89.32f32 as u8 == 89u8, "expected 89")
+        assert(3.000f32 as i8 == 3i8, "expected 3")
+
+        // Extended upcasts from f64.
+        assert(-8.0e-2 as u64 == 0u64, "expected 0")
+        assert(9.424e3 as u64 == 9424u64, "expected 64")
+        assert(-29.3 as i64 == -29i64, "expected -29")
+
+        // Truncated downcast from f64.
+        assert(32.78 as u8 == 32u8, "expected 32")
+        assert(-2.32 as i8 == -2i8, "expected -128")
+        assert(-3.0 as u32 == 0u32, "expected 0")
+        assert(-78.3 as i32 == -78i32, "expected -78")
+        assert(8.0e-89 as f32 == 0.0, "expected 0.0")
+        assert(-8.0e4 as f32 == -8.0e4, "expected -8.0e4")
+    }
+
+    // String casting.
+    {
+        assert(("Test".ptr())^ == 84, "expected 84")
+    }
+
+    // Char casting.
+    {
+        assert('A' as uint == 65, "expected 65")
+        assert('\u00F8' as u32 == 248, "expected 248")
+    }
+
+    exit(0)
+}

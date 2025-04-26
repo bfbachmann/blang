@@ -17,9 +17,9 @@ use crate::Locatable;
 pub struct Symbol {
     /// Some symbols will be accessed from other imported modules. For example:
     ///
-    ///     use "my_project/my_file.bl"
+    ///     use "my_project/my_mod" @my_mod
     ///     // ...
-    ///         @my_file.some_fn(...)
+    ///         @my_mod.some_fn(...)
     ///
     /// In these cases, the module path specified with `@<mod_name>` is included
     /// in the symbol name and will be available via this field.
@@ -65,16 +65,6 @@ impl Symbol {
             name: name.to_string(),
             params: vec![],
             span,
-        }
-    }
-
-    /// Creates a new symbol with default (zero) start and end positions.
-    pub fn new_with_default_pos(name: &str) -> Self {
-        Symbol {
-            maybe_mod_name: Box::new(None),
-            name: name.to_string(),
-            params: vec![],
-            span: Default::default(),
         }
     }
 

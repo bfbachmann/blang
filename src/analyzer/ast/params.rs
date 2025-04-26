@@ -5,14 +5,14 @@ use std::hash::{Hash, Hasher};
 
 use crate::analyzer::ast::generic::AGenericType;
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{err_dup_param, err_expected_spec};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::fmt::vec_to_string;
 use crate::lexer::pos::Span;
+use crate::locatable_impl;
 use crate::parser::ast::params::{Param, Params};
 use crate::Locatable;
-use crate::{format_code, locatable_impl};
 
 /// Represents a generic parameter. A generic parameter has a name and has either
 /// a set of associated specs, or a constant type, or no associated type or specs
@@ -65,11 +65,8 @@ impl AParam {
                 AType::Unknown(_) => {}
 
                 _ => {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::ExpectedSpec,
-                        format_code!("type {} is not a spec", ctx.display_type(spec_tk)).as_str(),
-                        required_spec,
-                    ));
+                    let err = err_expected_spec(ctx, spec_tk, required_spec.span);
+                    ctx.insert_err(err);
                 }
             }
         }
@@ -168,12 +165,7 @@ impl AParams {
             // Record an error and skip this param if another param with the same name already
             // exists.
             if a_params.iter().find(|p| p.name == param.name).is_some() {
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::DuplicateParam,
-                    format_code!("parameter {} already defined", param.name).as_str(),
-                    param,
-                ));
-
+                ctx.insert_err(err_dup_param(&param.name, param.span));
                 continue;
             }
 
@@ -186,11 +178,6 @@ impl AParams {
             params: a_params,
             span: params.span,
         }
-    }
-
-    /// Returns the parameter with the given name, if one exists.
-    pub fn get(&self, name: &str) -> Option<&AParam> {
-        self.params.iter().find(|p| p.name == name)
     }
 
     /// Returns a string containing this set of parameters in human-readable form.

@@ -5,14 +5,17 @@ use std::fmt::{Debug, Display, Formatter};
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::params::AParams;
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{
+    err_dup_field_assign, err_dup_field_decl, err_dup_ident, err_not_pub, err_type_not_struct,
+    err_undef_field, err_uninitialized_struct_fields,
+};
+use crate::analyzer::ident::{Ident, IdentKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::fmt::format_code_vec;
 use crate::lexer::pos::Span;
 use crate::parser::ast::r#struct::{StructInit, StructType};
 use crate::parser::ast::r#type::Type;
-use crate::{format_code, util};
+use crate::util;
 
 /// Represents a semantically valid and type-rich struct field.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -61,17 +64,7 @@ impl AStructType {
     /// Performs semantic analysis on a struct type declaration. Note that this will also
     /// recursively analyze any types contained in the struct. On success, the struct type info will
     /// be stored in the program context.
-    pub fn from(ctx: &mut ProgramContext, struct_type: &StructType, is_in_fn: bool) -> Self {
-        // Check if the struct type is already defined in the program context. This will be the
-        // case if we've already analyzed it in the process of analyzing another type that
-        // contains this type.
-        if let Some(a_struct) = ctx
-            .get_struct_type(None, struct_type.name.as_str())
-            .unwrap()
-        {
-            return a_struct.clone();
-        }
-
+    pub fn from(ctx: &mut ProgramContext, struct_type: &StructType, is_in_fn: bool) -> AStructType {
         // Before analyzing struct field types, we'll prematurely add this (currently-empty) struct
         // type to the program context. This way, if any of the field types make use of this struct
         // type, we won't get into an infinitely recursive type resolution cycle. When we're done
@@ -85,6 +78,20 @@ impl AStructType {
             span: struct_type.span,
         };
         let type_key = ctx.insert_type(AType::Struct(a_struct_type.clone()));
+
+        // Define a symbol that maps to the struct type.
+        if let Err(existing) = ctx.insert_ident(Ident {
+            name: struct_type.name.clone(),
+            kind: IdentKind::Type {
+                is_pub: struct_type.is_pub,
+                type_key,
+                mod_id: Some(ctx.cur_mod_id()),
+            },
+            span: struct_type.span, // TODO: use name span
+        }) {
+            let err = err_dup_ident(&struct_type.name, struct_type.span, existing.span);
+            ctx.insert_err(err);
+        }
 
         // Analyze generic params, if any and push them to the program context.
         let maybe_params = match &struct_type.maybe_params {
@@ -108,16 +115,8 @@ impl AStructType {
         for field in &struct_type.fields {
             // Check for duplicated field name.
             if !field_names.insert(field.name.clone()) {
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::DuplicateStructField,
-                    format_code!(
-                        "struct type {} already has a field named {}",
-                        struct_type.name,
-                        field.name,
-                    )
-                    .as_str(),
-                    field,
-                ));
+                let err = err_dup_field_decl(&struct_type.name, &field.name, field.span);
+                ctx.insert_err(err);
 
                 // Skip the duplicated field.
                 continue;
@@ -166,11 +165,6 @@ impl AStructType {
 
             // Pop generic parameters now that we're done analyzing the type.
             ctx.pop_params();
-        }
-
-        // Record the type name as public in the current module if necessary.
-        if struct_type.is_pub {
-            ctx.mark_type_pub(type_key);
         }
 
         a_struct_type
@@ -234,15 +228,8 @@ impl AStructInit {
 
             _ => {
                 // This is not a struct type. Record the error and return a placeholder value.
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::TypeIsNotStruct,
-                    format_code!(
-                        "type {} is not a struct, but is being used like one",
-                        ctx.display_type(type_key)
-                    )
-                    .as_str(),
-                    struct_init,
-                ));
+                let err = err_type_not_struct(ctx, type_key, struct_init.span);
+                ctx.insert_err(err);
 
                 return AStructInit {
                     type_key,
@@ -262,15 +249,11 @@ impl AStructInit {
             let field_tk = match struct_type.get_field_type_key(field_name) {
                 Some(tk) => tk,
                 None => {
-                    errors.push(AnalyzeError::new(
-                        ErrorKind::UndefStructField,
-                        format_code!(
-                            "struct type {} has no field {}",
-                            ctx.display_type(type_key),
-                            field_name
-                        )
-                        .as_str(),
-                        field_name_symbol,
+                    errors.push(err_undef_field(
+                        ctx,
+                        field_name,
+                        type_key,
+                        field_name_symbol.span,
                     ));
 
                     // Skip this struct field since it's invalid.
@@ -281,11 +264,7 @@ impl AStructInit {
             // Record an error if the struct field is not settable from the current
             // module.
             if !ctx.struct_field_is_accessible(type_key, field_name) {
-                errors.push(AnalyzeError::new(
-                    ErrorKind::UseOfPrivateValue,
-                    format_code!("field {} is not public", field_name).as_str(),
-                    field_name_symbol,
-                ));
+                ctx.insert_err(err_not_pub(field_name, field_name_symbol.span));
             }
 
             // Analyze the value being assigned to the struct field.
@@ -295,11 +274,7 @@ impl AStructInit {
             if used_field_names.insert(field_name.to_string()) {
                 field_values.push((field_name.to_string(), expr));
             } else {
-                errors.push(AnalyzeError::new(
-                    ErrorKind::DuplicateStructField,
-                    format_code!("struct field {} is already assigned", field_name).as_str(),
-                    field_name_symbol,
-                ));
+                errors.push(err_dup_field_assign(field_name, field_name_symbol.span));
             }
         }
 
@@ -316,23 +291,11 @@ impl AStructInit {
         }
 
         if !uninit_field_names.is_empty() {
-            errors.push(AnalyzeError::new(
-                ErrorKind::StructFieldNotInitialized,
-                format!(
-                    "{} {} on struct type {} {} uninitialized",
-                    match uninit_field_names.len() {
-                        1 => "field",
-                        _ => "fields",
-                    },
-                    format_code_vec(&uninit_field_names, ", "),
-                    format_code!(ctx.display_type(type_key)),
-                    match uninit_field_names.len() {
-                        1 => "is",
-                        _ => "are",
-                    },
-                )
-                .as_str(),
-                &struct_init.typ,
+            errors.push(err_uninitialized_struct_fields(
+                ctx,
+                type_key,
+                uninit_field_names,
+                struct_init.span,
             ));
         }
 

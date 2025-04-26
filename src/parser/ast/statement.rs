@@ -45,7 +45,7 @@ pub enum Statement {
     StructDeclaration(StructType),
     EnumDeclaration(EnumType),
     ExternFn(ExternFn),
-    Const(Const),
+    ConstDeclaration(Const),
     Impl(Impl),
     SpecDeclaration(SpecType),
     Use(UsedModule),
@@ -107,7 +107,7 @@ impl fmt::Display for Statement {
             Statement::ExternFn(extern_fn) => {
                 write!(f, "{}", extern_fn)
             }
-            Statement::Const(const_block) => {
+            Statement::ConstDeclaration(const_block) => {
                 write!(f, "{}", const_block)
             }
             Statement::Use(used_mod) => {
@@ -151,7 +151,7 @@ impl Locatable for Statement {
             Statement::StructDeclaration(s) => s.span(),
             Statement::EnumDeclaration(e) => e.span(),
             Statement::ExternFn(e) => e.span(),
-            Statement::Const(c) => c.span(),
+            Statement::ConstDeclaration(c) => c.span(),
             Statement::Use(u) => u.span(),
             Statement::Impl(i) => i.span(),
             Statement::SpecDeclaration(t) => t.span(),
@@ -217,7 +217,7 @@ impl Statement {
             // If the nex tokens are `const` or `pub const`, it's a constant declaration.
             (TokenKind::Const, _) | (TokenKind::Pub, TokenKind::Const) => {
                 let const_decl = Const::parse(parser)?;
-                Ok(Statement::Const(const_decl))
+                Ok(Statement::ConstDeclaration(const_decl))
             }
 
             // If the next tokens are `fn` or `pub fn`, it must be a function declaration.

@@ -3,10 +3,13 @@ use std::fmt::{Display, Formatter};
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::generic::AGenericType;
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
+use crate::analyzer::error::{
+    err_ambiguous_access, err_ambiguous_generic_member_access, err_member_not_method, err_not_pub,
+    err_spec_member_access, err_undef_member, err_unexpected_params, err_unresolved_params,
+    AnalyzeResult, ErrorKind,
+};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::fmt::format_code_vec;
 use crate::lexer::pos::Span;
 use crate::locatable_impl;
 use crate::parser::ast::member::MemberAccess;
@@ -62,21 +65,8 @@ impl AMemberAccess {
         // Abort early if the base type is a spec. It's illegal to access member functions on
         // specs because they're not real functions.
         if let AType::Spec(spec_type) = base_type {
-            ctx.insert_err(
-                AnalyzeError::new(
-                    ErrorKind::SpecMemberAccess,
-                    "cannot access members on spec types",
-                    access,
-                )
-                .with_detail(
-                    format_code!(
-                        "Spec types like {} contain don't have real member functions, so \
-                        it's impossible to access their members this way.",
-                        spec_type.name
-                    )
-                    .as_str(),
-                ),
-            );
+            let err = err_spec_member_access(&spec_type.name, access.span);
+            ctx.insert_err(err);
             return placeholder;
         }
 
@@ -106,28 +96,15 @@ impl AMemberAccess {
                         if !allow_polymorph {
                             // The method is polymorphic, but no params were provided. Record an
                             // error and set the member type to unknown.
-                            let param_names = expected_params
-                                .params
-                                .iter()
-                                .map(|p| p.name.as_str())
-                                .collect();
-                            ctx.insert_err(
-                                AnalyzeError::new(
-                                    ErrorKind::UnresolvedParams,
-                                    "unresolved parameters",
-                                    &access.member_symbol,
-                                )
-                                .with_detail(
-                                    format!(
-                                        "{} has polymorphic type {} which requires that types \
-                                    be specified for parameters: {}.",
-                                        format_code!(access.member_symbol),
-                                        format_code!(ctx.display_type(member_type_key)),
-                                        format_code_vec(&param_names, ", "),
-                                    )
-                                    .as_str(),
-                                ),
+                            let param_names =
+                                expected_params.params.iter().map(|p| &p.name).collect();
+                            let err = err_unresolved_params(
+                                ctx,
+                                &access.member_symbol,
+                                member_type_key,
+                                param_names,
                             );
+                            ctx.insert_err(err);
                         }
 
                         member_type_key
@@ -144,20 +121,9 @@ impl AMemberAccess {
                 None => {
                     if !missing_params {
                         // The method is monomorphic, but params where provided.
-                        ctx.insert_err(
-                            AnalyzeError::new(
-                                ErrorKind::UnexpectedParams,
-                                "unexpected generic parameters",
-                                &access.member_symbol,
-                            )
-                            .with_detail(
-                                format_code!(
-                                    "Type {} is not polymorphic.",
-                                    ctx.display_type(member_type_key)
-                                )
-                                .as_str(),
-                            ),
-                        );
+                        let err =
+                            err_unexpected_params(ctx, member_type_key, access.member_symbol.span);
+                        ctx.insert_err(err);
                     }
                 }
             }
@@ -190,20 +156,11 @@ fn try_resolve_member(
     member_name: &String,
     prefer_method: bool,
 ) -> AnalyzeResult<TypeKey> {
-    let not_found_err = AnalyzeError::new(
-        ErrorKind::UndefMember,
-        format_code!(
-            "type {} has no member {}",
-            ctx.display_type(base_expr.type_key),
-            member_name
-        )
-        .as_str(),
-        &access.member_symbol,
-    );
-    let use_of_private_field_err = AnalyzeError::new(
-        ErrorKind::UseOfPrivateValue,
-        format_code!("field {} is not public", member_name).as_str(),
-        &access.member_symbol,
+    let not_found_err = err_undef_member(
+        ctx,
+        base_expr.type_key,
+        member_name,
+        access.member_symbol.span,
     );
 
     if base_expr.kind.is_type() {
@@ -240,7 +197,7 @@ fn try_resolve_member(
 
                     // We found a matching struct field, but it's private.
                     Err(Some(private_field_tk)) => {
-                        ctx.insert_err(use_of_private_field_err);
+                        ctx.insert_err(err_not_pub(member_name, access.member_symbol.span));
                         Ok(private_field_tk)
                     }
 
@@ -258,18 +215,19 @@ fn try_resolve_member(
     // to searching for matching methods.
     match resolve_struct_field(ctx, base_expr, member_name) {
         // We found a matching struct field.
-        Ok(field_tk) => return Ok(field_tk),
+        Ok(field_tk) => Ok(field_tk),
 
         // We found a matching struct field that can't be accessed in this context (it's private).
         Err(Some(private_field_tk)) => {
             match resolve_concrete_method(ctx, access, base_expr, member_name) {
                 // We found a matching method, so we'll use that.
                 Ok(member_tk) => Ok(member_tk),
+
                 Err(err) => match &err.kind {
                     // We didn't find a matching method, so we'll return the field type and record
                     // an error indicating that it can't be accessed in this context.
                     ErrorKind::UndefMember => {
-                        ctx.insert_err(use_of_private_field_err);
+                        ctx.insert_err(err_not_pub(member_name, access.member_symbol.span));
                         Ok(private_field_tk)
                     }
 
@@ -306,7 +264,7 @@ fn resolve_struct_field(
         }
     };
 
-    return match struct_type.get_field_type_key(member_name) {
+    match struct_type.get_field_type_key(member_name) {
         Some(field_tk) => {
             // Only allow access to the struct field if the struct type is
             // local to this module or if the field is public.
@@ -329,7 +287,7 @@ fn resolve_struct_field(
         }
 
         None => Err(None),
-    };
+    }
 }
 
 /// Tries to resolve the member as a method on a generic type.
@@ -343,14 +301,14 @@ fn resolve_generic_method(
     // We need to locate the member function by searching the spec
     // constraints for this generic type.
     let mut matching_fns = vec![];
-    let mut matching_specs_names = vec![];
+    let mut matching_spec_names = vec![];
     'next_spec: for spec_tk in &generic_type.spec_type_keys {
         let spec = ctx.get_type(*spec_tk).to_spec_type();
         for (fn_name, fn_tk) in &spec.member_fn_type_keys {
             if fn_name == member_name {
                 let fn_type = ctx.get_type(*fn_tk).to_fn_sig();
                 matching_fns.push(fn_type);
-                matching_specs_names.push(spec.name.as_str());
+                matching_spec_names.push(spec.name.as_str());
                 continue 'next_spec;
             }
         }
@@ -360,13 +318,13 @@ fn resolve_generic_method(
     // or none at all.
     match matching_fns.len() {
         0 => {
-            let base_type_str = ctx.display_type(base_expr.type_key);
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::UndefMember,
-                format_code!("type {} has no member {}", base_type_str, member_name).as_str(),
-                &access.member_symbol,
-            ));
-
+            let err = err_undef_member(
+                ctx,
+                base_expr.type_key,
+                member_name,
+                access.member_symbol.span,
+            );
+            ctx.insert_err(err);
             None
         }
 
@@ -385,33 +343,14 @@ fn resolve_generic_method(
         }
 
         _ => {
-            ctx.insert_err(
-                AnalyzeError::new(
-                    ErrorKind::AmbiguousAccess,
-                    "ambiguous member access",
-                    &access.member_symbol,
-                )
-                .with_detail(
-                    format!(
-                        "{} is ambiguous because all of the following \
-                        specs used in constraints for generic type {} contain \
-                        functions named {}: {}.",
-                        format_code!(access),
-                        format_code!(generic_type.name),
-                        format_code!(member_name),
-                        format_code_vec(&matching_specs_names, ", "),
-                    )
-                    .as_str(),
-                )
-                .with_help(
-                    format_code!(
-                        "Consider calling the function via its type like this: {}.",
-                        format!("{}.{}", matching_specs_names[0], member_name)
-                    )
-                    .as_str(),
-                ),
+            let err = err_ambiguous_generic_member_access(
+                access,
+                &generic_type.name,
+                matching_spec_names,
+                member_name,
+                access.member_symbol.span,
             );
-
+            ctx.insert_err(err);
             None
         }
     }
@@ -448,11 +387,7 @@ fn resolve_concrete_method(
                 member_fn_sig.maybe_impl_type_key.unwrap(),
                 member_fn_sig.type_key,
             ) {
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::UseOfPrivateValue,
-                    format_code!("member function {} is not public", member_name).as_str(),
-                    &access.member_symbol,
-                ))
+                ctx.insert_err(err_not_pub(member_name, access.member_symbol.span));
             }
 
             // If the base expression is a value rather than a type,
@@ -460,19 +395,11 @@ fn resolve_concrete_method(
             // takes `self` as its first argument.
             if !called_via_type {
                 if !takes_self {
-                    return Err(AnalyzeError::new(
-                        ErrorKind::UndefMember,
-                        format_code!("{} is not a method", member_name).as_str(),
-                        &access.member_symbol,
-                    )
-                    .with_help(
-                        format_code!(
-                            "Consider accessing this function via its type ({}), \
-                                or add {} as the first argument to make it a method.",
-                            format!("{}.{}", ctx.display_type(base_type_key), member_name),
-                            "self"
-                        )
-                        .as_str(),
+                    return Err(err_member_not_method(
+                        ctx,
+                        base_type_key,
+                        member_name,
+                        access.member_symbol.span,
                     ));
                 }
 
@@ -511,37 +438,20 @@ fn resolve_concrete_method(
 
         // Error and return a placeholder value since we couldn't
         // locate the member being accessed.
-        Ok(None) => Err(AnalyzeError::new(
-            ErrorKind::UndefMember,
-            format_code!(
-                "type {} has no member {}",
-                ctx.display_type(base_expr.type_key),
-                member_name
-            )
-            .as_str(),
-            &access.member_symbol,
+        Ok(None) => Err(err_undef_member(
+            ctx,
+            base_expr.type_key,
+            member_name,
+            access.member_symbol.span,
         )),
 
         // Many matching member functions were found by the given name, so this
         // reference is ambiguous.
-        Err(_) => Err(AnalyzeError::new(
-            ErrorKind::AmbiguousAccess,
-            format_code!(
-                "ambiguous access to member {} on type {}",
-                member_name,
-                ctx.display_type(base_expr.type_key),
-            )
-            .as_str(),
-            &access.member_symbol,
-        )
-        .with_detail(
-            format_code!(
-                "There are multiple methods named {} on type {}.",
-                member_name,
-                ctx.display_type(base_expr.type_key)
-            )
-            .as_str(),
-        )
-        .with_help("Consider referring to the method via its type or spec.")),
+        Err(_) => Err(err_ambiguous_access(
+            ctx,
+            base_expr.type_key,
+            member_name,
+            access.member_symbol.span,
+        )),
     }
 }

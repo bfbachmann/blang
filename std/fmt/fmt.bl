@@ -215,8 +215,8 @@ impl int: Print {
     fn print(*self, writer: *mut Writer) {
         let result = @convert.int_to_str(self^)
         let bytes = &result.(0) as *u8
-        let offset = result.(1) as int
-        writer.write(Slice[u8].new(bytes.(offset), 65 - offset as uint))
+        let offset = result.(1)
+        writer.write(Slice[u8].new(bytes.(offset as int), 65uint - offset))
     }
 }
 

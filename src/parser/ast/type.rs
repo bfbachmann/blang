@@ -114,6 +114,6 @@ impl Type {
 
     /// Creates a new unresolved type with the given name.
     pub fn new_unresolved(name: &str) -> Self {
-        Type::Unresolved(UnresolvedType::new_with_default_pos(name))
+        Type::Unresolved(UnresolvedType::new_with_default_span(name))
     }
 }

@@ -1,7 +1,8 @@
 use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
+use crate::analyzer::ident::IdentKind;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::fmt::hierarchy_to_string;
-use crate::lexer::pos::Locatable;
+use crate::lexer::pos::Span;
 use crate::parser::ast::array::ArrayType;
 use crate::parser::ast::r#enum::EnumType;
 use crate::parser::ast::r#struct::StructType;
@@ -17,13 +18,16 @@ pub fn check_type_containment(
 ) -> AnalyzeResult<()> {
     match typ {
         Type::Unresolved(unresolved_type) => {
-            if let Some(struct_type) = ctx.get_unchecked_struct_type(unresolved_type.name.as_str())
-            {
-                check_struct_containment(ctx, struct_type, hierarchy)?;
-            } else if let Some(enum_type) =
-                ctx.get_unchecked_enum_type(unresolved_type.name.as_str())
-            {
-                check_enum_containment(ctx, enum_type, hierarchy)?;
+            if let Some(ident) = ctx.get_local_ident_unchecked(&unresolved_type.name) {
+                match &ident.kind {
+                    IdentKind::UncheckedStructType(struct_type) => {
+                        check_struct_containment(ctx, struct_type, hierarchy)?;
+                    }
+                    IdentKind::UncheckedEnumType(enum_type) => {
+                        check_enum_containment(ctx, enum_type, hierarchy)?;
+                    }
+                    _ => {}
+                }
             }
         }
 
@@ -52,8 +56,8 @@ pub fn check_struct_containment(
     if hierarchy.contains(&struct_type.name) {
         return Err(new_containment_err(
             struct_type.name.as_str(),
-            struct_type,
             hierarchy,
+            struct_type.span,
         ));
     }
 
@@ -82,8 +86,8 @@ pub fn check_enum_containment(
     if hierarchy.contains(&enum_type.name) {
         return Err(new_containment_err(
             enum_type.name.as_str(),
-            enum_type,
             hierarchy,
+            enum_type.span,
         ));
     }
 
@@ -133,15 +137,11 @@ pub fn check_array_containment(
     }
 }
 
-fn new_containment_err<T: Locatable>(
-    type_name: &str,
-    typ: &T,
-    hierarchy: &Vec<String>,
-) -> AnalyzeError {
+fn new_containment_err(type_name: &str, hierarchy: &Vec<String>, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::InfiniteSizedType,
         format_code!("type {} cannot contain itself", type_name).as_str(),
-        typ,
+        span,
     )
     .with_detail(
         format!(

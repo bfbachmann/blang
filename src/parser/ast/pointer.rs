@@ -36,8 +36,8 @@ impl PointerType {
         }
     }
 
-    /// Creates a new pointer type with default start and end positions.
-    pub fn new_with_default_pos(pointee_type: Type, is_mut: bool) -> PointerType {
+    /// Creates a new pointer type with default span.
+    pub fn new_with_default_span(pointee_type: Type, is_mut: bool) -> PointerType {
         PointerType {
             pointee_type,
             is_mut,

@@ -1,0 +1,110 @@
+mod generic_impls
+
+use "std/libc" {puts}
+use "std/libc" {exit}
+use "std/mem" {heap_realloc, heap_free}
+use "std/runtime" {panic}
+use "std/allocator" {Allocator}
+use "std/allocator" {LibcAllocator}
+
+// List is the data type being tested.
+use "std/types/list" {List}
+
+use "std/runtime" {assert}
+
+spec ToInt {
+    fn to_int(self) -> int
+}
+
+struct Container[T] {
+    t: T
+}
+
+impl Container[int]: ToInt {
+    fn to_int(self) -> int {
+        return self.t
+    }
+}
+
+struct Empty[T] {}
+
+impl Empty {
+    fn do_nothing() -> int {
+        return 234
+    }
+
+    fn neg(*self, value: bool) -> bool {
+        return !value
+    }
+
+    fn new_nested() -> Empty[Empty[T]] {
+        return Empty[Empty[T]]{}
+    }
+}
+
+spec GetValue {
+    fn get_value() -> int
+}
+
+struct ValueGetter {}
+
+impl ValueGetter: GetValue {
+    fn get_value() -> int {
+        return -3
+    }
+}
+
+struct Thing[T: GetValue] {}
+
+impl Thing {
+    fn call() -> int {
+        return T.get_value()
+    }
+}
+
+fn main() {
+    // Test generic list functionality.
+    {
+        let mut allocator = LibcAllocator.new().dynamic()
+        let mut list = List[uint].new(&mut allocator)
+        for let mut i: uint = 0; i < 10; i += 1 {
+            list.push(i)
+            assert(list.len() == i + 1, "list has wrong len after push()")
+        }
+
+        let mut sum: uint = 0
+        for i = 0; i < 10; i += 1 {
+            let value = list.get(i)
+            assert(value == i, "wrong value returned by get()")
+            sum += value
+        }
+        assert(sum == 45, "expected 45")
+
+        for i = 10; !list.is_empty(); i -= 1 {
+            assert(list.len() == i, "list has wrong len after remove()")
+            list.pop()
+        }
+        assert(list.is_empty(), "list should be empty")
+
+        list.free()
+    }
+
+    // Check that we can define and use functions from `impl` blocks declared
+    // on concrete monomorphizations of polymorphic types.
+    {
+        let cont = Container[int]{t: 432}
+        assert(cont.to_int() == 432, "expected 432")
+    }
+
+    // Check that we can use a monomorphized struct type that has no fields.
+    {
+        let empty = Empty[u64]{}
+        assert(empty.neg(false), "expected true")
+        assert(Empty[int].do_nothing() == 234, "expected 234")
+        assert(Empty[str].do_nothing() == 234, "expected 234")
+        assert(Empty[Empty[uint]].do_nothing() == 234, "expected 234")
+        assert(Thing[ValueGetter].call() == -3, "expected -3")
+    }
+
+    exit(0)
+}

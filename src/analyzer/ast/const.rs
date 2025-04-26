@@ -2,14 +2,14 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 
 use crate::analyzer::ast::expr::AExpr;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{err_dup_ident, err_not_const};
+use crate::analyzer::ident::{Ident, IdentKind};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::scope::ScopedSymbol;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::r#const::Const;
 use crate::parser::ast::r#type::Type;
-use crate::{format_code, util};
+use crate::util;
 
 /// Represents a semantically valid constant declaration.
 #[derive(Debug, Clone)]
@@ -53,12 +53,18 @@ impl AConst {
         // Make sure the constant value is a valid constant.
         let value = AExpr::from(ctx, const_decl.value.clone(), declared_tk, false, false);
 
-        // Add the symbol to the program context so it can be used later.
-        ctx.insert_scoped_symbol(ScopedSymbol::new_const(
-            const_decl.name.as_str(),
-            value.type_key,
-            ctx.get_cur_mod_path().to_owned(),
-        ));
+        // Add the identifier to the program context so it can be used later.
+        if let Err(existing) = ctx.insert_ident(Ident {
+            name: const_decl.name.clone(),
+            kind: IdentKind::Const {
+                is_pub: const_decl.is_pub,
+                value: value.clone(),
+                mod_id: Some(ctx.cur_mod_id()),
+            },
+            span: const_decl.span, // TODO: use name span
+        }) {
+            err_dup_ident(&existing.name, const_decl.span, existing.span);
+        }
 
         // Just return a dummy value if the expression already failed analysis.
         if ctx.get_type(value.type_key).is_unknown() {
@@ -67,25 +73,8 @@ impl AConst {
 
         // Error if the value assigned to the constant is not constant.
         if !value.kind.is_const() {
-            ctx.insert_err(
-                AnalyzeError::new(
-                    ErrorKind::InvalidConst,
-                    format_code!("{} is not a constant", value.display(ctx)).as_str(),
-                    &const_decl.value,
-                )
-                .with_detail("Constant expressions cannot contain variables or function calls."),
-            );
-
+            ctx.insert_err(err_not_const(ctx, &value));
             return AConst::new_zero_value(ctx, const_decl.name.as_str());
-        }
-
-        // Store the constant value in the program context so we can use it when we've evaluating
-        // constant expressions at compile time.
-        ctx.insert_const_value(const_decl.name.as_str(), value.clone());
-
-        // Record the constant as a public value in this module if necessary.
-        if const_decl.is_pub {
-            ctx.insert_pub_const_name(const_decl.name.as_str());
         }
 
         AConst {

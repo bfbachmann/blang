@@ -4,6 +4,8 @@ use std::fmt::{Display, Formatter};
 use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::params::AParams;
 use crate::analyzer::ast::r#type::AType;
+use crate::analyzer::error::err_dup_ident;
+use crate::analyzer::ident::{Ident, IdentKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::Span;
@@ -14,6 +16,7 @@ use crate::parser::ast::spec::SpecType;
 #[derive(PartialEq, Clone, Debug)]
 pub struct ASpecType {
     pub name: String,
+    pub mangled_name: String,
     pub maybe_params: Option<AParams>,
     /// Maps member function name to the function type key.
     pub member_fn_type_keys: HashMap<String, TypeKey>,
@@ -31,13 +34,29 @@ impl ASpecType {
     pub fn from(ctx: &mut ProgramContext, spec_type: &SpecType) -> ASpecType {
         // Insert the empty spec type so we have a type key for it. We'll update it when we're
         // done analyzing.
+        let mangled_name = ctx.mangle_name(None, None, None, &spec_type.name, false);
         let mut a_spec_type = ASpecType {
             name: spec_type.name.clone(),
+            mangled_name: mangled_name.clone(),
             maybe_params: None,
             member_fn_type_keys: Default::default(),
-            span: spec_type.span,
+            span: spec_type.span, // TODO: Use name space
         };
-        let type_key = ctx.force_insert_type(AType::Spec(a_spec_type.clone()));
+        let type_key = ctx.insert_type(AType::Spec(a_spec_type.clone()));
+
+        // Define a symbol that maps to the spec type.
+        if let Err(existing) = ctx.insert_ident(Ident {
+            name: spec_type.name.clone(),
+            kind: IdentKind::Type {
+                is_pub: spec_type.is_pub,
+                type_key,
+                mod_id: Some(ctx.cur_mod_id()),
+            },
+            span: Default::default(),
+        }) {
+            let err = err_dup_ident(&spec_type.name, spec_type.span, existing.span);
+            ctx.insert_err(err);
+        }
 
         // Analyze generic params, if any and push them to the program context.
         let maybe_params = match &spec_type.maybe_params {
@@ -71,19 +90,19 @@ impl ASpecType {
         ctx.set_cur_spec_type_key(None);
         ctx.set_cur_self_type_key(None);
 
+        // Update the type in the type store now that we've analyzed its fields.
         let a_spec_type = ASpecType {
             name: spec_type.name.clone(),
+            mangled_name,
             maybe_params,
             member_fn_type_keys,
             span: spec_type.span,
         };
-
-        // Add the new spec to the program context so we can reference it by name later.
         ctx.replace_type(type_key, AType::Spec(a_spec_type.clone()));
 
         if a_spec_type.maybe_params.is_some() {
             // We've analyzed all the functions in this spec, but it's possible that some of the
-            // functions had types that were monomorphizations of this struct type. For example, in
+            // functions had types that were monomorphizations of this spec type. For example, in
             // this spec
             //
             //      spec Thing[T] { fn thing[P: Thing[T]](ptr: *P) }
@@ -101,11 +120,6 @@ impl ASpecType {
 
             // Pop generic parameters now that we're done analyzing the type.
             ctx.pop_params();
-        }
-
-        // Record the type name as public in the current module if necessary.
-        if spec_type.is_pub {
-            ctx.mark_type_pub(type_key);
         }
 
         a_spec_type

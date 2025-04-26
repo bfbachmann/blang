@@ -3,9 +3,11 @@ use std::fmt::Formatter;
 
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{
+    err_assign_to_const, err_assign_to_immut_var, err_assign_to_non_var, err_assign_via_immut_ptr,
+};
+use crate::analyzer::ident::IdentKind;
 use crate::analyzer::prog_context::ProgramContext;
-use crate::format_code;
 use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::op::Operator;
 use crate::parser::ast::var_assign::VariableAssignment;
@@ -37,7 +39,7 @@ impl AVarAssign {
         // assignable, we'll skip type checks for the assigned expression to avoid
         // redundant errors.
         let maybe_expected_right_type_key = match !ctx.get_type(target.type_key).is_unknown()
-            && check_assignable(ctx, assign, &target)
+            && check_assignable(ctx, assign.span(), &target)
         {
             true => Some(target.type_key),
             false => None,
@@ -63,70 +65,37 @@ impl AVarAssign {
 /// Checks if the given `target_expr` can be assigned to and inserts an error into the program context
 /// if not. Only mutable variables (and their members/elements) and dereferenced `*mut _` pointers can be
 /// assigned to. Returns true if the target is assignable and false otherwise.
-fn check_assignable<T: Locatable>(ctx: &mut ProgramContext, loc: &T, target_expr: &AExpr) -> bool {
+fn check_assignable(ctx: &mut ProgramContext, span: &Span, target_expr: &AExpr) -> bool {
     match &target_expr.kind {
         // We're just assigning to a variable. Make sure it's mutable.
         AExprKind::Symbol(symbol) => {
             if symbol.is_null_intrinsic() {
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::InvalidAssignmentTarget,
-                    format_code!("cannot assign to intrinsic {}", &symbol.name).as_str(),
-                    loc,
-                ));
-
+                let err = err_assign_to_non_var(ctx, &target_expr.kind, *span);
+                ctx.insert_err(err);
                 return false;
             }
 
-            let var = match ctx.get_scoped_symbol(None, symbol.name.as_str()).unwrap() {
+            let ident = match ctx.get_local_ident(&symbol.name) {
                 Some(v) => v,
                 None => {
-                    // The variable does not exist. Record the error and skip any further checks.
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::UndefSymbol,
-                        format_code!("cannot assign to undefined variable {}", &symbol.name)
-                            .as_str(),
-                        loc,
-                    ));
-
-                    return false;
+                    return true;
                 }
             };
 
-            if var.is_const {
-                ctx.insert_err(
-                    AnalyzeError::new(
-                        ErrorKind::ImmutableAssignment,
-                        format_code!("cannot assign to constant {}", target_expr.display(ctx))
-                            .as_str(),
-                        loc,
-                    )
-                    .with_help(
-                        format_code!(
-                            "Consider declaring {} as a mutable local variable.",
-                            &symbol.name
-                        )
-                        .as_str(),
-                    ),
-                );
+            match &ident.kind {
+                IdentKind::Const { .. } => {
+                    let err = err_assign_to_const(ctx, target_expr, &symbol.name, *span);
+                    ctx.insert_err(err);
+                    return false;
+                }
 
-                return false;
-            } else if !var.is_mut {
-                ctx.insert_err(
-                    AnalyzeError::new(
-                        ErrorKind::ImmutableAssignment,
-                        format_code!(
-                            "cannot assign to immutable variable {}",
-                            target_expr.display(ctx)
-                        )
-                        .as_str(),
-                        loc,
-                    )
-                    .with_help(
-                        format_code!("Consider declaring {} as mutable.", &symbol.name).as_str(),
-                    ),
-                );
+                IdentKind::Variable { is_mut: false, .. } => {
+                    let err = err_assign_to_immut_var(ctx, target_expr, &symbol.name, *span);
+                    ctx.insert_err(err);
+                    return false;
+                }
 
-                return false;
+                _ => {}
             }
 
             true
@@ -134,25 +103,10 @@ fn check_assignable<T: Locatable>(ctx: &mut ProgramContext, loc: &T, target_expr
 
         // We're assigning to a value via a pointer. Make sure the pointer is `*mut`.
         AExprKind::UnaryOperation(Operator::Defererence, operand) => {
-            if let AType::Pointer(pointer_type) = ctx.get_type(operand.type_key) {
-                if !pointer_type.is_mut {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::ImmutableAssignment,
-                        "cannot assign via pointer to immutable data",
-                        loc,
-                    ).with_detail(
-                        format_code!(
-                            "Cannot assign via a pointer of type {} that points to an immutable value.",
-                            pointer_type.display(ctx),
-                        ).as_str()
-                    ).with_help(
-                        format_code!(
-                            "For this assignment to work, {} would need to have type {}.",
-                            operand.display(ctx),
-                            format!("*mut {}", ctx.display_type(pointer_type.pointee_type_key)),
-                        ).as_str()
-                    ));
-
+            if let AType::Pointer(ptr_type) = ctx.get_type(operand.type_key) {
+                if !ptr_type.is_mut {
+                    let err = err_assign_via_immut_ptr(ctx, ptr_type, operand, *span);
+                    ctx.insert_err(err);
                     return false;
                 }
             }
@@ -161,19 +115,15 @@ fn check_assignable<T: Locatable>(ctx: &mut ProgramContext, loc: &T, target_expr
         }
 
         // We're assigning to a field on a struct or tuple. Make sure the base variable is mutable.
-        AExprKind::MemberAccess(access) => check_assignable(ctx, loc, &access.base_expr),
+        AExprKind::MemberAccess(access) => check_assignable(ctx, span, &access.base_expr),
 
         // We're assigning to a slot in an array. Make sure the array is mutable.
-        AExprKind::Index(index) => check_assignable(ctx, loc, &index.collection_expr),
+        AExprKind::Index(index) => check_assignable(ctx, span, &index.collection_expr),
 
         // Cannot assign to other types of expressions because they're not variables.
         other => {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::InvalidAssignmentTarget,
-                format_code!("cannot assign to non-variable {}", other.display(ctx)).as_str(),
-                loc,
-            ));
-
+            let err = err_assign_to_non_var(ctx, other, *span);
+            ctx.insert_err(err);
             false
         }
     }

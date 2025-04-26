@@ -9,7 +9,7 @@ use crate::Locatable;
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Yield {
     pub value: Expression,
-    span: Span,
+    pub span: Span,
 }
 
 locatable_impl!(Yield);

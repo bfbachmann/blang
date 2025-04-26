@@ -2,8 +2,9 @@ use std::fmt;
 use std::fmt::Formatter;
 
 use crate::analyzer::ast::expr::AExpr;
+use crate::analyzer::error::err_dup_ident;
+use crate::analyzer::ident::{Ident, IdentKind};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::scope::ScopedSymbol;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::Span;
 use crate::parser::ast::var_dec::VariableDeclaration;
@@ -46,11 +47,17 @@ impl AVarDecl {
         };
 
         // The variable expression is valid. Add it to the program context.
-        ctx.insert_scoped_symbol(ScopedSymbol::new(
-            var_decl.name.as_str(),
-            rich_expr.type_key,
-            var_decl.is_mut,
-        ));
+        if let Err(existing) = ctx.insert_ident(Ident {
+            name: var_decl.name.clone(),
+            kind: IdentKind::Variable {
+                is_mut: var_decl.is_mut,
+                type_key,
+            },
+            span: var_decl.span, // TODO: use name span
+        }) {
+            let existing_span = existing.span;
+            ctx.insert_err(err_dup_ident(&var_decl.name, var_decl.span, existing_span));
+        };
 
         AVarDecl {
             type_key,
@@ -58,102 +65,5 @@ impl AVarDecl {
             val: rich_expr,
             span: var_decl.span,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::analyzer::ast::expr::{AExpr, AExprKind};
-    use crate::analyzer::ast::var_dec::AVarDecl;
-    use crate::analyzer::error::{AnalyzeError, ErrorKind};
-    use crate::analyzer::prog_context::ProgramContext;
-    use crate::parser::ast::bool_lit::BoolLit;
-    use crate::parser::ast::expr::Expression;
-    use crate::parser::ast::r#type::Type;
-    use crate::parser::ast::str_lit::StrLit;
-    use crate::parser::ast::var_dec::VariableDeclaration;
-
-    #[test]
-    fn var_redeclared() {
-        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
-        let var_decl = VariableDeclaration::new(
-            Some(Type::new_unresolved("str")),
-            false,
-            "my_var".to_string(),
-            Expression::StrLiteral(StrLit::new_with_default_pos("bingo")),
-            Default::default(),
-        );
-        let result = AVarDecl::from(&mut ctx, &var_decl);
-        assert!(ctx.errors().is_empty());
-        assert_eq!(
-            result,
-            AVarDecl {
-                type_key: ctx.str_type_key(),
-                name: "my_var".to_string(),
-                val: AExpr::new_with_default_pos(
-                    AExprKind::StrLiteral("bingo".to_string()),
-                    ctx.str_type_key()
-                ),
-                span: Default::default(),
-            }
-        );
-        assert_eq!(
-            ctx.get_scoped_symbol(None, "my_var")
-                .unwrap()
-                .unwrap()
-                .type_key,
-            ctx.str_type_key()
-        );
-
-        let new_var_decl = VariableDeclaration::new(
-            Some(Type::new_unresolved("bool")),
-            false,
-            "my_var".to_string(),
-            Expression::BoolLiteral(BoolLit::new_with_default_pos(true)),
-            Default::default(),
-        );
-
-        let result = AVarDecl::from(&mut ctx, &new_var_decl);
-        assert!(ctx.errors().is_empty());
-        assert_eq!(
-            result,
-            AVarDecl {
-                type_key: ctx.bool_type_key(),
-                name: "my_var".to_string(),
-                val: AExpr::new_with_default_pos(AExprKind::BoolLiteral(true), ctx.bool_type_key()),
-                span: Default::default(),
-            }
-        );
-        assert_eq!(
-            ctx.get_scoped_symbol(None, "my_var")
-                .unwrap()
-                .unwrap()
-                .type_key,
-            ctx.bool_type_key()
-        );
-    }
-
-    #[test]
-    fn type_mismatch() {
-        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
-        let var_decl = VariableDeclaration::new(
-            Some(Type::new_unresolved("i64")),
-            false,
-            "my_string".to_string(),
-            Expression::StrLiteral(StrLit::new_with_default_pos("bingo")),
-            Default::default(),
-        );
-        AVarDecl::from(&mut ctx, &var_decl);
-        assert!(matches!(
-            ctx.errors()
-                .values()
-                .collect::<Vec<&AnalyzeError>>()
-                .get(0)
-                .unwrap(),
-            AnalyzeError {
-                kind: ErrorKind::MismatchedTypes,
-                ..
-            }
-        ));
     }
 }

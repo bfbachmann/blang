@@ -60,13 +60,4 @@ impl FnCall {
             args,
         }
     }
-
-    #[cfg(test)]
-    pub fn new_with_default_pos(fn_expr: Expression, args: Vec<Expression>) -> FnCall {
-        FnCall {
-            fn_expr,
-            args,
-            span: Default::default(),
-        }
-    }
 }

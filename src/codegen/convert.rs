@@ -286,46 +286,35 @@ impl<'ctx> TypeConverter<'ctx> {
 
         // Figure out how many bytes we need to store the variant number based on how many
         // variants there are.
-        let ll_variant_num_type = self.enum_variant_num_field_type(enum_type.variants.len() as u64);
+        let tag_bytes = enum_variant_num_field_size(enum_type.variants.len() as u64);
+        let ll_tag_type = self.int_type_with_size(tag_bytes);
 
         // Create the struct type with two fields. The first stores the enum variant number and the
         // second stores the enum variant value, if any. We'll omit the second field in cases where
         // none of the enum variants contain a value.
         let ll_enum_type = self.ctx.opaque_struct_type(enum_type.mangled_name.as_str());
-        let has_any_value = enum_type
-            .variants
-            .values()
-            .find(|v| v.maybe_type_key.is_some())
-            .is_some();
 
-        if has_any_value {
+        let max_variant_size = self.max_enum_variant_size(enum_type);
+        if max_variant_size > 0 {
+            let align_size = self.max_enum_variant_alignment(enum_type) as u64;
+            let pad_size = (align_size - (tag_bytes as u64 % align_size)) % align_size;
+            let payload_type = self
+                .ctx
+                .i8_type()
+                .array_type((max_variant_size + pad_size) as u32);
+
             ll_enum_type.set_body(
                 &[
-                    ll_variant_num_type.as_basic_type_enum(),
-                    self.ctx
-                        .i8_type()
-                        .array_type(self.max_enum_variant_size(enum_type) as u32)
-                        .as_basic_type_enum(),
+                    ll_tag_type.as_basic_type_enum(),
+                    payload_type.as_basic_type_enum(),
                 ],
                 false,
             );
         } else {
-            ll_enum_type.set_body(&[ll_variant_num_type.as_basic_type_enum()], false);
+            ll_enum_type.set_body(&[ll_tag_type.as_basic_type_enum()], false);
         }
 
         ll_enum_type
-    }
-
-    /// Returns the LLVM IntType required to store the given number of enum variants.
-    pub(crate) fn enum_variant_num_field_type(&self, num_variants: u64) -> IntType<'ctx> {
-        let bits_required = 64 - num_variants.leading_zeros();
-        let bytes_required = (bits_required + 7) / 8;
-        match bytes_required {
-            1 => self.ctx.i8_type(),
-            2 => self.ctx.i16_type(),
-            3 | 4 => self.ctx.i32_type(),
-            _ => self.ctx.i64_type(),
-        }
     }
 
     /// Gets the LLVM "any" type that corresponds to the given type.
@@ -349,15 +338,17 @@ impl<'ctx> TypeConverter<'ctx> {
     /// other words, this returns the number of bytes required to hold the type in memory on the
     /// target system.
     pub fn size_of_type(&self, type_key: TypeKey) -> u64 {
-        let ll_type = self.to_basic_type(self.get_type(type_key));
+        let typ = self.get_type(type_key);
+        let ll_type = self.to_basic_type(typ);
         self.ll_target_machine
             .get_target_data()
-            .get_store_size(&ll_type)
+            .get_abi_size(&ll_type)
     }
 
     /// Returns the natural alignment of the given type in bytes.
     pub fn align_of_type(&self, type_key: TypeKey) -> u32 {
-        let ll_type = self.to_basic_type(self.get_type(type_key));
+        let typ = self.get_type(type_key);
+        let ll_type = self.to_basic_type(typ);
         self.ll_target_machine
             .get_target_data()
             .get_abi_alignment(&ll_type)
@@ -384,6 +375,26 @@ impl<'ctx> TypeConverter<'ctx> {
                 Some(tk) => u64::max(acc, self.size_of_type(tk)),
                 None => acc,
             })
+    }
+
+    /// Returns the maximum (i.e. strictest) padding required for any of the enum variant values.
+    fn max_enum_variant_alignment(&self, enum_type: &AEnumType) -> u32 {
+        enum_type
+            .variants
+            .iter()
+            .fold(0, |acc, (_, v)| match v.maybe_type_key {
+                Some(tk) => u32::max(acc, self.align_of_type(tk)),
+                None => acc,
+            })
+    }
+
+    fn int_type_with_size(&self, bytes_required: u32) -> IntType {
+        match bytes_required {
+            1 => self.ctx.i8_type(),
+            2 => self.ctx.i16_type(),
+            3 | 4 => self.ctx.i32_type(),
+            _ => self.ctx.i64_type(),
+        }
     }
 }
 
@@ -412,4 +423,9 @@ fn gen_intrinsic_types(ctx: &Context, target_machine: &TargetMachine) {
         ];
         ll_struct_type.set_body(&ll_field_types, false);
     }
+}
+
+fn enum_variant_num_field_size(num_variants: u64) -> u32 {
+    let bits_required = 64 - num_variants.leading_zeros();
+    (bits_required + 7) / 8
 }

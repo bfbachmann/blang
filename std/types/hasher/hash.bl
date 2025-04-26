@@ -1,0 +1,26 @@
+mod hasher
+
+use "std/types/slice" {Slice}
+use "std/convert" @convert
+
+/// Any type that can be hashed.
+pub spec Hash {
+    fn hash(*self, writer: *mut HashWriter) -> u64
+}
+
+impl str: Hash {
+    fn hash(*self, writer: *mut HashWriter) -> u64 {
+        writer.write(Slice[u8].new(self.ptr(), self.len()))
+        return writer.sum()
+    }
+}
+
+impl int: Hash {
+    fn hash(*self, writer: *mut HashWriter) -> u64 {
+        let result = @convert.int_to_str(self^)
+        let bytes = &result.(0) as *u8
+        let offset = result.(1)
+        writer.write(Slice[u8].new(bytes.(offset as int), 65uint - offset))
+        return writer.sum()
+    }
+}

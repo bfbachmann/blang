@@ -3,11 +3,13 @@ use std::path::PathBuf;
 
 use crate::analyzer::ast::module::AModule;
 use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::ident::IdentKind;
 use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::type_store::TypeKey;
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::codegen::program::CodeGenConfig;
 use crate::fmt::hierarchy_to_string;
-use crate::lexer::pos::Position;
+use crate::lexer::pos::{Position, Span};
 use crate::parser::{ModID, SrcInfo};
 use flamer::flame;
 
@@ -58,35 +60,36 @@ pub fn analyze_modules(
     config: CodeGenConfig,
 ) -> ProgramAnalysis {
     let mut analyzed_mods: HashMap<ModID, AnalyzedModule> = HashMap::new();
-    let mod_paths = src_info
-        .mod_ids()
-        .into_iter()
-        .map(|mod_id| src_info.mod_info.get_by_id(mod_id).path.as_str())
-        .collect();
-    let mut ctx = ProgramContext::new(root_mod_path, mod_paths, config);
-
-    // Analyze builtins first.
+    let root_mod_id = src_info.mod_info.get_id_by_path(root_mod_path).unwrap();
     let builtins_mod_id = src_info.mod_info.get_id_by_path("std/builtins").unwrap();
+    let mut ctx = ProgramContext::new(builtins_mod_id, root_mod_id, config);
+
+    // Analyze builtins, then analyze depth-first (bottom-up) from the root module.
     analyze_module(
-        src_info,
         &mut ctx,
         &mut analyzed_mods,
         &vec![],
+        src_info,
         builtins_mod_id,
     );
-
-    let root_mod_id = src_info.mod_info.get_id_by_path(root_mod_path).unwrap();
-    analyze_module(src_info, &mut ctx, &mut analyzed_mods, &vec![], root_mod_id);
+    analyze_module(&mut ctx, &mut analyzed_mods, &vec![], src_info, root_mod_id);
 
     // Try to find the name of the main function in the root module.
-    let maybe_fn_sig = ctx
-        .get_fn_sig_by_mangled_name(
-            None,
-            ctx.mangle_name(None, None, None, "main", true).as_str(),
-        )
-        .unwrap();
-    let maybe_main_fn_mangled_name = match maybe_fn_sig {
-        Some(sig) => Some(sig.mangled_name.clone()),
+    let maybe_main_fn_mangled_name = match ctx.get_local_ident("main") {
+        Some(ident) => {
+            // Validate the main function.
+            match ident.kind {
+                IdentKind::Fn { type_key, .. } => {
+                    let span = ident.span;
+                    let root_mod = analyzed_mods.get_mut(&root_mod_id).unwrap();
+                    check_main_fn(&mut ctx, root_mod, type_key, span);
+                    Some(format!("{}::main", ctx.cur_mod_id()))
+                }
+
+                _ => None,
+            }
+        }
+
         None => None,
     };
 
@@ -99,10 +102,10 @@ pub fn analyze_modules(
 
 /// Recursively analyzes modules bottom-up by following imports.
 pub fn analyze_module(
-    src_info: &SrcInfo,
     ctx: &mut ProgramContext,
     analyzed_mods: &mut HashMap<ModID, AnalyzedModule>,
     mod_chain: &Vec<PathBuf>,
+    src_info: &SrcInfo,
     mod_id: ModID,
 ) {
     // Append the module we're analyzing to the dependency chain.
@@ -136,9 +139,10 @@ pub fn analyze_module(
                     .collect(),
             );
             import_cycle_errs.push(
-                AnalyzeError::new(ErrorKind::ImportCycle, "import cycle", used_mod).with_detail(
-                    format!("The offending import cycle is: {}", import_cycle).as_str(),
-                ),
+                AnalyzeError::new(ErrorKind::ImportCycle, "import cycle", used_mod.span)
+                    .with_detail(
+                        format!("The offending import cycle is: {}", import_cycle).as_str(),
+                    ),
             );
 
             continue;
@@ -146,12 +150,11 @@ pub fn analyze_module(
 
         // Analyze the module only if we have not already done so.
         if !analyzed_mods.contains_key(&used_mod_id) {
-            analyze_module(src_info, ctx, analyzed_mods, &new_mod_chain, used_mod_id);
+            analyze_module(ctx, analyzed_mods, &new_mod_chain, src_info, used_mod_id);
         }
     }
 
-    let src_files = src_info.get_src_files(mod_id);
-    let analyzed_module = AModule::from(ctx, mod_info.path.clone(), src_files);
+    let analyzed_module = AModule::from(ctx, mod_id, src_info);
 
     // Append the import cycle errors to the module analysis errors.
     let mut errs = std::mem::take(&mut ctx.errors);
@@ -163,4 +166,36 @@ pub fn analyze_module(
         mod_id,
         AnalyzedModule::new(analyzed_module, errs, std::mem::take(&mut ctx.warnings)),
     );
+}
+
+/// Checks that given `main` function is declared correctly.
+fn check_main_fn(
+    ctx: &mut ProgramContext,
+    analyzed_module: &mut AnalyzedModule,
+    type_key: TypeKey,
+    span: Span,
+) {
+    let sig = ctx.get_type(type_key).to_fn_sig();
+
+    if let Some(params) = &sig.params {
+        let span = params.span;
+        analyzed_module.errors.push(AnalyzeError::new(
+            ErrorKind::InvalidMain,
+            format_code!("function {} cannot have parameters", "main").as_str(),
+            span,
+        ));
+    } else if !sig.args.is_empty() {
+        let span = sig.args.get(0).unwrap().span;
+        analyzed_module.errors.push(AnalyzeError::new(
+            ErrorKind::InvalidMain,
+            format_code!("function {} cannot take arguments", "main").as_str(),
+            span,
+        ));
+    } else if sig.maybe_ret_type_key.is_some() {
+        analyzed_module.errors.push(AnalyzeError::new(
+            ErrorKind::InvalidMain,
+            format_code!("function {} cannot have a return type", "main").as_str(),
+            span,
+        ));
+    }
 }

@@ -1,19 +1,27 @@
-use std::fmt::{Display, Formatter};
-
-use crate::analyzer::ast::r#const::AConst;
-use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
+use crate::analyzer::error::{
+    err_expected_expr_found_type, err_not_pub, err_undef_foreign_symbol, err_undef_local_symbol,
+    err_undef_mod_alias, err_unresolved_params,
+};
+use crate::analyzer::ident::IdentKind;
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::scope::ScopedSymbol;
 use crate::analyzer::type_store::TypeKey;
-use crate::fmt::format_code_vec;
 use crate::lexer::pos::Span;
+use crate::locatable_impl;
 use crate::parser::ast::pointer::PointerType;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::unresolved::UnresolvedType;
+use crate::parser::ModID;
 use crate::Locatable;
-use crate::{format_code, locatable_impl};
+use std::fmt::{Display, Formatter};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SymbolKind {
+    Const,
+    Type,
+    Variable,
+    Fn,
+}
 
 /// A symbol that can represent a variable, variable access, function, type, or constant.
 #[derive(Debug, Clone)]
@@ -22,17 +30,9 @@ pub struct ASymbol {
     /// The type key of the symbol.
     pub type_key: TypeKey,
     pub maybe_param_tks: Option<Vec<TypeKey>>,
-    /// This will be set to true if the name of this symbol matches a type name and no variable
-    /// names. If this is the case, the `type_key` field will hold the ID of the matching type.
-    pub is_type: bool,
-    /// This will be set to true if this symbol actually resolves to a constant.
-    pub is_const: bool,
-    /// This will be set to true if this symbol is an actual variable that was declared inside a
-    /// function (or is a function argument). In other words, it will be false if the symbol
-    /// refers to a declared function, type, or constant.
-    pub is_var: bool,
-    /// The path of the module from whence the symbol comes.
-    pub maybe_mod_path: Option<String>,
+    pub kind: SymbolKind,
+    /// The ID of the module from whence the symbol comes. Will be `None` for primitives.
+    pub maybe_mod_id: Option<ModID>,
     pub span: Span,
 }
 
@@ -51,16 +51,14 @@ impl PartialEq for ASymbol {
 }
 
 impl ASymbol {
-    /// Creates a new symbol with default start and end positions.
-    pub fn new_with_default_pos(name: &str, type_key: TypeKey) -> Self {
+    /// Creates a new symbol with default span.
+    pub fn new_with_default_span(name: &str, type_key: TypeKey) -> Self {
         ASymbol {
             name: name.to_string(),
             type_key,
             maybe_param_tks: None,
-            is_type: false,
-            is_const: true,
-            is_var: false,
-            maybe_mod_path: None,
+            kind: SymbolKind::Const,
+            maybe_mod_id: None,
             span: Default::default(),
         }
     }
@@ -70,139 +68,119 @@ impl ASymbol {
     /// Otherwise, only variables, types, and constants will be searched.
     /// If `allow_type` is true, the symbol can refer to a type. Otherwise, an error
     /// will be raised if the symbol refers to a type rather than a value.
-    /// If `no_params` is true, an error will be raised if the symbol includes generic
-    /// parameters.
     pub fn from(
         ctx: &mut ProgramContext,
         symbol: &Symbol,
-        include_fns: bool,
         allow_type: bool,
-        no_params: bool,
         allow_polymorph: bool,
     ) -> Self {
-        let plabeholder =
-            ASymbol::new_with_default_pos(symbol.name.as_str(), ctx.unknown_type_key());
-
-        let mut var_name = symbol.name.clone();
+        let placeholder =
+            ASymbol::new_with_default_span(symbol.name.as_str(), ctx.unknown_type_key());
 
         // Check for intrinsic symbols like `null`.
         if let Some(intrinsic) = maybe_get_intrinsic(ctx, symbol) {
             return intrinsic;
         }
 
-        // Return early if the mod name is invalid.
-        let maybe_mod_path = if let Some(mod_sym) = symbol.maybe_mod_name.as_ref() {
-            match ctx.get_mod_path(mod_sym) {
-                Ok(maybe_path) => maybe_path.cloned(),
-                Err(err) => {
-                    ctx.insert_err(err);
-                    return plabeholder;
-                }
-            }
-        } else {
-            Some(ctx.get_cur_mod_path().to_owned())
-        };
+        let mut name = symbol.name.clone();
 
-        // Find the type key for the symbol.
-        // Return a placeholder value if we failed to resolve the symbol type key.
-        // TODO: Refactor
-        let (mut maybe_type_key, maybe_symbol) =
-            get_type_key_for_symbol(ctx, symbol, include_fns).unwrap();
+        // Locate the identifier.
+        let ident = match (*symbol.maybe_mod_name).as_ref() {
+            Some(mod_sym) => {
+                let mod_id = match ctx.get_mod_alias(mod_sym) {
+                    Some(alias) => alias.target_mod_id,
+                    None => {
+                        ctx.insert_err(err_undef_mod_alias(&mod_sym.name, mod_sym.span));
+                        return placeholder;
+                    }
+                };
 
-        // If the symbol still has not been resolved, check if it's a type.
-        let mut is_type = false;
-        if maybe_type_key.is_none() {
-            let maybe_tk = match ctx
-                .get_type_key_by_type_name((*symbol.maybe_mod_name).as_ref(), var_name.as_str())
-            {
-                Ok(maybe_tk) => maybe_tk,
-                Err(err) => {
-                    ctx.insert_err(err);
-                    return plabeholder;
-                }
-            };
-
-            match maybe_tk {
-                Some(tk) if !ctx.get_type(tk).is_unknown() => {
-                    // Make sure the type is public if it's foreign.
-                    if symbol.maybe_mod_name.is_some() && !ctx.type_is_pub(tk) {
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::UseOfPrivateValue,
-                            format_code!("type {} is not public", ctx.display_type(tk)).as_str(),
-                            symbol,
+                match ctx.get_foreign_ident(mod_id, &symbol.name) {
+                    Some(ident) => ident,
+                    None => {
+                        ctx.insert_err(err_undef_foreign_symbol(
+                            &symbol.name,
+                            &mod_sym.name,
+                            symbol.span,
                         ));
+                        return placeholder;
                     }
-
-                    maybe_type_key = Some(tk);
-                    is_type = true;
                 }
-                _ => {}
             }
-        }
 
-        // At this point the symbol must be resolved, or it doesn't exist in this scope.
-        let var_type_key = match maybe_type_key {
-            Some(tk) => {
-                // If the symbol refers to a function, be sure to update its name to
-                // match the function name. We have to do this because function names
-                // get mangled, and we have to be sure that the variables that reference
-                // them get mangled too.
-                match ctx.get_type(tk) {
-                    AType::Function(fn_sig) if !fn_sig.name.is_empty() => {
-                        var_name = fn_sig.mangled_name.clone();
-                    }
-                    _ => {}
+            None => match ctx.get_local_ident(&symbol.name) {
+                Some(ident) => ident,
+                None => {
+                    ctx.insert_err(err_undef_local_symbol(&symbol.name, symbol.span));
+                    return placeholder;
                 }
-                tk
-            }
-            None => {
-                // We could not find the value with the given name, so record the error and return
-                // a placeholder value.
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::UndefSymbol,
-                    format_code!("{} is not defined in this scope", symbol).as_str(),
-                    symbol,
-                ));
-
-                return ASymbol::new_with_default_pos(symbol.name.as_str(), ctx.unknown_type_key());
-            }
+            },
         };
 
-        // We need to make sure the symbol is not just a type. This prevents types from being valid expressions.
-        if is_type && !allow_type {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::ExpectedExpr,
-                format_code!(
-                    "expected expression, but found type {}",
-                    ctx.display_type(var_type_key)
-                )
-                .as_str(),
-                symbol,
-            ));
+        let (type_key, is_pub, kind, maybe_mod_id) = match ident.kind.clone() {
+            IdentKind::Variable { type_key, .. } => (
+                type_key,
+                false,
+                SymbolKind::Variable,
+                Some(ctx.cur_mod_id()),
+            ),
 
-            return ASymbol::new_with_default_pos(symbol.name.as_str(), ctx.unknown_type_key());
-        }
+            IdentKind::Type {
+                is_pub,
+                type_key,
+                mod_id,
+            } => {
+                if !allow_type {
+                    let err = err_expected_expr_found_type(ctx, type_key, symbol.span);
+                    ctx.insert_err(err);
+                    return placeholder;
+                }
 
-        // Check if this symbol is actually a constant.
-        let (is_const, is_var, maybe_mod_path) = match maybe_symbol {
-            Some(var) => (var.is_const, true, var.maybe_mod_path),
-            None => (false, false, maybe_mod_path),
+                (type_key, is_pub, SymbolKind::Type, mod_id)
+            }
+
+            IdentKind::Fn {
+                is_pub,
+                type_key,
+                mod_id,
+            } => {
+                // TODO: this is whack
+                let fn_sig = ctx.get_type(type_key).to_fn_sig();
+                name = fn_sig.mangled_name.clone();
+                (type_key, is_pub, SymbolKind::Fn, mod_id)
+            }
+
+            IdentKind::ExternFn {
+                is_pub,
+                type_key,
+                mod_id,
+            } => {
+                // TODO: whack!
+                let fn_sig = ctx.get_type(type_key).to_fn_sig();
+                name = fn_sig.mangled_name.clone();
+                (type_key, is_pub, SymbolKind::Fn, mod_id)
+            }
+
+            IdentKind::Const {
+                is_pub,
+                value,
+                mod_id,
+            } => (value.type_key, is_pub, SymbolKind::Const, mod_id),
+
+            other => panic!("unexpected identifier kind: {:?}", other),
         };
+
+        // Record an error if this symbol refers to a non-public foreign type.
+        if maybe_mod_id.is_some_and(|id| id != ctx.cur_mod_id()) && !is_pub {
+            ctx.insert_err(err_not_pub(&symbol.name, symbol.span));
+        }
 
         // Analyze any generic parameters on this symbol and use them to monomorphize
         // the generic value, if it is generic. We don't do this if it's a type
         // because it would have already been done during type resolution.
         let (mono_type_key, maybe_param_tks) = match symbol.params.is_empty() {
             false => {
-                if no_params {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::UnexpectedParams,
-                        "parameters not allowed here",
-                        symbol,
-                    ));
-                }
-
-                if is_type {
+                if kind == SymbolKind::Const {
                     let mono_tk = ctx.resolve_type(&Type::Unresolved(UnresolvedType::from_symbol(
                         symbol.clone(),
                     )));
@@ -212,7 +190,7 @@ impl ASymbol {
                     // resolver in the code generator can figure out which concrete
                     // type this symbol maps to.
                     let mono_tk =
-                        ctx.monomorphize_parameterized_type(var_type_key, &symbol.params, symbol);
+                        ctx.monomorphize_parameterized_type(type_key, &symbol.params, symbol);
                     let param_tks = symbol.params.iter().map(|t| ctx.resolve_type(t)).collect();
                     (mono_tk, Some(param_tks))
                 }
@@ -220,60 +198,37 @@ impl ASymbol {
 
             true => {
                 // No parameters were provided, so the type had better not be
-                // parameterized unless `no_params` is false or the symbol type is the current
-                // `impl` type.
-                let poly_type = ctx.get_type(var_type_key);
-                if !no_params
-                    && !ctx
-                        .get_cur_self_type_key()
-                        .is_some_and(|tk| tk == var_type_key)
-                {
+                // parameterized unless the symbol type is the current `impl` type.
+                let poly_type = ctx.get_type(type_key);
+                if !ctx.get_cur_self_type_key().is_some_and(|tk| tk == type_key) {
                     match poly_type.params() {
                         Some(params) if !allow_polymorph => {
-                            let param_names =
-                                params.params.iter().map(|p| p.name.as_str()).collect();
-                            ctx.insert_err(
-                                AnalyzeError::new(
-                                    ErrorKind::UnresolvedParams,
-                                    "unresolved parameters",
-                                    symbol,
-                                )
-                                .with_detail(
-                                    format!(
-                                        "{} has polymorphic type {} which requires that types \
-                                        be specified for parameters: {}.",
-                                        format_code!(symbol),
-                                        format_code!(ctx.display_type(var_type_key)),
-                                        format_code_vec(&param_names, ", "),
-                                    )
-                                    .as_str(),
-                                ),
-                            )
+                            let param_names = params.params.iter().map(|p| &p.name).collect();
+                            let err = err_unresolved_params(ctx, symbol, type_key, param_names);
+                            ctx.insert_err(err);
                         }
 
                         _ => {}
                     }
                 }
 
-                (var_type_key, None)
+                (type_key, None)
             }
         };
 
         ASymbol {
-            name: var_name,
+            name,
             type_key: mono_type_key,
             maybe_param_tks,
-            is_type,
-            is_const,
-            is_var,
-            maybe_mod_path,
+            kind,
+            maybe_mod_id,
             span: symbol.span,
         }
     }
 
     /// Returns true if this symbol represents the `null` intrinsic value.
     pub fn is_null_intrinsic(&self) -> bool {
-        self.name == "null" && self.is_const && !self.is_var
+        self.name == "null" && self.kind == SymbolKind::Const
     }
 
     /// Creates a new symbol representing the `null` intrinsic.
@@ -286,98 +241,20 @@ impl ASymbol {
         // type will be coerced to the appropriate pointer type anyway.
         let type_key = match maybe_type_key {
             Some(tk) => tk,
-            None => ctx.resolve_type(&Type::Pointer(Box::new(PointerType::new_with_default_pos(
-                Type::new_unresolved("u8"),
-                true,
-            )))),
+            None => ctx.resolve_type(&Type::Pointer(Box::new(
+                PointerType::new_with_default_span(Type::new_unresolved("u8"), true),
+            ))),
         };
 
         ASymbol {
             name: "null".to_string(),
             type_key,
             maybe_param_tks: None,
-            is_type: false,
-            is_const: true,
-            is_var: false,
-            maybe_mod_path: None,
+            kind: SymbolKind::Const,
+            maybe_mod_id: None,
             span,
         }
     }
-}
-
-/// Attempts to find the type key of a symbol. Additionally, if `symbol`
-/// can be resolved to an actual variable, the variable will be returned.
-fn get_type_key_for_symbol(
-    ctx: &mut ProgramContext,
-    symbol: &Symbol,
-    include_fns: bool,
-) -> AnalyzeResult<(Option<TypeKey>, Option<ScopedSymbol>)> {
-    let maybe_mod_sym = (*symbol.maybe_mod_name).as_ref();
-    let name = symbol.name.as_str();
-
-    // Search for a variable with the given name. Variables take precedence over functions.
-    let maybe_sym = ctx.get_scoped_symbol(maybe_mod_sym, name)?;
-
-    if let Some(scoped_symbol) = maybe_sym {
-        let result = (Some(scoped_symbol.type_key), Some(scoped_symbol.clone()));
-
-        // If it's a foreign symbol, then make sure it's public.
-        match maybe_mod_sym {
-            Some(mod_name) if !ctx.const_is_pub(&mod_name, name) => {
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::UseOfPrivateValue,
-                    format_code!("constant {} is not public", name).as_str(),
-                    symbol,
-                ));
-            }
-            _ => {}
-        }
-
-        return Ok(result);
-    }
-
-    // Check if the symbol refers to a constant that has not yet been analyzed.
-    if let Some(const_) = ctx.get_unchecked_const(name) {
-        let a_const = AConst::from(ctx, &const_.clone());
-        let symbol = ctx.get_scoped_symbol(None, a_const.name.as_str())?.unwrap();
-        return Ok((Some(symbol.type_key), Some(symbol.clone())));
-    }
-
-    // Check if the symbol refers to a function.
-    let maybe_fn_tk = 'check_fns: {
-        if include_fns {
-            // Search for a function with the given name. Functions take precedence over extern
-            // functions.
-            let mangled_name_with_path = ctx.mangle_name(maybe_mod_sym, None, None, name, true);
-            if let Some(sig) = ctx.get_fn(maybe_mod_sym, mangled_name_with_path.as_str())? {
-                break 'check_fns Some(sig.type_key);
-            };
-
-            // Search for an extern function with the given name.
-            let mangled_name_without_path = ctx.mangle_name(maybe_mod_sym, None, None, name, false);
-            if let Some(fn_sig) =
-                ctx.get_fn_sig_by_mangled_name(maybe_mod_sym, mangled_name_without_path.as_str())?
-            {
-                break 'check_fns Some(fn_sig.type_key);
-            }
-        }
-
-        None
-    };
-
-    // If we found a foreign function, then we should make sure it's public.
-    match (maybe_fn_tk, maybe_mod_sym) {
-        (Some(_), Some(mod_sym)) if !ctx.fn_is_pub(mod_sym, &symbol.name) => {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::UseOfPrivateValue,
-                format_code!("function {} is not public", name).as_str(),
-                symbol,
-            ));
-        }
-        _ => {}
-    }
-
-    Ok((maybe_fn_tk, None))
 }
 
 /// Tries to locate an intrinsic that matches the given symbol and returns it

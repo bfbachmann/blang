@@ -1,13 +1,14 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::lexer::pos::{Span};
+use crate::lexer::pos::Span;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
-use crate::locatable_impl; use crate::Locatable;
+use crate::locatable_impl;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 
 /// Represents a boolean literal.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -31,15 +32,6 @@ impl Hash for BoolLit {
 locatable_impl!(BoolLit);
 
 impl BoolLit {
-    /// Creates a new boolean literal with default (zero) start and end positions.
-    #[cfg(test)]
-    pub fn new_with_default_pos(value: bool) -> Self {
-        BoolLit {
-            value,
-            span: Default::default(),
-        }
-    }
-
     /// Creates a new boolean literal.
     #[cfg(test)]
     pub fn new(value: bool, span: Span) -> Self {

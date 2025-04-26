@@ -1,3 +1,0 @@
-pub spec Test {
-    fn test() -> int
-}

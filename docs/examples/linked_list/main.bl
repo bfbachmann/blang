@@ -142,7 +142,7 @@ fn main() {
     assert(head.remove(4).value == 20, "removed node 4 is wrong\0")
 
     // Make sure all values are in the right place.
-    for let mut i = 0; i < 10; i += 1 {
+    for i = 0; i < 10; i += 1 {
         assert(head.node_at(i as uint).value == 9 - i, "wrong value left in list\0")
     }
 

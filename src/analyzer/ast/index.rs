@@ -2,7 +2,10 @@ use std::fmt::{Display, Formatter};
 
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{
+    err_cannot_index_value, err_index_empty_array, err_index_out_of_bounds,
+    err_mismatched_index_type,
+};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::Span;
@@ -52,12 +55,7 @@ impl AIndex {
                 Some(elem_tk) => (Some(array_type.len), elem_tk, false),
 
                 None => {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::IndexOutOfBounds,
-                        "cannot index zero-length array",
-                        index,
-                    ));
-
+                    ctx.insert_err(err_index_empty_array(index.span));
                     return placeholder;
                 }
             },
@@ -79,16 +77,9 @@ impl AIndex {
             }
 
             _ => {
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::MismatchedTypes,
-                    format_code!(
-                        "cannot index value of type {}",
-                        ctx.display_type(collection_expr.type_key)
-                    )
-                    .as_str(),
-                    &index.index_expr,
-                ));
-
+                let err =
+                    err_cannot_index_value(ctx, collection_expr.type_key, *index.index_expr.span());
+                ctx.insert_err(err);
                 return placeholder;
             }
         };
@@ -110,12 +101,8 @@ impl AIndex {
             // bounds checking at compile time.
             if let Some(i) = index_expr.try_into_const_uint(ctx) {
                 if i >= len {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::IndexOutOfBounds,
-                        format!("index {} is out of bounds (0:{})", i, len - 1).as_str(),
-                        &index.index_expr,
-                    ));
-
+                    let err = err_index_out_of_bounds(i, len, *index.index_expr.span());
+                    ctx.insert_err(err);
                     return placeholder;
                 }
 
@@ -127,29 +114,13 @@ impl AIndex {
             } else if is_tuple {
                 // At this point we know we're indexing a tuple with a value
                 // that is not constant and/or not a `uint`, which is illegal.
-                ctx.insert_err(
-                    AnalyzeError::new(
-                        ErrorKind::MismatchedTypes,
-                        format!(
-                            "expected constant of type {}, but found {}{}",
-                            format_code!("uint"),
-                            match index_expr.kind.is_const() {
-                                true => "",
-                                false => "non-constant ",
-                            },
-                            ctx.display_type(index_expr.type_key)
-                        )
-                        .as_str(),
-                        &index.index_expr,
-                    )
-                    .with_detail(
-                        format_code!(
-                            "Tuple indices must be {} values that are known at compile time.",
-                            "unit"
-                        )
-                        .as_str(),
-                    ),
+                let err = err_mismatched_index_type(
+                    ctx,
+                    index_expr.kind.is_const(),
+                    index_expr.type_key,
+                    *index.index_expr.span(),
                 );
+                ctx.insert_err(err);
 
                 return placeholder;
             };

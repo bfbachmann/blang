@@ -1,21 +1,27 @@
-use std::collections::HashSet;
-use std::fmt::{Display, Formatter};
-
 use crate::analyzer::ast::closure::AClosure;
 use crate::analyzer::ast::expr::{check_operand_types, AExpr, AExprKind};
 use crate::analyzer::ast::pointer::APointerType;
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{
+    err_conflicting_patterns, err_dup_ident, err_dup_pattern, err_enum_pattern_missing_value,
+    err_enum_variant_has_no_value, err_expected_enum_pattern, err_illegal_pattern_binding,
+    err_inconsistent_binding_types, err_inconsistent_pattern_binding_names, err_inexhaustive_match,
+    err_invalid_enum_pattern, err_invalid_pattern_expr, err_mismatched_pattern_types,
+    err_type_not_struct, err_undef_enum_variant,
+};
+use crate::analyzer::ident::{Ident, IdentKind};
 use crate::analyzer::prog_context::ProgramContext;
-use crate::analyzer::scope::{Scope, ScopeKind, ScopedSymbol};
+use crate::analyzer::scope::{Scope, ScopeKind};
 use crate::analyzer::type_store::TypeKey;
-use crate::analyzer::warn::{AnalyzeWarning, WarnKind};
+use crate::analyzer::warn::warn_unreachable_case;
 use crate::fmt::format_code_vec;
 use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::op::Operator;
 use crate::parser::ast::r#match::{Match, MatchCase, PatternKind};
 use crate::parser::ast::r#type::Type;
+use std::collections::HashSet;
+use std::fmt::{Display, Formatter};
 
 /// A pattern that appears in a `match` case.
 #[derive(Debug, Clone, PartialEq)]
@@ -67,16 +73,8 @@ impl APattern {
                     exprs_iter.next();
 
                     while let Some(expr) = exprs_iter.next() {
-                        ctx.insert_err(
-                            AnalyzeError::new(
-                                ErrorKind::ConflictingPattern,
-                                "conflicting patterns",
-                                expr,
-                            )
-                            .with_detail(
-                                "Variable binding patterns must appear alone in match cases.",
-                            ),
-                        );
+                        let err = err_conflicting_patterns(*expr.span());
+                        ctx.insert_err(err);
                     }
 
                     if sym.is_wildcard() {
@@ -112,23 +110,8 @@ impl APattern {
                 }
 
                 expr => {
-                    ctx.insert_err(
-                        AnalyzeError::new(
-                            ErrorKind::InvalidPattern,
-                            "invalid pattern expression",
-                            expr,
-                        )
-                        .with_detail("This expression is not valid inside a pattern.")
-                        .with_help(
-                            format_code!(
-                            "If you're trying to match against an existing value, remove {} from \
-                            this case.",
-                            "let"
-                        )
-                            .as_str(),
-                        ),
-                    );
-
+                    let err = err_invalid_pattern_expr(*expr.span());
+                    ctx.insert_err(err);
                     APattern::Exprs(vec![])
                 }
             },
@@ -148,17 +131,8 @@ fn analyze_enum_binding(
     let binding = match &binding_expr {
         Expression::EnumInit(binding) => binding,
         _ => {
-            ctx.insert_err(
-                AnalyzeError::new(
-                    ErrorKind::InvalidPattern,
-                    "expected enum variant",
-                    binding_expr,
-                )
-                .with_detail(
-                    "The first pattern in this case is an enum variant, so all \
-                    following patterns must also be enum variants.",
-                ),
-            );
+            let err = err_expected_enum_pattern(*binding_expr.span());
+            ctx.insert_err(err);
             return;
         }
     };
@@ -178,16 +152,8 @@ fn analyze_enum_binding(
         && enum_tk != ctx.unknown_type_key()
         && target_tk != ctx.unknown_type_key()
     {
-        ctx.insert_err(AnalyzeError::new(
-            ErrorKind::MismatchedTypes,
-            format_code!(
-                "expected pattern of type {}, but found {}",
-                ctx.display_type(target_tk),
-                ctx.display_type(enum_tk)
-            )
-            .as_str(),
-            binding,
-        ));
+        let err = err_mismatched_pattern_types(ctx, enum_tk, target_tk, binding.span);
+        ctx.insert_err(err);
         return;
     }
 
@@ -196,50 +162,23 @@ fn analyze_enum_binding(
         AType::Enum(enum_type) => match enum_type.variants.get(&binding.variant_name) {
             Some(variant) => variant.clone(),
             None => {
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::UndefType,
-                    format_code!(
-                        "enum type {} has no variant {}",
-                        ctx.display_type(enum_tk),
-                        binding.variant_name
-                    )
-                    .as_str(),
-                    binding,
-                ));
+                let err = err_undef_enum_variant(ctx, &binding.variant_name, enum_tk, binding.span);
+                ctx.insert_err(err);
                 return;
             }
         },
 
         _ => {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::TypeIsNotEnum,
-                format_code!(
-                    "type {} is not an enum, but is being used like one",
-                    ctx.display_type(enum_tk)
-                )
-                .as_str(),
-                binding,
-            ));
+            let err = err_type_not_struct(ctx, enum_tk, binding.span);
+            ctx.insert_err(err);
             return;
         }
     };
 
     // Make sure the variant isn't already used.
     if !used_variant_nums.insert(enum_variant.number) {
-        ctx.insert_err(
-            AnalyzeError::new(
-                ErrorKind::DuplicatePattern,
-                "duplicate pattern",
-                binding_expr,
-            )
-            .with_detail(
-                format_code!(
-                    "Variant {} is already used in this match case.",
-                    enum_variant.display(ctx),
-                )
-                .as_str(),
-            ),
-        );
+        let err = err_dup_pattern(ctx, &enum_variant, *binding_expr.span());
+        ctx.insert_err(err);
         return;
     }
 
@@ -248,39 +187,15 @@ fn analyze_enum_binding(
         (Some(var), Some(variant_inner_tk)) => (var, variant_inner_tk),
 
         (Some(var), None) => {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::MismatchedTypes,
-                format_code!(
-                    "enum variant {} has no associated value",
-                    format!(
-                        "{}::{}",
-                        ctx.display_type(enum_tk),
-                        enum_variant.display(ctx),
-                    )
-                )
-                .as_str(),
-                var.as_ref(),
-            ));
+            let err = err_enum_variant_has_no_value(ctx, enum_tk, &enum_variant, *var.span());
+            ctx.insert_err(err);
             return;
         }
 
         (None, maybe_inner_tk) => {
             if maybe_inner_tk.is_some() {
-                ctx.insert_err(
-                    AnalyzeError::new(
-                        ErrorKind::InvalidPattern,
-                        format_code!("expected identifier or wildcard {}", "_").as_str(),
-                        binding,
-                    )
-                    .with_detail(
-                        format_code!(
-                            "Enum variant {} has an associated value that must \
-                            be bound to an identifier or wildcard in this pattern.",
-                            enum_variant.display(ctx)
-                        )
-                        .as_str(),
-                    ),
-                );
+                let err = err_enum_pattern_missing_value(ctx, &enum_variant, binding.span);
+                ctx.insert_err(err);
             }
 
             return;
@@ -316,21 +231,8 @@ fn analyze_enum_binding(
             // Make sure the variable name matches what's expected.
             match maybe_expected_var_name {
                 Some(expected_var_name) if expected_var_name != &sym.name => {
-                    ctx.insert_err(
-                        AnalyzeError::new(
-                            ErrorKind::InconsistentPatternBindingNames,
-                            "inconsistent bindings in match case",
-                            sym,
-                        )
-                        .with_help(
-                            format_code!(
-                                "This variable should be bound as {} to match the binding in the \
-                                first pattern for this case.",
-                                expected_var_name
-                            )
-                            .as_str(),
-                        ),
-                    );
+                    let err = err_inconsistent_pattern_binding_names(expected_var_name, sym.span);
+                    ctx.insert_err(err);
                     return;
                 }
 
@@ -339,23 +241,8 @@ fn analyze_enum_binding(
                 }
 
                 None => {
-                    ctx.insert_err(
-                        AnalyzeError::new(
-                            ErrorKind::IllegalPatternBinding,
-                            "inconsistent bindings in match case",
-                            sym,
-                        )
-                        .with_detail(
-                            "No variable can be bound here because no variable is bound in \
-                            the first pattern for this case.",
-                        )
-                        .with_help(
-                            format_code!(
-                                "Consider either changing {} to {} or moving this pattern to its own case.", sym.name, "_"
-                            )
-                            .as_str(),
-                        ),
-                    );
+                    let err = err_illegal_pattern_binding(&sym.name, sym.span);
+                    ctx.insert_err(err);
                     return;
                 }
 
@@ -364,36 +251,20 @@ fn analyze_enum_binding(
 
             // Make sure the variable type matches what's expected.
             if maybe_expected_var_tk.unwrap() != binding_tk {
-                ctx.insert_err(
-                    AnalyzeError::new(
-                        ErrorKind::InconsistentPatternBindingTypes,
-                        "inconsistent binding types in match case",
-                        sym,
-                    )
-                    .with_detail(
-                        format_code!(
-                            "Variable {} is bound with type {} in the first pattern, but \
-                                would have type {} in this binding.",
-                            sym.name,
-                            ctx.display_type(maybe_expected_var_tk.unwrap()),
-                            ctx.display_type(binding_tk)
-                        )
-                        .as_str(),
-                    )
-                    .with_help("Consider moving this pattern to its own match case."),
+                let err = err_inconsistent_binding_types(
+                    ctx,
+                    &sym.name,
+                    maybe_expected_var_tk.unwrap(),
+                    binding_tk,
+                    sym.span,
                 );
+                ctx.insert_err(err);
             }
         }
 
         other => {
-            ctx.insert_err(
-                AnalyzeError::new(
-                    ErrorKind::InvalidPattern,
-                    format_code!("expected identifier or wildcard {}", "_").as_str(),
-                    other,
-                )
-                .with_detail("Enum patterns can only contain identifiers or wildcards."),
-            );
+            let err = err_invalid_enum_pattern(*other.span());
+            ctx.insert_err(err);
         }
     }
 }
@@ -415,19 +286,36 @@ impl AMatchCase {
 
         // Create a new scope for the rest of the case. If there's a pattern binding, we'll define
         // that as a variable in this scope.
-        ctx.push_scope(Scope::new(ScopeKind::BranchBody, vec![], None));
-        match &pattern {
+        ctx.push_scope(Scope::new(ScopeKind::BranchBody, None));
+        let maybe_ident = match &pattern {
             APattern::LetEnumVariants(is_mut, var_name, var_tk, _) if !var_name.is_empty() => {
-                ctx.insert_scoped_symbol(ScopedSymbol::new(var_name, *var_tk, *is_mut));
+                Some(Ident {
+                    name: var_name.clone(),
+                    kind: IdentKind::Variable {
+                        is_mut: *is_mut,
+                        type_key: *var_tk,
+                    },
+                    span: case.pattern.span,
+                })
             }
-            APattern::LetSymbol(is_mut, var_name) => {
-                ctx.insert_scoped_symbol(ScopedSymbol::new(
-                    var_name,
-                    match_target.type_key,
-                    *is_mut,
-                ));
+
+            APattern::LetSymbol(is_mut, var_name) => Some(Ident {
+                name: var_name.clone(),
+                kind: IdentKind::Variable {
+                    is_mut: *is_mut,
+                    type_key: match_target.type_key,
+                },
+                span: case.pattern.span,
+            }),
+
+            _ => None,
+        };
+
+        if let Some(ident) = maybe_ident {
+            if let Err(existing) = ctx.insert_ident(ident) {
+                let err = err_dup_ident(&existing.name, case.pattern.span, existing.span);
+                ctx.insert_err(err);
             }
-            _ => {}
         }
 
         // Analyze the condition, if there is one.
@@ -496,18 +384,7 @@ impl AMatch {
         for case in &match_.cases {
             // If the case is unreachable, so insert a warning.
             if exhaustive {
-                warns.push(AnalyzeWarning::new(
-                    WarnKind::UnreachableCode,
-                    "unreachable case",
-                    &Span {
-                        file_id: match_.span.file_id,
-                        start_pos: case.pattern.span().start_pos,
-                        end_pos: match &case.maybe_cond {
-                            Some(cond) => cond.span().end_pos,
-                            None => case.pattern.span().end_pos,
-                        },
-                    },
-                ));
+                warns.push(warn_unreachable_case(case.span));
             }
 
             // Analyze the case.
@@ -556,11 +433,7 @@ impl AMatch {
         }
 
         if !exhaustive {
-            let mut err = AnalyzeError::new(
-                ErrorKind::MatchNotExhaustive,
-                "match is not exhaustive",
-                match_,
-            );
+            let mut err = err_inexhaustive_match(match_.span);
 
             if !unmatched_variants.is_empty() && matching_enum {
                 let mut variant_names = vec![];

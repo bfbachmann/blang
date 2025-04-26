@@ -1,0 +1,16 @@
+mod generic_enums
+
+use "std/libc" {exit}
+use "std/runtime" {assert}
+
+enum Result[T, E] {
+    Ok(T)
+    Err(E)
+}
+
+fn main() {
+    let ok_int = Result[int, str]::Ok(1234)
+    assert(ok_int ~~ Result[int, str]::Ok(1234), "expected Ok")
+
+    exit(0)
+}

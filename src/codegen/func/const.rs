@@ -323,7 +323,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
     }
 
-    /// Extracts the value of the given symbol that must represent a constant or the accesses of
+    /// Extracts the value of the given symbol that must represent a constant or the access of
     /// some field or subfield on a constant.
     fn const_extract_value(&mut self, symbol: &ASymbol) -> BasicValueEnum<'ctx> {
         // Check if this constant represents an intrinsic value.
@@ -331,8 +331,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             return ll_intrinsic;
         }
 
-        if let Some(mod_path) = &symbol.maybe_mod_path {
-            if let Some(mod_consts) = self.mod_consts.get(mod_path) {
+        if let Some(mod_id) = &symbol.maybe_mod_id {
+            if let Some(mod_consts) = self.mod_consts.get(mod_id) {
                 if let Some(const_value) = mod_consts.get(&symbol.name) {
                     return self.gen_const_expr(const_value);
                 }

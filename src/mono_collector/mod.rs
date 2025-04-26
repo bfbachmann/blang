@@ -8,6 +8,7 @@ use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 use crate::codegen::program::CodeGenConfig;
+use crate::parser::ModID;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 
@@ -188,8 +189,8 @@ pub struct MonoProg {
     /// Tracks the type keys of nested functions (functions that are declared inside other
     /// functions).
     pub nested_fns: HashSet<TypeKey>,
-    /// Maps module paths to mappings from const names to their values for those modules.
-    pub mod_consts: HashMap<String, HashMap<String, AExpr>>,
+    /// Maps module IDs to mappings from const names to their values for those modules.
+    pub mod_consts: HashMap<ModID, HashMap<String, AExpr>>,
     /// Stores the name of the main function, if there is one.
     pub maybe_main_fn_mangled_name: Option<String>,
 }
@@ -336,6 +337,8 @@ fn walk_statement(collector: &mut MonoItemCollector, statement: AStatement) {
         }
 
         AStatement::Match(match_) => {
+            walk_expr(collector, match_.target);
+
             for case in match_.cases {
                 match case.pattern {
                     APattern::Exprs(exprs) => {
@@ -394,11 +397,6 @@ fn walk_statement(collector: &mut MonoItemCollector, statement: AStatement) {
 
         AStatement::Const(const_) => {
             walk_expr(collector, const_.value);
-        }
-
-        // These statements are impossible in this context.
-        AStatement::ExternFn(_) | AStatement::Impl(_) => {
-            panic!("unexpected statement {statement}")
         }
     }
 }

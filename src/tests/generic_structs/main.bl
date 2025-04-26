@@ -1,0 +1,63 @@
+mod generic_structs
+
+use "std/libc" {exit}
+use "std/libc" {memcpy, malloc, free}
+use "std/runtime" {assert}
+
+struct Ref[T] {
+    ptr: *mut T
+}
+
+impl Ref {
+    fn clone(*self) -> Ref[T] {
+        return Ref[T]{
+            ptr: self.ptr
+        }
+    }
+
+    fn get_ptr(*self) -> *T {
+        return self.ptr
+    }
+}
+
+fn heap[T](t: *T) -> Ref[T] {
+    let ptr = malloc(sizeof T) as *mut T
+    memcpy(ptr as *mut u8, t as *u8, sizeof T)
+    return Ref[T]{
+       ptr: ptr
+    }
+}
+
+fn deref[T](ref: *Ref[T]) -> *mut T {
+    return ref.ptr
+}
+
+// Test monomorphization of parameterized types that refer to themselves.
+struct Thing[T] {
+    f: fn (Thing[T])
+}
+
+fn main() {
+    // Test parameterized structs and functions that use them.
+    let msg = "test\0"
+    let ref_1 = heap(&msg)
+    let deref_msg = deref(&ref_1)^
+    assert(deref_msg == msg, "expected \"test\"")
+
+    // Test methods on parameterized structs.
+    let clone = ref_1
+    assert(clone.get_ptr()^ == msg, "expected \"test\"")
+
+    // Check that we can initialize parameterized structs inline.
+    let ref_2 = Ref[int]{ptr: &mut 9}
+    assert(ref_2.ptr^ == 9, "expected 9")
+
+    // Check that we can instantiate monomorphized types that refer to 
+    // themselves.
+    // TODO: This is broken.
+    // let thing = Thing[int]{
+    //     f: fn (thing: Thing[int]) {}
+    // }
+
+    exit(0)
+}

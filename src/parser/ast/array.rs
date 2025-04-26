@@ -51,7 +51,7 @@ impl ArrayType {
         if let Some(token) = parser.parse_optional(TokenKind::RightBracket) {
             return Ok(ArrayType {
                 maybe_element_type: None,
-                length_expr: Expression::UintLiteral(UintLit::new_with_default_pos(0)),
+                length_expr: Expression::UintLiteral(UintLit::new_with_default_span(0)),
                 span: Span {
                     file_id: token.span.file_id,
                     start_pos,

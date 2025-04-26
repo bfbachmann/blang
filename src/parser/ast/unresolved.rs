@@ -74,8 +74,8 @@ impl UnresolvedType {
         }
     }
 
-    /// Creates a new unresolved type with the given type name and default start and end positions.
-    pub fn new_with_default_pos(name: &str) -> Self {
+    /// Creates a new unresolved type with the given type name and default span.
+    pub fn new_with_default_span(name: &str) -> Self {
         UnresolvedType {
             maybe_mod_name: None,
             name: name.to_string(),

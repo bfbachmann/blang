@@ -9,6 +9,7 @@ use crate::codegen::context::{
 use crate::codegen::convert::TypeConverter;
 use crate::codegen::error::CodeGenResult;
 use crate::lexer::pos::Locatable;
+use crate::parser::ModID;
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
@@ -38,7 +39,7 @@ pub struct FnCodeGen<'a, 'ctx> {
     type_converter: &'a mut TypeConverter<'ctx>,
     nested_fns: &'a HashSet<TypeKey>,
     /// Stores constant values that are declared in the module outside of functions.
-    mod_consts: &'a HashMap<String, HashMap<String, AExpr>>,
+    mod_consts: &'a HashMap<ModID, HashMap<String, AExpr>>,
     /// Stores constant values that are declared within a function.
     local_consts: HashMap<String, AConst>,
     vars: HashMap<String, PointerValue<'ctx>>,
@@ -63,7 +64,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         type_store: &'a TypeStore,
         type_converter: &'a mut TypeConverter<'ctx>,
         nested_fns: &'a HashSet<TypeKey>,
-        mod_consts: &'a HashMap<String, HashMap<String, AExpr>>,
+        mod_consts: &'a HashMap<ModID, HashMap<String, AExpr>>,
         func: &AFn,
     ) -> CodeGenResult<FunctionValue<'ctx>> {
         let mut fn_compiler = FnCodeGen {

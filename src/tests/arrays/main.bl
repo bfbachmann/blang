@@ -1,0 +1,74 @@
+// This program is for testing the compilation and execution of code
+// that makes use of arrays: fixed-size, stack-allocated chunks of 
+// memory that contain continuous values of the same type.
+mod arrays
+
+use "std/libc" {exit}
+
+use "std/runtime" {assert}
+
+fn do_nothing() {}
+
+struct Thing {
+    value: int
+}
+
+const some_bool = true
+const some_array_len = 100uint
+
+// Check that arrays can be declared constant at the module level.
+const SOME_ARRAY = [some_bool; some_array_len]
+
+fn main() {
+    // Check that array variables can be declared, initialized, and accessed.
+    {
+        // Initialization using constant expressions.
+        let a: [u64; 3] = [1, 2, 3]
+        assert(a.(0) == 1u64, "expected 1")
+        assert(a.(1) == 2u64, "expected 2")
+        assert(a.(2) == 3u64, "expected 3")
+    
+        let b = ["one", "two", "three"]
+        assert(b.(0) == "one", "expected 'one'")
+        assert(b.(1) == "two", "expected 'two'")
+        assert(b.(2) == "three", "expected 'three'")
+    
+        // Make sure empty arrays are allowed.
+        let empty_1: [] = []
+        let empty_2: [u64; 0] = [1; 0]
+
+        // Constant array declaration at the function level.
+        const c = [{true}, {false}]
+        assert(c.(0).(0) == true, "expected true")
+        assert(c.(1).(0) == false, "expected false")
+
+        // Initialization using repeat count.
+        let d = [-8; 2]
+        assert(d.(0) == -8, "expected first value to be -8")
+        assert(d.(1) == -8, "expected second value to be -8")
+
+        // Assigning array elements.
+        let mut e = [3; 5]
+        e.(4) = -10
+        assert(e.(4) == -10, "expected -10")
+    }
+
+    // Check that arrays can be passed to and returned from functions.
+    {
+        let result = take([-8, 12])
+        assert(result.(0) == "test", "expected 'test'")
+    }
+
+    // Check that array type equality works.
+    {
+        let x: [fn (); 1] = [do_nothing]
+    }
+
+    exit(0)
+}
+
+fn take(a: [int; 2]) -> [str; 1] {
+    assert(a.(0) == -8, "12")
+    assert(a.(1) == 12, "13")
+    return ["test"]
+}

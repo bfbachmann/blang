@@ -4,14 +4,18 @@ use std::fmt::{Display, Formatter};
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::params::AParams;
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{
+    err_dup_enum_variant, err_dup_ident, err_expected_enum, err_missing_variant_value,
+    err_no_such_variant, err_unexpected_variant_value,
+};
+use crate::analyzer::ident::{Ident, IdentKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::r#enum::{EnumType, EnumVariantInit};
 use crate::parser::ast::r#type::Type;
-use crate::{format_code, util};
+use crate::util;
 
 /// Represents a semantically valid enum type variant declaration.
 #[derive(Debug, Clone)]
@@ -105,6 +109,18 @@ impl AEnumType {
         };
         let type_key = ctx.insert_type(AType::Enum(a_enum_type.clone()));
 
+        if let Err(existing) = ctx.insert_ident(Ident {
+            name: enum_type.name.clone(),
+            kind: IdentKind::Type {
+                is_pub: enum_type.is_pub,
+                type_key,
+                mod_id: Some(ctx.cur_mod_id()),
+            },
+            span: enum_type.span, // TODO: use name span
+        }) {
+            err_dup_ident(&enum_type.name, enum_type.span, existing.span);
+        }
+
         // Analyze parameters.
         let maybe_params = match &enum_type.maybe_params {
             Some(params) => {
@@ -126,16 +142,8 @@ impl AEnumType {
         for (i, variant) in enum_type.variants.iter().enumerate() {
             // Make sure the variant name is unique.
             if variants.contains_key(&variant.name) {
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::DuplicateEnumVariant,
-                    format_code!(
-                        "enum type {} already has a variant named {}",
-                        enum_type.name,
-                        variant.name
-                    )
-                    .as_str(),
-                    variant,
-                ));
+                let err = err_dup_enum_variant(&enum_type.name, &variant.name, variant.span);
+                ctx.insert_err(err);
 
                 // Ignore this variant since it's illegal.
                 continue;
@@ -190,11 +198,6 @@ impl AEnumType {
 
             // Pop generic parameters now that we're done analyzing the type.
             ctx.pop_params();
-        }
-
-        // Record the type name as public in the current module if necessary.
-        if enum_type.is_pub {
-            ctx.mark_type_pub(type_key);
         }
 
         a_enum_type
@@ -253,15 +256,8 @@ impl AEnumVariantInit {
 
             _ => {
                 // This is not an enum type. Record the error and return a placeholder value.
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::TypeIsNotEnum,
-                    format_code!(
-                        "type {} is not an enum, but is being used like one",
-                        ctx.display_type(enum_type_key)
-                    )
-                    .as_str(),
-                    enum_init,
-                ));
+                let err = err_expected_enum(ctx, enum_type_key, enum_init.span);
+                ctx.insert_err(err);
 
                 return AEnumVariantInit {
                     type_key: enum_type_key,
@@ -282,16 +278,13 @@ impl AEnumVariantInit {
             None => {
                 // This enum type has no such variant. Record the error and return a placeholder
                 // value.
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::UndefType,
-                    format_code!(
-                        "enum type {} has no variant {}",
-                        ctx.display_type(enum_type_key),
-                        enum_init.variant_name
-                    )
-                    .as_str(),
-                    enum_init,
-                ));
+                let err = err_no_such_variant(
+                    ctx,
+                    enum_type_key,
+                    &enum_init.variant_name,
+                    enum_init.span,
+                );
+                ctx.insert_err(err);
 
                 return AEnumVariantInit {
                     type_key: enum_type_key,
@@ -313,16 +306,13 @@ impl AEnumVariantInit {
                 if variant.maybe_type_key.is_none() {
                     // A value was not expected but was provided. Record the error and return a
                     // placeholder value.
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::MismatchedTypes,
-                        format_code!(
-                            "variant {} of enum {} has no associated type, but a value was provided",
-                            variant.display(ctx),
-                            enum_type.name,
-                        )
-                            .as_str(),
-                        enum_init,
-                    ));
+                    let err = err_unexpected_variant_value(
+                        ctx,
+                        &variant,
+                        &enum_type.name,
+                        enum_init.span,
+                    );
+                    ctx.insert_err(err);
 
                     return AEnumVariantInit {
                         type_key: enum_type_key,
@@ -344,17 +334,14 @@ impl AEnumVariantInit {
                 if let Some(type_key) = &variant.maybe_type_key {
                     // A value was expected but was not provided. Record the error and return a
                     // placeholder value.
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::MismatchedTypes,
-                        format_code!(
-                            "missing value of type {} for variant {} of enum {}",
-                            ctx.display_type(*type_key),
-                            variant.display(ctx),
-                            enum_type.name
-                        )
-                        .as_str(),
-                        enum_init,
-                    ));
+                    let err = err_missing_variant_value(
+                        ctx,
+                        &variant,
+                        *type_key,
+                        &enum_type.name,
+                        enum_init.span,
+                    );
+                    ctx.insert_err(err);
 
                     return AEnumVariantInit {
                         type_key: enum_type_key,

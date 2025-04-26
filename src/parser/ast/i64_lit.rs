@@ -4,10 +4,11 @@ use std::hash::{Hash, Hasher};
 use crate::lexer::pos::Span;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
-use crate::locatable_impl; use crate::Locatable;
+use crate::locatable_impl;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 
 /// Represents a signed 64 bit integer literal.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -31,14 +32,6 @@ impl Display for I64Lit {
 locatable_impl!(I64Lit);
 
 impl I64Lit {
-    #[cfg(test)]
-    pub fn new_with_default_pos(i: i64) -> I64Lit {
-        I64Lit {
-            value: i,
-            span: Default::default(),
-        }
-    }
-
     /// Attempts to parse an i64 literal from the token sequence.
     pub fn parse(parser: &mut FileParser) -> ParseResult<I64Lit> {
         match parser.tokens.next() {

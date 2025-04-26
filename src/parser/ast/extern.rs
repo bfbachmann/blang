@@ -13,7 +13,7 @@ use crate::Locatable;
 /// Represents a set of external function declarations.
 #[derive(Clone, Debug, Eq)]
 pub struct ExternFn {
-    pub fn_sig: FunctionSignature,
+    pub signature: FunctionSignature,
     pub maybe_link_name: Option<String>,
     pub is_pub: bool,
     pub span: Span,
@@ -21,19 +21,19 @@ pub struct ExternFn {
 
 impl Hash for ExternFn {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.fn_sig.hash(state);
+        self.signature.hash(state);
     }
 }
 
 impl PartialEq for ExternFn {
     fn eq(&self, other: &Self) -> bool {
-        self.fn_sig == other.fn_sig
+        self.signature == other.signature
     }
 }
 
 impl Display for ExternFn {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "extern {}", self.fn_sig)
+        write!(f, "extern {}", self.signature)
     }
 }
 
@@ -75,7 +75,7 @@ impl ExternFn {
         let end_pos = fn_sig.span().end_pos;
 
         Ok(ExternFn {
-            fn_sig,
+            signature: fn_sig,
             maybe_link_name,
             is_pub,
             span: parser.new_span(start_pos, end_pos),

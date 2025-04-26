@@ -123,7 +123,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             symbol.name.clone()
         };
 
-        if self.nested_fns.contains(&symbol.type_key) {
+        if !self.vars.contains_key(&symbol.name) && self.nested_fns.contains(&symbol.type_key) {
             name += mangle_type_mapping(self.type_converter.type_mapping()).as_str();
         }
 
@@ -132,7 +132,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Gets a pointer to the given variable or member.
     pub(crate) fn get_var_ptr(&mut self, symbol: &ASymbol) -> PointerValue<'ctx> {
-        let maybe_mod_path = &symbol.maybe_mod_path;
+        let maybe_mod_id = &symbol.maybe_mod_id;
         let name = self.get_full_symbol_name(symbol);
 
         // Try to look up the symbol as a variable.
@@ -147,8 +147,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // The symbol might be a constant. If it is, copy its value to the stack
         // and return the stack pointer.
-        if let Some(mod_path) = maybe_mod_path {
-            if let Some(consts) = self.mod_consts.get(mod_path) {
+        if let Some(mod_id) = maybe_mod_id {
+            if let Some(consts) = self.mod_consts.get(mod_id) {
                 if let Some(const_value) = consts.get(&name) {
                     let ll_ptr = self.stack_alloc(&name, const_value.type_key);
                     let ll_val = self.gen_const_expr(&const_value);

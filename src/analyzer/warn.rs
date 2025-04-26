@@ -1,6 +1,6 @@
+use crate::analyzer::ast::statement::AStatement;
+use crate::lexer::pos::Span;
 use std::fmt::{Display, Formatter};
-
-use crate::lexer::pos::{Locatable, Span};
 
 /// Represents a kind of warning emitted by the semantic analyzer.
 #[derive(Debug, PartialEq, Clone)]
@@ -32,11 +32,33 @@ impl Display for AnalyzeWarning {
 
 impl AnalyzeWarning {
     /// Creates a new warning message with start and end positions cloned from the locatable.
-    pub fn new<T: Locatable>(kind: WarnKind, message: &str, loc: &T) -> AnalyzeWarning {
+    pub fn new(kind: WarnKind, message: &str, span: Span) -> AnalyzeWarning {
         AnalyzeWarning {
             kind,
             message: message.to_string(),
-            span: *loc.span(),
+            span,
         }
     }
+}
+
+pub fn warn_unreachable_case(span: Span) -> AnalyzeWarning {
+    AnalyzeWarning::new(WarnKind::UnreachableCode, "unreachable case", span)
+}
+
+pub fn warn_unreachable_statements(statement: &AStatement, span: Span) -> AnalyzeWarning {
+    AnalyzeWarning::new(
+        WarnKind::UnreachableCode,
+        format_code!(
+            "statements following {} will never be executed",
+            match statement {
+                AStatement::Continue(_) => "continue",
+                AStatement::Break(_) => "break",
+                AStatement::Yield(_) => "yield",
+                AStatement::Return(_) => "return",
+                _ => unreachable!(),
+            }
+        )
+        .as_str(),
+        span,
+    )
 }

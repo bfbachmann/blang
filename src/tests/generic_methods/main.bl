@@ -1,0 +1,43 @@
+mod generic_methods
+
+use "std/libc" @proc
+use "std/runtime" {assert}
+
+spec Clone {
+    fn clone(*self) -> Self
+}
+
+spec DoClone {
+    fn do_clone[A: Clone](*self, a: *A) -> A
+}
+
+struct Thing {}
+
+impl Thing {
+    fn test[T](t: T) -> T {
+        return t
+    }
+}
+
+impl Thing: DoClone {
+    fn do_clone[A: Clone](*self, a: *A) -> A {
+        return a^
+    }
+}
+
+struct Other {
+    value: uint
+}
+
+impl Other: Clone {
+    fn clone(*self) -> Other {
+        return Other{value: self.value}
+    }
+}
+
+fn main() {
+    assert(Thing.test("sup!") == "sup!", "expected 'sup!'")
+    assert(Thing{}.do_clone(&Other{value: 2}).value == 2, "expected 2")
+
+    @proc.exit(0)
+}

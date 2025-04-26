@@ -1,50 +1,267 @@
 mod hashmap
 
-use "std/libc" @libc
-use "std/runtime" {assert}
-
 use "std/specs" {Eq}
-use "std/allocator" {LibcAllocator}
-use "std/types/hasher" {Hash, HashWriter}
+use "std/types/hasher" {Hash, Hasher, BuildHash}
+use "std/types/array" {Array}
+use "std/types/opt" {Opt}
+use "std/runtime" {assert, panic}
+use "std/allocator" {Allocator, LibcAllocator}
 use "std/types/slice" {Slice}
-
-struct Key {
-    s: str
-}
-
-impl Key: Hash {
-    fn hash(*self, writer: *mut HashWriter) -> u64 {
-        writer.write(Slice[u8].from_str(self.s))
-        return writer.sum()
-    }
-}
-
-impl Key: Eq {
-    fn eq(*self, other: *Self) -> bool {
-        return self.s == other.s
-    }
-}
+use "std/libc" @libc
+use "std/fmt" {printf, Format, Print}
 
 fn main() {
-    let mut allocator = LibcAllocator.new().dynamic()
-    let mut map = HashMap[Key, str].new(&mut allocator)
+    let mut al = &mut LibcAllocator.new().dynamic()
+    let mut map = HashMap[int, int].new(al)
 
-    map.insert(Key{s: "key"}, "value")
-    let result_ptr = map.get(&Key{s: "key"})
-    assert(result_ptr != null, "result can't be null")
-    assert(result_ptr^ == "value", "value should be \"value\"")
+    let mut last_i = 1
+    let mut i = 1
+    for let mut count = 0; count < 10; count += 1 {
+        assert(map.insert(i, i).is_none(), "first insert: expected None")
+        assert(map.len() == count as uint + 1, "first insert: wrong length")
+        display_hashmap(map)
 
-    map.delete(&Key{s: "key"})
-    assert(map.get(&Key{s: "key"}) == null, "result should be null")
+        assert(map.get(i).unwrap_or(-1) == i, "first get: wrong value")
+        assert(map.len() == count as uint + 1, "first get: wrong length")
+        display_hashmap(map)
 
-    map.insert(Key{s: "a"}, "value: a")
-    assert(map.get(&Key{s: "a"})^ == "value: a", "expected \"value: a\"")
-    map.insert(Key{s: "b"}, "value: b")
-    assert(map.get(&Key{s: "b"})^ == "value: b", "expected \"value: b\"")
-    map.insert(Key{s: "c"}, "value: c")
-    assert(map.get(&Key{s: "c"})^ == "value: c", "expected \"value: c\"")
-    map.insert(Key{s: "d"}, "value: d")
-    assert(map.get(&Key{s: "d"})^ == "value: d", "expected \"value: d\"")
+        assert(map.insert(i, i * 2).unwrap_or(-1) == i, "second insert: wrong value")
+        assert(map.len() == count as uint + 1, "second insert: wrong length")
+        display_hashmap(map)
+
+        assert(map.get(i).unwrap_or(-1) == i * 2, "second get: wrong value")
+        assert(map.len() == count as uint + 1, "second get: wrong length")
+        display_hashmap(map)
+
+        assert(map.delete(i).unwrap_or(-1) == i * 2, "first delete: wrong value")
+        assert(map.len() == count as uint, "first delete: wrong length")
+        display_hashmap(map)
+
+        assert(map.delete(i).is_none(), "second delete: expected None")
+        assert(map.len() == count as uint, "second delete: wrong length")
+        display_hashmap(map)
+
+        assert(map.get(i).is_none(), "third get: expected None")
+        assert(map.len() == count as uint, "third get: wrong length")
+        display_hashmap(map)
+
+        assert(map.insert(i, i).is_none(), "third insert: expected None")
+        assert(map.len() == count as uint + 1, "third insert: wrong length")
+        display_hashmap(map)
+
+        let temp = last_i
+        last_i = i
+        i = i + temp
+    }
+
+    map.free()
 
     @libc.exit(0)
+}
+
+fn display_hashmap[K: Hash + Eq + Print, V: Print](map: HashMap[K, V]) {
+    printf(Format.new(map.allocator, "_______HashMap______\n"))
+
+    for let mut i = 0uint; i < map.slots.len(); i += 1 {
+        match map.slots.ptr_at(i) {
+        case let Slot[K, V]::Occupied(entry):
+            printf(Format.new(map.allocator, "% -> %\n").arg(&entry.key).arg(&entry.value))
+        case let Slot[K, V]::Empty:
+            printf(Format.new(map.allocator, "empty\n"))
+        case let Slot[K, V]::Deleted:
+            printf(Format.new(map.allocator, "deleted\n"))
+        }
+    }
+
+    printf(Format.new(map.allocator, "____________________\n"))
+}
+
+/// Implements the DJB2 hash function.
+pub struct DJB2Hasher {
+    hash: u64
+}
+
+const initial_hash: u64 = 5381
+
+impl DJB2Hasher {
+    pub fn new() -> DJB2Hasher {
+        return DJB2Hasher{
+            hash: initial_hash
+        }
+    }
+}
+
+impl DJB2Hasher: BuildHash {
+    pub fn reset(*mut self) {
+        self.hash = initial_hash
+    }
+
+    pub fn write(*mut self, bytes: Slice[u8]) {
+        for let mut i = 0uint; i < bytes.len(); i += 1 {
+            let c = bytes.ptr_at(i)^ as u64
+            self.hash = ((self.hash bls 5uint) + self.hash) + c
+        }
+    }
+
+    pub fn sum(*self) -> u64 {
+        return self.hash
+    }
+}
+
+pub struct HashMap[K: Hash + Eq, V] {
+    allocator: *mut Allocator
+    slots: Array[Slot[K, V]]
+    len: uint
+}
+
+pub enum Slot[K, V] {
+    Empty
+    Occupied(Entry[K, V])
+    Deleted
+}
+
+pub struct Entry[K, V] {
+    key: K
+    value: V
+}
+
+impl HashMap {
+    pub fn new(al: *mut Allocator) -> Self {
+        return Self{
+            allocator: al
+            slots: Array[Slot[K, V]].new(al)
+            len: 0
+        }
+    }
+
+    pub fn len(self) -> uint {
+        return self.len
+    }
+ 
+    pub fn insert(*mut self, key: K, value: V) -> Opt[V] {
+        self.grow_if_needed()
+        
+        let len = self.slots.len()
+        let hash = hash_key(key)
+        let new_entry = Entry[K, V]{
+            key: key
+            value: value
+        }
+
+        for let mut i = 0uint; i < len; i += 1 {
+            let slot_ptr = self.slots.mut_ptr_at((hash + i) % len)
+
+            match slot_ptr {
+            case let Slot[K, V]::Occupied(entry_ptr):
+                if entry_ptr.key.eq(&key) {
+                    let old_value = entry_ptr.value
+                    entry_ptr^ = new_entry
+                    return Opt[V]::Some(old_value)
+                }
+
+            case:
+                slot_ptr^ = Slot[K, V]::Occupied(new_entry)
+                self.len += 1
+                return Opt[V]::None
+            }
+        }
+
+        panic("failed to locate slot for insertion")
+        return Opt[V]::None
+    }
+
+    pub fn delete(*mut self, key: K) -> Opt[V] {
+        let len = self.slots.len()
+        let hash = hash_key(key)
+
+        for let mut i = 0uint; i < len; i += 1 {
+            let slot_ptr = self.slots.mut_ptr_at((hash + i) % len)
+
+            match slot_ptr {
+            case let Slot[K, V]::Occupied(entry_ptr) if entry_ptr.key.eq(&key):
+                let value = entry_ptr.value
+                slot_ptr^ = Slot[K, V]::Deleted
+                self.len -= 1
+                return Opt[V]::Some(value)
+
+            case let Slot[K, V]::Empty:
+                return Opt[V]::None
+
+            case:
+            }
+        }
+
+        return Opt[V]::None
+    }
+
+    pub fn get(self, key: K) -> Opt[V] {
+        let len = self.slots.len()
+        let hash = hash_key(key)
+
+        for let mut i = 0uint; i < len; i += 1 {
+            let slot_ptr = self.slots.ptr_at((hash + i) % len)
+
+            match slot_ptr {
+            case let Slot[K, V]::Occupied(entry) if entry.key.eq(&key):
+                return Opt[V]::Some(entry.value)
+
+            case let Slot[K, V]::Empty:
+                return Opt[V]::None
+
+            case:
+            }
+        }
+
+        return Opt[V]::None
+    }
+
+    pub fn free(mut self) {
+        self.slots.free()
+        self.len = 0
+    }
+
+    fn grow_if_needed(*mut self) {
+        // Check if we need to allocate more capacity for the table.
+        // Using load factor of 0.8 (4 / 5).
+        let old_len = self.slots.len()
+        let resize_threshold = old_len * 4 / 5
+        if self.len < resize_threshold {
+            return
+        }
+
+        let new_len: uint = from if old_len == 0 {
+            yield 8uint
+        } else {
+            yield old_len * 2
+        }
+
+        let old_slots = self.slots
+        self.slots = self.new_empty_slots(new_len)
+        self.len = 0
+
+        for let mut i = 0uint; i < old_len; i += 1 {
+            match old_slots.ptr_at(i) {
+            case let Slot[K, V]::Occupied(entry):
+                self.insert(entry.key, entry.value)
+            case:
+            }
+        }
+
+        old_slots.free()
+    }
+
+    fn new_empty_slots(self, len: uint) -> Array[Slot[K, V]] {
+        let mut slots = Array[Slot[K, V]].new_with_len(self.allocator, len)
+        for let mut i = 0uint; i < len; i += 1 {
+            slots.mut_ptr_at(i)^ = Slot[K, V]::Empty
+        }
+        return slots
+    }
+
+}
+
+fn hash_key[K: Hash](key: K) -> uint {
+    // TODO: Use configurable hasher, or just a better one.
+    let mut hasher = Hasher.new(&mut DJB2Hasher.new())
+    return key.hash(&mut hasher.writer()) as uint
 }

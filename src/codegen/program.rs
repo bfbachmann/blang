@@ -25,6 +25,7 @@ use crate::codegen::error::{CodeGenError, CodeGenResult, ErrorKind};
 use crate::codegen::func::debug::new_di_ctx;
 use crate::codegen::func::{gen_fn_sig, FnCodeGen};
 use crate::mono_collector::{MonoItem, MonoProg};
+use crate::parser::ModID;
 
 /// Compiles a type-rich and semantically valid program to LLVM IR and/or bitcode.
 pub struct ProgramCodeGen<'a, 'ctx> {
@@ -38,7 +39,7 @@ pub struct ProgramCodeGen<'a, 'ctx> {
     maybe_main_fn_name: Option<String>,
     type_store: &'a TypeStore,
     type_converter: TypeConverter<'ctx>,
-    mod_consts: HashMap<String, HashMap<String, AExpr>>,
+    mod_consts: HashMap<ModID, HashMap<String, AExpr>>,
     /// Whether to include debug info in the LLVM IR.
     emit_debug_info: bool,
 }

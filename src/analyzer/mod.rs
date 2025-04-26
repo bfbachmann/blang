@@ -1,7 +1,9 @@
 pub mod analyze;
 pub mod ast;
 pub mod error;
+pub mod ident;
 pub mod mangling;
+pub mod mod_context;
 pub mod prog_context;
 pub mod scope;
 mod tests;

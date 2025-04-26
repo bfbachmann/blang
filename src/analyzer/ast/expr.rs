@@ -12,13 +12,21 @@ use crate::analyzer::ast::r#enum::AEnumVariantInit;
 use crate::analyzer::ast::r#struct::AStructInit;
 use crate::analyzer::ast::r#type::{size_of_type, AType};
 use crate::analyzer::ast::statement::AStatement;
-use crate::analyzer::ast::symbol::ASymbol;
+use crate::analyzer::ast::symbol::{ASymbol, SymbolKind};
 use crate::analyzer::ast::tuple::ATupleInit;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{
+    err_cannot_bitwise_neg_value, err_cannot_deref_value, err_cannot_negate_value,
+    err_expected_ret_val, err_invalid_from_expr, err_invalid_mut_ref_const, err_invalid_mut_ref_fn,
+    err_invalid_mut_ref_immut, err_invalid_operand_type, err_invalid_type_cast,
+    err_invalid_unary_operand_type, err_literal_out_of_range, err_mismatched_operand_types,
+    err_mismatched_types, err_superfluous_type_cast, AnalyzeError,
+};
+use crate::analyzer::ident::IdentKind;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::{Scope, ScopeKind};
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::{Locatable, Span};
+use crate::locatable_impl;
 use crate::parser::ast::array::ArrayInit;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::from::From;
@@ -29,7 +37,6 @@ use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::tuple::TupleInit;
 use crate::parser::ast::unresolved::UnresolvedType;
-use crate::{format_code, locatable_impl};
 
 /// Represents a kind of expression.
 #[derive(Debug, Clone)]
@@ -167,7 +174,7 @@ impl AExprKind {
     /// Returns true if the expression is a symbol representing a type.
     pub fn is_type(&self) -> bool {
         match self {
-            AExprKind::Symbol(symbol) if symbol.is_type => true,
+            AExprKind::Symbol(symbol) if symbol.kind == SymbolKind::Type => true,
             _ => false,
         }
     }
@@ -249,7 +256,7 @@ impl AExprKind {
             AExprKind::Index(_) => false,
 
             // Symbols can be constants.
-            AExprKind::Symbol(sym) => sym.is_const,
+            AExprKind::Symbol(sym) => sym.kind == SymbolKind::Const,
 
             // Function calls and unknown values are never constants.
             AExprKind::FunctionCall(_) | AExprKind::AnonFunction(_) | AExprKind::Unknown => false,
@@ -453,16 +460,8 @@ impl AExpr {
         }
 
         if !actual_type.is_same_as(ctx, &expected_type, ignore_mutability) {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::MismatchedTypes,
-                format_code!(
-                    "expected expression of type {}, but found {}",
-                    ctx.display_type(expected_tk),
-                    ctx.display_type(self.type_key),
-                )
-                .as_str(),
-                expr,
-            ));
+            let err = err_mismatched_types(ctx, expected_tk, self.type_key, *expr.span());
+            ctx.insert_err(err);
         }
 
         self
@@ -478,32 +477,36 @@ impl AExpr {
             None => return,
         };
 
-        let scoped_symbol = match ctx.get_scoped_symbol(None, symbol.name.as_str()).unwrap() {
-            Some(scoped_symbol) => scoped_symbol,
+        let ident = match ctx.get_local_ident(&symbol.name) {
+            Some(ident) => ident,
             None => return,
         };
 
-        if scoped_symbol.is_const {
-            ctx.insert_err(
-                AnalyzeError::new(
-                    ErrorKind::InvalidMutRef,
-                    format_code!("cannot mutably reference constant value {}", symbol).as_str(),
-                    loc,
-                )
-                .with_help(
-                    format_code!("Consider declaring {} as a mutable local variable.", symbol)
-                        .as_str(),
-                ),
-            );
-        } else if !scoped_symbol.is_mut && !ctx.get_type(scoped_symbol.type_key).is_mut_ptr() {
-            ctx.insert_err(
-                AnalyzeError::new(
-                    ErrorKind::InvalidMutRef,
-                    format_code!("cannot mutably reference immutable value {}", symbol).as_str(),
-                    loc,
-                )
-                .with_help(format_code!("Consider declaring {} as mutable.", symbol).as_str()),
-            );
+        match &ident.kind {
+            // Mutable variables can be referenced mutably.
+            IdentKind::Variable { is_mut: true, .. } => {}
+
+            // Variables with type `*mut T` can be referenced mutably.
+            &IdentKind::Variable { type_key, .. } => {
+                if !ctx.get_type(type_key).is_mut_ptr() {
+                    let err = err_invalid_mut_ref_immut(symbol, *loc.span());
+                    ctx.insert_err(err);
+                }
+            }
+
+            // Constants cannot be referenced mutably.
+            IdentKind::Const { .. } => {
+                let err = err_invalid_mut_ref_const(symbol, *loc.span());
+                ctx.insert_err(err);
+            }
+
+            // Functions cannot be referenced mutably.
+            IdentKind::Fn { .. } | IdentKind::ExternFn { .. } => {
+                let err = err_invalid_mut_ref_fn(symbol, *loc.span());
+                ctx.insert_err(err);
+            }
+
+            other => panic!("unexpected ident kind: {:?}", other),
         }
     }
 
@@ -549,11 +552,7 @@ impl AExpr {
 
                 AType::U32 => {
                     if *i > u32::MAX as i64 {
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::LiteralOutOfRange,
-                            format_code!("literal out of range for {}", "u32").as_str(),
-                            &self,
-                        ));
+                        ctx.insert_err(err_literal_out_of_range("u32", self.span))
                     }
 
                     self.kind = AExprKind::U32Literal(*i as u32);
@@ -562,11 +561,7 @@ impl AExpr {
 
                 AType::U16 => {
                     if *i > u16::MAX as i64 {
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::LiteralOutOfRange,
-                            format_code!("literal out of range for {}", "u16").as_str(),
-                            &self,
-                        ));
+                        ctx.insert_err(err_literal_out_of_range("u16", self.span))
                     }
 
                     self.kind = AExprKind::U16Literal(*i as u16);
@@ -575,11 +570,7 @@ impl AExpr {
 
                 AType::U8 => {
                     if *i > u8::MAX as i64 {
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::LiteralOutOfRange,
-                            format_code!("literal out of range for {}", "u8").as_str(),
-                            &self,
-                        ));
+                        ctx.insert_err(err_literal_out_of_range("u8", self.span))
                     }
 
                     self.kind = AExprKind::U8Literal(*i as u8);
@@ -588,11 +579,7 @@ impl AExpr {
 
                 AType::I32 => {
                     if *i > i32::MAX as i64 {
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::LiteralOutOfRange,
-                            format_code!("literal out of range for {}", "i32").as_str(),
-                            &self,
-                        ));
+                        ctx.insert_err(err_literal_out_of_range("i32", self.span))
                     }
 
                     self.kind = AExprKind::I32Literal(*i as i32);
@@ -601,11 +588,7 @@ impl AExpr {
 
                 AType::I8 => {
                     if *i > i8::MAX as i64 {
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::LiteralOutOfRange,
-                            format_code!("literal out of range for {}", "i8").as_str(),
-                            &self,
-                        ));
+                        ctx.insert_err(err_literal_out_of_range("i8", self.span))
                     }
 
                     self.kind = AExprKind::I8Literal(*i as i8);
@@ -618,11 +601,7 @@ impl AExpr {
             AExprKind::F64Literal(f, false) => match target_type {
                 AType::F32 => {
                     if *f > f32::MAX as f64 || *f < f32::MIN as f64 {
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::LiteralOutOfRange,
-                            format_code!("literal out of range for {}", "f32").as_str(),
-                            &self,
-                        ));
+                        ctx.insert_err(err_literal_out_of_range("f32", self.span))
                     }
 
                     self.kind = AExprKind::F32Literal(*f as f32);
@@ -665,7 +644,7 @@ impl AExpr {
     }
 
     /// Creates a new expression.
-    pub fn new_with_default_pos(kind: AExprKind, type_key: TypeKey) -> Self {
+    pub fn new_with_default_span(kind: AExprKind, type_key: TypeKey) -> Self {
         AExpr {
             kind,
             type_key,
@@ -761,8 +740,17 @@ impl AExpr {
 
         match &expr.kind {
             AExprKind::Symbol(symbol) => {
-                let const_value = ctx.get_const_value(symbol.name.as_str()).unwrap().clone();
-                const_value.try_into_const_uint(ctx)
+                let ident = match &symbol.maybe_mod_id {
+                    Some(mod_id) if *mod_id != ctx.cur_mod_id() => {
+                        ctx.get_foreign_ident(*mod_id, &symbol.name).unwrap()
+                    }
+                    _ => ctx.get_local_ident(&symbol.name).unwrap(),
+                };
+
+                match &ident.kind {
+                    IdentKind::Const { value, .. } => value.clone().try_into_const_uint(ctx),
+                    _ => None,
+                }
             }
 
             AExprKind::IntLiteral(i, false) => {
@@ -832,30 +820,24 @@ pub fn check_operand_types(
     let mut errors = vec![];
 
     if !is_valid_operand_type(op, left_type, true) {
-        errors.push(AnalyzeError::new(
-            ErrorKind::MismatchedTypes,
-            format_code!(
-                "cannot apply operator {} to left-side expression of type {}",
-                &op,
-                ctx.display_type(left_expr.type_key),
-            )
-            .as_str(),
-            left_expr,
+        errors.push(err_invalid_operand_type(
+            ctx,
+            &op,
+            left_expr.type_key,
+            true,
+            left_expr.span,
         ));
     } else {
         left_type_key = Some(left_expr.type_key);
     }
 
     if !is_valid_operand_type(op, right_type, false) {
-        errors.push(AnalyzeError::new(
-            ErrorKind::MismatchedTypes,
-            format_code!(
-                "cannot apply operator {} to right-side expression of type {}",
-                &op,
-                ctx.display_type(right_expr.type_key),
-            )
-            .as_str(),
-            right_expr,
+        errors.push(err_invalid_operand_type(
+            ctx,
+            &op,
+            right_expr.type_key,
+            false,
+            right_expr.span,
         ));
     } else {
         right_type_key = Some(right_expr.type_key);
@@ -863,16 +845,12 @@ pub fn check_operand_types(
 
     // Operands need to be the same in all cases except for bit shift operations.
     if !op.is_bitshift() && !right_type.is_same_as(ctx, left_type, true) {
-        errors.push(AnalyzeError::new(
-            ErrorKind::MismatchedTypes,
-            format_code!(
-                "{} operands have mismatched types {} and {}",
-                op,
-                ctx.display_type(left_expr.type_key),
-                ctx.display_type(right_expr.type_key),
-            )
-            .as_str(),
-            right_expr,
+        errors.push(err_mismatched_operand_types(
+            ctx,
+            op,
+            left_expr.type_key,
+            right_expr.type_key,
+            right_expr.span,
         ));
     }
 
@@ -1073,30 +1051,12 @@ fn analyze_type_cast(
         && !a_target_type.is_unknown()
         && !is_valid_type_cast(left_type, a_target_type)
     {
-        ctx.insert_err(AnalyzeError::new(
-            ErrorKind::InvalidTypeCast,
-            format_code!(
-                "cannot cast value of type {} to type {}",
-                ctx.display_type(left_expr.type_key),
-                ctx.display_type(target_type_key)
-            )
-            .as_str(),
-            &left_expr,
-        ));
-
+        let err = err_invalid_type_cast(ctx, left_expr.type_key, target_type_key, left_expr.span);
+        ctx.insert_err(err);
         AExpr::new_zero_value(ctx, target_type)
     } else if left_expr.type_key == target_type_key {
-        ctx.insert_err(AnalyzeError::new(
-            ErrorKind::SuperfluousTypeCast,
-            format_code!(
-                "{} already has type {}",
-                left_expr.display(ctx),
-                ctx.display_type(target_type_key)
-            )
-            .as_str(),
-            &span,
-        ));
-
+        let err = err_superfluous_type_cast(ctx, &left_expr, target_type_key, span);
+        ctx.insert_err(err);
         AExpr::new_zero_value(ctx, target_type)
     } else {
         AExpr {
@@ -1181,16 +1141,8 @@ fn analyze_fn_call(
         _ => {
             // The function does not have a return value. Record the error and return some
             // zero-value instead.
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::ExpectedReturnValue,
-                format_code!(
-                    "{} has no return value, but is called in an expression",
-                    a_call.display(ctx),
-                )
-                .as_str(),
-                &fn_call,
-            ));
-
+            let err = err_expected_ret_val(ctx, &a_call, span);
+            ctx.insert_err(err);
             AExpr::new_zero_value(ctx, Type::Unresolved(UnresolvedType::unresolved_none()))
         }
     }
@@ -1205,14 +1157,14 @@ fn analyze_anon_fn(ctx: &mut ProgramContext, anon_fn: Function, span: Span) -> A
     let a_closure = AClosure::from(
         ctx,
         &anon_fn.body,
-        ScopeKind::FnBody(sig.name.clone()),
+        ScopeKind::FnBody,
         sig.args.clone(),
         sig.maybe_ret_type.clone(),
     );
 
     // Make sure the function return conditions are satisfied by the closure.
     if sig.maybe_ret_type.is_some() {
-        check_closure_returns(ctx, &a_closure, &ScopeKind::FnBody(sig.name.clone()));
+        check_closure_returns(ctx, &a_closure, &ScopeKind::FnBody);
     }
 
     let a_fn = AFn {
@@ -1249,16 +1201,8 @@ fn analyze_unary_op(
             // Make sure the expression has type bool.
             let typ = ctx.get_type(a_expr.type_key);
             if !typ.is_unknown() && !typ.is_bool() {
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::MismatchedTypes,
-                    format_code!(
-                        "unary operator {} cannot be applied to value of type {}",
-                        "!",
-                        a_expr.display(ctx),
-                    )
-                    .as_str(),
-                    expr,
-                ));
+                let err = err_invalid_unary_operand_type(ctx, a_expr.type_key, *expr.span());
+                ctx.insert_err(err);
 
                 AExpr::new_zero_value(ctx, Type::new_unresolved("bool"))
             } else {
@@ -1314,15 +1258,8 @@ fn analyze_unary_op(
                     // Don't display a redundant error if the operand expression already
                     // failed analysis.
                     if !other.is_unknown() {
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::MismatchedTypes,
-                            format_code!(
-                                "cannot dereference value of type {}",
-                                ctx.display_type(operand_expr.type_key)
-                            )
-                            .as_str(),
-                            expr,
-                        ));
+                        let err = err_cannot_deref_value(ctx, operand_expr.type_key, *expr.span());
+                        ctx.insert_err(err);
                     }
 
                     AExpr::new_zero_value(ctx, Type::new_unresolved("<unknown>"))
@@ -1343,19 +1280,13 @@ fn analyze_unary_op(
                     span,
                 }
             } else {
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::MismatchedTypes,
-                    format!(
-                        "cannot negate value of {} type {}",
-                        match operand_expr_type.is_numeric() {
-                            true => "unsigned",
-                            false => "non-numeric",
-                        },
-                        format_code!(operand_expr_type)
-                    )
-                    .as_str(),
-                    expr,
-                ));
+                let err = err_cannot_negate_value(
+                    ctx,
+                    operand_expr.type_key,
+                    operand_expr_type.is_numeric(),
+                    *expr.span(),
+                );
+                ctx.insert_err(err);
 
                 AExpr::new_zero_value(ctx, Type::new_unresolved("<unknown>"))
             }
@@ -1373,15 +1304,8 @@ fn analyze_unary_op(
                     span,
                 }
             } else {
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::MismatchedTypes,
-                    format!(
-                        "cannot bitwise negate value of non-integer type {}",
-                        format_code!(operand_expr_type)
-                    )
-                    .as_str(),
-                    expr,
-                ));
+                let err = err_cannot_bitwise_neg_value(ctx, operand_expr.type_key, *expr.span());
+                ctx.insert_err(err);
 
                 AExpr::new_zero_value(ctx, Type::new_unresolved("<unknown>"))
             }
@@ -1461,7 +1385,7 @@ fn analyze_symbol(
     allow_polymorph: bool,
     span: Span,
 ) -> AExpr {
-    let a_symbol = ASymbol::from(ctx, &symbol, true, allow_type, false, allow_polymorph);
+    let a_symbol = ASymbol::from(ctx, &symbol, allow_type, allow_polymorph);
     AExpr {
         type_key: a_symbol.type_key,
         kind: AExprKind::Symbol(a_symbol),
@@ -1474,11 +1398,7 @@ fn analyze_from(
     from: &From,
     maybe_expected_type_key: Option<TypeKey>,
 ) -> AExpr {
-    ctx.push_scope(Scope::new(
-        ScopeKind::FromBody,
-        vec![],
-        maybe_expected_type_key,
-    ));
+    ctx.push_scope(Scope::new(ScopeKind::FromBody, maybe_expected_type_key));
     let statement = AStatement::from(ctx, &from.statement);
 
     // Make sure the statement is a valid kind.
@@ -1492,29 +1412,7 @@ fn analyze_from(
         }
         AStatement::Match(_) | AStatement::Conditional(_) | AStatement::Closure(_) => true,
         _ => {
-            ctx.insert_err(
-                AnalyzeError::new(
-                    ErrorKind::InvalidStatement,
-                    format_code!("invalid {} expression", "from").as_str(),
-                    from,
-                )
-                .with_detail(
-                    format_code!(
-                        "The statement following {} must be a conditional, {}, {}, or closure.",
-                        "from",
-                        "match",
-                        "loop",
-                    )
-                    .as_str(),
-                )
-                .with_help(
-                    format_code!(
-                        "Consider wrapping the statement following {} in a closure.",
-                        "from"
-                    )
-                    .as_str(),
-                ),
-            );
+            ctx.insert_err(err_invalid_from_expr(from.span));
             false
         }
     };
@@ -1731,648 +1629,5 @@ fn analyze_expr_with_pref(
         ),
 
         Expression::From(from) => analyze_from(ctx, &from, maybe_expected_type_key),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::analyzer::ast::arg::AArg;
-    use crate::analyzer::ast::closure::AClosure;
-    use crate::analyzer::ast::expr::{AExpr, AExprKind};
-    use crate::analyzer::ast::fn_call::AFnCall;
-    use crate::analyzer::ast::func::{AFn, AFnSig};
-    use crate::analyzer::ast::r#type::AType;
-    use crate::analyzer::ast::symbol::ASymbol;
-    use crate::analyzer::error::{AnalyzeError, ErrorKind};
-    use crate::analyzer::prog_context::ProgramContext;
-    use crate::analyzer::scope::ScopedSymbol;
-    use crate::parser::ast::arg::Argument;
-    use crate::parser::ast::bool_lit::BoolLit;
-    use crate::parser::ast::expr::Expression;
-    use crate::parser::ast::func_call::FnCall;
-    use crate::parser::ast::func_sig::FunctionSignature;
-    use crate::parser::ast::i64_lit::I64Lit;
-    use crate::parser::ast::op::Operator;
-    use crate::parser::ast::r#type::Type;
-    use crate::parser::ast::str_lit::StrLit;
-    use crate::parser::ast::symbol::Symbol;
-
-    #[test]
-    fn analyze_i64_literal() {
-        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
-        let expr = Expression::I64Literal(I64Lit::new_with_default_pos(1));
-        let result = AExpr::from(&mut ctx, expr, None, false, false);
-        assert!(ctx.errors().is_empty());
-        assert_eq!(
-            result,
-            AExpr {
-                kind: AExprKind::I64Literal(1),
-                type_key: ctx.i64_type_key(),
-                span: Default::default(),
-            }
-        );
-    }
-
-    #[test]
-    fn analyze_bool_literal() {
-        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
-        let expr = Expression::BoolLiteral(BoolLit::new_with_default_pos(false));
-        let result = AExpr::from(&mut ctx, expr, None, false, false);
-        assert!(ctx.errors().is_empty());
-        assert_eq!(
-            result,
-            AExpr {
-                kind: AExprKind::BoolLiteral(false),
-                type_key: ctx.bool_type_key(),
-                span: Default::default(),
-            },
-        );
-    }
-
-    #[test]
-    fn analyze_string_literal() {
-        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
-        let expr = Expression::StrLiteral(StrLit::new_with_default_pos("test"));
-        let result = AExpr::from(&mut ctx, expr, None, false, false);
-        assert!(ctx.errors().is_empty());
-        assert_eq!(
-            result,
-            AExpr {
-                kind: AExprKind::StrLiteral(String::from("test")),
-                type_key: ctx.str_type_key(),
-                span: Default::default(),
-            }
-        );
-    }
-
-    #[test]
-    fn analyze_var() {
-        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
-        ctx.insert_scoped_symbol(ScopedSymbol::new("myvar", ctx.str_type_key(), false));
-        let result = AExpr::from(
-            &mut ctx,
-            Expression::Symbol(Symbol::new_with_default_pos("myvar")),
-            None,
-            false,
-            false,
-        );
-        assert!(ctx.errors().is_empty());
-        assert_eq!(
-            result,
-            AExpr {
-                kind: AExprKind::Symbol(
-                    ASymbol::new_with_default_pos("myvar", ctx.str_type_key(),)
-                ),
-                type_key: ctx.str_type_key(),
-                span: Default::default(),
-            }
-        );
-    }
-
-    #[test]
-    fn analyze_invalid_var() {
-        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
-        let result = AExpr::from(
-            &mut ctx,
-            Expression::Symbol(Symbol::new_with_default_pos("myvar")),
-            None,
-            false,
-            false,
-        );
-        assert_eq!(
-            result,
-            AExpr {
-                kind: AExprKind::Symbol(ASymbol::new_with_default_pos(
-                    "myvar",
-                    ctx.unknown_type_key(),
-                )),
-                type_key: ctx.unknown_type_key(),
-                span: Default::default(),
-            }
-        );
-        assert!(matches!(
-            ctx.errors()
-                .values()
-                .collect::<Vec<&AnalyzeError>>()
-                .get(0)
-                .unwrap(),
-            AnalyzeError {
-                kind: ErrorKind::UndefSymbol,
-                ..
-            }
-        ));
-    }
-
-    #[test]
-    fn analyze_fn_call() {
-        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
-        let fn_sig = FunctionSignature::new_with_default_pos(
-            "do_thing",
-            vec![Argument::new_with_default_pos(
-                "first",
-                Type::new_unresolved("bool"),
-                false,
-            )],
-            Some(Type::new_unresolved("str")),
-        );
-        let fn_type_key = ctx.resolve_type(&Type::Function(Box::new(fn_sig.clone())));
-        let a_fn = AFn {
-            signature: AFnSig {
-                name: "do_thing".to_string(),
-                mangled_name: "test::do_thing".to_string(),
-                args: vec![AArg {
-                    name: "first".to_string(),
-                    type_key: ctx.bool_type_key(),
-                    is_mut: false,
-                    span: Default::default(),
-                }],
-                maybe_ret_type_key: Some(ctx.str_type_key()),
-                type_key: fn_type_key,
-                maybe_impl_type_key: None,
-                params: None,
-            },
-            body: AClosure::new_empty(),
-            span: Default::default(),
-        };
-
-        // Add the function and its type to the context so they can be retrieved when analyzing
-        // the expression that calls the function.
-        ctx.insert_fn(a_fn.signature.clone());
-        ctx.insert_type(AType::from_fn_sig(a_fn.signature.clone()));
-
-        // Analyze the function call expression.
-        let fn_call = FnCall::new_with_default_pos(
-            Expression::Symbol(Symbol::new_with_default_pos("do_thing")),
-            vec![Expression::BoolLiteral(BoolLit::new_with_default_pos(true))],
-        );
-        let call_expr = Expression::FunctionCall(Box::new(fn_call.clone()));
-        let result = AExpr::from(&mut ctx, call_expr, None, false, false);
-
-        // Check that analysis succeeded.
-        assert!(ctx.errors().is_empty());
-        assert_eq!(
-            result,
-            AExpr {
-                kind: AExprKind::FunctionCall(Box::new(AFnCall {
-                    fn_expr: AExpr::new_with_default_pos(
-                        AExprKind::Symbol(ASymbol::new_with_default_pos(
-                            "test::do_thing",
-                            a_fn.signature.type_key,
-                        )),
-                        a_fn.signature.type_key,
-                    ),
-                    args: vec![AExpr {
-                        kind: AExprKind::BoolLiteral(true),
-                        type_key: ctx.bool_type_key(),
-                        span: Default::default(),
-                    }],
-                    maybe_ret_type_key: Some(ctx.str_type_key()),
-                    span: Default::default(),
-                })),
-                type_key: ctx.str_type_key(),
-                span: Default::default(),
-            },
-        );
-    }
-
-    #[test]
-    fn fn_call_no_return() {
-        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
-        let fn_sig = FunctionSignature::new_with_default_pos("do_thing", vec![], None);
-        let fn_type_key = ctx.resolve_type(&Type::Function(Box::new(fn_sig.clone())));
-        let a_fn = AFn {
-            signature: AFnSig {
-                name: "do_thing".to_string(),
-                mangled_name: "test::do_thing".to_string(),
-                args: vec![],
-                maybe_ret_type_key: None,
-                type_key: fn_type_key,
-                maybe_impl_type_key: None,
-                params: None,
-            },
-            body: AClosure::new_empty(),
-            span: Default::default(),
-        };
-
-        // Add the function and its type to the context, so they can be retrieved when analyzing
-        // the expression that calls the function.
-        ctx.insert_fn(a_fn.signature.clone());
-        ctx.insert_type(AType::from_fn_sig(a_fn.signature.clone()));
-
-        // Analyze the function call expression.
-        let result = AExpr::from(
-            &mut ctx,
-            Expression::BinaryOperation(
-                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
-                Operator::Add,
-                Box::new(Expression::FunctionCall(Box::new(
-                    FnCall::new_with_default_pos(
-                        Expression::Symbol(Symbol::new_with_default_pos("do_thing")),
-                        vec![],
-                    ),
-                ))),
-            ),
-            None,
-            false,
-            false,
-        );
-
-        match result {
-            AExpr {
-                kind: AExprKind::BinaryOperation(left, Operator::Add, right),
-                type_key,
-                ..
-            } => {
-                assert_eq!(
-                    *left,
-                    AExpr {
-                        kind: AExprKind::I64Literal(1),
-                        type_key: ctx.i64_type_key(),
-                        span: Default::default(),
-                    }
-                );
-                assert_eq!(
-                    *right,
-                    AExpr {
-                        kind: AExprKind::Unknown,
-                        type_key: ctx.none_type_key(),
-                        span: Default::default(),
-                    }
-                );
-                assert_eq!(type_key, ctx.int_type_key())
-            }
-            other => panic!("incorrect result {}", other),
-        }
-
-        assert!(matches!(
-            ctx.errors()
-                .values()
-                .collect::<Vec<&AnalyzeError>>()
-                .get(0)
-                .unwrap(),
-            AnalyzeError {
-                kind: ErrorKind::ExpectedReturnValue,
-                ..
-            }
-        ));
-    }
-
-    #[test]
-    fn fn_call_missing_arg() {
-        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
-        let fn_sig = FunctionSignature::new_with_default_pos(
-            "do_thing",
-            vec![
-                Argument::new_with_default_pos("arg1", Type::new_unresolved("bool"), false),
-                Argument::new_with_default_pos("arg2", Type::new_unresolved("i64"), false),
-            ],
-            Some(Type::new_unresolved("bool")),
-        );
-        let fn_type_key = ctx.resolve_type(&Type::Function(Box::new(fn_sig)));
-        let a_fn = AFn {
-            signature: AFnSig {
-                name: "do_thing".to_string(),
-                mangled_name: "test::do_thing".to_string(),
-                args: vec![
-                    AArg {
-                        name: "arg1".to_string(),
-                        type_key: ctx.bool_type_key(),
-                        is_mut: false,
-                        span: Default::default(),
-                    },
-                    AArg {
-                        name: "arg2".to_string(),
-                        type_key: ctx.i64_type_key(),
-                        is_mut: false,
-                        span: Default::default(),
-                    },
-                ],
-                maybe_ret_type_key: Some(ctx.bool_type_key()),
-                type_key: fn_type_key,
-                maybe_impl_type_key: None,
-                params: None,
-            },
-            body: AClosure::new_empty(),
-            span: Default::default(),
-        };
-
-        // Add the function and its type to the context, so they can be retrieved when analyzing
-        // the expression that calls the function.
-        ctx.insert_fn(a_fn.signature.clone());
-        ctx.insert_type(AType::from_fn_sig(a_fn.signature.clone()));
-
-        // Analyze the function call expression.
-        let result = AExpr::from(
-            &mut ctx,
-            Expression::FunctionCall(Box::new(FnCall::new_with_default_pos(
-                Expression::Symbol(Symbol::new_with_default_pos("do_thing")),
-                vec![Expression::BoolLiteral(BoolLit::new_with_default_pos(true))],
-            ))),
-            None,
-            false,
-            false,
-        );
-
-        assert_eq!(
-            result,
-            AExpr {
-                kind: AExprKind::FunctionCall(Box::new(AFnCall {
-                    fn_expr: AExpr::new_with_default_pos(
-                        AExprKind::Symbol(ASymbol::new_with_default_pos(
-                            "test::do_thing",
-                            a_fn.signature.type_key,
-                        )),
-                        fn_type_key
-                    ),
-                    args: vec![],
-                    maybe_ret_type_key: Some(ctx.unknown_type_key()),
-                    span: Default::default(),
-                })),
-                type_key: ctx.unknown_type_key(),
-                span: Default::default(),
-            }
-        );
-
-        match result.kind {
-            AExprKind::FunctionCall(call) => {
-                assert_eq!(
-                    call.fn_expr,
-                    AExpr::new_with_default_pos(
-                        AExprKind::Symbol(ASymbol::new_with_default_pos(
-                            "test::do_thing",
-                            a_fn.signature.type_key,
-                        )),
-                        a_fn.signature.type_key,
-                    )
-                );
-
-                assert_eq!(call.maybe_ret_type_key, Some(ctx.unknown_type_key()));
-                assert_eq!(call.args.len(), 0);
-            }
-            _ => unreachable!(),
-        };
-
-        assert!(matches!(
-            ctx.errors()
-                .values()
-                .collect::<Vec<&AnalyzeError>>()
-                .get(0)
-                .unwrap(),
-            AnalyzeError {
-                kind: ErrorKind::WrongNumberOfArgs,
-                ..
-            }
-        ));
-    }
-
-    #[test]
-    fn fn_call_invalid_arg_type() {
-        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
-        let fn_sig = FunctionSignature::new_with_default_pos(
-            "do_thing",
-            vec![Argument::new_with_default_pos(
-                "arg",
-                Type::new_unresolved("bool"),
-                false,
-            )],
-            Some(Type::new_unresolved("bool")),
-        );
-        let a_fn = AFn {
-            signature: AFnSig {
-                name: "do_thing".to_string(),
-                mangled_name: "test::do_thing".to_string(),
-                args: vec![AArg {
-                    name: "arg".to_string(),
-                    type_key: ctx.bool_type_key(),
-                    is_mut: false,
-                    span: Default::default(),
-                }],
-                maybe_ret_type_key: Some(ctx.bool_type_key()),
-                type_key: ctx.resolve_type(&Type::Function(Box::new(fn_sig))),
-                maybe_impl_type_key: None,
-                params: None,
-            },
-            body: AClosure::new_empty(),
-            span: Default::default(),
-        };
-
-        // Add the function and its type to the context so they can be retrieved when analyzing
-        // the expression that calls the function.
-        ctx.insert_fn(a_fn.signature.clone());
-        ctx.insert_type(AType::from_fn_sig(a_fn.signature.clone()));
-
-        // Analyze the function call expression.
-        let result = AExpr::from(
-            &mut ctx,
-            Expression::FunctionCall(Box::new(FnCall::new_with_default_pos(
-                Expression::Symbol(Symbol::new_with_default_pos("do_thing")),
-                vec![Expression::I64Literal(I64Lit::new_with_default_pos(1))],
-            ))),
-            None,
-            false,
-            false,
-        );
-
-        assert_eq!(
-            result,
-            AExpr::new_with_default_pos(
-                AExprKind::FunctionCall(Box::new(AFnCall {
-                    fn_expr: AExpr::new_with_default_pos(
-                        AExprKind::Symbol(ASymbol::new_with_default_pos(
-                            "test::do_thing",
-                            a_fn.signature.type_key,
-                        )),
-                        a_fn.signature.type_key,
-                    ),
-                    args: vec![AExpr {
-                        kind: AExprKind::I64Literal(1),
-                        type_key: ctx.i64_type_key(),
-                        span: Default::default(),
-                    }],
-                    maybe_ret_type_key: Some(ctx.bool_type_key()),
-                    span: Default::default(),
-                })),
-                ctx.bool_type_key(),
-            )
-        );
-
-        assert!(matches!(
-            ctx.errors()
-                .values()
-                .collect::<Vec<&AnalyzeError>>()
-                .get(0)
-                .unwrap(),
-            AnalyzeError {
-                kind: ErrorKind::MismatchedTypes,
-                ..
-            }
-        ));
-    }
-
-    #[test]
-    fn binary_op_invalid_operand_types() {
-        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
-        let result = AExpr::from(
-            &mut ctx,
-            Expression::BinaryOperation(
-                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
-                Operator::Add,
-                Box::new(Expression::StrLiteral(StrLit::new_with_default_pos("asdf"))),
-            ),
-            None,
-            false,
-            false,
-        );
-
-        assert_eq!(
-            result,
-            AExpr {
-                kind: AExprKind::BinaryOperation(
-                    Box::new(AExpr {
-                        kind: AExprKind::I64Literal(1),
-                        type_key: ctx.i64_type_key(),
-                        span: Default::default(),
-                    }),
-                    Operator::Add,
-                    Box::new(AExpr {
-                        kind: AExprKind::StrLiteral("asdf".to_string()),
-                        type_key: ctx.str_type_key(),
-                        span: Default::default(),
-                    })
-                ),
-                type_key: ctx.int_type_key(),
-                span: Default::default(),
-            }
-        );
-
-        assert!(matches!(
-            ctx.errors()
-                .values()
-                .collect::<Vec<&AnalyzeError>>()
-                .get(0)
-                .unwrap(),
-            AnalyzeError {
-                kind: ErrorKind::MismatchedTypes,
-                ..
-            }
-        ));
-
-        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
-        let result = AExpr::from(
-            &mut ctx,
-            Expression::BinaryOperation(
-                Box::new(Expression::StrLiteral(StrLit::new_with_default_pos("asdf"))),
-                Operator::Add,
-                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
-            ),
-            None,
-            false,
-            false,
-        );
-
-        assert_eq!(
-            result,
-            AExpr {
-                kind: AExprKind::BinaryOperation(
-                    Box::new(AExpr {
-                        kind: AExprKind::StrLiteral("asdf".to_string()),
-                        type_key: ctx.str_type_key(),
-                        span: Default::default(),
-                    }),
-                    Operator::Add,
-                    Box::new(AExpr {
-                        kind: AExprKind::I64Literal(1),
-                        type_key: ctx.i64_type_key(),
-                        span: Default::default(),
-                    })
-                ),
-                type_key: ctx.int_type_key(),
-                span: Default::default(),
-            }
-        );
-
-        assert!(matches!(
-            ctx.errors()
-                .values()
-                .collect::<Vec<&AnalyzeError>>()
-                .get(0)
-                .unwrap(),
-            AnalyzeError {
-                kind: ErrorKind::MismatchedTypes,
-                ..
-            }
-        ));
-    }
-
-    #[test]
-    fn unary_op() {
-        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
-        let result = AExpr::from(
-            &mut ctx,
-            Expression::UnaryOperation(
-                Operator::LogicalNot,
-                Box::new(Expression::I64Literal(I64Lit::new_with_default_pos(1))),
-            ),
-            None,
-            false,
-            false,
-        );
-
-        assert_eq!(
-            result,
-            AExpr {
-                kind: AExprKind::BoolLiteral(false),
-                type_key: ctx.bool_type_key(),
-                span: Default::default(),
-            }
-        );
-
-        assert!(matches!(
-            ctx.errors()
-                .values()
-                .collect::<Vec<&AnalyzeError>>()
-                .get(0)
-                .unwrap(),
-            AnalyzeError {
-                kind: ErrorKind::MismatchedTypes,
-                ..
-            }
-        ));
-    }
-
-    #[test]
-    fn unary_op_invalid_operand_type() {
-        let mut ctx = ProgramContext::new_with_host_target("test", vec!["test"]);
-        let result = AExpr::from(
-            &mut ctx,
-            Expression::UnaryOperation(
-                Operator::LogicalNot,
-                Box::new(Expression::StrLiteral(StrLit::new_with_default_pos("s"))),
-            ),
-            None,
-            false,
-            false,
-        );
-
-        assert_eq!(
-            result,
-            AExpr {
-                kind: AExprKind::BoolLiteral(false),
-                type_key: ctx.bool_type_key(),
-                span: Default::default(),
-            }
-        );
-
-        assert!(matches!(
-            ctx.errors()
-                .values()
-                .collect::<Vec<&AnalyzeError>>()
-                .get(0)
-                .unwrap(),
-            AnalyzeError {
-                kind: ErrorKind::MismatchedTypes,
-                ..
-            }
-        ));
     }
 }

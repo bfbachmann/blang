@@ -73,22 +73,6 @@ impl PartialEq for FunctionSignature {
 locatable_impl!(FunctionSignature);
 
 impl FunctionSignature {
-    /// Creates a new function signature with default start and end positions.
-    #[cfg(test)]
-    pub fn new_with_default_pos(
-        name: &str,
-        args: Vec<Argument>,
-        return_type: Option<Type>,
-    ) -> Self {
-        FunctionSignature {
-            name: name.to_string(),
-            params: None,
-            args,
-            maybe_ret_type: return_type,
-            span: Default::default(),
-        }
-    }
-
     /// Creates a new function signature for a named function.
     #[cfg(test)]
     pub fn new(name: &str, args: Vec<Argument>, return_type: Option<Type>, span: Span) -> Self {

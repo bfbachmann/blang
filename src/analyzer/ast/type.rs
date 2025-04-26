@@ -7,12 +7,9 @@ use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::ast::tuple::ATupleType;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::codegen::convert::TypeConverter;
-use crate::parser::ast::r#type::Type;
-use crate::parser::ast::unresolved::UnresolvedType;
 use inkwell::context::Context;
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -87,103 +84,6 @@ impl Display for AType {
 }
 
 impl AType {
-    /// Analyzes `typ` and returns an analyzed version of it.
-    pub fn from(ctx: &mut ProgramContext, typ: &Type) -> AType {
-        match typ {
-            Type::Unresolved(unresolved_type) => AType::from_unresolved(ctx, unresolved_type),
-
-            Type::Function(sig) => AType::from_fn_sig(AFnSig::from(ctx, &*sig)),
-
-            Type::Tuple(tuple_type) => {
-                let a_tuple_type = ATupleType::from(ctx, tuple_type);
-                AType::Tuple(a_tuple_type)
-            }
-
-            Type::Array(array_type) => {
-                let a_array_type = AArrayType::from(ctx, array_type);
-                AType::Array(a_array_type)
-            }
-
-            Type::Pointer(ptr_type) => {
-                let a_ptr_type = APointerType::from(ctx, ptr_type);
-                if a_ptr_type.pointee_type_key == ctx.unknown_type_key() {
-                    return AType::Unknown("<unknown>".to_string());
-                }
-
-                AType::Pointer(a_ptr_type)
-            }
-        }
-    }
-
-    /// Tries to analyze/resolve the unresolved type.
-    fn from_unresolved(ctx: &mut ProgramContext, unresolved_type: &UnresolvedType) -> AType {
-        let maybe_mod_sym = unresolved_type.maybe_mod_name.as_ref();
-        let type_name = unresolved_type.name.as_str();
-
-        // Return early if the mod name is invalid.
-        if let Some(mod_sym) = maybe_mod_sym {
-            if let Err(err) = ctx.check_mod_name(mod_sym) {
-                ctx.insert_err(err);
-                return AType::Unknown("<unknown>".to_string());
-            }
-        }
-
-        // Check if the type has already been marked as invalid. If so, we should avoid
-        // trying to resolve it and simply return the unknown type.
-        if ctx.is_name_of_invalid_type(type_name) {
-            return AType::Unknown(type_name.to_string());
-        }
-
-        // Check if this is a generic type parameter.
-        if let Some(param) = ctx.get_param(type_name) {
-            return AType::Generic(
-                ctx.get_type(param.generic_type_key)
-                    .to_generic_type()
-                    .clone(),
-            );
-        }
-
-        // If the type has already been analyzed, just return it.
-        if let Some(struct_type) = ctx.get_struct_type(maybe_mod_sym, type_name).unwrap() {
-            return AType::Struct(struct_type.clone());
-        }
-        if let Some(enum_type) = ctx.get_enum_type(maybe_mod_sym, type_name).unwrap() {
-            return AType::Enum(enum_type.clone());
-        }
-        if let Some(spec_type) = ctx.get_spec_type(maybe_mod_sym, type_name).unwrap() {
-            return AType::Spec(spec_type.clone());
-        }
-        if let Some(fn_sig) = ctx
-            .get_fn_sig_by_mangled_name(
-                maybe_mod_sym,
-                ctx.mangle_name(None, None, None, type_name, false).as_str(),
-            )
-            .unwrap()
-        {
-            return AType::from_fn_sig(fn_sig.clone());
-        }
-        if let Some(sig) = ctx.get_fn(maybe_mod_sym, type_name).unwrap() {
-            return AType::from_fn_sig(sig.clone());
-        }
-
-        // The type has not yet been analyzed, so make sure the type has at least been
-        // declared somewhere and analyze it.
-        if let Some(struct_type) = ctx.get_unchecked_struct_type(type_name) {
-            return AType::Struct(AStructType::from(ctx, &struct_type.clone(), false));
-        }
-        if let Some(enum_type) = ctx.get_unchecked_enum_type(type_name) {
-            return AType::Enum(AEnumType::from(ctx, &enum_type.clone(), false));
-        }
-
-        ctx.insert_err(AnalyzeError::new(
-            ErrorKind::UndefType,
-            format_code!("type {} is not defined in this scope", unresolved_type).as_str(),
-            unresolved_type,
-        ));
-
-        return AType::Unknown("<unknown>".to_string());
-    }
-
     /// Returns the mapping from parsed type to analyzed type for all primitives types.
     pub fn primitives() -> Vec<AType> {
         vec![
@@ -361,25 +261,6 @@ impl AType {
     /// Returns true if this is a spec type.
     pub fn is_spec(&self) -> bool {
         matches!(self, AType::Spec(_))
-    }
-
-    /// Returns true if the type is primitive.
-    pub fn is_primitive(&self) -> bool {
-        matches!(
-            self,
-            AType::Bool
-                | AType::U8
-                | AType::I8
-                | AType::U32
-                | AType::I32
-                | AType::F32
-                | AType::I64
-                | AType::U64
-                | AType::F64
-                | AType::Int
-                | AType::Uint
-                | AType::Str
-        )
     }
 
     /// Returns true if arithmetic operations on this type should be signed. Otherwise, this type

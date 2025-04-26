@@ -26,7 +26,6 @@ pub type DirID = u32;
 
 /// Contains info about a module (i.e. a collection of source files under the same namespace).
 #[derive(Debug)]
-
 pub struct ModInfo {
     pub path: String,
     pub src_file_ids: HashSet<FileID>,
@@ -171,8 +170,48 @@ impl SrcInfo {
         }
     }
 
-    pub fn mod_ids(&self) -> Vec<ModID> {
-        (0u32..self.mod_info.mod_ids.len() as u32).collect()
+    #[cfg(test)]
+    pub fn new_test_file(file: SrcFile) -> Self {
+        SrcInfo::new_test_mods(HashMap::from([("test".to_string(), vec![file])]))
+    }
+
+    #[cfg(test)]
+    pub fn new_test_mods(src: HashMap<String, Vec<SrcFile>>) -> Self {
+        let mut src_info = SrcInfo {
+            mod_info: Default::default(),
+            file_info: Default::default(),
+            dir_info: Default::default(),
+            src_files: Default::default(),
+        };
+
+        let (_, errs) = parse_mod_dir(
+            &mut src_info,
+            &ModulePath {
+                raw: "std/builtins".to_string(),
+                span: Default::default(),
+            },
+        );
+        assert!(errs.is_empty());
+
+        let mut file_id = src_info.file_info.file_ids.len() as FileID;
+
+        for (mod_path, src_files) in src {
+            src_info.mod_info.insert(ModInfo {
+                path: mod_path,
+                src_file_ids: HashSet::from_iter((file_id..).take(src_files.len())),
+            });
+
+            for src_file in src_files {
+                src_info.src_files.insert(file_id, src_file);
+                src_info.file_info.insert(FileInfo {
+                    path: format!("test_file_{file_id}.bl"),
+                });
+
+                file_id += 1;
+            }
+        }
+
+        src_info
     }
 
     pub fn get_src_file(&self, id: FileID) -> &SrcFile {

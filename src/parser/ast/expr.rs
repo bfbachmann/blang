@@ -600,7 +600,7 @@ mod tests {
         assert_eq!(
             parse(r#"my_var"#).unwrap(),
             Expression::Symbol(Symbol {
-                maybe_mod_name: None,
+                maybe_mod_name: Box::new(None),
                 name: "my_var".to_string(),
                 params: vec![],
                 span: Span {
@@ -728,7 +728,7 @@ mod tests {
                             Expression::UnaryOperation(
                                 Operator::LogicalNot,
                                 Box::new(Expression::Symbol(Symbol {
-                                    maybe_mod_name: None,
+                                    maybe_mod_name: Box::new(None),
                                     name: "thing".to_string(),
                                     params: vec![],
                                     span: Span {
@@ -751,7 +751,7 @@ mod tests {
                                 Operator::GreaterThan,
                                 Box::new(Expression::BinaryOperation(
                                     Box::new(Expression::Symbol(Symbol {
-                                        maybe_mod_name: None,
+                                        maybe_mod_name: Box::new(None),
                                         name: "var".to_string(),
                                         params: vec![],
                                         span: Span {
@@ -867,7 +867,7 @@ mod tests {
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::BinaryOperation(
                             Box::new(Expression::Symbol(Symbol {
-                                maybe_mod_name: None,
+                                maybe_mod_name: Box::new(None),
                                 name: "var".to_string(),
                                 params: vec![],
                                 span: Span {
@@ -1078,7 +1078,7 @@ mod tests {
             Expression::UnaryOperation(
                 Operator::Subtract,
                 Box::new(Expression::Symbol(Symbol {
-                    maybe_mod_name: None,
+                    maybe_mod_name: Box::new(None),
                     name: "x".to_string(),
                     params: vec![],
                     span: Span {
@@ -1204,7 +1204,7 @@ mod tests {
                                 Box::new(Expression::UnaryOperation(
                                     Operator::Subtract,
                                     Box::new(Expression::Symbol(Symbol {
-                                        maybe_mod_name: None,
+                                        maybe_mod_name: Box::new(None),
                                         name: "v".to_string(),
                                         params: vec![],
                                         span: Span {
@@ -1218,7 +1218,7 @@ mod tests {
                                 Box::new(Expression::UnaryOperation(
                                     Operator::Subtract,
                                     Box::new(Expression::Symbol(Symbol {
-                                        maybe_mod_name: None,
+                                        maybe_mod_name: Box::new(None),
                                         name: "a".to_string(),
                                         params: vec![],
                                         span: Span {
@@ -1263,7 +1263,7 @@ mod tests {
                             Operator::Subtract,
                             Box::new(Expression::FunctionCall(Box::new(FnCall {
                                 fn_expr: Expression::Symbol(Symbol {
-                                    maybe_mod_name: None,
+                                    maybe_mod_name: Box::new(None),
                                     name: "call".to_string(),
                                     params: vec![],
                                     span: Span {
@@ -1305,7 +1305,7 @@ mod tests {
                     Box::new(Expression::UnaryOperation(
                         Operator::Subtract,
                         Box::new(Expression::Symbol(Symbol {
-                            maybe_mod_name: None,
+                            maybe_mod_name: Box::new(None),
                             name: "b".to_string(),
                             params: vec![],
                             span: Span {

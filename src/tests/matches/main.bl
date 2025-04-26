@@ -1,0 +1,68 @@
+mod matches
+
+use "std/libc" @proc
+use "std/runtime" {panic, assert}
+
+enum MyEnum {
+    A(int)
+    B(bool)
+    C
+    D(bool)
+}
+
+fn main() {
+    // Check that we can match against an enum by reference.
+    let mut value = MyEnum::A(5)
+    match &mut value {
+    case let MyEnum::A(v):
+        v^ *= 2
+    case let other:
+        other^ = MyEnum::C
+    }
+
+    // Check that we can match against an enum by value.
+    match value {
+    case let MyEnum::A(v) if v == 10:
+    case: 
+        panic("expected MyEnum::(10)")
+    }
+
+    // Check that we can match exhaustively against bools. This test case exists
+    // because (at the moment) it is the only case where the last match branch
+    // can match against an expression that requires evaluation but is always
+    // guaranteed to match (because of exhaustiveness).
+    match true {
+    case true:
+    case false:
+    }
+
+    // Check that we can match multiple expressions in one case.
+    let five = 5
+    let six = 6
+    for let mut i = 1; i <= 6; i += 1 {
+        match i {
+        case 1, 2, 3, 4, five, six:
+        case: panic("should not match")
+        }
+    }
+
+    // Check that we can match multiple enum variants in one case.
+    match MyEnum::B(true) {
+    case let MyEnum::B(v), MyEnum::D(v):
+        assert(v == true, "expected true")
+    case:
+        panic("should not match")
+    }
+
+    @proc.exit(0)
+}
+
+// Make sure return checks work for match statements.
+fn test() -> bool {
+    match "test" {
+    case "thing": return true
+    // Check that we can omit the pattern and just use `if`.
+    case if false: return true
+    case: return false
+    }
+}

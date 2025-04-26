@@ -4,11 +4,13 @@ use std::fmt::{Display, Formatter};
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::ast::symbol::ASymbol;
-use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
+use crate::analyzer::ast::symbol::{ASymbol, SymbolKind};
+use crate::analyzer::error::{
+    err_mismatched_types, err_not_callable, err_spec_not_satisfied, err_type_annotations_needed,
+    err_wrong_num_args, AnalyzeError, AnalyzeResult, ErrorKind,
+};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::fmt::format_code_vec;
 use crate::lexer::pos::Span;
 use crate::parser::ast::func_call::FnCall;
 use crate::Locatable;
@@ -51,25 +53,13 @@ impl AFnCall {
         // This value will serve as a placeholder for cases where analysis fails on the function
         // call, and we need to abort early.
         let placeholder = AFnCall {
-            fn_expr: AExpr::new_with_default_pos(AExprKind::Unknown, ctx.unknown_type_key()),
+            fn_expr: AExpr::new_with_default_span(AExprKind::Unknown, ctx.unknown_type_key()),
             args: vec![],
             maybe_ret_type_key: Some(ctx.unknown_type_key()),
             span: call.span,
         };
-        let type_annotations_needed_err = AnalyzeError::new(
-            ErrorKind::UnresolvedParams,
-            "type annotations needed",
-            &call.fn_expr,
-        )
-        .with_detail(
-            format_code!(
-                "This expression has polymorphic type {}, \
-                but it's not clear how to monomorphize it here without additional \
-                type annotations.",
-                ctx.display_type(fn_expr.type_key)
-            )
-            .as_str(),
-        );
+        let type_annotations_needed_err =
+            err_type_annotations_needed(ctx, fn_expr.type_key, *call.fn_expr.span());
 
         // Return a placeholder value if the expression already failed analysis or has the wrong
         // type.
@@ -83,15 +73,8 @@ impl AFnCall {
             }
 
             _ => {
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::MismatchedTypes,
-                    format_code!(
-                        "type {} is not callable",
-                        ctx.display_type(fn_expr.type_key)
-                    )
-                    .as_str(),
-                    &call.fn_expr,
-                ));
+                let err = err_not_callable(ctx, fn_expr.type_key, *call.fn_expr.span());
+                ctx.insert_err(err);
                 return placeholder;
             }
         };
@@ -101,7 +84,7 @@ impl AFnCall {
         let maybe_self = match &fn_sig.maybe_impl_type_key {
             Some(_) => match &fn_expr.kind {
                 AExprKind::MemberAccess(access) => match &access.base_expr.kind {
-                    AExprKind::Symbol(symbol) if symbol.is_type => None,
+                    AExprKind::Symbol(symbol) if symbol.kind == SymbolKind::Type => None,
                     _ => Some(&access.base_expr),
                 },
                 _ => None,
@@ -118,21 +101,9 @@ impl AFnCall {
         };
 
         if actual_args != expected_args {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::WrongNumberOfArgs,
-                format!(
-                    "{} expects {} argument{}, but found {}",
-                    format_code!("{}", fn_sig.display(ctx)),
-                    expected_args,
-                    match expected_args {
-                        1 => "",
-                        _ => "s",
-                    },
-                    actual_args
-                )
-                .as_str(),
-                call,
-            ));
+            let err = err_wrong_num_args(ctx, expected_args, actual_args, &fn_sig, call.span);
+            ctx.insert_err(err);
+
             return AFnCall {
                 fn_expr,
                 args: vec![],
@@ -363,7 +334,8 @@ fn check_types(
     loc: &impl Locatable,
 ) -> AnalyzeResult<()> {
     // Nothing to do if the actual type has already failed analysis.
-    if actual_tk == ctx.unknown_type_key() {
+    let unknown_tk = ctx.unknown_type_key();
+    if actual_tk == unknown_tk || expected_tk == unknown_tk {
         return Ok(());
     }
 
@@ -388,16 +360,8 @@ fn check_types(
         }
     }
 
-    let mismatched_types_err = AnalyzeError::new(
-        ErrorKind::MismatchedTypes,
-        format_code!(
-            "expected expression of type {}, but found {}",
-            ctx.display_type(mapped_expected_tk),
-            ctx.display_type(actual_tk)
-        )
-        .as_str(),
-        loc,
-    );
+    let mismatched_types_err =
+        err_mismatched_types(ctx, mapped_expected_tk, actual_tk, *loc.span());
 
     // Do some simple checks to see if the types are the same.
     if mapped_expected_tk == actual_tk {
@@ -562,34 +526,23 @@ fn check_types(
 
     // Make sure the actual type satisfies the generic constraints.
     let expected_param = expected_type.to_generic_type();
-    let parent_type_str = ctx.display_type(expected_param.poly_type_key);
     let param_name = expected_param.name.clone();
+    let parent_tk = expected_param.poly_type_key;
     let missing_spec_tks = ctx.get_missing_spec_impls(actual_tk, mapped_expected_tk);
     let missing_spec_names: Vec<String> = missing_spec_tks
         .into_iter()
         .map(|tk| ctx.display_type(tk))
         .collect();
     if !missing_spec_names.is_empty() {
-        let actual_type_str = ctx.display_type(actual_tk);
-        return Err(AnalyzeError::new(
-            ErrorKind::SpecNotSatisfied,
-            format_code!("type {} violates parameter constraints", actual_type_str).as_str(),
-            loc,
-        )
-        .with_detail(
-            format!(
-                "{} does not implement spec{} {} required by parameter {} in {}.",
-                format_code!(actual_type_str),
-                match missing_spec_names.len() {
-                    1 => "",
-                    _ => "s",
-                },
-                format_code_vec(&missing_spec_names, ", "),
-                format_code!(param_name),
-                format_code!(parent_type_str),
-            )
-            .as_str(),
-        ));
+        let err = err_spec_not_satisfied(
+            ctx,
+            actual_tk,
+            &missing_spec_names,
+            &param_name,
+            parent_tk,
+            *loc.span(),
+        );
+        return Err(err);
     }
 
     // We can safely map the expected generic type to the actual type.

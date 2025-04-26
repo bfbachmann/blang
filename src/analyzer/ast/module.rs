@@ -1,30 +1,32 @@
-use std::collections::{HashMap, HashSet};
-
 use crate::analyzer::ast::ext::AExternFn;
-use crate::analyzer::ast::func::{analyze_fn_sig, AFn, AFnSig};
+use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#impl::{is_legal_impl, AImpl};
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::spec::ASpecType;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{
+    err_dup_ident, err_dup_impl_fn, err_dup_import_alias, err_dup_mem_fn, err_expected_spec,
+    err_invalid_mod_path, err_invalid_statement, err_not_pub, err_type_already_implements_spec,
+    err_undef_foreign_symbol,
+};
+use crate::analyzer::ident::{Ident, IdentKind, ModAlias};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_containment::{check_enum_containment, check_struct_containment};
-use crate::lexer::pos::Span;
-use crate::parser::ast::func::Function;
-use crate::parser::ast::r#extern::ExternFn;
+use crate::lexer::pos::Locatable;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#type::Type;
-use crate::parser::ast::r#use::UsedModule;
-use crate::parser::ast::spec::SpecType;
 use crate::parser::ast::statement::Statement;
 use crate::parser::src_file::SrcFile;
+use crate::parser::{ModID, SrcInfo};
+use std::collections::{HashMap, HashSet};
 
 /// Represents a semantically analyzed source file.
 #[derive(Debug)]
 pub struct AModule {
-    pub path: String,
+    #[allow(dead_code)]
+    pub mod_id: ModID,
     pub fns: Vec<AFn>,
     pub impls: Vec<AImpl>,
     pub extern_fns: Vec<AExternFn>,
@@ -32,78 +34,107 @@ pub struct AModule {
 
 impl AModule {
     /// Performs semantic analysis on the given module and returns a type-rich version of it.
-    pub fn from(ctx: &mut ProgramContext, mod_path: String, src_files: Vec<&SrcFile>) -> AModule {
-        // Set the current mod path in the program context so it can be used to
-        // create unique identifiers for symbols in this module during analysis.
-        let mut used_mods: Vec<&UsedModule> = vec![];
-        for src_file in &src_files {
-            used_mods.extend(&src_file.used_mods);
-        }
-        ctx.set_cur_mod(mod_path.clone(), used_mods);
+    pub fn from(ctx: &mut ProgramContext, mod_id: ModID, src_info: &SrcInfo) -> AModule {
+        ctx.set_cur_mod_id(mod_id);
+        let src_files = src_info.get_src_files(mod_id);
 
-        // First pass: define types and functions in the module without analyzing them yet.
+        // First pass: define identifiers in the module without analyzing their values yet.
         for src_file in &src_files {
-            define_symbols(ctx, src_file);
+            ctx.set_cur_file_id(src_file.id);
+            define_imported_idents(ctx, src_file, src_info);
+            define_local_idents(ctx, src_file);
         }
 
-        // Second pass: analyze specs and function signatures.
+        // Second pass: define `impl` blocks so we know what types implement which methods.
         for src_file in &src_files {
-            analyze_specs(ctx, src_file);
-        }
-        for src_file in &src_files {
-            analyze_fn_sigs(ctx, src_file);
+            ctx.set_cur_file_id(src_file.id);
+
+            for statement in &src_file.statements {
+                if let Statement::Impl(impl_) = statement {
+                    define_impl(ctx, impl_);
+                }
+            }
         }
 
-        let mut fns = vec![];
-        let mut impls = vec![];
-        let mut extern_fns = vec![];
+        let mut invalid_statement_spans = vec![];
 
         // Third pass: fully analyze all program statements.
-        for src_file in &src_files {
+        for src_file in src_files {
+            ctx.set_cur_file_id(src_file.id);
+
             for statement in &src_file.statements {
                 match statement {
                     Statement::FunctionDeclaration(func) => {
-                        let a_fn = AFn::from(ctx, func);
-                        ctx.insert_fn(a_fn.signature.clone());
-                        fns.push(a_fn);
+                        if let Some(ident) =
+                            ctx.remove_unchecked_ident_from_cur_scope(&func.signature.name)
+                        {
+                            let a_fn = AFn::from(ctx, ident.kind.as_unchecked_fn());
+                            ctx.insert_analyzed_fn(a_fn);
+                        }
                     }
 
                     Statement::ExternFn(extern_fn) => {
-                        extern_fns.push(AExternFn::from(ctx, extern_fn));
+                        if let Some(ident) =
+                            ctx.remove_unchecked_ident_from_cur_scope(&extern_fn.signature.name)
+                        {
+                            let ext_fn = AExternFn::from(ctx, ident.kind.as_unchecked_extern_fn());
+                            ctx.insert_analyzed_extern_fn(ext_fn);
+                        }
                     }
 
-                    Statement::Impl(impl_) => {
-                        impls.push(AImpl::from(ctx, impl_));
-                    }
-
-                    Statement::Const(const_) => {
-                        AConst::from(ctx, const_);
+                    Statement::ConstDeclaration(const_) => {
+                        if let Some(ident) = ctx.remove_unchecked_ident_from_cur_scope(&const_.name)
+                        {
+                            AConst::from(ctx, ident.kind.as_unchecked_const());
+                        }
                     }
 
                     Statement::StructDeclaration(struct_type) => {
-                        AStructType::from(ctx, struct_type, false);
+                        if let Some(ident) =
+                            ctx.remove_unchecked_ident_from_cur_scope(&struct_type.name)
+                        {
+                            AStructType::from(ctx, ident.kind.as_unchecked_struct_type(), false);
+                        }
                     }
 
                     Statement::EnumDeclaration(enum_type) => {
-                        AEnumType::from(ctx, enum_type, false);
+                        if let Some(ident) =
+                            ctx.remove_unchecked_ident_from_cur_scope(&enum_type.name)
+                        {
+                            AEnumType::from(ctx, ident.kind.as_unchecked_enum_type(), false);
+                        }
                     }
 
-                    // These statements should already have been analyzed above.
-                    Statement::SpecDeclaration(_) | Statement::Use(_) => {}
+                    Statement::SpecDeclaration(spec_type) => {
+                        if let Some(ident) =
+                            ctx.remove_unchecked_ident_from_cur_scope(&spec_type.name)
+                        {
+                            ASpecType::from(ctx, ident.kind.as_unchecked_spec_type());
+                        }
+                    }
+
+                    Statement::Impl(impl_) => {
+                        let a_impl = AImpl::from(ctx, impl_);
+                        ctx.insert_analyzed_impl(a_impl);
+                    }
+
+                    Statement::Use(_) => {}
 
                     other => {
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::InvalidStatement,
-                            "statement not valid in this context",
-                            other,
-                        ));
+                        invalid_statement_spans.push(*other.span());
                     }
                 }
             }
         }
 
+        for span in invalid_statement_spans {
+            ctx.insert_err(err_invalid_statement(span));
+        }
+
+        let (fns, impls, extern_fns) = ctx.drain_fns();
+
         AModule {
-            path: mod_path,
+            mod_id,
             fns,
             impls,
             extern_fns,
@@ -111,144 +142,180 @@ impl AModule {
     }
 }
 
-/// Walks through statements in the program and inserts information about un-analyzed types, consts,
-/// and impls into the program context so we can look them up and analyzet them later. Then, checks
-/// for type containment cycles and detects illegal types.
-fn define_symbols(ctx: &mut ProgramContext, src_files: &SrcFile) {
-    // First pass: just insert un-analyzed impls headers, consts, and types so we can look the up
-    // when we need to.
-    for statement in &src_files.statements {
+fn define_imported_idents(ctx: &mut ProgramContext, src_file: &SrcFile, src_info: &SrcInfo) {
+    for used_mod in &src_file.used_mods {
+        let target_mod_id = match src_info.mod_info.get_id_by_path(&used_mod.path.raw) {
+            Some(mod_id) => mod_id,
+            None => {
+                ctx.insert_err(err_invalid_mod_path(&used_mod.path.raw, used_mod.path.span));
+                continue;
+            }
+        };
+
+        if let Some(alias) = &used_mod.maybe_alias {
+            if let Err(existing) = ctx.insert_mod_alias(ModAlias {
+                name: alias.to_owned(),
+                target_mod_id,
+                span: used_mod.span, // TODO: use name span
+            }) {
+                // TODO: use name span
+                let err = err_dup_import_alias(alias, used_mod.span, existing.span);
+                ctx.insert_err(err);
+            }
+        }
+
+        for symbol in &used_mod.symbols {
+            match ctx.get_foreign_ident(target_mod_id, &symbol.name) {
+                Some(ident) => {
+                    let mut ident = ident.clone();
+
+                    let is_pub = match &ident.kind {
+                        IdentKind::Type { is_pub, .. } => *is_pub,
+                        IdentKind::Fn { is_pub, .. } => *is_pub,
+                        IdentKind::ExternFn { is_pub, .. } => *is_pub,
+                        IdentKind::Const { is_pub, .. } => *is_pub,
+                        other => panic!("unexpected ident kind {other:?}"),
+                    };
+
+                    if !is_pub {
+                        ctx.insert_err(err_not_pub(&symbol.name, symbol.span));
+                    }
+
+                    ident.span = symbol.span;
+
+                    if let Err(existing) = ctx.insert_imported_ident(ident) {
+                        let err = err_dup_ident(&symbol.name, symbol.span, existing.span);
+                        ctx.insert_err(err);
+                    }
+                }
+
+                None => {
+                    let mod_path = &src_info.mod_info.get_by_id(target_mod_id).path;
+                    ctx.insert_err(err_undef_foreign_symbol(
+                        &symbol.name,
+                        mod_path,
+                        symbol.span,
+                    ));
+                }
+            }
+        }
+    }
+}
+
+fn define_local_idents(ctx: &mut ProgramContext, src_file: &SrcFile) {
+    // First pass: just insert symbols with un-analyzed values. We'll analyze them later.
+    let mut containment_check_names = vec![];
+
+    for statement in &src_file.statements {
         match statement {
-            Statement::Impl(impl_) => {
-                ctx.insert_unchecked_impl(impl_.typ.clone(), impl_.maybe_spec.clone());
-            }
-
-            Statement::Const(const_decl) => {
-                ctx.try_insert_unchecked_const(const_decl.clone());
-            }
-
             Statement::StructDeclaration(struct_type) => {
-                ctx.try_insert_unchecked_struct_type(struct_type.clone());
+                if let Err(existing) = ctx.insert_ident(Ident {
+                    name: struct_type.name.clone(),
+                    kind: IdentKind::UncheckedStructType(struct_type.clone()),
+                    span: struct_type.span,
+                }) {
+                    let err = err_dup_ident(&struct_type.name, struct_type.span, existing.span);
+                    ctx.insert_err(err);
+                } else {
+                    containment_check_names.push(&struct_type.name);
+                }
             }
 
             Statement::EnumDeclaration(enum_type) => {
-                ctx.try_insert_unchecked_enum_type(enum_type.clone());
+                if let Err(existing) = ctx.insert_ident(Ident {
+                    name: enum_type.name.clone(),
+                    kind: IdentKind::UncheckedEnumType(enum_type.clone()),
+                    span: enum_type.span,
+                }) {
+                    let err = err_dup_ident(&enum_type.name, enum_type.span, existing.span);
+                    ctx.insert_err(err);
+                } else {
+                    containment_check_names.push(&enum_type.name);
+                }
             }
 
-            Statement::SpecDeclaration(spec) => ctx.try_insert_unchecked_spec(spec.clone()),
-
-            _ => {}
-        }
-    }
-
-    // Second pass: Check for type containment cycles.
-    let mut results = vec![];
-    {
-        let unchecked_structs = ctx.unchecked_struct_types();
-        for struct_type in unchecked_structs {
-            let result = check_struct_containment(ctx, struct_type, &mut vec![]);
-            results.push((result, struct_type.name.clone()));
-        }
-
-        let unchecked_enums = ctx.unchecked_enum_types();
-        for enum_type in unchecked_enums {
-            let result = check_enum_containment(ctx, enum_type, &mut vec![]);
-            results.push((result, enum_type.name.clone()));
-        }
-    }
-
-    // Remove types that have illegal containment cycles from the program context and add them as
-    // invalid types instead. We do this so we can safely continue with semantic analysis without
-    // having to worry about stack overflows during recursive type resolution.
-    for (result, type_name) in results {
-        if ctx.consume_error(result).is_none() {
-            ctx.remove_unchecked_struct_type(type_name.as_str());
-            ctx.remove_unchecked_enum_type(type_name.as_str());
-            ctx.insert_invalid_type_name(type_name);
-        }
-    }
-}
-
-/// Analyzes all specs declared in the module.
-fn analyze_specs(ctx: &mut ProgramContext, module: &SrcFile) {
-    for statement in &module.statements {
-        match statement {
-            Statement::SpecDeclaration(spec) => {
-                analyze_spec(ctx, spec);
+            Statement::SpecDeclaration(spec_type) => {
+                if let Err(existing) = ctx.insert_ident(Ident {
+                    name: spec_type.name.clone(),
+                    kind: IdentKind::UncheckedSpecType(spec_type.clone()),
+                    span: spec_type.span,
+                }) {
+                    let err = err_dup_ident(&spec_type.name, spec_type.span, existing.span);
+                    ctx.insert_err(err);
+                }
             }
-            _ => {}
-        }
-    }
-}
 
-/// Analyzes all top-level function signatures (this includes those inside specs) and defines them
-/// in the program context so they can be referenced later. This will not perform any analysis of
-/// function bodies.
-fn analyze_fn_sigs(ctx: &mut ProgramContext, module: &SrcFile) {
-    for statement in &module.statements {
-        match statement {
+            Statement::ConstDeclaration(const_) => {
+                if let Err(existing) = ctx.insert_ident(Ident {
+                    name: const_.name.clone(),
+                    kind: IdentKind::UncheckedConst(const_.clone()),
+                    span: const_.span,
+                }) {
+                    let err = err_dup_ident(&const_.name, const_.span, existing.span);
+                    ctx.insert_err(err);
+                }
+            }
+
             Statement::FunctionDeclaration(func) => {
-                define_fn(ctx, func);
+                if let Err(existing) = ctx.insert_ident(Ident {
+                    name: func.signature.name.clone(),
+                    kind: IdentKind::UncheckedFn(func.clone()),
+                    span: func.signature.span,
+                }) {
+                    let err =
+                        err_dup_ident(&func.signature.name, func.signature.span, existing.span);
+                    ctx.insert_err(err);
+                };
             }
 
-            Statement::ExternFn(ext) => {
-                define_extern_fn(ctx, ext);
+            Statement::ExternFn(func) => {
+                if let Err(existing) = ctx.insert_ident(Ident {
+                    name: func.signature.name.clone(),
+                    kind: IdentKind::UncheckedExternFn(func.clone()),
+                    span: func.signature.span,
+                }) {
+                    let err =
+                        err_dup_ident(&func.signature.name, func.signature.span, existing.span);
+                    ctx.insert_err(err);
+                };
             }
 
             Statement::Impl(impl_) => {
-                define_impl(ctx, impl_);
+                ctx.insert_unchecked_impl(impl_.typ.clone(), impl_.maybe_spec.clone())
             }
 
             _ => {}
         };
     }
-}
 
-fn define_fn(ctx: &mut ProgramContext, func: &Function) {
-    analyze_fn_sig(ctx, &func.signature);
+    // Second pass: Check for type containment cycles. Any types with containment cycles will have
+    // their identifiers mapped to the `<unknown>` type.
+    for name in containment_check_names {
+        let ident = ctx.get_ident_in_cur_scope(name).unwrap();
+        let result = match &ident.kind {
+            IdentKind::UncheckedStructType(struct_type) => {
+                check_struct_containment(ctx, struct_type, &mut vec![])
+            }
 
-    if func.signature.name == "main" {
-        if let Some(params) = &func.signature.params {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::InvalidMain,
-                format_code!("function {} cannot have parameters", "main").as_str(),
-                params,
-            ));
+            IdentKind::UncheckedEnumType(enum_type) => {
+                check_enum_containment(ctx, enum_type, &mut vec![])
+            }
+
+            _ => unreachable!(),
+        };
+
+        if let Err(err) = result {
+            ctx.insert_err(err);
+
+            let unknown_tk = ctx.unknown_type_key();
+            let cur_mod_id = ctx.cur_mod_id();
+            let ident = ctx.get_ident_in_cur_scope_mut(name).unwrap();
+            ident.kind = IdentKind::Type {
+                type_key: unknown_tk,
+                is_pub: false,
+                mod_id: Some(cur_mod_id),
+            };
         }
-
-        if !func.signature.args.is_empty() {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::InvalidMain,
-                format_code!("function {} cannot take arguments", "main").as_str(),
-                func.signature.args.get(0).unwrap(),
-            ));
-        }
-
-        if let Some(ret_type) = &func.signature.maybe_ret_type {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::InvalidMain,
-                format_code!("function {} cannot have a return type", "main").as_str(),
-                ret_type,
-            ));
-        }
-    }
-}
-
-fn define_extern_fn(ctx: &mut ProgramContext, ext: &ExternFn) {
-    if ext.fn_sig.params.is_some() {
-        ctx.insert_err(AnalyzeError::new(
-            ErrorKind::InvalidExtern,
-            "external functions cannot be generic",
-            &ext.fn_sig,
-        ));
-        return;
-    }
-
-    analyze_fn_sig(ctx, &ext.fn_sig);
-
-    // Record the extern function name as public in the current module if necessary.
-    if ext.is_pub {
-        ctx.insert_pub_fn_name(ext.fn_sig.name.as_str());
     }
 }
 
@@ -281,21 +348,13 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
                 AType::Spec(_) => {
                     // Make sure there isn't already an impl defined for this spec on this type.
                     if ctx.type_has_spec_impl(impl_type_key, spec_tk) {
-                        ctx.insert_err(AnalyzeError::new(
-                            ErrorKind::DuplicateSpecImpl,
-                            format_code!(
-                                "{} already implements {}",
-                                ctx.display_type(impl_type_key),
-                                ctx.display_type(spec_tk),
-                            )
-                            .as_str(),
-                            &Span {
-                                file_id: impl_.span.file_id,
-                                start_pos: impl_.span.start_pos,
-                                end_pos: impl_.maybe_spec.as_ref().unwrap().span.end_pos,
-                            },
-                        ));
-
+                        let err = err_type_already_implements_spec(
+                            ctx,
+                            impl_type_key,
+                            spec_tk,
+                            spec.span,
+                        );
+                        ctx.insert_err(err);
                         None
                     } else {
                         Some(spec_tk)
@@ -305,12 +364,8 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
                 AType::Unknown(_) => None,
 
                 _ => {
-                    ctx.insert_err(AnalyzeError::new(
-                        ErrorKind::ExpectedSpec,
-                        format_code!("type {} is not a spec", ctx.display_type(spec_tk).as_str())
-                            .as_str(),
-                        spec,
-                    ));
+                    let err = err_expected_spec(ctx, spec_tk, spec.span);
+                    ctx.insert_err(err);
                     None
                 }
             }
@@ -338,16 +393,8 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
 
         // Make sure there are no other functions in this impl block that share the same name.
         if fn_type_keys.contains_key(fn_sig.name.as_str()) {
-            ctx.insert_err(AnalyzeError::new(
-                ErrorKind::DuplicateFunction,
-                format_code!(
-                    "function {} already defined in this {}",
-                    member_fn.signature.name,
-                    "impl",
-                )
-                .as_str(),
-                &member_fn.signature,
-            ));
+            let err = err_dup_impl_fn(&member_fn.signature.name, member_fn.signature.span);
+            ctx.insert_err(err);
 
             // Skip invalid func.
             continue;
@@ -361,16 +408,9 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
                 .get_default_member_fn(impl_type_key, fn_sig.name.as_str())
                 .is_some();
             if has_matching_default_fn {
-                ctx.insert_err(AnalyzeError::new(
-                    ErrorKind::DuplicateFunction,
-                    format_code!(
-                        "function {} already defined for type {}",
-                        fn_sig.name,
-                        ctx.display_type(impl_type_key),
-                    )
-                    .as_str(),
-                    &member_fn.signature,
-                ));
+                let err =
+                    err_dup_mem_fn(ctx, &fn_sig.name, impl_type_key, member_fn.signature.span);
+                ctx.insert_err(err);
 
                 // Skip invalid func.
                 continue;
@@ -403,24 +443,4 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     for fn_tk in pub_fn_tks {
         ctx.mark_member_fn_pub(impl_type_key, fn_tk);
     }
-}
-
-fn analyze_spec(ctx: &mut ProgramContext, spec: &SpecType) {
-    // Make sure this spec name is not a duplicate.
-    if ctx
-        .get_spec_type(None, spec.name.as_str())
-        .unwrap()
-        .is_some()
-    {
-        ctx.insert_err(AnalyzeError::new(
-            ErrorKind::DuplicateSpec,
-            format_code!("another spec named {} already exists", spec.name).as_str(),
-            spec,
-        ));
-
-        return;
-    }
-
-    // Analyze the spec and add it to the program context so we can retrieve it later.
-    ASpecType::from(ctx, spec);
 }

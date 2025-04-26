@@ -4,10 +4,11 @@ use std::hash::{Hash, Hasher};
 use crate::lexer::pos::Span;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
-use crate::locatable_impl; use crate::Locatable;
+use crate::locatable_impl;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 
 /// Represents a string literal.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -31,15 +32,6 @@ impl Display for StrLit {
 locatable_impl!(StrLit);
 
 impl StrLit {
-    /// Creates a new string literal with default (zero) start and end positions.
-    #[cfg(test)]
-    pub fn new_with_default_pos(value: &str) -> Self {
-        StrLit {
-            value: value.to_string(),
-            span: Default::default(),
-        }
-    }
-
     /// Attempts to parse a string literal from the given token sequence.
     pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
         match parser.tokens.next() {

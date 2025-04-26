@@ -3,9 +3,10 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::time::Duration;
 
-use colored::{control, Colorize};
-
+use crate::analyzer::error::Note;
 use crate::lexer::pos::Span;
+use crate::parser::SrcInfo;
+use colored::{control, Colorize};
 
 /// Prints an error message and exits with code 1.
 #[macro_export]
@@ -60,13 +61,19 @@ macro_rules! format_code {
 
 /// Displays the given error/warning message in a user-friendly form.
 pub fn display_err(
+    src_info: &SrcInfo,
     msg: &str,
     detail: Option<&String>,
     help: Option<&String>,
-    path: &str,
     span: &Span,
     is_warning: bool,
+    notes: &Vec<Note>,
 ) {
+    let path = src_info
+        .file_info
+        .try_get_file_path_by_id(span.file_id)
+        .unwrap();
+
     if is_warning {
         warnln!("{}", msg.bold());
     } else {
@@ -85,6 +92,23 @@ pub fn display_err(
             "note:".bold(),
             detail_msg
         );
+    }
+
+    for note in notes {
+        println!("{}{}", " ".repeat(width), "|".blue().bold());
+        println!(
+            "{}{} {} {}",
+            " ".repeat(width),
+            "=".blue().bold(),
+            "note:".bold(),
+            note.message
+        );
+
+        let path = src_info
+            .file_info
+            .try_get_file_path_by_id(note.span.file_id)
+            .unwrap();
+        print_source(path, &note.span);
     }
 
     if let Some(help_msg) = help {
