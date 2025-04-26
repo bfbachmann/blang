@@ -597,16 +597,27 @@ impl ProgramContext {
         &mut self,
         type_key: TypeKey,
         type_mappings: &HashMap<TypeKey, TypeKey>,
+        maybe_target_tk: Option<TypeKey>,
     ) -> Option<TypeKey> {
         let typ = self.get_type(type_key);
         match typ {
-            AType::Struct(_) => self.monomorphize_struct_type(type_key, type_mappings),
-            AType::Enum(_) => self.monomorphize_enum_type(type_key, type_mappings),
-            AType::Tuple(_) => self.monomorphize_tuple_type(type_key, type_mappings),
-            AType::Array(_) => self.monomorphize_array_type(type_key, type_mappings),
-            AType::Function(_) => self.monomorphize_fn_type(type_key, type_mappings),
-            AType::Pointer(_) => self.monomorphize_ptr_type(type_key, type_mappings),
-            AType::Spec(_) => self.monomorphize_spec_type(type_key, type_mappings),
+            AType::Struct(_) => {
+                self.monomorphize_struct_type(type_key, type_mappings, maybe_target_tk)
+            }
+            AType::Enum(_) => self.monomorphize_enum_type(type_key, type_mappings, maybe_target_tk),
+            AType::Tuple(_) => {
+                self.monomorphize_tuple_type(type_key, type_mappings, maybe_target_tk)
+            }
+            AType::Array(_) => {
+                self.monomorphize_array_type(type_key, type_mappings, maybe_target_tk)
+            }
+            AType::Function(_) => {
+                self.monomorphize_fn_type(type_key, type_mappings, maybe_target_tk)
+            }
+            AType::Pointer(_) => {
+                self.monomorphize_ptr_type(type_key, type_mappings, maybe_target_tk)
+            }
+            AType::Spec(_) => self.monomorphize_spec_type(type_key, type_mappings, maybe_target_tk),
 
             // These types can't be monomorphized.
             AType::Bool
@@ -633,6 +644,7 @@ impl ProgramContext {
         &mut self,
         type_key: TypeKey,
         type_mappings: &HashMap<TypeKey, TypeKey>,
+        maybe_target_tk: Option<TypeKey>,
     ) -> Option<TypeKey> {
         let mut struct_type = self.get_type(type_key).to_struct_type().clone();
 
@@ -676,7 +688,13 @@ impl ProgramContext {
             struct_type.maybe_params = None;
 
             // Define the new type in the program context.
-            return Some(self.insert_type(AType::Struct(struct_type)));
+            return match maybe_target_tk {
+                Some(target_tk) => {
+                    self.replace_type(target_tk, AType::Struct(struct_type));
+                    Some(target_tk)
+                }
+                None => Some(self.insert_type(AType::Struct(struct_type))),
+            };
         }
 
         None
@@ -686,6 +704,7 @@ impl ProgramContext {
         &mut self,
         type_key: TypeKey,
         type_mappings: &HashMap<TypeKey, TypeKey>,
+        maybe_target_tk: Option<TypeKey>,
     ) -> Option<TypeKey> {
         let mut replaced_tks = false;
         let mut enum_type = self.get_type(type_key).to_enum_type().clone();
@@ -716,7 +735,13 @@ impl ProgramContext {
             enum_type.maybe_params = None;
 
             // Define the new type in the program context.
-            return Some(self.insert_type(AType::Enum(enum_type)));
+            return match maybe_target_tk {
+                Some(target_tk) => {
+                    self.replace_type(target_tk, AType::Enum(enum_type));
+                    Some(target_tk)
+                }
+                None => Some(self.insert_type(AType::Enum(enum_type))),
+            };
         }
 
         None
@@ -726,6 +751,7 @@ impl ProgramContext {
         &mut self,
         type_key: TypeKey,
         type_mappings: &HashMap<TypeKey, TypeKey>,
+        maybe_target_tk: Option<TypeKey>,
     ) -> Option<TypeKey> {
         let mut replaced_tks = false;
         let mut fn_sig = self.get_type(type_key).to_fn_sig().clone();
@@ -775,10 +801,20 @@ impl ProgramContext {
             fn_sig.params = None;
 
             // Define the new type in the program context.
-            let new_fn_type_key = self.insert_type(AType::Function(Box::new(fn_sig.clone())));
-            fn_sig.type_key = new_fn_type_key;
-            self.replace_type(new_fn_type_key, AType::Function(Box::new(fn_sig.clone())));
-            return Some(new_fn_type_key);
+            return match maybe_target_tk {
+                Some(target_tk) => {
+                    fn_sig.type_key = target_tk;
+                    self.replace_type(target_tk, AType::Function(Box::new(fn_sig)));
+                    Some(target_tk)
+                }
+                None => {
+                    let new_fn_type_key =
+                        self.insert_type(AType::Function(Box::new(fn_sig.clone())));
+                    fn_sig.type_key = new_fn_type_key;
+                    self.replace_type(new_fn_type_key, AType::Function(Box::new(fn_sig)));
+                    Some(new_fn_type_key)
+                }
+            };
         }
 
         None
@@ -788,6 +824,7 @@ impl ProgramContext {
         &mut self,
         type_key: TypeKey,
         type_mappings: &HashMap<TypeKey, TypeKey>,
+        maybe_target_tk: Option<TypeKey>,
     ) -> Option<TypeKey> {
         let mut tuple_type = self.get_type(type_key).to_tuple_type().clone();
         let mut replaced_tks = false;
@@ -798,7 +835,13 @@ impl ProgramContext {
         }
 
         if replaced_tks {
-            return Some(self.insert_type(AType::Tuple(tuple_type)));
+            return match maybe_target_tk {
+                Some(target_tk) => {
+                    self.replace_type(target_tk, AType::Tuple(tuple_type));
+                    Some(target_tk)
+                }
+                None => Some(self.insert_type(AType::Tuple(tuple_type))),
+            };
         }
 
         None
@@ -808,11 +851,18 @@ impl ProgramContext {
         &mut self,
         type_key: TypeKey,
         type_mappings: &HashMap<TypeKey, TypeKey>,
+        maybe_target_tk: Option<TypeKey>,
     ) -> Option<TypeKey> {
         let mut array_type = self.get_type(type_key).to_array_type().clone();
         if let Some(elem_tk) = &mut array_type.maybe_element_type_key {
             if self.replace_tks(elem_tk, type_mappings) {
-                return Some(self.insert_type(AType::Array(array_type)));
+                return match maybe_target_tk {
+                    Some(target_tk) => {
+                        self.replace_type(target_tk, AType::Array(array_type));
+                        Some(target_tk)
+                    }
+                    None => Some(self.insert_type(AType::Array(array_type))),
+                };
             }
         }
 
@@ -823,10 +873,17 @@ impl ProgramContext {
         &mut self,
         type_key: TypeKey,
         type_mappings: &HashMap<TypeKey, TypeKey>,
+        maybe_target_tk: Option<TypeKey>,
     ) -> Option<TypeKey> {
         let mut ptr_type = self.get_type(type_key).to_ptr_type().clone();
         if self.replace_tks(&mut ptr_type.pointee_type_key, type_mappings) {
-            return Some(self.insert_type(AType::Pointer(ptr_type)));
+            return match maybe_target_tk {
+                Some(target_tk) => {
+                    self.replace_type(target_tk, AType::Pointer(ptr_type));
+                    Some(target_tk)
+                }
+                None => Some(self.insert_type(AType::Pointer(ptr_type))),
+            };
         }
 
         None
@@ -836,12 +893,13 @@ impl ProgramContext {
         &mut self,
         type_key: TypeKey,
         type_mappings: &HashMap<TypeKey, TypeKey>,
+        maybe_target_tk: Option<TypeKey>,
     ) -> Option<TypeKey> {
         let mut spec_type = self.get_type(type_key).to_spec_type().clone();
         let mut replaced_tks = false;
 
         for fn_tk in spec_type.member_fn_type_keys.values_mut() {
-            if let Some(new_tk) = self.monomorphize_fn_type(*fn_tk, type_mappings) {
+            if let Some(new_tk) = self.monomorphize_fn_type(*fn_tk, type_mappings, None) {
                 *fn_tk = new_tk;
                 replaced_tks = true;
             }
@@ -875,7 +933,13 @@ impl ProgramContext {
             spec_type.maybe_params = None;
 
             // Define the new type in the program context.
-            return Some(self.insert_type(AType::Spec(spec_type)));
+            return match maybe_target_tk {
+                Some(target_tk) => {
+                    self.replace_type(target_tk, AType::Spec(spec_type));
+                    Some(target_tk)
+                }
+                None => Some(self.insert_type(AType::Spec(spec_type))),
+            };
         }
 
         None
@@ -937,7 +1001,7 @@ impl ProgramContext {
         }
 
         // Just try to monomorphize the type the basic way.
-        match self.monomorphize_type(*tk, type_mappings) {
+        match self.monomorphize_type(*tk, type_mappings, None) {
             Some(mono_tk) => {
                 if mono_tk != *tk {
                     *tk = mono_tk;
@@ -975,7 +1039,7 @@ impl ProgramContext {
             .unwrap();
 
         // Execute the same monomorphization again.
-        self.monomorphize_type(mono.poly_type_key, &mono.type_mappings())
+        self.monomorphize_type(mono.poly_type_key, &mono.type_mappings(), None)
             .unwrap();
 
         // Re-insert the monomorphization.
@@ -1034,12 +1098,8 @@ impl ProgramContext {
         // the fact that this type has been monomorphized.
         let mut mono = Monomorphization {
             poly_type_key,
-            // Since we haven't actually computed the monomorphization yet, we'll set its resulting
-            // mono type key to the poly type key for now. This way we'll avoid infinite recursive
-            // monomorphization of the type in cases where it references itself. Later (below),
-            // after the type has been monomorphized, we'll replace all instances of this poly type
-            // key with the correct mono type key.
-            mono_type_key: poly_type_key,
+            // Use a placeholder type for the mono type for now. We'll update it later.
+            mono_type_key: self.force_insert_type(poly_type.clone()),
             replaced_params: vec![],
         };
         let mut type_mappings: HashMap<TypeKey, TypeKey> = HashMap::new();
@@ -1096,18 +1156,16 @@ impl ProgramContext {
         self.insert_monomorphization(mono.clone());
 
         // Monomorphize the type.
-        mono.mono_type_key = match self.monomorphize_type(poly_type_key, &type_mappings) {
-            Some(replacement_tk) => replacement_tk,
-            // It turns out the type doesn't need monomorphization.
-            None => return poly_type_key,
+        match self.monomorphize_type(poly_type_key, &type_mappings, Some(mono.mono_type_key)) {
+            Some(replacement_tk) => {
+                let new_type = self.get_type(replacement_tk).clone();
+                self.replace_type(mono.mono_type_key, new_type);
+            }
+
+            None => {
+                panic!("type should have been monomorphized");
+            }
         };
-
-        // TODO: Replace all instances of the polymorphic type key with the new monomorphic type key
-        // now that we've completed the monomorphization.
-
-        // Insert the monomorphization so we know we need to generate code
-        // for it during codegen.
-        self.insert_monomorphization(mono.clone());
 
         // Mark this new monomorphic type as implementing the specs its polymorphic
         // counterpart implements.
@@ -1519,7 +1577,7 @@ impl ProgramContext {
 
         // Monomorphize the function from the polymorphic parent type.
         let type_mappings = mono.type_mappings();
-        let mono_fn_sig = match self.monomorphize_fn_type(poly_fn_tk, &type_mappings) {
+        let mono_fn_sig = match self.monomorphize_fn_type(poly_fn_tk, &type_mappings, None) {
             Some(fn_tk) => self.get_type(fn_tk).to_fn_sig().clone(),
             // Monomorphization failed.
             None => return Ok(None),

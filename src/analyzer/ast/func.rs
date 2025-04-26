@@ -303,7 +303,7 @@ impl AFnSig {
                 return;
             }
 
-            if let Some(new_tk) = ctx.monomorphize_type(*tk, type_mappings) {
+            if let Some(new_tk) = ctx.monomorphize_type(*tk, type_mappings, None) {
                 *tk = new_tk;
             }
         }

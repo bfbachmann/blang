@@ -1,7 +1,6 @@
 mod nested_generic_fns
 
 use "std/libc" @libc
-use "std/libc" @proc
 use "std/runtime" {assert}
 
 spec Call {
@@ -9,16 +8,16 @@ spec Call {
 }
 
 struct Caller {
-    data: *mut Caller
-    func: fn (*mut Caller)
+    data: *mut u8
+    func: fn (*mut u8)
 }
 
 impl Caller {
     fn new[T: Call](t: *mut T) -> Caller {
         return Caller{
-            data: t as *mut Caller
-            func: fn (caller: *mut Caller) {
-                T.call(caller as *mut T)
+            data: t as *mut u8
+            func: fn (data: *mut u8) {
+                T.call(data as *mut T)
             }
         }
     }
@@ -63,5 +62,5 @@ fn main() {
     c.call()
     assert(inner.i == 1, "expected 1")
 
-    @proc.exit(0)
+    @libc.exit(0)
 }
