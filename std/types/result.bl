@@ -23,7 +23,7 @@ impl Result {
     }
 
     /// Returns true if this is an `Ok` result.
-    pub fn is_ok(*self) -> bool {
+    pub fn is_ok(self) -> bool {
         match self {
         case let Result[T, E]::Ok(_):
             return true
@@ -33,7 +33,7 @@ impl Result {
     }
 
     /// Returns true if this is an `Err` result.
-    pub fn is_err(*self) -> bool {
+    pub fn is_err(self) -> bool {
         return !self.is_ok()
     }
 }

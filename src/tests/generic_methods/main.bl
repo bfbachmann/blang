@@ -4,11 +4,11 @@ use "std/libc" @proc
 use "std/runtime" {assert}
 
 spec Clone {
-    fn clone(*self) -> Self
+    fn clone(self) -> Self
 }
 
 spec DoClone {
-    fn do_clone[A: Clone](*self, a: *A) -> A
+    fn do_clone[A: Clone](self, a: *A) -> A
 }
 
 struct Thing {}
@@ -20,7 +20,7 @@ impl Thing {
 }
 
 impl Thing: DoClone {
-    fn do_clone[A: Clone](*self, a: *A) -> A {
+    fn do_clone[A: Clone](self, a: *A) -> A {
         return a^
     }
 }
@@ -30,7 +30,7 @@ struct Other {
 }
 
 impl Other: Clone {
-    fn clone(*self) -> Other {
+    fn clone(self) -> Other {
         return Other{value: self.value}
     }
 }

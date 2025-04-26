@@ -8,13 +8,13 @@ struct Ref[T] {
 }
 
 impl Ref {
-    fn clone(*self) -> Ref[T] {
+    fn clone(self) -> Ref[T] {
         return Ref[T]{
             ptr: self.ptr
         }
     }
 
-    fn get_ptr(*self) -> *T {
+    fn get_ptr(self) -> *T {
         return self.ptr
     }
 }

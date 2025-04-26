@@ -29,7 +29,7 @@ impl Empty {
         return 234
     }
 
-    fn neg(*self, value: bool) -> bool {
+    fn neg(self, value: bool) -> bool {
         return !value
     }
 

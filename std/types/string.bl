@@ -31,12 +31,12 @@ impl String {
     }
 
     /// Returns a pointer to the bytes in the string.
-    pub fn ptr(*self) -> *u8 {
+    pub fn ptr(self) -> *u8 {
         return self.bytes.ptr()
     }
 
     /// Returns the length of the string in bytes.
-    pub fn len(*self) -> uint {
+    pub fn len(self) -> uint {
         return self.bytes.len()
     }
 

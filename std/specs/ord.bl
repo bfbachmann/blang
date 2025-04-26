@@ -2,7 +2,7 @@ mod specs
 
 /// Represents types that can be ordered relative to one another.
 pub spec Order {
-    fn compare(*self, other: *Self) -> Ord
+    fn compare(self, other: *Self) -> Ord
 }
 
 /// Represents relative ordering of two values.

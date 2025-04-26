@@ -144,7 +144,7 @@ impl Machine {
     }
 
     /// Returns the int in memory at the given index.
-    pub fn memory_at(*self, index: uint) -> int {
+    pub fn memory_at(self, index: uint) -> int {
         return self.memory.(index)
     }
 

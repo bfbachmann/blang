@@ -10,13 +10,13 @@ pub enum Opt[T] {
 
 impl Opt {
     /// Returns true if the value is `None`.
-    pub fn is_none(*self) -> bool {
-        return self^ ~~ Opt[T]::None
+    pub fn is_none(self) -> bool {
+        return self ~~ Opt[T]::None
     }
 
     /// Returns true if the value is `Some(T)`.
-    pub fn is_some(*self) -> bool {
-        return self^ !~ Opt[T]::None
+    pub fn is_some(self) -> bool {
+        return self !~ Opt[T]::None
     }
 
     /// Returns the contained value, if any. Otherwise, returns `default`.

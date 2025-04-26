@@ -4,7 +4,7 @@ use "std/libc" {malloc, free, exit}
 use "std/runtime" {assert}
 
 spec ToStr {
-    fn to_str(*self) -> str
+    fn to_str(self) -> str
 }
 
 spec Default {
@@ -31,7 +31,7 @@ impl Thing: Default {
 }
 
 impl Thing: ToStr {
-    fn to_str(*self) -> str {
+    fn to_str(self) -> str {
         return self.s
     }
 }

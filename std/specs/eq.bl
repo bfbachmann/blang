@@ -4,77 +4,77 @@ mod specs
 /// for equality.
 pub spec Eq {
     /// Returns true if `self` is equal to `other`.
-    fn eq(*self, other: *Self) -> bool
+    fn eq(self, other: Self) -> bool
 }
 
 impl int: Eq {
-    fn eq(*self, other: *Self) -> bool {
-        return self^ == other^
+    fn eq(self, other: Self) -> bool {
+        return self == other
     }
 }
 
 impl uint: Eq {
-    fn eq(*self, other: *Self) -> bool {
-        return self^ == other^
+    fn eq(self, other: Self) -> bool {
+        return self == other
     }
 }
 
 impl u64: Eq {
-    fn eq(*self, other: *Self) -> bool {
-        return self^ == other^
+    fn eq(self, other: Self) -> bool {
+        return self == other
     }
 }
 
 impl u32: Eq {
-    fn eq(*self, other: *Self) -> bool {
-        return self^ == other^
+    fn eq(self, other: Self) -> bool {
+        return self == other
     }
 }
 
 impl u16: Eq {
-    fn eq(*self, other: *Self) -> bool {
-        return self^ == other^
+    fn eq(self, other: Self) -> bool {
+        return self == other
     }
 }
 
 impl u8: Eq {
-    fn eq(*self, other: *Self) -> bool {
-        return self^ == other^
+    fn eq(self, other: Self) -> bool {
+        return self == other
     }
 }
 
 impl i64: Eq {
-    fn eq(*self, other: *Self) -> bool {
-        return self^ == other^
+    fn eq(self, other: Self) -> bool {
+        return self == other
     }
 }
 
 impl i32: Eq {
-    fn eq(*self, other: *Self) -> bool {
-        return self^ == other^
+    fn eq(self, other: Self) -> bool {
+        return self == other
     }
 }
 
 impl i16: Eq {
-    fn eq(*self, other: *Self) -> bool {
-        return self^ == other^
+    fn eq(self, other: Self) -> bool {
+        return self == other
     }
 }
 
 impl i8: Eq {
-    fn eq(*self, other: *Self) -> bool {
-        return self^ == other^
+    fn eq(self, other: Self) -> bool {
+        return self == other
     }
 }
 
 impl bool: Eq {
-    fn eq(*self, other: *Self) -> bool {
-        return self^ == other^
+    fn eq(self, other: Self) -> bool {
+        return self == other
     }
 }
 
 impl str: Eq {
-    fn eq(*self, other: *Self) -> bool {
-        return self^ == other^
+    fn eq(self, other: Self) -> bool {
+        return self == other
     }
 }

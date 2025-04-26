@@ -6,13 +6,13 @@ use "std/types/slice" {Slice}
 pub spec BuildHash {
     fn reset(*mut self)
     fn write(*mut self, bytes: Slice[u8])
-    fn sum(*self) -> u64
+    fn sum(self) -> u64
 }
 
 /// Any type that can write data to a hash function and return the current sum.
 pub spec WriteHash {
     fn write(*mut self, bytes: Slice[u8])
-    fn sum(*self) -> u64
+    fn sum(self) -> u64
 }
 
 /// Implements the `BuildHash` and `WriteHash` specs with dynamic dispatch.
@@ -35,7 +35,7 @@ impl Hasher {
                 B.write(hasher as *mut B, bytes)
             }
             sum_fn: fn (hasher: *u8) -> u64 {
-                return B.sum(hasher as *B)
+                return B.sum((hasher as *B)^)
             }
         }
     }
@@ -59,7 +59,7 @@ impl Hasher: BuildHash {
         self.write_fn(self.underlying, bytes)
     }
 
-    pub fn sum(*self) -> u64 {
+    pub fn sum(self) -> u64 {
         return self.sum_fn(self.underlying)
     }
 }
@@ -69,7 +69,7 @@ impl Hasher: WriteHash {
         self.write_fn(self.underlying, bytes)
     }
 
-    pub fn sum(*self) -> u64 {
+    pub fn sum(self) -> u64 {
         return self.sum_fn(self.underlying)
     }
 }
@@ -90,7 +90,7 @@ impl HashWriter {
                 W.write(hasher as *mut W, bytes)
             }
             sum_fn: fn (hasher: *u8) -> u64 {
-                return W.sum(hasher as *W)
+                return W.sum((hasher as *W)^)
             }
         }
     }
@@ -101,7 +101,7 @@ impl HashWriter: WriteHash {
         self.write_fn(self.underlying, bytes)
     }
 
-    pub fn sum(*self) -> u64 {
+    pub fn sum(self) -> u64 {
         return self.sum_fn(self.underlying)
     }
 }

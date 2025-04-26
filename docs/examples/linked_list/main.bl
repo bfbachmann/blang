@@ -19,7 +19,7 @@ impl Node {
     }
 
     /// Returns true if this node has a next node.
-    fn has_next(*self) -> bool {
+    fn has_next(self) -> bool {
         return self.next != null
     }
 
@@ -82,10 +82,10 @@ impl Node {
     /// Return true and the index of the first node containing the
     /// target value, or false and zero if no such value exists in
     /// the list.
-    fn index_of(*self, target: int) -> {bool, uint} {
+    fn index_of(self, target: int) -> {bool, uint} {
         let mut i: uint = 0
         for
-            let mut head = self;
+            let mut head = &self;
             head != null;
             head = head.next
         {

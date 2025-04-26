@@ -103,7 +103,7 @@ impl DJB2Hasher: BuildHash {
         }
     }
 
-    pub fn sum(*self) -> u64 {
+    pub fn sum(self) -> u64 {
         return self.hash
     }
 }
@@ -153,7 +153,7 @@ impl HashMap {
 
             match slot_ptr {
             case let Slot[K, V]::Occupied(entry_ptr):
-                if entry_ptr.key.eq(&key) {
+                if entry_ptr.key.eq(key) {
                     let old_value = entry_ptr.value
                     entry_ptr^ = new_entry
                     return Opt[V]::Some(old_value)
@@ -178,7 +178,7 @@ impl HashMap {
             let slot_ptr = self.slots.mut_ptr_at((hash + i) % len)
 
             match slot_ptr {
-            case let Slot[K, V]::Occupied(entry_ptr) if entry_ptr.key.eq(&key):
+            case let Slot[K, V]::Occupied(entry_ptr) if entry_ptr.key.eq(key):
                 let value = entry_ptr.value
                 slot_ptr^ = Slot[K, V]::Deleted
                 self.len -= 1
@@ -202,7 +202,7 @@ impl HashMap {
             let slot_ptr = self.slots.ptr_at((hash + i) % len)
 
             match slot_ptr {
-            case let Slot[K, V]::Occupied(entry) if entry.key.eq(&key):
+            case let Slot[K, V]::Occupied(entry) if entry.key.eq(key):
                 return Opt[V]::Some(entry.value)
 
             case let Slot[K, V]::Empty:

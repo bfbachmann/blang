@@ -26,29 +26,29 @@ impl Slice {
     }
 
     /// Returns the number of elements in the slice.
-    pub fn len(*self) -> uint {
+    pub fn len(self) -> uint {
         return self.len
     }
 
     /// Returns a pointer to the base of the slice.
-    pub fn ptr(*self) -> *T {
+    pub fn ptr(self) -> *T {
         return self.ptr
     }
 
     /// Returns a pointer to the element at index `i` in the slice.
-    pub fn ptr_at(*self, i: uint) -> *T {
+    pub fn ptr_at(self, i: uint) -> *T {
         assert(i < self.len, "slice index out of bounds")
         return self.ptr.(i as int)
     }
 
     /// Returns the value at index `i` in the slice.
-    pub fn get(*self, i: uint) -> T {
+    pub fn get(self, i: uint) -> T {
         return self.ptr_at(i)^
     }
 
     /// Returns a slice that points to elements from index `start` (incluive) 
     /// to `end` (exclusive).
-    pub fn slice(*self, start: uint, end: uint) -> Slice[T] {
+    pub fn slice(self, start: uint, end: uint) -> Slice[T] {
         assert(start < self.len || start == 0, "slice start out of bounds")
         assert(end <= self.len, "slice end out of bounds")
         assert(end >= start, "slice end cannot be less than start")
@@ -61,13 +61,13 @@ impl Slice {
 
     /// Returns a slice that points to elements from the base of the slice
     /// to `end` (exclusive).
-    pub fn slice_left(*self, end: uint) -> Slice[T] {
+    pub fn slice_left(self, end: uint) -> Slice[T] {
         return self.slice(0, end)
     }
 
     /// Returns a slice that points to elements from `start` (inclusive) to
     /// `end` (exclusive).
-    pub fn slice_right(*self, start: uint) -> Slice[T] {
+    pub fn slice_right(self, start: uint) -> Slice[T] {
         return self.slice(start, self.len)
     }
 }
@@ -113,23 +113,23 @@ impl SliceMut {
     }
 
     /// Returns the number of elements in the slice.
-    pub fn len(*self) -> uint {
+    pub fn len(self) -> uint {
         return self.len
     }
 
     /// Returns a pointer to the base of the slice.
-    pub fn ptr(*self) -> *mut T {
+    pub fn ptr(self) -> *mut T {
         return self.ptr
     }
 
     /// Returns a pointer to the element at index `i` in the slice.
-    pub fn ptr_at(*self, i: uint) -> *mut T {
+    pub fn ptr_at(self, i: uint) -> *mut T {
         assert(i < self.len, "slice index out of bounds")
         return self.ptr.(i as int)
     }
 
     /// Returns a slice with the same pointer and length as this one.
-    pub fn as_slice(*self) -> Slice[T] {
+    pub fn as_slice(self) -> Slice[T] {
         return Slice[T]{
             ptr: self.ptr
             len: self.len
@@ -138,7 +138,7 @@ impl SliceMut {
 
     /// Returns a slice that points to elements from index `start` (incluive) 
     /// to `end` (exclusive).
-    pub fn slice(*self, start: uint, end: uint) -> SliceMut[T] {
+    pub fn slice(self, start: uint, end: uint) -> SliceMut[T] {
         assert(end > start, "slice end must be greater than start")
         assert(start < self.len, "slice start out of bounds")
         assert(end <= self.len, "slice end out of bounds")
@@ -150,13 +150,13 @@ impl SliceMut {
 
     /// Returns a slice that points to elements from the base of the slice
     /// to `end` (exclusive).
-    pub fn slice_left(*self, end: uint) -> SliceMut[T] {
+    pub fn slice_left(self, end: uint) -> SliceMut[T] {
         return self.slice(0, end)
     }
 
     /// Returns a slice that points to elements from `start` (inclusive) to
     /// `end` (exclusive).
-    pub fn slice_right(*self, start: uint) -> SliceMut[T] {
+    pub fn slice_right(self, start: uint) -> SliceMut[T] {
         return self.slice(start, self.len)
     }
 }
