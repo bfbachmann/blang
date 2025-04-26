@@ -10,6 +10,7 @@ use crate::fmt::format_code_vec;
 use crate::lexer::pos::Span;
 use crate::parser::ast::member::MemberAccess;
 use crate::parser::ast::op::Operator;
+use crate::parser::ast::r#use::UsedModule;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::unresolved::UnresolvedType;
 use std::fmt;
@@ -34,6 +35,7 @@ pub enum ErrorKind {
     UndefSymbol,
     UndefStructField,
     UndefMod,
+    DupImportedMod,
     StructFieldNotInitialized,
     UndefMember,
     SpecMemberAccess,
@@ -355,6 +357,18 @@ pub fn err_invalid_mod_path(mod_path: &str, span: Span) -> AnalyzeError {
         format_code!("no such module {}", mod_path).as_str(),
         span,
     )
+}
+
+pub fn err_dup_imported_mod(used_mod: &UsedModule, existing: Span) -> AnalyzeError {
+    AnalyzeError::new(
+        ErrorKind::DupImportedMod,
+        format_code!("duplicate import {}", used_mod.path.raw).as_str(),
+        used_mod.path.span,
+    )
+    .with_note(Note {
+        message: format_code!("{} was already imported here.", used_mod.path.raw),
+        span: existing,
+    })
 }
 
 pub fn err_invalid_statement(span: Span) -> AnalyzeError {

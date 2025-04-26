@@ -7,9 +7,9 @@ use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::error::{
-    err_dup_ident, err_dup_impl_fn, err_dup_import_alias, err_dup_mem_fn, err_expected_spec,
-    err_invalid_mod_path, err_invalid_statement, err_not_pub, err_type_already_implements_spec,
-    err_undef_foreign_symbol,
+    err_dup_ident, err_dup_impl_fn, err_dup_import_alias, err_dup_imported_mod, err_dup_mem_fn,
+    err_expected_spec, err_invalid_mod_path, err_invalid_statement, err_not_pub,
+    err_type_already_implements_spec, err_undef_foreign_symbol,
 };
 use crate::analyzer::ident::{Ident, IdentKind, ModAlias};
 use crate::analyzer::prog_context::ProgramContext;
@@ -143,6 +143,8 @@ impl AModule {
 }
 
 fn define_imported_idents(ctx: &mut ProgramContext, src_file: &SrcFile, src_info: &SrcInfo) {
+    let mut imported_mod_ids = HashMap::new();
+
     for used_mod in &src_file.used_mods {
         let target_mod_id = match src_info.mod_info.get_id_by_path(&used_mod.path.raw) {
             Some(mod_id) => mod_id,
@@ -151,6 +153,11 @@ fn define_imported_idents(ctx: &mut ProgramContext, src_file: &SrcFile, src_info
                 continue;
             }
         };
+
+        // Record an error if this module was already imported.
+        if let Some(existing_span) = imported_mod_ids.insert(target_mod_id, used_mod.path.span) {
+            ctx.insert_err(err_dup_imported_mod(used_mod, existing_span));
+        }
 
         if let Some(alias) = &used_mod.maybe_alias {
             if let Err(existing) = ctx.insert_mod_alias(ModAlias {

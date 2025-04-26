@@ -1,7 +1,6 @@
 mod generic_fns
 
-use "std/libc" {exit}
-use "std/libc" {malloc, free}
+use "std/libc" {malloc, free, exit}
 use "std/runtime" {assert}
 
 spec ToStr {

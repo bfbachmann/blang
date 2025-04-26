@@ -1,8 +1,7 @@
 mod consts
 
-use "std/libc" {exit}
-use "std/runtime" {assert}
 use "std/libc" @libc
+use "std/runtime" {assert}
 
 struct Thing {
     i: i64
@@ -54,5 +53,5 @@ fn main() {
     // Make sure we can use `sizeof` expressions as const expressions.
     assert([3u8; sizeof u64].(sizeof u64 - 2) == 3, "expected 3")
 
-    exit(0)
+    @libc.exit(0)
 }

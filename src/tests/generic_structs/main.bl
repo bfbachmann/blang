@@ -1,7 +1,6 @@
 mod generic_structs
 
-use "std/libc" {exit}
-use "std/libc" {memcpy, malloc, free}
+use "std/libc" {memcpy, malloc, free, exit}
 use "std/runtime" {assert}
 
 struct Ref[T] {

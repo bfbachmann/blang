@@ -1,16 +1,12 @@
 mod generic_impls
 
-use "std/libc" {puts}
-use "std/libc" {exit}
+use "std/libc" {puts, exit}
 use "std/mem" {heap_realloc, heap_free}
-use "std/runtime" {panic}
-use "std/allocator" {Allocator}
-use "std/allocator" {LibcAllocator}
+use "std/runtime" {panic, assert}
+use "std/allocator" {Allocator, LibcAllocator}
 
 // List is the data type being tested.
 use "std/types/list" {List}
-
-use "std/runtime" {assert}
 
 spec ToInt {
     fn to_int(self) -> int

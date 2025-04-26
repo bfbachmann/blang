@@ -2511,6 +2511,35 @@ mod tests {
     }
 
     #[test]
+    fn dup_imported_mod() {
+        let mods = vec![
+            (
+                "a".to_string(),
+                r#"
+                    mod a
+                
+                    use "b" @b
+                    use "b" {test}
+                "#
+                .to_string(),
+            ),
+            (
+                "b".to_string(),
+                r#"
+                    mod b
+                    
+                    pub const test = 1
+                "#
+                .to_string(),
+            ),
+        ];
+
+        let (analysis, src_info) = analyze_program(mods);
+        check_mod_errs(&analysis, &src_info, "a", Some(ErrorKind::DupImportedMod));
+        check_mod_errs(&analysis, &src_info, "b", None);
+    }
+
+    #[test]
     fn var_redeclared_in_child_scope() {
         let result = analyze(
             r#"
