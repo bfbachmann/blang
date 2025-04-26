@@ -262,8 +262,8 @@ pub fn parse_mods(mod_path: &str) -> (SrcInfo, Vec<ParseError>) {
         },
     ]);
 
-    while let Some(used_mod) = parse_queue.pop_front() {
-        let (mod_ids, parse_errs) = parse_mod_dir(&mut src_info, &used_mod);
+    while let Some(mod_path) = parse_queue.pop_front() {
+        let (mod_ids, parse_errs) = parse_mod_dir(&mut src_info, &mod_path);
         errs.extend(parse_errs);
 
         for mod_id in mod_ids {
@@ -397,6 +397,7 @@ pub fn lex_source_file(file_id: FileID, input_path: &str) -> Result<LexResult<Ve
 /// error message.
 fn locate_module_dir(ctx: &mut SrcInfo, used_mod_path: &ModulePath) -> Result<DirID, ParseError> {
     // Get the directory path and mod name from the given target mod path.
+    let cwd_path = Path::new(".");
     let mod_path = Path::new(&used_mod_path.raw);
     let (dir_path, mod_name) = if mod_path.is_dir() {
         (
@@ -428,12 +429,7 @@ fn locate_module_dir(ctx: &mut SrcInfo, used_mod_path: &ModulePath) -> Result<Di
             used_mod_path.span,
         ));
     } else {
-        return Err(ParseError::new(
-            ErrorKind::FailedToLocateMod,
-            format_code!("module {} does not exist", mod_path.display()).as_str(),
-            None,
-            used_mod_path.span,
-        ));
+        (cwd_path, mod_path.to_string_lossy().to_string())
     };
 
     // Nothing to do if we've already parsed all the files in this dir.
@@ -492,7 +488,10 @@ fn locate_module_dir(ctx: &mut SrcInfo, used_mod_path: &ModulePath) -> Result<Di
     }
 
     let dir_id = ctx.dir_info.insert(DirInfo {
-        path: dir_path.to_str().unwrap().to_string(),
+        path: match dir_path_str {
+            "." => "".to_string(),
+            other => other.to_string(),
+        },
         file_ids,
         mod_ids: Default::default(),
     });
