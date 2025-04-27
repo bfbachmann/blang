@@ -6,7 +6,7 @@ use crate::analyzer::ast::r#enum::AEnumTypeVariant;
 use crate::analyzer::ast::symbol::ASymbol;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::fmt::format_code_vec;
+use crate::fmt::{format_code_vec, hierarchy_to_string};
 use crate::lexer::pos::Span;
 use crate::parser::ast::member::MemberAccess;
 use crate::parser::ast::op::Operator;
@@ -14,6 +14,7 @@ use crate::parser::ast::r#use::UsedModule;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::unresolved::UnresolvedType;
 use std::fmt;
+use std::path::PathBuf;
 
 pub type AnalyzeResult<T> = Result<T, AnalyzeError>;
 
@@ -1533,4 +1534,16 @@ pub fn err_dup_mem_fn(
         .as_str(),
         span,
     )
+}
+
+pub fn err_import_cycle(used_mod: &UsedModule, cycle: &Vec<PathBuf>) -> AnalyzeError {
+    let mod_chain = hierarchy_to_string(
+        &cycle
+            .iter()
+            .map(|p| p.to_str().unwrap().to_string())
+            .collect(),
+    );
+
+    AnalyzeError::new(ErrorKind::ImportCycle, "import cycle", used_mod.path.span)
+        .with_detail(format!("The offending import chain is: {}", mod_chain).as_str())
 }

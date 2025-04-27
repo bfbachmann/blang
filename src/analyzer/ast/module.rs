@@ -33,6 +33,15 @@ pub struct AModule {
 }
 
 impl AModule {
+    pub fn new_empty(mod_id: ModID) -> AModule {
+        AModule {
+            mod_id,
+            fns: vec![],
+            impls: vec![],
+            extern_fns: vec![],
+        }
+    }
+
     /// Performs semantic analysis on the given module and returns a type-rich version of it.
     pub fn from(ctx: &mut ProgramContext, mod_id: ModID, src_info: &SrcInfo) -> AModule {
         ctx.set_cur_mod_id(mod_id);

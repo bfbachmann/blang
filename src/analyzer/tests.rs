@@ -2511,6 +2511,34 @@ mod tests {
     }
 
     #[test]
+    fn cyclical_imports() {
+        let mods = vec![
+            (
+                "a".to_string(),
+                r#"
+                    mod a
+                
+                    use "b" @b
+                "#
+                .to_string(),
+            ),
+            (
+                "b".to_string(),
+                r#"
+                    mod b
+                    
+                    use "a" @a
+                "#
+                .to_string(),
+            ),
+        ];
+
+        let (analysis, src_info) = analyze_program(mods);
+        check_mod_errs(&analysis, &src_info, "a", None);
+        check_mod_errs(&analysis, &src_info, "b", Some(ErrorKind::ImportCycle));
+    }
+
+    #[test]
     fn dup_imported_mod() {
         let mods = vec![
             (

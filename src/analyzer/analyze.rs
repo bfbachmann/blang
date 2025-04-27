@@ -2,13 +2,12 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::analyzer::ast::module::AModule;
-use crate::analyzer::error::{AnalyzeError, ErrorKind};
+use crate::analyzer::error::{err_import_cycle, AnalyzeError, ErrorKind};
 use crate::analyzer::ident::IdentKind;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::codegen::program::CodeGenConfig;
-use crate::fmt::hierarchy_to_string;
 use crate::lexer::pos::{Position, Span};
 use crate::parser::{ModID, SrcInfo};
 use flamer::flame;
@@ -107,7 +106,7 @@ pub fn analyze_module(
     mod_chain: &Vec<PathBuf>,
     src_info: &SrcInfo,
     mod_id: ModID,
-) {
+) -> bool {
     // Append the module we're analyzing to the dependency chain.
     let mut new_mod_chain = mod_chain.clone();
     let mod_info = src_info.mod_info.get_by_id(mod_id);
@@ -115,7 +114,6 @@ pub fn analyze_module(
     new_mod_chain.push(mod_path.clone());
 
     // Make sure all modules that this module depends on are analyzed first.
-    let mut import_cycle_errs = vec![];
     for used_mod in src_info.get_used_mods(mod_id) {
         let used_mod_id = match src_info.mod_info.get_id_by_path(&used_mod.path.raw) {
             Some(id) => id,
@@ -127,45 +125,51 @@ pub fn analyze_module(
         let used_mod_info = src_info.mod_info.get_by_id(used_mod_id);
         let used_mod_path = PathBuf::from(&used_mod_info.path);
 
-        // Record error and skip this import if it is cyclical.
+        // Record error and abort early if there is a cyclical import.
         if new_mod_chain.contains(&used_mod_path) {
             let mut cycle = new_mod_chain.clone();
             cycle.push(used_mod_path);
 
-            let import_cycle = hierarchy_to_string(
-                &cycle
-                    .iter()
-                    .map(|p| p.to_str().unwrap().to_string())
-                    .collect(),
+            let err = err_import_cycle(used_mod, &cycle);
+            analyzed_mods.insert(
+                mod_id,
+                AnalyzedModule::new(
+                    AModule::new_empty(mod_id),
+                    HashMap::from([(err.span.start_pos, err)]),
+                    HashMap::new(),
+                ),
             );
-            import_cycle_errs.push(
-                AnalyzeError::new(ErrorKind::ImportCycle, "import cycle", used_mod.span)
-                    .with_detail(
-                        format!("The offending import cycle is: {}", import_cycle).as_str(),
-                    ),
-            );
-
-            continue;
+            return false;
         }
 
-        // Analyze the module only if we have not already done so.
-        if !analyzed_mods.contains_key(&used_mod_id) {
-            analyze_module(ctx, analyzed_mods, &new_mod_chain, src_info, used_mod_id);
+        // Analyze the module only if we have not already done so. If it returns false it means
+        // analysis should be aborted because of an import cycle.
+        if !analyzed_mods.contains_key(&used_mod_id)
+            && !analyze_module(ctx, analyzed_mods, &new_mod_chain, src_info, used_mod_id)
+        {
+            analyzed_mods.insert(
+                mod_id,
+                AnalyzedModule::new(
+                    AModule::new_empty(mod_id),
+                    std::mem::take(&mut ctx.errors),
+                    std::mem::take(&mut ctx.warnings),
+                ),
+            );
+            return false;
         }
     }
 
     let analyzed_module = AModule::from(ctx, mod_id, src_info);
 
-    // Append the import cycle errors to the module analysis errors.
-    let mut errs = std::mem::take(&mut ctx.errors);
-    for cycle_err in import_cycle_errs {
-        errs.insert(cycle_err.span.start_pos, cycle_err);
-    }
-
     analyzed_mods.insert(
         mod_id,
-        AnalyzedModule::new(analyzed_module, errs, std::mem::take(&mut ctx.warnings)),
+        AnalyzedModule::new(
+            analyzed_module,
+            std::mem::take(&mut ctx.errors),
+            std::mem::take(&mut ctx.warnings),
+        ),
     );
+    true
 }
 
 /// Checks that given `main` function is declared correctly.
