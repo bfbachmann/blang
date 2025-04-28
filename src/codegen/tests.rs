@@ -19,7 +19,7 @@ mod tests {
         let src_file = SrcFile::parse(&mut parser).expect("should not error");
 
         let target_machine = init_default_host_target().unwrap();
-        let config = CodeGenConfig::new_default(
+        let config = CodeGenConfig::new_test_default(
             target_machine,
             PathBuf::from("/dev/null"),
             OutputFormat::Object,
@@ -29,7 +29,7 @@ mod tests {
         let analysis = analyze_modules(&src_info, "test", config);
 
         let prog = mono_prog(analysis);
-        generate(prog).expect("should not error");
+        generate(&src_info, prog).expect("should not error");
     }
 
     #[test]

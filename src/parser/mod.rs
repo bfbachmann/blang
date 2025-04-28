@@ -71,7 +71,7 @@ impl FileInfoStore {
 #[derive(Default, Debug)]
 pub struct ModInfoStore {
     mod_info: Vec<ModInfo>,
-    mod_ids: HashMap<String, ModID>,
+    path_to_id: HashMap<String, ModID>,
 }
 
 impl ModInfoStore {
@@ -80,13 +80,14 @@ impl ModInfoStore {
     }
 
     pub fn insert(&mut self, mod_info: ModInfo) -> ModID {
-        let index = self.mod_ids.len();
+        let mod_id = self.path_to_id.len() as ModID;
         assert!(self
-            .mod_ids
-            .insert(mod_info.path.clone(), index as ModID)
+            .path_to_id
+            .insert(mod_info.path.clone(), mod_id)
             .is_none());
+
         self.mod_info.push(mod_info);
-        index as ModID
+        mod_id
     }
 
     pub fn get_by_id(&self, id: ModID) -> &ModInfo {
@@ -98,7 +99,7 @@ impl ModInfoStore {
     }
 
     pub fn get_id_by_path(&self, mod_path: &str) -> Option<ModID> {
-        self.mod_ids.get(mod_path).copied()
+        self.path_to_id.get(mod_path).copied()
     }
 }
 
@@ -241,6 +242,14 @@ impl SrcInfo {
         }
 
         used_mods
+    }
+
+    /// Returns the directory path and file name for the given file.
+    pub fn dir_and_file_name(&self, file_id: FileID) -> (&str, &str) {
+        let file_path = Path::new(self.file_info.try_get_file_path_by_id(file_id).unwrap());
+        let dir = file_path.parent().unwrap().to_str().unwrap();
+        let file_name = file_path.file_name().unwrap().to_str().unwrap();
+        (dir, file_name)
     }
 }
 

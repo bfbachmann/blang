@@ -20,7 +20,7 @@ mod tests {
 
         let target_machine = init_default_host_target().unwrap();
         let config =
-            CodeGenConfig::new_default(target_machine, PathBuf::new(), OutputFormat::LLVMIR);
+            CodeGenConfig::new_test_default(target_machine, PathBuf::new(), OutputFormat::LLVMIR);
         let src_info = SrcInfo::new_test_file(src_file);
 
         analyze_modules(&src_info, "test", config)
@@ -74,7 +74,7 @@ mod tests {
 
         let target_machine = init_default_host_target().unwrap();
         let config =
-            CodeGenConfig::new_default(target_machine, PathBuf::new(), OutputFormat::LLVMIR);
+            CodeGenConfig::new_test_default(target_machine, PathBuf::new(), OutputFormat::LLVMIR);
         let src_info = SrcInfo::new_test_mods(parsed_mods);
         let analysis = analyze_modules(&src_info, &root_mod_path, config);
 

@@ -9,7 +9,7 @@ use crate::codegen::context::{
 use crate::codegen::convert::TypeConverter;
 use crate::codegen::error::CodeGenResult;
 use crate::lexer::pos::Locatable;
-use crate::parser::ModID;
+use crate::parser::{ModID, SrcInfo};
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
@@ -32,6 +32,7 @@ mod var;
 /// Uses LLVM to generate code for functions.
 pub struct FnCodeGen<'a, 'ctx> {
     ctx: &'ctx Context,
+    src_info: &'a SrcInfo,
     ll_builder: &'a Builder<'ctx>,
     di_ctx: Option<&'a mut DICtx<'ctx>>,
     module: &'a Module<'ctx>,
@@ -58,6 +59,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Generates code for the given function.
     pub fn generate(
         context: &'ctx Context,
+        src_info: &'a SrcInfo,
         builder: &'a Builder<'ctx>,
         di_ctx: Option<&'a mut DICtx<'ctx>>,
         module: &'a Module<'ctx>,
@@ -69,6 +71,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     ) -> CodeGenResult<FunctionValue<'ctx>> {
         let mut fn_compiler = FnCodeGen {
             ctx: context,
+            src_info,
             ll_builder: builder,
             di_ctx,
             module,

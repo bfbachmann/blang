@@ -33,6 +33,7 @@ pub struct AFnSig {
     pub maybe_impl_type_key: Option<TypeKey>,
     /// Optional parameters (generics) for this function.
     pub params: Option<AParams>,
+    pub span: Span,
 }
 
 impl Hash for AFnSig {
@@ -108,6 +109,7 @@ impl AFnSig {
             type_key: ctx.unknown_type_key(),
             maybe_impl_type_key,
             params: None,
+            span: sig.span,
         };
         a_fn_sig.type_key = ctx.force_insert_type(AType::from_fn_sig(a_fn_sig.clone()));
 

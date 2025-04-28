@@ -691,6 +691,7 @@ impl AExpr {
                         type_key,
                         maybe_impl_type_key: None,
                         params: None,
+                        span: Span::default(),
                     },
                     body: AClosure::new_empty(),
                     span,

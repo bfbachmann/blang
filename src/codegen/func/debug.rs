@@ -3,6 +3,7 @@ use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::codegen::func::{DICtx, FnCodeGen};
 use crate::lexer::pos::Position;
+use crate::parser::{FileID, SrcInfo};
 use inkwell::debug_info::{
     AsDIScope, DIFile, DIFlagsConstants, DILocalVariable, DILocation, DIScope, DISubroutineType,
     DIType, DWARFEmissionKind, DWARFSourceLanguage,
@@ -11,18 +12,15 @@ use inkwell::module::Module;
 use inkwell::values::{BasicValueEnum, PointerValue};
 use inkwell::AddressSpace;
 use llvm_sys::debuginfo::{LLVMDIFlags, LLVMDWARFTypeEncoding};
-use std::path::{Path, PathBuf};
 
-/// Creates a new debug info builder and compile unit for the module (file) at the given path.
-pub fn new_di_ctx<'ctx>(mod_path: &str, module: &Module<'ctx>) -> DICtx<'ctx> {
-    let file_path = Path::new(mod_path);
-    let file_name = file_path.file_name().unwrap().to_str().unwrap();
-    let dir = match file_path.parent() {
-        Some(dir_path) => dir_path.to_str().unwrap(),
-        None => ".",
-    };
-
-    let (di_builder, di_cu) = module.create_debug_info_builder(
+/// Creates a new debug info builder and compile unit for the file.
+pub fn new_di_ctx<'ctx>(
+    src_info: &SrcInfo,
+    file_id: FileID,
+    ll_module: &Module<'ctx>,
+) -> DICtx<'ctx> {
+    let (dir, file_name) = src_info.dir_and_file_name(file_id);
+    let (di_builder, di_cu) = ll_module.create_debug_info_builder(
         true,
         DWARFSourceLanguage::C,
         file_name,
@@ -52,7 +50,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         };
 
         let di_scope = di_ctx.di_cu.as_debug_info_scope();
-        let di_file = self.di_file_from_mangled_name(mangled_name);
+        let di_file = self.di_file_from_id(func.span.file_id);
         let di_subroutine_type = self.gen_di_subroutine_type(&func.signature);
 
         let di_subprog = di_ctx.di_builder.create_function(
@@ -95,7 +93,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Generates debug info about a function type.
     fn gen_di_subroutine_type(&self, fn_sig: &AFnSig) -> DISubroutineType<'ctx> {
         let di_ctx = self.di_ctx.as_ref().unwrap();
-        let di_file = self.di_file_from_mangled_name(&fn_sig.mangled_name);
+        let di_file = self.di_file_from_id(fn_sig.span.file_id);
 
         let mut di_param_types = vec![];
 
@@ -257,14 +255,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         );
     }
 
-    fn di_file_from_mangled_name(&self, mangled_name: &str) -> DIFile<'ctx> {
-        let file_path = PathBuf::from(mangled_name.split("::").next().unwrap());
-        let file_name = file_path.file_name().unwrap().to_str().unwrap();
-        let dir = match file_path.parent() {
-            Some(dir_path) => dir_path.to_str().unwrap(),
-            None => ".",
-        };
-
+    fn di_file_from_id(&self, file_id: FileID) -> DIFile<'ctx> {
+        let (dir, file_name) = self.src_info.dir_and_file_name(file_id);
         self.di_ctx
             .as_ref()
             .unwrap()

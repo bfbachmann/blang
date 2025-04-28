@@ -23,13 +23,14 @@ use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 use crate::codegen::convert::TypeConverter;
 use crate::codegen::error::{CodeGenError, CodeGenResult, ErrorKind};
 use crate::codegen::func::debug::new_di_ctx;
-use crate::codegen::func::{gen_fn_sig, FnCodeGen};
+use crate::codegen::func::{gen_fn_sig, DICtx, FnCodeGen};
 use crate::mono_collector::{MonoItem, MonoProg};
-use crate::parser::ModID;
+use crate::parser::{ModID, SrcInfo};
 
 /// Compiles a type-rich and semantically valid program to LLVM IR and/or bitcode.
 pub struct ProgramCodeGen<'a, 'ctx> {
     ctx: &'ctx Context,
+    src_info: &'a SrcInfo,
     builder: &'a Builder<'ctx>,
     module: &'a Module<'ctx>,
     fns: &'a HashMap<TypeKey, AFn>,
@@ -98,7 +99,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
         }
 
         // Generate functions.
-        let mut di_ctxs = HashMap::new();
+        let mut di_ctxs: HashMap<ModID, DICtx> = HashMap::new();
         for (i, item) in self.mono_items.iter().enumerate() {
             // Skip the root mono item because it's meaningless.
             if i == 0 {
@@ -112,22 +113,15 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
             match typ {
                 AType::Function(fn_sig) => {
                     let func = self.fns.get(&fn_sig.type_key).unwrap();
+                    let file_id = func.span.file_id;
 
                     let maybe_di_ctx = if self.emit_debug_info {
-                        let mod_path = func
-                            .signature
-                            .mangled_name
-                            .split("::")
-                            .next()
-                            .unwrap()
-                            .to_string();
-
-                        if let Some(di_ctx) = di_ctxs.get_mut(&mod_path) {
+                        if let Some(di_ctx) = di_ctxs.get_mut(&file_id) {
                             Some(di_ctx)
                         } else {
-                            let di_ctx = new_di_ctx(&mod_path, self.module);
-                            di_ctxs.insert(mod_path.clone(), di_ctx);
-                            Some(di_ctxs.get_mut(&mod_path).unwrap())
+                            let di_ctx = new_di_ctx(self.src_info, file_id, self.module);
+                            di_ctxs.insert(file_id, di_ctx);
+                            Some(di_ctxs.get_mut(&file_id).unwrap())
                         }
                     } else {
                         None
@@ -135,6 +129,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
 
                     FnCodeGen::generate(
                         self.ctx,
+                        self.src_info,
                         self.builder,
                         maybe_di_ctx,
                         self.module,
@@ -321,6 +316,24 @@ impl CodeGenConfig {
         }
     }
 
+    /// Creates codegen config with default settings for tests.
+    #[cfg(test)]
+    pub fn new_test_default(
+        target_machine: TargetMachine,
+        output_path: PathBuf,
+        output_format: OutputFormat,
+    ) -> CodeGenConfig {
+        CodeGenConfig {
+            target_machine,
+            output_format,
+            output_path,
+            optimization_level: OptimizationLevel::Default,
+            linker: None,
+            linker_args: vec![],
+            emit_debug_info: false, // TODO: Set this to true when it's not broken.
+        }
+    }
+
     pub fn optimization_pass_config(&self) -> (String, PassBuilderOptions) {
         let optimization_pass_pipeline = match self.optimization_level {
             OptimizationLevel::None => "default<O0>",
@@ -349,7 +362,7 @@ impl CodeGenConfig {
 /// Generates the program code for the given target. If there is no target, compiles the
 /// program for the host system.
 #[flame]
-pub fn generate(prog: MonoProg) -> CodeGenResult<()> {
+pub fn generate(src_info: &SrcInfo, prog: MonoProg) -> CodeGenResult<()> {
     let ctx = Context::create();
     let builder = ctx.create_builder();
     let module = ctx.create_module("main");
@@ -363,6 +376,7 @@ pub fn generate(prog: MonoProg) -> CodeGenResult<()> {
     // Create the program code generator and generate the program.
     let mut codegen = ProgramCodeGen {
         ctx: &ctx,
+        src_info,
         builder: &builder,
         module: &module,
         fns: &prog.fns,

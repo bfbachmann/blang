@@ -19,7 +19,7 @@ use crate::codegen::program::{
 use crate::fmt::{display_err, format_duration};
 use crate::lexer::pos::Locatable;
 use crate::mono_collector::mono_prog;
-use crate::parser::parse_mods;
+use crate::parser::{parse_mods, SrcInfo};
 
 mod codegen;
 #[macro_use]
@@ -303,7 +303,7 @@ fn analyze(
     target_mod_path: &str,
     maybe_dump_path: Option<&String>,
     config: CodeGenConfig,
-) -> Result<ProgramAnalysis, AnalyzeProgError> {
+) -> Result<(SrcInfo, ProgramAnalysis), AnalyzeProgError> {
     // Parse all targeted source files.
     let (src_info, errs) = parse_mods(target_mod_path);
 
@@ -411,7 +411,7 @@ fn analyze(
         }
     }
 
-    Ok(analysis)
+    Ok((src_info, analysis))
 }
 
 #[derive(Debug)]
@@ -440,7 +440,7 @@ fn compile(target_mod: &str, quiet: bool, config: CodeGenConfig) -> Result<(), C
     let start_time = Instant::now();
     let is_exe = config.output_format == OutputFormat::Executable;
     let output_path = config.output_path.to_str().unwrap().to_string();
-    let prog_analysis = match analyze(target_mod, None, config) {
+    let (src_info, prog_analysis) = match analyze(target_mod, None, config) {
         Ok(p) => p,
         Err(e) => return Err(CompileProgError::AnalysisFailed(e)),
     };
@@ -453,7 +453,7 @@ fn compile(target_mod: &str, quiet: bool, config: CodeGenConfig) -> Result<(), C
     let prog = mono_prog(prog_analysis);
 
     // Compile the program.
-    if let Err(e) = generate(prog) {
+    if let Err(e) = generate(&src_info, prog) {
         return Err(CompileProgError::CodeGenFailed(e));
     }
 
@@ -524,7 +524,7 @@ mod tests {
             let result = compile(
                 lib_path.to_str().unwrap(),
                 true,
-                CodeGenConfig::new_default(
+                CodeGenConfig::new_test_default(
                     init_default_host_target().unwrap(),
                     PathBuf::from(output_path),
                     OutputFormat::Object,
@@ -570,7 +570,7 @@ mod tests {
             let exe_path = format!("bin/{}", src_path_stem);
 
             // Compile the source code to IR.
-            let codegen_config = CodeGenConfig::new_default(
+            let codegen_config = CodeGenConfig::new_test_default(
                 init_default_host_target().unwrap(),
                 PathBuf::from(&ir_path),
                 OutputFormat::LLVMIR,
