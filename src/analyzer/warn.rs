@@ -5,15 +5,8 @@ use std::fmt::{Display, Formatter};
 /// Represents a kind of warning emitted by the semantic analyzer.
 #[derive(Debug, PartialEq, Clone)]
 pub enum WarnKind {
-    UnreachableCode,
-}
-
-impl Display for WarnKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            WarnKind::UnreachableCode => write!(f, "unreachable code"),
-        }
-    }
+    Unreachable,
+    Unused,
 }
 
 /// Represents a warning issued by the semantic analyzer.
@@ -42,12 +35,12 @@ impl AnalyzeWarning {
 }
 
 pub fn warn_unreachable_case(span: Span) -> AnalyzeWarning {
-    AnalyzeWarning::new(WarnKind::UnreachableCode, "unreachable case", span)
+    AnalyzeWarning::new(WarnKind::Unreachable, "unreachable case", span)
 }
 
-pub fn warn_unreachable_statements(statement: &AStatement, span: Span) -> AnalyzeWarning {
+pub fn warn_unreachable(statement: &AStatement, span: Span) -> AnalyzeWarning {
     AnalyzeWarning::new(
-        WarnKind::UnreachableCode,
+        WarnKind::Unreachable,
         format_code!(
             "statements following {} will never be executed",
             match statement {
@@ -59,6 +52,14 @@ pub fn warn_unreachable_statements(statement: &AStatement, span: Span) -> Analyz
             }
         )
         .as_str(),
+        span,
+    )
+}
+
+pub fn warn_unused(name: &str, span: Span) -> AnalyzeWarning {
+    AnalyzeWarning::new(
+        WarnKind::Unused,
+        format_code!("{} is unused", name).as_str(),
         span,
     )
 }

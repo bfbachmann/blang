@@ -100,7 +100,6 @@ impl Buffer: Write {
     /// Writes `bytes` to the buffer. The buffer will try to grow automatically
     /// if it can't fit all the bytes.
     pub fn write(*mut self, bytes: Slice[u8]) {
-        let len = self.buf.len()
         let bytes_len = bytes.len()
         if bytes_len == 0 {
             return
@@ -159,8 +158,6 @@ impl Buffered: Write {
     /// Writes `bytes` to this buffered writer. The buffer will only be flushed
     /// to the underlying writer if it can't fit all of `bytes`.
     pub fn write(*mut self, bytes: Slice[u8]) {
-        let num_bytes = bytes.len()
-
         // If the bytes fit in the buffer, just write them to the buffer.
         if self.buf.can_fit(bytes.len()) {
             self.buf.write(bytes)

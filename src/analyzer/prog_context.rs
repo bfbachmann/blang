@@ -16,12 +16,12 @@ use crate::analyzer::error::{
     err_expected_params, err_expected_type, err_not_pub, err_undef_mod_alias, err_undef_type,
     err_unexpected_params, AnalyzeError, AnalyzeResult, ErrorKind,
 };
-use crate::analyzer::ident::{Ident, IdentKind, ModAlias};
+use crate::analyzer::ident::{Ident, IdentKind, ModAlias, Usage};
 use crate::analyzer::mangling;
 use crate::analyzer::mod_context::ModuleContext;
 use crate::analyzer::scope::{Scope, ScopeKind};
 use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
-use crate::analyzer::warn::AnalyzeWarning;
+use crate::analyzer::warn::{warn_unused, AnalyzeWarning};
 use crate::codegen::program::CodeGenConfig;
 use crate::fmt::format_code_vec;
 use crate::lexer::pos::{Locatable, Position, Span};
@@ -537,7 +537,7 @@ impl ProgramContext {
                     }
                 }
 
-                self.get_local_ident(&unresolved_type.name)
+                self.get_local_ident(&unresolved_type.name, Some(Usage::Read))
             }
         };
 
@@ -1371,8 +1371,27 @@ impl ProgramContext {
     }
 
     /// Pops and returns the current scope from the stack.
-    pub fn pop_scope(&mut self) -> Scope {
-        self.cur_mod_ctx_mut().pop_scope()
+    pub fn pop_scope(&mut self, check_usage: bool) -> Scope {
+        let scope = self.cur_mod_ctx_mut().pop_scope();
+
+        // Warn about unused identifiers.
+        if check_usage {
+            for ident in scope.unused_idents() {
+                self.insert_warn(warn_unused(&ident.name, ident.span));
+            }
+        }
+
+        scope
+    }
+
+    /// Returns the current scope.
+    pub fn cur_scope(&self) -> &Scope {
+        self.cur_mod_ctx().cur_scope()
+    }
+
+    /// Returns all unused imports in the current context.
+    pub fn unused_imports(&self) -> (Vec<&Ident>, Vec<&ModAlias>) {
+        self.cur_mod_ctx().unused_imports()
     }
 
     /// Returns the type associated with the given key. Panics if there is no such type.
@@ -1430,7 +1449,7 @@ impl ProgramContext {
     }
 
     pub fn get_mod_alias(&mut self, mod_sym: &Symbol) -> Option<&ModAlias> {
-        self.cur_mod_ctx().get_mod_alias(mod_sym)
+        self.cur_mod_ctx_mut().get_mod_alias(mod_sym)
     }
 
     /// Returns the type key associated with the current `impl` or `spec` type being analyzed.
@@ -1726,14 +1745,14 @@ impl ProgramContext {
     ///
     /// If `include_path` is false, `path` will not be included.
     pub fn mangle_name(
-        &self,
+        &mut self,
         maybe_mod_sym: Option<&Symbol>,
         maybe_impl_type_key: Option<TypeKey>,
         maybe_spec_type_key: Option<TypeKey>,
         name: &str,
         include_path: bool,
     ) -> String {
-        let mod_ctx = self.cur_mod_ctx();
+        let mod_ctx = self.cur_mod_ctx_mut();
 
         let mod_path = if let Some(mod_sym) = maybe_mod_sym {
             let alias = mod_ctx.get_mod_alias(mod_sym).unwrap();
@@ -1796,11 +1815,17 @@ impl ProgramContext {
     }
 
     pub fn get_local_ident_unchecked(&self, name: &str) -> Option<&Ident> {
-        self.cur_mod_ctx().get_ident(name)
+        match self.cur_mod_ctx().get_ident(name) {
+            Some(ident) => Some(ident),
+            None => None,
+        }
     }
 
-    pub fn get_local_ident(&mut self, name: &str) -> Option<&Ident> {
-        match self.cur_mod_ctx().get_ident(name) {
+    pub fn get_local_ident(&mut self, name: &str, set_usage: Option<Usage>) -> Option<&Ident> {
+        match self
+            .cur_mod_ctx_mut()
+            .get_ident_mut(name, set_usage.clone())
+        {
             Some(ident) => {
                 // If the identifier refers to something that has not yet been analyzed, analyze it.
                 match &ident.kind {
@@ -1816,7 +1841,10 @@ impl ProgramContext {
             None => return None,
         };
 
-        self.cur_mod_ctx().get_ident(name)
+        match self.cur_mod_ctx_mut().get_ident_mut(name, set_usage) {
+            Some(ident) => Some(ident),
+            None => None,
+        }
     }
 
     fn analyze_unchecked_ident(&mut self, name: &str) {
@@ -2005,21 +2033,19 @@ impl ProgramContext {
         self.push_scope(Scope::new(ScopeKind::Params, None));
 
         for param in params.params {
-            self.insert_ident(Ident {
-                name: param.name,
-                kind: IdentKind::Type {
-                    is_pub: false,
-                    type_key: param.generic_type_key,
-                    mod_id: Some(self.cur_mod_id),
-                },
-                span: param.span,
-            })
-            .unwrap()
+            self.insert_ident(Ident::new_type(
+                param.name,
+                false,
+                param.generic_type_key,
+                Some(self.cur_mod_id),
+                param.span,
+            ))
+            .unwrap();
         }
     }
 
-    pub fn pop_params(&mut self) {
-        assert_eq!(self.pop_scope().kind, ScopeKind::Params);
+    pub fn pop_params(&mut self, check_usage: bool) {
+        assert_eq!(self.pop_scope(check_usage).kind, ScopeKind::Params);
     }
 
     pub fn type_is_pub(&self, type_key: TypeKey) -> bool {

@@ -2,7 +2,7 @@ use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::ext::AExternFn;
 use crate::analyzer::ast::func::AFn;
 use crate::analyzer::ast::r#impl::AImpl;
-use crate::analyzer::ident::{Ident, IdentKind, ModAlias};
+use crate::analyzer::ident::{Ident, IdentKind, ModAlias, Usage};
 use crate::analyzer::scope::{Scope, ScopeKind};
 use crate::analyzer::type_store::TypeKey;
 use crate::parser::ast::symbol::Symbol;
@@ -39,20 +39,18 @@ pub struct ModuleContext {
 impl ModuleContext {
     /// Creates a new empty module context.
     pub fn new(primitive_types: &HashMap<String, TypeKey>) -> ModuleContext {
-        let mut scope = Scope::new(ScopeKind::InlineClosure, None);
+        let mut scope = Scope::new(ScopeKind::TopLevel, None);
 
         // Init scope with primitive types.
         for (name, type_key) in primitive_types {
             scope
-                .insert_ident(Ident {
-                    name: name.clone(),
-                    kind: IdentKind::Type {
-                        is_pub: true,
-                        type_key: *type_key,
-                        mod_id: None,
-                    },
-                    span: Default::default(),
-                })
+                .insert_ident(Ident::new_type(
+                    name.clone(),
+                    true,
+                    *type_key,
+                    None,
+                    Default::default(),
+                ))
                 .unwrap();
         }
 
@@ -124,6 +122,27 @@ impl ModuleContext {
         Ok(())
     }
 
+    fn get_imported_ident_mut(
+        &mut self,
+        name: &str,
+        set_usage: Option<Usage>,
+    ) -> Option<&mut Ident> {
+        match self.imported_idents.get_mut(&self.cur_file_id.unwrap()) {
+            Some(idents) => {
+                let ident = idents.get_mut(name);
+
+                match (ident, set_usage) {
+                    (Some(ident), Some(usage)) => {
+                        ident.usage = usage;
+                        Some(ident)
+                    }
+                    (ident, _) => ident,
+                }
+            }
+            None => None,
+        }
+    }
+
     fn get_imported_ident(&self, name: &str) -> Option<&Ident> {
         match self.imported_idents.get(&self.cur_file_id.unwrap()) {
             Some(idents) => idents.get(name),
@@ -139,6 +158,35 @@ impl ModuleContext {
     /// Pops the current scope from the stack and returns it.
     pub fn pop_scope(&mut self) -> Scope {
         self.scopes.pop().unwrap()
+    }
+
+    /// Returns the current scope.
+    pub fn cur_scope(&self) -> &Scope {
+        self.scopes.last().unwrap()
+    }
+
+    /// Returns all unused import identifiers.
+    pub fn unused_imports(&self) -> (Vec<&Ident>, Vec<&ModAlias>) {
+        let mut unused_idents = vec![];
+        let mut unused_aliases = vec![];
+
+        for map in self.imported_idents.values() {
+            for ident in map.values() {
+                if ident.is_unused() {
+                    unused_idents.push(ident);
+                }
+            }
+        }
+
+        for map in self.mod_aliases.values() {
+            for alias in map.values() {
+                if alias.usage == Usage::Unused {
+                    unused_aliases.push(alias);
+                }
+            }
+        }
+
+        (unused_idents, unused_aliases)
     }
 
     pub fn unwind_to_top_scope(&mut self) -> Vec<Scope> {
@@ -182,6 +230,44 @@ impl ModuleContext {
 
     /// Searches the stack for the identifier with the given name. Note that variables from parent
     /// functions aren't resolved because they can't be accessed from child functions.
+    pub fn get_ident_mut(&mut self, name: &str, set_usage: Option<Usage>) -> Option<&mut Ident> {
+        let maybe_ident = {
+            if self.search_scopes(name).is_some() {
+                self.search_scopes(name)
+            } else {
+                self.get_imported_ident_mut(name, set_usage)
+            }
+        };
+
+        match (maybe_ident, set_usage) {
+            (Some(ident), Some(usage)) => {
+                ident.usage = usage;
+                Some(ident)
+            }
+            (maybe_ident, _) => maybe_ident,
+        }
+    }
+
+    fn search_scopes(&mut self, name: &str) -> Option<&mut Ident> {
+        let mut allow_variables = true;
+
+        for scope in self.scopes.iter_mut().rev() {
+            let is_fn = matches!(scope.kind, ScopeKind::FnBody);
+
+            if let Some(ident) = scope.get_ident_mut(name) {
+                if allow_variables || !matches!(ident.kind, IdentKind::Variable { .. }) {
+                    return Some(ident);
+                }
+            }
+
+            if is_fn {
+                allow_variables = false;
+            }
+        }
+
+        None
+    }
+
     pub fn get_ident(&self, name: &str) -> Option<&Ident> {
         let mut allow_variables = true;
 
@@ -259,9 +345,12 @@ impl ModuleContext {
     }
 
     /// Gets the module ID that corresponds fo the given mod alias.
-    pub fn get_mod_alias(&self, mod_sym: &Symbol) -> Option<&ModAlias> {
-        if let Some(aliases) = self.mod_aliases.get(&mod_sym.span.file_id) {
-            return aliases.get(&mod_sym.name);
+    pub fn get_mod_alias(&mut self, mod_sym: &Symbol) -> Option<&ModAlias> {
+        if let Some(aliases) = self.mod_aliases.get_mut(&mod_sym.span.file_id) {
+            if let Some(alias) = aliases.get_mut(&mod_sym.name) {
+                alias.usage = Usage::Read;
+                return Some(alias);
+            }
         }
 
         None

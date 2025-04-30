@@ -9,7 +9,7 @@ use crate::analyzer::error::{
     err_dup_field_assign, err_dup_field_decl, err_dup_ident, err_not_pub, err_type_not_struct,
     err_undef_field, err_uninitialized_struct_fields,
 };
-use crate::analyzer::ident::{Ident, IdentKind};
+use crate::analyzer::ident::Ident;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::Span;
@@ -80,15 +80,13 @@ impl AStructType {
         let type_key = ctx.insert_type(AType::Struct(a_struct_type.clone()));
 
         // Define a symbol that maps to the struct type.
-        if let Err(existing) = ctx.insert_ident(Ident {
-            name: struct_type.name.clone(),
-            kind: IdentKind::Type {
-                is_pub: struct_type.is_pub,
-                type_key,
-                mod_id: Some(ctx.cur_mod_id()),
-            },
-            span: struct_type.span, // TODO: use name span
-        }) {
+        if let Err(existing) = ctx.insert_ident(Ident::new_type(
+            struct_type.name.clone(),
+            struct_type.is_pub,
+            type_key,
+            Some(ctx.cur_mod_id()),
+            struct_type.span, // TODO: Use name span
+        )) {
             let err = err_dup_ident(&struct_type.name, struct_type.span, existing.span);
             ctx.insert_err(err);
         }
@@ -164,7 +162,7 @@ impl AStructType {
             }
 
             // Pop generic parameters now that we're done analyzing the type.
-            ctx.pop_params();
+            ctx.pop_params(true);
         }
 
         a_struct_type

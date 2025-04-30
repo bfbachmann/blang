@@ -2,7 +2,7 @@ use crate::analyzer::error::{
     err_expected_expr_found_type, err_not_pub, err_undef_foreign_symbol, err_undef_local_symbol,
     err_undef_mod_alias, err_unresolved_params,
 };
-use crate::analyzer::ident::IdentKind;
+use crate::analyzer::ident::{IdentKind, Usage};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::Span;
@@ -108,7 +108,7 @@ impl ASymbol {
                 }
             }
 
-            None => match ctx.get_local_ident(&symbol.name) {
+            None => match ctx.get_local_ident(&symbol.name, Some(Usage::Read)) {
                 Some(ident) => ident,
                 None => {
                     ctx.insert_err(err_undef_local_symbol(&symbol.name, symbol.span));

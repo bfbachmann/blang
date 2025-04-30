@@ -8,7 +8,7 @@ use crate::analyzer::error::{
     err_dup_enum_variant, err_dup_ident, err_expected_enum, err_missing_variant_value,
     err_no_such_variant, err_unexpected_variant_value,
 };
-use crate::analyzer::ident::{Ident, IdentKind};
+use crate::analyzer::ident::Ident;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::Span;
@@ -109,15 +109,13 @@ impl AEnumType {
         };
         let type_key = ctx.insert_type(AType::Enum(a_enum_type.clone()));
 
-        if let Err(existing) = ctx.insert_ident(Ident {
-            name: enum_type.name.clone(),
-            kind: IdentKind::Type {
-                is_pub: enum_type.is_pub,
-                type_key,
-                mod_id: Some(ctx.cur_mod_id()),
-            },
-            span: enum_type.span, // TODO: use name span
-        }) {
+        if let Err(existing) = ctx.insert_ident(Ident::new_type(
+            enum_type.name.clone(),
+            enum_type.is_pub,
+            type_key,
+            Some(ctx.cur_mod_id()),
+            enum_type.span, // TODO: use name span
+        )) {
             err_dup_ident(&enum_type.name, enum_type.span, existing.span);
         }
 
@@ -197,7 +195,7 @@ impl AEnumType {
             }
 
             // Pop generic parameters now that we're done analyzing the type.
-            ctx.pop_params();
+            ctx.pop_params(true);
         }
 
         a_enum_type

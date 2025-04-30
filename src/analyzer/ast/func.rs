@@ -5,7 +5,7 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{
     err_dup_fn_arg, err_dup_ident, err_illegal_self_arg, err_misplaced_self_arg,
 };
-use crate::analyzer::ident::{Ident, IdentKind};
+use crate::analyzer::ident::Ident;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
 use crate::analyzer::type_store::TypeKey;
@@ -168,7 +168,7 @@ impl AFnSig {
         // We can clear the params from the program context now that we're
         // done analyzing this signature.
         if a_fn_sig.params.is_some() {
-            ctx.pop_params();
+            ctx.pop_params(true);
         }
 
         a_fn_sig
@@ -389,15 +389,11 @@ impl AFn {
     pub fn from_parts(ctx: &mut ProgramContext, func: &Function, signature: AFnSig) -> Self {
         // Insert a symbol for the function as long as it's not a method or anonymous.
         if !func.signature.name.is_empty() && signature.maybe_impl_type_key.is_none() {
-            if let Err(existing) = ctx.insert_ident(Ident {
-                name: func.signature.name.clone(),
-                kind: IdentKind::Fn {
-                    is_pub: func.is_pub,
-                    type_key: signature.type_key,
-                    mod_id: Some(ctx.cur_mod_id()),
-                },
-                span: func.signature.span, // TODO: use name span
-            }) {
+            if let Err(existing) = ctx.insert_ident(Ident::new_fn(
+                func,
+                signature.type_key,
+                Some(ctx.cur_mod_id()),
+            )) {
                 let err = err_dup_ident(&func.signature.name, func.signature.span, existing.span);
                 ctx.insert_err(err);
             }
@@ -427,7 +423,7 @@ impl AFn {
         // Remove the function signature params now that we're done analyzing
         // the function.
         if signature.params.is_some() {
-            ctx.pop_params();
+            ctx.pop_params(false);
         }
 
         AFn {

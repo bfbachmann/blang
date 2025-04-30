@@ -23,15 +23,15 @@ impl GCAllocator {
 }
 
 impl GCAllocator: Allocate {
-    pub fn alloc(*mut self, size: uint) -> *mut u8 {
+    pub fn alloc(*mut _, size: uint) -> *mut u8 {
         return gc_malloc(size)
     }
 
-    pub fn realloc(*mut self, ptr: *mut u8, size: uint) -> *mut u8 {
+    pub fn realloc(*mut _, ptr: *mut u8, size: uint) -> *mut u8 {
         return gc_realloc(ptr, size)
     }
 
-    pub fn free(*mut self, ptr: *mut u8) {
+    pub fn free(*mut _, ptr: *mut u8) {
         gc_free(ptr)
     }
 }

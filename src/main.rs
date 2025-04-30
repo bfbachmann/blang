@@ -16,7 +16,7 @@ use crate::codegen::error::CodeGenError;
 use crate::codegen::program::{
     generate, init_default_host_target, init_target_machine, CodeGenConfig, OutputFormat,
 };
-use crate::fmt::{display_err, format_duration};
+use crate::fmt::{display_msg, format_duration};
 use crate::lexer::pos::Locatable;
 use crate::mono_collector::mono_prog;
 use crate::parser::{parse_mods, SrcInfo};
@@ -226,7 +226,7 @@ fn main() {
         },
 
         Some(("check", sub_matches)) => match sub_matches.get_one::<String>("TARGET_MODULE") {
-            Some(file_path) => {
+            Some(target_mod) => {
                 let maybe_dump_path = sub_matches.get_one::<String>("dump");
                 let target_machine = match init_default_host_target() {
                     Ok(tm) => tm,
@@ -238,7 +238,7 @@ fn main() {
                     OutputFormat::LLVMIR,
                 );
 
-                if let Err(e) = analyze(file_path, maybe_dump_path, config) {
+                if let Err(e) = analyze(target_mod, maybe_dump_path, config) {
                     fatalln!("{}", e);
                 };
             }
@@ -246,20 +246,20 @@ fn main() {
         },
 
         Some(("run", sub_matches)) => match sub_matches.get_one::<String>("TARGET_MODULE") {
-            Some(file_path) => {
+            Some(target_mod) => {
                 let target_machine = match init_default_host_target() {
                     Ok(tm) => tm,
                     Err(err) => fatalln!("failed to initialize target {err}"),
                 };
                 let output_path =
-                    default_output_path(Path::new(file_path), OutputFormat::Executable);
+                    default_output_path(Path::new(target_mod), OutputFormat::Executable);
                 let config = CodeGenConfig::new_default(
                     target_machine,
                     output_path,
                     OutputFormat::Executable,
                 );
 
-                run(file_path, config);
+                run(target_mod, config);
             }
             _ => fatalln!("expected source path"),
         },
@@ -311,7 +311,7 @@ fn analyze(
         for err in &errs {
             match src_info.file_info.try_get_file_path_by_id(err.span.file_id) {
                 Some(_) => {
-                    display_err(
+                    display_msg(
                         &src_info,
                         &err.message,
                         None,
@@ -350,12 +350,12 @@ fn analyze(
     // Analyze the program.
     let analysis = analyze_modules(&src_info, target_mod_path, config);
 
-    // Display warnings and errors that occurred.
-    let mut err_count = 0;
-    for result in &analysis.analyzed_modules {
-        // Print warnings.
-        for warn in &result.warnings {
-            display_err(
+    // Print warnings.
+    let mut warn_count = 0;
+    for module in &analysis.analyzed_modules {
+        warn_count += 1;
+        for warn in &module.warnings {
+            display_msg(
                 &src_info,
                 &warn.message,
                 None,
@@ -365,11 +365,14 @@ fn analyze(
                 &vec![],
             );
         }
+    }
 
-        // Print errors.
-        err_count += result.errors.len();
-        for err in &result.errors {
-            display_err(
+    // Print errors.
+    let mut err_count = 0;
+    for module in &analysis.analyzed_modules {
+        err_count += module.errors.len();
+        for err in &module.errors {
+            display_msg(
                 &src_info,
                 &err.message,
                 err.detail.as_ref(),
@@ -384,7 +387,7 @@ fn analyze(
     // Die if analysis failed.
     if err_count > 0 {
         return Err(AnalyzeProgError::AnalysisFailed(format!(
-            "analysis failed with {err_count} error(s)"
+            "analysis failed with {err_count} error(s); {warn_count} warning(s)"
         )));
     }
 

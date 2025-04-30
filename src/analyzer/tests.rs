@@ -459,7 +459,7 @@ mod tests {
         "#,
         );
         check_err(&result, None);
-        check_warn(&result, Some(WarnKind::UnreachableCode));
+        check_warn(&result, Some(WarnKind::Unreachable));
     }
 
     #[test]
@@ -1950,7 +1950,7 @@ mod tests {
             }
             "#,
         );
-        check_warn(&result, Some(WarnKind::UnreachableCode));
+        check_warn(&result, Some(WarnKind::Unreachable));
     }
 
     #[test]
@@ -2764,15 +2764,15 @@ mod tests {
     fn statements_following_return() {
         let result = analyze(
             r#"
-            fn thing(a: i64) -> bool {
-                return true
-                a = 2
-                return false
+            fn main() {
+                return
+                let a = 2
+                return
             }
         "#,
         );
         check_err(&result, None);
-        check_warn(&result, Some(WarnKind::UnreachableCode));
+        check_warn(&result, Some(WarnKind::Unreachable));
     }
 
     #[test]
@@ -2792,5 +2792,37 @@ mod tests {
         "#,
         );
         check_err(&result, Some(ErrorKind::MissingReturn));
+    }
+
+    #[test]
+    fn warn_unused() {
+        let code = [
+            // Unused arg.
+            r#"
+            fn main() {
+                test(1)
+            }
+            
+            fn test(v: int) {}
+            "#,
+            // Unused local variable.
+            r#"fn main() { let x = 1 }"#,
+            // Unused local const.
+            r#"fn main() { const x = 1 }"#,
+            // Unused top-level private fn.
+            r#"fn thing() {}"#,
+            // Unused top-level const.
+            r#"fn thing() {}"#,
+            // Unused top-level private struct type.
+            r#"struct Thing {}"#,
+            // Unused top-level private enum type.
+            r#"enum Thing {One}"#,
+            // Unused top-level private spec type.
+            r#"spec Thing { fn thing() }"#,
+        ];
+
+        for code in code {
+            check_warn(&analyze(code), Some(WarnKind::Unused));
+        }
     }
 }

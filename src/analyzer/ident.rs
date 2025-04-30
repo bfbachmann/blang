@@ -13,7 +13,19 @@ use crate::parser::ModID;
 pub struct ModAlias {
     pub name: String,
     pub target_mod_id: ModID,
+    pub usage: Usage,
     pub span: Span,
+}
+
+impl ModAlias {
+    pub fn new(name: String, target_mod_id: ModID, span: Span) -> Self {
+        Self {
+            name,
+            target_mod_id,
+            usage: Usage::Unused,
+            span,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -112,9 +124,174 @@ impl IdentKind {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Usage {
+    Unused,
+    Read,
+    Write,
+}
+
 #[derive(Debug, Clone)]
 pub struct Ident {
     pub name: String,
     pub kind: IdentKind,
+    pub usage: Usage,
     pub span: Span,
+}
+
+impl Ident {
+    pub fn new_type(
+        name: String,
+        is_pub: bool,
+        type_key: TypeKey,
+        mod_id: Option<ModID>,
+        span: Span,
+    ) -> Self {
+        Self {
+            name,
+            kind: IdentKind::Type {
+                is_pub,
+                type_key,
+                mod_id,
+            },
+            usage: Usage::Unused,
+            span,
+        }
+    }
+
+    pub fn new_var(name: String, is_mut: bool, type_key: TypeKey, span: Span) -> Self {
+        Self {
+            name,
+            kind: IdentKind::Variable { is_mut, type_key },
+            usage: Usage::Unused,
+            span,
+        }
+    }
+
+    pub fn new_const(
+        name: String,
+        is_pub: bool,
+        value: AExpr,
+        mod_id: Option<ModID>,
+        span: Span,
+    ) -> Self {
+        Self {
+            name,
+            kind: IdentKind::Const {
+                is_pub,
+                value,
+                mod_id,
+            },
+            usage: Usage::Unused,
+            span,
+        }
+    }
+
+    pub fn new_fn(func: &Function, type_key: TypeKey, mod_id: Option<ModID>) -> Self {
+        Self {
+            name: func.signature.name.clone(),
+            kind: IdentKind::Fn {
+                is_pub: func.is_pub,
+                type_key,
+                mod_id,
+            },
+            usage: Usage::Unused,
+            span: func.signature.span, // TODO: Use name span
+        }
+    }
+
+    pub fn new_extern_fn(
+        name: String,
+        is_pub: bool,
+        type_key: TypeKey,
+        mod_id: Option<ModID>,
+        span: Span,
+    ) -> Self {
+        Self {
+            name,
+            kind: IdentKind::ExternFn {
+                is_pub,
+                type_key,
+                mod_id,
+            },
+            usage: Usage::Unused,
+            span,
+        }
+    }
+
+    pub fn new_unchecked_struct_type(struct_type: StructType) -> Self {
+        Self {
+            name: struct_type.name.clone(),
+            span: struct_type.span, // TODO: Use name span
+            kind: IdentKind::UncheckedStructType(struct_type),
+            usage: Usage::Unused,
+        }
+    }
+
+    pub fn new_unchecked_enum_type(enum_type: EnumType) -> Self {
+        Self {
+            name: enum_type.name.clone(),
+            span: enum_type.span, // TODO: Use name span
+            kind: IdentKind::UncheckedEnumType(enum_type),
+            usage: Usage::Unused,
+        }
+    }
+
+    pub fn new_unchecked_spec_type(spec_type: SpecType) -> Self {
+        Self {
+            name: spec_type.name.clone(),
+            span: spec_type.span, // TODO: Use name span
+            kind: IdentKind::UncheckedSpecType(spec_type),
+            usage: Usage::Unused,
+        }
+    }
+
+    pub fn new_unchecked_const(const_: Const) -> Self {
+        Self {
+            name: const_.name.clone(),
+            span: const_.span, // TODO: Use name span
+            kind: IdentKind::UncheckedConst(const_),
+            usage: Usage::Unused,
+        }
+    }
+
+    pub fn new_unchecked_fn(func: Function) -> Self {
+        Self {
+            name: func.signature.name.clone(),
+            span: func.signature.span, // TODO: Use name span
+            kind: IdentKind::UncheckedFn(func),
+            usage: Usage::Unused,
+        }
+    }
+
+    pub fn new_unchecked_extern_fn(extern_fn: ExternFn) -> Self {
+        Self {
+            name: extern_fn.signature.name.clone(),
+            span: extern_fn.signature.span, // TODO: Use name span
+            kind: IdentKind::UncheckedExternFn(extern_fn),
+            usage: Usage::Unused,
+        }
+    }
+
+    pub fn is_unused(&self) -> bool {
+        matches!(self.usage, Usage::Unused) && self.name != "_"
+    }
+
+    pub fn is_unused_top_level(&self) -> bool {
+        let is_pub = match &self.kind {
+            IdentKind::Variable { .. } => false,
+            IdentKind::Type { is_pub, .. } => *is_pub,
+            IdentKind::Fn { is_pub, .. } => *is_pub || self.name == "main",
+            IdentKind::ExternFn { is_pub, .. } => *is_pub,
+            IdentKind::Const { is_pub, .. } => *is_pub,
+            IdentKind::UncheckedConst(const_) => const_.is_pub,
+            IdentKind::UncheckedFn(func) => func.is_pub,
+            IdentKind::UncheckedExternFn(func) => func.is_pub,
+            IdentKind::UncheckedStructType(struct_type) => struct_type.is_pub,
+            IdentKind::UncheckedEnumType(enum_type) => enum_type.is_pub,
+            IdentKind::UncheckedSpecType(spec_type) => spec_type.is_pub,
+        };
+
+        self.is_unused() && !is_pub
+    }
 }

@@ -19,7 +19,7 @@ impl LibcAllocator {
 }
 
 impl LibcAllocator: Allocate {
-    pub fn alloc(*mut self, size: uint) -> *mut u8 {
+    pub fn alloc(*mut _, size: uint) -> *mut u8 {
         let ptr = @libc.malloc(size)
 
         // TODO: Return error on allocation failure.
@@ -28,7 +28,7 @@ impl LibcAllocator: Allocate {
         return ptr
     }
 
-    pub fn realloc(*mut self, ptr: *mut u8, size: uint) -> *mut u8 {
+    pub fn realloc(*mut _, ptr: *mut u8, size: uint) -> *mut u8 {
         let p = @libc.realloc(ptr, size)
 
         // TODO: Return error on allocation failure.
@@ -37,7 +37,7 @@ impl LibcAllocator: Allocate {
         return p
     }
 
-    pub fn free(*mut self, ptr: *mut u8) {
+    pub fn free(*mut _, ptr: *mut u8) {
         @libc.free(ptr)
     }
 }

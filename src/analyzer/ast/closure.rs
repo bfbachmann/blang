@@ -10,11 +10,11 @@ use crate::analyzer::error::{
     err_dup_fn_arg, err_missing_return, err_missing_yield, err_unexpected_break,
     err_unexpected_continue,
 };
-use crate::analyzer::ident::{Ident, IdentKind};
+use crate::analyzer::ident::Ident;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::{Scope, ScopeKind};
 use crate::analyzer::type_store::TypeKey;
-use crate::analyzer::warn::warn_unreachable_statements;
+use crate::analyzer::warn::warn_unreachable;
 use crate::lexer::pos::Span;
 use crate::parser::ast::arg::Argument;
 use crate::parser::ast::closure::Closure;
@@ -103,14 +103,12 @@ impl AClosure {
         ctx.push_scope(Scope::new(kind, expected_ret_type_key));
 
         for arg in a_args {
-            if let Err(_) = ctx.insert_ident(Ident {
-                name: arg.name.clone(),
-                kind: IdentKind::Variable {
-                    is_mut: arg.is_mut,
-                    type_key: arg.type_key,
-                },
-                span: arg.span,
-            }) {
+            if let Err(_) = ctx.insert_ident(Ident::new_var(
+                arg.name.clone(),
+                arg.is_mut,
+                arg.type_key,
+                arg.span,
+            )) {
                 ctx.insert_err(err_dup_fn_arg(&arg.name, arg.span));
             }
         }
@@ -137,7 +135,7 @@ impl AClosure {
             // never be executed.
             let is_last = i + 1 == num_statements;
             if has_terminator && !is_last {
-                ctx.insert_warn(warn_unreachable_statements(&a_statement, *statement.span()));
+                ctx.insert_warn(warn_unreachable(&a_statement, *statement.span()));
                 a_statements.push(a_statement);
                 break;
             }
@@ -145,7 +143,7 @@ impl AClosure {
             a_statements.push(a_statement);
         }
 
-        ctx.pop_scope();
+        ctx.pop_scope(true);
 
         AClosure {
             statements: a_statements,

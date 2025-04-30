@@ -1,7 +1,5 @@
 mod opt
 
-use "std/runtime" {panic}
-
 /// An optional value that is either `Some(T)` or `None`.
 pub enum Opt[T] {
     Some(T)

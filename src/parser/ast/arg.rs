@@ -62,10 +62,10 @@ impl Argument {
         if parser.parse_optional(TokenKind::Asterisk).is_some() {
             let is_mut = parser.parse_optional(TokenKind::Mut).is_some();
             let name = parser.parse_identifier()?;
-            if name != "self" {
+            if name != "self" && name != "_" {
                 return Err(ParseError::new_with_token(
                     ErrorKind::ExpectedIdent,
-                    format_code!("expected {}, but found {}", "self", name).as_str(),
+                    format_code!("expected {} or {}, but found {}", "self", "_", name).as_str(),
                     parser.tokens.prev().unwrap().clone(),
                 ));
             }

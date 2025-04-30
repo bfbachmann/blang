@@ -144,7 +144,7 @@ impl AImpl {
         // We can pop the params and the current `Self` type key from the program
         // context now that we're done analyzing this `impl`.
         if has_params {
-            ctx.pop_params();
+            ctx.pop_params(false);
         }
 
         ctx.set_cur_spec_type_key(None);

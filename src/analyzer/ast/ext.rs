@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 
 use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::error::{err_dup_ident, err_invalid_extern, err_invalid_statement};
-use crate::analyzer::ident::{Ident, IdentKind};
+use crate::analyzer::ident::Ident;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::lexer::pos::Span;
 use crate::parser::ast::r#extern::ExternFn;
@@ -44,15 +44,13 @@ impl AExternFn {
 
         let fn_sig = AFnSig::from(ctx, &ext.signature);
 
-        if let Err(existing) = ctx.insert_ident(Ident {
-            name: ext.signature.name.clone(),
-            kind: IdentKind::ExternFn {
-                is_pub: ext.is_pub,
-                type_key: fn_sig.type_key,
-                mod_id: Some(ctx.cur_mod_id()),
-            },
-            span: ext.span, // TODO: use name span
-        }) {
+        if let Err(existing) = ctx.insert_ident(Ident::new_extern_fn(
+            ext.signature.name.clone(),
+            ext.is_pub,
+            fn_sig.type_key,
+            Some(ctx.cur_mod_id()),
+            ext.span, // TODO: Use name span
+        )) {
             let err = err_dup_ident(&existing.name, ext.span, existing.span);
             ctx.insert_err(err);
         }

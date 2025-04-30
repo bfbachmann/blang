@@ -32,7 +32,7 @@ macro_rules! errorln {
 macro_rules! warnln {
     ($($arg:tt)*) => {{
         use colored::{CustomColor, Colorize};
-        print!("{}", "warning: ".custom_color(CustomColor::new(255, 165, 0)).bold());
+        print!("{}", "warning: ".custom_color(CustomColor::new(235, 227, 14)).bold());
         println!($($arg)*);
     }};
 }
@@ -60,7 +60,7 @@ macro_rules! format_code {
 }
 
 /// Displays the given error/warning message in a user-friendly form.
-pub fn display_err(
+pub fn display_msg(
     src_info: &SrcInfo,
     msg: &str,
     detail: Option<&String>,

@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::error::{err_dup_ident, err_not_const};
-use crate::analyzer::ident::{Ident, IdentKind};
+use crate::analyzer::ident::Ident;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::{Locatable, Span};
@@ -54,15 +54,13 @@ impl AConst {
         let value = AExpr::from(ctx, const_decl.value.clone(), declared_tk, false, false);
 
         // Add the identifier to the program context so it can be used later.
-        if let Err(existing) = ctx.insert_ident(Ident {
-            name: const_decl.name.clone(),
-            kind: IdentKind::Const {
-                is_pub: const_decl.is_pub,
-                value: value.clone(),
-                mod_id: Some(ctx.cur_mod_id()),
-            },
-            span: const_decl.span, // TODO: use name span
-        }) {
+        if let Err(existing) = ctx.insert_ident(Ident::new_const(
+            const_decl.name.clone(),
+            const_decl.is_pub,
+            value.clone(),
+            Some(ctx.cur_mod_id()),
+            const_decl.span, // TODO: Use name span.
+        )) {
             err_dup_ident(&existing.name, const_decl.span, existing.span);
         }
 

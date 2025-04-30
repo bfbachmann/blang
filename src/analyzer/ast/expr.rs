@@ -21,7 +21,7 @@ use crate::analyzer::error::{
     err_invalid_unary_operand_type, err_literal_out_of_range, err_mismatched_operand_types,
     err_mismatched_types, err_superfluous_type_cast, AnalyzeError,
 };
-use crate::analyzer::ident::IdentKind;
+use crate::analyzer::ident::{IdentKind, Usage};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::{Scope, ScopeKind};
 use crate::analyzer::type_store::TypeKey;
@@ -477,7 +477,7 @@ impl AExpr {
             None => return,
         };
 
-        let ident = match ctx.get_local_ident(&symbol.name) {
+        let ident = match ctx.get_local_ident(&symbol.name, Some(Usage::Write)) {
             Some(ident) => ident,
             None => return,
         };
@@ -745,7 +745,7 @@ impl AExpr {
                     Some(mod_id) if *mod_id != ctx.cur_mod_id() => {
                         ctx.get_foreign_ident(*mod_id, &symbol.name).unwrap()
                     }
-                    _ => ctx.get_local_ident(&symbol.name).unwrap(),
+                    _ => ctx.get_local_ident(&symbol.name, None).unwrap(),
                 };
 
                 match &ident.kind {
@@ -1423,7 +1423,7 @@ fn analyze_from(
     // was specified, or it will be a value determined based on the type of
     // the first value `yielded` from the statement. It could also be `None`
     // in the case where the statement does not contain a `yield`.
-    let type_key = match ctx.pop_scope().yield_type_key() {
+    let type_key = match ctx.pop_scope(true).yield_type_key() {
         Some(tk) => tk,
         None => ctx.unknown_type_key(),
     };

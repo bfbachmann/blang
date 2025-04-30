@@ -3,7 +3,7 @@ use std::fmt::Formatter;
 
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::error::err_dup_ident;
-use crate::analyzer::ident::{Ident, IdentKind};
+use crate::analyzer::ident::Ident;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::Span;
@@ -47,14 +47,12 @@ impl AVarDecl {
         };
 
         // The variable expression is valid. Add it to the program context.
-        if let Err(existing) = ctx.insert_ident(Ident {
-            name: var_decl.name.clone(),
-            kind: IdentKind::Variable {
-                is_mut: var_decl.is_mut,
-                type_key,
-            },
-            span: var_decl.span, // TODO: use name span
-        }) {
+        if let Err(existing) = ctx.insert_ident(Ident::new_var(
+            var_decl.name.clone(),
+            var_decl.is_mut,
+            type_key,
+            var_decl.span, // TODO: Use name span
+        )) {
             let existing_span = existing.span;
             ctx.insert_err(err_dup_ident(&var_decl.name, var_decl.span, existing_span));
         };

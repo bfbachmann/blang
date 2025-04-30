@@ -6,7 +6,7 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{
     err_assign_to_const, err_assign_to_immut_var, err_assign_to_non_var, err_assign_via_immut_ptr,
 };
-use crate::analyzer::ident::IdentKind;
+use crate::analyzer::ident::{IdentKind, Usage};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::op::Operator;
@@ -75,7 +75,7 @@ fn check_assignable(ctx: &mut ProgramContext, span: &Span, target_expr: &AExpr) 
                 return false;
             }
 
-            let ident = match ctx.get_local_ident(&symbol.name) {
+            let ident = match ctx.get_local_ident(&symbol.name, Some(Usage::Write)) {
                 Some(v) => v,
                 None => {
                     return true;

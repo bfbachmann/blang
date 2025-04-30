@@ -74,7 +74,7 @@ pub fn analyze_modules(
     analyze_module(&mut ctx, &mut analyzed_mods, &vec![], src_info, root_mod_id);
 
     // Try to find the name of the main function in the root module.
-    let maybe_main_fn_mangled_name = match ctx.get_local_ident("main") {
+    let maybe_main_fn_mangled_name = match ctx.get_local_ident("main", None) {
         Some(ident) => {
             // Validate the main function.
             match ident.kind {

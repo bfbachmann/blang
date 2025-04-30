@@ -9,7 +9,7 @@ use crate::analyzer::error::{
     err_invalid_enum_pattern, err_invalid_pattern_expr, err_mismatched_pattern_types,
     err_type_not_struct, err_undef_enum_variant,
 };
-use crate::analyzer::ident::{Ident, IdentKind};
+use crate::analyzer::ident::Ident;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::{Scope, ScopeKind};
 use crate::analyzer::type_store::TypeKey;
@@ -288,25 +288,16 @@ impl AMatchCase {
         // that as a variable in this scope.
         ctx.push_scope(Scope::new(ScopeKind::BranchBody, None));
         let maybe_ident = match &pattern {
-            APattern::LetEnumVariants(is_mut, var_name, var_tk, _) if !var_name.is_empty() => {
-                Some(Ident {
-                    name: var_name.clone(),
-                    kind: IdentKind::Variable {
-                        is_mut: *is_mut,
-                        type_key: *var_tk,
-                    },
-                    span: case.pattern.span,
-                })
-            }
+            APattern::LetEnumVariants(is_mut, var_name, var_tk, _) if !var_name.is_empty() => Some(
+                Ident::new_var(var_name.clone(), *is_mut, *var_tk, case.pattern.span),
+            ),
 
-            APattern::LetSymbol(is_mut, var_name) => Some(Ident {
-                name: var_name.clone(),
-                kind: IdentKind::Variable {
-                    is_mut: *is_mut,
-                    type_key: match_target.type_key,
-                },
-                span: case.pattern.span,
-            }),
+            APattern::LetSymbol(is_mut, var_name) => Some(Ident::new_var(
+                var_name.clone(),
+                *is_mut,
+                match_target.type_key,
+                case.pattern.span,
+            )),
 
             _ => None,
         };
@@ -334,7 +325,7 @@ impl AMatchCase {
         let body = AClosure::from(ctx, &case.body, ScopeKind::BranchBody, vec![], None);
 
         // Pop the scope now that we're done analyzing this match case.
-        let ret_type_key = ctx.pop_scope().ret_type_key();
+        let ret_type_key = ctx.pop_scope(true).ret_type_key();
 
         AMatchCase {
             pattern,

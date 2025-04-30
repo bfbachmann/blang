@@ -8,6 +8,7 @@ use std::fmt;
 /// Represents a kind of scope in which symbols can be defined.
 #[derive(PartialEq, Clone, Debug)]
 pub enum ScopeKind {
+    TopLevel,
     FnBody,
     InlineClosure,
     BranchBody,
@@ -19,6 +20,7 @@ pub enum ScopeKind {
 impl fmt::Display for ScopeKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            ScopeKind::TopLevel => write!(f, "top-level"),
             ScopeKind::FnBody => write!(f, "function body"),
             ScopeKind::InlineClosure => write!(f, "inline closure"),
             ScopeKind::BranchBody => write!(f, "branch body"),
@@ -32,7 +34,8 @@ impl fmt::Display for ScopeKind {
 impl ScopeKind {
     pub fn matches(&self, other: &ScopeKind) -> bool {
         match (self, other) {
-            (ScopeKind::FnBody, ScopeKind::FnBody)
+            (ScopeKind::TopLevel, ScopeKind::TopLevel)
+            | (ScopeKind::FnBody, ScopeKind::FnBody)
             | (ScopeKind::InlineClosure, ScopeKind::InlineClosure)
             | (ScopeKind::BranchBody, ScopeKind::BranchBody)
             | (ScopeKind::LoopBody, ScopeKind::LoopBody)
@@ -142,6 +145,19 @@ impl Scope {
                 IdentKind::Const { value, .. } => Some((name, value)),
                 _ => None,
             })
+            .collect()
+    }
+
+    /// Returns all idents declared in this scope that were never used.
+    pub fn unused_idents(&self) -> Vec<&Ident> {
+        self.idents.values().filter(|i| i.is_unused()).collect()
+    }
+
+    /// Returns all idents in the scope that are not `pub` and are unused.
+    pub fn unused_top_level_idents(&self) -> Vec<&Ident> {
+        self.idents
+            .values()
+            .filter(|i| i.is_unused_top_level())
             .collect()
     }
 }

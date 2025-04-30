@@ -11,9 +11,10 @@ use crate::analyzer::error::{
     err_expected_spec, err_invalid_mod_path, err_invalid_statement, err_not_pub,
     err_type_already_implements_spec, err_undef_foreign_symbol,
 };
-use crate::analyzer::ident::{Ident, IdentKind, ModAlias};
+use crate::analyzer::ident::{Ident, IdentKind, ModAlias, Usage};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_containment::{check_enum_containment, check_struct_containment};
+use crate::analyzer::warn::{warn_unused, AnalyzeWarning};
 use crate::lexer::pos::Locatable;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#type::Type;
@@ -140,6 +141,34 @@ impl AModule {
             ctx.insert_err(err_invalid_statement(span));
         }
 
+        // Warn about unused top-level idents.
+        let scope = ctx.cur_scope();
+        let warns: Vec<AnalyzeWarning> = scope
+            .unused_top_level_idents()
+            .iter()
+            .map(|ident| warn_unused(&ident.name, ident.span))
+            .collect();
+        for warn in warns {
+            ctx.insert_warn(warn);
+        }
+
+        // Warn about unused imports.
+        let (unused_idents, unused_aliases) = ctx.unused_imports();
+        let mut warns: Vec<AnalyzeWarning> = unused_idents
+            .into_iter()
+            .map(|ident| warn_unused(&ident.name, ident.span))
+            .collect();
+
+        warns.extend(
+            unused_aliases
+                .into_iter()
+                .map(|alias| warn_unused(&alias.name, alias.span)),
+        );
+
+        for warn in warns {
+            ctx.insert_warn(warn);
+        }
+
         let (fns, impls, extern_fns) = ctx.drain_fns();
 
         AModule {
@@ -169,11 +198,11 @@ fn define_imported_idents(ctx: &mut ProgramContext, src_file: &SrcFile, src_info
         }
 
         if let Some(alias) = &used_mod.maybe_alias {
-            if let Err(existing) = ctx.insert_mod_alias(ModAlias {
-                name: alias.to_owned(),
+            if let Err(existing) = ctx.insert_mod_alias(ModAlias::new(
+                alias.to_owned(),
                 target_mod_id,
-                span: used_mod.span, // TODO: use name span
-            }) {
+                used_mod.span, // TODO: use name span
+            )) {
                 // TODO: use name span
                 let err = err_dup_import_alias(alias, used_mod.span, existing.span);
                 ctx.insert_err(err);
@@ -198,6 +227,7 @@ fn define_imported_idents(ctx: &mut ProgramContext, src_file: &SrcFile, src_info
                     }
 
                     ident.span = symbol.span;
+                    ident.usage = Usage::Unused;
 
                     if let Err(existing) = ctx.insert_imported_ident(ident) {
                         let err = err_dup_ident(&symbol.name, symbol.span, existing.span);
@@ -225,11 +255,9 @@ fn define_local_idents(ctx: &mut ProgramContext, src_file: &SrcFile) {
     for statement in &src_file.statements {
         match statement {
             Statement::StructDeclaration(struct_type) => {
-                if let Err(existing) = ctx.insert_ident(Ident {
-                    name: struct_type.name.clone(),
-                    kind: IdentKind::UncheckedStructType(struct_type.clone()),
-                    span: struct_type.span,
-                }) {
+                if let Err(existing) =
+                    ctx.insert_ident(Ident::new_unchecked_struct_type(struct_type.clone()))
+                {
                     let err = err_dup_ident(&struct_type.name, struct_type.span, existing.span);
                     ctx.insert_err(err);
                 } else {
@@ -238,11 +266,9 @@ fn define_local_idents(ctx: &mut ProgramContext, src_file: &SrcFile) {
             }
 
             Statement::EnumDeclaration(enum_type) => {
-                if let Err(existing) = ctx.insert_ident(Ident {
-                    name: enum_type.name.clone(),
-                    kind: IdentKind::UncheckedEnumType(enum_type.clone()),
-                    span: enum_type.span,
-                }) {
+                if let Err(existing) =
+                    ctx.insert_ident(Ident::new_unchecked_enum_type(enum_type.clone()))
+                {
                     let err = err_dup_ident(&enum_type.name, enum_type.span, existing.span);
                     ctx.insert_err(err);
                 } else {
@@ -251,33 +277,24 @@ fn define_local_idents(ctx: &mut ProgramContext, src_file: &SrcFile) {
             }
 
             Statement::SpecDeclaration(spec_type) => {
-                if let Err(existing) = ctx.insert_ident(Ident {
-                    name: spec_type.name.clone(),
-                    kind: IdentKind::UncheckedSpecType(spec_type.clone()),
-                    span: spec_type.span,
-                }) {
+                if let Err(existing) =
+                    ctx.insert_ident(Ident::new_unchecked_spec_type(spec_type.clone()))
+                {
                     let err = err_dup_ident(&spec_type.name, spec_type.span, existing.span);
                     ctx.insert_err(err);
                 }
             }
 
             Statement::ConstDeclaration(const_) => {
-                if let Err(existing) = ctx.insert_ident(Ident {
-                    name: const_.name.clone(),
-                    kind: IdentKind::UncheckedConst(const_.clone()),
-                    span: const_.span,
-                }) {
+                if let Err(existing) = ctx.insert_ident(Ident::new_unchecked_const(const_.clone()))
+                {
                     let err = err_dup_ident(&const_.name, const_.span, existing.span);
                     ctx.insert_err(err);
                 }
             }
 
             Statement::FunctionDeclaration(func) => {
-                if let Err(existing) = ctx.insert_ident(Ident {
-                    name: func.signature.name.clone(),
-                    kind: IdentKind::UncheckedFn(func.clone()),
-                    span: func.signature.span,
-                }) {
+                if let Err(existing) = ctx.insert_ident(Ident::new_unchecked_fn(func.clone())) {
                     let err =
                         err_dup_ident(&func.signature.name, func.signature.span, existing.span);
                     ctx.insert_err(err);
@@ -285,11 +302,9 @@ fn define_local_idents(ctx: &mut ProgramContext, src_file: &SrcFile) {
             }
 
             Statement::ExternFn(func) => {
-                if let Err(existing) = ctx.insert_ident(Ident {
-                    name: func.signature.name.clone(),
-                    kind: IdentKind::UncheckedExternFn(func.clone()),
-                    span: func.signature.span,
-                }) {
+                if let Err(existing) =
+                    ctx.insert_ident(Ident::new_unchecked_extern_fn(func.clone()))
+                {
                     let err =
                         err_dup_ident(&func.signature.name, func.signature.span, existing.span);
                     ctx.insert_err(err);
@@ -445,7 +460,7 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     ctx.set_cur_self_type_key(None);
 
     if has_params {
-        ctx.pop_params();
+        ctx.pop_params(false);
     }
 
     // Regardless of errors, we'll mark this `impl` as implementing the

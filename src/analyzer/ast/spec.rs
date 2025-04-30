@@ -5,7 +5,7 @@ use crate::analyzer::ast::func::AFnSig;
 use crate::analyzer::ast::params::AParams;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::err_dup_ident;
-use crate::analyzer::ident::{Ident, IdentKind};
+use crate::analyzer::ident::Ident;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::Span;
@@ -40,20 +40,18 @@ impl ASpecType {
             mangled_name: mangled_name.clone(),
             maybe_params: None,
             member_fn_type_keys: Default::default(),
-            span: spec_type.span, // TODO: Use name space
+            span: spec_type.span, // TODO: Use name span
         };
         let type_key = ctx.insert_type(AType::Spec(a_spec_type.clone()));
 
         // Define a symbol that maps to the spec type.
-        if let Err(existing) = ctx.insert_ident(Ident {
-            name: spec_type.name.clone(),
-            kind: IdentKind::Type {
-                is_pub: spec_type.is_pub,
-                type_key,
-                mod_id: Some(ctx.cur_mod_id()),
-            },
-            span: Default::default(),
-        }) {
+        if let Err(existing) = ctx.insert_ident(Ident::new_type(
+            spec_type.name.clone(),
+            spec_type.is_pub,
+            type_key,
+            Some(ctx.cur_mod_id()),
+            spec_type.span, // TODO: Use name span
+        )) {
             let err = err_dup_ident(&spec_type.name, spec_type.span, existing.span);
             ctx.insert_err(err);
         }
@@ -119,7 +117,7 @@ impl ASpecType {
             }
 
             // Pop generic parameters now that we're done analyzing the type.
-            ctx.pop_params();
+            ctx.pop_params(true);
         }
 
         a_spec_type
