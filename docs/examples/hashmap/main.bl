@@ -2,11 +2,10 @@ mod hashmap
 
 use "std/specs" {Eq}
 use "std/types/hasher" {Hash, Hasher, BuildHash}
-use "std/types/array" {Array}
 use "std/types/opt" {Opt}
 use "std/runtime" {assert, panic}
 use "std/allocator" {Allocator, LibcAllocator}
-use "std/types/slice" {Slice}
+use "std/types/slice" {Slice, SliceMut}
 use "std/libc" @libc
 use "std/fmt" {printf, Format, Print}
 
@@ -110,7 +109,7 @@ impl DJB2Hasher: BuildHash {
 
 pub struct HashMap[K: Hash + Eq, V] {
     allocator: Allocator
-    slots: Array[Slot[K, V]]
+    slots: SliceMut[Slot[K, V]]
     len: uint
 }
 
@@ -129,7 +128,7 @@ impl HashMap {
     pub fn new(al: Allocator) -> Self {
         return Self{
             allocator: al
-            slots: Array[Slot[K, V]].new(al)
+            slots: SliceMut[Slot[K, V]].new_empty()
             len: 0
         }
     }
@@ -149,7 +148,7 @@ impl HashMap {
         }
 
         for let mut i = 0uint; i < len; i += 1 {
-            let slot_ptr = self.slots.mut_ptr_at((hash + i) % len)
+            let slot_ptr = self.slots.ptr_at((hash + i) % len)
 
             match slot_ptr {
             case let Slot[K, V]::Occupied(entry_ptr):
@@ -175,7 +174,7 @@ impl HashMap {
         let hash = hash_key(key)
 
         for let mut i = 0uint; i < len; i += 1 {
-            let slot_ptr = self.slots.mut_ptr_at((hash + i) % len)
+            let slot_ptr = self.slots.ptr_at((hash + i) % len)
 
             match slot_ptr {
             case let Slot[K, V]::Occupied(entry_ptr) if entry_ptr.key.eq(key):
@@ -215,8 +214,8 @@ impl HashMap {
         return Opt[V]::None
     }
 
-    pub fn free(mut self) {
-        self.slots.free()
+    pub fn free(*mut self) {
+        self.allocator.free(self.slots.ptr() as *mut u8)
         self.len = 0
     }
 
@@ -247,14 +246,17 @@ impl HashMap {
             }
         }
 
-        old_slots.free()
+        self.allocator.free(old_slots.ptr() as *mut u8)
     }
 
-    fn new_empty_slots(self, len: uint) -> Array[Slot[K, V]] {
-        let mut slots = Array[Slot[K, V]].new_with_len(self.allocator, len)
+    fn new_empty_slots(*mut self, len: uint) -> SliceMut[Slot[K, V]] {
+        let ptr = self.allocator.alloc(len * sizeof Slot[K, V]) as *mut Slot[K, V]
+        let mut slots = SliceMut[Slot[K, V]].new(ptr, len)
+
         for let mut i = 0uint; i < len; i += 1 {
-            slots.mut_ptr_at(i)^ = Slot[K, V]::Empty
+            slots.ptr_at(i)^ = Slot[K, V]::Empty
         }
+
         return slots
     }
 
