@@ -5,7 +5,7 @@ use crate::analyzer::ast::func::AFn;
 use crate::analyzer::ast::r#match::APattern;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::statement::AStatement;
-use crate::analyzer::prog_context::ProgramContext;
+use crate::analyzer::prog_context::{Monomorphization, ProgramContext, TypeImpls};
 use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 use crate::codegen::program::CodeGenConfig;
 use crate::parser::ModID;
@@ -180,19 +180,20 @@ impl MonoItemCollector {
 pub struct MonoProg {
     pub config: CodeGenConfig,
     pub type_store: TypeStore,
+    /// Maps monomorphic type keys to the monomorphizations that were used to derive them.
+    pub type_monomorphizations: HashMap<TypeKey, Monomorphization>,
+    /// Maps type keys to information about their `impl` blocks.
+    pub type_impls: HashMap<TypeKey, TypeImpls>,
     /// A list of monomorphized functions.
     pub mono_items: Vec<MonoItem>,
     /// Maps function type keys to their implementations.
     pub fns: HashMap<TypeKey, AFn>,
     /// Maps extern function type keys to their signatures.
     pub extern_fns: HashMap<TypeKey, AExternFn>,
-    /// Tracks the type keys of nested functions (functions that are declared inside other
-    /// functions).
-    pub nested_fns: HashSet<TypeKey>,
     /// Maps module IDs to mappings from const names to their values for those modules.
     pub mod_consts: HashMap<ModID, HashMap<String, AExpr>>,
-    /// Stores the name of the main function, if there is one.
-    pub maybe_main_fn_mangled_name: Option<String>,
+    /// Stores the type key of the `main` function, if any.
+    pub maybe_main_fn_tk: Option<TypeKey>,
 }
 
 /// Traverses functions in the program call graph, tracking and monomorphizing each one that
@@ -207,17 +208,29 @@ pub struct MonoProg {
 /// This way, we end up building what is essentially a function monomorphization tree that we can
 /// traverse during codegen.
 pub fn mono_prog(analysis: ProgramAnalysis) -> MonoProg {
+    let mut maybe_main_fn_tk = None;
     let mut collector = MonoItemCollector::new(analysis.ctx);
 
     // Collect all the functions up into a map, so we can look them up easily.
-    for module in analysis.analyzed_modules {
+    for (mod_id, module) in analysis.analyzed_mods {
+        let is_root_mod = mod_id == analysis.root_mod_id;
+
         for func in module.module.fns {
-            track_fn(&mut collector, &analysis.maybe_main_fn_mangled_name, func);
+            let is_main = maybe_main_fn_tk.is_none()
+                && is_root_mod
+                && func.signature.name == "main"
+                && func.signature.maybe_impl_type_key.is_none();
+
+            if is_main {
+                maybe_main_fn_tk = Some(func.signature.type_key);
+            }
+
+            track_fn(&mut collector, is_main, func);
         }
 
         for impl_ in module.module.impls {
             for func in impl_.member_fns {
-                track_fn(&mut collector, &analysis.maybe_main_fn_mangled_name, func);
+                track_fn(&mut collector, false, func);
             }
         }
 
@@ -245,39 +258,20 @@ pub fn mono_prog(analysis: ProgramAnalysis) -> MonoProg {
         mod_consts: collector.ctx.drain_mod_consts(),
         config: collector.ctx.config,
         type_store: collector.ctx.type_store,
+        type_monomorphizations: collector.ctx.type_monomorphizations,
+        type_impls: collector.ctx.type_impls,
         mono_items: collector.complete_mono_items,
         fns: collector.fns,
         extern_fns,
-        nested_fns: collector.nested_fns,
-        maybe_main_fn_mangled_name: analysis.maybe_main_fn_mangled_name,
+        maybe_main_fn_tk,
     }
 }
 
-fn track_fn(
-    collector: &mut MonoItemCollector,
-    maybe_main_fn_mangled_name: &Option<String>,
-    func: AFn,
-) {
-    let should_queue = if let Some(main_fn_name) = maybe_main_fn_mangled_name {
-        collector.incomplete_mono_items.is_empty() && &func.signature.mangled_name == main_fn_name
-    } else {
-        match func.signature.maybe_impl_type_key {
-            // Don't queue parameterized functions.
-            _ if func.signature.is_parameterized() => false,
-
-            // Only queue monomorphic member functions if they're declared on monomorphic types.
-            Some(impl_tk) => collector.get_type(impl_tk).params().is_none(),
-
-            // The function is not parameterized and is not a member function, so we should
-            // queue it.
-            None => true,
-        }
-    };
-
+fn track_fn(collector: &mut MonoItemCollector, queue: bool, func: AFn) {
     let fn_tk = func.signature.type_key;
     collector.insert_fn(func, false);
 
-    if should_queue {
+    if queue {
         collector.queue_item(fn_tk, HashMap::new());
     }
 }

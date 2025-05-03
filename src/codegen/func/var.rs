@@ -2,14 +2,14 @@ use inkwell::values::{BasicValue, BasicValueEnum, PointerValue};
 
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::r#type::AType;
-use crate::analyzer::ast::symbol::ASymbol;
+use crate::analyzer::ast::symbol::{ASymbol, SymbolKind};
 use crate::analyzer::ast::var_assign::AVarAssign;
+use crate::analyzer::mangling::mangle_type;
 use crate::analyzer::type_store::{GetType, TypeKey};
-use crate::fmt::vec_to_string;
 use crate::lexer::pos::Locatable;
 use crate::parser::ast::op::Operator;
 
-use super::{mangle_type_mapping, FnCodeGen};
+use super::FnCodeGen;
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Allocates space on the stack for a new variable of the type corresponding to `type_key` and
@@ -30,7 +30,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         };
 
         self.copy_value(ll_val, ll_dst_ptr, type_key);
-        self.vars.insert(name.to_string(), ll_dst_ptr);
+        self.ll_vars.insert(name.to_string(), ll_dst_ptr);
         ll_dst_ptr
     }
 
@@ -92,7 +92,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                                 ll_array_type,
                                 ll_collection_ptr,
                                 &[
-                                    self.ctx.i32_type().const_int(0, false),
+                                    self.ll_ctx.i32_type().const_int(0, false),
                                     ll_index_val.into_int_value(),
                                 ],
                                 "elem_ptr",
@@ -110,38 +110,24 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
     }
 
-    /// Computes the full symbol name based on generic parameters applied to
-    /// the symbol.
-    pub(crate) fn get_full_symbol_name(&self, symbol: &ASymbol) -> String {
-        let mut name = if let Some(param_tks) = &symbol.maybe_param_tks {
-            let param_value_tks = param_tks
-                .iter()
-                .map(|tk| self.type_converter.map_type_key(*tk))
-                .collect();
-            format!("{}[{}]", symbol.name, vec_to_string(&param_value_tks, ","))
-        } else {
-            symbol.name.clone()
-        };
-
-        if !self.vars.contains_key(&symbol.name) && self.nested_fns.contains(&symbol.type_key) {
-            name += mangle_type_mapping(self.type_converter.type_mapping()).as_str();
-        }
-
-        name
-    }
-
     /// Gets a pointer to the given variable or member.
     pub(crate) fn get_var_ptr(&mut self, symbol: &ASymbol) -> PointerValue<'ctx> {
         let maybe_mod_id = &symbol.maybe_mod_id;
-        let name = self.get_full_symbol_name(symbol);
+        let name = symbol.name.as_str();
 
         // Try to look up the symbol as a variable.
-        if let Some(ll_var_ptr) = self.vars.get(&name) {
+        if let Some(ll_var_ptr) = self.ll_vars.get(name) {
             return *ll_var_ptr;
         }
 
         // The symbol was not a variable, so try look it up as a function.
-        if let Some(func) = self.module.get_function(&name) {
+        let fn_name = mangle_type(
+            self.type_converter,
+            symbol.type_key,
+            self.type_converter.type_mapping(),
+            self.type_monomorphizations,
+        );
+        if let Some(func) = self.module.get_function(&fn_name) {
             return func.as_global_value().as_pointer_value();
         }
 
@@ -149,8 +135,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // and return the stack pointer.
         if let Some(mod_id) = maybe_mod_id {
             if let Some(consts) = self.mod_consts.get(mod_id) {
-                if let Some(const_value) = consts.get(&name) {
-                    let ll_ptr = self.stack_alloc(&name, const_value.type_key);
+                if let Some(const_value) = consts.get(name) {
+                    let ll_ptr = self.stack_alloc(name, const_value.type_key);
                     let ll_val = self.gen_const_expr(&const_value);
                     self.copy_value(ll_val, ll_ptr, const_value.type_key);
                     return ll_ptr;
@@ -159,15 +145,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         panic!("failed to resolve variable {}", name);
-    }
-
-    /// Returns true if `var` refers directly to a function in this module. Note that this function
-    /// will return false if `var` is has a function type, but refers to a local variable rather
-    /// than a function defined within this module.
-    pub(crate) fn is_var_module_fn(&self, symbol: &ASymbol) -> bool {
-        self.module
-            .get_function(&self.get_full_symbol_name(symbol))
-            .is_some()
     }
 
     /// Gets a variable (or member) and returns its value.
@@ -182,7 +159,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // Load the value from the pointer (unless it's a composite value that is passed with
         // pointers, or a pointer to a module-level function).
-        if self.is_var_module_fn(var) {
+        if var.kind == SymbolKind::Fn {
             ll_var_ptr.as_basic_value_enum()
         } else {
             self.load_if_basic(ll_var_ptr, var.type_key, var.name.as_str())

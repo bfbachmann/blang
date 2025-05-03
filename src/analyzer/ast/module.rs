@@ -26,17 +26,14 @@ use std::collections::{HashMap, HashSet};
 /// Represents a semantically analyzed source file.
 #[derive(Debug)]
 pub struct AModule {
-    #[allow(dead_code)]
-    pub mod_id: ModID,
     pub fns: Vec<AFn>,
     pub impls: Vec<AImpl>,
     pub extern_fns: Vec<AExternFn>,
 }
 
 impl AModule {
-    pub fn new_empty(mod_id: ModID) -> AModule {
+    pub fn new_empty() -> AModule {
         AModule {
-            mod_id,
             fns: vec![],
             impls: vec![],
             extern_fns: vec![],
@@ -103,7 +100,7 @@ impl AModule {
                         if let Some(ident) =
                             ctx.remove_unchecked_ident_from_cur_scope(&struct_type.name)
                         {
-                            AStructType::from(ctx, ident.kind.as_unchecked_struct_type(), false);
+                            AStructType::from(ctx, ident.kind.as_unchecked_struct_type());
                         }
                     }
 
@@ -111,7 +108,7 @@ impl AModule {
                         if let Some(ident) =
                             ctx.remove_unchecked_ident_from_cur_scope(&enum_type.name)
                         {
-                            AEnumType::from(ctx, ident.kind.as_unchecked_enum_type(), false);
+                            AEnumType::from(ctx, ident.kind.as_unchecked_enum_type());
                         }
                     }
 
@@ -172,7 +169,6 @@ impl AModule {
         let (fns, impls, extern_fns) = ctx.drain_fns();
 
         AModule {
-            mod_id,
             fns,
             impls,
             extern_fns,
@@ -414,7 +410,6 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     let is_pub_spec = maybe_spec_tk.is_some_and(|tk| ctx.type_is_pub(tk));
 
     ctx.set_cur_self_type_key(Some(impl_type_key));
-    ctx.set_cur_spec_type_key(maybe_spec_tk);
 
     // Analyze each member function signature.
     let mut fn_type_keys = HashMap::new();
@@ -456,7 +451,6 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
         }
     }
 
-    ctx.set_cur_spec_type_key(None);
     ctx.set_cur_self_type_key(None);
 
     if has_params {

@@ -26,7 +26,7 @@ struct Thing {
 
 impl Thing: Default {
     fn default() -> Thing {
-        return Thing{s: "default\0"}
+        return Thing{s: "default"}
     }
 }
 
@@ -76,16 +76,16 @@ fn nth[T](array: [T; 4], n: uint) -> T {
 }
 
 fn main() {
-    assert(get_default_str[Thing]() == "default\0", "expected \"default\"\0")
+    assert(get_default_str[Thing]() == "default", "expected \"default\"")
 
-    let thing_ptr = heap(Thing{s: "bing bong!\0"})
-    assert(thing_ptr.s == "bing bong!\0", "expected \"bing bong!\"\0")
+    let thing_ptr = heap(Thing{s: "bing bong!"})
+    assert(thing_ptr.s == "bing bong!", "expected \"bing bong!\"")
     heap_free(thing_ptr)
 
-    assert(apply(double, -7) == -14, "expected -14\0")
-    assert(get_second({2, 9}) == 9, "expected 9\0")
-    assert(deref(&17) == 17, "expected 17\0")
-    assert(nth([1, 2, 3, 4], 2) == 3, "expected 3\0")
+    assert(apply(double, -7) == -14, "expected -14")
+    assert(get_second({2, 9}) == 9, "expected 9")
+    assert(deref(&17) == 17, "expected 17")
+    assert(nth([1, 2, 3, 4], 2) == 3, "expected 3")
 
     exit(0)
 }

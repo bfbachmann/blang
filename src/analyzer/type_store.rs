@@ -8,7 +8,7 @@ pub trait GetType {
 
 /// A key that is associated with an analyzed type inside the type store. This is actually just an
 /// index into the Vec that the type store uses to store analyzed types.
-pub type TypeKey = u64;
+pub type TypeKey = u32;
 
 /// Stores analyzed types.
 pub struct TypeStore {

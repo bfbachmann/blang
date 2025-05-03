@@ -17,7 +17,6 @@ use crate::analyzer::error::{
     err_unexpected_params, AnalyzeError, AnalyzeResult, ErrorKind,
 };
 use crate::analyzer::ident::{Ident, IdentKind, ModAlias, Usage};
-use crate::analyzer::mangling;
 use crate::analyzer::mod_context::ModuleContext;
 use crate::analyzer::scope::{Scope, ScopeKind};
 use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
@@ -72,7 +71,7 @@ impl Monomorphization {
 
 /// Contains information about `impl` blocks for a type.
 #[derive(Default)]
-struct TypeImpls {
+pub struct TypeImpls {
     /// Maps function name to function type key for all functions declared in default impl blocks
     /// (impl blocks without specs) for the type.
     default_fns: HashMap<String, TypeKey>,
@@ -137,7 +136,7 @@ impl TypeImpls {
 
     /// Tries to find the function with the given name that is part of the implementation of the
     /// given spec.
-    fn get_fn_from_spec_impl(&self, spec_tk: TypeKey, name: &str) -> Option<TypeKey> {
+    pub fn get_fn_from_spec_impl(&self, spec_tk: TypeKey, name: &str) -> Option<TypeKey> {
         match self.spec_impls.get(&spec_tk) {
             Some(impls) => impls.get(name).cloned(),
             None => None,
@@ -195,7 +194,7 @@ pub struct ProgramContext {
     /// Maps function types to their type keys.
     fn_type_keys: HashMap<AFnSig, TypeKey>,
     /// Maps type key to its impl blocks.
-    type_impls: HashMap<TypeKey, TypeImpls>,
+    pub type_impls: HashMap<TypeKey, TypeImpls>,
     /// Maps struct type key to the set of public field names on that struct type.
     pub_struct_field_names: HashMap<TypeKey, HashSet<String>>,
     /// Maps type keys to the IDs of the modules in which the types are declared.
@@ -670,20 +669,6 @@ impl ProgramContext {
         };
 
         if replaced_tks || has_replaced_param {
-            // Add monomorphized types to the name to disambiguate it from other
-            // monomorphized instances of this type.
-            if let Some(params) = &struct_type.maybe_params {
-                struct_type.mangled_name +=
-                    mangling::mangle_param_names(params, type_mappings).as_str();
-            } else {
-                for (target_tk, replacement_tk) in type_mappings {
-                    struct_type.mangled_name = struct_type.mangled_name.replace(
-                        format!("{target_tk}").as_str(),
-                        format!("{replacement_tk}").as_str(),
-                    );
-                }
-            }
-
             // Remove parameters from the signature now that they're no longer relevant.
             struct_type.maybe_params = None;
 
@@ -717,20 +702,6 @@ impl ProgramContext {
         }
 
         if replaced_tks {
-            // Add monomorphized types to the name to disambiguate it from other
-            // monomorphized instances of this type.
-            if let Some(params) = &enum_type.maybe_params {
-                enum_type.mangled_name +=
-                    mangling::mangle_param_names(params, type_mappings).as_str();
-            } else {
-                for (target_tk, replacement_tk) in type_mappings {
-                    enum_type.mangled_name = enum_type.mangled_name.replace(
-                        format!("{target_tk}").as_str(),
-                        format!("{replacement_tk}").as_str(),
-                    );
-                }
-            }
-
             // Remove parameters from the signature now that they're no longer relevant.
             enum_type.maybe_params = None;
 
@@ -784,19 +755,6 @@ impl ProgramContext {
         }
 
         if replaced_tks {
-            // Add monomorphized types to the name to disambiguate it from other
-            // monomorphized instances of this function.
-            if let Some(params) = &fn_sig.params {
-                fn_sig.mangled_name += mangling::mangle_param_names(params, type_mappings).as_str();
-            } else {
-                for (target_tk, replacement_tk) in type_mappings {
-                    fn_sig.mangled_name = fn_sig.mangled_name.replace(
-                        format!("{target_tk}").as_str(),
-                        format!("{replacement_tk}").as_str(),
-                    );
-                }
-            }
-
             // Remove parameters from the signature now that they're no longer relevant.
             fn_sig.params = None;
 
@@ -915,20 +873,6 @@ impl ProgramContext {
         };
 
         if replaced_tks || has_replaced_param {
-            // Add monomorphized types to the name to disambiguate it from other
-            // monomorphized instances of this type.
-            if let Some(params) = &spec_type.maybe_params {
-                spec_type.mangled_name +=
-                    mangling::mangle_param_names(params, type_mappings).as_str();
-            } else {
-                for (target_tk, replacement_tk) in type_mappings {
-                    spec_type.mangled_name = spec_type.mangled_name.replace(
-                        format!("{target_tk}").as_str(),
-                        format!("{replacement_tk}").as_str(),
-                    );
-                }
-            }
-
             // Remove parameters from the signature now that they're no longer relevant.
             spec_type.maybe_params = None;
 
@@ -1419,19 +1363,6 @@ impl ProgramContext {
         self.cur_mod_ctx_mut().set_cur_self_type_key(maybe_type_key);
     }
 
-    /// Sets the type key of the spec implemented by the current `impl` block to
-    /// `maybe_spec_type_key`.
-    pub fn set_cur_spec_type_key(&mut self, maybe_spec_type_key: Option<TypeKey>) {
-        // Assert that the type is actually a spec.
-        assert!(match maybe_spec_type_key {
-            Some(spec_tk) => self.get_type(spec_tk).is_spec(),
-            None => true,
-        });
-
-        self.cur_mod_ctx_mut()
-            .set_cur_spec_type_key(maybe_spec_type_key);
-    }
-
     pub fn set_cur_mod_id(&mut self, mod_id: ModID) {
         if let Entry::Vacant(entry) = self.module_contexts.entry(mod_id) {
             entry.insert(ModuleContext::new(&self.primitive_type_keys));
@@ -1455,12 +1386,6 @@ impl ProgramContext {
     /// Returns the type key associated with the current `impl` or `spec` type being analyzed.
     pub fn get_cur_self_type_key(&self) -> Option<TypeKey> {
         self.cur_mod_ctx().cur_self_type_key()
-    }
-
-    /// Returns the type key of the spec being implemented in the current `impl` or `spec`
-    /// block, if any.
-    pub fn get_cur_spec_type_key(&self) -> Option<TypeKey> {
-        self.cur_mod_ctx().cur_spec_type_key()
     }
 
     /// Inserts the given mapping from member function name to type key into the program context
@@ -1721,62 +1646,6 @@ impl ProgramContext {
             .is_some()
     }
 
-    /// Changes the mangled type name in the given `mangled_name` to the mangled type name
-    /// corresponding to `type_key`.
-    pub fn remangle_name(&self, mangled_name: &str, type_key: TypeKey) -> String {
-        mangling::remangle_type_in_name(&self.type_store, mangled_name, type_key)
-    }
-
-    /// Returns a name mangled to the following form.
-    ///
-    ///     <mod_path>::<type_prefix><spec_prefix><path><name>
-    ///
-    /// where
-    ///  - `mod_path` is the full path of the module in which the symbol is
-    ///    defined (determined by `maybe_mod_name`)
-    ///  - `type_prefix` has the form `<type>.` if there is an impl type on
-    ///    the function (determined by `maybe_impl_type_key`), or is empty
-    ///  - `spec_prefix` has the form `impl:<spec>.` if the function implements a
-    ///    spec (determined by `maybe_spec_type_key`), or is empty
-    ///  - `path` has the form `<f1>.<f2>...` where each item in the sequence
-    ///    is the name of a function inside which the next function is nested
-    ///    (this only applies if `include_fn_path` is `true`)
-    ///  - `<name>` is the name of the symbol.
-    ///
-    /// If `include_path` is false, `path` will not be included.
-    pub fn mangle_name(
-        &mut self,
-        maybe_mod_sym: Option<&Symbol>,
-        maybe_impl_type_key: Option<TypeKey>,
-        maybe_spec_type_key: Option<TypeKey>,
-        name: &str,
-        include_path: bool,
-    ) -> String {
-        let mod_ctx = self.cur_mod_ctx_mut();
-
-        let mod_path = if let Some(mod_sym) = maybe_mod_sym {
-            let alias = mod_ctx.get_mod_alias(mod_sym).unwrap();
-            format!("{}", alias.target_mod_id)
-        } else {
-            self.cur_mod_id.to_string()
-        };
-
-        // Get a path to the function based on the current scope.
-        let fn_path = "".to_string();
-        if include_path {
-            // TODO: Not sure if this is necessary anymore.
-        }
-
-        mangling::mangle_name(
-            &self.type_store,
-            &mod_path,
-            maybe_impl_type_key,
-            maybe_spec_type_key,
-            fn_path.as_str(),
-            name,
-        )
-    }
-
     /// Returns a new name for an anonymous function created inside the current scope. This
     /// also has the side effect of incrementing the anonymous function count for the current
     /// scope.
@@ -1877,11 +1746,11 @@ impl ProgramContext {
             }
 
             IdentKind::UncheckedStructType(struct_type) => {
-                AStructType::from(self, &struct_type, false);
+                AStructType::from(self, &struct_type);
             }
 
             IdentKind::UncheckedEnumType(enum_type) => {
-                AEnumType::from(self, &enum_type, false);
+                AEnumType::from(self, &enum_type);
             }
 
             IdentKind::UncheckedSpecType(spec_type) => {

@@ -1,7 +1,8 @@
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::r#const::AConst;
-use crate::analyzer::mangling;
+use crate::analyzer::mangling::mangle_type;
+use crate::analyzer::prog_context::{Monomorphization, TypeImpls};
 use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 use crate::codegen::context::{
     BranchContext, CompilationContext, FnContext, FromContext, LoopContext, StatementContext,
@@ -18,7 +19,7 @@ use inkwell::debug_info::{DICompileUnit, DebugInfoBuilder};
 use inkwell::module::Module;
 use inkwell::types::{AnyType, AnyTypeEnum, BasicTypeEnum};
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 mod closure;
 mod cond;
@@ -31,19 +32,20 @@ mod var;
 
 /// Uses LLVM to generate code for functions.
 pub struct FnCodeGen<'a, 'ctx> {
-    ctx: &'ctx Context,
+    ll_ctx: &'ctx Context,
     src_info: &'a SrcInfo,
     ll_builder: &'a Builder<'ctx>,
     di_ctx: Option<&'a mut DICtx<'ctx>>,
     module: &'a Module<'ctx>,
     type_store: &'a TypeStore,
+    type_impls: &'a HashMap<TypeKey, TypeImpls>,
     type_converter: &'a mut TypeConverter<'ctx>,
-    nested_fns: &'a HashSet<TypeKey>,
+    type_monomorphizations: &'a HashMap<TypeKey, Monomorphization>,
     /// Stores constant values that are declared in the module outside of functions.
     mod_consts: &'a HashMap<ModID, HashMap<String, AExpr>>,
     /// Stores constant values that are declared within a function.
     local_consts: HashMap<String, AConst>,
-    vars: HashMap<String, PointerValue<'ctx>>,
+    ll_vars: HashMap<String, PointerValue<'ctx>>,
     ll_fn: Option<FunctionValue<'ctx>>,
     stack: Vec<CompilationContext<'ctx>>,
     cur_block: Option<BasicBlock<'ctx>>,
@@ -64,23 +66,25 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         di_ctx: Option<&'a mut DICtx<'ctx>>,
         module: &'a Module<'ctx>,
         type_store: &'a TypeStore,
+        type_impls: &'a HashMap<TypeKey, TypeImpls>,
+        type_monomorphizations: &'a HashMap<TypeKey, Monomorphization>,
         type_converter: &'a mut TypeConverter<'ctx>,
-        nested_fns: &'a HashSet<TypeKey>,
         mod_consts: &'a HashMap<ModID, HashMap<String, AExpr>>,
         func: &AFn,
     ) -> CodeGenResult<FunctionValue<'ctx>> {
         let mut fn_compiler = FnCodeGen {
-            ctx: context,
+            ll_ctx: context,
             src_info,
             ll_builder: builder,
             di_ctx,
             module,
             type_store,
+            type_impls,
             type_converter,
-            nested_fns,
+            type_monomorphizations,
             mod_consts,
             local_consts: Default::default(),
-            vars: HashMap::new(),
+            ll_vars: HashMap::new(),
             ll_fn: None,
             stack: vec![],
             cur_block: None,
@@ -91,7 +95,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Creates a new basic block for this function and returns it.
     fn append_block(&mut self, name: &str) -> BasicBlock<'ctx> {
-        self.ctx.append_basic_block(self.ll_fn.unwrap(), name)
+        self.ll_ctx.append_basic_block(self.ll_fn.unwrap(), name)
     }
 
     /// Positions at the end of `block`. Instructions created after this call will be placed at the
@@ -282,8 +286,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Compiles the given function.
     fn gen_fn(&mut self, func: &AFn) -> CodeGenResult<FunctionValue<'ctx>> {
-        let is_nested = self.nested_fns.contains(&func.signature.type_key);
-        let mangled_name = mangle_fn_name(self.type_converter, &func.signature, is_nested);
+        let mangled_name = mangle_type(
+            self.type_store,
+            func.signature.type_key,
+            self.type_converter.type_mapping(),
+            self.type_monomorphizations,
+        );
 
         // Retrieve the function and create a new "entry" block at the start of the function
         // body.
@@ -325,7 +333,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             // Composite types are passed as pointers and don't need to be copied to the callee
             // stack because they point to memory on the caller's stack that is safe to modify.
             if arg_type.is_composite() {
-                self.vars
+                self.ll_vars
                     .insert(arg.name.to_string(), ll_arg_val.into_pointer_value());
             } else {
                 self.create_var(arg.name.as_str(), arg.type_key, ll_arg_val);
@@ -445,7 +453,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             self.ll_builder
                 .build_ptr_to_int(
                     ll_val.into_pointer_value(),
-                    self.ctx.bool_type(),
+                    self.ll_ctx.bool_type(),
                     "ptr_to_bool",
                 )
                 .unwrap()
@@ -461,7 +469,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             self.ll_builder
                 .build_ptr_to_int(
                     ll_val.into_pointer_value(),
-                    self.ctx.i64_type(),
+                    self.ll_ctx.i64_type(),
                     "ptr_to_int",
                 )
                 .unwrap()
@@ -522,7 +530,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     ) -> BasicValueEnum<'ctx> {
         let ll_enum_type = self.type_converter.get_basic_type(enum_tk);
         let ll_inner_type = self.type_converter.get_basic_type(inner_tk);
-        let ll_variant_type = self.ctx.struct_type(
+        let ll_variant_type = self.ll_ctx.struct_type(
             &[
                 ll_enum_type
                     .into_struct_type()
@@ -564,67 +572,29 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 }
 
-/// Computes and returns the mangled name for the given function signature using the type mappings
-/// in the current context.
-pub fn mangle_fn_name(type_converter: &mut TypeConverter, sig: &AFnSig, is_nested: bool) -> String {
-    // Re-mangle the function name, if necessary.
-    let param_names = match &sig.params {
-        Some(params) => mangling::mangle_param_names(params, type_converter.type_mapping()),
-        None => "".to_string(),
-    };
-
-    let mut mangled_name = match sig.maybe_impl_type_key {
-        Some(impl_tk) => {
-            let mangled_name = mangling::remangle_type_in_name_with_mappings(
-                type_converter,
-                sig.mangled_name.as_str(),
-                impl_tk,
-                type_converter.type_mapping(),
-            );
-            format!("{mangled_name}{param_names}")
-        }
-        None => format!("{}{param_names}", sig.mangled_name),
-    };
-
-    if is_nested {
-        mangled_name += mangle_type_mapping(type_converter.type_mapping()).as_str();
-    }
-
-    mangled_name
-}
-
-/// Mangles type mappings into the form `{k:v,...}` where type key `k` is mapped to `v`.
-pub fn mangle_type_mapping(mapping: &HashMap<TypeKey, TypeKey>) -> String {
-    let mut type_mappings: Vec<(TypeKey, TypeKey)> =
-        mapping.iter().map(|(k, v)| (*k, *v)).collect();
-    type_mappings.sort_by(|(k1, v1), (k2, v2)| {
-        let result = k1.cmp(k2);
-        match result.is_eq() {
-            true => v1.cmp(v2),
-            _ => result,
-        }
-    });
-
-    let mut mangled_name = "{".to_string();
-    for (k, v) in type_mappings {
-        mangled_name += format!("{k}:{v},").as_str();
-    }
-
-    mangled_name + "}"
-}
-
 /// Defines the given function in the current module based on the function signature.
 pub fn gen_fn_sig<'a, 'ctx>(
     ctx: &'ctx Context,
-    module: &'a Module<'ctx>,
+    ll_mod: &'a Module<'ctx>,
     type_converter: &'a mut TypeConverter<'ctx>,
+    type_monomorphizations: &'a HashMap<TypeKey, Monomorphization>,
     sig: &AFnSig,
-    is_nested: bool,
 ) -> String {
     // Define the function in the module using the fully-qualified function name.
     let ll_fn_type = type_converter.get_fn_type(sig.type_key);
-    let mangled_name = mangle_fn_name(type_converter, sig, is_nested);
-    let ll_fn_val = module.add_function(mangled_name.as_str(), ll_fn_type, None);
+    let mangled_name = mangle_type(
+        type_converter,
+        sig.type_key,
+        type_converter.type_mapping(),
+        type_monomorphizations,
+    );
+
+    assert!(
+        ll_mod.get_function(&mangled_name).is_none(),
+        "duplicate fn {mangled_name}"
+    );
+
+    let ll_fn_val = ll_mod.add_function(mangled_name.as_str(), ll_fn_type, None);
 
     // For now, all functions get the `frame-pointer=non-leaf` attribute. This tells
     // LLVM that the frame pointer should be kept if the function calls other functions.

@@ -16,7 +16,6 @@ use crate::parser::ast::spec::SpecType;
 #[derive(PartialEq, Clone, Debug)]
 pub struct ASpecType {
     pub name: String,
-    pub mangled_name: String,
     pub maybe_params: Option<AParams>,
     /// Maps member function name to the function type key.
     pub member_fn_type_keys: HashMap<String, TypeKey>,
@@ -34,10 +33,8 @@ impl ASpecType {
     pub fn from(ctx: &mut ProgramContext, spec_type: &SpecType) -> ASpecType {
         // Insert the empty spec type so we have a type key for it. We'll update it when we're
         // done analyzing.
-        let mangled_name = ctx.mangle_name(None, None, None, &spec_type.name, false);
         let mut a_spec_type = ASpecType {
             name: spec_type.name.clone(),
-            mangled_name: mangled_name.clone(),
             maybe_params: None,
             member_fn_type_keys: Default::default(),
             span: spec_type.span, // TODO: Use name span
@@ -73,7 +70,6 @@ impl ASpecType {
         ctx.replace_type(type_key, AType::Spec(a_spec_type));
 
         ctx.set_cur_self_type_key(Some(type_key));
-        ctx.set_cur_spec_type_key(Some(type_key));
 
         // Analyze all the function signatures in the spec.
         let mut fn_sigs = vec![];
@@ -85,13 +81,11 @@ impl ASpecType {
         }
 
         // Unset the "Self" and spec type keys now that we're done analyzing the spec.
-        ctx.set_cur_spec_type_key(None);
         ctx.set_cur_self_type_key(None);
 
         // Update the type in the type store now that we've analyzed its fields.
         let a_spec_type = ASpecType {
             name: spec_type.name.clone(),
-            mangled_name,
             maybe_params,
             member_fn_type_keys,
             span: spec_type.span,

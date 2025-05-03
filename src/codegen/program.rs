@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -19,6 +19,8 @@ use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::ext::AExternFn;
 use crate::analyzer::ast::func::AFn;
 use crate::analyzer::ast::r#type::AType;
+use crate::analyzer::mangling::mangle_type;
+use crate::analyzer::prog_context::{Monomorphization, TypeImpls};
 use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 use crate::codegen::convert::TypeConverter;
 use crate::codegen::error::{CodeGenError, CodeGenResult, ErrorKind};
@@ -29,16 +31,17 @@ use crate::parser::{ModID, SrcInfo};
 
 /// Compiles a type-rich and semantically valid program to LLVM IR and/or bitcode.
 pub struct ProgramCodeGen<'a, 'ctx> {
-    ctx: &'ctx Context,
+    ll_ctx: &'ctx Context,
     src_info: &'a SrcInfo,
-    builder: &'a Builder<'ctx>,
-    module: &'a Module<'ctx>,
+    ll_builder: &'a Builder<'ctx>,
+    ll_mod: &'a Module<'ctx>,
     fns: &'a HashMap<TypeKey, AFn>,
     extern_fns: &'a HashMap<TypeKey, AExternFn>,
-    nested_fns: &'a HashSet<TypeKey>,
     mono_items: &'a Vec<MonoItem>,
-    maybe_main_fn_name: Option<String>,
+    maybe_main_fn_tk: Option<TypeKey>,
     type_store: &'a TypeStore,
+    type_impls: &'a HashMap<TypeKey, TypeImpls>,
+    type_monomorphizations: &'a HashMap<TypeKey, Monomorphization>,
     type_converter: TypeConverter<'ctx>,
     mod_consts: HashMap<ModID, HashMap<String, AExpr>>,
     /// Whether to include debug info in the LLVM IR.
@@ -61,8 +64,8 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
     fn gen_program(&mut self) -> CodeGenResult<()> {
         // Set debug info metadata.
         if self.emit_debug_info {
-            let debug_metadata_version = self.ctx.i32_type().const_int(3, false);
-            self.module.add_basic_value_flag(
+            let debug_metadata_version = self.ll_ctx.i32_type().const_int(3, false);
+            self.ll_mod.add_basic_value_flag(
                 "Debug Info Version",
                 inkwell::module::FlagBehavior::Warning,
                 debug_metadata_version,
@@ -88,13 +91,12 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                 .get_type(item.type_key)
                 .to_fn_sig()
                 .clone();
-            let is_nested = self.nested_fns.contains(&sig.type_key);
             gen_fn_sig(
-                self.ctx,
-                self.module,
+                self.ll_ctx,
+                self.ll_mod,
                 &mut self.type_converter,
+                self.type_monomorphizations,
                 &sig,
-                is_nested,
             );
         }
 
@@ -119,7 +121,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                         if let Some(di_ctx) = di_ctxs.get_mut(&file_id) {
                             Some(di_ctx)
                         } else {
-                            let di_ctx = new_di_ctx(self.src_info, file_id, self.module);
+                            let di_ctx = new_di_ctx(self.src_info, file_id, self.ll_mod);
                             di_ctxs.insert(file_id, di_ctx);
                             Some(di_ctxs.get_mut(&file_id).unwrap())
                         }
@@ -128,14 +130,15 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                     };
 
                     FnCodeGen::generate(
-                        self.ctx,
+                        self.ll_ctx,
                         self.src_info,
-                        self.builder,
+                        self.ll_builder,
                         maybe_di_ctx,
-                        self.module,
+                        self.ll_mod,
                         self.type_store,
+                        self.type_impls,
+                        self.type_monomorphizations,
                         &mut self.type_converter,
-                        &self.nested_fns,
                         &self.mod_consts,
                         func,
                     )?;
@@ -157,15 +160,22 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
         // so the linker won't locate it as the entrypoint. Generating our own
         // wrapping main also gives us the opportunity to initialize things at
         // runtime, like a GC.
-        if let Some(main_fn_name) = &self.maybe_main_fn_name {
-            let ll_main_fn = self.module.get_function(main_fn_name).unwrap();
+        if let Some(main_fn_tk) = &self.maybe_main_fn_tk {
+            let main_fn_sig = self.type_store.get_type(*main_fn_tk).to_fn_sig();
+            let mangled_name = mangle_type(
+                self.type_store,
+                main_fn_sig.type_key,
+                &HashMap::default(),
+                self.type_monomorphizations,
+            );
+            let ll_main_fn = self.ll_mod.get_function(&mangled_name).unwrap();
             let ll_wrapper_fn =
-                self.module
-                    .add_function("main", self.ctx.void_type().fn_type(&[], false), None);
-            let ll_entry_block = self.ctx.append_basic_block(ll_wrapper_fn, "entry");
-            self.builder.position_at_end(ll_entry_block);
-            self.builder.build_call(ll_main_fn, &[], "main").unwrap();
-            self.builder.build_return(None).unwrap();
+                self.ll_mod
+                    .add_function("main", self.ll_ctx.void_type().fn_type(&[], false), None);
+            let ll_entry_block = self.ll_ctx.append_basic_block(ll_wrapper_fn, "entry");
+            self.ll_builder.position_at_end(ll_entry_block);
+            self.ll_builder.build_call(ll_main_fn, &[], "main").unwrap();
+            self.ll_builder.build_return(None).unwrap();
         }
 
         Ok(())
@@ -177,6 +187,12 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
     ///    that will be linked externally by the linker.
     fn gen_extern_fn(&mut self, ext_fn: &AExternFn) {
         let fn_sig = &ext_fn.fn_sig;
+        let mangled_name = mangle_type(
+            self.type_store,
+            ext_fn.fn_sig.type_key,
+            self.type_converter.type_mapping(),
+            self.type_monomorphizations,
+        );
         let link_name = match &ext_fn.maybe_link_name {
             Some(name) => name,
             None => &fn_sig.name,
@@ -185,28 +201,26 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
         // Generate the external function definition.
         let ll_fn_type = self.type_converter.get_fn_type(fn_sig.type_key);
         let ll_extern_fn =
-            self.module
+            self.ll_mod
                 .add_function(link_name.as_str(), ll_fn_type, Some(Linkage::External));
 
         // Generate the internal function that calls the external one. We'll tell
         // LLVM to always inline this function.
-        let ll_internal_fn =
-            self.module
-                .add_function(fn_sig.mangled_name.as_str(), ll_fn_type, None);
+        let ll_internal_fn = self.ll_mod.add_function(&mangled_name, ll_fn_type, None);
         ll_internal_fn.add_attribute(
             AttributeLoc::Function,
-            self.ctx.create_string_attribute("alwaysinline", ""),
+            self.ll_ctx.create_string_attribute("alwaysinline", ""),
         );
 
-        let ll_entry_block = self.ctx.append_basic_block(ll_internal_fn, "entry");
-        self.builder.position_at_end(ll_entry_block);
+        let ll_entry_block = self.ll_ctx.append_basic_block(ll_internal_fn, "entry");
+        self.ll_builder.position_at_end(ll_entry_block);
         let ll_args: Vec<BasicMetadataValueEnum> = ll_internal_fn
             .get_params()
             .iter()
             .map(|param| param.as_basic_value_enum().into())
             .collect();
         let ll_ret_val = self
-            .builder
+            .ll_builder
             .build_call(ll_extern_fn, ll_args.as_slice(), "extern_call")
             .unwrap()
             .try_as_basic_value()
@@ -215,7 +229,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
             Some(ret_val) => Some(ret_val),
             None => None,
         };
-        self.builder.build_return(ll_ret_val).unwrap();
+        self.ll_builder.build_return(ll_ret_val).unwrap();
     }
 }
 
@@ -330,7 +344,7 @@ impl CodeGenConfig {
             optimization_level: OptimizationLevel::Default,
             linker: None,
             linker_args: vec![],
-            emit_debug_info: false, // TODO: Set this to true when it's not broken.
+            emit_debug_info: true,
         }
     }
 
@@ -375,27 +389,33 @@ pub fn generate(src_info: &SrcInfo, prog: MonoProg) -> CodeGenResult<()> {
 
     // Create the program code generator and generate the program.
     let mut codegen = ProgramCodeGen {
-        ctx: &ctx,
+        ll_ctx: &ctx,
         src_info,
-        builder: &builder,
-        module: &module,
+        ll_builder: &builder,
+        ll_mod: &module,
         fns: &prog.fns,
         extern_fns: &prog.extern_fns,
-        nested_fns: &prog.nested_fns,
         mono_items: &prog.mono_items,
-        maybe_main_fn_name: prog.maybe_main_fn_mangled_name,
+        maybe_main_fn_tk: prog.maybe_main_fn_tk,
         type_store: &prog.type_store,
-        type_converter: TypeConverter::new(&ctx, &prog.type_store, &prog.config.target_machine),
+        type_impls: &prog.type_impls,
+        type_monomorphizations: &prog.type_monomorphizations,
+        type_converter: TypeConverter::new(
+            &ctx,
+            &prog.type_store,
+            &prog.type_monomorphizations,
+            &prog.config.target_machine,
+        ),
         mod_consts: prog.mod_consts,
         emit_debug_info: prog.config.emit_debug_info,
     };
     codegen.gen_program()?;
 
     // Run optimization passes.
-    optimize(codegen.module, &prog.config)?;
+    optimize(codegen.ll_mod, &prog.config)?;
 
     // Write generated code to a file.
-    emit_to_file(codegen.module, &prog.config)?;
+    emit_to_file(codegen.ll_mod, &prog.config)?;
 
     Ok(())
 }

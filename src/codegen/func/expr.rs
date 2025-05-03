@@ -2,7 +2,6 @@ use inkwell::intrinsics::Intrinsic;
 use inkwell::types::{BasicType, BasicTypeEnum};
 use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, FloatValue, IntValue};
 use inkwell::{AddressSpace, FloatPredicate, IntPredicate};
-use regex::{Captures, Regex};
 
 use crate::analyzer::ast::array::AArrayInit;
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
@@ -15,10 +14,11 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::ast::symbol::SymbolKind;
 use crate::analyzer::ast::tuple::ATupleInit;
+use crate::analyzer::mangling::mangle_type;
 use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::parser::ast::op::Operator;
 
-use super::{get_fn_attrs, mangle_fn_name, FnCodeGen};
+use super::{get_fn_attrs, FnCodeGen};
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles an arbitrary expression.
@@ -80,7 +80,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AExprKind::AnonFunction(anon_fn) => {
                 // Shouldn't need to generate anything here. The function should already
                 // have been generated. We just need to return it.
-                let mangled_name = mangle_fn_name(self.type_converter, &anon_fn.signature, true);
+                let mangled_name = mangle_type(
+                    self.type_store,
+                    anon_fn.signature.type_key,
+                    self.type_converter.type_mapping(),
+                    self.type_monomorphizations,
+                );
                 self.module
                     .get_function(&mangled_name)
                     .expect(format!("function {mangled_name} should exist").as_str())
@@ -122,7 +127,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             // sure to stack-allocate composite values and yield pointers to them
             // if they're not already stack allocated.
             ll_result_type = self
-                .ctx
+                .ll_ctx
                 .ptr_type(AddressSpace::default())
                 .as_basic_type_enum();
         }
@@ -148,9 +153,15 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 .type_converter
                 .get_type(access.member_type_key)
                 .to_fn_sig();
+            let mangled_name = mangle_type(
+                self.type_store,
+                fn_sig.type_key,
+                self.type_converter.type_mapping(),
+                self.type_monomorphizations,
+            );
             return self
                 .module
-                .get_function(fn_sig.mangled_name.as_str())
+                .get_function(&mangled_name)
                 .unwrap()
                 .as_global_value()
                 .as_basic_value_enum();
@@ -252,7 +263,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                             ll_array_type,
                             ll_collection_ptr,
                             &[
-                                self.ctx.i32_type().const_int(0, false),
+                                self.ll_ctx.i32_type().const_int(0, false),
                                 ll_index_val.into_int_value(),
                             ],
                             "elem_ptr",
@@ -308,7 +319,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             .ll_builder
             .build_array_alloca(
                 ll_elem_type,
-                self.ctx.i32_type().const_int(array_type.len, false),
+                self.ll_ctx.i32_type().const_int(array_type.len, false),
                 "array",
             )
             .unwrap();
@@ -324,7 +335,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let ll_loop_end = self.append_block("array_init_done");
 
                 // Init array index and jump to condition branch.
-                let ll_index_type = self.ctx.i64_type();
+                let ll_index_type = self.ll_ctx.i64_type();
                 let ll_index_ptr =
                     self.build_entry_alloc("array_index_ptr", ll_index_type.as_basic_type_enum());
                 self.ll_builder
@@ -408,7 +419,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             _ => {
                 for (i, value) in array_init.values.iter().enumerate() {
-                    let ll_index = self.ctx.i32_type().const_int(i as u64, false);
+                    let ll_index = self.ll_ctx.i32_type().const_int(i as u64, false);
                     let ll_element_ptr = unsafe {
                         self.ll_builder
                             .build_in_bounds_gep(
@@ -442,7 +453,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // the variant number type followed by the specific type of the value stored.
         if let Some(value) = &enum_init.maybe_value {
             let ll_value_type = self.type_converter.get_basic_type(value.type_key);
-            ll_struct_type = self.ctx.struct_type(
+            ll_struct_type = self.ll_ctx.struct_type(
                 &[ll_variant_num_type.as_basic_type_enum(), ll_value_type],
                 false,
             );
@@ -521,81 +532,33 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     pub(crate) fn gen_call(&mut self, call: &AFnCall) -> Option<BasicValueEnum<'ctx>> {
         self.set_di_location(&call.span.start_pos);
 
-        let fn_sig = self.type_store.get_type(call.fn_expr.type_key).to_fn_sig();
+        let mut fn_sig = self.type_store.get_type(call.fn_expr.type_key).to_fn_sig();
 
-        let (mut mangled_name, ll_fn_type) = match fn_sig.maybe_impl_type_key {
-            Some(impl_tk) => {
-                if self.type_store.get_type(impl_tk).is_generic() {
-                    // This is a function on a generic type. We need to look up the
-                    // actual function by figuring out what the corresponding concrete
-                    // type.
-                    let concrete_tk = self.type_converter.map_type_key(impl_tk);
-                    let concrete_type = self.type_store.get_type(concrete_tk);
+        // Handle function calls on generic types.
+        if let Some(impl_tk) = fn_sig.maybe_impl_type_key {
+            if let AType::Generic(generic_type) = self.type_store.get_type(impl_tk) {
+                // This is a function on a generic type. We need to look up the
+                // actual function by figuring out what the corresponding concrete
+                // type.
+                let mapped_impl_tk = self.type_converter.map_type_key(impl_tk);
+                let impls = self.type_impls.get(&mapped_impl_tk).unwrap();
 
-                    // TODO: Fix demangling hack.
-                    let re = Regex::new(r"(?P<prefix>[^:]*::)([^\.]*)(?P<suffix>.*)").unwrap();
-                    let concrete_fn_name = re
-                        .replace(fn_sig.mangled_name.as_str(), |caps: &Captures| {
-                            if let Some(mangled_name) = concrete_type.maybe_mangled_name() {
-                                format!("{}{}", mangled_name, &caps["suffix"])
-                            } else {
-                                format!(
-                                    "{}{}{}",
-                                    &caps["prefix"],
-                                    concrete_type.name(),
-                                    &caps["suffix"]
-                                )
-                            }
-                        })
-                        .into_owned();
-                    let ll_fn_type = self
-                        .module
-                        .get_function(concrete_fn_name.as_str())
-                        .expect(format!("function {} should exist", concrete_fn_name).as_str())
-                        .get_type();
-
-                    (concrete_fn_name, ll_fn_type)
-                } else {
-                    (
-                        fn_sig.mangled_name.clone(),
-                        self.type_converter.get_fn_type(fn_sig.type_key),
-                    )
+                for spec_tk in &generic_type.spec_type_keys {
+                    if let Some(tk) = impls.get_fn_from_spec_impl(*spec_tk, &fn_sig.name) {
+                        fn_sig = self.type_store.get_type(tk).to_fn_sig();
+                        break;
+                    }
                 }
             }
-
-            None => (
-                fn_sig.mangled_name.clone(),
-                self.type_converter.get_fn_type(fn_sig.type_key),
-            ),
-        };
-
-        // TODO: This is a nasty hack. Find a better way of doing this.
-        let type_mapping = self.type_converter.type_mapping();
-        if !type_mapping.is_empty() {
-            // Define a regex to capture the part inside brackets
-            let re = Regex::new(r"\[(\d+(?:,\d+)*)\]").unwrap();
-
-            // Use `re.replace_all` to process the captured groups
-            mangled_name = re
-                .replace_all(mangled_name.as_str(), |caps: &Captures| {
-                    // Split the captured group by commas, parse integers, map them, and rejoin them
-                    let mapped_numbers: Vec<String> = caps[1]
-                        .split(',')
-                        .filter_map(|num_str| num_str.parse::<i32>().ok())
-                        .map(|num| {
-                            type_mapping
-                                .get(&(num as TypeKey))
-                                .cloned()
-                                .unwrap_or(num as TypeKey)
-                        }) // Map or keep original
-                        .map(|mapped_num| mapped_num.to_string()) // Convert back to string
-                        .collect();
-
-                    // Return the new bracketed string
-                    format!("[{}]", mapped_numbers.join(","))
-                })
-                .to_string();
         }
+
+        let mangled_name = mangle_type(
+            self.type_store,
+            fn_sig.type_key,
+            self.type_converter.type_mapping(),
+            self.type_monomorphizations,
+        );
+        let ll_fn_type = self.type_converter.get_fn_type(fn_sig.type_key);
 
         // Check if we're short one argument. If so, it means the function signature expects
         // the return value to be written to the address pointed to by the first argument, so we
@@ -632,14 +595,14 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Compile the function call and return the result.
         let ll_call = match &call.fn_expr.kind {
             AExprKind::Symbol(symbol) => {
-                if self.is_var_module_fn(&symbol) {
-                    // The function is being called directly, so we can just look it up by name in
-                    // the module and compile this as a direct call.
-                    let fn_name = self.get_full_symbol_name(symbol);
-                    let ll_fn = self.module.get_function(fn_name.as_str()).expect(
-                        format!("failed to locate function {} in module", fn_name).as_str(),
-                    );
+                let fn_name = mangle_type(
+                    self.type_converter,
+                    symbol.type_key,
+                    self.type_converter.type_mapping(),
+                    self.type_monomorphizations,
+                );
 
+                if let Some(ll_fn) = self.module.get_function(&fn_name) {
                     // Build the call and attach attributes to it. For some undocumented reason,
                     // some attributes like `byval` need to be attached at the call site as well as
                     // the function declaration.
@@ -684,7 +647,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         };
 
         // Attach argument attributes.
-        for (ll_loc, ll_attrs) in get_fn_attrs(self.ctx, self.type_converter, fn_sig) {
+        for (ll_loc, ll_attrs) in get_fn_attrs(self.ll_ctx, self.type_converter, fn_sig) {
             for ll_attr in ll_attrs {
                 ll_call.add_attribute(ll_loc, ll_attr);
             }
@@ -726,13 +689,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     .build_int_compare(
                         IntPredicate::EQ,
                         int_operand,
-                        self.ctx.bool_type().const_int(0, false),
+                        self.ll_ctx.bool_type().const_int(0, false),
                         ("not_".to_string() + int_operand.get_name().to_str().unwrap()).as_str(),
                     )
                     .unwrap();
 
                 result
-                    .const_bit_cast(self.ctx.bool_type())
+                    .const_bit_cast(self.ll_ctx.bool_type())
                     .as_basic_value_enum()
             }
 
@@ -831,7 +794,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 self.ll_builder
                     .build_int_to_ptr(
                         result.into_int_value(),
-                        self.ctx.ptr_type(AddressSpace::default()),
+                        self.ll_ctx.ptr_type(AddressSpace::default()),
                         "int_to_ptr",
                     )
                     .unwrap()
@@ -870,7 +833,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let ll_str_ptr = if ll_src_val.is_pointer_value() {
                     self.ll_builder
                         .build_struct_gep(
-                            self.ctx.i8_type(),
+                            self.ll_ctx.i8_type(),
                             ll_src_val.into_pointer_value(),
                             1,
                             "len",
@@ -1094,7 +1057,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         self.set_current_block(end_block);
         let ll_phi = self
             .ll_builder
-            .build_phi(self.ctx.bool_type(), "logical_op_result")
+            .build_phi(self.ll_ctx.bool_type(), "logical_op_result")
             .unwrap();
         ll_phi.add_incoming(&[(&ll_lhs, left_block)]);
         ll_phi.add_incoming(&[(&ll_rhs, right_block)]);

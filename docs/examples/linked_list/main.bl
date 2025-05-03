@@ -126,24 +126,24 @@ fn main() {
     head.insert(Node.new(20, Node.new(-48, null)), 4)
 
     // Make sure values were inserted correctly.
-    assert(head.node_at(4).value == 20, "node 4 is wrong\0")
-    assert(head.node_at(5).value == -48, "node 5 is wrong\0")
+    assert(head.node_at(4).value == 20, "node 4 is wrong")
+    assert(head.node_at(5).value == -48, "node 5 is wrong")
 
     // Check that we can determine the index of the inserted values.
     let result_20 = head.index_of(20)
-    assert(result_20.(0), "index of value 20 not found\0")
-    assert(result_20.(1) == 4, "index of value 20 is wrong\0")
+    assert(result_20.(0), "index of value 20 not found")
+    assert(result_20.(1) == 4, "index of value 20 is wrong")
     let result_48 = head.index_of(-48)
-    assert(result_48.(0), "index of value -48 not found\0")
-    assert(result_48.(1) == 5, "index of value -48 is wrong\0")
+    assert(result_48.(0), "index of value -48 not found")
+    assert(result_48.(1) == 5, "index of value -48 is wrong")
 
     // Remove the inserted values.
-    assert(head.remove(5).value == -48, "removed node 5 is wrong\0")
-    assert(head.remove(4).value == 20, "removed node 4 is wrong\0")
+    assert(head.remove(5).value == -48, "removed node 5 is wrong")
+    assert(head.remove(4).value == 20, "removed node 4 is wrong")
 
     // Make sure all values are in the right place.
     for i = 0; i < 10; i += 1 {
-        assert(head.node_at(i as uint).value == 9 - i, "wrong value left in list\0")
+        assert(head.node_at(i as uint).value == 9 - i, "wrong value left in list")
     }
 
     // Free the list.

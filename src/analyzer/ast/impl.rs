@@ -72,10 +72,7 @@ impl AImpl {
             Some(spec) => {
                 let spec_tk = ctx.resolve_type(&spec.as_unresolved_type());
                 match ctx.get_type(spec_tk) {
-                    AType::Spec(_) => {
-                        ctx.set_cur_spec_type_key(Some(spec_tk));
-                        Some(spec_tk)
-                    }
+                    AType::Spec(_) => Some(spec_tk),
 
                     AType::Unknown(_) => None,
 
@@ -147,7 +144,6 @@ impl AImpl {
             ctx.pop_params(false);
         }
 
-        ctx.set_cur_spec_type_key(None);
         ctx.set_cur_self_type_key(None);
 
         AImpl {

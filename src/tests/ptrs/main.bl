@@ -137,8 +137,8 @@ fn main() {
 
         three_ptr^ *= 2
 
-        assert(array.(2) == 6, "array.(2) is wrong\0")
-        assert(three_ptr^ == 6, "three_ptr^ is wrong\0")
+        assert(array.(2) == 6, "array.(2) is wrong")
+        assert(three_ptr^ == 6, "three_ptr^ is wrong")
     }
     
     exit(0)

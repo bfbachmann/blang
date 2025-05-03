@@ -165,7 +165,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             .unwrap()
             .di_builder
             .create_debug_location(
-                self.ctx,
+                self.ll_ctx,
                 pos.line as u32,
                 pos.col as u32,
                 self.cur_di_scope(),

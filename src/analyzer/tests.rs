@@ -28,8 +28,8 @@ mod tests {
 
     fn analyze(raw: &str) -> AnalyzedModule {
         let analysis = get_analysis(raw);
-        for module in analysis.analyzed_modules {
-            if module.module.mod_id == analysis.ctx.cur_mod_id() {
+        for (mod_id, module) in analysis.analyzed_mods {
+            if mod_id == analysis.ctx.cur_mod_id() {
                 return module;
             }
         }
@@ -87,10 +87,10 @@ mod tests {
         mod_path: &str,
         expected_kind: Option<ErrorKind>,
     ) {
-        let mod_id = src_info.mod_info.get_id_by_path(mod_path).unwrap();
+        let target_mod_id = src_info.mod_info.get_id_by_path(mod_path).unwrap();
 
-        for analyzed_mod in &program_analysis.analyzed_modules {
-            if analyzed_mod.module.mod_id == mod_id {
+        for (mod_id, analyzed_mod) in &program_analysis.analyzed_mods {
+            if *mod_id == target_mod_id {
                 match expected_kind {
                     Some(kind) => {
                         assert!(!analyzed_mod.errors.is_empty());

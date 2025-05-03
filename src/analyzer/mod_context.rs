@@ -20,9 +20,6 @@ pub struct ModuleContext {
     imported_idents: HashMap<FileID, HashMap<String, Ident>>,
     /// The ID of the current file being analyzed.
     cur_file_id: Option<FileID>,
-    /// Will contain the type key of the spec being implemented in the current `impl` or `spec`
-    /// block, if any.
-    cur_spec_type_key: Option<TypeKey>,
     /// The type key for the current `impl` or `spec` type.
     cur_self_type_key: Option<TypeKey>,
     /// Contains information about aliases for imported modules.
@@ -58,7 +55,6 @@ impl ModuleContext {
             scopes: Vec::from([scope]),
             imported_idents: Default::default(),
             cur_file_id: None,
-            cur_spec_type_key: None,
             cur_self_type_key: None,
             mod_aliases: Default::default(),
             unchecked_impls: vec![],
@@ -303,16 +299,6 @@ impl ModuleContext {
     /// mutable reference to it, if found.
     pub fn get_ident_in_cur_scope_mut(&mut self, name: &str) -> Option<&mut Ident> {
         self.scopes.last_mut().unwrap().get_ident_mut(name)
-    }
-
-    /// Returns the type key that corresponds to the spec type in the current scope, if any.
-    pub fn cur_spec_type_key(&self) -> Option<TypeKey> {
-        self.cur_spec_type_key
-    }
-
-    /// Sets the type key that corresponds to the spec type in the current scope.
-    pub fn set_cur_spec_type_key(&mut self, type_key: Option<TypeKey>) {
-        self.cur_spec_type_key = type_key;
     }
 
     pub fn cur_self_type_key(&self) -> Option<TypeKey> {

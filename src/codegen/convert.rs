@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use inkwell::context::Context;
 use inkwell::targets::TargetMachine;
 use inkwell::types::{
-    AnyType, AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, IntType,
-    StructType,
+    AnyType, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, IntType, StructType,
 };
 use inkwell::types::{ArrayType, AsTypeRef};
 use inkwell::values::IntValue;
@@ -18,12 +17,15 @@ use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::tuple::ATupleType;
+use crate::analyzer::mangling::mangle_type;
+use crate::analyzer::prog_context::Monomorphization;
 use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 
 /// Converts types from the Blang analyzer to LLVM types.
 pub struct TypeConverter<'ctx> {
     ctx: &'ctx Context,
     type_store: &'ctx TypeStore,
+    type_monomorphizations: &'ctx HashMap<TypeKey, Monomorphization>,
     ll_target_machine: &'ctx TargetMachine,
     type_mapping: HashMap<TypeKey, TypeKey>,
 }
@@ -42,6 +44,7 @@ impl<'ctx> TypeConverter<'ctx> {
     pub fn new(
         ctx: &'ctx Context,
         type_store: &'ctx TypeStore,
+        type_monomorphizations: &'ctx HashMap<TypeKey, Monomorphization>,
         ll_target_machine: &'ctx TargetMachine,
     ) -> TypeConverter<'ctx> {
         gen_intrinsic_types(ctx, ll_target_machine);
@@ -49,6 +52,7 @@ impl<'ctx> TypeConverter<'ctx> {
         TypeConverter {
             ctx,
             type_store,
+            type_monomorphizations,
             ll_target_machine,
             type_mapping: Default::default(),
         }
@@ -77,7 +81,7 @@ impl<'ctx> TypeConverter<'ctx> {
 
     /// Returns the LLVM basic type enum for the type associated with the given type key.
     pub fn get_basic_type(&mut self, type_key: TypeKey) -> BasicTypeEnum<'ctx> {
-        self.to_basic_type(self.get_type(type_key))
+        self.to_basic_type(type_key)
     }
 
     /// Returns the LLVM function type for the type associated with the given type key.
@@ -96,7 +100,8 @@ impl<'ctx> TypeConverter<'ctx> {
     }
 
     /// Gets the LLVM basic type that corresponds to the given type.
-    fn to_basic_type(&self, typ: &AType) -> BasicTypeEnum<'ctx> {
+    fn to_basic_type(&self, type_key: TypeKey) -> BasicTypeEnum<'ctx> {
+        let typ = self.get_type(type_key);
         match typ {
             AType::Bool => self.ctx.bool_type().as_basic_type_enum(),
 
@@ -122,9 +127,9 @@ impl<'ctx> TypeConverter<'ctx> {
 
             AType::Char => self.ctx.i32_type().as_basic_type_enum(),
 
-            AType::Struct(struct_type) => self.to_struct_type(struct_type).as_basic_type_enum(),
+            AType::Struct(_) => self.to_struct_type(type_key).as_basic_type_enum(),
 
-            AType::Enum(enum_type) => self.enum_to_struct_type(enum_type).as_basic_type_enum(),
+            AType::Enum(_) => self.enum_to_struct_type(type_key).as_basic_type_enum(),
 
             AType::Tuple(tuple_type) => self.tuple_to_struct_type(tuple_type).as_basic_type_enum(),
 
@@ -160,7 +165,7 @@ impl<'ctx> TypeConverter<'ctx> {
         let ll_field_types: Vec<BasicTypeEnum> = tuple_type
             .fields
             .iter()
-            .map(|f| self.to_basic_type(self.get_type(f.type_key)))
+            .map(|f| self.to_basic_type(f.type_key))
             .collect();
 
         // Create and return the LLVM struct type.
@@ -170,11 +175,10 @@ impl<'ctx> TypeConverter<'ctx> {
     /// Converts the given function signature into an LLVM `FunctionType`.
     fn to_fn_type(&self, sig: &AFnSig) -> FunctionType<'ctx> {
         // Get return type.
-        let ret_type = match &sig.maybe_ret_type_key {
-            Some(type_key) => Some(self.get_type(*type_key)),
-            None => None,
+        let mut ll_ret_type = match &sig.maybe_ret_type_key {
+            None => self.ctx.void_type().as_any_type_enum(),
+            Some(tk) => self.to_basic_type(*tk).as_any_type_enum(),
         };
-        let mut ll_ret_type = self.to_any_type(ret_type);
         let mut ll_arg_types: Vec<BasicMetadataTypeEnum> = vec![];
 
         // If the return type is a structured type, we need to add an extra argument to the beginning
@@ -210,8 +214,7 @@ impl<'ctx> TypeConverter<'ctx> {
 
         // Get arg types.
         for arg in &sig.args {
-            let arg_type = self.get_type(arg.type_key);
-            ll_arg_types.push(self.to_metadata_type_enum(arg_type));
+            ll_arg_types.push(self.to_metadata_type_enum(arg.type_key));
         }
 
         // Create the function type.
@@ -232,45 +235,41 @@ impl<'ctx> TypeConverter<'ctx> {
         struct_type
             .fields
             .iter()
-            .map(|field| self.to_basic_type(self.get_type(field.type_key)))
+            .map(|field| self.to_basic_type(field.type_key))
             .collect()
     }
 
     /// Converts the given `struct_type` to an LLVM `StructType`.
-    fn to_struct_type(&self, struct_type: &AStructType) -> StructType<'ctx> {
+    fn to_struct_type(&self, type_key: TypeKey) -> StructType<'ctx> {
+        let struct_type = self.get_type(type_key).to_struct_type();
+
         // If the struct type already exists, just return it.
-        if let Some(ll_struct_type) = self.ctx.get_struct_type(struct_type.mangled_name.as_str()) {
+        let mangled_name = mangle_type(
+            self,
+            type_key,
+            self.type_mapping(),
+            self.type_monomorphizations,
+        );
+        if let Some(ll_struct_type) = self.ctx.get_struct_type(&mangled_name) {
             return ll_struct_type;
         }
 
-        // If the struct type has a name (i.e. it is not an inline type declaration), define it with
-        // its type name. Otherwise, we just define a new struct type in-line.
-        if !struct_type.name.is_empty() {
-            let ll_struct_type = self
-                .ctx
-                .opaque_struct_type(struct_type.mangled_name.as_str());
+        let ll_struct_type = self.ctx.opaque_struct_type(&mangled_name);
 
-            // Assemble the struct field types. It's important that we do this after creating
-            // the opaque struct type to prevent infinite recursion on type conversion.
-            let ll_field_types = self.get_struct_field_types(struct_type);
+        // Assemble the struct field types. It's important that we do this after creating
+        // the opaque struct type to prevent infinite recursion on type conversion.
+        let ll_field_types = self.get_struct_field_types(struct_type);
 
-            // Create and return the LLVM struct type.
-            ll_struct_type.set_body(ll_field_types.as_slice(), false);
-            ll_struct_type
-        } else {
-            // Assemble the struct field types.
-            let ll_field_types = self.get_struct_field_types(struct_type);
-
-            // Create and return the LLVM struct type.
-            self.ctx.struct_type(ll_field_types.as_slice(), false)
-        }
+        // Create and return the LLVM struct type.
+        ll_struct_type.set_body(ll_field_types.as_slice(), false);
+        ll_struct_type
     }
 
     /// Converts the given `array_type` to an LLVM `ArrayType`.
     fn to_array_type(&self, array_type: &AArrayType) -> ArrayType<'ctx> {
         match &array_type.maybe_element_type_key {
             Some(tk) => {
-                let ll_element_type = self.to_basic_type(self.get_type(*tk));
+                let ll_element_type = self.to_basic_type(*tk);
                 ll_element_type.array_type(array_type.len as u32)
             }
             None => self.ctx.i8_type().array_type(0),
@@ -278,21 +277,28 @@ impl<'ctx> TypeConverter<'ctx> {
     }
 
     /// Converts the given `enum_type` to an LLVM `StructType`.
-    fn enum_to_struct_type(&self, enum_type: &AEnumType) -> StructType<'ctx> {
+    fn enum_to_struct_type(&self, type_key: TypeKey) -> StructType<'ctx> {
         // If the corresponding LLVM struct type already exists, just return it.
-        if let Some(ll_struct_type) = self.ctx.get_struct_type(enum_type.mangled_name.as_str()) {
+        let mangled_name = mangle_type(
+            self.type_store,
+            type_key,
+            self.type_mapping(),
+            self.type_monomorphizations,
+        );
+        if let Some(ll_struct_type) = self.ctx.get_struct_type(&mangled_name) {
             return ll_struct_type;
         }
 
         // Figure out how many bytes we need to store the variant number based on how many
         // variants there are.
+        let enum_type = self.get_type(type_key).to_enum_type();
         let tag_bytes = enum_variant_num_field_size(enum_type.variants.len() as u64);
         let ll_tag_type = self.int_type_with_size(tag_bytes);
 
         // Create the struct type with two fields. The first stores the enum variant number and the
         // second stores the enum variant value, if any. We'll omit the second field in cases where
         // none of the enum variants contain a value.
-        let ll_enum_type = self.ctx.opaque_struct_type(enum_type.mangled_name.as_str());
+        let ll_enum_type = self.ctx.opaque_struct_type(&mangled_name);
 
         let max_variant_size = self.max_enum_variant_size(enum_type);
         if max_variant_size > 0 {
@@ -317,20 +323,13 @@ impl<'ctx> TypeConverter<'ctx> {
         ll_enum_type
     }
 
-    /// Gets the LLVM "any" type that corresponds to the given type.
-    fn to_any_type(&self, typ: Option<&AType>) -> AnyTypeEnum<'ctx> {
-        match typ {
-            None => self.ctx.void_type().as_any_type_enum(),
-            Some(t) => self.to_basic_type(t).as_any_type_enum(),
-        }
-    }
-
     /// Gets the LLVM metadata type that corresponds to the given type.
-    fn to_metadata_type_enum(&self, typ: &AType) -> BasicMetadataTypeEnum<'ctx> {
+    fn to_metadata_type_enum(&self, type_key: TypeKey) -> BasicMetadataTypeEnum<'ctx> {
+        let typ = self.get_type(type_key);
         if typ.is_composite() {
             BasicMetadataTypeEnum::from(self.ctx.ptr_type(AddressSpace::default()))
         } else {
-            BasicMetadataTypeEnum::from(self.to_basic_type(typ))
+            BasicMetadataTypeEnum::from(self.to_basic_type(type_key))
         }
     }
 
@@ -338,8 +337,7 @@ impl<'ctx> TypeConverter<'ctx> {
     /// other words, this returns the number of bytes required to hold the type in memory on the
     /// target system.
     pub fn size_of_type(&self, type_key: TypeKey) -> u64 {
-        let typ = self.get_type(type_key);
-        let ll_type = self.to_basic_type(typ);
+        let ll_type = self.to_basic_type(type_key);
         self.ll_target_machine
             .get_target_data()
             .get_abi_size(&ll_type)
@@ -347,8 +345,7 @@ impl<'ctx> TypeConverter<'ctx> {
 
     /// Returns the natural alignment of the given type in bytes.
     pub fn align_of_type(&self, type_key: TypeKey) -> u32 {
-        let typ = self.get_type(type_key);
-        let ll_type = self.to_basic_type(typ);
+        let ll_type = self.to_basic_type(type_key);
         self.ll_target_machine
             .get_target_data()
             .get_abi_alignment(&ll_type)

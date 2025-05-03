@@ -62,7 +62,6 @@ impl AEnumTypeVariant {
 #[derive(Debug, Clone)]
 pub struct AEnumType {
     pub name: String,
-    pub mangled_name: String,
     pub maybe_params: Option<AParams>,
     pub variants: HashMap<String, AEnumTypeVariant>,
     pub span: Span,
@@ -72,7 +71,6 @@ impl PartialEq for AEnumType {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && self.maybe_params == other.maybe_params
-            && self.mangled_name == other.mangled_name
             && util::hashmaps_eq(&self.variants, &other.variants)
     }
 }
@@ -94,15 +92,13 @@ impl Display for AEnumType {
 
 impl AEnumType {
     /// Performs semantic analysis on an enum type declaration.
-    pub fn from(ctx: &mut ProgramContext, enum_type: &EnumType, is_in_fn: bool) -> Self {
+    pub fn from(ctx: &mut ProgramContext, enum_type: &EnumType) -> Self {
         // Before analyzing enum variant types, we'll prematurely add this (currently-empty) enum
         // type to the program context. This way, if any of the variant types make use of this enum
         // type, we won't get into an infinitely recursive type resolution cycle. When we're done
         // analyzing this type, the mapping will be updated in the program context.
-        let mangled_name = ctx.mangle_name(None, None, None, enum_type.name.as_str(), is_in_fn);
         let mut a_enum_type = AEnumType {
             name: enum_type.name.clone(),
-            mangled_name: mangled_name.clone(),
             maybe_params: None,
             variants: HashMap::new(),
             span: enum_type.span,
@@ -169,7 +165,6 @@ impl AEnumType {
         // Update the type in the type store now that we've analyzed its fields.
         let a_enum_type = AEnumType {
             name: enum_type.name.clone(),
-            mangled_name,
             maybe_params,
             variants,
             span: enum_type.span,

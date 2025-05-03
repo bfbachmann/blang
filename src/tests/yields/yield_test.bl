@@ -10,7 +10,7 @@ fn main() {
     } else {
         yield 2
     }
-    assert(x == 2, "expected 2\0")
+    assert(x == 2, "expected 2")
 
     // Check closure yields.
     let y = from {
@@ -20,7 +20,7 @@ fn main() {
         }
         yield sum
     }
-    assert(y == 3, "expected 3\0")
+    assert(y == 3, "expected 3")
 
     // Check loop yields.
     let mut value = 1
@@ -32,7 +32,7 @@ fn main() {
 
         yield value
     }
-    assert(z == 4, "expected 4\0")
+    assert(z == 4, "expected 4")
 
     // Check nested yields.
     let nested = from {
@@ -44,7 +44,7 @@ fn main() {
             }
         }
     }
-    assert(nested == 5, "expected 5\0")
+    assert(nested == 5, "expected 5")
 
     exit(0)
 }

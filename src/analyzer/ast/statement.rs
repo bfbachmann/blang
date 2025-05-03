@@ -143,11 +143,11 @@ impl AStatement {
             Statement::Yield(yld) => AStatement::Yield(AYield::from(ctx, yld)),
 
             Statement::StructDeclaration(s) => {
-                AStatement::StructTypeDeclaration(AStructType::from(ctx, &s, true))
+                AStatement::StructTypeDeclaration(AStructType::from(ctx, &s))
             }
 
             Statement::EnumDeclaration(e) => {
-                AStatement::EnumTypeDeclaration(AEnumType::from(ctx, &e, true))
+                AStatement::EnumTypeDeclaration(AEnumType::from(ctx, &e))
             }
 
             Statement::ConstDeclaration(const_decl) => {

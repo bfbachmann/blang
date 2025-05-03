@@ -144,9 +144,8 @@ impl ASymbol {
                 type_key,
                 mod_id,
             } => {
-                // TODO: this is whack
                 let fn_sig = ctx.get_type(type_key).to_fn_sig();
-                name = fn_sig.mangled_name.clone();
+                name = fn_sig.name.clone();
                 (type_key, is_pub, SymbolKind::Fn, mod_id)
             }
 
@@ -155,9 +154,8 @@ impl ASymbol {
                 type_key,
                 mod_id,
             } => {
-                // TODO: whack!
                 let fn_sig = ctx.get_type(type_key).to_fn_sig();
-                name = fn_sig.mangled_name.clone();
+                name = fn_sig.name.clone();
                 (type_key, is_pub, SymbolKind::Fn, mod_id)
             }
 

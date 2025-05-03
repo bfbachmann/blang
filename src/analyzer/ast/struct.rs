@@ -35,7 +35,6 @@ impl Display for AField {
 #[derive(Clone, Debug)]
 pub struct AStructType {
     pub name: String,
-    pub mangled_name: String,
     pub maybe_params: Option<AParams>,
     pub fields: Vec<AField>,
     pub span: Span,
@@ -54,7 +53,6 @@ impl Display for AStructType {
 impl PartialEq for AStructType {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
-            && self.mangled_name == other.mangled_name
             && self.maybe_params == other.maybe_params
             && util::vecs_eq(&self.fields, &other.fields)
     }
@@ -64,15 +62,13 @@ impl AStructType {
     /// Performs semantic analysis on a struct type declaration. Note that this will also
     /// recursively analyze any types contained in the struct. On success, the struct type info will
     /// be stored in the program context.
-    pub fn from(ctx: &mut ProgramContext, struct_type: &StructType, is_in_fn: bool) -> AStructType {
+    pub fn from(ctx: &mut ProgramContext, struct_type: &StructType) -> AStructType {
         // Before analyzing struct field types, we'll prematurely add this (currently-empty) struct
         // type to the program context. This way, if any of the field types make use of this struct
         // type, we won't get into an infinitely recursive type resolution cycle. When we're done
         // analyzing this struct type, the mapping will be updated in the program context.
-        let mangled_name = ctx.mangle_name(None, None, None, struct_type.name.as_str(), is_in_fn);
         let mut a_struct_type = AStructType {
             name: struct_type.name.clone(),
-            mangled_name: mangled_name.clone(),
             maybe_params: None,
             fields: vec![],
             span: struct_type.span,
@@ -136,7 +132,6 @@ impl AStructType {
         // Update the type in the type store now that we've analyzed its fields.
         let a_struct_type = AStructType {
             name: struct_type.name.clone(),
-            mangled_name,
             maybe_params,
             fields,
             span: struct_type.span,

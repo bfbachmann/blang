@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use crate::analyzer::ast::module::AModule;
 use crate::analyzer::error::{err_import_cycle, AnalyzeError, ErrorKind};
-use crate::analyzer::ident::IdentKind;
+use crate::analyzer::ident::{Ident, IdentKind};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::analyzer::warn::AnalyzeWarning;
@@ -47,8 +47,9 @@ impl AnalyzedModule {
 /// The result of analysis on a set of source files.
 pub struct ProgramAnalysis {
     pub ctx: ProgramContext,
-    pub analyzed_modules: Vec<AnalyzedModule>,
-    pub maybe_main_fn_mangled_name: Option<String>,
+    pub analyzed_mods: HashMap<ModID, AnalyzedModule>,
+    pub root_mod_id: ModID,
+    pub maybe_main_fn_tk: Option<TypeKey>,
 }
 
 /// Analyzes all the given modules.
@@ -73,29 +74,28 @@ pub fn analyze_modules(
     );
     analyze_module(&mut ctx, &mut analyzed_mods, &vec![], src_info, root_mod_id);
 
-    // Try to find the name of the main function in the root module.
-    let maybe_main_fn_mangled_name = match ctx.get_local_ident("main", None) {
-        Some(ident) => {
-            // Validate the main function.
-            match ident.kind {
-                IdentKind::Fn { type_key, .. } => {
-                    let span = ident.span;
-                    let root_mod = analyzed_mods.get_mut(&root_mod_id).unwrap();
-                    check_main_fn(&mut ctx, root_mod, type_key, span);
-                    Some(format!("{}::main", ctx.cur_mod_id()))
-                }
+    // Try to find and validate the main function in the root module.
+    let maybe_main_fn_tk = if let Some(Ident {
+        kind: IdentKind::Fn { type_key, .. },
+        span,
+        ..
+    }) = ctx.get_local_ident("main", None)
+    {
+        let span = *span;
+        let type_key = *type_key;
+        let root_mod = analyzed_mods.get_mut(&root_mod_id).unwrap();
+        check_main_fn(&mut ctx, root_mod, type_key, span);
 
-                _ => None,
-            }
-        }
-
-        None => None,
+        Some(type_key)
+    } else {
+        None
     };
 
     ProgramAnalysis {
         ctx,
-        analyzed_modules: analyzed_mods.into_values().collect(),
-        maybe_main_fn_mangled_name,
+        analyzed_mods,
+        root_mod_id,
+        maybe_main_fn_tk,
     }
 }
 
@@ -134,7 +134,7 @@ pub fn analyze_module(
             analyzed_mods.insert(
                 mod_id,
                 AnalyzedModule::new(
-                    AModule::new_empty(mod_id),
+                    AModule::new_empty(),
                     HashMap::from([(err.span.start_pos, err)]),
                     HashMap::new(),
                 ),
@@ -150,7 +150,7 @@ pub fn analyze_module(
             analyzed_mods.insert(
                 mod_id,
                 AnalyzedModule::new(
-                    AModule::new_empty(mod_id),
+                    AModule::new_empty(),
                     std::mem::take(&mut ctx.errors),
                     std::mem::take(&mut ctx.warnings),
                 ),

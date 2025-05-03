@@ -22,9 +22,6 @@ use std::hash::{Hash, Hasher};
 #[derive(Debug, Clone, Eq)]
 pub struct AFnSig {
     pub name: String,
-    /// The mangled name is the full name of the function that may include information about
-    /// it to disambiguate it from other functions with the same name.
-    pub mangled_name: String,
     pub args: Vec<AArg>,
     pub maybe_ret_type_key: Option<TypeKey>,
     /// Represents this function signature as a type.
@@ -39,7 +36,6 @@ pub struct AFnSig {
 impl Hash for AFnSig {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state);
-        self.mangled_name.hash(state);
         self.args.hash(state);
         self.maybe_ret_type_key.hash(state);
         self.maybe_impl_type_key.hash(state);
@@ -50,7 +46,6 @@ impl Hash for AFnSig {
 impl PartialEq for AFnSig {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
-            && self.mangled_name == other.mangled_name
             && util::vecs_eq(&self.args, &other.args)
             && util::opts_eq(&self.maybe_ret_type_key, &other.maybe_ret_type_key)
             && self.maybe_impl_type_key == other.maybe_impl_type_key
@@ -60,7 +55,7 @@ impl PartialEq for AFnSig {
 
 impl fmt::Display for AFnSig {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "fn {}(", self.mangled_name)?;
+        write!(f, "fn {}(", self.name)?;
 
         for (i, arg) in self.args.iter().enumerate() {
             write!(f, "{}", arg)?;
@@ -85,25 +80,15 @@ impl AFnSig {
         // Only try to determine if this is a method on a type (i.e. it has a spec and impl
         // type key) if it's a named function signature.
         let is_anon = sig.name.is_empty();
-        let (maybe_impl_type_key, maybe_spec_type_key) = match is_anon {
-            true => (None, None),
-            false => (ctx.get_cur_self_type_key(), ctx.get_cur_spec_type_key()),
+        let maybe_impl_type_key = match is_anon {
+            true => None,
+            false => ctx.get_cur_self_type_key(),
         };
-
-        // Mangle the function name so it's unique.
-        let mangled_name = ctx.mangle_name(
-            None,
-            maybe_impl_type_key,
-            maybe_spec_type_key,
-            sig.name.as_str(),
-            true,
-        );
 
         // Create a mostly-empty function type and insert it into the program context.
         // We'll fill in the details later, we just need a type key for it now.
         let mut a_fn_sig = AFnSig {
             name: sig.name.to_string(),
-            mangled_name,
             args: vec![],
             maybe_ret_type_key: None,
             type_key: ctx.unknown_type_key(),
@@ -322,13 +307,6 @@ impl AFnSig {
         if let Some(impl_tk) = &mut self.maybe_impl_type_key {
             replace_tk(ctx, impl_tk, type_mappings);
         }
-
-        // Re-mangle the name based on the updated type info.
-        // TODO: Not sure this is right for all cases.
-        self.mangled_name = ctx.remangle_name(
-            self.mangled_name.as_str(),
-            self.maybe_impl_type_key.unwrap(),
-        );
     }
 
     /// Returns a string containing the human-readable version of this function signature.

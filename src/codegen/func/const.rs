@@ -22,67 +22,67 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AExprKind::Symbol(symbol) => self.const_extract_value(symbol),
 
             AExprKind::BoolLiteral(b) => self
-                .ctx
+                .ll_ctx
                 .bool_type()
                 .const_int(*b as u64, false)
                 .as_basic_value_enum(),
 
             AExprKind::I8Literal(i) => self
-                .ctx
+                .ll_ctx
                 .i8_type()
                 .const_int(*i as u64, *i < 0)
                 .as_basic_value_enum(),
 
             AExprKind::U8Literal(u) => self
-                .ctx
+                .ll_ctx
                 .i8_type()
                 .const_int(*u as u64, false)
                 .as_basic_value_enum(),
 
             AExprKind::I16Literal(i) => self
-                .ctx
+                .ll_ctx
                 .i16_type()
                 .const_int(*i as u64, *i < 0)
                 .as_basic_value_enum(),
 
             AExprKind::U16Literal(u) => self
-                .ctx
+                .ll_ctx
                 .i16_type()
                 .const_int(*u as u64, false)
                 .as_basic_value_enum(),
 
             AExprKind::I32Literal(i) => self
-                .ctx
+                .ll_ctx
                 .i32_type()
                 .const_int(*i as u64, *i < 0)
                 .as_basic_value_enum(),
 
             AExprKind::U32Literal(u) => self
-                .ctx
+                .ll_ctx
                 .i32_type()
                 .const_int(*u as u64, false)
                 .as_basic_value_enum(),
 
             AExprKind::F32Literal(f) => self
-                .ctx
+                .ll_ctx
                 .f32_type()
                 .const_float(*f as f64)
                 .as_basic_value_enum(),
 
             AExprKind::I64Literal(i) => self
-                .ctx
+                .ll_ctx
                 .i64_type()
                 .const_int(*i as u64, *i < 0)
                 .as_basic_value_enum(),
 
             AExprKind::U64Literal(u) => self
-                .ctx
+                .ll_ctx
                 .i64_type()
                 .const_int(*u, false)
                 .as_basic_value_enum(),
 
             AExprKind::F64Literal(f, _) => {
-                self.ctx.f64_type().const_float(*f).as_basic_value_enum()
+                self.ll_ctx.f64_type().const_float(*f).as_basic_value_enum()
             }
 
             AExprKind::IntLiteral(i, _) => self
@@ -112,7 +112,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
 
             AExprKind::StrLiteral(literal) => {
-                let char_type = self.ctx.i8_type();
+                let char_type = self.ll_ctx.i8_type();
 
                 // Check if this string literal already exists as a global. If not, create one.
                 let global = if let Some(global) = self.module.get_global(literal) {
@@ -134,7 +134,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let ll_str_type = self.type_converter.get_struct_type(expr.type_key);
                 let ll_str_val = ll_str_type.const_named_struct(&[
                     global.as_basic_value_enum(),
-                    self.ctx
+                    self.ll_ctx
                         .i64_type()
                         .const_int(literal.len() as u64, false)
                         .as_basic_value_enum(),
@@ -170,7 +170,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 // Just return an empty array if there is no element type (this can only happen
                 // if the array is actually empty).
                 if array_init.maybe_element_type_key.is_none() {
-                    return self.ctx.i8_type().const_array(&[]).as_basic_value_enum();
+                    return self.ll_ctx.i8_type().const_array(&[]).as_basic_value_enum();
                 }
 
                 let ll_element_type = self
@@ -273,7 +273,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 // Only append the variant value if there is one.
                 if let Some(val) = &enum_init.maybe_value {
                     let ll_enum_inner = self.gen_const_expr(val);
-                    let ll_variant_type = self.ctx.struct_type(
+                    let ll_variant_type = self.ll_ctx.struct_type(
                         &[
                             ll_variant_num_type.as_basic_type_enum(),
                             ll_enum_inner.get_type(),

@@ -352,7 +352,7 @@ fn analyze(
 
     // Print warnings.
     let mut warn_count = 0;
-    for module in &analysis.analyzed_modules {
+    for module in analysis.analyzed_mods.values() {
         warn_count += 1;
         for warn in &module.warnings {
             display_msg(
@@ -369,7 +369,7 @@ fn analyze(
 
     // Print errors.
     let mut err_count = 0;
-    for module in &analysis.analyzed_modules {
+    for module in analysis.analyzed_mods.values() {
         err_count += module.errors.len();
         for err in &module.errors {
             display_msg(
@@ -405,7 +405,7 @@ fn analyze(
             Ok(result) => result,
         };
 
-        if let Err(err) = write!(dst_file, "{:#?}", analysis.analyzed_modules) {
+        if let Err(err) = write!(dst_file, "{:#?}", analysis.analyzed_mods) {
             return Err(AnalyzeProgError::WriteOutFailed(format!(
                 "error writing AST to file {}: {}",
                 dst.to_str().unwrap_or_default(),
@@ -449,7 +449,7 @@ fn compile(target_mod: &str, quiet: bool, config: CodeGenConfig) -> Result<(), C
     };
 
     // Raise an error if there is no `fn main`.
-    if prog_analysis.maybe_main_fn_mangled_name.is_none() && is_exe {
+    if prog_analysis.maybe_main_fn_tk.is_none() && is_exe {
         return Err(CompileProgError::MissingMain);
     }
 

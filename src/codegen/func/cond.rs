@@ -317,7 +317,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 self.set_current_block(ll_end_block);
                 let ll_phi_val = self
                     .ll_builder
-                    .build_phi(self.ctx.bool_type(), "pattern_phi")
+                    .build_phi(self.ll_ctx.bool_type(), "pattern_phi")
                     .unwrap();
                 for (ll_phi_arg, ll_block) in ll_phi_args {
                     ll_phi_val.add_incoming(&[(&ll_phi_arg, ll_block)]);
@@ -382,7 +382,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                             .unwrap();
 
                         self.set_current_block(ll_end_block);
-                        let ll_bool_type = self.ctx.bool_type();
+                        let ll_bool_type = self.ll_ctx.bool_type();
                         let ll_phi = self
                             .ll_builder
                             .build_phi(ll_bool_type, "found_variant_match")

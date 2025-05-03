@@ -10,6 +10,7 @@ use crate::analyzer::ast::tuple::ATupleType;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::codegen::convert::TypeConverter;
+use crate::lexer::pos::Span;
 use inkwell::context::Context;
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -137,13 +138,13 @@ impl AType {
         }
     }
 
-    /// Returns the type's mangled name, if it has one.
-    pub fn maybe_mangled_name(&self) -> Option<&String> {
+    pub fn span(&self) -> Span {
         match self {
-            AType::Function(fn_sig) => Some(&fn_sig.mangled_name),
-            AType::Struct(struct_type) => Some(&struct_type.mangled_name),
-            AType::Enum(enum_type) => Some(&enum_type.mangled_name),
-            _ => None,
+            AType::Struct(struct_type) => struct_type.span,
+            AType::Enum(enum_type) => enum_type.span,
+            AType::Function(fn_sig) => fn_sig.span,
+            AType::Spec(spec_type) => spec_type.span,
+            _ => Span::default(),
         }
     }
 
@@ -399,6 +400,11 @@ impl AType {
 /// Returns the size of the given type in bytes on the target system (includes padding).
 pub fn size_of_type(ctx: &ProgramContext, type_key: TypeKey) -> u64 {
     let ll_ctx = Context::create();
-    let converter = TypeConverter::new(&ll_ctx, &ctx.type_store, &ctx.config.target_machine);
+    let converter = TypeConverter::new(
+        &ll_ctx,
+        &ctx.type_store,
+        &ctx.type_monomorphizations,
+        &ctx.config.target_machine,
+    );
     converter.size_of_type(type_key)
 }

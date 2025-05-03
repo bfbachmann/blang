@@ -685,7 +685,6 @@ impl AExpr {
                 kind: AExprKind::AnonFunction(Box::new(AFn {
                     signature: AFnSig {
                         name: "".to_string(),
-                        mangled_name: "".to_string(),
                         args: vec![],
                         maybe_ret_type_key: None,
                         type_key,
