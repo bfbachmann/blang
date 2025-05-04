@@ -353,7 +353,7 @@ fn analyze(
     // Print warnings.
     let mut warn_count = 0;
     for module in analysis.analyzed_mods.values() {
-        warn_count += 1;
+        warn_count += module.warnings.len();
         for warn in &module.warnings {
             display_msg(
                 &src_info,

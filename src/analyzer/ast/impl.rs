@@ -183,8 +183,6 @@ fn check_spec_impl(
                 if !a_fn.signature.implements(ctx, &spec_fn_sig) {
                     spec_impl_errs.push(err_incorrect_spec_fn(
                         ctx,
-                        &a_fn.signature.name,
-                        &spec.name.value,
                         spec_tk,
                         &spec_fn_sig,
                         raw_fn.signature.span,

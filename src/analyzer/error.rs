@@ -1115,30 +1115,27 @@ pub fn err_non_spec_impl(
 #[must_use]
 pub fn err_incorrect_spec_fn(
     ctx: &ProgramContext,
-    fn_name: &str,
-    spec_name: &str,
     spec_tk: TypeKey,
     spec_fn_sig: &AFnSig,
     span: Span,
 ) -> AnalyzeError {
+    let spec_name = ctx.display_type(spec_tk);
+
     AnalyzeError::new(
         ErrorKind::IncorrectSpecFnInImpl,
         format_code!(
-            "function {} not implemented according to spec {}",
-            fn_name,
+            "{} is implemented incorrectly for spec {}",
+            spec_fn_sig.name,
             spec_name
         )
         .as_str(),
         span,
     )
-    .with_detail(
-        format_code!(
-            "Spec {} defines the function as {}.",
-            ctx.display_type(spec_tk),
-            spec_fn_sig.display(ctx),
-        )
-        .as_str(),
-    )
+    .with_detail(format_code!("Spec {} expects {}.", spec_name, spec_fn_sig.display(ctx),).as_str())
+    .with_note(Note {
+        message: format_code!("{} is defined here.", spec_fn_sig.name),
+        span: spec_fn_sig.span,
+    })
 }
 
 #[must_use]

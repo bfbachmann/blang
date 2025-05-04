@@ -2,6 +2,7 @@ mod generic_specs
 
 use "std/libc" {exit}
 use "std/runtime" {assert}
+use "std/types/slice" {Slice}
 
 spec Set[T] {
     fn set(*mut self, t: T)
@@ -21,11 +22,79 @@ fn do_set[T: Set[str]](t: *mut T, s: str) {
     t.set(s)
 }
 
+spec HashState[R] {
+    fn new() -> Self
+    fn write(*mut self, bytes: Slice[u8])
+    fn digest(self) -> R
+}
+
+spec Hash[R] {
+    fn hash[H: HashState[R]](self, state: *mut H) -> R
+}
+
+struct U64Hasher {
+    hash: u64
+}
+
+impl U64Hasher: HashState[u64] {
+    fn new() -> Self {
+        return Self{hash: 0}
+    }
+
+    fn write(*mut self, bytes: Slice[u8]) {
+        for let mut i = 0uint; i < bytes.len(); i += 1 {
+            self.hash += bytes.ptr_at(i)^ as u64
+        }
+    }
+
+    fn digest(self) -> u64 {
+        return self.hash
+    }
+}
+
+struct U8Hasher {
+    hash: u8
+}
+
+impl U8Hasher: HashState[u8] {
+    fn new() -> Self {
+        return Self{hash: 0}
+    }
+
+    fn write(*mut self, bytes: Slice[u8]) {
+        for let mut i = 0uint; i < bytes.len(); i += 1 {
+            self.hash += bytes.ptr_at(i)^
+        }
+    }
+
+    fn digest(self) -> u8 {
+        return self.hash
+    }
+}
+
+impl str: Hash[u64] {
+    pub fn hash[H: HashState[u64]](self, state: *mut H) -> u64 {
+        let bytes = Slice[u8].from_str(self)
+        state.write(bytes)
+        return state.digest()
+    }
+}
+
+impl u8: Hash[u8] {
+    pub fn hash[H: HashState[u8]](self, state: *mut H) -> u8 {
+        let bytes = Slice[u8].new(&self, 1)
+        state.write(bytes)
+        return state.digest()
+    }
+}
+
 fn main() {
     let mut thing = Thing{s: "wrong"}
     assert(thing.s == "wrong", "expected 'wrong'")
     do_set(&mut thing, "new")
     assert(thing.s == "new", "expected 'new'")
+    assert("test".hash(&mut U64Hasher.new()) == 448, "expected 448")
+    assert(23u8.hash(&mut U8Hasher.new()) == 23, "expected 23")
 
     exit(0)
 }

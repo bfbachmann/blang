@@ -116,4 +116,8 @@ impl ASpecType {
 
         a_spec_type
     }
+
+    pub fn is_same_as(&self, other: &ASpecType) -> bool {
+        self.name == other.name && self.member_fn_type_keys == other.member_fn_type_keys
+    }
 }

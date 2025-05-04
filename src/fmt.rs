@@ -95,7 +95,6 @@ pub fn display_msg(
     }
 
     for note in notes {
-        println!("{}{}", " ".repeat(width), "|".blue().bold());
         println!(
             "{}{} {} {}",
             " ".repeat(width),

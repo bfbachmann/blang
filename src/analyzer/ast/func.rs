@@ -230,7 +230,13 @@ impl AFnSig {
                         .iter()
                         .zip(other_param_type.spec_type_keys.iter())
                     {
-                        if this_spec_tk != other_spec_tk {
+                        if this_spec_tk == other_spec_tk {
+                            continue;
+                        }
+
+                        let this_spec_type = ctx.get_type(*this_spec_tk).to_spec_type();
+                        let other_spec_type = ctx.get_type(*other_spec_tk).to_spec_type();
+                        if !this_spec_type.is_same_as(other_spec_type) {
                             return false;
                         }
                     }
@@ -251,7 +257,7 @@ impl AFnSig {
             _ => return false,
         }
 
-        return self.is_same_as(ctx, other);
+        self.is_same_as(ctx, other)
     }
 
     /// Updates this function signature by replacing any instances of the

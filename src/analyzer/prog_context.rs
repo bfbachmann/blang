@@ -721,6 +721,93 @@ impl ProgramContext {
         None
     }
 
+    fn monomorphize_spec_fn(
+        &mut self,
+        type_key: TypeKey,
+        type_mappings: &HashMap<TypeKey, TypeKey>,
+    ) -> Option<TypeKey> {
+        let mut replaced_tks = false;
+        let mut fn_sig = self.get_type(type_key).to_fn_sig().clone();
+
+        #[allow(unused)] // False positive
+        let mut new_type_mappings = HashMap::new();
+
+        let type_mappings = if let Some(params) = fn_sig.params {
+            new_type_mappings = type_mappings.clone();
+            fn_sig.params = None;
+            fn_sig.type_key = self.force_insert_type(AType::Function(Box::new(fn_sig.clone())));
+
+            let mut new_params = AParams {
+                params: vec![],
+                span: params.span,
+            };
+
+            for param in params.params {
+                let mut generic_type = self
+                    .get_type(param.generic_type_key)
+                    .to_generic_type()
+                    .clone();
+
+                generic_type.poly_type_key = fn_sig.type_key;
+                generic_type.spec_type_keys = generic_type
+                    .spec_type_keys
+                    .iter()
+                    .map(|spec_tk| {
+                        self.monomorphize_spec_type(*spec_tk, type_mappings, None)
+                            .unwrap_or(*spec_tk)
+                    })
+                    .collect();
+
+                let new_generic_tk = self.insert_type(AType::Generic(generic_type));
+
+                new_type_mappings.insert(param.generic_type_key, new_generic_tk);
+                new_params.params.push(AParam {
+                    name: param.name,
+                    poly_type_key: fn_sig.type_key,
+                    generic_type_key: new_generic_tk,
+                    span: param.span,
+                });
+            }
+
+            fn_sig.params = Some(new_params);
+
+            &new_type_mappings
+        } else {
+            type_mappings
+        };
+
+        for arg in &mut fn_sig.args {
+            if self.replace_tks(&mut arg.type_key, type_mappings) {
+                replaced_tks = true;
+            }
+        }
+
+        if let Some(ret_type_key) = &mut fn_sig.maybe_ret_type_key {
+            if self.replace_tks(ret_type_key, type_mappings) {
+                replaced_tks = true;
+            }
+        }
+
+        if let Some(impl_type_key) = &mut fn_sig.maybe_impl_type_key {
+            if self.replace_tks(impl_type_key, type_mappings) {
+                replaced_tks = true;
+            }
+        }
+
+        if fn_sig.params.is_some() {
+            let new_tk = fn_sig.type_key;
+            self.replace_type(fn_sig.type_key, AType::Function(Box::new(fn_sig)));
+            Some(new_tk)
+        } else if replaced_tks {
+            let new_tk = self.insert_type(AType::Function(Box::new(fn_sig.clone())));
+            fn_sig.type_key = new_tk;
+            self.replace_type(fn_sig.type_key, AType::Function(Box::new(fn_sig)));
+            Some(new_tk)
+        } else {
+            None
+        }
+    }
+
     fn monomorphize_fn_type(
         &mut self,
         type_key: TypeKey,
@@ -857,39 +944,24 @@ impl ProgramContext {
         maybe_target_tk: Option<TypeKey>,
     ) -> Option<TypeKey> {
         let mut spec_type = self.get_type(type_key).to_spec_type().clone();
-        let mut replaced_tks = false;
 
         for fn_tk in spec_type.member_fn_type_keys.values_mut() {
-            if let Some(new_tk) = self.monomorphize_fn_type(*fn_tk, type_mappings, None) {
+            if let Some(new_tk) = self.monomorphize_spec_fn(*fn_tk, type_mappings) {
                 *fn_tk = new_tk;
-                replaced_tks = true;
             }
         }
 
-        let has_replaced_param = match self.get_type(type_key).params() {
-            Some(params) => params
-                .params
-                .iter()
-                .find(|p| type_mappings.contains_key(&p.generic_type_key))
-                .is_some(),
-            None => false,
-        };
+        // Remove parameters from the signature now that they're no longer relevant.
+        spec_type.maybe_params = None;
 
-        if replaced_tks || has_replaced_param {
-            // Remove parameters from the signature now that they're no longer relevant.
-            spec_type.maybe_params = None;
-
-            // Define the new type in the program context.
-            return match maybe_target_tk {
-                Some(target_tk) => {
-                    self.replace_type(target_tk, AType::Spec(spec_type));
-                    Some(target_tk)
-                }
-                None => Some(self.insert_type(AType::Spec(spec_type))),
-            };
+        // Define the new type in the program context.
+        match maybe_target_tk {
+            Some(target_tk) => {
+                self.replace_type(target_tk, AType::Spec(spec_type));
+                Some(target_tk)
+            }
+            None => Some(self.insert_type(AType::Spec(spec_type))),
         }
-
-        None
     }
 
     /// Replaces type keys inside the given type using `type_mappings`. If any type keys were
