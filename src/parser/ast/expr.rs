@@ -585,7 +585,7 @@ mod tests {
     use crate::parser::ast::int_lit::IntLit;
     use crate::parser::ast::op::Operator;
     use crate::parser::ast::str_lit::StrLit;
-    use crate::parser::ast::symbol::Symbol;
+    use crate::parser::ast::symbol::{Name, Symbol};
     use crate::parser::error::{ErrorKind, ParseError, ParseResult};
     use crate::parser::file_parser::FileParser;
 
@@ -600,8 +600,15 @@ mod tests {
         assert_eq!(
             parse(r#"my_var"#).unwrap(),
             Expression::Symbol(Symbol {
-                maybe_mod_name: Box::new(None),
-                name: "my_var".to_string(),
+                maybe_mod_name: None,
+                name: Name {
+                    value: "my_var".to_string(),
+                    span: Span {
+                        file_id: 0,
+                        start_pos: Position::new(1, 1),
+                        end_pos: Position::new(1, 7),
+                    }
+                },
                 params: vec![],
                 span: Span {
                     file_id: 0,
@@ -674,7 +681,14 @@ mod tests {
             parse("call(3 * 2 - 2, other(!thing, 1 > var % 2))").unwrap(),
             Expression::FunctionCall(Box::new(FnCall::new(
                 Expression::Symbol(Symbol::new(
-                    "call",
+                    Name {
+                        value: "call".to_string(),
+                        span: Span {
+                            file_id: 0,
+                            start_pos: Position::new(1, 1),
+                            end_pos: Position::new(1, 5)
+                        },
+                    },
                     Span {
                         file_id: 0,
                         start_pos: Position::new(1, 1),
@@ -717,7 +731,14 @@ mod tests {
                     ),
                     Expression::FunctionCall(Box::new(FnCall::new(
                         Expression::Symbol(Symbol::new(
-                            "other",
+                            Name {
+                                value: "other".to_string(),
+                                span: Span {
+                                    file_id: 0,
+                                    start_pos: Position::new(1, 17),
+                                    end_pos: Position::new(1, 22)
+                                },
+                            },
                             Span {
                                 file_id: 0,
                                 start_pos: Position::new(1, 17),
@@ -728,8 +749,15 @@ mod tests {
                             Expression::UnaryOperation(
                                 Operator::LogicalNot,
                                 Box::new(Expression::Symbol(Symbol {
-                                    maybe_mod_name: Box::new(None),
-                                    name: "thing".to_string(),
+                                    maybe_mod_name: None,
+                                    name: Name {
+                                        value: "thing".to_string(),
+                                        span: Span {
+                                            file_id: 0,
+                                            start_pos: Position::new(1, 24),
+                                            end_pos: Position::new(1, 29),
+                                        }
+                                    },
                                     params: vec![],
                                     span: Span {
                                         file_id: 0,
@@ -751,8 +779,15 @@ mod tests {
                                 Operator::GreaterThan,
                                 Box::new(Expression::BinaryOperation(
                                     Box::new(Expression::Symbol(Symbol {
-                                        maybe_mod_name: Box::new(None),
-                                        name: "var".to_string(),
+                                        maybe_mod_name: None,
+                                        name: Name {
+                                            value: "var".to_string(),
+                                            span: Span {
+                                                file_id: 0,
+                                                start_pos: Position::new(1, 35),
+                                                end_pos: Position::new(1, 38),
+                                            }
+                                        },
                                         params: vec![],
                                         span: Span {
                                             file_id: 0,
@@ -867,8 +902,15 @@ mod tests {
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::BinaryOperation(
                             Box::new(Expression::Symbol(Symbol {
-                                maybe_mod_name: Box::new(None),
-                                name: "var".to_string(),
+                                maybe_mod_name: None,
+                                name: Name {
+                                    value: "var".to_string(),
+                                    span: Span {
+                                        file_id: 0,
+                                        start_pos: Position::new(1, 2),
+                                        end_pos: Position::new(1, 5),
+                                    }
+                                },
                                 params: vec![],
                                 span: Span {
                                     file_id: 0,
@@ -902,7 +944,14 @@ mod tests {
                     Box::new(Expression::BinaryOperation(
                         Box::new(Expression::FunctionCall(Box::new(FnCall::new(
                             Expression::Symbol(Symbol::new(
-                                "call",
+                                Name {
+                                    value: "call".to_string(),
+                                    span: Span {
+                                        file_id: 0,
+                                        start_pos: Position::new(2, 2),
+                                        end_pos: Position::new(2, 6)
+                                    },
+                                },
                                 Span {
                                     file_id: 0,
                                     start_pos: Position::new(2, 2),
@@ -1078,8 +1127,15 @@ mod tests {
             Expression::UnaryOperation(
                 Operator::Subtract,
                 Box::new(Expression::Symbol(Symbol {
-                    maybe_mod_name: Box::new(None),
-                    name: "x".to_string(),
+                    maybe_mod_name: None,
+                    name: Name {
+                        value: "x".to_string(),
+                        span: Span {
+                            file_id: 0,
+                            start_pos: Position::new(1, 2),
+                            end_pos: Position::new(1, 3),
+                        }
+                    },
                     params: vec![],
                     span: Span {
                         file_id: 0,
@@ -1097,7 +1153,14 @@ mod tests {
                 Operator::Subtract,
                 Box::new(Expression::FunctionCall(Box::new(FnCall::new(
                     Expression::Symbol(Symbol::new(
-                        "f",
+                        Name {
+                            value: "f".to_string(),
+                            span: Span {
+                                file_id: 0,
+                                start_pos: Position::new(1, 2),
+                                end_pos: Position::new(1, 3)
+                            },
+                        },
                         Span {
                             file_id: 0,
                             start_pos: Position::new(1, 2),
@@ -1204,8 +1267,15 @@ mod tests {
                                 Box::new(Expression::UnaryOperation(
                                     Operator::Subtract,
                                     Box::new(Expression::Symbol(Symbol {
-                                        maybe_mod_name: Box::new(None),
-                                        name: "v".to_string(),
+                                        maybe_mod_name: None,
+                                        name: Name {
+                                            value: "v".to_string(),
+                                            span: Span {
+                                                file_id: 0,
+                                                start_pos: Position { line: 1, col: 5 },
+                                                end_pos: Position { line: 1, col: 6 },
+                                            }
+                                        },
                                         params: vec![],
                                         span: Span {
                                             file_id: 0,
@@ -1218,8 +1288,15 @@ mod tests {
                                 Box::new(Expression::UnaryOperation(
                                     Operator::Subtract,
                                     Box::new(Expression::Symbol(Symbol {
-                                        maybe_mod_name: Box::new(None),
-                                        name: "a".to_string(),
+                                        maybe_mod_name: None,
+                                        name: Name {
+                                            value: "a".to_string(),
+                                            span: Span {
+                                                file_id: 0,
+                                                start_pos: Position { line: 1, col: 8 },
+                                                end_pos: Position { line: 1, col: 9 },
+                                            }
+                                        },
                                         params: vec![],
                                         span: Span {
                                             file_id: 0,
@@ -1263,8 +1340,15 @@ mod tests {
                             Operator::Subtract,
                             Box::new(Expression::FunctionCall(Box::new(FnCall {
                                 fn_expr: Expression::Symbol(Symbol {
-                                    maybe_mod_name: Box::new(None),
-                                    name: "call".to_string(),
+                                    maybe_mod_name: None,
+                                    name: Name {
+                                        value: "call".to_string(),
+                                        span: Span {
+                                            file_id: 0,
+                                            start_pos: Position { line: 1, col: 23 },
+                                            end_pos: Position { line: 1, col: 27 },
+                                        }
+                                    },
                                     params: vec![],
                                     span: Span {
                                         file_id: 0,
@@ -1305,8 +1389,15 @@ mod tests {
                     Box::new(Expression::UnaryOperation(
                         Operator::Subtract,
                         Box::new(Expression::Symbol(Symbol {
-                            maybe_mod_name: Box::new(None),
-                            name: "b".to_string(),
+                            maybe_mod_name: None,
+                            name: Name {
+                                value: "b".to_string(),
+                                span: Span {
+                                    file_id: 0,
+                                    start_pos: Position::new(1, 4),
+                                    end_pos: Position::new(1, 5),
+                                }
+                            },
                             params: vec![],
                             span: Span {
                                 file_id: 0,

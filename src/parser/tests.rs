@@ -21,7 +21,7 @@ mod tests {
     use crate::parser::ast::ret::Ret;
     use crate::parser::ast::statement::Statement;
     use crate::parser::ast::str_lit::StrLit;
-    use crate::parser::ast::symbol::Symbol;
+    use crate::parser::ast::symbol::{Name, Symbol};
     use crate::parser::ast::unresolved::UnresolvedType;
     use crate::parser::ast::var_assign::VariableAssignment;
     use crate::parser::ast::var_dec::VariableDeclaration;
@@ -102,7 +102,14 @@ mod tests {
                 statements: vec![
                     Statement::VariableDeclaration(VariableDeclaration::new(
                         Some(Type::Unresolved(UnresolvedType::new(
-                            "i64",
+                            Name {
+                                value: "i64".to_string(),
+                                span: Span {
+                                    file_id: 0,
+                                    start_pos: Position::new(1, 17),
+                                    end_pos: Position::new(1, 20),
+                                },
+                            },
                             Span {
                                 file_id: 0,
                                 start_pos: Position::new(1, 17),
@@ -110,7 +117,14 @@ mod tests {
                             }
                         ))),
                         false,
-                        "i".to_string(),
+                        Name {
+                            value: "i".to_string(),
+                            span: Span {
+                                file_id: 0,
+                                start_pos: Position::new(1, 14),
+                                end_pos: Position::new(1, 15),
+                            }
+                        },
                         Expression::IntLiteral(IntLit {
                             value: 123,
                             has_suffix: false,
@@ -129,7 +143,14 @@ mod tests {
                     Statement::VariableDeclaration(VariableDeclaration::new(
                         None,
                         false,
-                        "j".to_string(),
+                        Name {
+                            value: "j".to_string(),
+                            span: Span {
+                                file_id: 0,
+                                start_pos: Position::new(1, 31),
+                                end_pos: Position::new(1, 32),
+                            }
+                        },
                         Expression::IntLiteral(IntLit {
                             value: 1231,
                             has_suffix: false,
@@ -159,12 +180,26 @@ mod tests {
             result,
             Function::new(
                 FunctionSignature::new(
-                    "my_fn",
+                    Name {
+                        value: "my_fn".to_string(),
+                        span: Span {
+                            file_id: 0,
+                            start_pos: Position::new(1, 4),
+                            end_pos: Position::new(1, 9)
+                        }
+                    },
                     vec![
                         Argument::new(
                             "arg1",
                             Type::Unresolved(UnresolvedType::new(
-                                "str",
+                                Name {
+                                    value: "str".to_string(),
+                                    span: Span {
+                                        file_id: 0,
+                                        start_pos: Position::new(1, 16),
+                                        end_pos: Position::new(1, 19)
+                                    },
+                                },
                                 Span {
                                     file_id: 0,
                                     start_pos: Position::new(1, 16),
@@ -181,7 +216,14 @@ mod tests {
                         Argument::new(
                             "arg2",
                             Type::Unresolved(UnresolvedType::new(
-                                "i64",
+                                Name {
+                                    value: "i64".to_string(),
+                                    span: Span {
+                                        file_id: 0,
+                                        start_pos: Position::new(1, 27),
+                                        end_pos: Position::new(1, 30)
+                                    },
+                                },
                                 Span {
                                     file_id: 0,
                                     start_pos: Position::new(1, 27),
@@ -197,7 +239,14 @@ mod tests {
                         )
                     ],
                     Some(Type::Unresolved(UnresolvedType::new(
-                        "str",
+                        Name {
+                            value: "str".to_string(),
+                            span: Span {
+                                file_id: 0,
+                                start_pos: Position::new(1, 35),
+                                end_pos: Position::new(1, 38)
+                            },
+                        },
                         Span {
                             file_id: 0,
                             start_pos: Position::new(1, 35),
@@ -214,7 +263,14 @@ mod tests {
                     vec![Statement::VariableDeclaration(VariableDeclaration::new(
                         None,
                         false,
-                        "s".to_string(),
+                        Name {
+                            value: "s".to_string(),
+                            span: Span {
+                                file_id: 0,
+                                start_pos: Position::new(1, 45),
+                                end_pos: Position::new(1, 46),
+                            }
+                        },
                         Expression::StrLiteral(StrLit {
                             value: "hello world!".to_string(),
                             span: Span {
@@ -246,7 +302,14 @@ mod tests {
             result,
             Function::new(
                 FunctionSignature::new(
-                    "bigboi",
+                    Name {
+                        value: "bigboi".to_string(),
+                        span: Span {
+                            file_id: 0,
+                            start_pos: Position::new(1, 4),
+                            end_pos: Position::new(1, 10)
+                        },
+                    },
                     vec![
                         Argument::new(
                             "f",
@@ -255,7 +318,14 @@ mod tests {
                                     Argument::new(
                                         "",
                                         Type::Unresolved(UnresolvedType::new(
-                                            "str",
+                                            Name {
+                                                value: "str".to_string(),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    start_pos: Position::new(1, 18),
+                                                    end_pos: Position::new(1, 21)
+                                                },
+                                            },
                                             Span {
                                                 file_id: 0,
                                                 start_pos: Position::new(1, 18),
@@ -272,7 +342,14 @@ mod tests {
                                     Argument::new(
                                         "",
                                         Type::Unresolved(UnresolvedType::new(
-                                            "i64",
+                                            Name {
+                                                value: "i64".to_string(),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    start_pos: Position::new(1, 23),
+                                                    end_pos: Position::new(1, 26)
+                                                },
+                                            },
                                             Span {
                                                 file_id: 0,
                                                 start_pos: Position::new(1, 23),
@@ -288,7 +365,14 @@ mod tests {
                                     )
                                 ],
                                 Some(Type::Unresolved(UnresolvedType::new(
-                                    "bool",
+                                    Name {
+                                        value: "bool".to_string(),
+                                        span: Span {
+                                            file_id: 0,
+                                            start_pos: Position::new(1, 31),
+                                            end_pos: Position::new(1, 35)
+                                        },
+                                    },
                                     Span {
                                         file_id: 0,
                                         start_pos: Position::new(1, 31),
@@ -311,7 +395,14 @@ mod tests {
                         Argument::new(
                             "i",
                             Type::Unresolved(UnresolvedType::new(
-                                "i64",
+                                Name {
+                                    value: "i64".to_string(),
+                                    span: Span {
+                                        file_id: 0,
+                                        start_pos: Position::new(1, 40),
+                                        end_pos: Position::new(1, 43)
+                                    },
+                                },
                                 Span {
                                     file_id: 0,
                                     start_pos: Position::new(1, 40),
@@ -330,7 +421,14 @@ mod tests {
                         vec![Argument::new(
                             "",
                             Type::Unresolved(UnresolvedType::new(
-                                "bool",
+                                Name {
+                                    value: "bool".to_string(),
+                                    span: Span {
+                                        file_id: 0,
+                                        start_pos: Position::new(1, 52),
+                                        end_pos: Position::new(1, 56)
+                                    },
+                                },
                                 Span {
                                     file_id: 0,
                                     start_pos: Position::new(1, 52),
@@ -345,7 +443,14 @@ mod tests {
                             }
                         )],
                         Some(Type::Unresolved(UnresolvedType::new(
-                            "str",
+                            Name {
+                                value: "str".to_string(),
+                                span: Span {
+                                    file_id: 0,
+                                    start_pos: Position::new(1, 61),
+                                    end_pos: Position::new(1, 64)
+                                },
+                            },
                             Span {
                                 file_id: 0,
                                 start_pos: Position::new(1, 61),
@@ -385,7 +490,14 @@ mod tests {
             result,
             Expression::FunctionCall(Box::new(FnCall::new(
                 Expression::Symbol(Symbol::new(
-                    "do_thing",
+                    Name {
+                        value: "do_thing".to_string(),
+                        span: Span {
+                            file_id: 0,
+                            start_pos: Position::new(1, 1),
+                            end_pos: Position::new(1, 9),
+                        },
+                    },
                     Span {
                         file_id: 0,
                         start_pos: Position::new(1, 1),
@@ -531,11 +643,25 @@ mod tests {
             result,
             Function::new(
                 FunctionSignature::new(
-                    "my_func",
+                    Name {
+                        value: "my_func".to_string(),
+                        span: Span {
+                            file_id: 0,
+                            start_pos: Position::new(1, 4),
+                            end_pos: Position::new(1, 11)
+                        }
+                    },
                     vec![Argument::new(
                         "s",
                         Type::Unresolved(UnresolvedType::new(
-                            "str",
+                            Name {
+                                value: "str".to_string(),
+                                span: Span {
+                                    file_id: 0,
+                                    start_pos: Position::new(1, 15),
+                                    end_pos: Position::new(1, 18)
+                                },
+                            },
                             Span {
                                 file_id: 0,
                                 start_pos: Position::new(1, 15),
@@ -561,8 +687,15 @@ mod tests {
                         Statement::Conditional(Conditional::new(vec![Branch::new(
                             Some(Expression::BinaryOperation(
                                 Box::new(Expression::Symbol(Symbol {
-                                    maybe_mod_name: Box::new(None),
-                                    name: "s".to_string(),
+                                    maybe_mod_name: None,
+                                    name: Name {
+                                        value: "s".to_string(),
+                                        span: Span {
+                                            file_id: 0,
+                                            start_pos: Position::new(2, 16),
+                                            end_pos: Position::new(2, 17),
+                                        },
+                                    },
                                     params: vec![],
                                     span: Span {
                                         file_id: 0,
@@ -603,7 +736,14 @@ mod tests {
                         )])),
                         Statement::FunctionCall(FnCall::new(
                             Expression::Symbol(Symbol::new(
-                                "print",
+                                Name {
+                                    value: "print".to_string(),
+                                    span: Span {
+                                        file_id: 0,
+                                        start_pos: Position::new(6, 13),
+                                        end_pos: Position::new(6, 18)
+                                    },
+                                },
                                 Span {
                                     file_id: 0,
                                     start_pos: Position::new(6, 13),
@@ -691,10 +831,24 @@ mod tests {
                 Statement::VariableDeclaration(VariableDeclaration {
                     maybe_type: None,
                     is_mut: false,
-                    name: "a".to_string(),
+                    name: Name {
+                        value: "a".to_string(),
+                        span: Span {
+                            file_id: 0,
+                            start_pos: Position::new(3, 21),
+                            end_pos: Position::new(3, 22),
+                        },
+                    },
                     value: Expression::Symbol(Symbol {
-                        maybe_mod_name: Box::new(None),
-                        name: "thing".to_string(),
+                        maybe_mod_name: None,
+                        name: Name {
+                            value: "thing".to_string(),
+                            span: Span {
+                                file_id: 0,
+                                start_pos: Position::new(3, 25),
+                                end_pos: Position::new(3, 30),
+                            },
+                        },
                         params: vec![],
                         span: Span {
                             file_id: 0,
@@ -710,8 +864,15 @@ mod tests {
                 }),
                 Statement::VariableAssignment(VariableAssignment::new(
                     Expression::Symbol(Symbol {
-                        maybe_mod_name: Box::new(None),
-                        name: "thing".to_string(),
+                        maybe_mod_name: None,
+                        name: Name {
+                            value: "thing".to_string(),
+                            span: Span {
+                                file_id: 0,
+                                start_pos: Position::new(4, 18),
+                                end_pos: Position::new(4, 23),
+                            },
+                        },
                         params: vec![],
                         span: Span {
                             file_id: 0,

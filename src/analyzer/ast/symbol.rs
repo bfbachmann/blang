@@ -75,43 +75,43 @@ impl ASymbol {
         allow_polymorph: bool,
     ) -> Self {
         let placeholder =
-            ASymbol::new_with_default_span(symbol.name.as_str(), ctx.unknown_type_key());
+            ASymbol::new_with_default_span(symbol.name.value.as_str(), ctx.unknown_type_key());
 
         // Check for intrinsic symbols like `null`.
         if let Some(intrinsic) = maybe_get_intrinsic(ctx, symbol) {
             return intrinsic;
         }
 
-        let mut name = symbol.name.clone();
+        let mut name = symbol.name.value.clone();
 
         // Locate the identifier.
-        let ident = match (*symbol.maybe_mod_name).as_ref() {
-            Some(mod_sym) => {
-                let mod_id = match ctx.get_mod_alias(mod_sym) {
+        let ident = match &symbol.maybe_mod_name {
+            Some(mod_name) => {
+                let mod_id = match ctx.get_mod_alias(mod_name) {
                     Some(alias) => alias.target_mod_id,
                     None => {
-                        ctx.insert_err(err_undef_mod_alias(&mod_sym.name, mod_sym.span));
+                        ctx.insert_err(err_undef_mod_alias(&mod_name.value, mod_name.span));
                         return placeholder;
                     }
                 };
 
-                match ctx.get_foreign_ident(mod_id, &symbol.name) {
+                match ctx.get_foreign_ident(mod_id, &symbol.name.value) {
                     Some(ident) => ident,
                     None => {
                         ctx.insert_err(err_undef_foreign_symbol(
-                            &symbol.name,
-                            &mod_sym.name,
-                            symbol.span,
+                            &symbol.name.value,
+                            &mod_name.value,
+                            symbol.name.span,
                         ));
                         return placeholder;
                     }
                 }
             }
 
-            None => match ctx.get_local_ident(&symbol.name, Some(Usage::Read)) {
+            None => match ctx.get_local_ident(&symbol.name.value, Some(Usage::Read)) {
                 Some(ident) => ident,
                 None => {
-                    ctx.insert_err(err_undef_local_symbol(&symbol.name, symbol.span));
+                    ctx.insert_err(err_undef_local_symbol(&symbol.name.value, symbol.span));
                     return placeholder;
                 }
             },
@@ -170,7 +170,7 @@ impl ASymbol {
 
         // Record an error if this symbol refers to a non-public foreign type.
         if maybe_mod_id.is_some_and(|id| id != ctx.cur_mod_id()) && !is_pub {
-            ctx.insert_err(err_not_pub(&symbol.name, symbol.span));
+            ctx.insert_err(err_not_pub(&symbol.name.value, symbol.span));
         }
 
         // Analyze any generic parameters on this symbol and use them to monomorphize
@@ -259,7 +259,7 @@ impl ASymbol {
 /// if one exists.
 fn maybe_get_intrinsic(ctx: &mut ProgramContext, symbol: &Symbol) -> Option<ASymbol> {
     // Check for the `null` intrinsic.
-    if symbol.maybe_mod_name.is_none() && symbol.name == "null" {
+    if symbol.maybe_mod_name.is_none() && symbol.name.value == "null" {
         return Some(ASymbol::new_null(ctx, None, symbol.span));
     }
 

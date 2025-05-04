@@ -5,14 +5,14 @@ use crate::fmt::vec_to_string;
 use crate::lexer::pos::Span;
 use crate::locatable_impl;
 use crate::parser::ast::r#type::Type;
-use crate::parser::ast::symbol::Symbol;
+use crate::parser::ast::symbol::{Name, Symbol};
 use crate::Locatable;
 
 /// Represents a user-defined type that has not yet been resolved (i.e. is not primitive).
 #[derive(Debug, Clone, Eq)]
 pub struct UnresolvedType {
-    pub maybe_mod_name: Option<Symbol>,
-    pub name: String,
+    pub maybe_mod_name: Option<Name>,
+    pub name: Name,
     pub params: Vec<Type>,
     pub span: Span,
 }
@@ -39,7 +39,7 @@ impl Display for UnresolvedType {
             f,
             "{}{}{}",
             match &self.maybe_mod_name {
-                Some(sym) => format!("@{}.", sym.name),
+                Some(sym) => format!("@{}.", sym.value),
                 None => "".to_string(),
             },
             self.name,
@@ -55,10 +55,10 @@ locatable_impl!(UnresolvedType);
 
 impl UnresolvedType {
     /// Creates a new unresolved type with the given type name.
-    pub fn new(name: &str, span: Span) -> Self {
+    pub fn new(name: Name, span: Span) -> Self {
         UnresolvedType {
             maybe_mod_name: None,
-            name: name.to_string(),
+            name,
             params: vec![],
             span,
         }
@@ -67,7 +67,7 @@ impl UnresolvedType {
     /// Creates a new unresolved type from the given symbol.
     pub fn from_symbol(symbol: Symbol) -> UnresolvedType {
         UnresolvedType {
-            maybe_mod_name: (*symbol.maybe_mod_name).clone(),
+            maybe_mod_name: symbol.maybe_mod_name,
             name: symbol.name,
             params: symbol.params,
             span: symbol.span,
@@ -78,7 +78,10 @@ impl UnresolvedType {
     pub fn new_with_default_span(name: &str) -> Self {
         UnresolvedType {
             maybe_mod_name: None,
-            name: name.to_string(),
+            name: Name {
+                value: name.to_string(),
+                span: Default::default(),
+            },
             params: vec![],
             span: Default::default(),
         }
@@ -86,11 +89,6 @@ impl UnresolvedType {
 
     /// Returns a new "none" type representing something that does not have a type.
     pub fn unresolved_none() -> Self {
-        UnresolvedType {
-            maybe_mod_name: None,
-            name: "<none>".to_string(),
-            params: vec![],
-            span: Default::default(),
-        }
+        UnresolvedType::new_with_default_span("<none>")
     }
 }

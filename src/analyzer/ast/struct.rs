@@ -68,7 +68,7 @@ impl AStructType {
         // type, we won't get into an infinitely recursive type resolution cycle. When we're done
         // analyzing this struct type, the mapping will be updated in the program context.
         let mut a_struct_type = AStructType {
-            name: struct_type.name.clone(),
+            name: struct_type.name.value.clone(),
             maybe_params: None,
             fields: vec![],
             span: struct_type.span,
@@ -77,13 +77,13 @@ impl AStructType {
 
         // Define a symbol that maps to the struct type.
         if let Err(existing) = ctx.insert_ident(Ident::new_type(
-            struct_type.name.clone(),
+            struct_type.name.value.clone(),
             struct_type.is_pub,
             type_key,
             Some(ctx.cur_mod_id()),
-            struct_type.span, // TODO: Use name span
+            struct_type.name.span,
         )) {
-            let err = err_dup_ident(&struct_type.name, struct_type.span, existing.span);
+            let err = err_dup_ident(&struct_type.name.value, struct_type.span, existing.span);
             ctx.insert_err(err);
         }
 
@@ -109,7 +109,7 @@ impl AStructType {
         for field in &struct_type.fields {
             // Check for duplicated field name.
             if !field_names.insert(field.name.clone()) {
-                let err = err_dup_field_decl(&struct_type.name, &field.name, field.span);
+                let err = err_dup_field_decl(&struct_type.name.value, &field.name, field.span);
                 ctx.insert_err(err);
 
                 // Skip the duplicated field.
@@ -131,7 +131,7 @@ impl AStructType {
 
         // Update the type in the type store now that we've analyzed its fields.
         let a_struct_type = AStructType {
-            name: struct_type.name.clone(),
+            name: struct_type.name.value.clone(),
             maybe_params,
             fields,
             span: struct_type.span,
@@ -236,7 +236,7 @@ impl AStructInit {
         let mut field_values: Vec<(String, AExpr)> = vec![];
         let mut used_field_names = HashSet::new();
         for (field_name_symbol, field_value) in &struct_init.field_values {
-            let field_name = field_name_symbol.name.as_str();
+            let field_name = field_name_symbol.name.value.as_str();
 
             // Get the struct field type, or error if the struct type has no such field.
             let field_tk = match struct_type.get_field_type_key(field_name) {

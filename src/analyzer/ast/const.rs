@@ -55,28 +55,29 @@ impl AConst {
 
         // Add the identifier to the program context so it can be used later.
         if let Err(existing) = ctx.insert_ident(Ident::new_const(
-            const_decl.name.clone(),
+            const_decl.name.value.clone(),
             const_decl.is_pub,
             value.clone(),
             Some(ctx.cur_mod_id()),
-            const_decl.span, // TODO: Use name span.
+            const_decl.name.span,
         )) {
-            err_dup_ident(&existing.name, const_decl.span, existing.span);
+            let err = err_dup_ident(&existing.name, const_decl.span, existing.span);
+            ctx.insert_err(err);
         }
 
         // Just return a dummy value if the expression already failed analysis.
         if ctx.get_type(value.type_key).is_unknown() {
-            return AConst::new_zero_value(ctx, const_decl.name.as_str());
+            return AConst::new_zero_value(ctx, const_decl.name.value.as_str());
         }
 
         // Error if the value assigned to the constant is not constant.
         if !value.kind.is_const() {
             ctx.insert_err(err_not_const(ctx, &value));
-            return AConst::new_zero_value(ctx, const_decl.name.as_str());
+            return AConst::new_zero_value(ctx, const_decl.name.value.as_str());
         }
 
         AConst {
-            name: const_decl.name.clone(),
+            name: const_decl.name.value.clone(),
             declared_type_key: declared_tk,
             value,
             span: const_decl.span().clone(),

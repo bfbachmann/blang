@@ -4,6 +4,7 @@ use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::func_sig::FunctionSignature;
 use crate::parser::ast::params::Params;
+use crate::parser::ast::symbol::Name;
 use crate::parser::error::ParseResult;
 use crate::parser::file_parser::FileParser;
 use crate::Locatable;
@@ -12,7 +13,7 @@ use crate::{locatable_impl, util};
 /// Represents a spec declaration.
 #[derive(Debug, Eq, Clone)]
 pub struct SpecType {
-    pub name: String,
+    pub name: Name,
     pub fn_sigs: Vec<FunctionSignature>,
     pub maybe_params: Option<Params>,
     pub is_pub: bool,
@@ -56,7 +57,7 @@ impl SpecType {
         let start_pos = parser.parse_expecting(TokenKind::Spec)?.span.start_pos;
 
         // Parse the spec name and left brace.
-        let name = parser.parse_identifier()?;
+        let name = Name::parse(parser)?;
 
         // Parse optional generic parameters.
         let maybe_params = match parser.next_token_is(&TokenKind::LeftBracket) {

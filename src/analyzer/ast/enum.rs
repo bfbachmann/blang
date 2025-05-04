@@ -98,7 +98,7 @@ impl AEnumType {
         // type, we won't get into an infinitely recursive type resolution cycle. When we're done
         // analyzing this type, the mapping will be updated in the program context.
         let mut a_enum_type = AEnumType {
-            name: enum_type.name.clone(),
+            name: enum_type.name.value.clone(),
             maybe_params: None,
             variants: HashMap::new(),
             span: enum_type.span,
@@ -106,13 +106,14 @@ impl AEnumType {
         let type_key = ctx.insert_type(AType::Enum(a_enum_type.clone()));
 
         if let Err(existing) = ctx.insert_ident(Ident::new_type(
-            enum_type.name.clone(),
+            enum_type.name.value.clone(),
             enum_type.is_pub,
             type_key,
             Some(ctx.cur_mod_id()),
-            enum_type.span, // TODO: use name span
+            enum_type.name.span,
         )) {
-            err_dup_ident(&enum_type.name, enum_type.span, existing.span);
+            let err = err_dup_ident(&enum_type.name.value, enum_type.name.span, existing.span);
+            ctx.insert_err(err);
         }
 
         // Analyze parameters.
@@ -136,7 +137,7 @@ impl AEnumType {
         for (i, variant) in enum_type.variants.iter().enumerate() {
             // Make sure the variant name is unique.
             if variants.contains_key(&variant.name) {
-                let err = err_dup_enum_variant(&enum_type.name, &variant.name, variant.span);
+                let err = err_dup_enum_variant(&enum_type.name.value, &variant.name, variant.span);
                 ctx.insert_err(err);
 
                 // Ignore this variant since it's illegal.
@@ -164,7 +165,7 @@ impl AEnumType {
 
         // Update the type in the type store now that we've analyzed its fields.
         let a_enum_type = AEnumType {
-            name: enum_type.name.clone(),
+            name: enum_type.name.value.clone(),
             maybe_params,
             variants,
             span: enum_type.span,

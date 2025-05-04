@@ -79,7 +79,7 @@ impl AFnSig {
     pub fn from(ctx: &mut ProgramContext, sig: &FunctionSignature) -> AFnSig {
         // Only try to determine if this is a method on a type (i.e. it has a spec and impl
         // type key) if it's a named function signature.
-        let is_anon = sig.name.is_empty();
+        let is_anon = sig.name.value.is_empty();
         let maybe_impl_type_key = match is_anon {
             true => None,
             false => ctx.get_cur_self_type_key(),
@@ -366,13 +366,17 @@ impl AFn {
 
     pub fn from_parts(ctx: &mut ProgramContext, func: &Function, signature: AFnSig) -> Self {
         // Insert a symbol for the function as long as it's not a method or anonymous.
-        if !func.signature.name.is_empty() && signature.maybe_impl_type_key.is_none() {
+        if !func.signature.name.value.is_empty() && signature.maybe_impl_type_key.is_none() {
             if let Err(existing) = ctx.insert_ident(Ident::new_fn(
                 func,
                 signature.type_key,
                 Some(ctx.cur_mod_id()),
             )) {
-                let err = err_dup_ident(&func.signature.name, func.signature.span, existing.span);
+                let err = err_dup_ident(
+                    &func.signature.name.value,
+                    func.signature.name.span,
+                    existing.span,
+                );
                 ctx.insert_err(err);
             }
         }

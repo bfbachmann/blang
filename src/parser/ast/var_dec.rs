@@ -6,6 +6,7 @@ use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::r#type::Type;
+use crate::parser::ast::symbol::Name;
 use crate::parser::error::ParseResult;
 use crate::parser::file_parser::FileParser;
 use crate::Locatable;
@@ -16,7 +17,7 @@ use crate::Locatable;
 pub struct VariableDeclaration {
     pub maybe_type: Option<Type>,
     pub is_mut: bool,
-    pub name: String,
+    pub name: Name,
     pub value: Expression,
     pub span: Span,
 }
@@ -33,13 +34,7 @@ impl Hash for VariableDeclaration {
 locatable_impl!(VariableDeclaration);
 
 impl VariableDeclaration {
-    pub fn new(
-        typ: Option<Type>,
-        is_mut: bool,
-        name: String,
-        value: Expression,
-        span: Span,
-    ) -> Self {
+    pub fn new(typ: Option<Type>, is_mut: bool, name: Name, value: Expression, span: Span) -> Self {
         VariableDeclaration {
             maybe_type: typ,
             is_mut,
@@ -68,7 +63,7 @@ impl VariableDeclaration {
         let is_mut = parser.parse_optional(TokenKind::Mut).is_some();
 
         // The second token should be the variable name.
-        let name = parser.parse_identifier()?;
+        let name = Name::parse(parser)?;
 
         // The colon and variable type are optional.
         let mut typ = None;

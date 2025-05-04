@@ -45,11 +45,11 @@ impl AExternFn {
         let fn_sig = AFnSig::from(ctx, &ext.signature);
 
         if let Err(existing) = ctx.insert_ident(Ident::new_extern_fn(
-            ext.signature.name.clone(),
+            ext.signature.name.value.clone(),
             ext.is_pub,
             fn_sig.type_key,
             Some(ctx.cur_mod_id()),
-            ext.span, // TODO: Use name span
+            ext.signature.name.span,
         )) {
             let err = err_dup_ident(&existing.name, ext.span, existing.span);
             ctx.insert_err(err);

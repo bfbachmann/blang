@@ -5,7 +5,7 @@ use crate::analyzer::ast::r#impl::AImpl;
 use crate::analyzer::ident::{Ident, IdentKind, ModAlias, Usage};
 use crate::analyzer::scope::{Scope, ScopeKind};
 use crate::analyzer::type_store::TypeKey;
-use crate::parser::ast::symbol::Symbol;
+use crate::parser::ast::symbol::{Name, Symbol};
 use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::FileID;
 use std::collections::hash_map::Entry;
@@ -331,9 +331,9 @@ impl ModuleContext {
     }
 
     /// Gets the module ID that corresponds fo the given mod alias.
-    pub fn get_mod_alias(&mut self, mod_sym: &Symbol) -> Option<&ModAlias> {
-        if let Some(aliases) = self.mod_aliases.get_mut(&mod_sym.span.file_id) {
-            if let Some(alias) = aliases.get_mut(&mod_sym.name) {
+    pub fn get_mod_alias(&mut self, mod_name: &Name) -> Option<&ModAlias> {
+        if let Some(aliases) = self.mod_aliases.get_mut(&mod_name.span.file_id) {
+            if let Some(alias) = aliases.get_mut(&mod_name.value) {
                 alias.usage = Usage::Read;
                 return Some(alias);
             }

@@ -6,7 +6,7 @@ use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::params::Params;
 use crate::parser::ast::r#type::Type;
-use crate::parser::ast::symbol::Symbol;
+use crate::parser::ast::symbol::{Name, Symbol};
 use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::ParseResult;
 use crate::parser::file_parser::FileParser;
@@ -90,7 +90,7 @@ impl EnumTypeVariant {
 /// An enumerated type.
 #[derive(Debug, Eq, Clone)]
 pub struct EnumType {
-    pub name: String,
+    pub name: Name,
     pub maybe_params: Option<Params>,
     pub variants: Vec<EnumTypeVariant>,
     pub is_pub: bool,
@@ -152,7 +152,7 @@ impl EnumType {
 
         // Parse `enum <name>`.
         parser.parse_expecting(TokenKind::Enum)?;
-        let name = parser.parse_identifier()?;
+        let name = Name::parse(parser)?;
 
         // Parse optional parameters.
         let maybe_params = match parser.next_token_is(&TokenKind::LeftBracket) {

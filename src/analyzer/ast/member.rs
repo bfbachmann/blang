@@ -53,7 +53,7 @@ impl AMemberAccess {
         // Abort early if the expression failed analysis.
         let placeholder = AMemberAccess {
             base_expr: base_expr.clone(),
-            member_name: member_name.clone(),
+            member_name: member_name.value.clone(),
             member_type_key: ctx.unknown_type_key(),
             is_method: false,
             span: access.span().clone(),
@@ -71,14 +71,19 @@ impl AMemberAccess {
         }
 
         // Try to resolve the member on the base expression type.
-        let mut member_type_key =
-            match try_resolve_member(ctx, access, &mut base_expr, member_name, prefer_method) {
-                Ok(values) => values,
-                Err(err) => {
-                    ctx.insert_err(err);
-                    return placeholder;
-                }
-            };
+        let mut member_type_key = match try_resolve_member(
+            ctx,
+            access,
+            &mut base_expr,
+            &member_name.value,
+            prefer_method,
+        ) {
+            Ok(values) => values,
+            Err(err) => {
+                ctx.insert_err(err);
+                return placeholder;
+            }
+        };
 
         let member_type = ctx.get_type(member_type_key);
         let (maybe_mem_fn_sig, is_method) = match member_type {
@@ -131,7 +136,7 @@ impl AMemberAccess {
 
         AMemberAccess {
             base_expr,
-            member_name: member_name.clone(),
+            member_name: member_name.value.clone(),
             member_type_key,
             is_method,
             span: access.span().clone(),

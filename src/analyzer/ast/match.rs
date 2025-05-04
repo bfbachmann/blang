@@ -80,7 +80,7 @@ impl APattern {
                     if sym.is_wildcard() {
                         APattern::Wildcard
                     } else {
-                        APattern::LetSymbol(*is_mut, sym.name.clone())
+                        APattern::LetSymbol(*is_mut, sym.name.value.clone())
                     }
                 }
 
@@ -222,7 +222,7 @@ fn analyze_enum_binding(
             // No need to check anything if this is the first pattern in the match case.
             if is_first_pattern {
                 if !sym.is_wildcard() {
-                    *maybe_expected_var_name = Some(sym.name.clone());
+                    *maybe_expected_var_name = Some(sym.name.value.clone());
                     *maybe_expected_var_tk = Some(binding_tk);
                 }
                 return;
@@ -230,7 +230,7 @@ fn analyze_enum_binding(
 
             // Make sure the variable name matches what's expected.
             match maybe_expected_var_name {
-                Some(expected_var_name) if expected_var_name != &sym.name => {
+                Some(expected_var_name) if expected_var_name != &sym.name.value => {
                     let err = err_inconsistent_pattern_binding_names(expected_var_name, sym.span);
                     ctx.insert_err(err);
                     return;
@@ -241,7 +241,7 @@ fn analyze_enum_binding(
                 }
 
                 None => {
-                    let err = err_illegal_pattern_binding(&sym.name, sym.span);
+                    let err = err_illegal_pattern_binding(&sym.name.value, sym.span);
                     ctx.insert_err(err);
                     return;
                 }
@@ -253,10 +253,10 @@ fn analyze_enum_binding(
             if maybe_expected_var_tk.unwrap() != binding_tk {
                 let err = err_inconsistent_binding_types(
                     ctx,
-                    &sym.name,
+                    &sym.name.value,
                     maybe_expected_var_tk.unwrap(),
                     binding_tk,
-                    sym.span,
+                    sym.name.span,
                 );
                 ctx.insert_err(err);
             }

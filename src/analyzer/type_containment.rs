@@ -18,7 +18,7 @@ pub fn check_type_containment(
 ) -> AnalyzeResult<()> {
     match typ {
         Type::Unresolved(unresolved_type) => {
-            if let Some(ident) = ctx.get_local_ident_unchecked(&unresolved_type.name) {
+            if let Some(ident) = ctx.get_local_ident_unchecked(&unresolved_type.name.value) {
                 match &ident.kind {
                     IdentKind::UncheckedStructType(struct_type) => {
                         check_struct_containment(ctx, struct_type, hierarchy)?;
@@ -53,16 +53,16 @@ pub fn check_struct_containment(
     struct_type: &StructType,
     hierarchy: &mut Vec<String>,
 ) -> AnalyzeResult<()> {
-    if hierarchy.contains(&struct_type.name) {
+    if hierarchy.contains(&struct_type.name.value) {
         return Err(new_containment_err(
-            struct_type.name.as_str(),
+            struct_type.name.value.as_str(),
             hierarchy,
             struct_type.span,
         ));
     }
 
     // Push this type name onto the hierarchy stack so it can be checked against other types.
-    hierarchy.push(struct_type.name.clone());
+    hierarchy.push(struct_type.name.value.clone());
 
     // Recursively check each struct field type.
     for field in &struct_type.fields {
@@ -83,16 +83,16 @@ pub fn check_enum_containment(
     enum_type: &EnumType,
     hierarchy: &mut Vec<String>,
 ) -> AnalyzeResult<()> {
-    if hierarchy.contains(&enum_type.name) {
+    if hierarchy.contains(&enum_type.name.value) {
         return Err(new_containment_err(
-            enum_type.name.as_str(),
+            enum_type.name.value.as_str(),
             hierarchy,
             enum_type.span,
         ));
     }
 
     // Push this type name onto the hierarchy stack so it can be checked against other types.
-    hierarchy.push(enum_type.name.clone());
+    hierarchy.push(enum_type.name.value.clone());
 
     // Recursively check each enum variant type.
     for variant in &enum_type.variants {

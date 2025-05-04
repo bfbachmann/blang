@@ -73,7 +73,7 @@ impl AModule {
                 match statement {
                     Statement::FunctionDeclaration(func) => {
                         if let Some(ident) =
-                            ctx.remove_unchecked_ident_from_cur_scope(&func.signature.name)
+                            ctx.remove_unchecked_ident_from_cur_scope(&func.signature.name.value)
                         {
                             let a_fn = AFn::from(ctx, ident.kind.as_unchecked_fn());
                             ctx.insert_analyzed_fn(a_fn);
@@ -81,8 +81,8 @@ impl AModule {
                     }
 
                     Statement::ExternFn(extern_fn) => {
-                        if let Some(ident) =
-                            ctx.remove_unchecked_ident_from_cur_scope(&extern_fn.signature.name)
+                        if let Some(ident) = ctx
+                            .remove_unchecked_ident_from_cur_scope(&extern_fn.signature.name.value)
                         {
                             let ext_fn = AExternFn::from(ctx, ident.kind.as_unchecked_extern_fn());
                             ctx.insert_analyzed_extern_fn(ext_fn);
@@ -90,7 +90,8 @@ impl AModule {
                     }
 
                     Statement::ConstDeclaration(const_) => {
-                        if let Some(ident) = ctx.remove_unchecked_ident_from_cur_scope(&const_.name)
+                        if let Some(ident) =
+                            ctx.remove_unchecked_ident_from_cur_scope(&const_.name.value)
                         {
                             AConst::from(ctx, ident.kind.as_unchecked_const());
                         }
@@ -98,7 +99,7 @@ impl AModule {
 
                     Statement::StructDeclaration(struct_type) => {
                         if let Some(ident) =
-                            ctx.remove_unchecked_ident_from_cur_scope(&struct_type.name)
+                            ctx.remove_unchecked_ident_from_cur_scope(&struct_type.name.value)
                         {
                             AStructType::from(ctx, ident.kind.as_unchecked_struct_type());
                         }
@@ -106,7 +107,7 @@ impl AModule {
 
                     Statement::EnumDeclaration(enum_type) => {
                         if let Some(ident) =
-                            ctx.remove_unchecked_ident_from_cur_scope(&enum_type.name)
+                            ctx.remove_unchecked_ident_from_cur_scope(&enum_type.name.value)
                         {
                             AEnumType::from(ctx, ident.kind.as_unchecked_enum_type());
                         }
@@ -114,7 +115,7 @@ impl AModule {
 
                     Statement::SpecDeclaration(spec_type) => {
                         if let Some(ident) =
-                            ctx.remove_unchecked_ident_from_cur_scope(&spec_type.name)
+                            ctx.remove_unchecked_ident_from_cur_scope(&spec_type.name.value)
                         {
                             ASpecType::from(ctx, ident.kind.as_unchecked_spec_type());
                         }
@@ -195,18 +196,17 @@ fn define_imported_idents(ctx: &mut ProgramContext, src_file: &SrcFile, src_info
 
         if let Some(alias) = &used_mod.maybe_alias {
             if let Err(existing) = ctx.insert_mod_alias(ModAlias::new(
-                alias.to_owned(),
+                alias.value.clone(),
                 target_mod_id,
-                used_mod.span, // TODO: use name span
+                alias.span,
             )) {
-                // TODO: use name span
-                let err = err_dup_import_alias(alias, used_mod.span, existing.span);
+                let err = err_dup_import_alias(&alias.value, alias.span, existing.span);
                 ctx.insert_err(err);
             }
         }
 
         for symbol in &used_mod.symbols {
-            match ctx.get_foreign_ident(target_mod_id, &symbol.name) {
+            match ctx.get_foreign_ident(target_mod_id, &symbol.name.value) {
                 Some(ident) => {
                     let mut ident = ident.clone();
 
@@ -219,14 +219,15 @@ fn define_imported_idents(ctx: &mut ProgramContext, src_file: &SrcFile, src_info
                     };
 
                     if !is_pub {
-                        ctx.insert_err(err_not_pub(&symbol.name, symbol.span));
+                        ctx.insert_err(err_not_pub(&symbol.name.value, symbol.name.span));
                     }
 
                     ident.span = symbol.span;
                     ident.usage = Usage::Unused;
 
                     if let Err(existing) = ctx.insert_imported_ident(ident) {
-                        let err = err_dup_ident(&symbol.name, symbol.span, existing.span);
+                        let err =
+                            err_dup_ident(&symbol.name.value, symbol.name.span, existing.span);
                         ctx.insert_err(err);
                     }
                 }
@@ -234,9 +235,9 @@ fn define_imported_idents(ctx: &mut ProgramContext, src_file: &SrcFile, src_info
                 None => {
                     let mod_path = &src_info.mod_info.get_by_id(target_mod_id).path;
                     ctx.insert_err(err_undef_foreign_symbol(
-                        &symbol.name,
+                        &symbol.name.value,
                         mod_path,
-                        symbol.span,
+                        symbol.name.span,
                     ));
                 }
             }
@@ -254,10 +255,14 @@ fn define_local_idents(ctx: &mut ProgramContext, src_file: &SrcFile) {
                 if let Err(existing) =
                     ctx.insert_ident(Ident::new_unchecked_struct_type(struct_type.clone()))
                 {
-                    let err = err_dup_ident(&struct_type.name, struct_type.span, existing.span);
+                    let err = err_dup_ident(
+                        &struct_type.name.value,
+                        struct_type.name.span,
+                        existing.span,
+                    );
                     ctx.insert_err(err);
                 } else {
-                    containment_check_names.push(&struct_type.name);
+                    containment_check_names.push(&struct_type.name.value);
                 }
             }
 
@@ -265,10 +270,11 @@ fn define_local_idents(ctx: &mut ProgramContext, src_file: &SrcFile) {
                 if let Err(existing) =
                     ctx.insert_ident(Ident::new_unchecked_enum_type(enum_type.clone()))
                 {
-                    let err = err_dup_ident(&enum_type.name, enum_type.span, existing.span);
+                    let err =
+                        err_dup_ident(&enum_type.name.value, enum_type.name.span, existing.span);
                     ctx.insert_err(err);
                 } else {
-                    containment_check_names.push(&enum_type.name);
+                    containment_check_names.push(&enum_type.name.value);
                 }
             }
 
@@ -276,7 +282,8 @@ fn define_local_idents(ctx: &mut ProgramContext, src_file: &SrcFile) {
                 if let Err(existing) =
                     ctx.insert_ident(Ident::new_unchecked_spec_type(spec_type.clone()))
                 {
-                    let err = err_dup_ident(&spec_type.name, spec_type.span, existing.span);
+                    let err =
+                        err_dup_ident(&spec_type.name.value, spec_type.name.span, existing.span);
                     ctx.insert_err(err);
                 }
             }
@@ -284,15 +291,18 @@ fn define_local_idents(ctx: &mut ProgramContext, src_file: &SrcFile) {
             Statement::ConstDeclaration(const_) => {
                 if let Err(existing) = ctx.insert_ident(Ident::new_unchecked_const(const_.clone()))
                 {
-                    let err = err_dup_ident(&const_.name, const_.span, existing.span);
+                    let err = err_dup_ident(&const_.name.value, const_.name.span, existing.span);
                     ctx.insert_err(err);
                 }
             }
 
             Statement::FunctionDeclaration(func) => {
                 if let Err(existing) = ctx.insert_ident(Ident::new_unchecked_fn(func.clone())) {
-                    let err =
-                        err_dup_ident(&func.signature.name, func.signature.span, existing.span);
+                    let err = err_dup_ident(
+                        &func.signature.name.value,
+                        func.signature.name.span,
+                        existing.span,
+                    );
                     ctx.insert_err(err);
                 };
             }
@@ -301,8 +311,11 @@ fn define_local_idents(ctx: &mut ProgramContext, src_file: &SrcFile) {
                 if let Err(existing) =
                     ctx.insert_ident(Ident::new_unchecked_extern_fn(func.clone()))
                 {
-                    let err =
-                        err_dup_ident(&func.signature.name, func.signature.span, existing.span);
+                    let err = err_dup_ident(
+                        &func.signature.name.value,
+                        func.signature.name.span,
+                        existing.span,
+                    );
                     ctx.insert_err(err);
                 };
             }
@@ -419,7 +432,7 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
 
         // Make sure there are no other functions in this impl block that share the same name.
         if fn_type_keys.contains_key(fn_sig.name.as_str()) {
-            let err = err_dup_impl_fn(&member_fn.signature.name, member_fn.signature.span);
+            let err = err_dup_impl_fn(&member_fn.signature.name.value, member_fn.signature.span);
             ctx.insert_err(err);
 
             // Skip invalid func.

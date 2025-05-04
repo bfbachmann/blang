@@ -5,14 +5,16 @@ use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::r#type::Type;
+use crate::parser::ast::symbol::Name;
 use crate::parser::error::ParseResult;
 use crate::parser::file_parser::FileParser;
-use crate::{locatable_impl, util}; use crate::Locatable;
+use crate::Locatable;
+use crate::{locatable_impl, util};
 
 /// Represents a single module-level constant declaration.
 #[derive(Debug, Eq, Clone)]
 pub struct Const {
-    pub name: String,
+    pub name: Name,
     pub maybe_type: Option<Type>,
     pub value: Expression,
     pub is_pub: bool,
@@ -64,7 +66,7 @@ impl Const {
     pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
         let is_pub = parser.parse_optional(TokenKind::Pub).is_some();
         let start_pos = parser.parse_expecting(TokenKind::Const)?.span.start_pos;
-        let name = parser.parse_identifier()?;
+        let name = Name::parse(parser)?;
 
         // Parse the optional `: <type>`.
         let typ = match parser.parse_optional(TokenKind::Colon) {

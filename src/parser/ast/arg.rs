@@ -5,6 +5,7 @@ use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::pointer::PointerType;
 use crate::parser::ast::r#type::Type;
+use crate::parser::ast::symbol::Name;
 use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::file_parser::FileParser;
@@ -61,8 +62,8 @@ impl Argument {
         // Handle the special cases of `*self` and `*mut self`.
         if parser.parse_optional(TokenKind::Asterisk).is_some() {
             let is_mut = parser.parse_optional(TokenKind::Mut).is_some();
-            let name = parser.parse_identifier()?;
-            if name != "self" && name != "_" {
+            let name = Name::parse(parser)?;
+            if name.value != "self" && name.value != "_" {
                 return Err(ParseError::new_with_token(
                     ErrorKind::ExpectedIdent,
                     format_code!("expected {} or {}, but found {}", "self", "_", name).as_str(),
@@ -73,10 +74,13 @@ impl Argument {
             let end_pos = parser.prev_position();
 
             return Ok(Argument::new(
-                name.as_str(),
+                name.value.as_str(),
                 Type::Pointer(Box::new(PointerType::new(
                     Type::Unresolved(UnresolvedType::new(
-                        "Self",
+                        Name {
+                            value: "Self".to_string(),
+                            span: name.span,
+                        },
                         parser.new_span(start_pos, parser.prev_position()),
                     )),
                     is_mut,
@@ -92,16 +96,19 @@ impl Argument {
 
         // The first token should be the argument name.
         let mut end_pos = parser.current_position();
-        let name = parser.parse_identifier()?;
-        end_pos.col += name.len() as u32;
+        let name = Name::parse(parser)?;
+        end_pos.col += name.value.len() as u32;
 
         // If the argument name is `self`, it doesn't need a type. Otherwise, it's a regular
         // argument with a type.
-        if name == "self" {
+        if name.value == "self" {
             return Ok(Argument::new(
-                name.as_str(),
+                name.value.as_str(),
                 Type::Unresolved(UnresolvedType::new(
-                    "Self",
+                    Name {
+                        value: "Self".to_string(),
+                        span: name.span,
+                    },
                     parser.new_span(start_pos, parser.prev_position()),
                 )),
                 is_mut,
@@ -119,7 +126,7 @@ impl Argument {
         let end_pos = arg_type.span().end_pos;
 
         Ok(Argument::new(
-            name.as_str(),
+            name.value.as_str(),
             arg_type,
             is_mut,
             parser.new_span(start_pos, end_pos),

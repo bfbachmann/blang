@@ -135,6 +135,7 @@ impl AnalyzeError {
     }
 }
 
+#[must_use]
 pub fn err_dup_import_alias(name: &str, span: Span, existing_span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::DuplicateImportName,
@@ -154,6 +155,7 @@ pub fn err_dup_import_alias(name: &str, span: Span, existing_span: Span) -> Anal
     })
 }
 
+#[must_use]
 pub fn err_undef_mod_alias(name: &str, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::UndefMod,
@@ -162,6 +164,7 @@ pub fn err_undef_mod_alias(name: &str, span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_undef_foreign_symbol(name: &str, mod_path: &str, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::UndefSymbol,
@@ -170,6 +173,7 @@ pub fn err_undef_foreign_symbol(name: &str, mod_path: &str, span: Span) -> Analy
     )
 }
 
+#[must_use]
 pub fn err_undef_local_symbol(name: &str, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::UndefSymbol,
@@ -178,6 +182,7 @@ pub fn err_undef_local_symbol(name: &str, span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_not_pub(name: &str, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::UseOfPrivateValue,
@@ -186,6 +191,7 @@ pub fn err_not_pub(name: &str, span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_dup_ident(name: &str, span: Span, existing_span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::DuplicateIdentifier,
@@ -202,6 +208,7 @@ pub fn err_dup_ident(name: &str, span: Span, existing_span: Span) -> AnalyzeErro
     })
 }
 
+#[must_use]
 pub fn err_invalid_extern(span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::InvalidExtern,
@@ -210,6 +217,7 @@ pub fn err_invalid_extern(span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_assign_to_const(
     ctx: &ProgramContext,
     target_expr: &AExpr,
@@ -230,6 +238,7 @@ pub fn err_assign_to_const(
     )
 }
 
+#[must_use]
 pub fn err_assign_to_immut_var(
     ctx: &ProgramContext,
     target_expr: &AExpr,
@@ -248,6 +257,7 @@ pub fn err_assign_to_immut_var(
     .with_help(format_code!("Consider declaring {} as mutable.", &target_name).as_str())
 }
 
+#[must_use]
 pub fn err_assign_via_immut_ptr(
     ctx: &ProgramContext,
     ptr_type: &APointerType,
@@ -276,6 +286,7 @@ pub fn err_assign_via_immut_ptr(
     )
 }
 
+#[must_use]
 pub fn err_assign_to_non_var(
     ctx: &ProgramContext,
     target_expr: &AExprKind,
@@ -288,6 +299,7 @@ pub fn err_assign_to_non_var(
     )
 }
 
+#[must_use]
 pub fn err_not_const(ctx: &ProgramContext, value: &AExpr) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::InvalidConst,
@@ -297,6 +309,7 @@ pub fn err_not_const(ctx: &ProgramContext, value: &AExpr) -> AnalyzeError {
     .with_detail("Constant expressions cannot contain variables or function calls.")
 }
 
+#[must_use]
 pub fn err_expected_type(name: &str, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::ExpectedType,
@@ -305,6 +318,7 @@ pub fn err_expected_type(name: &str, span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_undef_type(unresolved_type: &UnresolvedType) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::UndefType,
@@ -313,6 +327,7 @@ pub fn err_undef_type(unresolved_type: &UnresolvedType) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_expected_expr_found_type(
     ctx: &ProgramContext,
     type_key: TypeKey,
@@ -329,6 +344,7 @@ pub fn err_expected_expr_found_type(
     )
 }
 
+#[must_use]
 pub fn err_unresolved_params(
     ctx: &ProgramContext,
     symbol: &Symbol,
@@ -352,6 +368,7 @@ pub fn err_unresolved_params(
     )
 }
 
+#[must_use]
 pub fn err_invalid_mod_path(mod_path: &str, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::UndefMod,
@@ -360,6 +377,7 @@ pub fn err_invalid_mod_path(mod_path: &str, span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_dup_imported_mod(used_mod: &UsedModule, existing: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::DupImportedMod,
@@ -372,6 +390,7 @@ pub fn err_dup_imported_mod(used_mod: &UsedModule, existing: Span) -> AnalyzeErr
     })
 }
 
+#[must_use]
 pub fn err_invalid_statement(span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::InvalidStatement,
@@ -380,6 +399,7 @@ pub fn err_invalid_statement(span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_literal_out_of_range(type_name: &str, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::LiteralOutOfRange,
@@ -388,6 +408,7 @@ pub fn err_literal_out_of_range(type_name: &str, span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_invalid_type_cast(
     ctx: &ProgramContext,
     value_tk: TypeKey,
@@ -406,6 +427,7 @@ pub fn err_invalid_type_cast(
     )
 }
 
+#[must_use]
 pub fn err_superfluous_type_cast(
     ctx: &ProgramContext,
     left_expr: &AExpr,
@@ -424,6 +446,7 @@ pub fn err_superfluous_type_cast(
     )
 }
 
+#[must_use]
 pub fn err_expected_ret_val(ctx: &ProgramContext, call: &AFnCall, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::ExpectedReturnValue,
@@ -436,6 +459,7 @@ pub fn err_expected_ret_val(ctx: &ProgramContext, call: &AFnCall, span: Span) ->
     )
 }
 
+#[must_use]
 pub fn err_invalid_from_expr(span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::InvalidStatement,
@@ -460,6 +484,7 @@ pub fn err_invalid_from_expr(span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_missing_return(detail: Option<&str>, span: Span) -> AnalyzeError {
     let mut err = AnalyzeError::new(
         ErrorKind::MissingReturn,
@@ -474,6 +499,7 @@ pub fn err_missing_return(detail: Option<&str>, span: Span) -> AnalyzeError {
     err
 }
 
+#[must_use]
 pub fn err_missing_yield(detail: Option<&str>, span: Span) -> AnalyzeError {
     let mut err = AnalyzeError::new(
         ErrorKind::MissingYield,
@@ -488,6 +514,7 @@ pub fn err_missing_yield(detail: Option<&str>, span: Span) -> AnalyzeError {
     err
 }
 
+#[must_use]
 pub fn err_unexpected_break(span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::UnexpectedBreak,
@@ -496,6 +523,7 @@ pub fn err_unexpected_break(span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_unexpected_continue(span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::UnexpectedContinue,
@@ -504,6 +532,7 @@ pub fn err_unexpected_continue(span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_unexpected_yield(span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::UnexpectedYield,
@@ -512,6 +541,7 @@ pub fn err_unexpected_yield(span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_expected_params(ctx: &ProgramContext, type_key: TypeKey, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::UnresolvedParams,
@@ -527,6 +557,7 @@ pub fn err_expected_params(ctx: &ProgramContext, type_key: TypeKey, span: Span) 
     )
 }
 
+#[must_use]
 pub fn err_uninitialized_struct_fields(
     ctx: &ProgramContext,
     type_key: TypeKey,
@@ -553,6 +584,7 @@ pub fn err_uninitialized_struct_fields(
     )
 }
 
+#[must_use]
 pub fn err_dup_field_assign(field_name: &str, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::DuplicateStructField,
@@ -561,6 +593,7 @@ pub fn err_dup_field_assign(field_name: &str, span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_type_not_struct(ctx: &ProgramContext, type_key: TypeKey, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::TypeIsNotStruct,
@@ -573,6 +606,7 @@ pub fn err_type_not_struct(ctx: &ProgramContext, type_key: TypeKey, span: Span) 
     )
 }
 
+#[must_use]
 pub fn err_undef_enum_variant(
     ctx: &ProgramContext,
     variant_name: &str,
@@ -591,6 +625,7 @@ pub fn err_undef_enum_variant(
     )
 }
 
+#[must_use]
 pub fn err_undef_field(
     ctx: &ProgramContext,
     field_name: &str,
@@ -609,6 +644,7 @@ pub fn err_undef_field(
     )
 }
 
+#[must_use]
 pub fn err_dup_field_decl(struct_name: &str, field_name: &str, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::DuplicateStructField,
@@ -622,6 +658,7 @@ pub fn err_dup_field_decl(struct_name: &str, field_name: &str, span: Span) -> An
     )
 }
 
+#[must_use]
 pub fn err_empty_return(ctx: &ProgramContext, expected_tk: TypeKey, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::MismatchedTypes,
@@ -634,6 +671,7 @@ pub fn err_empty_return(ctx: &ProgramContext, expected_tk: TypeKey, span: Span) 
     )
 }
 
+#[must_use]
 pub fn err_unexpected_return_val(span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::MismatchedTypes,
@@ -642,6 +680,7 @@ pub fn err_unexpected_return_val(span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_unexpected_return(span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::UnexpectedReturn,
@@ -650,6 +689,7 @@ pub fn err_unexpected_return(span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_dup_param(name: &str, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::DuplicateParam,
@@ -658,6 +698,7 @@ pub fn err_dup_param(name: &str, span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_expected_spec(ctx: &ProgramContext, type_key: TypeKey, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::ExpectedSpec,
@@ -666,6 +707,7 @@ pub fn err_expected_spec(ctx: &ProgramContext, type_key: TypeKey, span: Span) ->
     )
 }
 
+#[must_use]
 pub fn err_ambiguous_access(
     ctx: &ProgramContext,
     base_tk: TypeKey,
@@ -693,6 +735,7 @@ pub fn err_ambiguous_access(
     .with_help("Consider referring to the method via its type or spec.")
 }
 
+#[must_use]
 pub fn err_undef_member(
     ctx: &ProgramContext,
     base_tk: TypeKey,
@@ -711,6 +754,7 @@ pub fn err_undef_member(
     )
 }
 
+#[must_use]
 pub fn err_member_not_method(
     ctx: &ProgramContext,
     base_tk: TypeKey,
@@ -733,6 +777,7 @@ pub fn err_member_not_method(
     )
 }
 
+#[must_use]
 pub fn err_ambiguous_generic_member_access(
     access: &MemberAccess,
     generic_type_name: &str,
@@ -762,6 +807,7 @@ pub fn err_ambiguous_generic_member_access(
         )
 }
 
+#[must_use]
 pub fn err_unexpected_params(ctx: &ProgramContext, member_tk: TypeKey, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::UnexpectedParams,
@@ -771,6 +817,7 @@ pub fn err_unexpected_params(ctx: &ProgramContext, member_tk: TypeKey, span: Spa
     .with_detail(format_code!("Type {} is not polymorphic.", ctx.display_type(member_tk)).as_str())
 }
 
+#[must_use]
 pub fn err_spec_member_access(spec_name: &str, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::SpecMemberAccess,
@@ -787,6 +834,7 @@ pub fn err_spec_member_access(spec_name: &str, span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_inexhaustive_match(span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::MatchNotExhaustive,
@@ -795,6 +843,7 @@ pub fn err_inexhaustive_match(span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_invalid_enum_pattern(span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::InvalidPattern,
@@ -804,6 +853,7 @@ pub fn err_invalid_enum_pattern(span: Span) -> AnalyzeError {
     .with_detail("Enum patterns can only contain identifiers or wildcards.")
 }
 
+#[must_use]
 pub fn err_enum_pattern_missing_value(
     ctx: &ProgramContext,
     variant: &AEnumTypeVariant,
@@ -824,6 +874,7 @@ pub fn err_enum_pattern_missing_value(
     )
 }
 
+#[must_use]
 pub fn err_inconsistent_binding_types(
     ctx: &ProgramContext,
     name: &str,
@@ -849,6 +900,7 @@ pub fn err_inconsistent_binding_types(
     .with_help("Consider moving this pattern to its own match case.")
 }
 
+#[must_use]
 pub fn err_illegal_pattern_binding(name: &str, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::IllegalPatternBinding,
@@ -869,6 +921,7 @@ pub fn err_illegal_pattern_binding(name: &str, span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_inconsistent_pattern_binding_names(expected_name: &str, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::InconsistentPatternBindingNames,
@@ -885,6 +938,7 @@ pub fn err_inconsistent_pattern_binding_names(expected_name: &str, span: Span) -
     )
 }
 
+#[must_use]
 pub fn err_enum_variant_has_no_value(
     ctx: &ProgramContext,
     enum_tk: TypeKey,
@@ -902,6 +956,7 @@ pub fn err_enum_variant_has_no_value(
     )
 }
 
+#[must_use]
 pub fn err_dup_pattern(
     ctx: &ProgramContext,
     variant: &AEnumTypeVariant,
@@ -916,6 +971,7 @@ pub fn err_dup_pattern(
     )
 }
 
+#[must_use]
 pub fn err_mismatched_pattern_types(
     ctx: &ProgramContext,
     enum_tk: TypeKey,
@@ -934,6 +990,7 @@ pub fn err_mismatched_pattern_types(
     )
 }
 
+#[must_use]
 pub fn err_expected_enum_pattern(span: Span) -> AnalyzeError {
     AnalyzeError::new(ErrorKind::InvalidPattern, "expected enum variant", span).with_detail(
         "The first pattern in this case is an enum variant, so all \
@@ -941,6 +998,7 @@ pub fn err_expected_enum_pattern(span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_invalid_pattern_expr(span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::InvalidPattern,
@@ -958,11 +1016,13 @@ pub fn err_invalid_pattern_expr(span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_conflicting_patterns(span: Span) -> AnalyzeError {
     AnalyzeError::new(ErrorKind::ConflictingPattern, "conflicting patterns", span)
         .with_detail("Variable binding patterns must appear alone in match cases.")
 }
 
+#[must_use]
 pub fn err_mismatched_index_type(
     ctx: &ProgramContext,
     is_const: bool,
@@ -992,6 +1052,7 @@ pub fn err_mismatched_index_type(
     )
 }
 
+#[must_use]
 pub fn err_index_out_of_bounds(i: u64, len: u64, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::IndexOutOfBounds,
@@ -1000,6 +1061,7 @@ pub fn err_index_out_of_bounds(i: u64, len: u64, span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_index_empty_array(span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::IndexOutOfBounds,
@@ -1008,6 +1070,7 @@ pub fn err_index_empty_array(span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_cannot_index_value(ctx: &ProgramContext, type_key: TypeKey, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::MismatchedTypes,
@@ -1016,6 +1079,7 @@ pub fn err_cannot_index_value(ctx: &ProgramContext, type_key: TypeKey, span: Spa
     )
 }
 
+#[must_use]
 pub fn err_non_spec_impl(
     ctx: &ProgramContext,
     spec_name: &str,
@@ -1048,6 +1112,7 @@ pub fn err_non_spec_impl(
     )
 }
 
+#[must_use]
 pub fn err_incorrect_spec_fn(
     ctx: &ProgramContext,
     fn_name: &str,
@@ -1076,6 +1141,7 @@ pub fn err_incorrect_spec_fn(
     )
 }
 
+#[must_use]
 pub fn err_spec_impl_missing_fns(
     spec_name: &str,
     missing_fn_names: &Vec<String>,
@@ -1096,6 +1162,7 @@ pub fn err_spec_impl_missing_fns(
     )
 }
 
+#[must_use]
 pub fn err_dup_fn_arg(name: &str, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::DuplicateFnArg,
@@ -1108,6 +1175,7 @@ pub fn err_dup_fn_arg(name: &str, span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_illegal_self_arg(span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::IllegalSelfArg,
@@ -1122,6 +1190,7 @@ pub fn err_illegal_self_arg(span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_misplaced_self_arg(span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::IllegalSelfArg,
@@ -1130,6 +1199,7 @@ pub fn err_misplaced_self_arg(span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_illegal_foreign_type_impl(
     ctx: &ProgramContext,
     type_key: TypeKey,
@@ -1147,6 +1217,7 @@ pub fn err_illegal_foreign_type_impl(
     )
 }
 
+#[must_use]
 pub fn err_illegal_foreign_spec_impl(
     ctx: &ProgramContext,
     spec_tk: TypeKey,
@@ -1169,6 +1240,7 @@ pub fn err_illegal_foreign_spec_impl(
     )
 }
 
+#[must_use]
 pub fn err_spec_not_satisfied(
     ctx: &ProgramContext,
     actual_tk: TypeKey,
@@ -1201,6 +1273,7 @@ pub fn err_spec_not_satisfied(
     )
 }
 
+#[must_use]
 pub fn err_mismatched_types(
     ctx: &ProgramContext,
     expected_tk: TypeKey,
@@ -1219,6 +1292,7 @@ pub fn err_mismatched_types(
     )
 }
 
+#[must_use]
 pub fn err_wrong_num_args(
     ctx: &ProgramContext,
     expected_args: usize,
@@ -1243,6 +1317,7 @@ pub fn err_wrong_num_args(
     )
 }
 
+#[must_use]
 pub fn err_not_callable(ctx: &ProgramContext, type_key: TypeKey, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::MismatchedTypes,
@@ -1251,6 +1326,7 @@ pub fn err_not_callable(ctx: &ProgramContext, type_key: TypeKey, span: Span) -> 
     )
 }
 
+#[must_use]
 pub fn err_type_annotations_needed(
     ctx: &ProgramContext,
     type_key: TypeKey,
@@ -1267,6 +1343,7 @@ pub fn err_type_annotations_needed(
     )
 }
 
+#[must_use]
 pub fn err_invalid_mut_ref_const(symbol: &ASymbol, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::InvalidMutRef,
@@ -1276,6 +1353,7 @@ pub fn err_invalid_mut_ref_const(symbol: &ASymbol, span: Span) -> AnalyzeError {
     .with_help(format_code!("Consider declaring {} as a mutable local variable.", symbol).as_str())
 }
 
+#[must_use]
 pub fn err_invalid_mut_ref_fn(symbol: &ASymbol, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::InvalidMutRef,
@@ -1284,6 +1362,7 @@ pub fn err_invalid_mut_ref_fn(symbol: &ASymbol, span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_invalid_mut_ref_immut(symbol: &ASymbol, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::InvalidMutRef,
@@ -1293,6 +1372,7 @@ pub fn err_invalid_mut_ref_immut(symbol: &ASymbol, span: Span) -> AnalyzeError {
     .with_help(format_code!("Consider declaring {} as mutable.", symbol).as_str())
 }
 
+#[must_use]
 pub fn err_mismatched_operand_types(
     ctx: &ProgramContext,
     op: &Operator,
@@ -1313,6 +1393,7 @@ pub fn err_mismatched_operand_types(
     )
 }
 
+#[must_use]
 pub fn err_invalid_operand_type(
     ctx: &ProgramContext,
     op: &Operator,
@@ -1337,6 +1418,7 @@ pub fn err_invalid_operand_type(
     )
 }
 
+#[must_use]
 pub fn err_invalid_unary_operand_type(
     ctx: &ProgramContext,
     type_key: TypeKey,
@@ -1354,6 +1436,7 @@ pub fn err_invalid_unary_operand_type(
     )
 }
 
+#[must_use]
 pub fn err_cannot_deref_value(ctx: &ProgramContext, type_key: TypeKey, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::MismatchedTypes,
@@ -1366,6 +1449,7 @@ pub fn err_cannot_deref_value(ctx: &ProgramContext, type_key: TypeKey, span: Spa
     )
 }
 
+#[must_use]
 pub fn err_cannot_negate_value(
     ctx: &ProgramContext,
     type_key: TypeKey,
@@ -1387,6 +1471,7 @@ pub fn err_cannot_negate_value(
     )
 }
 
+#[must_use]
 pub fn err_cannot_bitwise_neg_value(
     ctx: &ProgramContext,
     type_key: TypeKey,
@@ -1403,6 +1488,7 @@ pub fn err_cannot_bitwise_neg_value(
     )
 }
 
+#[must_use]
 pub fn err_missing_variant_value(
     ctx: &ProgramContext,
     variant: &AEnumTypeVariant,
@@ -1423,6 +1509,7 @@ pub fn err_missing_variant_value(
     )
 }
 
+#[must_use]
 pub fn err_unexpected_variant_value(
     ctx: &ProgramContext,
     variant: &AEnumTypeVariant,
@@ -1441,6 +1528,7 @@ pub fn err_unexpected_variant_value(
     )
 }
 
+#[must_use]
 pub fn err_no_such_variant(
     ctx: &ProgramContext,
     type_key: TypeKey,
@@ -1459,6 +1547,7 @@ pub fn err_no_such_variant(
     )
 }
 
+#[must_use]
 pub fn err_expected_enum(ctx: &ProgramContext, type_key: TypeKey, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::TypeIsNotEnum,
@@ -1471,6 +1560,7 @@ pub fn err_expected_enum(ctx: &ProgramContext, type_key: TypeKey, span: Span) ->
     )
 }
 
+#[must_use]
 pub fn err_dup_enum_variant(enum_name: &str, variant_name: &str, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::DuplicateEnumVariant,
@@ -1484,6 +1574,7 @@ pub fn err_dup_enum_variant(enum_name: &str, variant_name: &str, span: Span) -> 
     )
 }
 
+#[must_use]
 pub fn err_invalid_array_size_type(span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::InvalidArraySize,
@@ -1492,6 +1583,7 @@ pub fn err_invalid_array_size_type(span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_type_already_implements_spec(
     ctx: &ProgramContext,
     type_key: TypeKey,
@@ -1510,6 +1602,7 @@ pub fn err_type_already_implements_spec(
     )
 }
 
+#[must_use]
 pub fn err_dup_impl_fn(name: &str, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::DuplicateFunction,
@@ -1518,6 +1611,7 @@ pub fn err_dup_impl_fn(name: &str, span: Span) -> AnalyzeError {
     )
 }
 
+#[must_use]
 pub fn err_dup_mem_fn(
     ctx: &ProgramContext,
     name: &str,
@@ -1536,6 +1630,7 @@ pub fn err_dup_mem_fn(
     )
 }
 
+#[must_use]
 pub fn err_import_cycle(used_mod: &UsedModule, cycle: &Vec<PathBuf>) -> AnalyzeError {
     let mod_chain = hierarchy_to_string(
         &cycle

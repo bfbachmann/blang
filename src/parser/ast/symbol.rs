@@ -1,6 +1,3 @@
-use std::fmt::{Display, Formatter};
-use std::hash::{Hash, Hasher};
-
 use crate::fmt::vec_to_string;
 use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
@@ -10,6 +7,36 @@ use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::ParseResult;
 use crate::parser::file_parser::FileParser;
 use crate::Locatable;
+use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
+
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub struct Name {
+    pub value: String,
+    pub span: Span,
+}
+
+impl Display for Name {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
+impl Name {
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Name> {
+        let start_pos = parser.current_position();
+        let name = parser.parse_identifier()?;
+        let end_pos = parser.prev_position();
+        Ok(Name {
+            value: name,
+            span: Span {
+                file_id: parser.file_id,
+                start_pos,
+                end_pos,
+            },
+        })
+    }
+}
 
 /// Represents a named value. These can be variables, variable member accesses, functions,
 /// constants, or types. The value can also optionally include parameters (generics).
@@ -23,8 +50,8 @@ pub struct Symbol {
     ///
     /// In these cases, the module path specified with `@<mod_name>` is included
     /// in the symbol name and will be available via this field.
-    pub maybe_mod_name: Box<Option<Symbol>>,
-    pub name: String,
+    pub maybe_mod_name: Option<Name>,
+    pub name: Name,
     pub params: Vec<Type>,
     pub span: Span,
 }
@@ -37,7 +64,7 @@ impl Display for Symbol {
             f,
             "{}{}{}",
             match self.maybe_mod_name.as_ref() {
-                Some(sym) => format!("@{}.", sym.name),
+                Some(sym) => format!("@{}.", sym.value),
                 None => "".to_string(),
             },
             self.name,
@@ -59,10 +86,10 @@ locatable_impl!(Symbol);
 
 impl Symbol {
     /// Creates a new symbol.
-    pub fn new(name: &str, span: Span) -> Self {
+    pub fn new(name: Name, span: Span) -> Self {
         Symbol {
-            maybe_mod_name: Box::new(None),
-            name: name.to_string(),
+            maybe_mod_name: None,
+            name,
             params: vec![],
             span,
         }
@@ -70,12 +97,9 @@ impl Symbol {
 
     /// Attempts to parse a symbol from a single identifier.
     pub fn parse_as_identifier(parser: &mut FileParser) -> ParseResult<Symbol> {
-        let start_pos = parser.current_position();
-        let ident = parser.parse_identifier()?;
-        Ok(Symbol::new(
-            ident.as_str(),
-            parser.new_span(start_pos, parser.prev_position()),
-        ))
+        let name = Name::parse(parser)?;
+        let span = name.span;
+        Ok(Symbol::new(name, span))
     }
 
     /// Attempts to parse a symbol from the given token sequence. Expects token
@@ -96,7 +120,7 @@ impl Symbol {
 
         // Parse the optional module name.
         let maybe_mod_name = if parser.parse_optional(TokenKind::At).is_some() {
-            let mod_name = Symbol::parse_as_identifier(parser)?;
+            let mod_name = Name::parse(parser)?;
             parser.parse_expecting(TokenKind::Dot)?;
             Some(mod_name)
         } else {
@@ -104,7 +128,7 @@ impl Symbol {
         };
 
         // Parse the symbol name.
-        let name = parser.parse_identifier()?;
+        let name = Name::parse(parser)?;
 
         // Parse optional parameters.
         let mut params = vec![];
@@ -119,7 +143,7 @@ impl Symbol {
         }
 
         Ok(Symbol {
-            maybe_mod_name: Box::new(maybe_mod_name),
+            maybe_mod_name,
             name,
             params,
             span: parser.new_span(start_pos, parser.prev_position()),
@@ -133,7 +157,7 @@ impl Symbol {
 
     /// Returns true if the symbol is the wildcard symbol `_`.
     pub fn is_wildcard(&self) -> bool {
-        self.name == "_" && self.maybe_mod_name.is_none() && self.params.is_empty()
+        self.name.value == "_" && self.maybe_mod_name.is_none() && self.params.is_empty()
     }
 
     /// Returns true if the symbol is just a simple identifier (i.e. no params or mod name).

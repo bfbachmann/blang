@@ -7,6 +7,7 @@ use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::arg::Argument;
 use crate::parser::ast::params::Params;
 use crate::parser::ast::r#type::Type;
+use crate::parser::ast::symbol::Name;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::file_parser::FileParser;
 use crate::Locatable;
@@ -16,7 +17,7 @@ use crate::{locatable_impl, util};
 /// have empty names.
 #[derive(Debug, Clone, Eq)]
 pub struct FunctionSignature {
-    pub name: String,
+    pub name: Name,
     pub args: Vec<Argument>,
     pub maybe_ret_type: Option<Type>,
     pub params: Option<Params>,
@@ -75,9 +76,9 @@ locatable_impl!(FunctionSignature);
 impl FunctionSignature {
     /// Creates a new function signature for a named function.
     #[cfg(test)]
-    pub fn new(name: &str, args: Vec<Argument>, return_type: Option<Type>, span: Span) -> Self {
+    pub fn new(name: Name, args: Vec<Argument>, return_type: Option<Type>, span: Span) -> Self {
         FunctionSignature {
-            name: name.to_string(),
+            name,
             params: None,
             args,
             maybe_ret_type: return_type,
@@ -88,7 +89,10 @@ impl FunctionSignature {
     /// Creates a new function signature for an anonymous function.
     pub fn new_anon(args: Vec<Argument>, return_type: Option<Type>, span: Span) -> Self {
         FunctionSignature {
-            name: "".to_string(),
+            name: Name {
+                value: "".to_string(),
+                span,
+            },
             params: None,
             args,
             maybe_ret_type: return_type,
@@ -112,7 +116,7 @@ impl FunctionSignature {
         // Record the function signature starting position.
         let start_pos = parser.parse_expecting(TokenKind::Fn)?.span.start_pos;
 
-        let fn_name = parser.parse_identifier()?;
+        let fn_name = Name::parse(parser)?;
 
         // Parse the optional generic parameters.
         let params = match parser.next_token_is(&TokenKind::LeftBracket) {

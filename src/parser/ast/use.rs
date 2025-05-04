@@ -6,7 +6,7 @@ use crate::lexer::pos::Span;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
-use crate::parser::ast::symbol::Symbol;
+use crate::parser::ast::symbol::{Name, Symbol};
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::file_parser::FileParser;
 use crate::Locatable;
@@ -76,7 +76,7 @@ impl ModulePath {
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct UsedModule {
     pub path: ModulePath,
-    pub maybe_alias: Option<String>,
+    pub maybe_alias: Option<Name>,
     pub symbols: Vec<Symbol>,
     pub span: Span,
 }
@@ -141,9 +141,9 @@ impl UsedModule {
                 ..
             }) => {
                 parser.tokens.next();
-                let ident = parser.parse_identifier()?;
+                let name = Name::parse(parser)?;
                 end_pos = parser.prev_position();
-                Some(ident)
+                Some(name)
             }
 
             _ => None,

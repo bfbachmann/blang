@@ -48,18 +48,22 @@ impl AVarDecl {
 
         // The variable expression is valid. Add it to the program context.
         if let Err(existing) = ctx.insert_ident(Ident::new_var(
-            var_decl.name.clone(),
+            var_decl.name.value.clone(),
             var_decl.is_mut,
             type_key,
-            var_decl.span, // TODO: Use name span
+            var_decl.name.span,
         )) {
             let existing_span = existing.span;
-            ctx.insert_err(err_dup_ident(&var_decl.name, var_decl.span, existing_span));
+            ctx.insert_err(err_dup_ident(
+                &var_decl.name.value,
+                var_decl.name.span,
+                existing_span,
+            ));
         };
 
         AVarDecl {
             type_key,
-            name: var_decl.name.clone(),
+            name: var_decl.name.value.clone(),
             val: rich_expr,
             span: var_decl.span,
         }

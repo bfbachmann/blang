@@ -34,22 +34,22 @@ impl ASpecType {
         // Insert the empty spec type so we have a type key for it. We'll update it when we're
         // done analyzing.
         let mut a_spec_type = ASpecType {
-            name: spec_type.name.clone(),
+            name: spec_type.name.value.clone(),
             maybe_params: None,
             member_fn_type_keys: Default::default(),
-            span: spec_type.span, // TODO: Use name span
+            span: spec_type.name.span,
         };
         let type_key = ctx.insert_type(AType::Spec(a_spec_type.clone()));
 
         // Define a symbol that maps to the spec type.
         if let Err(existing) = ctx.insert_ident(Ident::new_type(
-            spec_type.name.clone(),
+            spec_type.name.value.clone(),
             spec_type.is_pub,
             type_key,
             Some(ctx.cur_mod_id()),
-            spec_type.span, // TODO: Use name span
+            spec_type.name.span,
         )) {
-            let err = err_dup_ident(&spec_type.name, spec_type.span, existing.span);
+            let err = err_dup_ident(&spec_type.name.value, spec_type.span, existing.span);
             ctx.insert_err(err);
         }
 
@@ -85,7 +85,7 @@ impl ASpecType {
 
         // Update the type in the type store now that we've analyzed its fields.
         let a_spec_type = ASpecType {
-            name: spec_type.name.clone(),
+            name: spec_type.name.value.clone(),
             maybe_params,
             member_fn_type_keys,
             span: spec_type.span,

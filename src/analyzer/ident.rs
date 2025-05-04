@@ -189,14 +189,14 @@ impl Ident {
 
     pub fn new_fn(func: &Function, type_key: TypeKey, mod_id: Option<ModID>) -> Self {
         Self {
-            name: func.signature.name.clone(),
+            name: func.signature.name.value.clone(),
             kind: IdentKind::Fn {
                 is_pub: func.is_pub,
                 type_key,
                 mod_id,
             },
             usage: Usage::Unused,
-            span: func.signature.span, // TODO: Use name span
+            span: func.signature.name.span,
         }
     }
 
@@ -221,8 +221,8 @@ impl Ident {
 
     pub fn new_unchecked_struct_type(struct_type: StructType) -> Self {
         Self {
-            name: struct_type.name.clone(),
-            span: struct_type.span, // TODO: Use name span
+            name: struct_type.name.value.clone(),
+            span: struct_type.name.span,
             kind: IdentKind::UncheckedStructType(struct_type),
             usage: Usage::Unused,
         }
@@ -230,8 +230,8 @@ impl Ident {
 
     pub fn new_unchecked_enum_type(enum_type: EnumType) -> Self {
         Self {
-            name: enum_type.name.clone(),
-            span: enum_type.span, // TODO: Use name span
+            name: enum_type.name.value.clone(),
+            span: enum_type.name.span,
             kind: IdentKind::UncheckedEnumType(enum_type),
             usage: Usage::Unused,
         }
@@ -239,8 +239,8 @@ impl Ident {
 
     pub fn new_unchecked_spec_type(spec_type: SpecType) -> Self {
         Self {
-            name: spec_type.name.clone(),
-            span: spec_type.span, // TODO: Use name span
+            name: spec_type.name.value.clone(),
+            span: spec_type.name.span,
             kind: IdentKind::UncheckedSpecType(spec_type),
             usage: Usage::Unused,
         }
@@ -248,8 +248,8 @@ impl Ident {
 
     pub fn new_unchecked_const(const_: Const) -> Self {
         Self {
-            name: const_.name.clone(),
-            span: const_.span, // TODO: Use name span
+            name: const_.name.value.clone(),
+            span: const_.name.span,
             kind: IdentKind::UncheckedConst(const_),
             usage: Usage::Unused,
         }
@@ -257,8 +257,8 @@ impl Ident {
 
     pub fn new_unchecked_fn(func: Function) -> Self {
         Self {
-            name: func.signature.name.clone(),
-            span: func.signature.span, // TODO: Use name span
+            name: func.signature.name.value.clone(),
+            span: func.signature.name.span,
             kind: IdentKind::UncheckedFn(func),
             usage: Usage::Unused,
         }
@@ -266,8 +266,8 @@ impl Ident {
 
     pub fn new_unchecked_extern_fn(extern_fn: ExternFn) -> Self {
         Self {
-            name: extern_fn.signature.name.clone(),
-            span: extern_fn.signature.span, // TODO: Use name span
+            name: extern_fn.signature.name.value.clone(),
+            span: extern_fn.signature.name.span,
             kind: IdentKind::UncheckedExternFn(extern_fn),
             usage: Usage::Unused,
         }

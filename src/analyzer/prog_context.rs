@@ -25,7 +25,7 @@ use crate::codegen::program::CodeGenConfig;
 use crate::fmt::format_code_vec;
 use crate::lexer::pos::{Locatable, Position, Span};
 use crate::parser::ast::r#type::Type;
-use crate::parser::ast::symbol::Symbol;
+use crate::parser::ast::symbol::{Name, Symbol};
 use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::{FileID, ModID};
 use std::collections::hash_map::Entry;
@@ -516,27 +516,27 @@ impl ProgramContext {
         allow_polymorph: bool,
     ) -> TypeKey {
         let maybe_ident = match &unresolved_type.maybe_mod_name {
-            Some(mod_sym) => {
-                let mod_id = match self.get_mod_alias(mod_sym) {
+            Some(mod_name) => {
+                let mod_id = match self.get_mod_alias(mod_name) {
                     Some(alias) => alias.target_mod_id,
                     None => {
-                        self.insert_err(err_undef_mod_alias(&mod_sym.name, mod_sym.span));
+                        self.insert_err(err_undef_mod_alias(&mod_name.value, mod_name.span));
                         return self.unknown_type_key();
                     }
                 };
 
-                self.get_foreign_ident(mod_id, &unresolved_type.name)
+                self.get_foreign_ident(mod_id, &unresolved_type.name.value)
             }
 
             None => {
                 // Yucky hack to resolve the special "Self" type, if it's defined.
-                if unresolved_type.name == "Self" {
+                if unresolved_type.name.value == "Self" {
                     if let Some(self_tk) = self.get_cur_self_type_key() {
                         return self_tk;
                     }
                 }
 
-                self.get_local_ident(&unresolved_type.name, Some(Usage::Read))
+                self.get_local_ident(&unresolved_type.name.value, Some(Usage::Read))
             }
         };
 
@@ -551,7 +551,10 @@ impl ProgramContext {
                 ..
             }) => {
                 if mod_id.is_some_and(|id| id != self.cur_mod_id) && !is_pub {
-                    self.insert_err(err_not_pub(&unresolved_type.name, unresolved_type.span));
+                    self.insert_err(err_not_pub(
+                        &unresolved_type.name.value,
+                        unresolved_type.span,
+                    ));
                 }
 
                 type_key
@@ -1379,8 +1382,8 @@ impl ProgramContext {
         self.cur_mod_ctx_mut().insert_mod_alias(alias)
     }
 
-    pub fn get_mod_alias(&mut self, mod_sym: &Symbol) -> Option<&ModAlias> {
-        self.cur_mod_ctx_mut().get_mod_alias(mod_sym)
+    pub fn get_mod_alias(&mut self, mod_name: &Name) -> Option<&ModAlias> {
+        self.cur_mod_ctx_mut().get_mod_alias(mod_name)
     }
 
     /// Returns the type key associated with the current `impl` or `spec` type being analyzed.

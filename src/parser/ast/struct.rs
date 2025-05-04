@@ -9,7 +9,7 @@ use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::params::Params;
 use crate::parser::ast::r#type::Type;
-use crate::parser::ast::symbol::Symbol;
+use crate::parser::ast::symbol::{Name, Symbol};
 use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::ParseResult;
 use crate::parser::error::{ErrorKind, ParseError};
@@ -43,7 +43,7 @@ locatable_impl!(StructField);
 /// Represents a struct with a set of named fields.
 #[derive(Debug, Clone, Eq)]
 pub struct StructType {
-    pub name: String,
+    pub name: Name,
     pub maybe_params: Option<Params>,
     pub fields: Vec<StructField>,
     pub is_pub: bool,
@@ -61,7 +61,7 @@ impl Hash for StructType {
 
 impl Display for StructType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if self.name.is_empty() {
+        if self.name.value.is_empty() {
             write!(f, "struct {{ ... }}")
         } else {
             write!(f, "struct {} {{ ... }}", self.name)
@@ -120,15 +120,8 @@ impl StructType {
         // The first token should be `struct`.
         parser.parse_expecting(TokenKind::Struct)?;
 
-        // The next token might be the struct type name, which is optional.
-        let mut name = "".to_string();
-        if let Some(Token {
-            kind: TokenKind::Identifier(_),
-            ..
-        }) = parser.tokens.peek_next()
-        {
-            name = parser.parse_identifier()?;
-        }
+        // The next token is the struct type name.
+        let name = Name::parse(parser)?;
 
         // Parse optional generic parameters.
         let maybe_params = match parser.next_token_is(&TokenKind::LeftBracket) {

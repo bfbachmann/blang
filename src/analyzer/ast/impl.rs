@@ -110,10 +110,10 @@ impl AImpl {
             // Locate the already-analyzed function signature.
             let mem_fn_tk = match maybe_spec_tk {
                 Some(spec_tk) => ctx
-                    .get_member_fn_from_spec_impl(type_key, spec_tk, &mem_fn.signature.name)
+                    .get_member_fn_from_spec_impl(type_key, spec_tk, &mem_fn.signature.name.value)
                     .unwrap(),
                 None => ctx
-                    .get_default_member_fn(type_key, &mem_fn.signature.name)
+                    .get_default_member_fn(type_key, &mem_fn.signature.name.value)
                     .unwrap(),
             };
 
@@ -184,7 +184,7 @@ fn check_spec_impl(
                     spec_impl_errs.push(err_incorrect_spec_fn(
                         ctx,
                         &a_fn.signature.name,
-                        &spec.name,
+                        &spec.name.value,
                         spec_tk,
                         &spec_fn_sig,
                         raw_fn.signature.span,
@@ -206,9 +206,9 @@ fn check_spec_impl(
     // Record an error if this impl is missing functions defined in the spec.
     if !missing_fn_names.is_empty() {
         spec_impl_errs.push(err_spec_impl_missing_fns(
-            &spec.name,
+            &spec.name.value,
             &missing_fn_names,
-            spec.span,
+            spec.name.span,
         ));
     }
 
@@ -217,7 +217,7 @@ fn check_spec_impl(
         let raw_func = member_fns.get(fn_name.as_str()).unwrap().1;
         spec_impl_errs.push(err_non_spec_impl(
             ctx,
-            &spec.name,
+            &spec.name.value,
             &fn_name,
             type_key,
             raw_func.signature.span,

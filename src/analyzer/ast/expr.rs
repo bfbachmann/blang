@@ -34,7 +34,7 @@ use crate::parser::ast::func::Function;
 use crate::parser::ast::func_call::FnCall;
 use crate::parser::ast::op::Operator;
 use crate::parser::ast::r#type::Type;
-use crate::parser::ast::symbol::Symbol;
+use crate::parser::ast::symbol::{Name, Symbol};
 use crate::parser::ast::tuple::TupleInit;
 use crate::parser::ast::unresolved::UnresolvedType;
 
@@ -700,7 +700,7 @@ impl AExpr {
             },
 
             Type::Unresolved(unresolved_type) => {
-                let kind = match unresolved_type.name.as_str() {
+                let kind = match unresolved_type.name.value.as_str() {
                     "bool" => AExprKind::BoolLiteral(false),
                     "i8" => AExprKind::I8Literal(0),
                     "u8" => AExprKind::U8Literal(0),
@@ -1152,7 +1152,10 @@ fn analyze_anon_fn(ctx: &mut ProgramContext, anon_fn: Function, span: Span) -> A
     // Give the anonymous function a unique name based on the order in which it appears
     // inside the current scope.
     let mut sig = anon_fn.signature.clone();
-    sig.name = ctx.new_anon_fn_name();
+    sig.name = Name {
+        value: ctx.new_anon_fn_name(),
+        span: anon_fn.signature.span,
+    };
 
     let a_closure = AClosure::from(
         ctx,
