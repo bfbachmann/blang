@@ -1,10 +1,8 @@
 mod list
 
-use "std/runtime" {assert}
 use "std/libc" @libc
-
-use "std/mem" {replace}
 use "std/allocator" {Allocator}
+use "std/types/opt" {Opt}
 use "std/types/slice" {Slice, SliceMut}
 
 /// The minimum capacity of the list once it has been allocated.
@@ -63,30 +61,42 @@ impl List {
         self.len += 1
     }
 
-    /// Removes the value at the end of the list. Panics if the list if empty.
-    pub fn pop(*mut self) {
-        assert(self.len > 0, "cannot pop from empty list")
-        self.remove(self.len - 1)
+    /// Removes the value at the end of the list and returns it. Returns
+    /// None if the list is empty.
+    pub fn pop(*mut self) -> Opt[T] {
+        if self.len == 0 {
+            return Opt[T]::None
+        }
+
+        return self.remove(self.len - 1)
     }
 
-    /// Returns the value at index `i` in the list.
-    /// Panics if `i` is out of bounds.
-    pub fn get(self, i: uint) -> T {
-        self.check_bounds(i)
-        return self.data.ptr_at(i)^
+    /// Returns the value at index `i` in the list, or None if `i` is out of
+    /// bounds.
+    pub fn get(self, i: uint) -> Opt[T] {
+        return self.data.get(i)
     }
 
     /// Replaces the value at index `i` in the list with `t` and returns the
-    /// existing value at index `i`. Panics if `i` is out of bounds.
-    pub fn replace(*mut self, i: uint, t: T) -> T {
-        self.check_bounds(i)
-        return replace(self.data.ptr_at(i), t)
+    /// existing value at index `i`. Retuns None if `i` is out of bounds.
+    pub fn replace(*mut self, i: uint, t: T) -> Opt[T] {
+        if i >= self.len {
+            return Opt[T]::None
+        }
+        
+        let old_value = self.data.get(i)
+        self.data.set(i, t)
+        return old_value
     }
 
-    /// Remove the value at index `i` from the list.
-    /// Panics if `i` is out of bounds.
-    pub fn remove(*mut self, i: uint) {
-        self.check_bounds(i)
+    /// Remove the value at index `i` from the list and returns it. Returns
+    /// None if `i` is out of bounds.
+    pub fn remove(*mut self, i: uint) -> Opt[T] {
+        if i >= self.len {
+            return Opt[T]::None
+        }
+
+        let removed = self.get(i)
         
         // We only need to move entries left by one if the element we removed
         // was not the last one.
@@ -107,6 +117,8 @@ impl List {
         if new_cap >= min_cap && self.len * growth_factor <= new_cap {
             self.resize(new_cap)
         }
+
+        return removed
     }
 
     /// Pushes `values` onto the end of the list.
@@ -190,10 +202,5 @@ impl List {
     fn resize(*mut self, new_cap: uint) {
         let ptr = @libc.realloc(self.data.ptr() as *mut u8, new_cap * sizeof T)
         self.data = SliceMut[T].new(ptr as *mut T, new_cap)
-    }
-
-    /// Panics if `i` is outside of the array bounds.
-    fn check_bounds(self, i: uint) {
-        assert(i < self.len, "list index out of bounds")
     }
 }

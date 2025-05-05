@@ -127,7 +127,7 @@ fn print_next_arg(writer: *mut Writer, args: *List[Arg], i: *mut uint) {
     if index >= args.len() {
         writer.write(Slice[u8].from_str("<missing>"))
     } else {
-        args.get(index).print(writer)
+        args.get(index).unwrap().print(writer)
         i^ += 1
     }
 }

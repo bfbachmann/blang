@@ -44,8 +44,8 @@ impl Value: Order {
 /// Returns true only if the list is sorted in ascending order.
 fn is_sorted[T: Order](list: *List[T]) -> bool {
     for let mut i = 0uint; i < list.len() - 1; i += 1 {
-        let ival = list.get(i)
-        let jval = list.get(i + 1)
+        let ival = list.get(i).unwrap()
+        let jval = list.get(i + 1).unwrap()
         if ival.compare(&jval) ~~ Ord::Greater {
             return false
         }
@@ -57,7 +57,7 @@ fn is_sorted[T: Order](list: *List[T]) -> bool {
 /// Sorts the list in ascending order.
 fn sort[T: Order](list: *mut List[T]) {
     for let mut i = 0uint; i < list.len() - 1; {} {
-        let cur_value = list.get(i)
+        let cur_value = list.get(i).unwrap()
         let result = find_min(list, i + 1)
         let min_index = result.(0)
         let min_value = result.(1)
@@ -72,11 +72,11 @@ fn sort[T: Order](list: *mut List[T]) {
 
 /// Finds the minimum value from the `start` index to the end of the list (inclusive).
 fn find_min[T: Order](list: *List[T], start: uint) -> {uint, T} {
-    let mut min_value = list.get(start)
+    let mut min_value = list.get(start).unwrap()
     let mut min_index = start
 
     for let mut i = start + 1; i < list.len(); i += 1 {
-        let v = list.get(i)
+        let v = list.get(i).unwrap()
         if v.compare(&min_value) ~~ Ord::Lesser {
             min_value = v
             min_index = i

@@ -1,6 +1,7 @@
 mod slice
 
 use "std/runtime" {assert}
+use "std/types/opt" {Opt}
 
 /// A bounded pointer to contiguous values of type T.
 pub struct Slice[T] {
@@ -42,8 +43,11 @@ impl Slice {
     }
 
     /// Returns the value at index `i` in the slice.
-    pub fn get(self, i: uint) -> T {
-        return self.ptr_at(i)^
+    pub fn get(self, i: uint) -> Opt[T] {
+        if i >= self.len {
+            return Opt[T]::None
+        }
+        return Opt[T]::Some(self.ptr_at(i)^)
     }
 
     /// Returns a slice that points to elements from index `start` (incluive) 
@@ -126,6 +130,20 @@ impl SliceMut {
     pub fn ptr_at(self, i: uint) -> *mut T {
         assert(i < self.len, "slice index out of bounds")
         return self.ptr.(i as int)
+    }
+
+    /// Returns the value at index `i` in the slice, or None if `i` is ouf of
+    /// bounds.
+    pub fn get(self, i: uint) -> Opt[T] {
+        if i >= self.len {
+            return Opt[T]::None
+        }
+        return Opt[T]::Some(self.ptr_at(i)^)
+    }
+
+    /// Sets the element at index `i` to `t`. Panics if `i` is out of bounds.
+    pub fn set(self, i: uint, t: T) {
+        self.ptr_at(i)^ = t
     }
 
     /// Returns a slice with the same pointer and length as this one.

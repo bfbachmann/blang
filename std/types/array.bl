@@ -2,6 +2,7 @@ mod array
 
 use "std/allocator" {Allocator}
 use "std/types/slice" {Slice, SliceMut}
+use "std/types/opt" {Opt}
 
 /// A resizeable array of values of type T.
 pub struct Array[T] {
@@ -39,16 +40,15 @@ impl Array {
         self.data = SliceMut[T].new(ptr, len)
     }
 
-    /// Returns a pointer to the element at index `i`. Panics if `i`
-    /// is out of bounds.
-    pub fn ptr_at(self, i: uint) -> *T {
-        return self.data.ptr_at(i)
+    /// Returns the element at index `i` in the list, or None if `i` is out of
+    /// bounds.
+    pub fn get(self, i: uint) -> Opt[T] {
+        return self.data.get(i)
     }
 
-    /// Returns a mutating pointer to the element at index `i`. Panics if
-    /// `i` is out of bounds.
-    pub fn mut_ptr_at(self, i: uint) -> *mut T {
-        return self.data.ptr_at(i)
+    /// Sets the element at index `i` to `t`. Panics if `i` is out of bounds.
+    pub fn set(self, i: uint, t: T) {
+        self.data.set(i, t)
     }
 
     /// Returns the nubmer of elements in the array.
@@ -59,6 +59,26 @@ impl Array {
     /// Returns a slice that references the data in the array.
     pub fn as_slice(self) -> Slice[T] {
         return self.data.as_slice()
+    }
+
+    /// Returns a mutable slice that references the data in the array.
+    pub fn as_slice_mut(self) -> SliceMut[T] {
+        return self.data
+    }
+
+    /// Copies data from `slice` into the array starting from `offset`. Returns
+    /// the number of elements copied.
+    pub fn write_at_offset(*mut self, mut offset: uint, slice: Slice[T]) -> uint {
+        for let mut i = 0uint; offset + i < self.data.len(); i += 1 {
+            match slice.get(i) {
+            case let Opt[T]::Some(t):
+                self.data.set(i + offset, t)
+            case:
+                break
+            }
+        }
+
+        return i
     }
 
     /// Frees all heap memory allocated for the array.

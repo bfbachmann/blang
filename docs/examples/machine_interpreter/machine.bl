@@ -57,7 +57,7 @@ impl Machine {
             self.pc < self.instructions.len();
             self.pc += 1
         {
-            let inst = self.instructions.get(self.pc)
+            let inst = self.instructions.get(self.pc).unwrap()
             let result = self.exec_inst(&inst)
             if result.status ~~ ExecStatus::Err {
                 return result

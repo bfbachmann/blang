@@ -1,6 +1,6 @@
 mod io
 
-use "std/libc" @libc
+use "std/runtime" {assert}
 use "std/types/array" {Array}
 use "std/types/slice" {Slice}
 use "std/allocator" {Allocator}
@@ -106,8 +106,8 @@ impl Buffer: Write {
         }
 
         self.grow_to_fit(bytes_len)
-        let start = self.buf.mut_ptr_at(self.cursor)
-        @libc.memcpy(start, bytes.ptr_at(0), bytes_len)
+        let bytes_written = self.buf.write_at_offset(self.cursor, bytes)
+        assert(bytes_written == bytes_len, "partial copy")
         self.cursor += bytes_len
     }
 }

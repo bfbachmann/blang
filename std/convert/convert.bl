@@ -29,17 +29,17 @@ fn format_uint(mut u: uint, neg: bool) -> {[u8; 65], uint} {
         let is = u % 100 * 2
         u /= 100
         i -= 2
-        str_bytes.(i+1) = digit_bytes.get(is+1)
-        str_bytes.(i) = digit_bytes.get(is)
+        str_bytes.(i+1) = digit_bytes.get(is+1).unwrap()
+        str_bytes.(i) = digit_bytes.get(is).unwrap()
     }
 
     let is = u * 2
     i -= 1
-    str_bytes.(i) = digit_bytes.get(is+1)
+    str_bytes.(i) = digit_bytes.get(is+1).unwrap()
 
     if u >= 10 {
         i -= 1
-        str_bytes.(i) = digit_bytes.get(is)
+        str_bytes.(i) = digit_bytes.get(is).unwrap()
     }
 
     if neg {

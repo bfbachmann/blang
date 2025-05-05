@@ -36,7 +36,8 @@ impl FileReader: Read {
         }
 
         loop {
-            let bytes_read = @libc.read(self.fd, self.read_buf.mut_ptr_at(0), buf_size)
+            let dst_ptr = self.read_buf.as_slice_mut().ptr()
+            let bytes_read = @libc.read(self.fd, dst_ptr, buf_size)
             if bytes_read > 0 {
                 writer.write(self.read_buf.as_slice().slice_left(bytes_read as uint))
                 if bytes_read as uint == buf_size {
