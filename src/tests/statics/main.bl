@@ -2,20 +2,29 @@ mod statics
 
 use "std/libc" @libc
 use "std/runtime" {assert}
+use "src/tests/statics/other" {counter}
 
 static value: uint = 23
 static test = "test"
 
 fn main() {
+    // Check that we can read static values.
     assert(value == 23, "expected 23")
     assert(test == "test", "expected 'test'")
 
+    // Check that static values are updated correctly.
     value += 1
     assert(value == 24, "expected 24")
 
+    // Check that static references work like normal references.
     let test_ptr = &mut test
     test_ptr^ = "new"
     assert(test == "new", "expected 'new")
+
+    // Check that we can import static values.
+    assert(counter.value == 0, "expected 0")
+    counter.inc(10)
+    assert(counter.value == 10, "expected 10")
 
     @libc.exit(0)
 }

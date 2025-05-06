@@ -1,0 +1,15 @@
+mod other
+
+pub static counter = Counter {
+    value: 0
+}
+
+pub struct Counter {
+    pub value: uint
+}
+
+impl Counter {
+    pub fn inc(*mut self, i: uint) {
+        self.value += i
+    }
+}
