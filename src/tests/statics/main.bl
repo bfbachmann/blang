@@ -4,8 +4,8 @@ use "std/libc" @libc
 use "std/runtime" {assert}
 use "src/tests/statics/other" {counter}
 
-static value: uint = 23
-static test = "test"
+static mut value: uint = 23
+static mut test = "test"
 
 fn main() {
     // Check that we can read static values.

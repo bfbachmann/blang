@@ -57,6 +57,7 @@ pub enum IdentKind {
     },
     Static {
         is_pub: bool,
+        is_mut: bool,
         value: AExpr,
         mod_id: Option<ModID>,
     },
@@ -206,6 +207,7 @@ impl Ident {
     pub fn new_static(
         name: String,
         is_pub: bool,
+        is_mut: bool,
         value: AExpr,
         mod_id: Option<ModID>,
         span: Span,
@@ -214,6 +216,7 @@ impl Ident {
             name,
             kind: IdentKind::Static {
                 is_pub,
+                is_mut,
                 value,
                 mod_id,
             },

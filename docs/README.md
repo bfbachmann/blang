@@ -174,7 +174,7 @@ const my_tuple = { "this", "is my tuple", 123 / 23 - 1 }
 Module-level static variables can be declared as follows.
 
 ```
-static counter = 123
+static mut counter = 123
 
 fn update_counter(value: int) {
     counter += value

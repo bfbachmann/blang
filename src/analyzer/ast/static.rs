@@ -46,6 +46,7 @@ impl AStatic {
         // Static declarations are only allowed at the top level.
         if ctx.is_in_fn() {
             ctx.insert_err(err_invalid_statement(static_decl.span));
+            return AStatic::new_zero_value(ctx, static_decl.name.value.as_str());
         }
 
         // Analyze the optional type.
@@ -61,6 +62,7 @@ impl AStatic {
         if let Err(existing) = ctx.insert_ident(Ident::new_static(
             static_decl.name.value.clone(),
             static_decl.is_pub,
+            static_decl.is_mut,
             value.clone(),
             Some(ctx.cur_mod_id()),
             static_decl.name.span,

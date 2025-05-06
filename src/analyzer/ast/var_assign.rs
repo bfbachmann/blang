@@ -89,7 +89,8 @@ fn check_assignable(ctx: &mut ProgramContext, span: &Span, target_expr: &AExpr) 
                     return false;
                 }
 
-                IdentKind::Variable { is_mut: false, .. } => {
+                IdentKind::Variable { is_mut: false, .. }
+                | IdentKind::Static { is_mut: false, .. } => {
                     let err = err_assign_to_immut_var(ctx, target_expr, &symbol.name, *span);
                     ctx.insert_err(err);
                     return false;

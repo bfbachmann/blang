@@ -1363,7 +1363,7 @@ pub fn err_invalid_mut_ref_fn(symbol: &ASymbol, span: Span) -> AnalyzeError {
 pub fn err_invalid_mut_ref_immut(symbol: &ASymbol, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::InvalidMutRef,
-        format_code!("cannot mutably reference immutable variable {}", symbol).as_str(),
+        format_code!("cannot mutably reference immutable value {}", symbol).as_str(),
         span,
     )
     .with_help(format_code!("Consider declaring {} as mutable.", symbol).as_str())

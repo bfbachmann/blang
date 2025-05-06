@@ -13,6 +13,7 @@ use std::hash::{Hash, Hasher};
 #[derive(Debug, Eq, Clone)]
 pub struct Static {
     pub name: Name,
+    pub is_mut: bool,
     pub maybe_type: Option<Type>,
     pub value: Expression,
     pub is_pub: bool,
@@ -53,6 +54,7 @@ impl Static {
     pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
         let is_pub = parser.parse_optional(TokenKind::Pub).is_some();
         let start_pos = parser.parse_expecting(TokenKind::Static)?.span.start_pos;
+        let is_mut = parser.parse_optional(TokenKind::Mut).is_some();
         let name = Name::parse(parser)?;
 
         // Parse the optional `: <type>`.
@@ -70,6 +72,7 @@ impl Static {
 
         Ok(Static {
             name,
+            is_mut,
             maybe_type: typ,
             value,
             is_pub,

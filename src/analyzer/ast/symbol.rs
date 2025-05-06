@@ -170,6 +170,7 @@ impl ASymbol {
                 is_pub,
                 value,
                 mod_id,
+                ..
             } => (value.type_key, is_pub, SymbolKind::Static, mod_id),
 
             other => panic!("unexpected identifier kind: {:?}", other),

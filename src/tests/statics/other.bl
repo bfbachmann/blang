@@ -1,6 +1,6 @@
 mod other
 
-pub static counter = Counter {
+pub static mut counter = Counter {
     value: 0
 }
 

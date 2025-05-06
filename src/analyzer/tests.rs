@@ -220,6 +220,19 @@ mod tests {
     }
 
     #[test]
+    fn assign_to_immutable_static() {
+        let raw = r#"
+            static value = 1
+
+            fn update() {
+                value = 2
+            }
+        "#;
+        let result = analyze(raw);
+        check_err(&result, Some(ErrorKind::ImmutableAssignment));
+    }
+
+    #[test]
     fn fn_decl() {
         let raw = r#"
         fn main() {}
@@ -2853,5 +2866,19 @@ mod tests {
             "#,
         );
         check_err(&result, Some(ErrorKind::InvalidStatement));
+    }
+
+    #[test]
+    fn illegal_mutate_immutable_static() {
+        let result = analyze(
+            r#"
+            static value = 1
+            
+            fn update() {
+                let ref = &mut value
+            }
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::InvalidMutRef));
     }
 }
