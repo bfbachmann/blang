@@ -4,7 +4,7 @@ use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::symbol::{ASymbol, SymbolKind};
 use crate::analyzer::ast::var_assign::AVarAssign;
-use crate::analyzer::mangling::mangle_type;
+use crate::analyzer::mangling::{mangle_name, mangle_type};
 use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::lexer::pos::Locatable;
 use crate::parser::ast::op::Operator;
@@ -115,33 +115,60 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let maybe_mod_id = &symbol.maybe_mod_id;
         let name = symbol.name.as_str();
 
-        // Try to look up the symbol as a variable.
-        if let Some(ll_var_ptr) = self.ll_vars.get(name) {
-            return *ll_var_ptr;
-        }
-
-        // The symbol was not a variable, so try look it up as a function.
-        let fn_name = mangle_type(
-            self.type_converter,
-            symbol.type_key,
-            self.type_converter.type_mapping(),
-            self.type_monomorphizations,
-        );
-        if let Some(func) = self.module.get_function(&fn_name) {
-            return func.as_global_value().as_pointer_value();
-        }
-
-        // The symbol might be a constant. If it is, copy its value to the stack
-        // and return the stack pointer.
-        if let Some(mod_id) = maybe_mod_id {
-            if let Some(consts) = self.mod_consts.get(mod_id) {
-                if let Some(const_value) = consts.get(name) {
-                    let ll_ptr = self.stack_alloc(name, const_value.type_key);
-                    let ll_val = self.gen_const_expr(&const_value);
-                    self.copy_value(ll_val, ll_ptr, const_value.type_key);
-                    return ll_ptr;
+        match (&symbol.kind, maybe_mod_id) {
+            (SymbolKind::Const, Some(mod_id)) => {
+                if let Some(consts) = self.mod_consts.get(mod_id) {
+                    if let Some(const_) = consts.get(name) {
+                        let ll_ptr = self.stack_alloc(name, const_.type_key);
+                        let ll_val = self.gen_const_expr(&const_);
+                        self.copy_value(ll_val, ll_ptr, const_.type_key);
+                        return ll_ptr;
+                    }
                 }
             }
+
+            (SymbolKind::Static, Some(mod_id)) => {
+                if let Some(statics) = self.mod_statics.get(mod_id) {
+                    if let Some(static_) = statics.get(name) {
+                        let mangled_name = mangle_name(&symbol.name, *mod_id);
+
+                        let ll_global = if let Some(ll_global) =
+                            self.module.get_global(&mangled_name)
+                        {
+                            ll_global
+                        } else {
+                            let ll_type = self.type_converter.get_basic_type(static_.type_key);
+                            let ll_global = self.module.add_global(ll_type, None, &mangled_name);
+                            ll_global.set_initializer(
+                                &self.gen_const_expr(static_).as_basic_value_enum(),
+                            );
+                            ll_global
+                        };
+
+                        return ll_global.as_pointer_value();
+                    }
+                }
+            }
+
+            (SymbolKind::Variable, _) => {
+                if let Some(ll_var_ptr) = self.ll_vars.get(name) {
+                    return *ll_var_ptr;
+                }
+            }
+
+            (SymbolKind::Fn, _) => {
+                let fn_name = mangle_type(
+                    self.type_converter,
+                    symbol.type_key,
+                    self.type_converter.type_mapping(),
+                    self.type_monomorphizations,
+                );
+                if let Some(func) = self.module.get_function(&fn_name) {
+                    return func.as_global_value().as_pointer_value();
+                }
+            }
+
+            _ => {}
         }
 
         panic!("failed to resolve variable {}", name);

@@ -138,14 +138,23 @@ impl Scope {
         count
     }
 
-    pub fn drain_consts(&mut self) -> HashMap<String, AExpr> {
-        self.idents
-            .drain()
-            .filter_map(|(name, ident)| match ident.kind {
-                IdentKind::Const { value, .. } => Some((name, value)),
-                _ => None,
-            })
-            .collect()
+    pub fn drain_consts_and_statics(&mut self) -> (HashMap<String, AExpr>, HashMap<String, AExpr>) {
+        let mut consts = HashMap::new();
+        let mut statics = HashMap::new();
+
+        for (name, ident) in std::mem::take(&mut self.idents) {
+            match ident.kind {
+                IdentKind::Const { value, .. } => {
+                    consts.insert(name, value);
+                }
+                IdentKind::Static { value, .. } => {
+                    statics.insert(name, value);
+                }
+                _ => {}
+            }
+        }
+
+        (consts, statics)
     }
 
     /// Returns all idents declared in this scope that were never used.

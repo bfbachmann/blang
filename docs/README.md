@@ -21,6 +21,7 @@ The language and compiler are still very young, so they still lack some critical
 * [Function Declarations & Calls: `fn`](#function-declarations--calls-fn)
 * [Variable Declarations: `let`](#variable-declarations-let)
 * [Constant Declarations: `const`](#constant-declarations-const)
+* [Static Declarations: `static`](#static-declarations-static)
 * [Statements as Expressions: `from`, `yield`](#statements-as-expressions-from-yield)
 * [Structures: `struct`](#structures-struct)
 * [Enumerations: `enum`](#enumerations-enum)
@@ -167,6 +168,20 @@ Any expression composed exclusively of constant values can be declared as a cons
 ```
 const my_tuple = { "this", "is my tuple", 123 / 23 - 1 }
 ```
+
+### Static Declarations: `static`
+
+Module-level static variables can be declared as follows.
+
+```
+static counter = 123
+
+fn update_counter(value: int) {
+    counter += value
+}
+```
+
+Static variables can only be declared at the module level and are always considered mutable.
 
 ### Statements as Expressions: `from`, `yield`
 

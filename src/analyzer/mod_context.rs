@@ -220,8 +220,8 @@ impl ModuleContext {
         self.scopes.last_mut().unwrap().remove_unchecked_ident(name)
     }
 
-    pub fn drain_consts(&mut self) -> HashMap<String, AExpr> {
-        self.scopes.first_mut().unwrap().drain_consts()
+    pub fn drain_consts_and_statics(&mut self) -> (HashMap<String, AExpr>, HashMap<String, AExpr>) {
+        self.scopes.first_mut().unwrap().drain_consts_and_statics()
     }
 
     /// Searches the stack for the identifier with the given name. Note that variables from parent

@@ -9,6 +9,7 @@ use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#loop::ALoop;
 use crate::analyzer::ast::r#match::AMatch;
+use crate::analyzer::ast::r#static::AStatic;
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::r#yield::AYield;
 use crate::analyzer::ast::ret::ARet;
@@ -37,8 +38,8 @@ pub enum AStatement {
     Yield(AYield),
     StructTypeDeclaration(AStructType),
     EnumTypeDeclaration(AEnumType),
-    /// An external function declaration.
     Const(AConst),
+    Static(AStatic),
 }
 
 impl fmt::Display for AStatement {
@@ -60,6 +61,9 @@ impl fmt::Display for AStatement {
             AStatement::EnumTypeDeclaration(e) => write!(f, "{}", e),
             AStatement::Const(const_decl) => {
                 write!(f, "const {}", const_decl)
+            }
+            AStatement::Static(static_decl) => {
+                write!(f, "static.rs {}", static_decl)
             }
         }
     }
@@ -83,6 +87,7 @@ impl Locatable for AStatement {
             AStatement::StructTypeDeclaration(decl) => &decl.span,
             AStatement::EnumTypeDeclaration(decl) => &decl.span,
             AStatement::Const(const_) => &const_.span,
+            AStatement::Static(static_) => &static_.span,
         }
     }
 }
@@ -152,6 +157,10 @@ impl AStatement {
 
             Statement::ConstDeclaration(const_decl) => {
                 AStatement::Const(AConst::from(ctx, const_decl))
+            }
+
+            Statement::StaticDeclaration(static_decl) => {
+                AStatement::Static(AStatic::from(ctx, static_decl))
             }
 
             Statement::Use(_) | Statement::Impl(_) | Statement::ExternFn(_) => {

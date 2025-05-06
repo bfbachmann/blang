@@ -43,6 +43,8 @@ pub struct FnCodeGen<'a, 'ctx> {
     type_monomorphizations: &'a HashMap<TypeKey, Monomorphization>,
     /// Stores constant values that are declared in the module outside of functions.
     mod_consts: &'a HashMap<ModID, HashMap<String, AExpr>>,
+    /// Stores static values that are declared in the module outside of functions.
+    mod_statics: &'a HashMap<ModID, HashMap<String, AExpr>>,
     /// Stores constant values that are declared within a function.
     local_consts: HashMap<String, AConst>,
     ll_vars: HashMap<String, PointerValue<'ctx>>,
@@ -70,6 +72,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         type_monomorphizations: &'a HashMap<TypeKey, Monomorphization>,
         type_converter: &'a mut TypeConverter<'ctx>,
         mod_consts: &'a HashMap<ModID, HashMap<String, AExpr>>,
+        mod_statics: &'a HashMap<ModID, HashMap<String, AExpr>>,
         func: &AFn,
     ) -> CodeGenResult<FunctionValue<'ctx>> {
         let mut fn_compiler = FnCodeGen {
@@ -83,6 +86,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             type_converter,
             type_monomorphizations,
             mod_consts,
+            mod_statics,
             local_consts: Default::default(),
             ll_vars: HashMap::new(),
             ll_fn: None,

@@ -18,6 +18,7 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SymbolKind {
     Const,
+    Static,
     Type,
     Variable,
     Fn,
@@ -164,6 +165,12 @@ impl ASymbol {
                 value,
                 mod_id,
             } => (value.type_key, is_pub, SymbolKind::Const, mod_id),
+
+            IdentKind::Static {
+                is_pub,
+                value,
+                mod_id,
+            } => (value.type_key, is_pub, SymbolKind::Static, mod_id),
 
             other => panic!("unexpected identifier kind: {:?}", other),
         };

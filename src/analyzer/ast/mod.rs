@@ -20,6 +20,7 @@ pub mod pointer;
 pub mod ret;
 pub mod spec;
 pub mod statement;
+pub mod r#static;
 pub mod r#struct;
 pub mod symbol;
 pub mod tuple;

@@ -2812,7 +2812,9 @@ mod tests {
             // Unused top-level private fn.
             r#"fn thing() {}"#,
             // Unused top-level const.
-            r#"fn thing() {}"#,
+            r#"const thing = 1"#,
+            // Unused top-level static.
+            r#"static thing = 1"#,
             // Unused top-level private struct type.
             r#"struct Thing {}"#,
             // Unused top-level private enum type.
@@ -2824,5 +2826,32 @@ mod tests {
         for code in code {
             check_warn(&analyze(code), Some(WarnKind::Unused));
         }
+    }
+
+    #[test]
+    fn non_const_static() {
+        let result = analyze(
+            r#"
+            fn get_value() -> uint {
+                return 1
+            }
+            
+            static thing = get_value() 
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::InvalidConst));
+    }
+
+    #[test]
+    fn illegal_static_in_fn() {
+        let result = analyze(
+            r#"
+            fn get_value() -> uint {
+                static value = 1
+                return value
+            }
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::InvalidStatement));
     }
 }

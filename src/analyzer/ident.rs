@@ -5,6 +5,7 @@ use crate::parser::ast::func::Function;
 use crate::parser::ast::r#const::Const;
 use crate::parser::ast::r#enum::EnumType;
 use crate::parser::ast::r#extern::ExternFn;
+use crate::parser::ast::r#static::Static;
 use crate::parser::ast::r#struct::StructType;
 use crate::parser::ast::spec::SpecType;
 use crate::parser::ModID;
@@ -54,8 +55,14 @@ pub enum IdentKind {
         value: AExpr,
         mod_id: Option<ModID>,
     },
+    Static {
+        is_pub: bool,
+        value: AExpr,
+        mod_id: Option<ModID>,
+    },
 
     UncheckedConst(Const),
+    UncheckedStatic(Static),
     UncheckedFn(Function),
     UncheckedExternFn(ExternFn),
     UncheckedStructType(StructType),
@@ -81,6 +88,13 @@ impl IdentKind {
     pub fn as_unchecked_const(&self) -> &Const {
         match self {
             IdentKind::UncheckedConst(c) => c,
+            _ => panic!("unexpected ident kind {self:?}"),
+        }
+    }
+
+    pub fn as_unchecked_static(&self) -> &Static {
+        match self {
+            IdentKind::UncheckedStatic(c) => c,
             _ => panic!("unexpected ident kind {self:?}"),
         }
     }
@@ -112,9 +126,11 @@ impl IdentKind {
             | IdentKind::Type { .. }
             | IdentKind::Fn { .. }
             | IdentKind::ExternFn { .. }
-            | IdentKind::Const { .. } => false,
+            | IdentKind::Const { .. }
+            | IdentKind::Static { .. } => false,
 
             IdentKind::UncheckedConst(_)
+            | IdentKind::UncheckedStatic(_)
             | IdentKind::UncheckedFn(_)
             | IdentKind::UncheckedExternFn(_)
             | IdentKind::UncheckedStructType(_)
@@ -178,6 +194,25 @@ impl Ident {
         Self {
             name,
             kind: IdentKind::Const {
+                is_pub,
+                value,
+                mod_id,
+            },
+            usage: Usage::Unused,
+            span,
+        }
+    }
+
+    pub fn new_static(
+        name: String,
+        is_pub: bool,
+        value: AExpr,
+        mod_id: Option<ModID>,
+        span: Span,
+    ) -> Self {
+        Self {
+            name,
+            kind: IdentKind::Static {
                 is_pub,
                 value,
                 mod_id,
@@ -255,6 +290,15 @@ impl Ident {
         }
     }
 
+    pub fn new_unchecked_static(static_: Static) -> Self {
+        Self {
+            name: static_.name.value.clone(),
+            span: static_.name.span,
+            kind: IdentKind::UncheckedStatic(static_),
+            usage: Usage::Unused,
+        }
+    }
+
     pub fn new_unchecked_fn(func: Function) -> Self {
         Self {
             name: func.signature.name.value.clone(),
@@ -284,7 +328,9 @@ impl Ident {
             IdentKind::Fn { is_pub, .. } => *is_pub || self.name == "main",
             IdentKind::ExternFn { is_pub, .. } => *is_pub,
             IdentKind::Const { is_pub, .. } => *is_pub,
+            IdentKind::Static { is_pub, .. } => *is_pub,
             IdentKind::UncheckedConst(const_) => const_.is_pub,
+            IdentKind::UncheckedStatic(static_) => static_.is_pub,
             IdentKind::UncheckedFn(func) => func.is_pub,
             IdentKind::UncheckedExternFn(func) => func.is_pub,
             IdentKind::UncheckedStructType(struct_type) => struct_type.is_pub,

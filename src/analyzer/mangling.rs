@@ -2,6 +2,7 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::prog_context::Monomorphization;
 use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::lexer::pos::Span;
+use crate::parser::ModID;
 use base_62;
 use std::collections::HashMap;
 
@@ -74,6 +75,10 @@ pub fn mangle_type<T: GetType>(
     );
 
     mangled_name
+}
+
+pub fn mangle_name(name: &str, mod_id: ModID) -> String {
+    format!("_{}_{}", serialize(&vec![mod_id]), name)
 }
 
 fn mangle(name: &str, span: &Span, param_tks: &[TypeKey]) -> String {

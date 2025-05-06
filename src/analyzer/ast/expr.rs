@@ -483,8 +483,8 @@ impl AExpr {
         };
 
         match &ident.kind {
-            // Mutable variables can be referenced mutably.
-            IdentKind::Variable { is_mut: true, .. } => {}
+            // Mutable variables and statics can be referenced mutably.
+            IdentKind::Variable { is_mut: true, .. } | IdentKind::Static { .. } => {}
 
             // Variables with type `*mut T` can be referenced mutably.
             &IdentKind::Variable { type_key, .. } => {

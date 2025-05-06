@@ -8,6 +8,7 @@ use crate::analyzer::ast::pointer::APointerType;
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#impl::AImpl;
+use crate::analyzer::ast::r#static::AStatic;
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::spec::ASpecType;
@@ -313,15 +314,24 @@ impl ProgramContext {
         false
     }
 
-    /// Drains all module constants from the program context.
-    pub fn drain_mod_consts(&mut self) -> HashMap<ModID, HashMap<String, AExpr>> {
+    /// Drains all module constants and statics from the program context.
+    pub fn drain_mod_consts_and_statics(
+        &mut self,
+    ) -> (
+        HashMap<ModID, HashMap<String, AExpr>>,
+        HashMap<ModID, HashMap<String, AExpr>>,
+    ) {
         let mut consts = HashMap::new();
+        let mut statics = HashMap::new();
 
         for (mod_id, mod_ctx) in &mut self.module_contexts {
-            consts.insert(*mod_id, mod_ctx.drain_consts());
+            let (mod_consts, mod_statics) = mod_ctx.drain_consts_and_statics();
+
+            consts.insert(*mod_id, mod_consts);
+            statics.insert(*mod_id, mod_statics);
         }
 
-        consts
+        (consts, statics)
     }
 
     /// Inserts an error into the program context.
@@ -1774,6 +1784,7 @@ impl ProgramContext {
                 // If the identifier refers to something that has not yet been analyzed, analyze it.
                 match &ident.kind {
                     IdentKind::UncheckedConst(_)
+                    | IdentKind::UncheckedStatic(_)
                     | IdentKind::UncheckedFn(_)
                     | IdentKind::UncheckedExternFn(_)
                     | IdentKind::UncheckedStructType(_)
@@ -1808,6 +1819,10 @@ impl ProgramContext {
         match ident.kind {
             IdentKind::UncheckedConst(const_) => {
                 AConst::from(self, &const_);
+            }
+
+            IdentKind::UncheckedStatic(static_) => {
+                AStatic::from(self, &static_);
             }
 
             IdentKind::UncheckedFn(func) => {

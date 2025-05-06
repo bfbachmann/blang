@@ -44,6 +44,7 @@ pub struct ProgramCodeGen<'a, 'ctx> {
     type_monomorphizations: &'a HashMap<TypeKey, Monomorphization>,
     type_converter: TypeConverter<'ctx>,
     mod_consts: HashMap<ModID, HashMap<String, AExpr>>,
+    mod_statics: HashMap<ModID, HashMap<String, AExpr>>,
     /// Whether to include debug info in the LLVM IR.
     emit_debug_info: bool,
 }
@@ -140,6 +141,7 @@ impl<'a, 'ctx> ProgramCodeGen<'a, 'ctx> {
                         self.type_monomorphizations,
                         &mut self.type_converter,
                         &self.mod_consts,
+                        &self.mod_statics,
                         func,
                     )?;
                 }
@@ -407,6 +409,7 @@ pub fn generate(src_info: &SrcInfo, prog: MonoProg) -> CodeGenResult<()> {
             &prog.config.target_machine,
         ),
         mod_consts: prog.mod_consts,
+        mod_statics: prog.mod_statics,
         emit_debug_info: prog.config.emit_debug_info,
     };
     codegen.gen_program()?;

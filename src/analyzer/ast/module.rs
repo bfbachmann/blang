@@ -3,6 +3,7 @@ use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::r#enum::AEnumType;
 use crate::analyzer::ast::r#impl::{is_legal_impl, AImpl};
+use crate::analyzer::ast::r#static::AStatic;
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::spec::ASpecType;
@@ -94,6 +95,14 @@ impl AModule {
                             ctx.remove_unchecked_ident_from_cur_scope(&const_.name.value)
                         {
                             AConst::from(ctx, ident.kind.as_unchecked_const());
+                        }
+                    }
+
+                    Statement::StaticDeclaration(static_) => {
+                        if let Some(ident) =
+                            ctx.remove_unchecked_ident_from_cur_scope(&static_.name.value)
+                        {
+                            AStatic::from(ctx, ident.kind.as_unchecked_static());
                         }
                     }
 
@@ -215,6 +224,7 @@ fn define_imported_idents(ctx: &mut ProgramContext, src_file: &SrcFile, src_info
                         IdentKind::Fn { is_pub, .. } => *is_pub,
                         IdentKind::ExternFn { is_pub, .. } => *is_pub,
                         IdentKind::Const { is_pub, .. } => *is_pub,
+                        IdentKind::Static { is_pub, .. } => *is_pub,
                         other => panic!("unexpected ident kind {other:?}"),
                     };
 
@@ -292,6 +302,15 @@ fn define_local_idents(ctx: &mut ProgramContext, src_file: &SrcFile) {
                 if let Err(existing) = ctx.insert_ident(Ident::new_unchecked_const(const_.clone()))
                 {
                     let err = err_dup_ident(&const_.name.value, const_.name.span, existing.span);
+                    ctx.insert_err(err);
+                }
+            }
+
+            Statement::StaticDeclaration(static_) => {
+                if let Err(existing) =
+                    ctx.insert_ident(Ident::new_unchecked_static(static_.clone()))
+                {
+                    let err = err_dup_ident(&static_.name.value, static_.name.span, existing.span);
                     ctx.insert_err(err);
                 }
             }

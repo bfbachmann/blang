@@ -179,6 +179,8 @@ pub enum TokenKind {
     Extern,
     #[token("const")]
     Const,
+    #[token("static")]
+    Static,
     #[token("impl")]
     Impl,
     #[token("spec")]
@@ -334,6 +336,7 @@ impl TokenKind {
             TokenKind::SizeOf => "sizeof".to_string(),
             TokenKind::Extern => "extern".to_string(),
             TokenKind::Const => "const".to_string(),
+            TokenKind::Static => "static".to_string(),
             TokenKind::Impl => "impl".to_string(),
             TokenKind::Enum => "enum".to_string(),
             TokenKind::At => "@".to_string(),

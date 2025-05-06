@@ -1,0 +1,21 @@
+mod statics
+
+use "std/libc" @libc
+use "std/runtime" {assert}
+
+static value: uint = 23
+static test = "test"
+
+fn main() {
+    assert(value == 23, "expected 23")
+    assert(test == "test", "expected 'test'")
+
+    value += 1
+    assert(value == 24, "expected 24")
+
+    let test_ptr = &mut test
+    test_ptr^ = "new"
+    assert(test == "new", "expected 'new")
+
+    @libc.exit(0)
+}

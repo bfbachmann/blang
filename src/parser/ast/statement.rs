@@ -7,15 +7,16 @@ use crate::parser::ast::closure::Closure;
 use crate::parser::ast::cond::Conditional;
 use crate::parser::ast::cont::Continue;
 use crate::parser::ast::expr::Expression;
-use crate::parser::ast::r#extern::ExternFn;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::func_call::FnCall;
 use crate::parser::ast::r#break::Break;
 use crate::parser::ast::r#const::Const;
 use crate::parser::ast::r#enum::EnumType;
+use crate::parser::ast::r#extern::ExternFn;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#loop::Loop;
 use crate::parser::ast::r#match::Match;
+use crate::parser::ast::r#static::Static;
 use crate::parser::ast::r#struct::StructType;
 use crate::parser::ast::r#use::UsedModule;
 use crate::parser::ast::r#yield::Yield;
@@ -46,6 +47,7 @@ pub enum Statement {
     EnumDeclaration(EnumType),
     ExternFn(ExternFn),
     ConstDeclaration(Const),
+    StaticDeclaration(Static),
     Impl(Impl),
     SpecDeclaration(SpecType),
     Use(UsedModule),
@@ -107,8 +109,11 @@ impl fmt::Display for Statement {
             Statement::ExternFn(extern_fn) => {
                 write!(f, "{}", extern_fn)
             }
-            Statement::ConstDeclaration(const_block) => {
-                write!(f, "{}", const_block)
+            Statement::ConstDeclaration(const_decl) => {
+                write!(f, "{}", const_decl)
+            }
+            Statement::StaticDeclaration(static_decl) => {
+                write!(f, "{}", static_decl)
             }
             Statement::Use(used_mod) => {
                 write!(f, "{}", used_mod)
@@ -152,6 +157,7 @@ impl Locatable for Statement {
             Statement::EnumDeclaration(e) => e.span(),
             Statement::ExternFn(e) => e.span(),
             Statement::ConstDeclaration(c) => c.span(),
+            Statement::StaticDeclaration(s) => s.span(),
             Statement::Use(u) => u.span(),
             Statement::Impl(i) => i.span(),
             Statement::SpecDeclaration(t) => t.span(),
@@ -218,6 +224,11 @@ impl Statement {
             (TokenKind::Const, _) | (TokenKind::Pub, TokenKind::Const) => {
                 let const_decl = Const::parse(parser)?;
                 Ok(Statement::ConstDeclaration(const_decl))
+            }
+
+            (TokenKind::Static, _) | (TokenKind::Pub, TokenKind::Static) => {
+                let static_decl = Static::parse(parser)?;
+                Ok(Statement::StaticDeclaration(static_decl))
             }
 
             // If the next tokens are `fn` or `pub fn`, it must be a function declaration.

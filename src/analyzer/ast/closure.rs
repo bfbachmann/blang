@@ -571,7 +571,8 @@ fn search_statement(statement: &AStatement, is_match: &impl Fn(&AStatement) -> b
         | AStatement::FunctionDeclaration(_)
         | AStatement::StructTypeDeclaration(_)
         | AStatement::EnumTypeDeclaration(_)
-        | AStatement::Const(_) => false,
+        | AStatement::Const(_)
+        | AStatement::Static(_) => false,
     }
 }
 
@@ -679,7 +680,8 @@ fn search_statement_for_expr(statement: &AStatement, is_match: &impl Fn(&AExpr) 
         | AStatement::FunctionDeclaration(_)
         | AStatement::StructTypeDeclaration(_)
         | AStatement::EnumTypeDeclaration(_)
-        | AStatement::Const(_) => false,
+        | AStatement::Const(_)
+        | AStatement::Static(_) => false,
     }
 }
 

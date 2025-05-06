@@ -190,8 +190,10 @@ pub struct MonoProg {
     pub fns: HashMap<TypeKey, AFn>,
     /// Maps extern function type keys to their signatures.
     pub extern_fns: HashMap<TypeKey, AExternFn>,
-    /// Maps module IDs to mappings from const names to their values for those modules.
+    /// Maps module IDs to mappings from `const` names to their values for those modules.
     pub mod_consts: HashMap<ModID, HashMap<String, AExpr>>,
+    /// Maps module IDs to mappings from `static` names to their values for those modules.
+    pub mod_statics: HashMap<ModID, HashMap<String, AExpr>>,
     /// Stores the type key of the `main` function, if any.
     pub maybe_main_fn_tk: Option<TypeKey>,
 }
@@ -254,8 +256,11 @@ pub fn mono_prog(analysis: ProgramAnalysis) -> MonoProg {
         .filter(|(tk, _)| collector.used_extern_fns.contains(tk))
         .collect();
 
+    let (mod_consts, mod_statics) = collector.ctx.drain_mod_consts_and_statics();
+
     MonoProg {
-        mod_consts: collector.ctx.drain_mod_consts(),
+        mod_consts,
+        mod_statics,
         config: collector.ctx.config,
         type_store: collector.ctx.type_store,
         type_monomorphizations: collector.ctx.type_monomorphizations,
@@ -391,6 +396,10 @@ fn walk_statement(collector: &mut MonoItemCollector, statement: AStatement) {
 
         AStatement::Const(const_) => {
             walk_expr(collector, const_.value);
+        }
+
+        AStatement::Static(static_) => {
+            walk_expr(collector, static_.value);
         }
     }
 }
