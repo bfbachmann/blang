@@ -2,6 +2,7 @@ mod enums
 
 use "std/libc" {exit}
 use "std/runtime" {assert}
+use "std/types/opt" {Opt}
 
 struct S {
     i: i64
@@ -38,7 +39,7 @@ impl OptionalI64 {
 }
 
 fn main() {
-    // Check that enum variant initialization, moves, and comparisons work.
+    // Check that enum variant initialization, copies, and comparisons work.
     {
         let e_one = E::One
         assert(e_one ~~ E::One, "1")
@@ -55,7 +56,7 @@ fn main() {
             s: "test"
         })
 
-        let e_four_moved = e_four;
+        let e_four_copy = e_four;
     }
 
     // Check that enums work as return values.
@@ -76,7 +77,19 @@ fn main() {
         }))
     }
 
+    // Check that we can write an enum value onto the stack and then read
+    // from it. Amazingly, this used to be broken in some interesting ways,
+    // so this regression test really is necessary.
+    {
+        let v = get_opt()
+        assert(v.unwrap() == 234, "expected 234")
+    }
+
     exit(0)
+}
+
+fn get_opt() -> Opt[uint] {
+    return Opt[uint]::Some(234)
 }
 
 fn take_enum(e: E) {

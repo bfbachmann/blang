@@ -224,11 +224,6 @@ impl AType {
         )
     }
 
-    /// Returns true if this type is an enum type.
-    pub fn is_enum(&self) -> bool {
-        matches!(self, AType::Enum(_))
-    }
-
     /// Returns true if this is a pointer type.
     pub fn is_any_ptr(&self) -> bool {
         matches!(self, AType::Pointer(_))

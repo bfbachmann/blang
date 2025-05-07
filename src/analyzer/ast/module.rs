@@ -462,12 +462,11 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
         // make sure that function names don't collide with those of existing functions from
         // other default impls on this type.
         if is_default_impl {
-            let has_matching_default_fn = ctx
-                .get_default_member_fn(impl_type_key, fn_sig.name.as_str())
-                .is_some();
-            if has_matching_default_fn {
-                let err =
-                    err_dup_mem_fn(ctx, &fn_sig.name, impl_type_key, member_fn.signature.span);
+            let maybe_default_fn_tk =
+                ctx.get_default_member_fn(impl_type_key, fn_sig.name.as_str());
+            if let Some(existing_fn_tk) = maybe_default_fn_tk {
+                let existing_fn_sig = ctx.get_type(existing_fn_tk).to_fn_sig();
+                let err = err_dup_mem_fn(ctx, &fn_sig, existing_fn_sig);
                 ctx.insert_err(err);
 
                 // Skip invalid func.

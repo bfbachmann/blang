@@ -150,7 +150,7 @@ pub fn err_dup_import_alias(name: &str, span: Span, existing_span: Span) -> Anal
         .as_str(),
     )
     .with_note(Note {
-        message: format_code!("{} is also defined here", name),
+        message: format_code!("{} was previously defined here", name),
         span: existing_span,
     })
 }
@@ -203,7 +203,7 @@ pub fn err_dup_ident(name: &str, span: Span, existing_span: Span) -> AnalyzeErro
         or place these definitions in separate modules.",
     )
     .with_note(Note {
-        message: format_code!("{} is already defined here.", name),
+        message: format_code!("{} was previously defined here.", name),
         span: existing_span,
     })
 }
@@ -1611,20 +1611,23 @@ pub fn err_dup_impl_fn(name: &str, span: Span) -> AnalyzeError {
 #[must_use]
 pub fn err_dup_mem_fn(
     ctx: &ProgramContext,
-    name: &str,
-    impl_tk: TypeKey,
-    span: Span,
+    fn_sig: &AFnSig,
+    existing_fn_sig: &AFnSig,
 ) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::DuplicateFunction,
         format_code!(
             "function {} already defined for type {}",
-            name,
-            ctx.display_type(impl_tk),
+            fn_sig.name,
+            ctx.display_type(fn_sig.maybe_impl_type_key.unwrap()),
         )
         .as_str(),
-        span,
+        fn_sig.span,
     )
+    .with_note(Note {
+        message: format_code!("{} was previously defined here.", existing_fn_sig.name),
+        span: existing_fn_sig.span,
+    })
 }
 
 #[must_use]
