@@ -483,23 +483,13 @@ impl AExpr {
         };
 
         match &ident.kind {
-            // Only mutable variables or variables with type `*mut T` can be referenced mutably.
-            &IdentKind::Variable {
-                is_mut, type_key, ..
-            } => {
-                if !is_mut && !ctx.get_type(type_key).is_mut_ptr() {
-                    let err = err_invalid_mut_ref_immut(symbol, *loc.span());
-                    ctx.insert_err(err);
-                }
-            }
-
-            // Only mutable statics or statics with type `*mut T` can be referenced mutably.
-            &IdentKind::Static {
-                is_mut,
-                value: AExpr { type_key, .. },
-                ..
-            } => {
-                if !is_mut && !ctx.get_type(type_key).is_mut_ptr() {
+            // Values can only be referenced mutably in the following cases:
+            //  - the base variable was declared `mut`
+            //  - it's a member access on a base variable of type `*mut T`
+            &IdentKind::Variable { is_mut, .. } | &IdentKind::Static { is_mut, .. } => {
+                let is_ptr_mut_member_access = matches!(self.kind, AExprKind::MemberAccess(_))
+                    && ctx.get_type(symbol.type_key).is_mut_ptr();
+                if !is_mut && !is_ptr_mut_member_access {
                     let err = err_invalid_mut_ref_immut(symbol, *loc.span());
                     ctx.insert_err(err);
                 }

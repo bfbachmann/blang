@@ -26,5 +26,11 @@ fn main() {
     counter.inc(10)
     assert(counter.value == 10, "expected 10")
 
+    // Check that we can take mutable references to static struct members.
+    let value_ptr = &mut counter.value
+    value_ptr^ = 23
+    assert(value_ptr^ == 23, "expected 23")
+    assert(counter.value == 23, "expected 23")
+
     @libc.exit(0)
 }

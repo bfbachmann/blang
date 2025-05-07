@@ -4,9 +4,9 @@ use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::generic::AGenericType;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{
-    err_ambiguous_access, err_ambiguous_generic_member_access, err_member_not_method, err_not_pub,
-    err_spec_member_access, err_undef_member, err_unexpected_params, err_unresolved_params,
-    AnalyzeResult, ErrorKind,
+    err_ambiguous_access, err_ambiguous_generic_member_access, err_member_not_method,
+    err_mismatched_types, err_not_pub, err_spec_member_access, err_undef_member,
+    err_unexpected_params, err_unresolved_params, AnalyzeResult, ErrorKind,
 };
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
@@ -395,47 +395,55 @@ fn resolve_concrete_method(
                 ctx.insert_err(err_not_pub(member_name, access.member_symbol.span));
             }
 
+            if called_via_type {
+                return Ok(member_type_key);
+            }
+
             // If the base expression is a value rather than a type,
             // we need to make sure the member function being accessed
             // takes `self` as its first argument.
-            if !called_via_type {
-                if !takes_self {
-                    return Err(err_member_not_method(
-                        ctx,
-                        base_type_key,
-                        member_name,
-                        access.member_symbol.span,
-                    ));
-                }
+            if !takes_self {
+                return Err(err_member_not_method(
+                    ctx,
+                    base_type_key,
+                    member_name,
+                    access.member_symbol.span,
+                ));
+            }
 
-                // At this point we know it's a valid method call on a
-                // concrete value. If the value is not a pointer, but the
-                // method requires a pointer, then we need to implicitly
-                // take a reference to the value.
-                let self_arg_type_key = maybe_self_type_key.unwrap();
-                let self_arg_type = ctx.get_type(self_arg_type_key);
-                if !base_expr_is_ptr && self_arg_type.is_any_ptr() {
-                    let op = match self_arg_type.is_mut_ptr() {
-                        true => {
-                            // Record an error if we're not allowed to get a
-                            // `&mut` to the base expression.
-                            base_expr.check_referencable_as_mut(ctx, base_expr);
-                            Operator::MutReference
-                        }
-                        false => Operator::Reference,
-                    };
+            // At this point we know it's a valid method call on a
+            // concrete value. If the value is not a pointer, but the
+            // method requires a pointer, then we need to implicitly
+            // take a reference to the value.
+            let self_arg_type_key = maybe_self_type_key.unwrap();
+            let self_arg_type = ctx.get_type(self_arg_type_key);
+            if self_arg_type.is_any_ptr() && !base_expr_is_ptr {
+                let op = match self_arg_type.is_mut_ptr() {
+                    true => {
+                        // Record an error if we're not allowed to get a
+                        // `&mut` to the base expression.
+                        base_expr.check_referencable_as_mut(ctx, base_expr);
+                        Operator::MutReference
+                    }
+                    false => Operator::Reference,
+                };
 
-                    let span = base_expr.span().clone();
-                    *base_expr = AExpr::new(
-                        AExprKind::UnaryOperation(op, Box::new(base_expr.clone())),
-                        self_arg_type_key,
-                        span,
-                    );
-                } else if self_arg_type.is_mut_ptr() {
-                    // Record an error here because we're trying to call
-                    // a method that requires `*mut T` with only a `*T`.
-                    base_expr.check_referencable_as_mut(ctx, base_expr);
-                }
+                let span = base_expr.span().clone();
+                *base_expr = AExpr::new(
+                    AExprKind::UnaryOperation(op, Box::new(base_expr.clone())),
+                    self_arg_type_key,
+                    span,
+                );
+            } else if self_arg_type.is_mut_ptr() && !ctx.get_type(base_expr.type_key).is_mut_ptr() {
+                // Record an error here because we're trying to call
+                // a method that requires `*mut T` with only a `*T`.
+                let err = err_mismatched_types(
+                    ctx,
+                    self_arg_type_key,
+                    base_expr.type_key,
+                    *access.base_expr.span(),
+                );
+                ctx.insert_err(err);
             }
 
             Ok(member_type_key)

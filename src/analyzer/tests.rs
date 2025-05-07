@@ -1491,7 +1491,7 @@ mod tests {
             }
         "#,
         );
-        check_err(&result, Some(ErrorKind::InvalidMutRef));
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]
