@@ -216,6 +216,7 @@ fn main() {
                     linker,
                     linker_args,
                     emit_debug_info: debug,
+                    verify: false,
                 };
 
                 if let Err(e) = compile(target_mod, quiet, codegen_config) {

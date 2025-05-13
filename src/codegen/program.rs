@@ -3,18 +3,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use flamer::flame;
-use inkwell::attributes::AttributeLoc;
-use inkwell::builder::Builder;
-use inkwell::context::Context;
-use inkwell::module::{Linkage, Module};
-use inkwell::passes::PassBuilderOptions;
-use inkwell::targets::{
-    CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine, TargetTriple,
-};
-use inkwell::values::{BasicMetadataValueEnum, BasicValue};
-use inkwell::OptimizationLevel;
-
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::ext::AExternFn;
 use crate::analyzer::ast::func::AFn;
@@ -28,6 +16,17 @@ use crate::codegen::func::debug::new_di_ctx;
 use crate::codegen::func::{gen_fn_sig, DICtx, FnCodeGen};
 use crate::mono_collector::{MonoItem, MonoProg};
 use crate::parser::{ModID, SrcInfo};
+use flamer::flame;
+use inkwell::attributes::AttributeLoc;
+use inkwell::builder::Builder;
+use inkwell::context::Context;
+use inkwell::module::{Linkage, Module};
+use inkwell::passes::PassBuilderOptions;
+use inkwell::targets::{
+    CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine, TargetTriple,
+};
+use inkwell::values::{BasicMetadataValueEnum, BasicValue};
+use inkwell::OptimizationLevel;
 
 /// Compiles a type-rich and semantically valid program to LLVM IR and/or bitcode.
 pub struct ProgramCodeGen<'a, 'ctx> {
@@ -312,6 +311,9 @@ pub struct CodeGenConfig {
     pub linker: Option<String>,
     pub linker_args: Vec<String>,
     pub emit_debug_info: bool,
+    /// Whether to have LLVM verify each function in the resulting IR. This makes codegen at least
+    /// twice as slow, so it should only be turned on for testing and debugging.
+    pub verify: bool,
 }
 
 impl CodeGenConfig {
@@ -329,6 +331,7 @@ impl CodeGenConfig {
             linker: None,
             linker_args: vec![],
             emit_debug_info: false,
+            verify: false,
         }
     }
 
@@ -347,6 +350,7 @@ impl CodeGenConfig {
             linker: None,
             linker_args: vec![],
             emit_debug_info: true,
+            verify: true,
         }
     }
 
@@ -359,7 +363,7 @@ impl CodeGenConfig {
         };
 
         let opts = PassBuilderOptions::create();
-        opts.set_verify_each(true);
+        opts.set_verify_each(self.verify);
         opts.set_debug_logging(false);
         opts.set_loop_interleaving(true);
         opts.set_loop_vectorization(true);
