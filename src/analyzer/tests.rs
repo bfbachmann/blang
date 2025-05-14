@@ -2815,7 +2815,7 @@ mod tests {
             fn main() {
                 test(1)
             }
-            
+
             fn test(v: int) {}
             "#,
             // Unused local variable.
@@ -2834,10 +2834,48 @@ mod tests {
             r#"enum Thing {One}"#,
             // Unused top-level private spec type.
             r#"spec Thing { fn thing() }"#,
+            // Unused mod alias.
+            r#"use "std/builtins" @x"#,
         ];
 
         for code in code {
             check_warn(&analyze(code), Some(WarnKind::Unused));
+        }
+    }
+
+    #[test]
+    fn ignore_unused_wildcard() {
+        let code = [
+            // Unused arg.
+            r#"
+            fn main() {
+                test(1)
+            }
+            
+            fn test(_: int) {}
+            "#,
+            // Unused local variable.
+            r#"fn main() { let _ = 1 }"#,
+            // Unused local const.
+            r#"fn main() { const _ = 1 }"#,
+            // Unused top-level private fn.
+            r#"fn _() {}"#,
+            // Unused top-level const.
+            r#"const _ = 1"#,
+            // Unused top-level static.
+            r#"static _ = 1"#,
+            // Unused top-level private struct type.
+            r#"struct _ {}"#,
+            // Unused top-level private enum type.
+            r#"enum _ {One}"#,
+            // Unused top-level private spec type.
+            r#"spec _ { fn thing() }"#,
+            // Unused mod alias.
+            r#"use "x" @_"#,
+        ];
+
+        for code in code {
+            check_warn(&analyze(code), None);
         }
     }
 

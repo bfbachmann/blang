@@ -27,6 +27,10 @@ impl ModAlias {
             span,
         }
     }
+
+    pub fn is_unused(&self) -> bool {
+        self.usage == Usage::Unused && self.name != "_"
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -341,6 +345,6 @@ impl Ident {
             IdentKind::UncheckedSpecType(spec_type) => spec_type.is_pub,
         };
 
-        self.is_unused() && !is_pub
+        !is_pub && self.is_unused()
     }
 }

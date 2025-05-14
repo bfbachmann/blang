@@ -176,7 +176,7 @@ impl ModuleContext {
 
         for map in self.mod_aliases.values() {
             for alias in map.values() {
-                if alias.usage == Usage::Unused {
+                if alias.is_unused() {
                     unused_aliases.push(alias);
                 }
             }
