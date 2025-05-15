@@ -172,6 +172,13 @@ impl AModule {
                 .map(|alias| warn_unused(&alias.name, alias.span)),
         );
 
+        // Warn about unused private impl functions.
+        for fn_tk in ctx.unused_impl_fns() {
+            let fn_sig = ctx.get_type(fn_tk).to_fn_sig();
+            let warn = warn_unused(&fn_sig.name, fn_sig.span);
+            warns.push(warn);
+        }
+
         for warn in warns {
             ctx.insert_warn(warn);
         }

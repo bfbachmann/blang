@@ -105,6 +105,17 @@ impl Scope {
         self.idents.get(name)
     }
 
+    /// Returns the type keys of all types defined in this scope.
+    pub fn get_defined_types(&self) -> Vec<TypeKey> {
+        self.idents
+            .values()
+            .filter_map(|ident| match &ident.kind {
+                IdentKind::Type { type_key, .. } => Some(*type_key),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// Returns a mutable reference to the identifier with the given name.
     pub fn get_ident_mut(&mut self, name: &str) -> Option<&mut Ident> {
         self.idents.get_mut(name)

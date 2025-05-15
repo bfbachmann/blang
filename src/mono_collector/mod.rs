@@ -561,14 +561,14 @@ fn walk_type_key(collector: &mut MonoItemCollector, type_key: TypeKey) {
                     // search for it as a default member function. If we don't find it,
                     // it means that the function is actually a field on a struct, in which
                     // case there is nothing to queue.
+                    let name = fn_sig.name.clone();
                     if let Some(fn_tk) = collector
                         .ctx
-                        .get_default_member_fn(poly_impl_tk, fn_sig.name.as_str())
+                        .get_default_member_fn(poly_impl_tk, name.as_str())
                     {
                         collector.queue_item(fn_tk, type_mappings);
-                    } else if let Some(fn_tk) = collector
-                        .ctx
-                        .get_default_member_fn(mapped_impl_tk, &fn_sig.name)
+                    } else if let Some(fn_tk) =
+                        collector.ctx.get_default_member_fn(mapped_impl_tk, &name)
                     {
                         collector.queue_item(fn_tk, type_mappings);
                     }

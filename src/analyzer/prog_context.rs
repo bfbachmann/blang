@@ -76,6 +76,8 @@ pub struct TypeImpls {
     /// Maps function name to function type key for all functions declared in default impl blocks
     /// (impl blocks without specs) for the type.
     default_fns: HashMap<String, TypeKey>,
+    /// Tracks usage of default member functions. Member functions that are used will appear here.
+    used_default_fns: HashSet<TypeKey>,
     /// Maps implemented spec type key to a mapping from member function name to its type key.
     /// There should be one mapping for each spec impl on this type.
     spec_impls: HashMap<TypeKey, HashMap<String, TypeKey>>,
@@ -131,8 +133,23 @@ impl TypeImpls {
 
     /// Tries to find a "default" function (i.e. a function declared in a regular `impl` block
     /// without a spec) with the given name.
-    fn get_default_fn(&self, name: &str) -> Option<TypeKey> {
-        self.default_fns.get(name).cloned()
+    fn get_default_fn(&mut self, name: &str) -> Option<TypeKey> {
+        match self.default_fns.get(name) {
+            Some(&tk) => Some(tk),
+            None => None,
+        }
+    }
+
+    /// Returns the type keys of all unused private default functions.
+    fn unused_default_fns(&self) -> Vec<TypeKey> {
+        let mut fn_tks = vec![];
+        for fn_tk in self.default_fns.values() {
+            if !self.pub_fn_tks.contains(fn_tk) && !self.used_default_fns.contains(fn_tk) {
+                fn_tks.push(*fn_tk);
+            }
+        }
+
+        fn_tks
     }
 
     /// Tries to find the function with the given name that is part of the implementation of the
@@ -144,23 +161,31 @@ impl TypeImpls {
         }
     }
 
-    /// Returns the type keys of all functions with the given name in all impls.
-    fn get_fns_by_name(&self, name: &str) -> HashSet<TypeKey> {
-        let mut fn_tks = HashSet::new();
+    /// Tries to find the member function with the given name. Returns
+    ///  - `Ok(None)` if no matching member functions exist
+    ///  - `Ok(Some(tk))` if exactly one matching member function exists
+    ///  - `Err(())` if multiple matching member functions are found.
+    fn get_fns_by_name(&mut self, name: &str) -> Result<Option<TypeKey>, ()> {
+        let mut fn_tks = vec![];
 
         // Find a default function with the same name.
         if let Some(tk) = self.default_fns.get(name) {
-            fn_tks.insert(*tk);
+            self.used_default_fns.insert(*tk);
+            fn_tks.push(*tk);
         }
 
         // Find any spec functions with the same name.
         for fns in self.spec_impls.values() {
             if let Some(tk) = fns.get(name) {
-                fn_tks.insert(*tk);
+                fn_tks.push(*tk);
             }
         }
 
-        fn_tks
+        match fn_tks.len() {
+            0 => Ok(None),
+            1 => Ok(Some(fn_tks[0])),
+            _ => Err(()),
+        }
     }
 }
 
@@ -1423,6 +1448,23 @@ impl ProgramContext {
         self.cur_mod_ctx().unused_imports()
     }
 
+    /// Returns the type keys of all non-public functions from default impls that are unused in the
+    /// current module.
+    pub fn unused_impl_fns(&self) -> Vec<TypeKey> {
+        let mut tks = vec![];
+
+        let scope = self.cur_mod_ctx().cur_scope();
+        assert_eq!(scope.kind, ScopeKind::TopLevel);
+
+        for tk in scope.get_defined_types() {
+            if let Some(impls) = self.type_impls.get(&tk) {
+                tks.extend(impls.unused_default_fns())
+            }
+        }
+
+        tks
+    }
+
     /// Returns the type associated with the given key. Panics if there is no such type.
     pub fn get_type(&self, type_key: TypeKey) -> &AType {
         self.type_store.get_type(type_key)
@@ -1522,40 +1564,39 @@ impl ProgramContext {
         &mut self,
         type_key: TypeKey,
         fn_name: &str,
-    ) -> Result<Option<AFnSig>, HashSet<TypeKey>> {
-        let fn_tks = self.get_member_fns(type_key, fn_name);
-        match fn_tks.len() {
+    ) -> Result<Option<AFnSig>, ()> {
+        match self.get_member_fns(type_key, fn_name) {
             // We didn't find any member functions for this type, but maybe this type was generated
             // as the result of a monomorphization and we have yet to generate this member function
             // for it. Let's check...
-            0 => self.try_monomorphize_member_fn(type_key, fn_name),
+            Ok(None) => self.try_monomorphize_member_fn(type_key, fn_name),
 
             // Exactly one function by that name was found for the type. This is the ideal case.
-            1 => {
-                let tk = fn_tks.iter().next().unwrap();
-                let fn_sig = self.get_type(*tk).to_fn_sig();
+            Ok(Some(tk)) => {
+                let fn_sig = self.get_type(tk).to_fn_sig();
                 Ok(Some(fn_sig.clone()))
             }
 
             // Many functions were found by that name.
-            _ => Err(fn_tks),
+            _ => Err(()),
         }
     }
 
-    /// Tries to locate member functions with the given name on the given type. If the type
-    /// implements multiple specs with methods that share the same name, then this function will
-    /// return the type keys of all of those functions.
-    fn get_member_fns(&self, type_key: TypeKey, fn_name: &str) -> HashSet<TypeKey> {
-        match self.type_impls.get(&type_key) {
+    /// Tries to locate member functions with the given name on the given type. Returns
+    ///  - `Ok(None)` if no matching member functions exist
+    ///  - `Ok(Some(tk))` if exactly one matching member function exists
+    ///  - `Err(())` if multiple matching member functions are found.
+    fn get_member_fns(&mut self, type_key: TypeKey, fn_name: &str) -> Result<Option<TypeKey>, ()> {
+        match self.type_impls.get_mut(&type_key) {
             Some(impls) => impls.get_fns_by_name(fn_name),
-            None => HashSet::new(),
+            None => Ok(None),
         }
     }
 
     /// Returns the type key of the default function on the given type with the given name, or
     /// None if no such function exists.
-    pub fn get_default_member_fn(&self, type_key: TypeKey, fn_name: &str) -> Option<TypeKey> {
-        match self.type_impls.get(&type_key) {
+    pub fn get_default_member_fn(&mut self, type_key: TypeKey, fn_name: &str) -> Option<TypeKey> {
+        match self.type_impls.get_mut(&type_key) {
             Some(impls) => impls.get_default_fn(fn_name),
             None => None,
         }
@@ -1583,7 +1624,7 @@ impl ProgramContext {
         &mut self,
         type_key: TypeKey,
         fn_name: &str,
-    ) -> Result<Option<AFnSig>, HashSet<TypeKey>> {
+    ) -> Result<Option<AFnSig>, ()> {
         // Check if the given type is the result of a monomorphization. If not, then we're not
         // going to find the function so we can abort early.
         let mono = match self.type_monomorphizations.get(&type_key) {
@@ -1592,14 +1633,13 @@ impl ProgramContext {
         };
 
         // Try to find the function by name on the parent polymorphic type.
-        let poly_fn_tks = self.get_member_fns(mono.poly_type_key, fn_name);
-        let poly_fn_tk = match poly_fn_tks.len() {
+        let poly_fn_tk = match self.get_member_fns(mono.poly_type_key, fn_name) {
             // No function found.
-            0 => return Ok(None),
+            Ok(None) => return Ok(None),
             // Exactly one function found. This is what we want.
-            1 => *poly_fn_tks.iter().next().unwrap(),
+            Ok(Some(tk)) => tk,
             // Many functions found by that name. We can't proceed because of this ambiguity.
-            _ => return Err(poly_fn_tks),
+            _ => return Err(()),
         };
 
         let is_pub = self.member_fn_is_pub(mono.poly_type_key, poly_fn_tk);

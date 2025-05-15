@@ -2836,6 +2836,11 @@ mod tests {
             r#"spec Thing { fn thing() }"#,
             // Unused mod alias.
             r#"use "std/builtins" @x"#,
+            // Unused member function.
+            r#"
+            struct Thing {}
+            impl Thing { fn test() {} }
+            "#,
         ];
 
         for code in code {
