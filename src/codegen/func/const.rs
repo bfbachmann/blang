@@ -309,15 +309,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 .const_int_size_of_type(*type_key)
                 .as_basic_value_enum(),
 
-            AExprKind::MemberAccess(access) => {
-                let ll_base_val = self.gen_const_expr(&access.base_expr);
-                self.get_member_value(
-                    ll_base_val,
-                    access.base_expr.type_key,
-                    access.member_type_key,
-                    access.member_name.as_str(),
-                )
-            }
+            AExprKind::MemberAccess(access) => self.gen_member_access(access),
 
             _ => panic!("unexpected const expression {}", expr),
         }

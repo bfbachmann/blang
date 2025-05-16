@@ -49,6 +49,16 @@ fn get_sum_fn() -> fn (int, int) -> int {
     return sum
 }
 
+struct Thing {
+    value: int
+}
+
+impl Thing {
+    fn get_value(self) -> int {
+        return self.value
+    }
+}
+
 fn main() {
     // Check that regular function calls work.
     {
@@ -113,6 +123,13 @@ fn main() {
     // Check that extern functions with custom link names work.
     {
         assert(atoi("1234\0".ptr(), null, 10) == 1234, "expected 1234")
+    }
+
+    // Check that we can we can refer to member functions on value expressions.
+    {
+        let thing = Thing{value: 843}
+        let t = thing.get_value
+        assert(t(thing) == 843, "expected 843")
     }
 
     exit(0)

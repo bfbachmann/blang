@@ -4,6 +4,7 @@ use "std/libc" @libc
 use "std/allocator" {Allocator}
 use "std/types/opt" {Opt}
 use "std/types/slice" {Slice, SliceMut}
+use "std/runtime" {panic}
 
 /// The minimum capacity of the list once it has been allocated.
 const min_cap: uint = 4
@@ -87,6 +88,27 @@ impl List {
         let old_value = self.data.get(i)
         self.data.set(i, t)
         return old_value
+    }
+
+    /// Inserts `t` into the list at index `i`. Panics if `i` is out of bounds.
+    pub fn insert(*mut self, i: uint, t: T) {
+        if i == self.len() {
+            self.push(t)
+            return
+        }
+
+        if i > self.len {
+            panic("list index out of bounds")
+        }
+
+        self.grow_to_fit(1)
+        @libc.memmove(
+            self.data.ptr_at(i + 1) as *mut u8,
+            self.data.ptr_at(i) as *u8,
+            (self.len - i) * sizeof T,
+        )
+        self.data.set(i, t)
+        self.len += 1
     }
 
     /// Remove the value at index `i` from the list and returns it. Returns

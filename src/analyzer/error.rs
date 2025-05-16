@@ -1056,7 +1056,7 @@ pub fn err_mismatched_index_type(
 pub fn err_index_out_of_bounds(i: u64, len: u64, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::IndexOutOfBounds,
-        format!("index {} is out of bounds (0:{})", i, len - 1).as_str(),
+        format!("index {} is out of bounds [0:{})", i, len).as_str(),
         span,
     )
 }

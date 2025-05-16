@@ -614,6 +614,7 @@ mod tests {
             .args([
                 &ir_path,
                 "-O2",
+                "-fverify-intermediate-code",
                 "-fsanitize=undefined,address",
                 "-fstack-protector-all",
                 "-fno-sanitize-recover=all",
