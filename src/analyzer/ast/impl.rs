@@ -13,29 +13,18 @@ use crate::parser::ast::func::Function;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Symbol;
-use crate::util;
 
 /// Represents a semantically valid `impl` block that declares member functions for a type.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AImpl {
-    pub type_key: TypeKey,
     pub member_fns: Vec<AFn>,
-}
-
-impl PartialEq for AImpl {
-    fn eq(&self, other: &Self) -> bool {
-        self.type_key == other.type_key && util::vecs_eq(&self.member_fns, &other.member_fns)
-    }
 }
 
 impl AImpl {
     /// Performs semantic analysis on an `impl` block and returns the analyzed
     /// result.
     pub fn from(ctx: &mut ProgramContext, impl_: &Impl) -> AImpl {
-        let placeholder = AImpl {
-            type_key: ctx.unknown_type_key(),
-            member_fns: vec![],
-        };
+        let placeholder = AImpl { member_fns: vec![] };
 
         // Make sure the `impl` block is not being defined inside a function.
         if ctx.is_in_fn() {
@@ -147,7 +136,6 @@ impl AImpl {
         ctx.set_cur_self_type_key(None);
 
         AImpl {
-            type_key,
             member_fns: member_fns.into_values().map(|(func, _)| func).collect(),
         }
     }
