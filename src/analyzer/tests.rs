@@ -1830,7 +1830,7 @@ mod tests {
             }
             "#,
         );
-        check_err(&result, Some(ErrorKind::DuplicateSpecImpl));
+        check_err(&result, Some(ErrorKind::SpecImplConflict));
     }
 
     #[test]
@@ -2923,5 +2923,20 @@ mod tests {
             "#,
         );
         check_err(&result, Some(ErrorKind::InvalidMutRef));
+    }
+
+    #[test]
+    fn polymorphic_spec_impl_conflict() {
+        let result = analyze(
+            r#"
+            struct Thing[T] {}
+            
+            spec MySpec {}
+            
+            impl Thing: MySpec {}
+            impl Thing[int]: MySpec {}
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::SpecImplConflict));
     }
 }

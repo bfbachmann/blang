@@ -93,7 +93,7 @@ impl AParam {
                 impl_fns.insert(fn_sig.name, fn_sig.type_key);
             }
 
-            ctx.insert_impl(generic_type_key, Some(spec_type_key), impl_fns);
+            ctx.insert_spec_impl(generic_type_key, spec_type_key, impl_fns, Span::default());
         }
 
         AParam {

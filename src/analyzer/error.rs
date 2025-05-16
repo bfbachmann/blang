@@ -59,7 +59,7 @@ pub enum ErrorKind {
     UseOfPrivateValue,
     TypeIsNotStruct,
     TypeIsNotEnum,
-    DuplicateSpecImpl,
+    SpecImplConflict,
     ExpectedSpec,
     DuplicateParam,
     UnexpectedParams,
@@ -1581,22 +1581,30 @@ pub fn err_invalid_array_size_type(span: Span) -> AnalyzeError {
 }
 
 #[must_use]
-pub fn err_type_already_implements_spec(
+pub fn err_spec_impl_conflict(
     ctx: &ProgramContext,
     type_key: TypeKey,
     spec_tk: TypeKey,
     span: Span,
+    other_span: Span,
 ) -> AnalyzeError {
+    let impl_type_display = ctx.display_type(type_key);
+    let spec_type_display = ctx.display_type(spec_tk);
+
     AnalyzeError::new(
-        ErrorKind::DuplicateSpecImpl,
+        ErrorKind::SpecImplConflict,
         format_code!(
-            "{} already implements {}",
-            ctx.display_type(type_key),
-            ctx.display_type(spec_tk),
+            "conflicting implementation of {} for {}",
+            spec_type_display,
+            impl_type_display
         )
         .as_str(),
         span,
     )
+    .with_note(Note {
+        message: format_code!("{} is already implemented here.", spec_type_display),
+        span: other_span,
+    })
 }
 
 #[must_use]

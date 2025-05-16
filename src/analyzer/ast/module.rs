@@ -10,13 +10,13 @@ use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::error::{
     err_dup_ident, err_dup_impl_fn, err_dup_import_alias, err_dup_imported_mod, err_dup_mem_fn,
     err_expected_spec, err_invalid_mod_path, err_invalid_statement, err_not_pub,
-    err_type_already_implements_spec, err_undef_foreign_symbol,
+    err_spec_impl_conflict, err_undef_foreign_symbol,
 };
 use crate::analyzer::ident::{Ident, IdentKind, ModAlias, Usage};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_containment::{check_enum_containment, check_struct_containment};
 use crate::analyzer::warn::{warn_unused, AnalyzeWarning};
-use crate::lexer::pos::Locatable;
+use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::statement::Statement;
@@ -411,20 +411,40 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
             let spec_tk = ctx.resolve_type(&spec.as_unresolved_type());
             let spec_type = ctx.get_type(spec_tk);
             match spec_type {
-                AType::Spec(_) => {
-                    // Make sure there isn't already an impl defined for this spec on this type.
-                    if ctx.type_has_spec_impl(impl_type_key, spec_tk) {
-                        let err = err_type_already_implements_spec(
+                AType::Spec(_) => 'check: {
+                    // Make sure there are no conflicting spec impls for this type.
+                    if let Some(spec_impl) = ctx.get_spec_impl(impl_type_key, spec_tk) {
+                        let header_span = spec_impl.header_span;
+                        let err = err_spec_impl_conflict(
                             ctx,
                             impl_type_key,
                             spec_tk,
                             spec.span,
+                            header_span,
                         );
                         ctx.insert_err(err);
-                        None
-                    } else {
-                        Some(spec_tk)
+                        break 'check None;
                     }
+
+                    // Make sure there are no conflicting spec impls for the polymorphic parent
+                    // type, if one exists.
+                    if let Some(mono) = ctx.type_monomorphizations.get(&impl_type_key) {
+                        let poly_tk = mono.poly_type_key;
+                        if let Some(spec_impl) = ctx.get_spec_impl(poly_tk, spec_tk) {
+                            let header_span = spec_impl.header_span;
+                            let err = err_spec_impl_conflict(
+                                ctx,
+                                poly_tk,
+                                spec_tk,
+                                spec.span,
+                                header_span,
+                            );
+                            ctx.insert_err(err);
+                            break 'check None;
+                        }
+                    }
+
+                    Some(spec_tk)
                 }
 
                 AType::Unknown(_) => None,
@@ -498,7 +518,19 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     // Regardless of errors, we'll mark this `impl` as implementing the
     // spec it claims it does. This is just to prevent redundant error
     // messages when the corresponding type gets used.
-    ctx.insert_impl(impl_type_key, maybe_spec_tk, fn_type_keys);
+    match maybe_spec_tk {
+        Some(spec_tk) => {
+            let header_span = Span {
+                file_id: impl_.span.file_id,
+                start_pos: impl_.span.start_pos,
+                end_pos: impl_.maybe_spec.as_ref().unwrap().span.end_pos,
+            };
+            ctx.insert_spec_impl(impl_type_key, spec_tk, fn_type_keys, header_span)
+        }
+        None => {
+            ctx.insert_default_impl(impl_type_key, fn_type_keys);
+        }
+    }
 
     // Record public member functions, so we can check whether they're accessible
     // whenever they're used. We'll also consider the member function public if
