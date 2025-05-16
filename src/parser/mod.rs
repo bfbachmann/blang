@@ -272,6 +272,11 @@ pub fn parse_mods(mod_path: &str) -> (SrcInfo, Vec<ParseError>) {
     ]);
 
     while let Some(mod_path) = parse_queue.pop_front() {
+        // Skip the module if we've already parsed it.
+        if src_info.mod_info.get_id_by_path(&mod_path.raw).is_some() {
+            continue;
+        }
+
         let (mod_ids, parse_errs) = parse_mod_dir(&mut src_info, &mod_path);
         errs.extend(parse_errs);
 
@@ -297,24 +302,24 @@ pub fn parse_mods(mod_path: &str) -> (SrcInfo, Vec<ParseError>) {
 /// Parses a module directory, updating the given parse info. Returns the IDs of all the modules
 /// discovered in the directory, as well as any parse errors that occurred.
 pub fn parse_mod_dir(
-    parse_info: &mut SrcInfo,
+    src_info: &mut SrcInfo,
     mod_path: &ModulePath,
 ) -> (HashSet<ModID>, Vec<ParseError>) {
     let mut errs = vec![];
     let mut discovered_mod_ids = HashSet::new();
 
     // Find source files in the module directory.
-    let dir_id = match locate_module_dir(parse_info, mod_path) {
+    let dir_id = match locate_module_dir(src_info, mod_path) {
         Ok(dir_id) => dir_id,
         Err(parse_err) => {
             errs.push(parse_err);
             return (discovered_mod_ids, errs);
         }
     };
-    let dir_info = parse_info.dir_info.get_mut_by_id(dir_id);
+    let dir_info = src_info.dir_info.get_mut_by_id(dir_id);
 
     for file_id in &dir_info.file_ids {
-        let file_info = parse_info.file_info.get_by_id(*file_id);
+        let file_info = src_info.file_info.get_by_id(*file_id);
         let path = &file_info.path;
 
         // Lex the source file and return early if there are any errors.
@@ -366,18 +371,18 @@ pub fn parse_mod_dir(
         };
 
         // Find or create the module to which this source file belongs.
-        let file_mod_id = match parse_info.mod_info.get_id_by_path(&file_mod_path) {
+        let file_mod_id = match src_info.mod_info.get_id_by_path(&file_mod_path) {
             Some(id) => id,
-            None => parse_info.mod_info.insert(ModInfo {
+            None => src_info.mod_info.insert(ModInfo {
                 path: file_mod_path.clone(),
                 src_file_ids: Default::default(),
             }),
         };
-        let mod_info = parse_info.mod_info.get_mut_by_id(file_mod_id);
+        let mod_info = src_info.mod_info.get_mut_by_id(file_mod_id);
 
         // Update the file's module with info about the file and the modules it relies on.
         mod_info.src_file_ids.insert(src_file.id);
-        parse_info.src_files.insert(*file_id, src_file);
+        src_info.src_files.insert(*file_id, src_file);
         dir_info.mod_ids.insert(file_mod_name, file_mod_id);
 
         discovered_mod_ids.insert(file_mod_id);

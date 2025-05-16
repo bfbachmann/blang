@@ -22,24 +22,6 @@ pub enum ErrorKind {
     UnexpectedEOF,
 }
 
-impl Display for ErrorKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            ErrorKind::LexError => write!(f, "lexing failed"),
-            ErrorKind::FailedToLocateMod => write!(f, "failed to locate module"),
-            ErrorKind::ExpectedExpr => write!(f, "expected expression"),
-            ErrorKind::ExpectedBasicExpr => write!(f, "expected basic expression"),
-            ErrorKind::ExpectedBeginExpr => write!(f, "expected beginning of expression"),
-            ErrorKind::ExpectedIdent => write!(f, "expected identifier"),
-            ErrorKind::InvalidModPath => write!(f, "invalid module path"),
-            ErrorKind::ExpectedStatement => write!(f, "expected statement"),
-            ErrorKind::UnexpectedEndOfExpr => write!(f, "unexpected end of expression"),
-            ErrorKind::UnexpectedToken => write!(f, "unexpected token"),
-            ErrorKind::UnexpectedEOF => write!(f, "unexpected EOF"),
-        }
-    }
-}
-
 /// Represents any fatal error that occurs during parsing.
 #[derive(Debug)]
 pub struct ParseError {
