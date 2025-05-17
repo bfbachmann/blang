@@ -4,7 +4,8 @@ use inkwell::values::{
 };
 
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
-use crate::analyzer::ast::symbol::ASymbol;
+use crate::analyzer::ast::symbol::{ASymbol, SymbolKind};
+use crate::analyzer::mangling::mangle_type;
 use crate::analyzer::type_store::GetType;
 
 use super::FnCodeGen;
@@ -323,16 +324,38 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             return ll_intrinsic;
         }
 
-        if let Some(mod_id) = &symbol.maybe_mod_id {
-            if let Some(mod_consts) = self.mod_consts.get(mod_id) {
-                if let Some(const_value) = mod_consts.get(&symbol.name) {
-                    return self.gen_const_expr(const_value);
+        match symbol.kind {
+            SymbolKind::Const => {
+                if let Some(mod_id) = &symbol.maybe_mod_id {
+                    if let Some(mod_consts) = self.mod_consts.get(mod_id) {
+                        if let Some(const_value) = mod_consts.get(&symbol.name) {
+                            return self.gen_const_expr(const_value);
+                        }
+                    }
+                }
+
+                if let Some(const_) = self.local_consts.get(&symbol.name) {
+                    return self.gen_const_expr(&const_.value.clone());
                 }
             }
-        }
 
-        if let Some(const_) = self.local_consts.get(&symbol.name) {
-            return self.gen_const_expr(&const_.value.clone());
+            SymbolKind::Fn => {
+                let mangled_name = mangle_type(
+                    self.type_converter,
+                    symbol.type_key,
+                    self.type_converter.type_mapping(),
+                    self.type_monomorphizations,
+                );
+
+                return self
+                    .module
+                    .get_function(&mangled_name)
+                    .expect(format!("failed to locate function {mangled_name}").as_str())
+                    .as_global_value()
+                    .as_basic_value_enum();
+            }
+
+            _ => panic!("unexpected symbol kind {:?}", symbol.kind),
         }
 
         panic!("failed to locate constant for symbol {symbol}")

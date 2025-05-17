@@ -255,8 +255,8 @@ impl AExprKind {
             // simplicity.
             AExprKind::Index(_) => false,
 
-            // Symbols can be constants.
-            AExprKind::Symbol(sym) => sym.kind == SymbolKind::Const,
+            // Symbols can be constants if they refer to constant values.
+            AExprKind::Symbol(sym) => matches!(sym.kind, SymbolKind::Const | SymbolKind::Fn),
 
             // Function calls and unknown values are never constants.
             AExprKind::FunctionCall(_) | AExprKind::AnonFunction(_) | AExprKind::Unknown => false,

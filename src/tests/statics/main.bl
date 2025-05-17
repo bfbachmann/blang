@@ -7,30 +7,57 @@ use "src/tests/statics/other" {counter}
 static mut value: uint = 23
 static mut test = "test"
 
+fn get_1() -> int {
+    return 1
+}
+
+fn get_2() -> int {
+    return 2
+}
+
+static mut get_value = get_1
+
 fn main() {
     // Check that we can read static values.
-    assert(value == 23, "expected 23")
-    assert(test == "test", "expected 'test'")
+    {
+        assert(value == 23, "expected 23")
+        assert(test == "test", "expected 'test'")
+    }
 
     // Check that static values are updated correctly.
-    value += 1
-    assert(value == 24, "expected 24")
+    {
+        value += 1
+        assert(value == 24, "expected 24")
+    }
 
     // Check that static references work like normal references.
-    let test_ptr = &mut test
-    test_ptr^ = "new"
-    assert(test == "new", "expected 'new")
+    {
+        let test_ptr = &mut test
+        test_ptr^ = "new"
+        assert(test == "new", "expected 'new")
+    }
 
     // Check that we can import static values.
-    assert(counter.value == 0, "expected 0")
-    counter.inc(10)
-    assert(counter.value == 10, "expected 10")
+    {
+        assert(counter.value == 0, "expected 0")
+        counter.inc(10)
+        assert(counter.value == 10, "expected 10")
+    }
 
     // Check that we can take mutable references to static struct members.
-    let value_ptr = &mut counter.value
-    value_ptr^ = 23
-    assert(value_ptr^ == 23, "expected 23")
-    assert(counter.value == 23, "expected 23")
+    {
+        let value_ptr = &mut counter.value
+        value_ptr^ = 23
+        assert(value_ptr^ == 23, "expected 23")
+        assert(counter.value == 23, "expected 23")
+    }
+
+    // Check that we can assign function values to statics.
+    {
+        assert(get_value() == 1, "expected 1")
+        get_value = get_2
+        assert(get_value() == 2, "expected 2")
+    }
 
     @libc.exit(0)
 }

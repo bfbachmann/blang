@@ -125,17 +125,17 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     if let Some(static_) = statics.get(name) {
                         let mangled_name = mangle_name(&symbol.name, *mod_id);
 
-                        let ll_global = if let Some(ll_global) =
-                            self.module.get_global(&mangled_name)
-                        {
-                            ll_global
-                        } else {
-                            let ll_type = self.type_converter.get_basic_type(static_.type_key);
-                            let ll_global = self.module.add_global(ll_type, None, &mangled_name);
-                            ll_global.set_initializer(
-                                &self.gen_const_expr(static_).as_basic_value_enum(),
-                            );
-                            ll_global
+                        let ll_global = match self.module.get_global(&mangled_name) {
+                            Some(g) => g,
+                            None => {
+                                let ll_type = self.type_converter.get_basic_type(static_.type_key);
+                                let ll_global =
+                                    self.module.add_global(ll_type, None, &mangled_name);
+                                ll_global.set_initializer(
+                                    &self.gen_const_expr(static_).as_basic_value_enum(),
+                                );
+                                ll_global
+                            }
                         };
 
                         return ll_global.as_pointer_value();

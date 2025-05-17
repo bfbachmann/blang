@@ -53,5 +53,12 @@ fn main() {
     // Make sure we can use `sizeof` expressions as const expressions.
     assert([3u8; sizeof u64].(sizeof u64 - 2) == 3, "expected 3")
 
+    // Functions should be usable as constants.
+    {
+        fn get_1() -> int { return 1 }
+        const f = get_1
+        assert(f() == 1, "expected 1")
+    }
+
     @libc.exit(0)
 }

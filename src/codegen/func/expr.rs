@@ -595,32 +595,39 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Compile the function call and return the result.
         let ll_call = match &call.fn_expr.kind {
             AExprKind::Symbol(symbol) => {
-                let fn_name = mangle_type(
-                    self.type_converter,
-                    symbol.type_key,
-                    self.type_converter.type_mapping(),
-                    self.type_monomorphizations,
-                );
+                match symbol.kind {
+                    SymbolKind::Variable | SymbolKind::Static => {
+                        // Load the function pointer from the symbol value and call it indirectly.
+                        let ll_fn_ptr = self.get_var_value(&symbol).into_pointer_value();
+                        self.ll_builder
+                            .build_indirect_call(
+                                ll_fn_type,
+                                ll_fn_ptr,
+                                args.as_slice(),
+                                mangled_name.as_str(),
+                            )
+                            .unwrap()
+                    }
 
-                if let Some(ll_fn) = self.module.get_function(&fn_name) {
-                    // Build the call and attach attributes to it. For some undocumented reason,
-                    // some attributes like `byval` need to be attached at the call site as well as
-                    // the function declaration.
-                    self.ll_builder
-                        .build_call(ll_fn, args.as_slice(), symbol.name.as_str())
-                        .unwrap()
-                } else {
-                    // The function is actually a variable, so we need to load the function pointer
-                    // from the variable value and call it indirectly.
-                    let ll_fn_ptr = self.get_var_value(&symbol).into_pointer_value();
-                    self.ll_builder
-                        .build_indirect_call(
-                            ll_fn_type,
-                            ll_fn_ptr,
-                            args.as_slice(),
-                            mangled_name.as_str(),
-                        )
-                        .unwrap()
+                    SymbolKind::Const | SymbolKind::Fn => {
+                        // The symbol refers directly to a function that we can look up in the
+                        // module and call directly.
+                        let fn_name = mangle_type(
+                            self.type_converter,
+                            symbol.type_key,
+                            self.type_converter.type_mapping(),
+                            self.type_monomorphizations,
+                        );
+
+                        let ll_fn = self.module.get_function(&fn_name).unwrap();
+                        self.ll_builder
+                            .build_call(ll_fn, args.as_slice(), symbol.name.as_str())
+                            .unwrap()
+                    }
+
+                    SymbolKind::Type => {
+                        panic!("unexpected symbol kind {:?} in call", symbol.kind);
+                    }
                 }
             }
 
