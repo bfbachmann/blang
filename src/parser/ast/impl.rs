@@ -87,4 +87,16 @@ impl Impl {
             span: parser.new_span(start_pos, end_pos),
         })
     }
+
+    /// Returns the span on the impl header.
+    pub fn header_span(&self) -> Span {
+        Span {
+            file_id: self.span.file_id,
+            start_pos: self.span.start_pos,
+            end_pos: match &self.maybe_spec {
+                Some(spec) => spec.span.end_pos,
+                None => self.typ.span.end_pos,
+            },
+        }
+    }
 }

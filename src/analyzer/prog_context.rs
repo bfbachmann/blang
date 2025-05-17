@@ -101,17 +101,13 @@ impl TypeImpls {
         member_fns: HashMap<String, TypeKey>,
         header_span: Span,
     ) {
-        let no_conflict = self
-            .spec_impls
-            .insert(
-                spec_tk,
-                SpecImpl {
-                    member_fns,
-                    header_span,
-                },
-            )
-            .is_none();
-        assert!(no_conflict);
+        self.spec_impls.insert(
+            spec_tk,
+            SpecImpl {
+                member_fns,
+                header_span,
+            },
+        );
     }
 
     /// Inserts information about a default `impl` block for some type.

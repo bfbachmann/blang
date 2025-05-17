@@ -2,7 +2,7 @@ use crate::analyzer::ast::ext::AExternFn;
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::ast::r#enum::AEnumType;
-use crate::analyzer::ast::r#impl::{is_legal_impl, AImpl};
+use crate::analyzer::ast::r#impl::{check_legal_impl, check_spec_impl_conflicts, AImpl};
 use crate::analyzer::ast::r#static::AStatic;
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::r#type::AType;
@@ -10,13 +10,13 @@ use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::error::{
     err_dup_ident, err_dup_impl_fn, err_dup_import_alias, err_dup_imported_mod, err_dup_mem_fn,
     err_expected_spec, err_invalid_mod_path, err_invalid_statement, err_not_pub,
-    err_spec_impl_conflict, err_undef_foreign_symbol,
+    err_undef_foreign_symbol, AnalyzeResult,
 };
 use crate::analyzer::ident::{Ident, IdentKind, ModAlias, Usage};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_containment::{check_enum_containment, check_struct_containment};
 use crate::analyzer::warn::{warn_unused, AnalyzeWarning};
-use crate::lexer::pos::{Locatable, Span};
+use crate::lexer::pos::Locatable;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::statement::Statement;
@@ -401,6 +401,17 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
         None => false,
     };
 
+    // Call this on return to pop params, if necessary.
+    fn finish(ctx: &mut ProgramContext, has_params: bool, result: AnalyzeResult<()>) {
+        if has_params {
+            ctx.pop_params(false);
+        }
+
+        if let Err(err) = result {
+            ctx.insert_err(err);
+        }
+    }
+
     // Check if this is an implementation of a spec. If so, try to resolve the spec and track
     // its type key in the program context while we analyze its functions.
     let is_default_impl = impl_.maybe_spec.is_none();
@@ -411,37 +422,16 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
             let spec_tk = ctx.resolve_type(&spec.as_unresolved_type());
             let spec_type = ctx.get_type(spec_tk);
             match spec_type {
-                AType::Spec(_) => 'check: {
-                    // Make sure there are no conflicting spec impls for this type.
-                    if let Some(spec_impl) = ctx.get_spec_impl(impl_type_key, spec_tk) {
-                        let header_span = spec_impl.header_span;
-                        let err = err_spec_impl_conflict(
-                            ctx,
-                            impl_type_key,
-                            spec_tk,
-                            spec.span,
-                            header_span,
-                        );
-                        ctx.insert_err(err);
-                        break 'check None;
-                    }
-
-                    // Make sure there are no conflicting spec impls for the polymorphic parent
-                    // type, if one exists.
-                    if let Some(mono) = ctx.type_monomorphizations.get(&impl_type_key) {
-                        let poly_tk = mono.poly_type_key;
-                        if let Some(spec_impl) = ctx.get_spec_impl(poly_tk, spec_tk) {
-                            let header_span = spec_impl.header_span;
-                            let err = err_spec_impl_conflict(
-                                ctx,
-                                poly_tk,
-                                spec_tk,
-                                spec.span,
-                                header_span,
-                            );
-                            ctx.insert_err(err);
-                            break 'check None;
-                        }
+                AType::Spec(_) => {
+                    // Return early with an error if the spec impl conflicts.
+                    if let Err(err) = check_spec_impl_conflicts(
+                        ctx,
+                        impl_type_key,
+                        spec_tk,
+                        impl_.header_span(),
+                        true,
+                    ) {
+                        return finish(ctx, has_params, Err(err));
                     }
 
                     Some(spec_tk)
@@ -451,8 +441,7 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
 
                 _ => {
                     let err = err_expected_spec(ctx, spec_tk, spec.span);
-                    ctx.insert_err(err);
-                    None
+                    return finish(ctx, has_params, Err(err));
                 }
             }
         }
@@ -461,8 +450,8 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     };
 
     // Skip the impl if it's illegal.
-    if !is_legal_impl(ctx, impl_type_key, maybe_spec_tk) {
-        return;
+    if let Err(err) = check_legal_impl(ctx, impl_type_key, maybe_spec_tk, impl_) {
+        return finish(ctx, has_params, Err(err));
     }
 
     // Check if the spec being implemented is public.
@@ -511,21 +500,12 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
 
     ctx.set_cur_self_type_key(None);
 
-    if has_params {
-        ctx.pop_params(false);
-    }
-
     // Regardless of errors, we'll mark this `impl` as implementing the
     // spec it claims it does. This is just to prevent redundant error
     // messages when the corresponding type gets used.
     match maybe_spec_tk {
         Some(spec_tk) => {
-            let header_span = Span {
-                file_id: impl_.span.file_id,
-                start_pos: impl_.span.start_pos,
-                end_pos: impl_.maybe_spec.as_ref().unwrap().span.end_pos,
-            };
-            ctx.insert_spec_impl(impl_type_key, spec_tk, fn_type_keys, header_span)
+            ctx.insert_spec_impl(impl_type_key, spec_tk, fn_type_keys, impl_.header_span());
         }
         None => {
             ctx.insert_default_impl(impl_type_key, fn_type_keys);
@@ -538,4 +518,6 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     for fn_tk in pub_fn_tks {
         ctx.mark_member_fn_pub(impl_type_key, fn_tk);
     }
+
+    finish(ctx, has_params, Ok(()))
 }

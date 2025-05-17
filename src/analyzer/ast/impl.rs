@@ -4,11 +4,12 @@ use crate::analyzer::ast::func::AFn;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{
     err_expected_spec, err_illegal_foreign_spec_impl, err_illegal_foreign_type_impl,
-    err_incorrect_spec_fn, err_invalid_statement, err_non_spec_impl, err_spec_impl_missing_fns,
-    AnalyzeError,
+    err_incorrect_spec_fn, err_invalid_statement, err_non_spec_impl, err_spec_impl_conflict,
+    err_spec_impl_missing_fns, AnalyzeError, AnalyzeResult,
 };
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
+use crate::lexer::pos::Span;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#type::Type;
@@ -52,6 +53,15 @@ impl AImpl {
             None => false,
         };
 
+        // Pops params before returning.
+        fn finish(ctx: &mut ProgramContext, has_params: bool, impl_: AImpl) -> AImpl {
+            if has_params {
+                ctx.pop_params(false);
+            }
+
+            impl_
+        }
+
         // Set the impl type key in the program context so we can use it when resolving type `Self`.
         ctx.set_cur_self_type_key(Some(type_key));
 
@@ -61,7 +71,23 @@ impl AImpl {
             Some(spec) => {
                 let spec_tk = ctx.resolve_type(&spec.as_unresolved_type());
                 match ctx.get_type(spec_tk) {
-                    AType::Spec(_) => Some(spec_tk),
+                    AType::Spec(_) => {
+                        // Return early if the spec impl conflicts with another impl. No point
+                        // analyzing it further. No need to record the error here because it would
+                        // have already been done in `analyze_impl`.
+                        if check_spec_impl_conflicts(
+                            ctx,
+                            type_key,
+                            spec_tk,
+                            impl_.header_span(),
+                            false,
+                        )
+                        .is_err()
+                        {
+                            return finish(ctx, has_params, placeholder);
+                        }
+                        Some(spec_tk)
+                    }
 
                     AType::Unknown(_) => None,
 
@@ -76,21 +102,11 @@ impl AImpl {
             None => None,
         };
 
-        // Record an error and return early if the type was not defined in this module.
-        match maybe_spec_tk {
-            Some(spec_tk) => {
-                if !is_legal_spec_impl(ctx, parent_tk, spec_tk) {
-                    let err = err_illegal_foreign_spec_impl(ctx, spec_tk, type_key, impl_.typ.span);
-                    ctx.insert_err(err);
-                }
-            }
-
-            None => {
-                if !is_legal_impl(ctx, parent_tk, None) {
-                    let err = err_illegal_foreign_type_impl(ctx, type_key, impl_.typ.span);
-                    ctx.insert_err(err);
-                }
-            }
+        // Return early if this is an illegal impl.
+        if check_legal_impl(ctx, parent_tk, maybe_spec_tk, impl_).is_err() {
+            // No need to record the error here because it would have been recorded in
+            // `define_impl`.
+            return finish(ctx, has_params, placeholder);
         }
 
         // Analyze member functions.
@@ -127,17 +143,15 @@ impl AImpl {
             ctx.insert_err(err);
         }
 
-        // We can pop the params and the current `Self` type key from the program
-        // context now that we're done analyzing this `impl`.
-        if has_params {
-            ctx.pop_params(false);
-        }
-
         ctx.set_cur_self_type_key(None);
 
-        AImpl {
-            member_fns: member_fns.into_values().map(|(func, _)| func).collect(),
-        }
+        finish(
+            ctx,
+            has_params,
+            AImpl {
+                member_fns: member_fns.into_values().map(|(func, _)| func).collect(),
+            },
+        )
     }
 }
 
@@ -213,25 +227,38 @@ fn check_spec_impl(
     spec_impl_errs
 }
 
-/// Returns whether the `impl` block for type `impl_tk` (optionally for spec `maybe_spec_tk`) is
-/// legal. The impl would be considered legal if any of the following are true
+/// Returns an error if the `impl` block for type `impl_tk` (optionally for spec `maybe_spec_tk`)
+/// is illegal. The impl would be considered legal if any of the following are true
 /// - `maybe_spec_tk` is `None` (i.e. it's a default `impl`), and `impl_tk` refers to a local type
-/// - neither the impl type or the spec type are foreign.
-pub fn is_legal_impl(
+/// - neither the `impl` type nor the spec type are foreign.
+pub fn check_legal_impl(
     ctx: &mut ProgramContext,
     impl_tk: TypeKey,
     maybe_spec_tk: Option<TypeKey>,
-) -> bool {
+    impl_: &Impl,
+) -> AnalyzeResult<()> {
     match maybe_spec_tk {
-        Some(spec_tk) => is_legal_spec_impl(ctx, impl_tk, spec_tk),
-        None => ctx.type_declared_in_cur_mod(impl_tk),
+        Some(spec_tk) => check_legal_spec_impl(ctx, impl_tk, spec_tk, impl_),
+        None => {
+            if !ctx.type_declared_in_cur_mod(impl_tk) {
+                let err = err_illegal_foreign_type_impl(ctx, impl_tk, impl_.typ.span);
+                return Err(err);
+            }
+
+            Ok(())
+        }
     }
 }
 
-/// Returns whether the given spec can be implemented for the given type. Spec `S` can be
+/// Returns an error if the given spec cannot be implemented for the given type. Spec `S` can be
 /// implemented for type `T` only if `S` and/or `T` were defined in the current module. In other
 /// words, the `impl` is illegal if both `S` and `T` are foreign types.
-pub fn is_legal_spec_impl(ctx: &mut ProgramContext, impl_tk: TypeKey, spec_tk: TypeKey) -> bool {
+fn check_legal_spec_impl(
+    ctx: &mut ProgramContext,
+    impl_tk: TypeKey,
+    spec_tk: TypeKey,
+    impl_: &Impl,
+) -> AnalyzeResult<()> {
     if !ctx.type_declared_in_cur_mod(impl_tk) {
         let poly_spec_tk = match ctx.type_monomorphizations.get(&spec_tk) {
             Some(mono) => mono.poly_type_key,
@@ -239,9 +266,42 @@ pub fn is_legal_spec_impl(ctx: &mut ProgramContext, impl_tk: TypeKey, spec_tk: T
         };
 
         if !ctx.type_declared_in_cur_mod(poly_spec_tk) {
-            return false;
+            let err = err_illegal_foreign_spec_impl(ctx, spec_tk, impl_tk, impl_.typ.span);
+            return Err(err);
         }
     }
 
-    true
+    Ok(())
+}
+
+/// Returns an error if the impl for the given type and spec is illegal (i.e. it conflicts with
+/// some other existing spec impl).
+pub fn check_spec_impl_conflicts(
+    ctx: &mut ProgramContext,
+    impl_tk: TypeKey,
+    spec_tk: TypeKey,
+    spec_span: Span,
+    check_self: bool,
+) -> AnalyzeResult<()> {
+    // Make sure there are no conflicting spec impls for the polymorphic parent
+    // type, if one exists.
+    if let Some(mono) = ctx.type_monomorphizations.get(&impl_tk) {
+        let poly_tk = mono.poly_type_key;
+        if let Some(spec_impl) = ctx.get_spec_impl(poly_tk, spec_tk) {
+            let header_span = spec_impl.header_span;
+            let err = err_spec_impl_conflict(ctx, poly_tk, spec_tk, spec_span, header_span);
+            return Err(err);
+        }
+    }
+
+    if check_self {
+        // Make sure there are no conflicting spec impls for this exact type.
+        if let Some(spec_impl) = ctx.get_spec_impl(impl_tk, spec_tk) {
+            let header_span = spec_impl.header_span;
+            let err = err_spec_impl_conflict(ctx, impl_tk, spec_tk, spec_span, header_span);
+            return Err(err);
+        }
+    }
+
+    Ok(())
 }

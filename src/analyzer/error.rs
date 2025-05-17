@@ -1602,7 +1602,11 @@ pub fn err_spec_impl_conflict(
         span,
     )
     .with_note(Note {
-        message: format_code!("{} is already implemented here.", spec_type_display),
+        message: format_code!(
+            "{} is already implemented for type {} here.",
+            spec_type_display,
+            impl_type_display,
+        ),
         span: other_span,
     })
 }

@@ -2939,4 +2939,19 @@ mod tests {
         );
         check_err(&result, Some(ErrorKind::SpecImplConflict));
     }
+
+    #[test]
+    fn monomorphic_spec_impl_conflict() {
+        let result = analyze(
+            r#"
+            struct Thing[T] {}
+            
+            spec MySpec {}
+            
+            impl Thing[int]: MySpec {}
+            impl Thing[int]: MySpec {}
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::SpecImplConflict));
+    }
 }
