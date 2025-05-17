@@ -1,7 +1,3 @@
-use std::collections::HashSet;
-use std::fmt;
-use std::fmt::{Debug, Display, Formatter};
-
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::params::AParams;
 use crate::analyzer::ast::r#type::AType;
@@ -16,13 +12,29 @@ use crate::lexer::pos::Span;
 use crate::parser::ast::r#struct::{StructInit, StructType};
 use crate::parser::ast::r#type::Type;
 use crate::util;
+use std::collections::HashSet;
+use std::fmt;
+use std::fmt::{Debug, Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 /// Represents a semantically valid and type-rich struct field.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Eq)]
 pub struct AField {
     pub name: String,
     pub type_key: TypeKey,
-    pub span: Span,
+}
+
+impl PartialEq for AField {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.type_key == other.type_key
+    }
+}
+
+impl Hash for AField {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.type_key.hash(state);
+    }
 }
 
 impl Display for AField {
@@ -125,7 +137,6 @@ impl AStructType {
             fields.push(AField {
                 name: field.name.clone(),
                 type_key: ctx.resolve_type(&field.typ),
-                span: field.span,
             });
         }
 

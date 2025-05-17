@@ -331,11 +331,29 @@ impl AFnSig {
         s += "(";
 
         for (i, arg) in self.args.iter().enumerate() {
-            let arg_display = arg.display(ctx);
             if i == 0 {
-                s += format!("{}", arg_display).as_str();
+                if arg.name == "self" {
+                    let arg_type = ctx.get_type(arg.type_key);
+                    let is_ptr = arg_type.is_any_ptr();
+                    let is_mut_ptr = arg_type.is_mut_ptr();
+
+                    s += format!(
+                        "{}{}self",
+                        match is_ptr {
+                            true => "*",
+                            false => "",
+                        },
+                        match is_mut_ptr {
+                            true => "mut ",
+                            false => "",
+                        }
+                    )
+                    .as_str();
+                } else {
+                    s += format!("{}", arg.display(ctx)).as_str();
+                }
             } else {
-                s += format!(", {}", arg_display).as_str();
+                s += format!(", {}", arg.display(ctx)).as_str();
             }
         }
 

@@ -1,20 +1,30 @@
-use std::fmt::{Display, Formatter};
-
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::r#struct::AField;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::tuple::{TupleInit, TupleType};
+use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 /// Represents an analyzed tuple type. Tuples are essentially the same as structs, only tuple types
 /// cannot be named like struct types, and tuple fields are accessed by field index.
-#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+#[derive(Debug, Clone, Eq)]
 pub struct ATupleType {
     pub fields: Vec<AField>,
-    pub span: Span,
+}
+
+impl Hash for ATupleType {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.fields.hash(state);
+    }
+}
+
+impl PartialEq for ATupleType {
+    fn eq(&self, other: &Self) -> bool {
+        self.fields == other.fields
+    }
 }
 
 impl Display for ATupleType {
@@ -44,14 +54,10 @@ impl ATupleType {
             fields.push(AField {
                 name: field_index.to_string(),
                 type_key: ctx.resolve_type(field_type),
-                span: field_type.span().clone(),
             })
         }
 
-        ATupleType {
-            fields,
-            span: tuple_type.span,
-        }
+        ATupleType { fields }
     }
 
     /// Returns the type key of the field at the given index.
@@ -150,7 +156,6 @@ impl ATupleInit {
                 AField {
                     name: i.to_string(),
                     type_key: val.type_key,
-                    span: val.span,
                 },
                 val,
             ));
@@ -163,10 +168,7 @@ impl ATupleInit {
             values.push(value);
         }
 
-        let type_key = ctx.insert_type(AType::Tuple(ATupleType {
-            fields,
-            span: tuple_init.span,
-        }));
+        let type_key = ctx.insert_type(AType::Tuple(ATupleType { fields }));
 
         ATupleInit { type_key, values }
     }

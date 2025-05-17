@@ -1,5 +1,3 @@
-use std::fmt::{Display, Formatter};
-
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{err_invalid_array_size_type, err_mismatched_types};
@@ -8,13 +6,21 @@ use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::Span;
 use crate::parser::ast::array::{ArrayInit, ArrayType};
 use crate::Locatable;
+use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 /// An array type declaration.
-#[derive(Clone, Hash, Eq, Debug)]
+#[derive(Clone, Eq, Debug)]
 pub struct AArrayType {
     pub maybe_element_type_key: Option<TypeKey>,
     pub len: u64,
-    pub span: Span,
+}
+
+impl Hash for AArrayType {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.maybe_element_type_key.hash(state);
+        self.len.hash(state);
+    }
 }
 
 impl PartialEq for AArrayType {
@@ -80,7 +86,6 @@ impl AArrayType {
         AArrayType {
             maybe_element_type_key,
             len,
-            span: array_type.span().clone(),
         }
     }
 
@@ -240,7 +245,6 @@ impl AArrayInit {
                 None => contained_values.len() as u64,
             },
             maybe_element_type_key,
-            span: array_init.span.clone(),
         }));
 
         AArrayInit {

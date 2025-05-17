@@ -2954,4 +2954,64 @@ mod tests {
         );
         check_err(&result, Some(ErrorKind::SpecImplConflict));
     }
+
+    #[test]
+    fn tuple_type_equality() {
+        let result = analyze(
+            r#"
+            enum Result[O, E] {
+                Ok(O)
+                Err(E)
+            }
+            
+            struct IOError {}
+            
+            spec Writer[T] {
+                fn write(*mut self, data: T) -> Result[[], IOError]
+            }
+            
+            struct File {}
+
+            // This impl should be valid. There was a bug where the array type was not deduplicated
+            // in the type store, so it ended up having multiple different type keys and was 
+            // therefor considered to be multiple different types. 
+            impl File: Writer[u8] {
+                fn write(*mut self, data: u8) -> Result[[], IOError] {
+                    return Result[[], IOError]::Ok([])
+                }
+            }
+        "#,
+        );
+        check_err(&result, None)
+    }
+
+    #[test]
+    fn array_type_equality() {
+        let result = analyze(
+            r#"
+            enum Result[O, E] {
+                Ok(O)
+                Err(E)
+            }
+            
+            struct IOError {}
+            
+            spec Writer[T] {
+                fn write(*mut self, data: T) -> Result[{}, IOError]
+            }
+            
+            struct File {}
+
+            // This impl should be valid. There was a bug where the tuple type was not deduplicated
+            // in the type store, so it ended up having multiple different type keys and was 
+            // therefor considered to be multiple different types. 
+            impl File: Writer[u8] {
+                fn write(*mut self, data: u8) -> Result[{}, IOError] {
+                    return Result[{}, IOError]::Ok({})
+                }
+            }
+        "#,
+        );
+        check_err(&result, None)
+    }
 }
