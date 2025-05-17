@@ -2877,6 +2877,19 @@ mod tests {
             r#"spec _ { fn thing() }"#,
             // Unused mod alias.
             r#"use "x" @_"#,
+            // Duplicated declarations using "_" should be considered legal.
+            r#"
+            fn main() {
+                let _ = 1
+                let _ = 1
+            }
+            
+            fn _() {}
+            struct _ {}
+            enum _ {}
+            const _ = 0
+            static _ = 0
+            "#,
         ];
 
         for code in code {

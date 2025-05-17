@@ -114,7 +114,7 @@ impl AFnSig {
         let mut arg_names = HashSet::new();
         for (i, arg) in sig.args.iter().enumerate() {
             // Make sure the argument name wasn't already used if it's not empty.
-            if !arg.name.is_empty() {
+            if !arg.name.is_empty() && arg.name != "_" {
                 if !arg_names.insert(arg.name.clone()) {
                     ctx.insert_err(err_dup_fn_arg(&arg.name, arg.span));
 

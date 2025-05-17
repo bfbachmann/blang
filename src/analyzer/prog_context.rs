@@ -1814,6 +1814,11 @@ impl ProgramContext {
     }
 
     pub fn insert_ident(&mut self, ident: Ident) -> Result<(), &Ident> {
+        // Ignore wildcards.
+        if ident.name == "_" {
+            return Ok(());
+        }
+
         if let IdentKind::Type {
             is_pub: true,
             type_key,

@@ -357,7 +357,14 @@ fn define_local_idents(ctx: &mut ProgramContext, src_file: &SrcFile) {
     // Second pass: Check for type containment cycles. Any types with containment cycles will have
     // their identifiers mapped to the `<unknown>` type.
     for name in containment_check_names {
-        let ident = ctx.get_ident_in_cur_scope(name).unwrap();
+        let ident = match ctx.get_ident_in_cur_scope(name) {
+            Some(i) => i,
+            None => {
+                // The ident will be missing if it's the wildcard "_".
+                continue;
+            }
+        };
+
         let result = match &ident.kind {
             IdentKind::UncheckedStructType(struct_type) => {
                 check_struct_containment(ctx, struct_type, &mut vec![])
