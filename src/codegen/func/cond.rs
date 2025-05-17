@@ -6,6 +6,7 @@ use crate::analyzer::ast::r#match::{AMatch, APattern};
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::codegen::error::CodeGenResult;
+use crate::codegen::scope::CodegenScope;
 use crate::parser::ast::op::Operator;
 
 use super::FnCodeGen;
@@ -51,17 +52,17 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 // Fill the "then" block with the branch body.
                 self.set_current_block(then_block);
 
-                // Create a branch context to store information about the branch being compiled.
-                self.push_branch_ctx();
+                // Create a branch scope to store information about the branch being compiled.
+                self.push_scope(CodegenScope::new_branch());
 
                 // Compile the branch body.
                 self.gen_closure(&branch.body)?;
 
-                // Pop the branch context now that we're done compiling the branch.
-                let ctx = self.pop_ctx().to_branch();
+                // Pop the branch scope now that we're done compiling the branch.
+                let scope = self.pop_scope().to_branch();
 
                 let has_terminator = self.current_block_has_terminator();
-                all_branches_return = all_branches_return && ctx.guarantees_return;
+                all_branches_return = all_branches_return && scope.guarantees_return;
                 all_branches_terminate = all_branches_terminate && has_terminator;
 
                 // If this branch does not end in an unconditional return, we need to complete
@@ -80,11 +81,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             } else {
                 // This is an else branch, so we must execute the branch body.
                 else_branch_exists = true;
-                self.push_branch_ctx();
+                self.push_scope(CodegenScope::new_branch());
                 self.gen_closure(&branch.body)?;
-                let ctx = self.pop_ctx().to_branch();
+                let scope = self.pop_scope().to_branch();
                 let has_terminator = self.current_block_has_terminator();
-                all_branches_return = all_branches_return && ctx.guarantees_return;
+                all_branches_return = all_branches_return && scope.guarantees_return;
                 all_branches_terminate = all_branches_terminate && has_terminator;
 
                 // If this branch does not end in an unconditional return, we need to complete
@@ -105,7 +106,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             self.set_current_block(block);
         }
 
-        // Update the parent context with return and terminator information.
+        // Update the parent scope with return and terminator information.
         self.set_guarantees_return(all_branches_return && else_branch_exists);
         self.set_guarantees_terminator(all_branches_terminate && else_branch_exists);
         Ok(())

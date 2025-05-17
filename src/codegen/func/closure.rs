@@ -1,31 +1,33 @@
 use super::FnCodeGen;
 use crate::analyzer::ast::closure::AClosure;
 use crate::codegen::error::CodeGenResult;
+use crate::codegen::scope::CodegenScope;
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles all statements in the closure.
     pub(crate) fn gen_closure(&mut self, closure: &AClosure) -> CodeGenResult<()> {
         self.set_di_location(&closure.span.start_pos);
 
+        self.push_scope(CodegenScope::new_closure());
+
         for (i, statement) in closure.statements.iter().enumerate() {
-            // Create a new statement context that can store information about the statement
-            // we're about to compile.
-            self.push_statement_ctx();
-
+            self.push_scope(CodegenScope::new_statement());
             self.gen_statement(statement)?;
-
-            // Pop the statement context now that we've compiled the statement.
-            let ctx = self.pop_ctx().to_statement();
+            let statement_scope = self.pop_scope().to_statement();
 
             // If this is the last statement in the closure or the statement is guaranteed to end
             // in a terminator (unconditional jump) instruction, we need to propagate information
-            // about terminators and returns to the parent context.
-            if i + 1 == closure.statements.len() || ctx.guarantees_terminator {
-                self.set_guarantees_return(ctx.guarantees_return);
-                self.set_guarantees_terminator(ctx.guarantees_terminator);
+            // about terminators and returns to the parent scope.
+            if i + 1 == closure.statements.len() || statement_scope.guarantees_terminator {
+                self.set_guarantees_return(statement_scope.guarantees_return);
+                self.set_guarantees_terminator(statement_scope.guarantees_terminator);
                 break;
             }
         }
+
+        let scope = self.pop_scope().to_closure();
+        self.set_guarantees_return(scope.guarantees_return);
+        self.set_guarantees_terminator(scope.guarantees_terminator);
 
         Ok(())
     }

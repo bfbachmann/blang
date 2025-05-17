@@ -132,5 +132,27 @@ fn main() {
         assert(t(thing) == 843, "expected 843")
     }
 
+    // Check that variable scoping works.
+    {
+        let x = 1
+        {
+            let x = 2
+            assert(x == 2, "expected 2")
+        }
+
+        assert(x == 1, "expected 1")
+    }
+
+    // Check that const scoping works.
+    {
+        const x = 1
+        {
+            const x = 2
+            assert(x == 2, "expected 2")
+        }
+
+        assert(x == 1, "expected 1")
+    }
+
     exit(0)
 }

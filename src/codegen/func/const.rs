@@ -334,7 +334,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     }
                 }
 
-                if let Some(const_) = self.local_consts.get(&symbol.name) {
+                if let Some(const_) = self.get_local_const(&symbol.name) {
                     return self.gen_const_expr(&const_.value.clone());
                 }
             }

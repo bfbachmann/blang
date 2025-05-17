@@ -8,28 +8,34 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     pub(crate) fn gen_break(&mut self) {
         self.set_guarantees_terminator(true);
         let loop_end = self.get_or_create_loop_end_block();
-        self.ll_builder.build_unconditional_branch(loop_end).unwrap();
+        self.ll_builder
+            .build_unconditional_branch(loop_end)
+            .unwrap();
     }
 
     /// Compiles a continue statement.
     pub(crate) fn gen_continue(&mut self) {
         self.set_guarantees_terminator(true);
         let loop_begin = self.get_loop_begin_block();
-        self.ll_builder.build_unconditional_branch(loop_begin).unwrap();
+        self.ll_builder
+            .build_unconditional_branch(loop_begin)
+            .unwrap();
     }
 
     /// Compiles a loop.
     pub(crate) fn gen_loop(&mut self, loop_: &ALoop) -> CodeGenResult<()> {
-        // Create a loop context to store information about the loop.
-        self.push_loop_ctx();
+        // Create a loop scope to store information about the loop.
+        self.push_loop_scope();
 
-        let cond_block = self.get_loop_ctx().cond_block;
-        let body_block = self.get_loop_ctx().body_block;
+        let cond_block = self.get_loop_scope().cond_block;
+        let body_block = self.get_loop_scope().body_block;
 
         // Generate code for the loop initialization statement, if one exists.
         if let Some(init_statement) = &loop_.maybe_init {
             let init_block = self.append_block("loop_init");
-            self.ll_builder.build_unconditional_branch(init_block).unwrap();
+            self.ll_builder
+                .build_unconditional_branch(init_block)
+                .unwrap();
             self.set_current_block(init_block);
             self.gen_statement(init_statement)?;
 
@@ -43,7 +49,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Jump to the conditional block for the loop. We'll use this block to generate
         // code for the loop condition that runs before each iteration.
         {
-            self.ll_builder.build_unconditional_branch(cond_block).unwrap();
+            self.ll_builder
+                .build_unconditional_branch(cond_block)
+                .unwrap();
             self.set_current_block(cond_block);
 
             // If there is a loop condition, compile it and use the result to jump to the loop body block.
@@ -60,7 +68,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                         .unwrap();
                 }
                 None => {
-                    self.ll_builder.build_unconditional_branch(body_block).unwrap();
+                    self.ll_builder
+                        .build_unconditional_branch(body_block)
+                        .unwrap();
                 }
             };
         }
@@ -73,7 +83,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             // Branch back to the beginning of the loop if this block doesn't already terminate.
             if !self.current_block_has_terminator() {
-                self.ll_builder.build_unconditional_branch(cond_block).unwrap();
+                self.ll_builder
+                    .build_unconditional_branch(cond_block)
+                    .unwrap();
             }
         }
 
@@ -91,11 +103,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 .unwrap();
         }
 
-        // Pop the loop context now that we've compiled the loop.
-        let ctx = self.pop_ctx().to_loop();
+        // Pop the loop scope now that we've compiled the loop.
+        let ctx = self.pop_scope().to_loop();
 
         // If there is a loop end block, it means the loop has a break and we need to continue
-        // compilation on the loop end block. In this case, we also inform the parent context
+        // compilation on the loop end block. In this case, we also inform the parent scope
         // that this loop is not guaranteed to end in a terminator or return (since it can be broken
         // out of).
         if let Some(end_block) = ctx.end_block {
@@ -107,7 +119,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             self.set_guarantees_terminator(true);
 
             // If there is a return inside the loop and it never breaks, we can tell the
-            // parent context that is is guaranteed to return (or run forever, which is fine).
+            // parent scope that is is guaranteed to return (or run forever, which is fine).
             self.set_guarantees_return(ctx.contains_return);
         }
 

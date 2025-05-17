@@ -23,7 +23,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     ) -> PointerValue<'ctx> {
         let ll_dst_ptr = self.stack_alloc(name, type_key);
         self.copy_value(ll_val, ll_dst_ptr, type_key);
-        self.ll_vars.insert(name.to_string(), ll_dst_ptr);
+        self.insert_var(name.to_string(), ll_dst_ptr);
         ll_dst_ptr
     }
 
@@ -144,7 +144,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
 
             (SymbolKind::Variable, _) => {
-                if let Some(ll_var_ptr) = self.ll_vars.get(name) {
+                if let Some(ll_var_ptr) = self.get_var(name) {
                     return *ll_var_ptr;
                 }
             }

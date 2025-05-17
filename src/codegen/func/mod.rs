@@ -4,11 +4,9 @@ use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::mangling::mangle_type;
 use crate::analyzer::prog_context::{Monomorphization, TypeImpls};
 use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
-use crate::codegen::context::{
-    BranchContext, CompilationContext, FnContext, FromContext, LoopContext, StatementContext,
-};
 use crate::codegen::convert::TypeConverter;
 use crate::codegen::error::CodeGenResult;
+use crate::codegen::scope::{CodegenScope, CodegenScopeKind, FromScope, LoopScope};
 use crate::lexer::pos::Locatable;
 use crate::parser::{ModID, SrcInfo};
 use inkwell::attributes::{Attribute, AttributeLoc};
@@ -45,11 +43,8 @@ pub struct FnCodeGen<'a, 'ctx> {
     mod_consts: &'a HashMap<ModID, HashMap<String, AExpr>>,
     /// Stores static values that are declared in the module outside of functions.
     mod_statics: &'a HashMap<ModID, HashMap<String, AExpr>>,
-    /// Stores constant values that are declared within a function.
-    local_consts: HashMap<String, AConst>,
-    ll_vars: HashMap<String, PointerValue<'ctx>>,
     ll_fn: Option<FunctionValue<'ctx>>,
-    stack: Vec<CompilationContext<'ctx>>,
+    scopes: Vec<CodegenScope<'ctx>>,
     cur_block: Option<BasicBlock<'ctx>>,
 }
 
@@ -87,10 +82,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             type_monomorphizations,
             mod_consts,
             mod_statics,
-            local_consts: Default::default(),
-            ll_vars: HashMap::new(),
             ll_fn: None,
-            stack: vec![],
+            scopes: vec![CodegenScope::new_fn()],
             cur_block: None,
         };
 
@@ -116,48 +109,92 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         self.cur_block.unwrap().get_terminator().is_some()
     }
 
-    /// Creates a new statement context and pushes it onto the stack.
-    fn push_statement_ctx(&mut self) {
-        self.stack
-            .push(CompilationContext::Statement(StatementContext::new()));
+    /// Pushes the given scope onto the stack.
+    fn push_scope(&mut self, scope: CodegenScope<'ctx>) {
+        self.scopes.push(scope);
     }
 
-    /// Creates a new branch context and pushes it onto the stack.
-    fn push_branch_ctx(&mut self) {
-        self.stack
-            .push(CompilationContext::Branch(BranchContext::new()));
-    }
-
-    /// Creates a new loop context and pushes it onto the stack.
-    fn push_loop_ctx(&mut self) {
+    /// Creates a new loop scope and pushes it onto the stack.
+    fn push_loop_scope(&mut self) {
         let cond_block = self.append_block("loop_condition");
         let body_block = self.append_block("loop_body");
-        let loop_ctx = LoopContext::new(cond_block, body_block);
-        self.stack.push(CompilationContext::Loop(loop_ctx));
+        self.push_scope(CodegenScope::new_loop(cond_block, body_block));
     }
 
-    /// Creates a new `from` context and pushes it onto the stack.
-    fn push_from_ctx(&mut self) {
+    /// Creates a new `from` scope and pushes it onto the stack.
+    fn push_from_scope(&mut self) {
         let end_block = self.append_block("from_end");
-        self.stack
-            .push(CompilationContext::From(FromContext::new(end_block)));
+        self.push_scope(CodegenScope::new_from(end_block));
     }
 
-    /// Creates a new function context and pushes it onto the stack.
-    fn push_fn_ctx(&mut self) {
-        self.stack.push(CompilationContext::Func(FnContext::new()));
+    /// Pops the current scope.
+    fn pop_scope(&mut self) -> CodegenScopeKind<'ctx> {
+        let scope = self.scopes.pop().unwrap();
+
+        // For loop and statement scopes, merge any local consts or variables declared in the scope
+        // into the parent scope. We do this because they're not actually separate scopes with
+        // respect to declarations.
+        match &scope.kind {
+            CodegenScopeKind::Loop(_) | CodegenScopeKind::Statement(_) => {
+                let cur_scope = self.cur_scope_mut();
+                cur_scope.consts.extend(scope.consts);
+                cur_scope.ll_vars.extend(scope.ll_vars);
+            }
+            _ => {}
+        }
+
+        scope.kind
     }
 
-    /// Pops the current loop context from the stack. Panics if the current context is not a loop
-    /// context.
-    fn pop_ctx(&mut self) -> CompilationContext<'ctx> {
-        self.stack.pop().unwrap()
+    /// Returns a mutable reference to the current scope.
+    fn cur_scope_mut(&mut self) -> &mut CodegenScope<'ctx> {
+        self.scopes.last_mut().unwrap()
+    }
+
+    /// Inserts a variable into the current scope.
+    fn insert_var(&mut self, name: String, ll_ptr: PointerValue<'ctx>) {
+        let no_conflict = self.cur_scope_mut().ll_vars.insert(name, ll_ptr).is_none();
+        assert!(no_conflict);
+    }
+
+    /// Returns the pointer to the stack slot where the variable with the given name lives.
+    fn get_var(&self, name: &str) -> Option<&PointerValue<'ctx>> {
+        for scope in self.scopes.iter().rev() {
+            if let Some(ll_ptr) = scope.ll_vars.get(name) {
+                return Some(ll_ptr);
+            }
+        }
+
+        None
+    }
+
+    /// Inserts the given const into the current scope.
+    fn insert_local_const(&mut self, const_: AConst) {
+        let no_conflict = self
+            .scopes
+            .last_mut()
+            .unwrap()
+            .consts
+            .insert(const_.name.clone(), const_)
+            .is_none();
+        assert!(no_conflict);
+    }
+
+    /// Returns the local const value with the given name.
+    fn get_local_const(&self, name: &str) -> Option<&AConst> {
+        for scope in self.scopes.iter().rev() {
+            if let Some(const_) = scope.consts.get(name) {
+                return Some(const_);
+            }
+        }
+
+        None
     }
 
     /// Returns true if we are currently inside a loop.
     fn is_in_loop(&self) -> bool {
-        for ctx in self.stack.iter().rev() {
-            if let CompilationContext::Loop(_) = ctx {
+        for ctx in self.scopes.iter().rev() {
+            if let CodegenScopeKind::Loop(_) = &ctx.kind {
                 return true;
             }
         }
@@ -167,57 +204,60 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Sets the `guarantees_return` flag on the current context.
     fn set_guarantees_return(&mut self, guarantees_return: bool) {
-        match self.stack.last_mut().unwrap() {
-            CompilationContext::Loop(ctx) => {
-                ctx.guarantees_return = guarantees_return;
-                ctx.guarantees_terminator = guarantees_return || ctx.guarantees_terminator;
+        match &mut self.cur_scope_mut().kind {
+            CodegenScopeKind::Loop(scope) => {
+                scope.guarantees_return = guarantees_return;
+                scope.guarantees_terminator = guarantees_return || scope.guarantees_terminator;
             }
-            CompilationContext::From(ctx) => {
-                ctx.guarantees_return = guarantees_return;
+
+            CodegenScopeKind::From(scope) => {
+                scope.guarantees_return = guarantees_return;
             }
-            CompilationContext::Func(ctx) => {
-                ctx.guarantees_return = guarantees_return;
+
+            CodegenScopeKind::Func(scope) => {
+                scope.guarantees_return = guarantees_return;
             }
-            CompilationContext::Statement(ctx) => {
-                ctx.guarantees_return = guarantees_return;
-                ctx.guarantees_terminator = guarantees_return || ctx.guarantees_terminator;
-            }
-            CompilationContext::Branch(ctx) => {
-                ctx.guarantees_return = guarantees_return;
-                ctx.guarantees_terminator = guarantees_return || ctx.guarantees_terminator;
+
+            CodegenScopeKind::Closure(scope)
+            | CodegenScopeKind::Statement(scope)
+            | CodegenScopeKind::Branch(scope) => {
+                scope.guarantees_return = guarantees_return;
+                scope.guarantees_terminator = guarantees_return || scope.guarantees_terminator;
             }
         }
     }
 
     /// Sets the `guarantees_terminator` flag on the current context, if applicable.
     fn set_guarantees_terminator(&mut self, guarantees_term: bool) {
-        match self.stack.last_mut().unwrap() {
-            CompilationContext::Statement(ctx) => {
-                ctx.guarantees_terminator = guarantees_term;
+        match &mut self.cur_scope_mut().kind {
+            CodegenScopeKind::Branch(scope)
+            | CodegenScopeKind::Closure(scope)
+            | CodegenScopeKind::Statement(scope) => {
+                scope.guarantees_terminator = guarantees_term;
             }
-            CompilationContext::Branch(ctx) => {
-                ctx.guarantees_terminator = guarantees_term;
+
+            CodegenScopeKind::Loop(scope) => {
+                scope.guarantees_terminator = guarantees_term;
             }
-            CompilationContext::Loop(ctx) => {
-                ctx.guarantees_terminator = guarantees_term;
-            }
-            CompilationContext::From(_) => {
-                // Nothing to do here. Do expressions always guarantee a
+
+            CodegenScopeKind::From(_) => {
+                // Nothing to do here. `from` expressions always guarantee a
                 // terminator.
             }
-            CompilationContext::Func(ctx) => {
+
+            CodegenScopeKind::Func(scope) => {
                 if guarantees_term {
-                    ctx.guarantees_return = true;
+                    scope.guarantees_return = true;
                 }
             }
         }
     }
 
-    /// Returns a reference to the nearest loop context in the stack.
-    fn get_loop_ctx(&mut self) -> &mut LoopContext<'ctx> {
-        for ctx in self.stack.iter_mut().rev() {
-            if let CompilationContext::Loop(loop_ctx) = ctx {
-                return loop_ctx;
+    /// Returns a reference to the nearest loop scope in the stack.
+    fn get_loop_scope(&mut self) -> &mut LoopScope<'ctx> {
+        for ctx in self.scopes.iter_mut().rev() {
+            if let CodegenScopeKind::Loop(scope) = &mut ctx.kind {
+                return scope;
             }
         }
 
@@ -225,10 +265,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     /// Returns a reference to the nearest `from` context in the stack.
-    fn get_from_ctx(&mut self) -> &mut FromContext<'ctx> {
-        for ctx in self.stack.iter_mut().rev() {
-            if let CompilationContext::From(from_ctx) = ctx {
-                return from_ctx;
+    fn get_from_scope(&mut self) -> &mut FromScope<'ctx> {
+        for ctx in self.scopes.iter_mut().rev() {
+            if let CodegenScopeKind::From(scope) = &mut ctx.kind {
+                return scope;
             }
         }
 
@@ -245,19 +285,19 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         let end_block = self.append_block("loop_end");
 
-        let ctx = self.get_loop_ctx();
+        let ctx = self.get_loop_scope();
         ctx.end_block = Some(end_block);
         ctx.end_block.unwrap()
     }
 
     fn get_or_create_loop_update_block(&mut self) -> BasicBlock<'ctx> {
-        if let Some(end_block) = self.get_loop_ctx().update_block {
+        if let Some(end_block) = self.get_loop_scope().update_block {
             return end_block;
         }
 
         let update_block = self.append_block("loop_update");
 
-        let ctx = self.get_loop_ctx();
+        let ctx = self.get_loop_scope();
         ctx.update_block = Some(update_block);
         ctx.update_block.unwrap()
     }
@@ -265,25 +305,25 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Fetches the loop end block from the current loop context. Panics if there is no loop
     /// context (i.e. if not called from within a loop).
     fn get_loop_end_block(&mut self) -> Option<BasicBlock<'ctx>> {
-        let loop_ctx = self.get_loop_ctx();
+        let loop_ctx = self.get_loop_scope();
         loop_ctx.end_block
     }
 
     /// Returns the block that begins the current loop. Panics if there is no loop context (i.e. if
     /// not called from within a loop).
     fn get_loop_begin_block(&mut self) -> BasicBlock<'ctx> {
-        let loop_ctx = self.get_loop_ctx();
+        let loop_ctx = self.get_loop_scope();
         if let Some(update_block) = loop_ctx.update_block {
             update_block
         } else {
-            self.get_loop_ctx().cond_block
+            self.get_loop_scope().cond_block
         }
     }
 
     /// If inside a loop, sets the loop's `contains_return` flag.
     fn set_loop_contains_return(&mut self, contains_return: bool) {
         if self.is_in_loop() {
-            let loop_ctx = self.get_loop_ctx();
+            let loop_ctx = self.get_loop_scope();
             loop_ctx.contains_return = contains_return;
         }
     }
@@ -337,23 +377,19 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             // Composite types are passed as pointers and don't need to be copied to the callee
             // stack because they point to memory on the caller's stack that is safe to modify.
             if arg_type.is_composite() {
-                self.ll_vars
-                    .insert(arg.name.to_string(), ll_arg_val.into_pointer_value());
+                self.insert_var(arg.name.to_string(), ll_arg_val.into_pointer_value());
             } else {
                 self.create_var(arg.name.as_str(), arg.type_key, ll_arg_val);
             }
         }
-
-        // Push a function context onto the stack so we can reference it later.
-        self.push_fn_ctx();
 
         // Compile the function body.
         self.gen_closure(&func.body)?;
 
         // If the function body does not end in an explicit return (or other terminator
         // instruction), we have to insert one.
-        let ctx = self.pop_ctx().to_fn();
-        if !ctx.guarantees_return {
+        let fn_scope = self.pop_scope().to_fn();
+        if !fn_scope.guarantees_return {
             self.ll_builder.build_return(None).unwrap();
         }
 

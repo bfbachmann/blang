@@ -69,8 +69,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 self.gen_yield(yld);
             }
             AStatement::Const(const_decl) => {
-                self.local_consts
-                    .insert(const_decl.name.clone(), const_decl.clone());
+                self.insert_local_const(const_decl.clone());
             }
             AStatement::Static(static_decl) => {
                 panic!("unexpected static declaration: {:?}", static_decl);
@@ -139,7 +138,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Append the yielded value to the `from` context so we can use it in the
         // phi node at the `from` end block and build a branch to the end block.
         let ll_block = self.cur_block.unwrap();
-        let ctx = self.get_from_ctx();
+        let ctx = self.get_from_scope();
         ctx.yielded_vales.insert(ll_block, result);
 
         let ll_end_block = ctx.end_block;

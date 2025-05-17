@@ -112,12 +112,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         result_type_key: TypeKey,
     ) -> BasicValueEnum<'ctx> {
         // Compile the statements in the `from` expression.
-        self.push_from_ctx();
+        self.push_from_scope();
         self.gen_statement(statement).expect("should succeed");
 
         // Switch to the `from` end block and generate a phi that takes the values
         // that were yielded from incoming blocks in the `from` statement.
-        let ctx = self.pop_ctx().to_from();
+        let ctx = self.pop_scope().to_from();
         self.set_current_block(ctx.end_block);
 
         let mut ll_result_type = self.type_converter.get_basic_type(result_type_key);
