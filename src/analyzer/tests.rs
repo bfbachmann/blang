@@ -3,7 +3,7 @@ mod tests {
     use crate::analyzer::analyze::{analyze_modules, AnalyzedModule, ProgramAnalysis};
     use crate::analyzer::error::ErrorKind;
     use crate::analyzer::warn::WarnKind;
-    use crate::codegen::program::{init_default_host_target, CodeGenConfig, OutputFormat};
+    use crate::codegen::program::{CodeGenConfig, OutputFormat};
     use crate::lexer::lex::lex;
     use crate::lexer::stream::Stream;
     use crate::parser::file_parser::FileParser;
@@ -18,9 +18,7 @@ mod tests {
         let mut parser = FileParser::new(0, Stream::from(tokens));
         let src_file = SrcFile::parse(&mut parser).expect("should not error");
 
-        let target_machine = init_default_host_target().unwrap();
-        let config =
-            CodeGenConfig::new_test_default(target_machine, PathBuf::new(), OutputFormat::LLVMIR);
+        let config = CodeGenConfig::new_test_default(PathBuf::new(), OutputFormat::LLVMIR);
         let src_info = SrcInfo::new_test_file(src_file);
 
         analyze_modules(&src_info, "test", config)
@@ -72,9 +70,7 @@ mod tests {
             file_id += 1;
         }
 
-        let target_machine = init_default_host_target().unwrap();
-        let config =
-            CodeGenConfig::new_test_default(target_machine, PathBuf::new(), OutputFormat::LLVMIR);
+        let config = CodeGenConfig::new_test_default(PathBuf::new(), OutputFormat::LLVMIR);
         let src_info = SrcInfo::new_test_mods(parsed_mods);
         let analysis = analyze_modules(&src_info, &root_mod_path, config);
 

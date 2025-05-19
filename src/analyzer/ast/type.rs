@@ -399,7 +399,7 @@ pub fn size_of_type(ctx: &ProgramContext, type_key: TypeKey) -> u64 {
         &ll_ctx,
         &ctx.type_store,
         &ctx.type_monomorphizations,
-        &ctx.config.target_machine,
+        &ctx.target_machine,
     );
     converter.size_of_type(type_key)
 }

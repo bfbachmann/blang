@@ -1,5 +1,5 @@
 use crate::parser::ast::mod_::ModDecl;
-use crate::parser::ast::r#use::UsedModule;
+use crate::parser::ast::r#use::UsedMod;
 use crate::parser::ast::statement::Statement;
 use crate::parser::error::ParseResult;
 use crate::parser::{FileID, FileParser};
@@ -9,7 +9,7 @@ use crate::parser::{FileID, FileParser};
 pub struct SrcFile {
     pub id: FileID,
     pub mod_decl: ModDecl,
-    pub used_mods: Vec<UsedModule>,
+    pub used_mods: Vec<UsedMod>,
     pub statements: Vec<Statement>,
 }
 

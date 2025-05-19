@@ -14,13 +14,10 @@ use crate::locatable_impl;
 use crate::parser::ast::params::{Param, Params};
 use crate::Locatable;
 
-/// Represents a generic parameter. A generic parameter has a name and has either
-/// a set of associated specs, or a constant type, or no associated type or specs
-/// (i.e. is a wildcard parameter).
+/// Represents a generic parameter. A generic parameter has a set of associated specs, or no
+/// associated type or specs (i.e. is a wildcard parameter).
 /// If a generic parameter has an associated set of specs, only values of types that implement
 /// all of those specs can be used where the generic parameter is used.
-/// If a generic parameter has a const type, only constants of that type can
-/// be used in its place.
 /// If a generic parameter has no type or specs, any value can be used in its place.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AParam {

@@ -80,15 +80,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AExprKind::AnonFunction(anon_fn) => {
                 // Shouldn't need to generate anything here. The function should already
                 // have been generated. We just need to return it.
-                let mangled_name = mangle_type(
-                    self.type_store,
-                    anon_fn.signature.type_key,
-                    self.type_converter.type_mapping(),
-                    self.type_monomorphizations,
-                );
-                self.module
-                    .get_function(&mangled_name)
-                    .expect(format!("function {mangled_name} should exist").as_str())
+                self.get_or_define_function(anon_fn.signature.type_key)
                     .as_global_value()
                     .as_basic_value_enum()
             }
@@ -149,20 +141,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // then it must be a method that is being used as a variable rather than being
         // called directly.
         if access.is_method {
-            let fn_sig = self
-                .type_converter
-                .get_type(access.member_type_key)
-                .to_fn_sig();
-            let mangled_name = mangle_type(
-                self.type_store,
-                fn_sig.type_key,
-                self.type_converter.type_mapping(),
-                self.type_monomorphizations,
-            );
             return self
-                .module
-                .get_function(&mangled_name)
-                .unwrap()
+                .get_or_define_function(access.member_type_key)
                 .as_global_value()
                 .as_basic_value_enum();
         }
@@ -612,14 +592,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     SymbolKind::Const | SymbolKind::Fn => {
                         // The symbol refers directly to a function that we can look up in the
                         // module and call directly.
-                        let fn_name = mangle_type(
-                            self.type_converter,
-                            symbol.type_key,
-                            self.type_converter.type_mapping(),
-                            self.type_monomorphizations,
-                        );
-
-                        let ll_fn = self.module.get_function(&fn_name).unwrap();
+                        let ll_fn = self.get_or_define_function(symbol.type_key);
                         self.ll_builder
                             .build_call(ll_fn, args.as_slice(), symbol.name.as_str())
                             .unwrap()
@@ -632,9 +605,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
 
             AExprKind::MemberAccess(access) if access.is_method => {
-                let ll_fn = self.module.get_function(mangled_name.as_str()).expect(
-                    format!("failed to locate function {} in module", mangled_name).as_str(),
-                );
+                let ll_fn = self.get_or_define_function(fn_sig.type_key);
                 self.ll_builder
                     .build_call(ll_fn, args.as_slice(), access.member_name.as_str())
                     .unwrap()
@@ -933,7 +904,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             (true, false, true) => {
                 let convert_fn = Intrinsic::find("llvm.fptosi.sat")
                     .unwrap()
-                    .get_declaration(self.module, &[ll_dst_type, ll_src_val.get_type()])
+                    .get_declaration(self.ll_mod, &[ll_dst_type, ll_src_val.get_type()])
                     .unwrap();
                 self.ll_builder
                     .build_call(convert_fn, &[ll_src_val.into()], name.as_str())
@@ -947,7 +918,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             (true, false, false) => {
                 let convert_fn = Intrinsic::find("llvm.fptoui.sat")
                     .unwrap()
-                    .get_declaration(self.module, &[ll_dst_type, ll_src_val.get_type()])
+                    .get_declaration(self.ll_mod, &[ll_dst_type, ll_src_val.get_type()])
                     .unwrap();
                 self.ll_builder
                     .build_call(convert_fn, &[ll_src_val.into()], name.as_str())

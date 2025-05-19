@@ -1,3 +1,4 @@
+use inkwell::module::Linkage;
 use inkwell::types::BasicType;
 use inkwell::values::{
     ArrayValue, BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue, StructValue,
@@ -5,7 +6,7 @@ use inkwell::values::{
 
 use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::symbol::{ASymbol, SymbolKind};
-use crate::analyzer::mangling::mangle_type;
+use crate::analyzer::mangling::mangle;
 use crate::analyzer::type_store::GetType;
 
 use super::FnCodeGen;
@@ -116,7 +117,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let char_type = self.ll_ctx.i8_type();
 
                 // Check if this string literal already exists as a global. If not, create one.
-                let global = if let Some(global) = self.module.get_global(literal) {
+                let global = if let Some(global) = self.ll_mod.get_global(literal) {
                     global
                 } else {
                     let chars: Vec<u8> = literal.clone().into_bytes();
@@ -126,9 +127,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                         .map(|v| char_type.const_int((*v).into(), false))
                         .collect();
 
-                    let global = self.module.add_global(array_type, None, literal.as_str());
+                    let global = self.ll_mod.add_global(array_type, None, literal);
                     global.set_initializer(&char_type.const_array(array_vals.as_slice()));
-
+                    global.set_linkage(Linkage::LinkOnceODR);
                     global
                 };
 
@@ -165,8 +166,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
 
             AExprKind::ArrayInit(array_init) => {
+                let mangled_name = mangle("const_array", &array_init.span, &[]);
                 let ll_array_type = self.type_converter.get_array_type(array_init.type_key);
-                let ll_global_array = self.module.add_global(ll_array_type, None, "const_array");
+                let ll_global_array = self.ll_mod.add_global(ll_array_type, None, &mangled_name);
 
                 // Just return an empty array if there is no element type (this can only happen
                 // if the array is actually empty).
@@ -340,17 +342,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
 
             SymbolKind::Fn => {
-                let mangled_name = mangle_type(
-                    self.type_converter,
-                    symbol.type_key,
-                    self.type_converter.type_mapping(),
-                    self.type_monomorphizations,
-                );
-
                 return self
-                    .module
-                    .get_function(&mangled_name)
-                    .expect(format!("failed to locate function {mangled_name}").as_str())
+                    .get_or_define_function(symbol.type_key)
                     .as_global_value()
                     .as_basic_value_enum();
             }

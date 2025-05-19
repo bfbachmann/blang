@@ -81,7 +81,7 @@ pub fn mangle_name(name: &str, mod_id: ModID) -> String {
     format!("_{}_{}", serialize(&vec![mod_id]), name)
 }
 
-fn mangle(name: &str, span: &Span, param_tks: &[TypeKey]) -> String {
+pub fn mangle(name: &str, span: &Span, param_tks: &[TypeKey]) -> String {
     let mut prefix: Vec<u32> = vec![span.file_id, span.start_pos.line, span.start_pos.col];
 
     for tk in param_tks {

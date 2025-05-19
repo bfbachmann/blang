@@ -10,7 +10,7 @@ use crate::fmt::{format_code_vec, hierarchy_to_string};
 use crate::lexer::pos::Span;
 use crate::parser::ast::member::MemberAccess;
 use crate::parser::ast::op::Operator;
-use crate::parser::ast::r#use::UsedModule;
+use crate::parser::ast::r#use::UsedMod;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::unresolved::UnresolvedType;
 use std::fmt;
@@ -378,7 +378,7 @@ pub fn err_invalid_mod_path(mod_path: &str, span: Span) -> AnalyzeError {
 }
 
 #[must_use]
-pub fn err_dup_imported_mod(used_mod: &UsedModule, existing: Span) -> AnalyzeError {
+pub fn err_dup_imported_mod(used_mod: &UsedMod, existing: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::DupImportedMod,
         format_code!("duplicate import {}", used_mod.path.raw).as_str(),
@@ -1643,7 +1643,7 @@ pub fn err_dup_mem_fn(
 }
 
 #[must_use]
-pub fn err_import_cycle(used_mod: &UsedModule, cycle: &Vec<PathBuf>) -> AnalyzeError {
+pub fn err_import_cycle(used_mod: &UsedMod, cycle: &Vec<PathBuf>) -> AnalyzeError {
     let mod_chain = hierarchy_to_string(
         &cycle
             .iter()

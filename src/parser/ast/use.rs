@@ -74,14 +74,14 @@ impl ModulePath {
 
 /// A module that is imported into a program.
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct UsedModule {
+pub struct UsedMod {
     pub path: ModulePath,
     pub maybe_alias: Option<Name>,
     pub symbols: Vec<Symbol>,
     pub span: Span,
 }
 
-impl Hash for UsedModule {
+impl Hash for UsedMod {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.path.hash(state);
         self.maybe_alias.hash(state);
@@ -89,9 +89,9 @@ impl Hash for UsedModule {
     }
 }
 
-locatable_impl!(UsedModule);
+locatable_impl!(UsedMod);
 
-impl Display for UsedModule {
+impl Display for UsedMod {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "use ")?;
 
@@ -118,7 +118,7 @@ impl Display for UsedModule {
     }
 }
 
-impl UsedModule {
+impl UsedMod {
     /// Parses a `use` statement from the given token sequence. Expects token sequences of
     /// the forms
     ///
@@ -129,7 +129,7 @@ impl UsedModule {
     /// where
     /// - `name` is an identifier used to name the module being used
     /// - `ident` is any identifier to import from the given path.
-    pub fn parse(parser: &mut FileParser) -> ParseResult<UsedModule> {
+    pub fn parse(parser: &mut FileParser) -> ParseResult<UsedMod> {
         let start_pos = parser.parse_expecting(TokenKind::Use)?.span.start_pos;
         let path = ModulePath::from(parser)?;
         let mut end_pos = path.span.end_pos;
@@ -181,7 +181,7 @@ impl UsedModule {
             ));
         }
 
-        Ok(UsedModule {
+        Ok(UsedMod {
             span: Span {
                 file_id: parser.file_id,
                 start_pos,

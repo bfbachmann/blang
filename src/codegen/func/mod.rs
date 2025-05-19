@@ -14,7 +14,7 @@ use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::debug_info::{DICompileUnit, DebugInfoBuilder};
-use inkwell::module::Module;
+use inkwell::module::{Linkage, Module};
 use inkwell::types::{AnyType, AnyTypeEnum, BasicTypeEnum};
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
 use std::collections::HashMap;
@@ -34,10 +34,10 @@ pub struct FnCodeGen<'a, 'ctx> {
     src_info: &'a SrcInfo,
     ll_builder: &'a Builder<'ctx>,
     di_ctx: Option<&'a mut DICtx<'ctx>>,
-    module: &'a Module<'ctx>,
+    ll_mod: &'a Module<'ctx>,
     type_store: &'a TypeStore,
     type_impls: &'a HashMap<TypeKey, TypeImpls>,
-    type_converter: &'a mut TypeConverter<'ctx>,
+    type_converter: &'a TypeConverter<'ctx>,
     type_monomorphizations: &'a HashMap<TypeKey, Monomorphization>,
     /// Stores constant values that are declared in the module outside of functions.
     mod_consts: &'a HashMap<ModID, HashMap<String, AExpr>>,
@@ -65,7 +65,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         type_store: &'a TypeStore,
         type_impls: &'a HashMap<TypeKey, TypeImpls>,
         type_monomorphizations: &'a HashMap<TypeKey, Monomorphization>,
-        type_converter: &'a mut TypeConverter<'ctx>,
+        type_converter: &'a TypeConverter<'ctx>,
         mod_consts: &'a HashMap<ModID, HashMap<String, AExpr>>,
         mod_statics: &'a HashMap<ModID, HashMap<String, AExpr>>,
         func: &AFn,
@@ -75,7 +75,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             src_info,
             ll_builder: builder,
             di_ctx,
-            module,
+            ll_mod: module,
             type_store,
             type_impls,
             type_converter,
@@ -131,15 +131,22 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     fn pop_scope(&mut self) -> CodegenScopeKind<'ctx> {
         let scope = self.scopes.pop().unwrap();
 
-        // For loop and statement scopes, merge any local consts or variables declared in the scope
-        // into the parent scope. We do this because they're not actually separate scopes with
-        // respect to declarations.
         match &scope.kind {
+            // For loop and statement scopes, merge any local consts or variables declared in the
+            // scope into the parent scope. We do this because they're not actually separate scopes
+            // with respect to declarations.
             CodegenScopeKind::Loop(_) | CodegenScopeKind::Statement(_) => {
                 let cur_scope = self.cur_scope_mut();
                 cur_scope.consts.extend(scope.consts);
                 cur_scope.ll_vars.extend(scope.ll_vars);
             }
+
+            // For closure scopes, update the parent scope with terminator info from the closure.
+            CodegenScopeKind::Closure(scope) => {
+                self.set_guarantees_return(scope.guarantees_return);
+                self.set_guarantees_terminator(scope.guarantees_terminator);
+            }
+
             _ => {}
         }
 
@@ -340,7 +347,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Retrieve the function and create a new "entry" block at the start of the function
         // body.
         let ll_fn = self
-            .module
+            .ll_mod
             .get_function(mangled_name.as_str())
             .expect(format!("function `{}` should exist", mangled_name).as_str());
 
@@ -610,15 +617,44 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
         }
     }
+
+    /// Either finds the given function in the current module, or generates a declaration for it
+    /// if it's foreign.
+    fn get_or_define_function(&mut self, fn_tk: TypeKey) -> FunctionValue<'ctx> {
+        let mangled_name = mangle_type(
+            self.type_converter,
+            fn_tk,
+            self.type_converter.type_mapping(),
+            self.type_monomorphizations,
+        );
+
+        match self.ll_mod.get_function(&mangled_name) {
+            Some(f) => f,
+            None => {
+                let fn_sig = self.type_converter.get_type(fn_tk).to_fn_sig();
+                let mangled_name = gen_fn_sig(
+                    self.ll_ctx,
+                    self.ll_mod,
+                    self.type_converter,
+                    self.type_monomorphizations,
+                    fn_sig,
+                    Some(Linkage::External),
+                );
+
+                self.ll_mod.get_function(&mangled_name).unwrap()
+            }
+        }
+    }
 }
 
 /// Defines the given function in the current module based on the function signature.
 pub fn gen_fn_sig<'a, 'ctx>(
     ctx: &'ctx Context,
     ll_mod: &'a Module<'ctx>,
-    type_converter: &'a mut TypeConverter<'ctx>,
+    type_converter: &'a TypeConverter<'ctx>,
     type_monomorphizations: &'a HashMap<TypeKey, Monomorphization>,
     sig: &AFnSig,
+    linkage: Option<Linkage>,
 ) -> String {
     // Define the function in the module using the fully-qualified function name.
     let ll_fn_type = type_converter.get_fn_type(sig.type_key);
@@ -634,7 +670,7 @@ pub fn gen_fn_sig<'a, 'ctx>(
         "duplicate fn {mangled_name}"
     );
 
-    let ll_fn_val = ll_mod.add_function(mangled_name.as_str(), ll_fn_type, None);
+    let ll_fn_val = ll_mod.add_function(mangled_name.as_str(), ll_fn_type, linkage);
 
     // For now, all functions get the `frame-pointer=non-leaf` attribute. This tells
     // LLVM that the frame pointer should be kept if the function calls other functions.
@@ -676,7 +712,7 @@ pub fn gen_fn_sig<'a, 'ctx>(
 /// Returns LLVM attributes to set on a function declaration or call site.
 pub(crate) fn get_fn_attrs(
     ctx: &Context,
-    type_converter: &mut TypeConverter,
+    type_converter: &TypeConverter,
     fn_sig: &AFnSig,
 ) -> HashMap<AttributeLoc, Vec<Attribute>> {
     let ll_fn_type = type_converter.get_fn_type(fn_sig.type_key);

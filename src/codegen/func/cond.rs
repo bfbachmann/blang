@@ -148,6 +148,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         for (i, case) in match_.cases.iter().enumerate() {
             let is_last_case = i + 1 == match_.cases.len();
 
+            // Create a new scope for the match case so variables declared inside it don't collide
+            // with variables from the enclosing scope.
+            self.push_scope(CodegenScope::new_closure());
+
             // Generate the code for the pattern match expressions, if any.
             let ll_cmp_result = self.gen_pattern_cmp(
                 &case.pattern,
@@ -238,6 +242,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     .build_unconditional_branch(ll_match_end_block.unwrap())
                     .unwrap();
             }
+
+            // Pop the match case scope now that we're done building it.
+            self.pop_scope();
 
             // If there is an else block, switch to it so we can use it to generate code for the
             // next case.
@@ -351,52 +358,47 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
                 // Don't do a comparison if this is the last case, as it's guaranteed
                 // to match anyway (because match cases are exhaustive).
-                match is_last_case {
-                    // Last case.
-                    true => None,
+                if is_last_case {
+                    None
+                } else {
+                    let ll_target_variant = ll_target_variant_num?;
+                    let ll_num_type = ll_target_variant.get_type();
 
-                    // Not last case.
-                    false => {
-                        let ll_target_variant = ll_target_variant_num?;
-                        let ll_num_type = ll_target_variant.get_type();
+                    let ll_match_block = self.append_block("variant_matched");
+                    let ll_no_match_block = self.append_block("no_variant_matched");
+                    let ll_end_block = self.append_block("variant_check_end");
 
-                        let ll_match_block = self.append_block("variant_matched");
-                        let ll_no_match_block = self.append_block("no_variant_matched");
-                        let ll_end_block = self.append_block("variant_check_end");
+                    let ll_switch_cases: Vec<(IntValue, BasicBlock)> = variant_nums
+                        .iter()
+                        .map(|num| (ll_num_type.const_int(*num as u64, false), ll_match_block))
+                        .collect();
+                    self.ll_builder
+                        .build_switch(ll_target_variant, ll_no_match_block, &ll_switch_cases)
+                        .unwrap();
 
-                        let ll_switch_cases: Vec<(IntValue, BasicBlock)> = variant_nums
-                            .iter()
-                            .map(|num| (ll_num_type.const_int(*num as u64, false), ll_match_block))
-                            .collect();
-                        self.ll_builder
-                            .build_switch(ll_target_variant, ll_no_match_block, &ll_switch_cases)
-                            .unwrap();
+                    self.set_current_block(ll_match_block);
+                    self.ll_builder
+                        .build_unconditional_branch(ll_end_block)
+                        .unwrap();
 
-                        self.set_current_block(ll_match_block);
-                        self.ll_builder
-                            .build_unconditional_branch(ll_end_block)
-                            .unwrap();
+                    self.set_current_block(ll_no_match_block);
+                    self.ll_builder
+                        .build_unconditional_branch(ll_end_block)
+                        .unwrap();
 
-                        self.set_current_block(ll_no_match_block);
-                        self.ll_builder
-                            .build_unconditional_branch(ll_end_block)
-                            .unwrap();
+                    self.set_current_block(ll_end_block);
+                    let ll_bool_type = self.ll_ctx.bool_type();
+                    let ll_phi = self
+                        .ll_builder
+                        .build_phi(ll_bool_type, "found_variant_match")
+                        .unwrap();
 
-                        self.set_current_block(ll_end_block);
-                        let ll_bool_type = self.ll_ctx.bool_type();
-                        let ll_phi = self
-                            .ll_builder
-                            .build_phi(ll_bool_type, "found_variant_match")
-                            .unwrap();
+                    let ll_true = ll_bool_type.const_int(1, false);
+                    let ll_false = ll_bool_type.const_int(0, false);
+                    ll_phi.add_incoming(&[(&ll_true.as_basic_value_enum(), ll_match_block)]);
+                    ll_phi.add_incoming(&[(&ll_false.as_basic_value_enum(), ll_no_match_block)]);
 
-                        let ll_true = ll_bool_type.const_int(1, false);
-                        let ll_false = ll_bool_type.const_int(0, false);
-                        ll_phi.add_incoming(&[(&ll_true.as_basic_value_enum(), ll_match_block)]);
-                        ll_phi
-                            .add_incoming(&[(&ll_false.as_basic_value_enum(), ll_no_match_block)]);
-
-                        Some(ll_phi.as_basic_value().into_int_value())
-                    }
+                    Some(ll_phi.as_basic_value().into_int_value())
                 }
             }
 

@@ -5,7 +5,7 @@ use crate::lexer::error::LexResult;
 use crate::lexer::lex::lex;
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
-use crate::parser::ast::r#use::{ModulePath, UsedModule};
+use crate::parser::ast::r#use::{ModulePath, UsedMod};
 use crate::parser::error::{ErrorKind, ParseError};
 use crate::parser::file_parser::FileParser;
 use crate::parser::src_file::SrcFile;
@@ -72,6 +72,7 @@ impl FileInfoStore {
 pub struct ModInfoStore {
     mod_info: Vec<ModInfo>,
     path_to_id: HashMap<String, ModID>,
+    file_id_to_mod_id: HashMap<FileID, ModID>,
 }
 
 impl ModInfoStore {
@@ -86,7 +87,11 @@ impl ModInfoStore {
             .insert(mod_info.path.clone(), mod_id)
             .is_none());
 
+        for file_id in &mod_info.src_file_ids {
+            self.file_id_to_mod_id.insert(*file_id, mod_id);
+        }
         self.mod_info.push(mod_info);
+
         mod_id
     }
 
@@ -100,6 +105,10 @@ impl ModInfoStore {
 
     pub fn get_id_by_path(&self, mod_path: &str) -> Option<ModID> {
         self.path_to_id.get(mod_path).copied()
+    }
+
+    pub fn get_id_by_file_id(&self, file_id: FileID) -> Option<ModID> {
+        self.file_id_to_mod_id.get(&file_id).copied()
     }
 }
 
@@ -232,7 +241,7 @@ impl SrcInfo {
     }
 
     /// Returns all modules used by the given module.
-    pub fn get_used_mods(&self, mod_id: ModID) -> Vec<&UsedModule> {
+    pub fn get_used_mods(&self, mod_id: ModID) -> Vec<&UsedMod> {
         let mut used_mods = vec![];
         let mod_info = self.mod_info.get_by_id(mod_id);
 
@@ -250,6 +259,34 @@ impl SrcInfo {
         let dir = file_path.parent().unwrap().to_str().unwrap();
         let file_name = file_path.file_name().unwrap().to_str().unwrap();
         (dir, file_name)
+    }
+
+    /// Returns all module paths corresponding to the given mod IDs in dependency (breadth-first)
+    /// order starting from the root.
+    pub fn mod_paths_in_order(&self, root_mod_id: ModID, mod_ids: HashSet<ModID>) -> Vec<String> {
+        let mut mod_paths = vec![];
+
+        let mut queued = HashSet::from([root_mod_id]);
+        let mut queue = VecDeque::from([root_mod_id]);
+
+        while let Some(mod_id) = queue.pop_front() {
+            let mod_info = self.mod_info.get_by_id(mod_id);
+            mod_paths.push(mod_info.path.clone());
+
+            for file_id in &mod_info.src_file_ids {
+                let src_file = self.get_src_file(*file_id);
+                for used_mod in &src_file.used_mods {
+                    let used_mod_id = self.mod_info.get_id_by_path(&used_mod.path.raw).unwrap();
+
+                    // Don't queue unwanted modules, or modules that were already queued.
+                    if mod_ids.contains(&used_mod_id) && queued.insert(used_mod_id) {
+                        queue.push_back(used_mod_id);
+                    }
+                }
+            }
+        }
+
+        mod_paths
     }
 }
 
@@ -382,6 +419,10 @@ pub fn parse_mod_dir(
 
         // Update the file's module with info about the file and the modules it relies on.
         mod_info.src_file_ids.insert(src_file.id);
+        src_info
+            .mod_info
+            .file_id_to_mod_id
+            .insert(src_file.id, file_mod_id);
         src_info.src_files.insert(*file_id, src_file);
         dir_info.mod_ids.insert(file_mod_name, file_mod_id);
 

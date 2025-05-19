@@ -22,13 +22,14 @@ use crate::analyzer::mod_context::ModuleContext;
 use crate::analyzer::scope::{Scope, ScopeKind};
 use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 use crate::analyzer::warn::{warn_unused, AnalyzeWarning};
-use crate::codegen::program::CodeGenConfig;
+use crate::codegen::program::{init_target_machine, CodeGenConfig};
 use crate::fmt::format_code_vec;
 use crate::lexer::pos::{Locatable, Position, Span};
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::{Name, Symbol};
 use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::{FileID, ModID};
+use inkwell::targets::TargetMachine;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -210,6 +211,8 @@ impl TypeImpls {
 /// Stores information about the program for reference during semantic analysis.
 pub struct ProgramContext {
     pub config: CodeGenConfig,
+    // For providing target-specific info (like type sizing).
+    pub target_machine: TargetMachine,
     /// Stores all types that are successfully analyzed during semantic analysis.
     pub type_store: TypeStore,
     /// Maps polymorphic type keys to their monomorphizations.
@@ -266,8 +269,16 @@ impl ProgramContext {
             type_declaration_mod_ids.insert(type_key, builtins_mod_id);
         }
 
+        let target_machine = init_target_machine(
+            config.target_triple.as_ref(),
+            config.optimization_level,
+            config.reloc_mode,
+        )
+        .unwrap();
+
         ProgramContext {
             config,
+            target_machine,
             type_store,
             primitive_type_keys,
             pub_type_keys: Default::default(),
@@ -1699,6 +1710,15 @@ impl ProgramContext {
             .mark_fn_pub(fn_type_key);
     }
 
+    /// Returns whether the given function or member function is `pub`.
+    pub fn fn_is_pub(&self, fn_tk: TypeKey) -> bool {
+        let sig = self.get_type(fn_tk).to_fn_sig();
+        match &sig.maybe_impl_type_key {
+            Some(impl_tk) => self.member_fn_is_pub(*impl_tk, fn_tk),
+            None => self.type_is_pub(fn_tk),
+        }
+    }
+
     /// Records the given struct field as public in the program context.
     pub fn mark_struct_field_pub(&mut self, type_key: TypeKey, field_name: &str) {
         match self.pub_struct_field_names.get_mut(&type_key) {
@@ -1819,13 +1839,22 @@ impl ProgramContext {
             return Ok(());
         }
 
-        if let IdentKind::Type {
-            is_pub: true,
-            type_key,
-            ..
-        } = &ident.kind
-        {
-            self.pub_type_keys.insert(*type_key);
+        // Record pub types and functions.
+        match &ident.kind {
+            IdentKind::Type {
+                is_pub: true,
+                type_key,
+                ..
+            }
+            | IdentKind::Fn {
+                is_pub: true,
+                type_key,
+                ..
+            } => {
+                self.pub_type_keys.insert(*type_key);
+            }
+
+            _ => {}
         }
 
         self.cur_mod_ctx_mut().insert_ident(ident)

@@ -4,7 +4,7 @@ use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::symbol::{ASymbol, SymbolKind};
 use crate::analyzer::ast::var_assign::AVarAssign;
-use crate::analyzer::mangling::{mangle_name, mangle_type};
+use crate::analyzer::mangling::mangle_name;
 use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::lexer::pos::Locatable;
 use crate::parser::ast::op::Operator;
@@ -125,12 +125,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     if let Some(static_) = statics.get(name) {
                         let mangled_name = mangle_name(&symbol.name, *mod_id);
 
-                        let ll_global = match self.module.get_global(&mangled_name) {
+                        let ll_global = match self.ll_mod.get_global(&mangled_name) {
                             Some(g) => g,
                             None => {
                                 let ll_type = self.type_converter.get_basic_type(static_.type_key);
                                 let ll_global =
-                                    self.module.add_global(ll_type, None, &mangled_name);
+                                    self.ll_mod.add_global(ll_type, None, &mangled_name);
                                 ll_global.set_initializer(
                                     &self.gen_const_expr(static_).as_basic_value_enum(),
                                 );
@@ -150,15 +150,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
 
             (SymbolKind::Fn, _) => {
-                let fn_name = mangle_type(
-                    self.type_converter,
-                    symbol.type_key,
-                    self.type_converter.type_mapping(),
-                    self.type_monomorphizations,
-                );
-                if let Some(func) = self.module.get_function(&fn_name) {
-                    return func.as_global_value().as_pointer_value();
-                }
+                return self
+                    .get_or_define_function(symbol.type_key)
+                    .as_global_value()
+                    .as_pointer_value();
             }
 
             _ => {}

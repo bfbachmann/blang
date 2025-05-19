@@ -18,7 +18,7 @@ use crate::parser::ast::r#loop::Loop;
 use crate::parser::ast::r#match::Match;
 use crate::parser::ast::r#static::Static;
 use crate::parser::ast::r#struct::StructType;
-use crate::parser::ast::r#use::UsedModule;
+use crate::parser::ast::r#use::UsedMod;
 use crate::parser::ast::r#yield::Yield;
 use crate::parser::ast::ret::Ret;
 use crate::parser::ast::spec::SpecType;
@@ -50,7 +50,7 @@ pub enum Statement {
     StaticDeclaration(Static),
     Impl(Impl),
     SpecDeclaration(SpecType),
-    Use(UsedModule),
+    Use(UsedMod),
 }
 
 impl fmt::Display for Statement {
@@ -339,7 +339,7 @@ impl Statement {
 
             // If the first token is `use`, it's a use (import).
             (TokenKind::Use, _) => {
-                let use_mod = UsedModule::parse(parser)?;
+                let use_mod = UsedMod::parse(parser)?;
                 Ok(Statement::Use(use_mod))
             }
 

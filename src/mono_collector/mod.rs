@@ -8,7 +8,7 @@ use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::prog_context::{Monomorphization, ProgramContext, TypeImpls};
 use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 use crate::codegen::program::CodeGenConfig;
-use crate::parser::ModID;
+use crate::parser::{ModID, SrcInfo};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 
@@ -184,32 +184,38 @@ pub struct MonoProg {
     pub type_monomorphizations: HashMap<TypeKey, Monomorphization>,
     /// Maps type keys to information about their `impl` blocks.
     pub type_impls: HashMap<TypeKey, TypeImpls>,
-    /// A list of monomorphized functions.
-    pub mono_items: Vec<MonoItem>,
+    /// Maps module IDs to monomorphized functions from those modules.
+    pub mono_items: HashMap<ModID, Vec<MonoItem>>,
+    /// The type keys of all public functions.
+    pub pub_fns: HashSet<TypeKey>,
     /// Maps function type keys to their implementations.
     pub fns: HashMap<TypeKey, AFn>,
-    /// Maps extern function type keys to their signatures.
-    pub extern_fns: HashMap<TypeKey, AExternFn>,
+    /// Maps module IDs to mappings from extern function type keys to bools indicating whether
+    /// they're declared `pub`.
+    pub extern_fns: HashMap<ModID, HashMap<TypeKey, AExternFn>>,
     /// Maps module IDs to mappings from `const` names to their values for those modules.
     pub mod_consts: HashMap<ModID, HashMap<String, AExpr>>,
     /// Maps module IDs to mappings from `static` names to their values for those modules.
     pub mod_statics: HashMap<ModID, HashMap<String, AExpr>>,
     /// Stores the type key of the `main` function, if any.
     pub maybe_main_fn_tk: Option<TypeKey>,
+    /// The ID of the root module.
+    pub root_mod_id: ModID,
 }
 
 /// Traverses functions in the program call graph, tracking and monomorphizing each one that
 /// we need to generate code for. The basic algorithm is as follows:
-///     1. Find the roots. If there is a main function (i.e. we're generating an executable
-///        program), then it will be the only root. If there isn't one (i.e. we're generating
-///        code for a library), then all top-level monomorphic functions are considered roots.
-///     2. Push all roots into the queue of un-checked functions.
-///     3. While there are functions in the queue, pop the next function from the front of the queue
-///        and walk it to discover which functions it uses. For each function we encounter, push it
-///        into the queue with its generic parameter type mappings if it hasn't already been checked.
+/// 1. Find the roots. If there is a main function (i.e. we're generating an executable
+///    program), then it will be the only root. If there isn't one (i.e. we're generating
+///    code for a library), then all top-level monomorphic functions are considered roots.
+/// 2. Push all roots into the queue of un-checked functions.
+/// 3. While there are functions in the queue, pop the next function from the front of the queue
+///    and walk it to discover which functions it uses. For each function we encounter, push it
+///    into the queue with its generic parameter type mappings if it hasn't already been checked.
+///
 /// This way, we end up building what is essentially a function monomorphization tree that we can
 /// traverse during codegen.
-pub fn mono_prog(analysis: ProgramAnalysis) -> MonoProg {
+pub fn mono_prog(src_info: &SrcInfo, analysis: ProgramAnalysis) -> MonoProg {
     let mut maybe_main_fn_tk = None;
     let mut collector = MonoItemCollector::new(analysis.ctx);
 
@@ -250,13 +256,40 @@ pub fn mono_prog(analysis: ProgramAnalysis) -> MonoProg {
     }
 
     // Filter out unused extern functions.
-    let extern_fns = collector
-        .extern_fns
-        .into_iter()
-        .filter(|(tk, _)| collector.used_extern_fns.contains(tk))
-        .collect();
+    let mut pub_fns = HashSet::new();
+    let mut extern_fns = HashMap::new();
+    for (fn_tk, extern_fn) in collector.extern_fns {
+        if !collector.used_extern_fns.contains(&fn_tk) {
+            continue;
+        }
+
+        if collector.ctx.fn_is_pub(fn_tk) {
+            pub_fns.insert(fn_tk);
+        }
+
+        let file_id = extern_fn.span.file_id;
+        let mod_id = src_info.mod_info.get_id_by_file_id(file_id).unwrap();
+        extern_fns
+            .entry(mod_id)
+            .or_insert(HashMap::new())
+            .insert(fn_tk, extern_fn);
+    }
 
     let (mod_consts, mod_statics) = collector.ctx.drain_mod_consts_and_statics();
+
+    // Collect all mono items by mod ID. We skip the root item because it's not meaningful.
+    let mut mono_items = HashMap::new();
+    let mut iter = collector.complete_mono_items.into_iter();
+    iter.next();
+    while let Some(item) = iter.next() {
+        if collector.ctx.fn_is_pub(item.type_key) {
+            pub_fns.insert(item.type_key);
+        }
+
+        let file_id = collector.ctx.get_type(item.type_key).span().file_id;
+        let mod_id = src_info.mod_info.get_id_by_file_id(file_id).unwrap();
+        mono_items.entry(mod_id).or_insert(vec![]).push(item);
+    }
 
     MonoProg {
         mod_consts,
@@ -265,10 +298,12 @@ pub fn mono_prog(analysis: ProgramAnalysis) -> MonoProg {
         type_store: collector.ctx.type_store,
         type_monomorphizations: collector.ctx.type_monomorphizations,
         type_impls: collector.ctx.type_impls,
-        mono_items: collector.complete_mono_items,
+        mono_items,
+        pub_fns,
         fns: collector.fns,
         extern_fns,
         maybe_main_fn_tk,
+        root_mod_id: analysis.root_mod_id,
     }
 }
 
@@ -580,11 +615,9 @@ fn walk_type_key(collector: &mut MonoItemCollector, type_key: TypeKey) {
             // If the type key already refers to an existing function, we're done.
             if collector.fns.get(&type_key).is_some() {
                 collector.queue_item(type_key, type_mappings);
-                return;
+            } else if collector.extern_fns.get(&type_key).is_some() {
+                collector.used_extern_fns.insert(fn_sig.type_key);
             }
-
-            // This will be the case for extern functions. We'll track them separately.
-            collector.used_extern_fns.insert(fn_sig.type_key);
         }
     }
 }

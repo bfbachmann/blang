@@ -170,11 +170,4 @@ impl<'ctx> CodegenScopeKind<'ctx> {
             _ => panic!("cannot cast scope to Statement"),
         }
     }
-
-    pub fn to_closure(self) -> BasicScope {
-        match self {
-            CodegenScopeKind::Closure(scope) => scope,
-            _ => panic!("cannot cast scope to Closure"),
-        }
-    }
 }

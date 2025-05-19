@@ -13,9 +13,7 @@ use inkwell::OptimizationLevel;
 
 use crate::analyzer::analyze::{analyze_modules, ProgramAnalysis};
 use crate::codegen::error::CodeGenError;
-use crate::codegen::program::{
-    generate, init_default_host_target, init_target_machine, CodeGenConfig, OutputFormat,
-};
+use crate::codegen::program::{gen_program, validate_target_triple, CodeGenConfig, OutputFormat};
 use crate::fmt::{display_msg, format_duration};
 use crate::lexer::pos::Locatable;
 use crate::mono_collector::mono_prog;
@@ -118,6 +116,13 @@ fn main() {
     match matches.subcommand() {
         Some(("build", sub_matches)) => match sub_matches.get_one::<String>("TARGET_MODULE") {
             Some(target_mod) => {
+                let target_triple = sub_matches.get_one::<String>("target").cloned();
+                if let Some(triple) = &target_triple {
+                    if let Err(err) = validate_target_triple(triple) {
+                        eprintln!("{}", err);
+                    }
+                }
+
                 let optimization_level = match sub_matches.get_one::<String>("optimization-level") {
                     Some(level) => match level.as_str() {
                         "default" => OptimizationLevel::Default,
@@ -140,15 +145,6 @@ fn main() {
                     },
 
                     None => RelocMode::Default,
-                };
-
-                let target_machine = match init_target_machine(
-                    sub_matches.get_one::<String>("target"),
-                    optimization_level,
-                    reloc_mode,
-                ) {
-                    Ok(machine) => machine,
-                    Err(err) => fatalln!("{err}"),
                 };
 
                 let dst_path = sub_matches.get_one::<String>("out");
@@ -209,17 +205,18 @@ fn main() {
                     .collect();
 
                 let codegen_config = CodeGenConfig {
+                    target_triple,
                     output_path,
                     output_format,
-                    target_machine,
                     optimization_level,
+                    reloc_mode,
                     linker,
                     linker_args,
                     emit_debug_info: debug,
                     verify: false,
                 };
 
-                if let Err(e) = compile(target_mod, quiet, codegen_config) {
+                if let Err(e) = build(target_mod, quiet, codegen_config) {
                     fatalln!("{}", e);
                 }
             }
@@ -229,15 +226,7 @@ fn main() {
         Some(("check", sub_matches)) => match sub_matches.get_one::<String>("TARGET_MODULE") {
             Some(target_mod) => {
                 let maybe_dump_path = sub_matches.get_one::<String>("dump");
-                let target_machine = match init_default_host_target() {
-                    Ok(tm) => tm,
-                    Err(err) => fatalln!("failed to initialize target {err}"),
-                };
-                let config = CodeGenConfig::new_default(
-                    target_machine,
-                    PathBuf::new(),
-                    OutputFormat::LLVMIR,
-                );
+                let config = CodeGenConfig::new_default(PathBuf::new(), OutputFormat::LLVMIR);
 
                 if let Err(e) = analyze(target_mod, maybe_dump_path, config) {
                     fatalln!("{}", e);
@@ -248,17 +237,9 @@ fn main() {
 
         Some(("run", sub_matches)) => match sub_matches.get_one::<String>("TARGET_MODULE") {
             Some(target_mod) => {
-                let target_machine = match init_default_host_target() {
-                    Ok(tm) => tm,
-                    Err(err) => fatalln!("failed to initialize target {err}"),
-                };
                 let output_path =
                     default_output_path(Path::new(target_mod), OutputFormat::Executable);
-                let config = CodeGenConfig::new_default(
-                    target_machine,
-                    output_path,
-                    OutputFormat::Executable,
-                );
+                let config = CodeGenConfig::new_default(output_path, OutputFormat::Executable);
 
                 run(target_mod, config);
             }
@@ -439,7 +420,7 @@ impl Display for CompileProgError {
 
 /// Compiles a module.
 #[flame]
-fn compile(target_mod: &str, quiet: bool, config: CodeGenConfig) -> Result<(), CompileProgError> {
+fn build(target_mod: &str, quiet: bool, config: CodeGenConfig) -> Result<(), CompileProgError> {
     // Read and analyze the program.
     let start_time = Instant::now();
     let is_exe = config.output_format == OutputFormat::Executable;
@@ -454,10 +435,10 @@ fn compile(target_mod: &str, quiet: bool, config: CodeGenConfig) -> Result<(), C
         return Err(CompileProgError::MissingMain);
     }
 
-    let prog = mono_prog(prog_analysis);
+    let prog = mono_prog(&src_info, prog_analysis);
 
     // Compile the program.
-    if let Err(e) = generate(&src_info, prog) {
+    if let Err(e) = gen_program(&src_info, prog) {
         return Err(CompileProgError::CodeGenFailed(e));
     }
 
@@ -479,7 +460,7 @@ fn compile(target_mod: &str, quiet: bool, config: CodeGenConfig) -> Result<(), C
 fn run(src_path: &str, config: CodeGenConfig) {
     let output_path = config.output_path.to_str().unwrap().to_string();
 
-    if let Err(err) = compile(src_path, true, config) {
+    if let Err(err) = build(src_path, true, config) {
         fatalln!("{}", err);
     }
 
@@ -492,52 +473,61 @@ fn run(src_path: &str, config: CodeGenConfig) {
 fn default_output_path(src: &Path, output_format: OutputFormat) -> PathBuf {
     let file_stem = src.file_stem().unwrap_or_default();
     let mut path = PathBuf::from("bin");
-    path.push(
-        PathBuf::from(file_stem).with_extension(match output_format {
-            OutputFormat::LLVMBitcode => "bc",
-            OutputFormat::LLVMIR => "ll",
-            OutputFormat::Assembly => "s",
-            OutputFormat::Object => "o",
-            OutputFormat::Executable => "",
-        }),
-    );
+    path.push(PathBuf::from(file_stem).with_extension(output_format.file_extension()));
     path
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::codegen::program::{init_default_host_target, CodeGenConfig, OutputFormat};
-    use crate::{compile, AnalyzeProgError, CompileProgError};
+    use crate::codegen::program::{CodeGenConfig, OutputFormat};
+    use crate::{analyze, build, AnalyzeProgError};
+    use std::collections::VecDeque;
     use std::fs;
     use std::path::PathBuf;
     use std::process::Child;
 
     #[test]
     fn build_std_lib() {
-        // Check that we can compile the standard library.
-        let entries = fs::read_dir("std").expect("should succeed");
-        for entry in entries {
-            let lib_path = entry.unwrap().path();
+        // Run static analysis on all standard library code.
+        let mut entries = fs::read_dir("std")
+            .expect("should succeed")
+            .collect::<VecDeque<_>>();
+
+        while let Some(entry) = entries.pop_front() {
+            let entry = entry.unwrap();
+            let lib_path = entry.path();
             if lib_path.starts_with("std/builtins") {
                 continue;
             }
 
-            let output_path = format!("bin/{}.o", lib_path.file_stem().unwrap().to_str().unwrap());
+            if lib_path.is_dir() {
+                let mut has_src_files = false;
+                for child in fs::read_dir(&lib_path).expect("should succeed") {
+                    let child_ref = child.as_ref().unwrap();
+                    if child_ref.file_type().unwrap().is_file()
+                        && child_ref.path().extension().unwrap().to_str().unwrap() == "bl"
+                    {
+                        has_src_files = true;
+                    }
 
-            // Compile the library.
-            let result = compile(
+                    entries.push_back(child);
+                }
+
+                // Skip dirs with no source files.
+                if !has_src_files {
+                    continue;
+                }
+            }
+
+            let output_path = format!("bin/{}.o", lib_path.file_stem().unwrap().to_str().unwrap());
+            let result = analyze(
                 lib_path.to_str().unwrap(),
-                true,
-                CodeGenConfig::new_test_default(
-                    init_default_host_target().unwrap(),
-                    PathBuf::from(output_path),
-                    OutputFormat::Object,
-                ),
+                None,
+                CodeGenConfig::new_test_default(PathBuf::from(output_path), OutputFormat::LLVMIR),
             );
 
             match result {
-                Ok(_) | Err(CompileProgError::AnalysisFailed(AnalyzeProgError::ModNotFound(_))) => {
-                }
+                Ok(_) | Err(AnalyzeProgError::ModNotFound(_)) => {}
                 Err(other) => panic!("{}", other),
             }
         }
@@ -574,12 +564,9 @@ mod tests {
             let exe_path = format!("bin/{}", src_path_stem);
 
             // Compile the source code to IR.
-            let codegen_config = CodeGenConfig::new_test_default(
-                init_default_host_target().unwrap(),
-                PathBuf::from(&ir_path),
-                OutputFormat::LLVMIR,
-            );
-            compile(path.to_str().unwrap(), true, codegen_config).unwrap();
+            let codegen_config =
+                CodeGenConfig::new_test_default(PathBuf::from(&ir_path), OutputFormat::LLVMIR);
+            build(path.to_str().unwrap(), true, codegen_config).unwrap();
 
             // Verify IR and build executable with Clang.
             let clang_proc = clang_build_verify(&ir_path, &exe_path);

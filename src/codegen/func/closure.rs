@@ -25,9 +25,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
         }
 
-        let scope = self.pop_scope().to_closure();
-        self.set_guarantees_return(scope.guarantees_return);
-        self.set_guarantees_terminator(scope.guarantees_terminator);
+        self.pop_scope();
 
         Ok(())
     }
