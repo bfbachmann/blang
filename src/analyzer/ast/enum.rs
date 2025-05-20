@@ -48,7 +48,7 @@ impl Display for AEnumTypeVariant {
 impl AEnumTypeVariant {
     /// Returns a string containing the human-readable version of this enum variant.
     pub fn display(&self, ctx: &ProgramContext) -> String {
-        let mut s = format!("{}", self.name);
+        let mut s = self.name.to_string();
 
         if let Some(type_key) = &self.maybe_type_key {
             s += format!("({})", ctx.display_type(*type_key)).as_str();
@@ -147,7 +147,7 @@ impl AEnumType {
             // Analyze the variant type, if any.
             let maybe_type_key = match &variant.maybe_type {
                 Some(typ) => {
-                    let variant_type_key = ctx.resolve_type(&typ);
+                    let variant_type_key = ctx.resolve_type(typ);
                     Some(variant_type_key)
                 }
                 None => None,

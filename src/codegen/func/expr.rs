@@ -361,7 +361,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                         )
                         .unwrap()
                 };
-                let elem = array_init.values.get(0).unwrap();
+                let elem = array_init.values.first().unwrap();
                 let ll_elem = self.gen_expr(elem);
                 self.copy_value(
                     ll_elem,
@@ -578,7 +578,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 match symbol.kind {
                     SymbolKind::Variable | SymbolKind::Static => {
                         // Load the function pointer from the symbol value and call it indirectly.
-                        let ll_fn_ptr = self.get_var_value(&symbol).into_pointer_value();
+                        let ll_fn_ptr = self.get_var_value(symbol).into_pointer_value();
                         self.ll_builder
                             .build_indirect_call(
                                 ll_fn_type,

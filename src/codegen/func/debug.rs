@@ -56,13 +56,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let di_subprog = di_ctx.di_builder.create_function(
             di_scope,
             &func.signature.name,
-            Some(&mangled_name),
+            Some(mangled_name),
             di_file,
-            func.span.start_pos.line as u32,
+            func.span.start_pos.line,
             di_subroutine_type,
             true,
             true,
-            func.body.span.start_pos.line as u32,
+            func.body.span.start_pos.line,
             LLVMDIFlags::PUBLIC,
             false, // TODO: Not sure if this should be true in some cases.
         );
@@ -81,7 +81,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             &arg.name,
             arg_no,
             di_ctx.di_cu.get_file(),
-            arg.span.start_pos.line as u32,
+            arg.span.start_pos.line,
             self.gen_di_type(arg.type_key),
             true,
             LLVMDIFlags::PUBLIC,
@@ -166,8 +166,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             .di_builder
             .create_debug_location(
                 self.ll_ctx,
-                pos.line as u32,
-                pos.col as u32,
+                pos.line,
+                pos.col,
                 self.cur_di_scope(),
                 None,
             )
@@ -212,7 +212,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             self.cur_di_scope(),
             name,
             di_ctx.di_cu.get_file(),
-            pos.line as u32,
+            pos.line,
             self.gen_di_type(type_key),
             true,
             LLVMDIFlags::PUBLIC,
@@ -223,7 +223,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             ll_var_ptr,
             Some(di_var),
             None,
-            self.gen_di_location(&pos),
+            self.gen_di_location(pos),
             self.ll_builder
                 .get_insert_block()
                 .unwrap()

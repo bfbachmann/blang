@@ -72,7 +72,7 @@ impl APattern {
                     let mut exprs_iter = exprs.iter();
                     exprs_iter.next();
 
-                    while let Some(expr) = exprs_iter.next() {
+                    for expr in exprs_iter {
                         let err = err_conflicting_patterns(*expr.span());
                         ctx.insert_err(err);
                     }
@@ -310,16 +310,13 @@ impl AMatchCase {
         }
 
         // Analyze the condition, if there is one.
-        let maybe_cond = match &case.maybe_cond {
-            Some(cond) => Some(AExpr::from(
+        let maybe_cond = case.maybe_cond.as_ref().map(|cond| AExpr::from(
                 ctx,
                 cond.clone(),
                 Some(ctx.bool_type_key()),
                 false,
                 false,
-            )),
-            None => None,
-        };
+            ));
 
         // Analyze the statement.
         let body = AClosure::from(ctx, &case.body, ScopeKind::BranchBody, vec![], None);

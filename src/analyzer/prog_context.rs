@@ -122,7 +122,7 @@ impl TypeImpls {
             Some(spec_tk) => {
                 self.spec_impls
                     .entry(spec_tk)
-                    .or_insert(SpecImpl::default())
+                    .or_default()
                     .member_fns
                     .insert(fn_name, fn_type_key);
             }
@@ -153,10 +153,7 @@ impl TypeImpls {
     /// Tries to find a "default" function (i.e. a function declared in a regular `impl` block
     /// without a spec) with the given name.
     fn get_default_fn(&mut self, name: &str) -> Option<TypeKey> {
-        match self.default_fns.get(name) {
-            Some(&tk) => Some(tk),
-            None => None,
-        }
+        self.default_fns.get(name).copied()
     }
 
     /// Returns the type keys of all unused private default functions.
@@ -525,7 +522,7 @@ impl ProgramContext {
                 return self.resolve_named_type(unresolved_type, allow_polymorph)
             }
 
-            Type::Function(sig) => AType::from_fn_sig(AFnSig::from(self, &*sig)),
+            Type::Function(sig) => AType::from_fn_sig(AFnSig::from(self, sig)),
 
             Type::Tuple(tuple_type) => {
                 let a_tuple_type = ATupleType::from(self, tuple_type);
@@ -716,9 +713,7 @@ impl ProgramContext {
         let mut struct_type = self.get_type(type_key).to_struct_type().clone();
 
         // We can't monomorphize struct types that aren't parameterized.
-        if struct_type.maybe_params.is_none() {
-            return None;
-        }
+        struct_type.maybe_params.as_ref()?;
 
         let mut replaced_tks = false;
         for field in &mut struct_type.fields {
@@ -731,8 +726,7 @@ impl ProgramContext {
             Some(params) => params
                 .params
                 .iter()
-                .find(|p| type_mappings.contains_key(&p.generic_type_key))
-                .is_some(),
+                .any(|p| type_mappings.contains_key(&p.generic_type_key)),
             None => false,
         };
 
@@ -1110,7 +1104,7 @@ impl ProgramContext {
     ) -> TypeKey {
         let param_type_keys: Vec<TypeKey> =
             param_types.iter().map(|t| self.resolve_type(t)).collect();
-        let param_locs: Vec<&Type> = param_types.iter().map(|t| t).collect();
+        let param_locs: Vec<&Type> = param_types.iter().collect();
         self.try_execute_monomorphization(poly_type_key, param_type_keys, &param_locs, loc)
     }
 
@@ -1362,10 +1356,7 @@ impl ProgramContext {
     /// If `type_key` corresponds to a type that was produced by a monomorphization,
     /// this function returns the type key of its corresponding polymorphic type.
     pub fn get_poly_type_key(&self, mono_tk: TypeKey) -> Option<TypeKey> {
-        match self.type_monomorphizations.get(&mono_tk) {
-            Some(mono) => Some(mono.poly_type_key),
-            None => None,
-        }
+        self.type_monomorphizations.get(&mono_tk).map(|mono| mono.poly_type_key)
     }
 
     /// Returns the type key for the analyzer-internal `<unknown>` type.
@@ -1559,7 +1550,7 @@ impl ProgramContext {
     ) {
         self.type_impls
             .entry(impl_tk)
-            .or_insert(TypeImpls::default())
+            .or_default()
             .insert_spec_impl(spec_tk, member_fns, header_span);
     }
 
@@ -1567,7 +1558,7 @@ impl ProgramContext {
     pub fn insert_default_impl(&mut self, impl_tk: TypeKey, member_fns: HashMap<String, TypeKey>) {
         self.type_impls
             .entry(impl_tk)
-            .or_insert(TypeImpls::default())
+            .or_default()
             .insert_default_impl(member_fns);
     }
 
@@ -1644,10 +1635,7 @@ impl ProgramContext {
         spec_tk: TypeKey,
         fn_name: &str,
     ) -> Option<TypeKey> {
-        let type_impls = match self.type_impls.get(&type_key) {
-            Some(impls) => impls,
-            None => return None,
-        };
+        let type_impls = self.type_impls.get(&type_key)?;
 
         type_impls.get_fn_from_spec_impl(spec_tk, fn_name)
     }
@@ -1706,7 +1694,7 @@ impl ProgramContext {
     pub fn mark_member_fn_pub(&mut self, type_key: TypeKey, fn_type_key: TypeKey) {
         self.type_impls
             .get_mut(&type_key)
-            .expect(format!("type with key {type_key} should have impls").as_str())
+            .unwrap_or_else(|| panic!("type with key {type_key} should have impls"))
             .mark_fn_pub(fn_type_key);
     }
 
@@ -1874,7 +1862,7 @@ impl ProgramContext {
     pub fn get_local_ident(&mut self, name: &str, set_usage: Option<Usage>) -> Option<&Ident> {
         match self
             .cur_mod_ctx_mut()
-            .get_ident_mut(name, set_usage.clone())
+            .get_ident_mut(name, set_usage)
         {
             Some(ident) => {
                 // If the identifier refers to something that has not yet been analyzed, analyze it.
@@ -1885,7 +1873,7 @@ impl ProgramContext {
                     | IdentKind::UncheckedExternFn(_)
                     | IdentKind::UncheckedStructType(_)
                     | IdentKind::UncheckedEnumType(_)
-                    | IdentKind::UncheckedSpecType(_) => self.analyze_unchecked_ident(&name),
+                    | IdentKind::UncheckedSpecType(_) => self.analyze_unchecked_ident(name),
                     _ => {}
                 }
             }
@@ -2045,17 +2033,17 @@ impl ProgramContext {
             }
 
             AType::Tuple(tuple_type) => {
-                let mut s = format!("{{");
+                let mut s = "{".to_string();
 
                 for (i, field) in tuple_type.fields.iter().enumerate() {
-                    s += format!("{}", self.display_type(field.type_key)).as_str();
+                    s += self.display_type(field.type_key).to_string().as_str();
 
                     if i + 1 < tuple_type.fields.len() {
-                        s += format!(", ").as_str();
+                        s += ", ".to_string().as_str();
                     }
                 }
 
-                s + format!("}}").as_str()
+                s + "}".to_string().as_str()
             }
 
             AType::Array(array_type) => match &array_type.maybe_element_type_key {
@@ -2080,7 +2068,7 @@ impl ProgramContext {
 
             AType::Generic(t) => t.name.clone(),
 
-            AType::Unknown(name) => format!("{}", name),
+            AType::Unknown(name) => name.to_string(),
         }
     }
 

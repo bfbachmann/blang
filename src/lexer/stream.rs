@@ -24,7 +24,7 @@ impl<T> Stream<T> {
     /// Returns the next value in the stream and increments the cursor position by 1.
     pub fn next(&mut self) -> Option<&T> {
         let tok = self.tokens.get(self.cursor);
-        self.cursor = self.cursor + 1;
+        self.cursor += 1;
         tok
     }
 

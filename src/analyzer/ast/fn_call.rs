@@ -202,8 +202,7 @@ impl AFnCall {
             maybe_ret_type_key = ctx
                 .get_type(fn_expr.type_key)
                 .to_fn_sig()
-                .maybe_ret_type_key
-                .clone();
+                .maybe_ret_type_key;
         } else {
             // The function is monomorphic, so we can analyze and type-check arguments the normal
             // way.
@@ -234,7 +233,7 @@ impl AFnCall {
 
         for (i, arg) in self.args.iter().enumerate() {
             match i {
-                0 => format!("{}", arg.display(ctx)),
+                0 => arg.display(ctx).to_string(),
                 _ => format!(", {}", arg.display(ctx)),
             };
         }
@@ -417,15 +416,13 @@ fn check_types(
                 .iter()
                 .zip(actual_tuple_type.fields.iter())
             {
-                if let Err(err) = check_types(
+                check_types(
                     ctx,
                     expected_field.type_key,
                     actual_field.type_key,
                     type_mappings,
                     loc,
-                ) {
-                    return Err(err);
-                }
+                )?
             }
 
             return Ok(());
@@ -446,11 +443,7 @@ fn check_types(
 
                     for (generic_tk, replacement_tk) in expected_type_mappings {
                         let actual_tk = actual_type_mappings.get(&generic_tk).unwrap();
-                        if let Err(err) =
-                            check_types(ctx, replacement_tk, *actual_tk, type_mappings, loc)
-                        {
-                            return Err(err);
-                        }
+                        check_types(ctx, replacement_tk, *actual_tk, type_mappings, loc)?
                     }
 
                     Ok(())

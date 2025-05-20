@@ -39,7 +39,7 @@ mod tests {
         match expected_kind {
             Some(kind) => {
                 assert!(!result.errors.is_empty());
-                assert_eq!(result.errors.get(0).unwrap().kind, kind);
+                assert_eq!(result.errors.first().unwrap().kind, kind);
             }
 
             None => assert!(result.errors.is_empty()),
@@ -49,7 +49,7 @@ mod tests {
     fn check_warn(result: &AnalyzedModule, expected_kind: Option<WarnKind>) {
         match expected_kind {
             Some(kind) => {
-                assert_eq!(result.warnings.get(0).unwrap().kind, kind);
+                assert_eq!(result.warnings.first().unwrap().kind, kind);
             }
 
             None => assert!(result.warnings.is_empty()),
@@ -59,7 +59,7 @@ mod tests {
     fn analyze_program(mods: Vec<(String, String)>) -> (ProgramAnalysis, SrcInfo) {
         let mut parsed_mods = HashMap::new();
         let mut file_id = 100;
-        let root_mod_path = mods.get(0).unwrap().0.clone();
+        let root_mod_path = mods.first().unwrap().0.clone();
 
         for (mod_path, mod_code) in mods {
             let tokens = lex(mod_code.as_str(), file_id).expect("lexing should succeed");
@@ -90,7 +90,7 @@ mod tests {
                 match expected_kind {
                     Some(kind) => {
                         assert!(!analyzed_mod.errors.is_empty());
-                        assert_eq!(analyzed_mod.errors.get(0).unwrap().kind, kind);
+                        assert_eq!(analyzed_mod.errors.first().unwrap().kind, kind);
                     }
                     None => {
                         assert!(analyzed_mod.errors.is_empty());

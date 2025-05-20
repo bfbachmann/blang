@@ -96,7 +96,7 @@ impl ACond {
                 break;
             }
 
-            ret_type = branch.body.ret_type_key.clone();
+            ret_type = branch.body.ret_type_key;
         }
 
         ACond {

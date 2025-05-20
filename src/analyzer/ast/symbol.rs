@@ -206,7 +206,7 @@ impl ASymbol {
                 // No parameters were provided, so the type had better not be
                 // parameterized unless the symbol type is the current `impl` type.
                 let poly_type = ctx.get_type(type_key);
-                if !ctx.get_cur_self_type_key().is_some_and(|tk| tk == type_key) {
+                if ctx.get_cur_self_type_key().is_none_or(|tk| tk != type_key) {
                     match poly_type.params() {
                         Some(params) if !allow_polymorph => {
                             let param_names = params.params.iter().map(|p| &p.name).collect();

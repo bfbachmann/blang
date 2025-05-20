@@ -75,7 +75,7 @@ impl ATupleType {
     /// always actually be a positive integer because tuple fields are accessed by index.
     pub fn get_field_index(&self, name: &str) -> usize {
         for (i, field) in self.fields.iter().enumerate() {
-            if field.name == name.to_string() {
+            if field.name == *name {
                 return i;
             }
         }
@@ -175,16 +175,16 @@ impl ATupleInit {
 
     /// Returns the human-readable version of this tuple initialization.
     pub fn display(&self, ctx: &ProgramContext) -> String {
-        let mut s = format!("{{");
+        let mut s = "{".to_string();
 
         for (i, expr) in self.values.iter().enumerate() {
             s += expr.display(ctx).as_str();
 
             if i + 1 < self.values.len() {
-                s += format!(", ").as_str();
+                s += ", ".to_string().as_str();
             }
         }
 
-        s + format!("}}").as_str()
+        s + "}".to_string().as_str()
     }
 }

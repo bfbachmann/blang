@@ -311,7 +311,7 @@ pub fn parse_expr(parser: &mut FileParser) -> ParseResult<Expression> {
     }
 
     // Create expression tree from output queue in RPN order.
-    Ok(parse_from_rpn(&mut out_q)?)
+    parse_from_rpn(&mut out_q)
 }
 
 /// Parses and returns all sequential unary operators at the current position in the token stream.
@@ -1455,6 +1455,6 @@ mod tests {
             }"#,
             0,
         );
-        assert!(matches!(result, Err(_)));
+        assert!(result.is_err());
     }
 }

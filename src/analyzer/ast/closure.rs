@@ -79,10 +79,7 @@ impl AClosure {
             a_args.push(AArg::from(ctx, &arg));
         }
 
-        let a_expected_ret_type = match &expected_ret_type {
-            Some(typ) => Some(ctx.resolve_type(&typ)),
-            None => None,
-        };
+        let a_expected_ret_type = expected_ret_type.as_ref().map(|typ| ctx.resolve_type(typ));
 
         AClosure::from_analyzed(ctx, closure, kind, a_args, a_expected_ret_type)
     }
@@ -103,12 +100,12 @@ impl AClosure {
         ctx.push_scope(Scope::new(kind, expected_ret_type_key));
 
         for arg in a_args {
-            if let Err(_) = ctx.insert_ident(Ident::new_var(
+            if ctx.insert_ident(Ident::new_var(
                 arg.name.clone(),
                 arg.is_mut,
                 arg.type_key,
                 arg.span,
-            )) {
+            )).is_err() {
                 ctx.insert_err(err_dup_fn_arg(&arg.name, arg.span));
             }
         }
@@ -183,7 +180,7 @@ pub fn check_closure_returns(ctx: &mut ProgramContext, closure: &AClosure, kind:
 
                 // If it's a conditional, make sure it is exhaustive and recurse on each branch.
                 Some(AStatement::Conditional(cond)) => {
-                    check_cond_returns(ctx, &cond);
+                    check_cond_returns(ctx, cond);
                 }
 
                 // If it's a loop, recurse on the loop body.
@@ -200,7 +197,7 @@ pub fn check_closure_returns(ctx: &mut ProgramContext, closure: &AClosure, kind:
 
                 // If it's an inline closure, recurse on the closure.
                 Some(AStatement::Closure(closure)) => {
-                    check_closure_returns(ctx, &closure, &ScopeKind::InlineClosure);
+                    check_closure_returns(ctx, closure, &ScopeKind::InlineClosure);
                 }
 
                 // If it's a match statement, make sure all cases return.
@@ -743,7 +740,7 @@ pub fn check_closure_yields(ctx: &mut ProgramContext, closure: &AClosure, kind: 
 
                 // If it's an inline closure, recurse on the closure.
                 Some(AStatement::Closure(closure)) => {
-                    check_closure_yields(ctx, &closure, &ScopeKind::InlineClosure);
+                    check_closure_yields(ctx, closure, &ScopeKind::InlineClosure);
                 }
 
                 _ => {

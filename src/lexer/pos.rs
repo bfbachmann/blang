@@ -3,6 +3,7 @@ use std::fmt;
 
 /// Represents the position (line and column) within a file.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash)]
+#[derive(Default)]
 pub struct Position {
     pub line: u32,
     pub col: u32,
@@ -14,11 +15,6 @@ impl fmt::Display for Position {
     }
 }
 
-impl Default for Position {
-    fn default() -> Self {
-        Position { line: 0, col: 0 }
-    }
-}
 
 impl Position {
     pub fn new(line: u32, col: u32) -> Self {

@@ -236,7 +236,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 } else {
                     panic!(
                         "unexpected array element type {}",
-                        ll_element_type.to_string()
+                        ll_element_type
                     )
                 };
 

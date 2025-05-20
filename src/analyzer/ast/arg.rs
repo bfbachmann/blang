@@ -41,7 +41,7 @@ impl AArg {
             name: arg.name.to_string(),
             type_key: ctx.resolve_type(&arg.typ),
             is_mut: arg.is_mut,
-            span: arg.span.clone(),
+            span: arg.span,
         }
     }
 
@@ -49,7 +49,7 @@ impl AArg {
     pub fn display(&self, ctx: &ProgramContext) -> String {
         let type_display = ctx.display_type(self.type_key);
         match self.name.is_empty() {
-            true => format!("{}", type_display).to_string(),
+            true => type_display.to_string().to_string(),
             false => format!("{}: {}", self.name, type_display).to_string(),
         }
     }

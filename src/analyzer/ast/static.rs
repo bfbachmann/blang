@@ -50,10 +50,7 @@ impl AStatic {
         }
 
         // Analyze the optional type.
-        let declared_tk = match &static_decl.maybe_type {
-            Some(typ) => Some(ctx.resolve_type(typ)),
-            None => None,
-        };
+        let declared_tk = static_decl.maybe_type.as_ref().map(|typ| ctx.resolve_type(typ));
 
         // Make sure the value is a valid constant.
         let value = AExpr::from(ctx, static_decl.value.clone(), declared_tk, false, false);
@@ -85,7 +82,7 @@ impl AStatic {
             name: static_decl.name.value.clone(),
             declared_type_key: declared_tk,
             value,
-            span: static_decl.span().clone(),
+            span: *static_decl.span(),
         }
     }
 

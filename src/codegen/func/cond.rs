@@ -295,7 +295,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let ll_end_block = self.append_block("pattern_end");
 
                 // Generate remaining comparison expressions.
-                while let Some(expr) = exprs_iter.next() {
+                for expr in exprs_iter {
                     let ll_next_pattern_block = self.append_block("next_pattern");
                     self.ll_builder
                         .build_conditional_branch(

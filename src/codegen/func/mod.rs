@@ -349,7 +349,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let ll_fn = self
             .ll_mod
             .get_function(mangled_name.as_str())
-            .expect(format!("function `{}` should exist", mangled_name).as_str());
+            .unwrap_or_else(|| panic!("function `{}` should exist", mangled_name));
 
         self.ll_fn = Some(ll_fn);
 
@@ -786,8 +786,8 @@ fn new_enum_attr(ctx: &Context, name: &str, ll_attr_val: u64) -> Attribute {
     ctx.create_enum_attribute(new_attr_kind(name), ll_attr_val)
 }
 
-pub(crate) fn new_type_attr<'ctx>(
-    ctx: &'ctx Context,
+pub(crate) fn new_type_attr(
+    ctx: &Context,
     name: &str,
     ll_attr_type: AnyTypeEnum,
 ) -> Attribute {

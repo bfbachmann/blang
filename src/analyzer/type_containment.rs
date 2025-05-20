@@ -117,7 +117,7 @@ pub fn check_tuple_containment(
 ) -> AnalyzeResult<()> {
     // Recursively check each tuple field type.
     for typ in &tuple_type.field_types {
-        check_type_containment(ctx, &typ, hierarchy)?;
+        check_type_containment(ctx, typ, hierarchy)?;
     }
 
     Ok(())

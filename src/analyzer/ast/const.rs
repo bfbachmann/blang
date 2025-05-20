@@ -45,10 +45,7 @@ impl AConst {
     /// declaration.
     pub fn from(ctx: &mut ProgramContext, const_decl: &Const) -> Self {
         // Analyze the optional constant type.
-        let declared_tk = match &const_decl.maybe_type {
-            Some(typ) => Some(ctx.resolve_type(typ)),
-            None => None,
-        };
+        let declared_tk = const_decl.maybe_type.as_ref().map(|typ| ctx.resolve_type(typ));
 
         // Make sure the constant value is a valid constant.
         let value = AExpr::from(ctx, const_decl.value.clone(), declared_tk, false, false);
@@ -79,7 +76,7 @@ impl AConst {
             name: const_decl.name.value.clone(),
             declared_type_key: declared_tk,
             value,
-            span: const_decl.span().clone(),
+            span: *const_decl.span(),
         }
     }
 

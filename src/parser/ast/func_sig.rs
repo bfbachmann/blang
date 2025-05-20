@@ -184,18 +184,15 @@ impl FunctionSignature {
         // The next token should be `->` if there is a return type. Otherwise, there is no return
         // type and we're done.
         let mut maybe_ret_type = None;
-        match parser.tokens.peek_next() {
-            Some(Token {
+        if let Some(Token {
                 kind: TokenKind::Arrow,
                 ..
-            }) => {
-                // Remove the `->` and parse the return type.
-                parser.tokens.next();
-                let return_type = Type::parse(parser)?;
-                end_pos = return_type.span().end_pos;
-                maybe_ret_type = Some(return_type);
-            }
-            _ => {}
+            }) = parser.tokens.peek_next() {
+            // Remove the `->` and parse the return type.
+            parser.tokens.next();
+            let return_type = Type::parse(parser)?;
+            end_pos = return_type.span().end_pos;
+            maybe_ret_type = Some(return_type);
         }
 
         Ok(FunctionSignature::new_anon(

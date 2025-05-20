@@ -186,7 +186,7 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
         let mangled_name = mangle_type(
             &self.prog.type_store,
             ext_fn.fn_sig.type_key,
-            &self.type_converter.type_mapping(),
+            self.type_converter.type_mapping(),
             &self.prog.type_monomorphizations,
         );
         let linkage = match self.prog.pub_fns.contains(&ext_fn.fn_sig.type_key) {
@@ -336,7 +336,7 @@ fn emit_to_file(
                 _ => FileType::Object,
             };
 
-            match target_machine.write_to_file(&ll_mod, file_type, &output_file) {
+            match target_machine.write_to_file(ll_mod, file_type, &output_file) {
                 Ok(_) => Ok(()),
                 Err(msg) => Err(CodeGenError::new(
                     ErrorKind::WriteOutFailed,

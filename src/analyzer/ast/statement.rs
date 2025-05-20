@@ -128,15 +128,15 @@ impl AStatement {
 
             Statement::Match(match_) => AStatement::Match(AMatch::from(ctx, match_)),
 
-            Statement::Loop(loop_) => AStatement::Loop(Box::new(ALoop::from(ctx, &loop_))),
+            Statement::Loop(loop_) => AStatement::Loop(Box::new(ALoop::from(ctx, loop_))),
 
             Statement::Break(br) => {
-                analyze_break(ctx, &br);
+                analyze_break(ctx, br);
                 AStatement::Break(br.span)
             }
 
             Statement::Continue(cont) => {
-                analyze_continue(ctx, &cont);
+                analyze_continue(ctx, cont);
                 AStatement::Continue(cont.span)
             }
 
@@ -148,11 +148,11 @@ impl AStatement {
             Statement::Yield(yld) => AStatement::Yield(AYield::from(ctx, yld)),
 
             Statement::StructDeclaration(s) => {
-                AStatement::StructTypeDeclaration(AStructType::from(ctx, &s))
+                AStatement::StructTypeDeclaration(AStructType::from(ctx, s))
             }
 
             Statement::EnumDeclaration(e) => {
-                AStatement::EnumTypeDeclaration(AEnumType::from(ctx, &e))
+                AStatement::EnumTypeDeclaration(AEnumType::from(ctx, e))
             }
 
             Statement::ConstDeclaration(const_decl) => {

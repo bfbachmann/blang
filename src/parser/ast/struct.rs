@@ -83,7 +83,7 @@ impl PartialEq for StructType {
         }
 
         for field in &self.fields {
-            if other.fields.iter().find(|f| f == &field).is_none() {
+            if !other.fields.iter().any(|f| f == field) {
                 return false;
             }
         }

@@ -459,7 +459,7 @@ fn locate_module_dir(ctx: &mut SrcInfo, used_mod_path: &ModulePath) -> Result<Di
             mod_path,
             mod_path
                 .components()
-                .last()
+                .next_back()
                 .unwrap()
                 .as_os_str()
                 .to_string_lossy()
@@ -470,7 +470,7 @@ fn locate_module_dir(ctx: &mut SrcInfo, used_mod_path: &ModulePath) -> Result<Di
             mod_path.parent().unwrap(),
             mod_path
                 .components()
-                .last()
+                .next_back()
                 .unwrap()
                 .as_os_str()
                 .to_string_lossy()

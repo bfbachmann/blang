@@ -80,10 +80,7 @@ impl<'a> ProgramCodeGen<'a> {
         let errs: Vec<CodeGenError> = mod_ids
             .par_iter()
             .filter_map(
-                |mod_id| match gen_module(&self.src_info, &self.prog, *mod_id) {
-                    Ok(_) => None,
-                    Err(err) => Some(err),
-                },
+                |mod_id| gen_module(self.src_info, self.prog, *mod_id).err(),
             )
             .collect();
 
@@ -157,7 +154,7 @@ pub fn init_target_machine(
             ErrorKind::TargetInitFailed,
             format!(
                 "failed to initialize machine for {}",
-                target_triple.to_string()
+                target_triple
             )
             .as_str(),
         )),

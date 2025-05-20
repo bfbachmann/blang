@@ -1153,7 +1153,7 @@ pub fn err_spec_impl_missing_fns(
         format!(
             "The following functions from spec {} are missing: {}.",
             format_code!(spec_name),
-            format_code_vec(&missing_fn_names, ", "),
+            format_code_vec(missing_fn_names, ", "),
         )
         .as_str(),
     )
@@ -1262,7 +1262,7 @@ pub fn err_spec_not_satisfied(
                 1 => "",
                 _ => "s",
             },
-            format_code_vec(&missing_spec_names, ", "),
+            format_code_vec(missing_spec_names, ", "),
             format_code!(param_name),
             format_code!(parent_type_str),
         )

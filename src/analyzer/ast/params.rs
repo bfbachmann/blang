@@ -97,7 +97,7 @@ impl AParam {
             name: param.name.clone(),
             generic_type_key,
             poly_type_key,
-            span: param.span.clone(),
+            span: param.span,
         }
     }
 
@@ -125,6 +125,7 @@ impl AParam {
 
 /// A list of compile-time (generic) parameters.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Default)]
 pub struct AParams {
     pub params: Vec<AParam>,
     pub span: Span,
@@ -136,14 +137,6 @@ impl Hash for AParams {
     }
 }
 
-impl Default for AParams {
-    fn default() -> Self {
-        AParams {
-            params: vec![],
-            span: Span::default(),
-        }
-    }
-}
 
 impl Display for AParams {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -161,7 +154,7 @@ impl AParams {
         for param in &params.params {
             // Record an error and skip this param if another param with the same name already
             // exists.
-            if a_params.iter().find(|p| p.name == param.name).is_some() {
+            if a_params.iter().any(|p| p.name == param.name) {
                 ctx.insert_err(err_dup_param(&param.name, param.span));
                 continue;
             }
@@ -183,7 +176,7 @@ impl AParams {
 
         for (i, param) in self.params.iter().enumerate() {
             if i == 0 {
-                s += format!("{}", param.display(ctx)).as_str();
+                s += param.display(ctx).to_string().as_str();
             } else {
                 s += format!(", {}", param.display(ctx)).as_str();
             }

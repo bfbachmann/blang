@@ -309,7 +309,7 @@ impl AExprKind {
                 }
             ),
             AExprKind::UintLiteral(i) => format!("{}", i),
-            AExprKind::StrLiteral(s) => format!("{}", s),
+            AExprKind::StrLiteral(s) => s.to_string(),
             AExprKind::CharLiteral(c) => format!("{}", c),
             AExprKind::StructInit(s) => s.display(ctx),
             AExprKind::EnumInit(e) => e.display(ctx),
@@ -418,7 +418,7 @@ impl AExpr {
             allow_type,
             prefer_method,
             allow_polymorph,
-            expr.span().clone(),
+            *expr.span(),
         );
 
         // Try to (safely) coerce the expression to the right type (this may involve generic
@@ -459,7 +459,7 @@ impl AExpr {
             return self;
         }
 
-        if !actual_type.is_same_as(ctx, &expected_type, ignore_mutability) {
+        if !actual_type.is_same_as(ctx, expected_type, ignore_mutability) {
             let err = err_mismatched_types(ctx, expected_tk, self.type_key, *expr.span());
             ctx.insert_err(err);
         }
@@ -599,16 +599,13 @@ impl AExpr {
             },
 
             // Only allow coercion of `f64` literals if they don't have explicit type suffixes.
-            AExprKind::F64Literal(f, false) => match target_type {
-                AType::F32 => {
-                    if *f > f32::MAX as f64 || *f < f32::MIN as f64 {
-                        ctx.insert_err(err_literal_out_of_range("f32", self.span))
-                    }
-
-                    self.kind = AExprKind::F32Literal(*f as f32);
-                    self.type_key = ctx.f32_type_key();
+            AExprKind::F64Literal(f, false) => if target_type == &AType::F32 {
+                if *f > f32::MAX as f64 || *f < f32::MIN as f64 {
+                    ctx.insert_err(err_literal_out_of_range("f32", self.span))
                 }
-                _ => {}
+
+                self.kind = AExprKind::F32Literal(*f as f32);
+                self.type_key = ctx.f32_type_key();
             },
 
             // Only allow coercion of negated values if the target type is signed.
@@ -625,7 +622,7 @@ impl AExpr {
                     self.kind = AExprKind::Symbol(ASymbol::new_null(
                         ctx,
                         Some(target_type_key),
-                        symbol.span().clone(),
+                        *symbol.span(),
                     ));
                     return self;
                 }
@@ -667,7 +664,7 @@ impl AExpr {
     /// Creates a new zero-valued expression of the given type.
     pub fn new_zero_value(ctx: &mut ProgramContext, typ: Type) -> Self {
         let type_key = ctx.resolve_type(&typ);
-        let span = typ.span().clone();
+        let span = *typ.span();
 
         match typ {
             Type::Tuple(_) => AExpr {
@@ -823,7 +820,7 @@ pub fn check_operand_types(
     if !is_valid_operand_type(op, left_type, true) {
         errors.push(err_invalid_operand_type(
             ctx,
-            &op,
+            op,
             left_expr.type_key,
             true,
             left_expr.span,
@@ -835,7 +832,7 @@ pub fn check_operand_types(
     if !is_valid_operand_type(op, right_type, false) {
         errors.push(err_invalid_operand_type(
             ctx,
-            &op,
+            op,
             right_expr.type_key,
             false,
             right_expr.span,
@@ -1132,7 +1129,7 @@ fn analyze_fn_call(
     span: Span,
 ) -> AExpr {
     let a_call = AFnCall::from(ctx, &fn_call, maybe_expected_ret_tk);
-    match a_call.maybe_ret_type_key.clone() {
+    match a_call.maybe_ret_type_key {
         Some(type_key) => AExpr {
             kind: AExprKind::FunctionCall(Box::new(a_call)),
             type_key,
@@ -1432,7 +1429,7 @@ fn analyze_from(
     };
 
     // Make sure all possible branches of the statement yield a value.
-    let mut closure = AClosure::new(vec![statement], from.statement.span().clone());
+    let mut closure = AClosure::new(vec![statement], *from.statement.span());
     if valid_statement {
         check_closure_yields(ctx, &closure, &ScopeKind::FromBody);
     }
@@ -1440,7 +1437,7 @@ fn analyze_from(
     AExpr {
         type_key,
         kind: AExprKind::From(Box::new(closure.statements.remove(0))),
-        span: from.span().clone(),
+        span: *from.span(),
     }
 }
 

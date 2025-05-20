@@ -285,7 +285,7 @@ impl TokenKind {
             TokenKind::U64Literal(v) => v.to_string(),
             TokenKind::F64Literal((v, has_suffix)) => format!(
                 "{}{}",
-                v.to_string(),
+                v,
                 match has_suffix {
                     true => "f64",
                     false => "",
@@ -294,7 +294,7 @@ impl TokenKind {
             .to_string(),
             TokenKind::IntLiteral((v, has_suffix)) => format!(
                 "{}{}",
-                v.to_string(),
+                v,
                 match has_suffix {
                     true => "int",
                     false => "",
@@ -544,7 +544,7 @@ fn lex_f32_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<f32, LexingErro
     {
         Ok(i) => FilterResult::Emit(i),
         Err(e) => {
-            return FilterResult::Error(LexingError::InvalidF64(e));
+            FilterResult::Error(LexingError::InvalidF64(e))
         }
     }
 }
@@ -586,7 +586,7 @@ fn lex_f64_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<(f64, bool), Le
     {
         Ok(f) => FilterResult::Emit((f, has_suffix)),
         Err(e) => {
-            return FilterResult::Error(LexingError::InvalidF64(e));
+            FilterResult::Error(LexingError::InvalidF64(e))
         }
     }
 }

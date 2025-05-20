@@ -345,7 +345,7 @@ fn print_source_no_color(file_path: &str, span: &Span) {
 ///
 ///     A -> B -> C
 pub fn hierarchy_to_string(hierarchy: &Vec<String>) -> String {
-    return format_code_vec(hierarchy, " -> ");
+    format_code_vec(hierarchy, " -> ")
 }
 
 /// Formats the given vector by placing `sep` between its elements, and rendering

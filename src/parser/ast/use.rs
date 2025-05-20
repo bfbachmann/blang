@@ -101,7 +101,7 @@ impl Display for UsedMod {
             write!(f, "@{} ", alias)?;
         }
 
-        if self.symbols.len() > 0 {
+        if !self.symbols.is_empty() {
             write!(f, "{{")?;
 
             for (i, ident) in self.symbols.iter().enumerate() {

@@ -46,7 +46,7 @@ impl BoolLit {
                 span,
             }) => Ok(BoolLit {
                 value: *value,
-                span: span.clone(),
+                span: *span,
             }),
             Some(other) => Err(ParseError::new_with_token(
                 ErrorKind::ExpectedBasicExpr,

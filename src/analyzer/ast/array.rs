@@ -48,10 +48,7 @@ impl AArrayType {
     /// Performs semantic analysis on the given array type.
     pub fn from(ctx: &mut ProgramContext, array_type: &ArrayType) -> AArrayType {
         // Analyze the contained type.
-        let mut maybe_element_type_key = match &array_type.maybe_element_type {
-            Some(element_type) => Some(ctx.resolve_type(element_type)),
-            None => None,
-        };
+        let mut maybe_element_type_key = array_type.maybe_element_type.as_ref().map(|element_type| ctx.resolve_type(element_type));
 
         // Analyze the array type length expression.
         let len_expr = AExpr::from(
@@ -252,7 +249,7 @@ impl AArrayInit {
             maybe_repeat_count,
             maybe_element_type_key,
             type_key,
-            span: array_init.span.clone(),
+            span: array_init.span,
         }
     }
 
@@ -260,18 +257,18 @@ impl AArrayInit {
     pub fn display(&self, ctx: &ProgramContext) -> String {
         let mut s = "[".to_string();
 
-        return match &self.maybe_repeat_count {
+        match &self.maybe_repeat_count {
             Some(count) => s + format!("{}; {}]", self.values.first().unwrap(), count).as_str(),
             None => {
                 for (i, val) in self.values.iter().enumerate() {
                     match i {
-                        0 => s += format!("{}", val.display(ctx)).as_str(),
+                        0 => s += val.display(ctx).to_string().as_str(),
                         _ => s += format!(", {}", val.display(ctx)).as_str(),
                     }
                 }
 
                 s + "]"
             }
-        };
+        }
     }
 }

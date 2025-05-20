@@ -191,10 +191,7 @@ impl<'a> TypeConverter<'a> {
         //      fn new_person(person: *Person)
         //
         // and the `person` pointer will be written to when assigning the return value.
-        let ret_type = match sig.maybe_ret_type_key {
-            Some(type_key) => Some(self.get_type(type_key)),
-            None => None,
-        };
+        let ret_type = sig.maybe_ret_type_key.map(|type_key| self.get_type(type_key));
         let extra_arg_type = match ret_type {
             Some(AType::Struct(_)) => Some(self.ctx.ptr_type(AddressSpace::default())),
             Some(AType::Enum(_)) => Some(self.ctx.ptr_type(AddressSpace::default())),
@@ -422,5 +419,5 @@ fn gen_intrinsic_types(ctx: &Context, target_machine: &TargetMachine) {
 
 fn enum_variant_num_field_size(num_variants: u64) -> u32 {
     let bits_required = 64 - num_variants.leading_zeros();
-    (bits_required + 7) / 8
+    bits_required.div_ceil(8)
 }

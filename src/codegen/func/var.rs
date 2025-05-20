@@ -113,7 +113,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 if let Some(consts) = self.mod_consts.get(mod_id) {
                     if let Some(const_) = consts.get(name) {
                         let ll_ptr = self.stack_alloc(name, const_.type_key);
-                        let ll_val = self.gen_const_expr(&const_);
+                        let ll_val = self.gen_const_expr(const_);
                         self.copy_value(ll_val, ll_ptr, const_.type_key);
                         return ll_ptr;
                     }

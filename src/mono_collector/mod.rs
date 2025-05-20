@@ -36,7 +36,7 @@ impl Hash for MonoItem {
         // MonoItems should hash to the same value if they have the same function type key and
         // type mappings.
         self.type_key.hash(state);
-        BTreeMap::from_iter(self.type_mappings.clone().into_iter()).hash(state);
+        BTreeMap::from_iter(self.type_mappings.clone()).hash(state);
     }
 }
 
@@ -281,7 +281,7 @@ pub fn mono_prog(src_info: &SrcInfo, analysis: ProgramAnalysis) -> MonoProg {
     let mut mono_items = HashMap::new();
     let mut iter = collector.complete_mono_items.into_iter();
     iter.next();
-    while let Some(item) = iter.next() {
+    for item in iter {
         if collector.ctx.fn_is_pub(item.type_key) {
             pub_fns.insert(item.type_key);
         }

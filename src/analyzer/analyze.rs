@@ -29,12 +29,12 @@ impl AnalyzedModule {
     ) -> AnalyzedModule {
         // Extract and sort errors and warnings by their location in the source file.
         let mut errors: Vec<(Position, AnalyzeError)> =
-            errors.into_iter().map(|(p, e)| (p, e)).collect();
+            errors.into_iter().collect();
         errors.sort_by(|(pos1, _), (pos2, _)| pos1.cmp(pos2));
 
         let mut warnings: Vec<(Position, AnalyzeWarning)> =
-            warns.into_iter().map(|(p, e)| (p, e)).collect();
-        warnings.sort_by(|(pos1, _), (pos2, _)| pos1.cmp(&pos2));
+            warns.into_iter().collect();
+        warnings.sort_by(|(pos1, _), (pos2, _)| pos1.cmp(pos2));
 
         AnalyzedModule {
             module,
@@ -189,7 +189,7 @@ fn check_main_fn(
             span,
         ));
     } else if !sig.args.is_empty() {
-        let span = sig.args.get(0).unwrap().span;
+        let span = sig.args.first().unwrap().span;
         analyzed_module.errors.push(AnalyzeError::new(
             ErrorKind::InvalidMain,
             format_code!("function {} cannot take arguments", "main").as_str(),

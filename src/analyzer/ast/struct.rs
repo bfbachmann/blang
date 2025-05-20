@@ -176,10 +176,7 @@ impl AStructType {
 
     /// Returns the type of the struct field with the given name.
     pub fn get_field_type_key(&self, name: &str) -> Option<TypeKey> {
-        match self.fields.iter().find(|f| f.name.as_str() == name) {
-            Some(field) => Some(field.type_key),
-            None => None,
-        }
+        self.fields.iter().find(|f| f.name.as_str() == name).map(|field| field.type_key)
     }
 
     /// Returns the index of the field with the given name.
@@ -285,10 +282,8 @@ impl AStructInit {
         // Make sure all struct fields were assigned.
         let mut uninit_field_names = vec![];
         for field in &struct_type.fields {
-            if field_values
-                .iter()
-                .find(|(name, _)| name == &field.name)
-                .is_none()
+            if !field_values
+                .iter().any(|(name, _)| name == &field.name)
             {
                 uninit_field_names.push(field.name.as_str());
             }

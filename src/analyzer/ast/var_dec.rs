@@ -30,10 +30,7 @@ impl AVarDecl {
     pub fn from(ctx: &mut ProgramContext, var_decl: &VariableDeclaration) -> Self {
         // Analyze the variable type. It might be empty because type annotations are optional
         // in variable declarations.
-        let maybe_declared_tk = match &var_decl.maybe_type {
-            Some(typ) => Some(ctx.resolve_type(typ)),
-            None => None,
-        };
+        let maybe_declared_tk = var_decl.maybe_type.as_ref().map(|typ| ctx.resolve_type(typ));
 
         // Check the expression being assigned to this new variable. Note that it's okay for
         // the variable name to collide with that of another variable. In this case, the old

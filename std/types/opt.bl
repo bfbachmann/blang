@@ -42,4 +42,13 @@ impl Opt {
             return @mem.heap_alloc[T](1)^
         }
     }
+
+    /// If this optional contains a value, transforms the value using `f` and
+    /// returns an optional wrapping the result. Otherwise, returns None.
+    pub fn map[O](self, f: fn (T) -> O) -> Opt[O] {
+        match self {
+        case let Opt[T]::Some(t): return Opt[O]::Some(f(t))
+        case: return Opt[O]::None
+        }
+    }
 }

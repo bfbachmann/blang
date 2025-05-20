@@ -43,7 +43,7 @@ impl FileParser {
     pub fn parse_expecting_any(&mut self, expected: Vec<TokenKind>) -> ParseResult<Token> {
         match self.tokens.next() {
             None => {
-                return Err(ParseError::new(
+                Err(ParseError::new(
                     ErrorKind::UnexpectedEOF,
                     format!(
                         r#"expected {}{}, but found EOF"#,
@@ -117,7 +117,7 @@ impl FileParser {
                 ..
             }) => Ok(name.clone()),
             None => {
-                return Err(ParseError::new(
+                Err(ParseError::new(
                     ErrorKind::UnexpectedEOF,
                     "expected identifier, but found EOF",
                     None,
@@ -125,7 +125,7 @@ impl FileParser {
                 ))
             }
             Some(other) => {
-                return Err(ParseError::new_with_token(
+                Err(ParseError::new_with_token(
                     ErrorKind::ExpectedIdent,
                     format_code!("expected identifier, but found {}", other).as_str(),
                     other.clone(),

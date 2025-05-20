@@ -137,15 +137,12 @@ impl AFnSig {
                 }
             }
 
-            let a_arg = AArg::from(ctx, &arg);
+            let a_arg = AArg::from(ctx, arg);
             a_fn_sig.args.push(a_arg);
         }
 
         // Analyze the return type.
-        a_fn_sig.maybe_ret_type_key = match &sig.maybe_ret_type {
-            Some(typ) => Some(ctx.resolve_type(typ)),
-            None => None,
-        };
+        a_fn_sig.maybe_ret_type_key = sig.maybe_ret_type.as_ref().map(|typ| ctx.resolve_type(typ));
 
         // Replace the type now that it has been fully analyzed.
         ctx.replace_type(a_fn_sig.type_key, AType::from_fn_sig(a_fn_sig.clone()));
@@ -249,7 +246,7 @@ impl AFnSig {
                 // and see if the resulting signature match matches `other`.
                 let mut this = self.clone();
                 this.replace_types(ctx, &type_mappings);
-                return this.is_same_as(ctx, &other);
+                return this.is_same_as(ctx, other);
             }
 
             (None, None) => {}
@@ -350,7 +347,7 @@ impl AFnSig {
                     )
                     .as_str();
                 } else {
-                    s += format!("{}", arg.display(ctx)).as_str();
+                    s += arg.display(ctx).to_string().as_str();
                 }
             } else {
                 s += format!(", {}", arg.display(ctx)).as_str();

@@ -45,7 +45,7 @@ impl AIndex {
             collection_expr: collection_expr.clone(),
             index_expr: AExpr::new_zero_value(ctx, Type::new_unresolved("uint")),
             result_type_key: ctx.unknown_type_key(),
-            span: index.span().clone(),
+            span: *index.span(),
         };
 
         // The collection expression must be of an array, tuple, or pointer type.
@@ -142,7 +142,7 @@ impl AIndex {
             collection_expr,
             index_expr,
             result_type_key,
-            span: index.span().clone(),
+            span: *index.span(),
         }
     }
 

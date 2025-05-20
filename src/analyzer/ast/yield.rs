@@ -34,7 +34,7 @@ locatable_impl!(AYield);
 impl AYield {
     /// Performs semantic analysis on a `yield` statement.
     pub fn from(ctx: &mut ProgramContext, yld: &Yield) -> AYield {
-        let span = yld.span().clone();
+        let span = *yld.span();
 
         // Make sure we are inside a `from` block. If not, record the error and
         // return a dummy value.

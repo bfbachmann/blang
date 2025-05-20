@@ -49,7 +49,7 @@ impl Pattern {
                 kind: TokenKind::Identifier(ident),
                 span,
             }) if ident == "_" => {
-                let span = span.clone();
+                let span = *span;
                 parser.tokens.next();
                 return Ok(Pattern {
                     kind: PatternKind::Wildcard,

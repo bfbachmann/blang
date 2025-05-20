@@ -56,7 +56,7 @@ impl AMemberAccess {
             member_name: member_name.value.clone(),
             member_type_key: ctx.unknown_type_key(),
             is_method: false,
-            span: access.span().clone(),
+            span: *access.span(),
         };
         if base_type.is_unknown() {
             return placeholder;
@@ -139,7 +139,7 @@ impl AMemberAccess {
             member_name: member_name.value.clone(),
             member_type_key,
             is_method,
-            span: access.span().clone(),
+            span: *access.span(),
         }
     }
 
@@ -282,7 +282,7 @@ fn resolve_struct_field(
                                 Box::new(base_expr.clone()),
                             ),
                             struct_tk,
-                            base_expr.span().clone(),
+                            *base_expr.span(),
                         );
                     }
                     Ok(field_tk)
@@ -428,7 +428,7 @@ fn resolve_concrete_method(
                     false => Operator::Reference,
                 };
 
-                let span = base_expr.span().clone();
+                let span = *base_expr.span();
                 *base_expr = AExpr::new(
                     AExprKind::UnaryOperation(op, Box::new(base_expr.clone())),
                     self_arg_type_key,

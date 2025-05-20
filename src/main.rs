@@ -193,10 +193,7 @@ fn main() {
                 let quiet = sub_matches.get_flag("quiet");
                 let debug = sub_matches.get_flag("debug");
 
-                let linker = match sub_matches.get_one::<String>("linker") {
-                    Some(l) => Some(l.to_owned()),
-                    None => None,
-                };
+                let linker = sub_matches.get_one::<String>("linker").map(|l| l.to_owned());
 
                 let linker_args = sub_matches
                     .get_many::<String>("linker-flag")
@@ -599,7 +596,7 @@ mod tests {
     fn clang_build_verify(ir_path: &str, exe_path: &str) -> Child {
         std::process::Command::new("clang-18")
             .args([
-                &ir_path,
+                ir_path,
                 "-O2",
                 "-fverify-intermediate-code",
                 "-fsanitize=undefined,address",
@@ -611,7 +608,7 @@ mod tests {
                 "-Wpedantic",
                 "-Werror",
                 "-o",
-                &exe_path,
+                exe_path,
             ])
             .spawn()
             .unwrap()
