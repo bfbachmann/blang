@@ -92,7 +92,7 @@ fn main() {
     // Add the "check" subcommand for performing static.rs analysis.
     let cmd = cmd.subcommand(
         Command::new("check")
-            .about("Perform static.rs analysis only")
+            .about("Perform static analysis only")
             .arg(
                 arg!([TARGET_MODULE] "The module to check")
                     .required(false)
