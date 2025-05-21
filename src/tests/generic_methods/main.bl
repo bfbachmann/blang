@@ -2,6 +2,7 @@ mod generic_methods
 
 use "std/libc" @proc
 use "std/runtime" {assert}
+use "std/types/opt" {Opt}
 
 spec Clone {
     fn clone(self) -> Self
@@ -38,6 +39,19 @@ impl Other: Clone {
 fn main() {
     assert(Thing.test("sup!") == "sup!", "expected 'sup!'")
     assert(Thing{}.do_clone(&Other{value: 2}).value == 2, "expected 2")
+    
+    // Opt.map is a funky generic method that takes a function argument that
+    // references its generic parameters. We're going to test it here.
+    {
+        for let mut i = 0; i < 10; i += 1 {
+            let result = Opt[int]::Some(i)
+                .map(fn (v: int) -> bool {
+                    return v % 2 == 0
+                })
+                .unwrap()
+            assert(result == (i % 2 == 0), "Opt.map is broken")
+        }
+    }
 
     @proc.exit(0)
 }

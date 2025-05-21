@@ -894,18 +894,24 @@ impl ProgramContext {
             }
         }
 
+        let mut replaced_params = false;
         if let Some(params) = &fn_sig.params {
             for param in &params.params {
                 if type_mappings.contains_key(&param.generic_type_key) {
                     replaced_tks = true;
+                    replaced_params = true;
                     break;
                 }
             }
         }
 
         if replaced_tks {
-            // Remove parameters from the signature now that they're no longer relevant.
-            fn_sig.params = None;
+            // Only delete the generic params on the function if they're the params we just
+            // replaced. This won't always be the case - sometimes we're just replacing generic
+            // parameters from the impl type and not on the ones on the method itself.
+            if replaced_params {
+                fn_sig.params = None;
+            }
 
             // Define the new type in the program context.
             return match maybe_target_tk {
@@ -1356,7 +1362,9 @@ impl ProgramContext {
     /// If `type_key` corresponds to a type that was produced by a monomorphization,
     /// this function returns the type key of its corresponding polymorphic type.
     pub fn get_poly_type_key(&self, mono_tk: TypeKey) -> Option<TypeKey> {
-        self.type_monomorphizations.get(&mono_tk).map(|mono| mono.poly_type_key)
+        self.type_monomorphizations
+            .get(&mono_tk)
+            .map(|mono| mono.poly_type_key)
     }
 
     /// Returns the type key for the analyzer-internal `<unknown>` type.
@@ -1860,10 +1868,7 @@ impl ProgramContext {
     }
 
     pub fn get_local_ident(&mut self, name: &str, set_usage: Option<Usage>) -> Option<&Ident> {
-        match self
-            .cur_mod_ctx_mut()
-            .get_ident_mut(name, set_usage)
-        {
+        match self.cur_mod_ctx_mut().get_ident_mut(name, set_usage) {
             Some(ident) => {
                 // If the identifier refers to something that has not yet been analyzed, analyze it.
                 match &ident.kind {
