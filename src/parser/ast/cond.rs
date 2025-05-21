@@ -5,11 +5,11 @@ use std::hash::{Hash, Hasher};
 use crate::lexer::pos::Span;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::locatable_impl;
 use crate::parser::ast::branch::Branch;
 use crate::parser::error::ParseResult;
 use crate::parser::file_parser::FileParser;
 use crate::Locatable;
-use crate::{locatable_impl, util};
 
 /// Represents a conditional (i.e. branching if/else if/else statements).
 #[derive(Debug, Clone, Eq)]
@@ -32,7 +32,7 @@ impl fmt::Display for Conditional {
 
 impl PartialEq for Conditional {
     fn eq(&self, other: &Self) -> bool {
-        util::vecs_eq(&self.branches, &other.branches) && self.span == other.span
+        self.branches == other.branches && self.span == other.span
     }
 }
 
@@ -74,40 +74,32 @@ impl Conditional {
         // We now have the first `if` branch. Continue by adding other `else if` branches until
         // there are none left.
         let mut branches = vec![branch];
-        loop {
+        while let Some(&Token {
+            kind: TokenKind::Else,
+            ..
+        }) = parser.tokens.peek_next()
+        {
+            // Move past the `else` token.
+            parser.tokens.next();
+
             match parser.tokens.peek_next() {
-                Some(&Token {
-                    kind: TokenKind::Else,
+                // `else if` branch
+                Some(Token {
+                    kind: TokenKind::If,
                     ..
                 }) => {
-                    // Move past the `else` token.
+                    // Move past the `if` token.
                     parser.tokens.next();
-
-                    match parser.tokens.peek_next() {
-                        // `else if` branch
-                        Some(Token {
-                            kind: TokenKind::If,
-                            ..
-                        }) => {
-                            // Move past the `if` token.
-                            parser.tokens.next();
-                            let branch = Branch::from(parser, true)?;
-                            branches.push(branch);
-                        }
-
-                        // `else` branch.
-                        _ => {
-                            // Parse the rest of the branch and add it to the list of branches, then break
-                            // because we're reached the end of the conditional.
-                            let branch = Branch::from(parser, false)?;
-                            branches.push(branch);
-                            break;
-                        }
-                    }
+                    let branch = Branch::from(parser, true)?;
+                    branches.push(branch);
                 }
 
+                // `else` branch.
                 _ => {
-                    // The next token is not `else`, so we assume it's some new statement and break.
+                    // Parse the rest of the branch and add it to the list of branches, then break
+                    // because we're reached the end of the conditional.
+                    let branch = Branch::from(parser, false)?;
+                    branches.push(branch);
                     break;
                 }
             }

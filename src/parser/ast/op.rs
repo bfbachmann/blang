@@ -149,26 +149,26 @@ impl Operator {
     /// Returns true if the operator is left-associative. Operator associativity is copied from
     /// the C standard.
     pub fn is_left_associative(&self) -> bool {
-        match self {
+        !matches!(
+            self,
             Operator::LogicalNot
-            | Operator::BitwiseNot
-            | Operator::Reference
-            | Operator::MutReference
-            | Operator::Defererence => false,
-            _ => true,
-        }
+                | Operator::BitwiseNot
+                | Operator::Reference
+                | Operator::MutReference
+                | Operator::Defererence
+        )
     }
 
     /// Returns true if this is a binary operator.
     pub fn is_binary(&self) -> bool {
-        match self {
+        !matches!(
+            self,
             Operator::LogicalNot
-            | Operator::BitwiseNot
-            | Operator::Reference
-            | Operator::MutReference
-            | Operator::Defererence => false,
-            _ => true,
-        }
+                | Operator::BitwiseNot
+                | Operator::Reference
+                | Operator::MutReference
+                | Operator::Defererence
+        )
     }
 
     /// Returns true if this is a bit shift operator.

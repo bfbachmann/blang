@@ -79,9 +79,7 @@ impl<'a> ProgramCodeGen<'a> {
         // Do module codegen in parallel.
         let errs: Vec<CodeGenError> = mod_ids
             .par_iter()
-            .filter_map(
-                |mod_id| gen_module(self.src_info, self.prog, *mod_id).err(),
-            )
+            .filter_map(|mod_id| gen_module(self.src_info, self.prog, *mod_id).err())
             .collect();
 
         match errs.is_empty() {
@@ -152,11 +150,7 @@ pub fn init_target_machine(
     ) {
         None => Err(CodeGenError::new(
             ErrorKind::TargetInitFailed,
-            format!(
-                "failed to initialize machine for {}",
-                target_triple
-            )
-            .as_str(),
+            format!("failed to initialize machine for {}", target_triple).as_str(),
         )),
         Some(machine) => Ok(machine),
     }

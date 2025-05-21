@@ -543,9 +543,7 @@ fn lex_f32_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<f32, LexingErro
         .parse::<f32>()
     {
         Ok(i) => FilterResult::Emit(i),
-        Err(e) => {
-            FilterResult::Error(LexingError::InvalidF64(e))
-        }
+        Err(e) => FilterResult::Error(LexingError::InvalidF64(e)),
     }
 }
 
@@ -585,9 +583,7 @@ fn lex_f64_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<(f64, bool), Le
         .parse::<f64>()
     {
         Ok(f) => FilterResult::Emit((f, has_suffix)),
-        Err(e) => {
-            FilterResult::Error(LexingError::InvalidF64(e))
-        }
+        Err(e) => FilterResult::Error(LexingError::InvalidF64(e)),
     }
 }
 

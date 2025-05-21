@@ -2,13 +2,13 @@ use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
+use crate::locatable_impl;
 use crate::parser::ast::func_sig::FunctionSignature;
 use crate::parser::ast::params::Params;
 use crate::parser::ast::symbol::Name;
 use crate::parser::error::ParseResult;
 use crate::parser::file_parser::FileParser;
 use crate::Locatable;
-use crate::{locatable_impl, util};
 
 /// Represents a spec declaration.
 #[derive(Debug, Eq, Clone)]
@@ -31,7 +31,7 @@ impl Hash for SpecType {
 impl PartialEq for SpecType {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
-            && util::vecs_eq(&self.fn_sigs, &other.fn_sigs)
+            && self.fn_sigs == other.fn_sigs
             && self.maybe_params == other.maybe_params
     }
 }

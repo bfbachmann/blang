@@ -1,14 +1,14 @@
-use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::mangling::mangle_type;
-use crate::analyzer::prog_context::{Monomorphization, TypeImpls};
-use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
+use crate::analyzer::prog_context::Monomorphization;
+use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::codegen::convert::TypeConverter;
 use crate::codegen::error::CodeGenResult;
 use crate::codegen::scope::{CodegenScope, CodegenScopeKind, FromScope, LoopScope};
 use crate::lexer::pos::Locatable;
-use crate::parser::{ModID, SrcInfo};
+use crate::mono_collector::MonoProg;
+use crate::parser::SrcInfo;
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
@@ -35,15 +35,9 @@ pub struct FnCodeGen<'a, 'ctx> {
     ll_builder: &'a Builder<'ctx>,
     di_ctx: Option<&'a mut DICtx<'ctx>>,
     ll_mod: &'a Module<'ctx>,
-    type_store: &'a TypeStore,
-    type_impls: &'a HashMap<TypeKey, TypeImpls>,
     type_converter: &'a TypeConverter<'ctx>,
-    type_monomorphizations: &'a HashMap<TypeKey, Monomorphization>,
-    /// Stores constant values that are declared in the module outside of functions.
-    mod_consts: &'a HashMap<ModID, HashMap<String, AExpr>>,
-    /// Stores static values that are declared in the module outside of functions.
-    mod_statics: &'a HashMap<ModID, HashMap<String, AExpr>>,
     ll_fn: Option<FunctionValue<'ctx>>,
+    prog: &'a MonoProg,
     scopes: Vec<CodegenScope<'ctx>>,
     cur_block: Option<BasicBlock<'ctx>>,
 }
@@ -62,12 +56,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         builder: &'a Builder<'ctx>,
         di_ctx: Option<&'a mut DICtx<'ctx>>,
         module: &'a Module<'ctx>,
-        type_store: &'a TypeStore,
-        type_impls: &'a HashMap<TypeKey, TypeImpls>,
-        type_monomorphizations: &'a HashMap<TypeKey, Monomorphization>,
         type_converter: &'a TypeConverter<'ctx>,
-        mod_consts: &'a HashMap<ModID, HashMap<String, AExpr>>,
-        mod_statics: &'a HashMap<ModID, HashMap<String, AExpr>>,
+        prog: &'a MonoProg,
         func: &AFn,
     ) -> CodeGenResult<FunctionValue<'ctx>> {
         let mut fn_compiler = FnCodeGen {
@@ -76,13 +66,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             ll_builder: builder,
             di_ctx,
             ll_mod: module,
-            type_store,
-            type_impls,
             type_converter,
-            type_monomorphizations,
-            mod_consts,
-            mod_statics,
             ll_fn: None,
+            prog,
             scopes: vec![CodegenScope::new_fn()],
             cur_block: None,
         };
@@ -338,10 +324,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles the given function.
     fn gen_fn(&mut self, func: &AFn) -> CodeGenResult<FunctionValue<'ctx>> {
         let mangled_name = mangle_type(
-            self.type_store,
+            &self.prog.type_store,
             func.signature.type_key,
             self.type_converter.type_mapping(),
-            self.type_monomorphizations,
+            &self.prog.type_monomorphizations,
         );
 
         // Retrieve the function and create a new "entry" block at the start of the function
@@ -379,7 +365,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             self.gen_di_fn_param(arg, arg_index);
             arg_index += 1;
 
-            let arg_type = self.type_store.get_type(arg.type_key);
+            let arg_type = self.prog.type_store.get_type(arg.type_key);
 
             // Composite types are passed as pointers and don't need to be copied to the callee
             // stack because they point to memory on the caller's stack that is safe to modify.
@@ -395,7 +381,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // If the function body does not end in an explicit return (or other terminator
         // instruction), we have to insert one.
-        let fn_scope = self.pop_scope().to_fn();
+        let fn_scope = self.pop_scope().into_fn();
         if !fn_scope.guarantees_return {
             self.ll_builder.build_return(None).unwrap();
         }
@@ -483,7 +469,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         type_key: TypeKey,
         name: &str,
     ) -> BasicValueEnum<'ctx> {
-        let typ = self.type_store.get_type(type_key);
+        let typ = self.prog.type_store.get_type(type_key);
         if typ.is_composite() {
             ll_ptr.as_basic_value_enum()
         } else {
@@ -532,7 +518,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         enum_type_key: TypeKey,
         ll_enum_value: BasicValueEnum<'ctx>,
     ) -> IntValue<'ctx> {
-        let enum_type = self.type_store.get_type(enum_type_key);
+        let enum_type = self.prog.type_store.get_type(enum_type_key);
         let ll_enum_type = self.type_converter.get_basic_type(enum_type_key);
         let ll_variant_num_type = ll_enum_type
             .into_struct_type()
@@ -625,7 +611,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             self.type_converter,
             fn_tk,
             self.type_converter.type_mapping(),
-            self.type_monomorphizations,
+            &self.prog.type_monomorphizations,
         );
 
         match self.ll_mod.get_function(&mangled_name) {
@@ -636,7 +622,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     self.ll_ctx,
                     self.ll_mod,
                     self.type_converter,
-                    self.type_monomorphizations,
+                    &self.prog.type_monomorphizations,
                     fn_sig,
                     Some(Linkage::External),
                 );
@@ -786,11 +772,7 @@ fn new_enum_attr(ctx: &Context, name: &str, ll_attr_val: u64) -> Attribute {
     ctx.create_enum_attribute(new_attr_kind(name), ll_attr_val)
 }
 
-pub(crate) fn new_type_attr(
-    ctx: &Context,
-    name: &str,
-    ll_attr_type: AnyTypeEnum,
-) -> Attribute {
+pub(crate) fn new_type_attr(ctx: &Context, name: &str, ll_attr_type: AnyTypeEnum) -> Attribute {
     ctx.create_type_attribute(new_attr_kind(name), ll_attr_type)
 }
 

@@ -136,35 +136,35 @@ pub enum CodegenScopeKind<'ctx> {
 }
 
 impl<'ctx> CodegenScopeKind<'ctx> {
-    pub fn to_loop(self) -> LoopScope<'ctx> {
+    pub fn into_loop(self) -> LoopScope<'ctx> {
         match self {
             CodegenScopeKind::Loop(scope) => scope,
             _ => panic!("cannot cast scope to Loop"),
         }
     }
 
-    pub fn to_from(self) -> FromScope<'ctx> {
+    pub fn into_from(self) -> FromScope<'ctx> {
         match self {
             CodegenScopeKind::From(scope) => scope,
             _ => panic!("cannot cast scope to From"),
         }
     }
 
-    pub fn to_branch(self) -> BasicScope {
+    pub fn into_branch(self) -> BasicScope {
         match self {
             CodegenScopeKind::Branch(scope) => scope,
             _ => panic!("cannot cast scope to Branch"),
         }
     }
 
-    pub fn to_fn(self) -> FnScope {
+    pub fn into_fn(self) -> FnScope {
         match self {
             CodegenScopeKind::Func(scope) => scope,
             _ => panic!("cannot cast scope to Func"),
         }
     }
 
-    pub fn to_statement(self) -> BasicScope {
+    pub fn into_statement(self) -> BasicScope {
         match self {
             CodegenScopeKind::Statement(scope) => scope,
             _ => panic!("cannot cast scope to Statement"),

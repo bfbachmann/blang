@@ -4,6 +4,7 @@ use std::hash::{Hash, Hasher};
 use crate::lexer::pos::{Position, Span};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::locatable_impl;
 use crate::parser::ast::arg::Argument;
 use crate::parser::ast::params::Params;
 use crate::parser::ast::r#type::Type;
@@ -11,7 +12,6 @@ use crate::parser::ast::symbol::Name;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::file_parser::FileParser;
 use crate::Locatable;
-use crate::{locatable_impl, util};
 
 /// Represents the name, arguments, and return type of a function. Anonymous functions
 /// have empty names.
@@ -65,9 +65,9 @@ impl fmt::Display for FunctionSignature {
 impl PartialEq for FunctionSignature {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
-            && util::vecs_eq(&self.args, &other.args)
+            && self.args == other.args
             && self.maybe_ret_type == other.maybe_ret_type
-            && util::opts_eq(&self.params, &other.params)
+            && self.params == other.params
     }
 }
 
@@ -185,9 +185,10 @@ impl FunctionSignature {
         // type and we're done.
         let mut maybe_ret_type = None;
         if let Some(Token {
-                kind: TokenKind::Arrow,
-                ..
-            }) = parser.tokens.peek_next() {
+            kind: TokenKind::Arrow,
+            ..
+        }) = parser.tokens.peek_next()
+        {
             // Remove the `->` and parse the return type.
             parser.tokens.next();
             let return_type = Type::parse(parser)?;

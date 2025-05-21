@@ -2,8 +2,7 @@ use crate::parser::FileID;
 use std::fmt;
 
 /// Represents the position (line and column) within a file.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash)]
-#[derive(Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Default)]
 pub struct Position {
     pub line: u32,
     pub col: u32,
@@ -14,7 +13,6 @@ impl fmt::Display for Position {
         write!(f, "{}:{}", self.line, self.col)
     }
 }
-
 
 impl Position {
     pub fn new(line: u32, col: u32) -> Self {

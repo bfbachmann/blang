@@ -1105,7 +1105,7 @@ impl ProgramContext {
     pub fn monomorphize_parameterized_type(
         &mut self,
         poly_type_key: TypeKey,
-        param_types: &Vec<Type>,
+        param_types: &[Type],
         loc: &impl Locatable,
     ) -> TypeKey {
         let param_type_keys: Vec<TypeKey> =

@@ -310,13 +310,10 @@ impl AMatchCase {
         }
 
         // Analyze the condition, if there is one.
-        let maybe_cond = case.maybe_cond.as_ref().map(|cond| AExpr::from(
-                ctx,
-                cond.clone(),
-                Some(ctx.bool_type_key()),
-                false,
-                false,
-            ));
+        let maybe_cond = case
+            .maybe_cond
+            .as_ref()
+            .map(|cond| AExpr::from(ctx, cond.clone(), Some(ctx.bool_type_key()), false, false));
 
         // Analyze the statement.
         let body = AClosure::from(ctx, &case.body, ScopeKind::BranchBody, vec![], None);

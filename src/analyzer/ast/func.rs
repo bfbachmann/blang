@@ -12,7 +12,6 @@ use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::Span;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::func_sig::FunctionSignature;
-use crate::util;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fmt::Formatter;
@@ -46,10 +45,10 @@ impl Hash for AFnSig {
 impl PartialEq for AFnSig {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
-            && util::vecs_eq(&self.args, &other.args)
-            && util::opts_eq(&self.maybe_ret_type_key, &other.maybe_ret_type_key)
+            && self.args == other.args
+            && self.maybe_ret_type_key == other.maybe_ret_type_key
             && self.maybe_impl_type_key == other.maybe_impl_type_key
-            && util::opts_eq(&self.params, &other.params)
+            && self.params == other.params
     }
 }
 

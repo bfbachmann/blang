@@ -613,9 +613,9 @@ fn walk_type_key(collector: &mut MonoItemCollector, type_key: TypeKey) {
 
         None => {
             // If the type key already refers to an existing function, we're done.
-            if collector.fns.get(&type_key).is_some() {
+            if collector.fns.contains_key(&type_key) {
                 collector.queue_item(type_key, type_mappings);
-            } else if collector.extern_fns.get(&type_key).is_some() {
+            } else if collector.extern_fns.contains_key(&type_key) {
                 collector.used_extern_fns.insert(fn_sig.type_key);
             }
         }

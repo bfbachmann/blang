@@ -92,7 +92,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 // If the value being returned is some structured type, we need to copy it to the
                 // memory pointed to by the first argument and return void.
                 let ret_type_key = self.type_converter.map_type_key(expr.type_key);
-                let expr_type = self.type_store.get_type(ret_type_key);
+                let expr_type = self.prog.type_store.get_type(ret_type_key);
                 if expr_type.is_composite() {
                     // Copy the return value into the pointer from the first function argument.
                     let ll_ret_ptr = self.ll_fn.unwrap().get_first_param().unwrap();

@@ -4,7 +4,7 @@ mod tests {
     use crate::analyzer::error::ErrorKind;
     use crate::analyzer::warn::WarnKind;
     use crate::codegen::program::{CodeGenConfig, OutputFormat};
-    use crate::lexer::lex::lex;
+    use crate::lexer::lex;
     use crate::lexer::stream::Stream;
     use crate::parser::file_parser::FileParser;
     use crate::parser::src_file::SrcFile;

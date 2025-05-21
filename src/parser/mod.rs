@@ -2,7 +2,7 @@
 //! produces.
 
 use crate::lexer::error::LexResult;
-use crate::lexer::lex::lex;
+use crate::lexer::lex;
 use crate::lexer::stream::Stream;
 use crate::lexer::token::Token;
 use crate::parser::ast::r#use::{ModulePath, UsedMod};

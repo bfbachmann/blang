@@ -169,6 +169,7 @@ impl Expression {
     ///  - a function call
     ///  - a unary operator followed by a composite expression (`<unary_op> <comp_expr>`)
     ///  - a struct initialization
+    ///
     /// whereas a composite expression can be any token sequence of the form
     ///
     ///     <basic_expr> <binary_op> <comp_expr>
@@ -574,7 +575,7 @@ fn parse_unit_expr(parser: &mut FileParser) -> ParseResult<Expression> {
 
 #[cfg(test)]
 mod tests {
-    use crate::lexer::lex::lex;
+    use crate::lexer::lex;
     use crate::lexer::pos::{Position, Span};
     use crate::lexer::stream::Stream;
     use crate::lexer::token::Token;

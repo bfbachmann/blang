@@ -2,9 +2,10 @@ use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::Span;
-use crate::locatable_impl; use crate::Locatable;
+use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::symbol::Symbol;
+use crate::Locatable;
 
 /// Represents the access of a member on come value. This could be a call or reference to
 /// a method on a value or type, or a struct or tuple field access.

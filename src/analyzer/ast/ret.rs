@@ -5,8 +5,8 @@ use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::error::{err_empty_return, err_unexpected_return, err_unexpected_return_val};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::lexer::pos::{Locatable, Span};
+use crate::locatable_impl;
 use crate::parser::ast::ret::Ret;
-use crate::{locatable_impl, util};
 
 /// Represents an analyzed return statement.
 #[derive(Clone, Debug)]
@@ -27,7 +27,7 @@ impl fmt::Display for ARet {
 
 impl PartialEq for ARet {
     fn eq(&self, other: &Self) -> bool {
-        util::opts_eq(&self.val, &other.val)
+        self.val == other.val
     }
 }
 

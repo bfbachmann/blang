@@ -109,7 +109,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // Switch to the `from` end block and generate a phi that takes the values
         // that were yielded from incoming blocks in the `from` statement.
-        let ctx = self.pop_scope().to_from();
+        let ctx = self.pop_scope().into_from();
         self.set_current_block(ctx.end_block);
 
         let mut ll_result_type = self.type_converter.get_basic_type(result_type_key);
@@ -162,7 +162,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles tuple initialization.
     fn gen_tuple_init(&mut self, tuple_init: &ATupleInit) -> BasicValueEnum<'ctx> {
         // Assemble the LLVM struct type.
-        let tuple_type = match self.type_store.get_type(tuple_init.type_key) {
+        let tuple_type = match self.prog.type_store.get_type(tuple_init.type_key) {
             AType::Tuple(tt) => tt,
             _ => {
                 panic!("unexpected type {}", tuple_init.type_key);
@@ -281,6 +281,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Generates array initialization instructions and returns the resulting LLVM array value.
     pub(crate) fn gen_array_init(&mut self, array_init: &AArrayInit) -> BasicValueEnum<'ctx> {
         let array_type = self
+            .prog
             .type_store
             .get_type(array_init.type_key)
             .to_array_type();
@@ -473,6 +474,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     fn gen_struct_init(&mut self, struct_init: &AStructInit) -> BasicValueEnum<'ctx> {
         // Assemble the LLVM struct type.
         let struct_type = self
+            .prog
             .type_store
             .get_type(struct_init.type_key)
             .to_struct_type();
@@ -512,20 +514,24 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     pub(crate) fn gen_call(&mut self, call: &AFnCall) -> Option<BasicValueEnum<'ctx>> {
         self.set_di_location(&call.span.start_pos);
 
-        let mut fn_sig = self.type_store.get_type(call.fn_expr.type_key).to_fn_sig();
+        let mut fn_sig = self
+            .prog
+            .type_store
+            .get_type(call.fn_expr.type_key)
+            .to_fn_sig();
 
         // Handle function calls on generic types.
         if let Some(impl_tk) = fn_sig.maybe_impl_type_key {
-            if let AType::Generic(generic_type) = self.type_store.get_type(impl_tk) {
+            if let AType::Generic(generic_type) = self.prog.type_store.get_type(impl_tk) {
                 // This is a function on a generic type. We need to look up the
                 // actual function by figuring out what the corresponding concrete
                 // type.
                 let mapped_impl_tk = self.type_converter.map_type_key(impl_tk);
-                let impls = self.type_impls.get(&mapped_impl_tk).unwrap();
+                let impls = self.prog.type_impls.get(&mapped_impl_tk).unwrap();
 
                 for spec_tk in &generic_type.spec_type_keys {
                     if let Some(tk) = impls.get_fn_from_spec_impl(*spec_tk, &fn_sig.name) {
-                        fn_sig = self.type_store.get_type(tk).to_fn_sig();
+                        fn_sig = self.prog.type_store.get_type(tk).to_fn_sig();
                         break;
                     }
                 }
@@ -533,10 +539,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         let mangled_name = mangle_type(
-            self.type_store,
+            &self.prog.type_store,
             fn_sig.type_key,
             self.type_converter.type_mapping(),
-            self.type_monomorphizations,
+            &self.prog.type_monomorphizations,
         );
         let ll_fn_type = self.type_converter.get_fn_type(fn_sig.type_key);
 
@@ -556,7 +562,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Compile call args.
         for (i, arg) in call.args.iter().enumerate() {
             let arg_tk = self.type_converter.map_type_key(arg.type_key);
-            let arg_type = self.type_store.get_type(arg_tk);
+            let arg_type = self.prog.type_store.get_type(arg_tk);
             let ll_arg_val = self.gen_expr(arg);
             let is_composite = arg_type.is_composite();
 
@@ -711,7 +717,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let ll_operand = self.gen_expr(operand_expr);
 
                 // Negate the operand.
-                let operand_type = self.type_store.get_type(operand_expr.type_key);
+                let operand_type = self.prog.type_store.get_type(operand_expr.type_key);
                 if operand_type.is_float() {
                     self.ll_builder
                         .build_float_neg(ll_operand.into_float_value(), "neg")
@@ -796,8 +802,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         dst_type_key: TypeKey,
     ) -> BasicValueEnum<'ctx> {
         let ll_src_val = self.gen_expr(src_expr);
-        let src_type = self.type_store.get_type(src_expr.type_key);
-        let dst_type = self.type_store.get_type(dst_type_key);
+        let src_type = self.prog.type_store.get_type(src_expr.type_key);
+        let dst_type = self.prog.type_store.get_type(dst_type_key);
         let ll_dst_type = self.type_converter.get_basic_type(dst_type_key);
 
         match (src_type, dst_type) {
@@ -878,7 +884,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         dst_type_key: TypeKey,
         ll_dst_type: BasicTypeEnum<'ctx>,
     ) -> BasicValueEnum<'ctx> {
-        let src_type = self.type_store.get_type(src_type_key);
+        let src_type = self.prog.type_store.get_type(src_type_key);
         let dst_type = self.type_converter.get_type(dst_type_key);
         let src_is_signed = src_type.is_signed();
         let dst_is_signed = dst_type.is_signed();
@@ -1073,7 +1079,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         // Handle the special case of `str` comparisons.
-        let left_type = self.type_store.get_type(left_type_key);
+        let left_type = self.prog.type_store.get_type(left_type_key);
         if left_type == &AType::Str {
             ll_lhs = self
                 .ll_builder

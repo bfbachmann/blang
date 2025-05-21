@@ -28,12 +28,10 @@ impl AnalyzedModule {
         warns: HashMap<Position, AnalyzeWarning>,
     ) -> AnalyzedModule {
         // Extract and sort errors and warnings by their location in the source file.
-        let mut errors: Vec<(Position, AnalyzeError)> =
-            errors.into_iter().collect();
+        let mut errors: Vec<(Position, AnalyzeError)> = errors.into_iter().collect();
         errors.sort_by(|(pos1, _), (pos2, _)| pos1.cmp(pos2));
 
-        let mut warnings: Vec<(Position, AnalyzeWarning)> =
-            warns.into_iter().collect();
+        let mut warnings: Vec<(Position, AnalyzeWarning)> = warns.into_iter().collect();
         warnings.sort_by(|(pos1, _), (pos2, _)| pos1.cmp(pos2));
 
         AnalyzedModule {
@@ -65,14 +63,8 @@ pub fn analyze_modules(
     let mut ctx = ProgramContext::new(builtins_mod_id, root_mod_id, config);
 
     // Analyze builtins, then analyze depth-first (bottom-up) from the root module.
-    analyze_module(
-        &mut ctx,
-        &mut analyzed_mods,
-        &vec![],
-        src_info,
-        builtins_mod_id,
-    );
-    analyze_module(&mut ctx, &mut analyzed_mods, &vec![], src_info, root_mod_id);
+    analyze_module(&mut ctx, &mut analyzed_mods, &[], src_info, builtins_mod_id);
+    analyze_module(&mut ctx, &mut analyzed_mods, &[], src_info, root_mod_id);
 
     // Try to find and validate the main function in the root module.
     let maybe_main_fn_tk = if let Some(Ident {
@@ -103,12 +95,12 @@ pub fn analyze_modules(
 pub fn analyze_module(
     ctx: &mut ProgramContext,
     analyzed_mods: &mut HashMap<ModID, AnalyzedModule>,
-    mod_chain: &Vec<PathBuf>,
+    mod_chain: &[PathBuf],
     src_info: &SrcInfo,
     mod_id: ModID,
 ) -> bool {
     // Append the module we're analyzing to the dependency chain.
-    let mut new_mod_chain = mod_chain.clone();
+    let mut new_mod_chain = Vec::from(mod_chain);
     let mod_info = src_info.mod_info.get_by_id(mod_id);
     let mod_path = PathBuf::from(&mod_info.path);
     new_mod_chain.push(mod_path.clone());

@@ -124,8 +124,7 @@ impl AParam {
 }
 
 /// A list of compile-time (generic) parameters.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct AParams {
     pub params: Vec<AParam>,
     pub span: Span,
@@ -136,7 +135,6 @@ impl Hash for AParams {
         self.params.hash(state);
     }
 }
-
 
 impl Display for AParams {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

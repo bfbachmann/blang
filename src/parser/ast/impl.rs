@@ -2,13 +2,13 @@ use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
+use crate::locatable_impl;
 use crate::parser::ast::func::Function;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::ParseResult;
 use crate::parser::file_parser::FileParser;
 use crate::Locatable;
-use crate::{locatable_impl, util};
 
 /// Represents the implementation of a series of member functions on a type.
 #[derive(Clone, Debug, Eq)]
@@ -22,7 +22,7 @@ pub struct Impl {
 
 impl PartialEq for Impl {
     fn eq(&self, other: &Self) -> bool {
-        util::vecs_eq(&self.member_fns, &other.member_fns)
+        self.member_fns == other.member_fns
     }
 }
 

@@ -104,7 +104,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         // Pop the loop scope now that we've compiled the loop.
-        let ctx = self.pop_scope().to_loop();
+        let ctx = self.pop_scope().into_loop();
 
         // If there is a loop end block, it means the loop has a break and we need to continue
         // compilation on the loop end block. In this case, we also inform the parent scope

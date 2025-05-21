@@ -1141,7 +1141,7 @@ pub fn err_incorrect_spec_fn(
 #[must_use]
 pub fn err_spec_impl_missing_fns(
     spec_name: &str,
-    missing_fn_names: &Vec<String>,
+    missing_fn_names: &[String],
     span: Span,
 ) -> AnalyzeError {
     AnalyzeError::new(
@@ -1241,7 +1241,7 @@ pub fn err_illegal_foreign_spec_impl(
 pub fn err_spec_not_satisfied(
     ctx: &ProgramContext,
     actual_tk: TypeKey,
-    missing_spec_names: &Vec<String>,
+    missing_spec_names: &[String],
     param_name: &str,
     parent_tk: TypeKey,
     span: Span,
@@ -1643,12 +1643,12 @@ pub fn err_dup_mem_fn(
 }
 
 #[must_use]
-pub fn err_import_cycle(used_mod: &UsedMod, cycle: &Vec<PathBuf>) -> AnalyzeError {
+pub fn err_import_cycle(used_mod: &UsedMod, cycle: &[PathBuf]) -> AnalyzeError {
     let mod_chain = hierarchy_to_string(
         &cycle
             .iter()
             .map(|p| p.to_str().unwrap().to_string())
-            .collect(),
+            .collect::<Vec<_>>(),
     );
 
     AnalyzeError::new(ErrorKind::ImportCycle, "import cycle", used_mod.path.span)

@@ -3,6 +3,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Position, Span};
 use crate::lexer::token_kind::TokenKind;
+use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::params::Params;
 use crate::parser::ast::r#type::Type;
@@ -11,7 +12,6 @@ use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::ParseResult;
 use crate::parser::file_parser::FileParser;
 use crate::Locatable;
-use crate::{locatable_impl, util};
 
 /// A variant of an enumerated type.
 #[derive(Clone, Debug, Eq)]
@@ -23,7 +23,7 @@ pub struct EnumTypeVariant {
 
 impl PartialEq for EnumTypeVariant {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && util::opts_eq(&self.maybe_type, &other.maybe_type)
+        self.name == other.name && self.maybe_type == other.maybe_type
     }
 }
 
@@ -101,7 +101,7 @@ impl PartialEq for EnumType {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && self.maybe_params == other.maybe_params
-            && util::vecs_eq(&self.variants, &other.variants)
+            && self.variants == other.variants
     }
 }
 

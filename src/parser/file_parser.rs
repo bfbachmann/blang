@@ -42,19 +42,17 @@ impl FileParser {
     /// Returns an error if the next token is not any of the given kinds, or the token otherwise.
     pub fn parse_expecting_any(&mut self, expected: Vec<TokenKind>) -> ParseResult<Token> {
         match self.tokens.next() {
-            None => {
-                Err(ParseError::new(
-                    ErrorKind::UnexpectedEOF,
-                    format!(
-                        r#"expected {}{}, but found EOF"#,
-                        if expected.len() > 1 { "one of " } else { "" },
-                        fmt::format_code_vec(&expected, ", ")
-                    )
-                    .as_str(),
-                    None,
-                    Default::default(),
-                ))
-            }
+            None => Err(ParseError::new(
+                ErrorKind::UnexpectedEOF,
+                format!(
+                    r#"expected {}{}, but found EOF"#,
+                    if expected.len() > 1 { "one of " } else { "" },
+                    fmt::format_code_vec(&expected, ", ")
+                )
+                .as_str(),
+                None,
+                Default::default(),
+            )),
             Some(token) => {
                 if expected.contains(&token.kind) {
                     Ok(token.clone())
@@ -116,21 +114,17 @@ impl FileParser {
                 kind: TokenKind::Identifier(name),
                 ..
             }) => Ok(name.clone()),
-            None => {
-                Err(ParseError::new(
-                    ErrorKind::UnexpectedEOF,
-                    "expected identifier, but found EOF",
-                    None,
-                    Default::default(),
-                ))
-            }
-            Some(other) => {
-                Err(ParseError::new_with_token(
-                    ErrorKind::ExpectedIdent,
-                    format_code!("expected identifier, but found {}", other).as_str(),
-                    other.clone(),
-                ))
-            }
+            None => Err(ParseError::new(
+                ErrorKind::UnexpectedEOF,
+                "expected identifier, but found EOF",
+                None,
+                Default::default(),
+            )),
+            Some(other) => Err(ParseError::new_with_token(
+                ErrorKind::ExpectedIdent,
+                format_code!("expected identifier, but found {}", other).as_str(),
+                other.clone(),
+            )),
         }
     }
 

@@ -29,7 +29,7 @@ impl PartialEq for AEnumTypeVariant {
     fn eq(&self, other: &Self) -> bool {
         self.number == other.number
             && self.name == other.name
-            && util::opts_eq(&self.maybe_type_key, &other.maybe_type_key)
+            && self.maybe_type_key == other.maybe_type_key
     }
 }
 

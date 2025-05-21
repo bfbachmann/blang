@@ -191,7 +191,9 @@ impl<'a> TypeConverter<'a> {
         //      fn new_person(person: *Person)
         //
         // and the `person` pointer will be written to when assigning the return value.
-        let ret_type = sig.maybe_ret_type_key.map(|type_key| self.get_type(type_key));
+        let ret_type = sig
+            .maybe_ret_type_key
+            .map(|type_key| self.get_type(type_key));
         let extra_arg_type = match ret_type {
             Some(AType::Struct(_)) => Some(self.ctx.ptr_type(AddressSpace::default())),
             Some(AType::Enum(_)) => Some(self.ctx.ptr_type(AddressSpace::default())),

@@ -9,7 +9,6 @@ use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::r#static::Static;
 use crate::parser::ast::r#type::Type;
-use crate::util;
 
 /// Represents a semantically valid constant declaration.
 #[derive(Debug, Clone)]
@@ -23,7 +22,7 @@ pub struct AStatic {
 impl PartialEq for AStatic {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
-            && util::opts_eq(&self.declared_type_key, &other.declared_type_key)
+            && self.declared_type_key == other.declared_type_key
             && self.value == other.value
     }
 }
@@ -50,7 +49,10 @@ impl AStatic {
         }
 
         // Analyze the optional type.
-        let declared_tk = static_decl.maybe_type.as_ref().map(|typ| ctx.resolve_type(typ));
+        let declared_tk = static_decl
+            .maybe_type
+            .as_ref()
+            .map(|typ| ctx.resolve_type(typ));
 
         // Make sure the value is a valid constant.
         let value = AExpr::from(ctx, static_decl.value.clone(), declared_tk, false, false);

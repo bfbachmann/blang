@@ -1,11 +1,11 @@
 use crate::lexer::pos::{Locatable, Span};
 use crate::lexer::token_kind::TokenKind;
+use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Name;
 use crate::parser::error::ParseResult;
 use crate::parser::file_parser::FileParser;
-use crate::{locatable_impl, util};
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
@@ -30,9 +30,7 @@ impl Hash for Static {
 
 impl PartialEq for Static {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-            && util::opts_eq(&self.maybe_type, &other.maybe_type)
-            && self.value == other.value
+        self.name == other.name && self.maybe_type == other.maybe_type && self.value == other.value
     }
 }
 

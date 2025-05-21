@@ -164,13 +164,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             .as_ref()
             .unwrap()
             .di_builder
-            .create_debug_location(
-                self.ll_ctx,
-                pos.line,
-                pos.col,
-                self.cur_di_scope(),
-                None,
-            )
+            .create_debug_location(self.ll_ctx, pos.line, pos.col, self.cur_di_scope(), None)
     }
 
     /// Returns the current debug info scope.

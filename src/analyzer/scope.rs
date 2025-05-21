@@ -33,16 +33,16 @@ impl fmt::Display for ScopeKind {
 
 impl ScopeKind {
     pub fn matches(&self, other: &ScopeKind) -> bool {
-        match (self, other) {
+        matches!(
+            (self, other),
             (ScopeKind::TopLevel, ScopeKind::TopLevel)
-            | (ScopeKind::FnBody, ScopeKind::FnBody)
-            | (ScopeKind::InlineClosure, ScopeKind::InlineClosure)
-            | (ScopeKind::BranchBody, ScopeKind::BranchBody)
-            | (ScopeKind::LoopBody, ScopeKind::LoopBody)
-            | (ScopeKind::FromBody, ScopeKind::FromBody) => true,
-            (ScopeKind::Params, ScopeKind::Params) => true,
-            _ => false,
-        }
+                | (ScopeKind::FnBody, ScopeKind::FnBody)
+                | (ScopeKind::InlineClosure, ScopeKind::InlineClosure)
+                | (ScopeKind::BranchBody, ScopeKind::BranchBody)
+                | (ScopeKind::LoopBody, ScopeKind::LoopBody)
+                | (ScopeKind::FromBody, ScopeKind::FromBody)
+                | (ScopeKind::Params, ScopeKind::Params)
+        )
     }
 }
 

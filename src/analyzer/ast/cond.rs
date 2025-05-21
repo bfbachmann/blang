@@ -7,9 +7,9 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::scope::ScopeKind;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::Span;
+use crate::locatable_impl;
 use crate::parser::ast::cond::Conditional;
 use crate::Locatable;
-use crate::{locatable_impl, util};
 
 /// Represents a semantically valid and type-rich branch.
 #[derive(Clone, Debug)]
@@ -21,7 +21,7 @@ pub struct ABranch {
 
 impl PartialEq for ABranch {
     fn eq(&self, other: &Self) -> bool {
-        util::opts_eq(&self.cond, &other.cond) && self.body == other.body
+        self.cond == other.cond && self.body == other.body
     }
 }
 
@@ -44,8 +44,7 @@ impl fmt::Display for ACond {
 
 impl PartialEq for ACond {
     fn eq(&self, other: &Self) -> bool {
-        util::vecs_eq(&self.branches, &other.branches)
-            && util::opts_eq(&self.ret_type_key, &other.ret_type_key)
+        self.branches == other.branches && self.ret_type_key == other.ret_type_key
     }
 }
 

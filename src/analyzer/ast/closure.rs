@@ -16,13 +16,13 @@ use crate::analyzer::scope::{Scope, ScopeKind};
 use crate::analyzer::type_store::TypeKey;
 use crate::analyzer::warn::warn_unreachable;
 use crate::lexer::pos::Span;
+use crate::locatable_impl;
 use crate::parser::ast::arg::Argument;
 use crate::parser::ast::closure::Closure;
 use crate::parser::ast::cont::Continue;
 use crate::parser::ast::r#break::Break;
 use crate::parser::ast::r#type::Type;
 use crate::Locatable;
-use crate::{locatable_impl, util};
 
 /// Represents a semantically valid and fully analyzed closure.
 #[derive(Debug, Clone)]
@@ -42,8 +42,7 @@ impl fmt::Display for AClosure {
 
 impl PartialEq for AClosure {
     fn eq(&self, other: &Self) -> bool {
-        util::vecs_eq(&self.statements, &other.statements)
-            && util::opts_eq(&self.ret_type_key, &other.ret_type_key)
+        self.statements == other.statements && self.ret_type_key == other.ret_type_key
     }
 }
 
@@ -100,12 +99,15 @@ impl AClosure {
         ctx.push_scope(Scope::new(kind, expected_ret_type_key));
 
         for arg in a_args {
-            if ctx.insert_ident(Ident::new_var(
-                arg.name.clone(),
-                arg.is_mut,
-                arg.type_key,
-                arg.span,
-            )).is_err() {
+            if ctx
+                .insert_ident(Ident::new_var(
+                    arg.name.clone(),
+                    arg.is_mut,
+                    arg.type_key,
+                    arg.span,
+                ))
+                .is_err()
+            {
                 ctx.insert_err(err_dup_fn_arg(&arg.name, arg.span));
             }
         }

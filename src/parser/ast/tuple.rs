@@ -3,12 +3,12 @@ use std::fmt::{Display, Formatter};
 use crate::lexer::pos::Span;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
+use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::r#type::Type;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::file_parser::FileParser;
 use crate::Locatable;
-use crate::{locatable_impl, util};
 use std::hash::{Hash, Hasher};
 
 /// Represents tuple type declaration.
@@ -48,7 +48,7 @@ impl Display for TupleType {
 
 impl PartialEq for TupleType {
     fn eq(&self, other: &Self) -> bool {
-        util::vecs_eq(&self.field_types, &other.field_types)
+        self.field_types == other.field_types
     }
 }
 
@@ -158,7 +158,7 @@ impl Display for TupleInit {
 
 impl PartialEq for TupleInit {
     fn eq(&self, other: &Self) -> bool {
-        util::vecs_eq(&self.values, &other.values)
+        self.values == other.values
     }
 }
 

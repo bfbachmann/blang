@@ -173,10 +173,13 @@ impl PartialEq for AExprKind {
 impl AExprKind {
     /// Returns true if the expression is a symbol representing a type.
     pub fn is_type(&self) -> bool {
-        match self {
-            AExprKind::Symbol(symbol) if symbol.kind == SymbolKind::Type => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            AExprKind::Symbol(ASymbol {
+                kind: SymbolKind::Type,
+                ..
+            })
+        )
     }
 
     /// Returns true if the expression kind can be used as a constant.
@@ -599,14 +602,16 @@ impl AExpr {
             },
 
             // Only allow coercion of `f64` literals if they don't have explicit type suffixes.
-            AExprKind::F64Literal(f, false) => if target_type == &AType::F32 {
-                if *f > f32::MAX as f64 || *f < f32::MIN as f64 {
-                    ctx.insert_err(err_literal_out_of_range("f32", self.span))
-                }
+            AExprKind::F64Literal(f, false) => {
+                if target_type == &AType::F32 {
+                    if *f > f32::MAX as f64 || *f < f32::MIN as f64 {
+                        ctx.insert_err(err_literal_out_of_range("f32", self.span))
+                    }
 
-                self.kind = AExprKind::F32Literal(*f as f32);
-                self.type_key = ctx.f32_type_key();
-            },
+                    self.kind = AExprKind::F32Literal(*f as f32);
+                    self.type_key = ctx.f32_type_key();
+                }
+            }
 
             // Only allow coercion of negated values if the target type is signed.
             AExprKind::UnaryOperation(Operator::Subtract, operand) if target_type.is_signed() => {

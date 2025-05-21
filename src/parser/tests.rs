@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::lexer::lex::lex;
+    use crate::lexer::lex;
     use crate::lexer::pos::{Position, Span};
     use crate::lexer::stream::Stream;
     use crate::lexer::token::Token;

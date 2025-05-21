@@ -2,9 +2,10 @@ use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
-use crate::locatable_impl; use crate::Locatable;
+use crate::locatable_impl;
 use crate::parser::error::ParseResult;
 use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 
 /// Represents a continue statement.
 #[derive(PartialEq, Eq, Debug, Clone)]

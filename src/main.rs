@@ -193,7 +193,9 @@ fn main() {
                 let quiet = sub_matches.get_flag("quiet");
                 let debug = sub_matches.get_flag("debug");
 
-                let linker = sub_matches.get_one::<String>("linker").map(|l| l.to_owned());
+                let linker = sub_matches
+                    .get_one::<String>("linker")
+                    .map(|l| l.to_owned());
 
                 let linker_args = sub_matches
                     .get_many::<String>("linker-flag")

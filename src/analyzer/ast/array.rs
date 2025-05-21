@@ -48,7 +48,10 @@ impl AArrayType {
     /// Performs semantic analysis on the given array type.
     pub fn from(ctx: &mut ProgramContext, array_type: &ArrayType) -> AArrayType {
         // Analyze the contained type.
-        let mut maybe_element_type_key = array_type.maybe_element_type.as_ref().map(|element_type| ctx.resolve_type(element_type));
+        let mut maybe_element_type_key = array_type
+            .maybe_element_type
+            .as_ref()
+            .map(|element_type| ctx.resolve_type(element_type));
 
         // Analyze the array type length expression.
         let len_expr = AExpr::from(

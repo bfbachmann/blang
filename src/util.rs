@@ -1,20 +1,5 @@
 use std::collections::HashMap;
 
-/// Returns true if the vectors have the same length and the same elements in the same positions.
-pub fn vecs_eq<T: PartialEq>(a: &Vec<T>, b: &Vec<T>) -> bool {
-    let match_count = a.iter().zip(b.iter()).filter(|&(a, b)| a == b).count();
-    match_count == a.len() && match_count == b.len()
-}
-
-/// Returns true if the two optional values are equal.
-pub fn opts_eq<T: PartialEq>(a: &Option<T>, b: &Option<T>) -> bool {
-    match (a, b) {
-        (Some(av), Some(bv)) => av == bv,
-        (None, None) => true,
-        (_, _) => false,
-    }
-}
-
 /// Returns true if both maps have the exact same set of keys and share equal values for each key.
 pub fn hashmaps_eq<K, V>(a: &HashMap<K, V>, b: &HashMap<K, V>) -> bool
 where

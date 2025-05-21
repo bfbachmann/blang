@@ -268,58 +268,40 @@ fn print_source_no_color(file_path: &str, span: &Span) {
             let (mid, right) = right.split_at((end_pos.col - start_pos.col) as usize);
             println!("{pipe:>width$}", pipe = "|", width = width + 1);
             println!(
-                "{} {}{}{}",
-                format!("{:>width$}|", line_num, width = width),
+                "{:>width$}| {}{}{}",
+                line_num,
                 left,
                 mid,
-                right
+                right,
+                width = width
             );
             println!(
-                "{} {}{}",
-                format!(
-                    "{:>width$}|",
-                    " ".repeat(line_num.to_string().len()),
-                    width = width
-                ),
+                "{:>width$}| {}{}",
+                " ".repeat(line_num.to_string().len()),
                 " ".repeat(left.len()),
                 "^".repeat(mid.len()),
+                width = width
             );
         } else if line_num == start_pos.line {
             // The segment we're printing spans multiple lines, and this is the first.
             let (left, right) = line.split_at(start_pos.col as usize - 1);
             println!("{pipe:>width$}", pipe = "|", width = width + 1);
+            println!("{:>width$}| {}{}", line_num, left, right, width = width);
             println!(
-                "{} {}{}",
-                format!("{:>width$}|", line_num, width = width),
-                left,
-                right,
-            );
-            println!(
-                "{} {}^-- starts here",
-                format!(
-                    "{:>width$}|",
-                    " ".repeat(line_num.to_string().len()),
-                    width = width
-                ),
+                "{:>width$}| {}^-- starts here",
+                " ".repeat(line_num.to_string().len()),
                 " ".repeat(left.len()),
+                width = width
             );
         } else if line_num == end_pos.line {
             // The segment we're printing spans multiple lines, and this is the last.
             let (left, right) = line.split_at(end_pos.col as usize - 1);
+            println!("{:>width$}| {}{}", line_num, left, right, width = width);
             println!(
-                "{} {}{}",
-                format!("{:>width$}|", line_num, width = width),
-                left,
-                right
-            );
-            println!(
-                "{} {}^-- ends here",
-                format!(
-                    "{:>width$}|",
-                    " ".repeat(line_num.to_string().len()),
-                    width = width
-                ),
+                "{:>width$}| {}^-- ends here",
+                " ".repeat(line_num.to_string().len()),
                 " ".repeat(left.len() - 1),
+                width = width
             );
         } else {
             // The segment we're printing spans multiple lines, and this is neither the first
@@ -331,11 +313,7 @@ fn print_source_no_color(file_path: &str, span: &Span) {
             if mid_lines_printed == 3 {
                 println!("{}", ".".repeat(width + 1).blue().bold(),);
             } else if mid_lines_printed <= 1 {
-                println!(
-                    "{} {}",
-                    format!("{:>width$}|", line_num, width = width),
-                    line
-                );
+                println!("{:>width$}| {}", line_num, line, width = width);
             }
         }
     }
@@ -344,7 +322,7 @@ fn print_source_no_color(file_path: &str, span: &Span) {
 /// Formats the given type hierarchy like this
 ///
 ///     A -> B -> C
-pub fn hierarchy_to_string(hierarchy: &Vec<String>) -> String {
+pub fn hierarchy_to_string(hierarchy: &[String]) -> String {
     format_code_vec(hierarchy, " -> ")
 }
 
@@ -352,7 +330,7 @@ pub fn hierarchy_to_string(hierarchy: &Vec<String>) -> String {
 /// each element as code using `format_code!`.
 /// For example, if `sep` is ",", and `vec` is `[1, 2, 3]`, then this function
 /// would return the string "`1`, `2`, `3`".
-pub fn format_code_vec<T: Display>(vec: &Vec<T>, sep: &str) -> String {
+pub fn format_code_vec<T: Display>(vec: &[T], sep: &str) -> String {
     let mut s = String::from("");
     for (i, val) in vec.iter().enumerate() {
         if i == 0 {
@@ -373,17 +351,13 @@ pub fn format_code_vec<T: Display>(vec: &Vec<T>, sep: &str) -> String {
 /// each element as a string.
 /// For example, if `sep` is ",", and `vec` is `[1, 2, 3]`, then this function
 /// would return the string "1, 2, 3".
-pub fn vec_to_string<T: Display>(vec: &Vec<T>, sep: &str) -> String {
+pub fn vec_to_string<T: Display>(vec: &[T], sep: &str) -> String {
     let mut s = String::from("");
     for (i, val) in vec.iter().enumerate() {
         if i == 0 {
-            s.push_str(format!("{val}").to_string().as_str());
+            s.push_str(format!("{val}").as_str());
         } else {
-            s.push_str(
-                format!("{}{}", sep, format!("{}", val))
-                    .to_string()
-                    .as_str(),
-            )
+            s.push_str(format!("{sep}{val}").as_str())
         }
     }
 

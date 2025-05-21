@@ -158,7 +158,7 @@ fn try_resolve_member(
     ctx: &mut ProgramContext,
     access: &MemberAccess,
     base_expr: &mut AExpr,
-    member_name: &String,
+    member_name: &str,
     prefer_method: bool,
 ) -> AnalyzeResult<TypeKey> {
     let not_found_err = err_undef_member(
@@ -366,7 +366,7 @@ fn resolve_concrete_method(
     ctx: &mut ProgramContext,
     access: &MemberAccess,
     base_expr: &mut AExpr,
-    member_name: &String,
+    member_name: &str,
 ) -> AnalyzeResult<TypeKey> {
     // If the base expression type is a pointer, then we'll try resolving the method on the pointee
     // type.
@@ -375,7 +375,7 @@ fn resolve_concrete_method(
         _ => (base_expr.type_key, false),
     };
 
-    match ctx.get_or_monomorphize_member_fn(base_type_key, member_name.as_str()) {
+    match ctx.get_or_monomorphize_member_fn(base_type_key, member_name) {
         // We found a single matching member function. We just need to check that it's being used
         // correctly.
         Ok(Some(member_fn_sig)) => {

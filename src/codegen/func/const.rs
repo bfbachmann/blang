@@ -234,10 +234,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                         .const_array(ll_elements.as_slice())
                         .as_basic_value_enum()
                 } else {
-                    panic!(
-                        "unexpected array element type {}",
-                        ll_element_type
-                    )
+                    panic!("unexpected array element type {}", ll_element_type)
                 };
 
                 ll_global_array.set_initializer(&ll_array_value);
@@ -246,6 +243,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             AExprKind::StructInit(struct_init) => {
                 let struct_type = self
+                    .prog
                     .type_store
                     .get_type(struct_init.type_key)
                     .to_struct_type();
@@ -329,7 +327,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         match symbol.kind {
             SymbolKind::Const => {
                 if let Some(mod_id) = &symbol.maybe_mod_id {
-                    if let Some(mod_consts) = self.mod_consts.get(mod_id) {
+                    if let Some(mod_consts) = self.prog.mod_consts.get(mod_id) {
                         if let Some(const_value) = mod_consts.get(&symbol.name) {
                             return self.gen_const_expr(const_value);
                         }

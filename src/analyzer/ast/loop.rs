@@ -42,20 +42,28 @@ impl Display for ALoop {
 impl ALoop {
     pub fn from(ctx: &mut ProgramContext, loop_: &Loop) -> ALoop {
         // Analyze the optional initialization statement.
-        let maybe_init = loop_.maybe_init.as_ref().map(|init_statement| AStatement::from(ctx, init_statement));
+        let maybe_init = loop_
+            .maybe_init
+            .as_ref()
+            .map(|init_statement| AStatement::from(ctx, init_statement));
 
         // Analyze the optional initialization loop condition, making sure
         // it results in a `bool` value.
-        let maybe_cond = loop_.maybe_cond.as_ref().map(|cond_expr| AExpr::from(
+        let maybe_cond = loop_.maybe_cond.as_ref().map(|cond_expr| {
+            AExpr::from(
                 ctx,
                 cond_expr.clone(),
                 Some(ctx.bool_type_key()),
                 false,
                 false,
-            ));
+            )
+        });
 
         // Analyze the optional update statement.
-        let maybe_update = loop_.maybe_update.as_ref().map(|update_statement| AStatement::from(ctx, update_statement));
+        let maybe_update = loop_
+            .maybe_update
+            .as_ref()
+            .map(|update_statement| AStatement::from(ctx, update_statement));
 
         ALoop {
             maybe_init,

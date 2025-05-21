@@ -3,13 +3,13 @@ use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
+use crate::locatable_impl;
 use crate::parser::ast::expr::Expression;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Name;
 use crate::parser::error::ParseResult;
 use crate::parser::file_parser::FileParser;
 use crate::Locatable;
-use crate::{locatable_impl, util};
 
 /// Represents a single module-level constant declaration.
 #[derive(Debug, Eq, Clone)]
@@ -31,9 +31,7 @@ impl Hash for Const {
 
 impl PartialEq for Const {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-            && util::opts_eq(&self.maybe_type, &other.maybe_type)
-            && self.value == other.value
+        self.name == other.name && self.maybe_type == other.maybe_type && self.value == other.value
     }
 }
 

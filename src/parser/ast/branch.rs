@@ -1,11 +1,12 @@
 use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::Span;
-use crate::locatable_impl; use crate::Locatable;
+use crate::locatable_impl;
 use crate::parser::ast::closure::Closure;
 use crate::parser::ast::expr::Expression;
 use crate::parser::error::ParseResult;
 use crate::parser::file_parser::FileParser;
+use crate::Locatable;
 
 /// Represents a branch in a conditional. `if` and `else if` branches must have condition
 /// expressions, but `else` branches must not.
@@ -61,6 +62,10 @@ impl Branch {
         let body = Closure::parse(parser)?;
         let end_pos = body.span().end_pos;
 
-        Ok(Branch::new(cond_expr, body, parser.new_span(start_pos, end_pos)))
+        Ok(Branch::new(
+            cond_expr,
+            body,
+            parser.new_span(start_pos, end_pos),
+        ))
     }
 }

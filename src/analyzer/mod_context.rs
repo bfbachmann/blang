@@ -65,9 +65,7 @@ impl ModuleContext {
     }
 
     pub fn set_cur_file_id(&mut self, id: FileID) -> Option<FileID> {
-        self.imported_idents
-            .entry(id)
-            .or_default();
+        self.imported_idents.entry(id).or_default();
 
         self.cur_file_id.replace(id)
     }

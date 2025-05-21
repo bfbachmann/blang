@@ -11,7 +11,6 @@ use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::Span;
 use crate::parser::ast::r#struct::{StructInit, StructType};
 use crate::parser::ast::r#type::Type;
-use crate::util;
 use std::collections::HashSet;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
@@ -66,7 +65,7 @@ impl PartialEq for AStructType {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && self.maybe_params == other.maybe_params
-            && util::vecs_eq(&self.fields, &other.fields)
+            && self.fields == other.fields
     }
 }
 
@@ -176,7 +175,10 @@ impl AStructType {
 
     /// Returns the type of the struct field with the given name.
     pub fn get_field_type_key(&self, name: &str) -> Option<TypeKey> {
-        self.fields.iter().find(|f| f.name.as_str() == name).map(|field| field.type_key)
+        self.fields
+            .iter()
+            .find(|f| f.name.as_str() == name)
+            .map(|field| field.type_key)
     }
 
     /// Returns the index of the field with the given name.
@@ -282,9 +284,7 @@ impl AStructInit {
         // Make sure all struct fields were assigned.
         let mut uninit_field_names = vec![];
         for field in &struct_type.fields {
-            if !field_values
-                .iter().any(|(name, _)| name == &field.name)
-            {
+            if !field_values.iter().any(|(name, _)| name == &field.name) {
                 uninit_field_names.push(field.name.as_str());
             }
         }

@@ -13,7 +13,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         for (i, statement) in closure.statements.iter().enumerate() {
             self.push_scope(CodegenScope::new_statement());
             self.gen_statement(statement)?;
-            let statement_scope = self.pop_scope().to_statement();
+            let statement_scope = self.pop_scope().into_statement();
 
             // If this is the last statement in the closure or the statement is guaranteed to end
             // in a terminator (unconditional jump) instruction, we need to propagate information

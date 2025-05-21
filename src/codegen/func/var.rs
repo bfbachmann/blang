@@ -110,7 +110,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         match (&symbol.kind, maybe_mod_id) {
             (SymbolKind::Const, Some(mod_id)) => {
-                if let Some(consts) = self.mod_consts.get(mod_id) {
+                if let Some(consts) = self.prog.mod_consts.get(mod_id) {
                     if let Some(const_) = consts.get(name) {
                         let ll_ptr = self.stack_alloc(name, const_.type_key);
                         let ll_val = self.gen_const_expr(const_);
@@ -121,7 +121,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
 
             (SymbolKind::Static, Some(mod_id)) => {
-                if let Some(statics) = self.mod_statics.get(mod_id) {
+                if let Some(statics) = self.prog.mod_statics.get(mod_id) {
                     if let Some(static_) = statics.get(name) {
                         let mangled_name = mangle_name(&symbol.name, *mod_id);
 
@@ -204,7 +204,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         base_expr_type_key: TypeKey,
         member_name: &str,
     ) -> PointerValue<'ctx> {
-        let base_expr_type = self.type_store.get_type(base_expr_type_key);
+        let base_expr_type = self.prog.type_store.get_type(base_expr_type_key);
         let ll_base_expr_type = self.type_converter.get_basic_type(base_expr_type_key);
         let ll_field_index = match base_expr_type {
             AType::Struct(struct_type) => struct_type.get_field_index(member_name).unwrap() as u32,
@@ -237,7 +237,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
 
         // At this point we know that we're accessing a member on a constant.
-        let base_expr_type = self.type_store.get_type(base_expr_type_key);
+        let base_expr_type = self.prog.type_store.get_type(base_expr_type_key);
         match base_expr_type {
             AType::Struct(struct_type) => {
                 // Get the value of the struct field at the computed index.

@@ -150,12 +150,8 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
                 &self.ll_builder,
                 maybe_di_ctx,
                 &self.ll_mod,
-                &self.prog.type_store,
-                &self.prog.type_impls,
-                &self.prog.type_monomorphizations,
                 &self.type_converter,
-                &self.prog.mod_consts,
-                &self.prog.mod_statics,
+                self.prog,
                 func,
             )?;
         }

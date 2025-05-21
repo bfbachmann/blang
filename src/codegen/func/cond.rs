@@ -59,7 +59,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 self.gen_closure(&branch.body)?;
 
                 // Pop the branch scope now that we're done compiling the branch.
-                let scope = self.pop_scope().to_branch();
+                let scope = self.pop_scope().into_branch();
 
                 let has_terminator = self.current_block_has_terminator();
                 all_branches_return = all_branches_return && scope.guarantees_return;
@@ -83,7 +83,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 else_branch_exists = true;
                 self.push_scope(CodegenScope::new_branch());
                 self.gen_closure(&branch.body)?;
-                let scope = self.pop_scope().to_branch();
+                let scope = self.pop_scope().into_branch();
                 let has_terminator = self.current_block_has_terminator();
                 all_branches_return = all_branches_return && scope.guarantees_return;
                 all_branches_terminate = all_branches_terminate && has_terminator;
