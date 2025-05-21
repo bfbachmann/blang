@@ -9,7 +9,7 @@ use crate::parser::file_parser::FileParser;
 use crate::Locatable;
 
 /// Represents a pointer to a value of some known type.
-#[derive(PartialEq, Clone, Eq, Hash, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct PointerType {
     /// The type of the value being pointed to.
     pub pointee_type: Type,

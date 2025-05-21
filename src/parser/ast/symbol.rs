@@ -40,7 +40,7 @@ impl Name {
 
 /// Represents a named value. These can be variables, variable member accesses, functions,
 /// constants, or types. The value can also optionally include parameters (generics).
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Symbol {
     /// Some symbols will be accessed from other imported modules. For example:
     ///

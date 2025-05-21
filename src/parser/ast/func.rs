@@ -1,5 +1,4 @@
 use std::fmt;
-use std::hash::Hash;
 
 use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
@@ -11,7 +10,7 @@ use crate::parser::file_parser::FileParser;
 use crate::Locatable;
 
 /// Represents a function declaration.
-#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Function {
     pub signature: FunctionSignature,
     pub body: Closure,

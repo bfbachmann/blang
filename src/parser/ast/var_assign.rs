@@ -1,5 +1,3 @@
-use std::hash::{Hash, Hasher};
-
 use crate::lexer::pos::{Position, Span};
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
@@ -10,7 +8,7 @@ use crate::parser::file_parser::FileParser;
 use crate::Locatable;
 
 /// Represents the assignment of some value (i.e. an expression) to a variable.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct VariableAssignment {
     pub target: Expression,
     pub value: Expression,
@@ -18,13 +16,6 @@ pub struct VariableAssignment {
 }
 
 locatable_impl!(VariableAssignment);
-
-impl Hash for VariableAssignment {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.target.hash(state);
-        self.value.hash(state);
-    }
-}
 
 impl VariableAssignment {
     /// Creates a new variable assignment.

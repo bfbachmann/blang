@@ -7,10 +7,9 @@ use crate::parser::ast::symbol::Name;
 use crate::parser::error::ParseResult;
 use crate::parser::file_parser::FileParser;
 use std::fmt::{Display, Formatter};
-use std::hash::{Hash, Hasher};
 
 /// Represents a `static.rs` value declaration.
-#[derive(Debug, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub struct Static {
     pub name: Name,
     pub is_mut: bool,
@@ -18,14 +17,6 @@ pub struct Static {
     pub value: Expression,
     pub is_pub: bool,
     pub span: Span,
-}
-
-impl Hash for Static {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-        self.maybe_type.hash(state);
-        self.value.hash(state);
-    }
 }
 
 impl PartialEq for Static {

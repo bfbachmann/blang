@@ -1,5 +1,4 @@
 use std::fmt::{Display, Formatter};
-use std::hash::Hash;
 
 use crate::lexer::pos::Span;
 use crate::lexer::token::Token;
@@ -13,7 +12,7 @@ use crate::parser::file_parser::FileParser;
 use crate::Locatable;
 
 /// A fixed-sized sequence of values of the same type.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ArrayType {
     pub maybe_element_type: Option<Type>,
     pub length_expr: Expression,
@@ -77,7 +76,7 @@ impl ArrayType {
 }
 
 /// Array initialization.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ArrayInit {
     pub values: Vec<Expression>,
     pub maybe_repeat_expr: Option<Expression>,

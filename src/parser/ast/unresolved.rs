@@ -1,5 +1,4 @@
 use std::fmt::{Display, Formatter};
-use std::hash::{Hash, Hasher};
 
 use crate::fmt::vec_to_string;
 use crate::lexer::pos::Span;
@@ -9,7 +8,7 @@ use crate::parser::ast::symbol::{Name, Symbol};
 use crate::Locatable;
 
 /// Represents a user-defined type that has not yet been resolved (i.e. is not primitive).
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone)]
 pub struct UnresolvedType {
     pub maybe_mod_name: Option<Name>,
     pub name: Name,
@@ -22,14 +21,6 @@ impl PartialEq for UnresolvedType {
         self.name == other.name
             && self.maybe_mod_name == other.maybe_mod_name
             && self.params == other.params
-    }
-}
-
-impl Hash for UnresolvedType {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-        self.maybe_mod_name.hash(state);
-        self.params.hash(state);
     }
 }
 

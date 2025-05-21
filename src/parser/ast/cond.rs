@@ -1,6 +1,5 @@
 use std::fmt;
 use std::fmt::Formatter;
-use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::Span;
 use crate::lexer::token::Token;
@@ -12,16 +11,10 @@ use crate::parser::file_parser::FileParser;
 use crate::Locatable;
 
 /// Represents a conditional (i.e. branching if/else if/else statements).
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone)]
 pub struct Conditional {
     pub branches: Vec<Branch>,
     pub span: Span,
-}
-
-impl Hash for Conditional {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.branches.hash(state);
-    }
 }
 
 impl fmt::Display for Conditional {

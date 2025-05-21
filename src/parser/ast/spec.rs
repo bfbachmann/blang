@@ -1,5 +1,3 @@
-use std::hash::{Hash, Hasher};
-
 use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
@@ -11,21 +9,13 @@ use crate::parser::file_parser::FileParser;
 use crate::Locatable;
 
 /// Represents a spec declaration.
-#[derive(Debug, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub struct SpecType {
     pub name: Name,
     pub fn_sigs: Vec<FunctionSignature>,
     pub maybe_params: Option<Params>,
     pub is_pub: bool,
     pub span: Span,
-}
-
-impl Hash for SpecType {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-        self.fn_sigs.hash(state);
-        self.maybe_params.hash(state);
-    }
 }
 
 impl PartialEq for SpecType {

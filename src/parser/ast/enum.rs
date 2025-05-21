@@ -1,5 +1,4 @@
 use std::fmt::{Display, Formatter};
-use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Position, Span};
 use crate::lexer::token_kind::TokenKind;
@@ -14,7 +13,7 @@ use crate::parser::file_parser::FileParser;
 use crate::Locatable;
 
 /// A variant of an enumerated type.
-#[derive(Clone, Debug, Eq)]
+#[derive(Clone, Debug)]
 pub struct EnumTypeVariant {
     pub name: String,
     pub maybe_type: Option<Type>,
@@ -24,16 +23,6 @@ pub struct EnumTypeVariant {
 impl PartialEq for EnumTypeVariant {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name && self.maybe_type == other.maybe_type
-    }
-}
-
-impl Hash for EnumTypeVariant {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-
-        if let Some(typ) = &self.maybe_type {
-            typ.hash(state);
-        }
     }
 }
 
@@ -88,7 +77,7 @@ impl EnumTypeVariant {
 }
 
 /// An enumerated type.
-#[derive(Debug, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub struct EnumType {
     pub name: Name,
     pub maybe_params: Option<Params>,
@@ -117,16 +106,6 @@ impl Display for EnumType {
         }
 
         write!(f, "}}")
-    }
-}
-
-impl Hash for EnumType {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-
-        for variant in &self.variants {
-            variant.hash(state);
-        }
     }
 }
 
@@ -186,7 +165,7 @@ impl EnumType {
 }
 
 /// Represents enum variant initialization.
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone)]
 pub struct EnumVariantInit {
     pub typ: UnresolvedType,
     pub variant_name: String,
@@ -217,14 +196,6 @@ impl Display for EnumVariantInit {
         }
 
         Ok(())
-    }
-}
-
-impl Hash for EnumVariantInit {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.typ.hash(state);
-        self.variant_name.hash(state);
-        self.maybe_value.hash(state);
     }
 }
 

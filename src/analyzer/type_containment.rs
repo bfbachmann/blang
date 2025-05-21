@@ -1,8 +1,6 @@
-use crate::analyzer::error::{AnalyzeError, AnalyzeResult, ErrorKind};
+use crate::analyzer::error::{err_cyclical_containment, AnalyzeResult};
 use crate::analyzer::ident::IdentKind;
 use crate::analyzer::prog_context::ProgramContext;
-use crate::fmt::hierarchy_to_string;
-use crate::lexer::pos::Span;
 use crate::parser::ast::array::ArrayType;
 use crate::parser::ast::r#enum::EnumType;
 use crate::parser::ast::r#struct::StructType;
@@ -54,7 +52,7 @@ pub fn check_struct_containment(
     hierarchy: &mut Vec<String>,
 ) -> AnalyzeResult<()> {
     if hierarchy.contains(&struct_type.name.value) {
-        return Err(new_containment_err(
+        return Err(err_cyclical_containment(
             struct_type.name.value.as_str(),
             hierarchy,
             struct_type.span,
@@ -84,7 +82,7 @@ pub fn check_enum_containment(
     hierarchy: &mut Vec<String>,
 ) -> AnalyzeResult<()> {
     if hierarchy.contains(&enum_type.name.value) {
-        return Err(new_containment_err(
+        return Err(err_cyclical_containment(
             enum_type.name.value.as_str(),
             hierarchy,
             enum_type.span,
@@ -135,22 +133,4 @@ pub fn check_array_containment(
     } else {
         Ok(())
     }
-}
-
-fn new_containment_err(type_name: &str, hierarchy: &Vec<String>, span: Span) -> AnalyzeError {
-    AnalyzeError::new(
-        ErrorKind::InfiniteSizedType,
-        format_code!("type {} cannot contain itself", type_name).as_str(),
-        span,
-    )
-    .with_detail(
-        format!(
-            "The offending type hierarchy is {}.",
-            hierarchy_to_string(hierarchy)
-        )
-        .as_str(),
-    )
-    .with_help(
-        "Consider adding some form of indirection on the offending types, like a pointer type.",
-    )
 }

@@ -1,5 +1,3 @@
-use std::hash::{Hash, Hasher};
-
 use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
 
@@ -13,22 +11,13 @@ use crate::Locatable;
 
 /// Represents a variable declaration. Each variable declaration must have a valid type, a name,
 /// and some value as the result of an expression.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct VariableDeclaration {
     pub maybe_type: Option<Type>,
     pub is_mut: bool,
     pub name: Name,
     pub value: Expression,
     pub span: Span,
-}
-
-impl Hash for VariableDeclaration {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.maybe_type.hash(state);
-        self.is_mut.hash(state);
-        self.name.hash(state);
-        self.value.hash(state);
-    }
 }
 
 locatable_impl!(VariableDeclaration);

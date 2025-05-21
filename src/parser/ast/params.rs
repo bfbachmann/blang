@@ -1,5 +1,3 @@
-use std::hash::{Hash, Hasher};
-
 use crate::lexer::pos::Span;
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -11,23 +9,13 @@ use crate::Locatable;
 
 /// Represents a generic compile-time parameter. A parameter has a name and has
 /// a set of associated specs that any type used in its place must implement.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Param {
     /// The name given to the parameter.
     pub name: String,
     /// The specs that this parameter requires.
     pub required_specs: Vec<Symbol>,
     pub span: Span,
-}
-
-impl Hash for Param {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-
-        for spec in &self.required_specs {
-            spec.hash(state);
-        }
-    }
 }
 
 impl Param {
@@ -79,18 +67,10 @@ locatable_impl!(Param);
 
 /// Represents generic parameters. A set of generic parameters is just a set of
 /// types.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Params {
     pub params: Vec<Param>,
     pub span: Span,
-}
-
-impl Hash for Params {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        for param in &self.params {
-            param.hash(state);
-        }
-    }
 }
 
 locatable_impl!(Params);

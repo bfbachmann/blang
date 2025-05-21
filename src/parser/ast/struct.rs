@@ -1,6 +1,5 @@
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Position, Span};
 use crate::lexer::token::Token;
@@ -17,7 +16,7 @@ use crate::parser::file_parser::FileParser;
 use crate::Locatable;
 
 /// Represents a field in a struct with a type and a name.
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone)]
 pub struct StructField {
     pub name: String,
     pub typ: Type,
@@ -31,32 +30,16 @@ impl PartialEq for StructField {
     }
 }
 
-impl Hash for StructField {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-        self.typ.hash(state);
-    }
-}
-
 locatable_impl!(StructField);
 
 /// Represents a struct with a set of named fields.
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone)]
 pub struct StructType {
     pub name: Name,
     pub maybe_params: Option<Params>,
     pub fields: Vec<StructField>,
     pub is_pub: bool,
     pub span: Span,
-}
-
-impl Hash for StructType {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-        for field in &self.fields {
-            field.hash(state);
-        }
-    }
 }
 
 impl Display for StructType {
@@ -188,7 +171,7 @@ impl StructType {
 }
 
 /// Represents struct initialization.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StructInit {
     pub typ: UnresolvedType,
     /// Maps struct field name to the value assigned to it.
@@ -199,13 +182,6 @@ pub struct StructInit {
 impl Display for StructInit {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{} {{ ... }}", self.typ)
-    }
-}
-
-impl Hash for StructInit {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.typ.hash(state);
-        self.field_values.hash(state);
     }
 }
 

@@ -12,7 +12,7 @@ use crate::parser::file_parser::FileParser;
 use crate::Locatable;
 
 /// Represents a function argument declaration.
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Argument {
     pub name: String,
     pub typ: Type,

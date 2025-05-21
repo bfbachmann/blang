@@ -1,5 +1,4 @@
 use std::fmt::{Display, Formatter};
-use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Position, Span};
 use crate::locatable_impl;
@@ -7,7 +6,7 @@ use crate::parser::ast::expr::Expression;
 use crate::Locatable;
 
 /// Represents a function call.
-#[derive(Eq, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct FnCall {
     pub fn_expr: Expression,
     pub args: Vec<Expression>,
@@ -28,15 +27,6 @@ impl Display for FnCall {
         }
 
         write!(f, ")")
-    }
-}
-
-impl Hash for FnCall {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.fn_expr.hash(state);
-        for arg in &self.args {
-            arg.hash(state);
-        }
     }
 }
 

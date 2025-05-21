@@ -1,5 +1,3 @@
-use std::hash::{Hash, Hasher};
-
 use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
@@ -11,7 +9,7 @@ use crate::parser::file_parser::FileParser;
 use crate::Locatable;
 
 /// Represents the implementation of a series of member functions on a type.
-#[derive(Clone, Debug, Eq)]
+#[derive(Clone, Debug)]
 pub struct Impl {
     pub typ: UnresolvedType,
     /// The spec being implemented for the type.
@@ -23,13 +21,6 @@ pub struct Impl {
 impl PartialEq for Impl {
     fn eq(&self, other: &Self) -> bool {
         self.member_fns == other.member_fns
-    }
-}
-
-impl Hash for Impl {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.typ.hash(state);
-        self.member_fns.hash(state);
     }
 }
 

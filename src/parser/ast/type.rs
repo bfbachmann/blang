@@ -1,5 +1,4 @@
 use std::fmt;
-use std::hash::Hash;
 
 use crate::lexer::pos::{Locatable, Span};
 use crate::lexer::token::Token;
@@ -14,7 +13,7 @@ use crate::parser::error::ParseResult;
 use crate::parser::file_parser::FileParser;
 
 /// Represents a type referenced in a program.
-#[derive(Debug, Clone, Hash, Eq)]
+#[derive(Debug, Clone)]
 pub enum Type {
     Tuple(TupleType),
     Function(Box<FunctionSignature>),

@@ -8,7 +8,7 @@ use crate::Locatable;
 
 /// Represents a statement that yields a result. This language construct exists
 /// so statements can be used as expressions.
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct From {
     pub statement: Box<Statement>,
     pub span: Span,

@@ -1,5 +1,4 @@
 use std::fmt::{Display, Formatter};
-use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
@@ -12,21 +11,13 @@ use crate::parser::file_parser::FileParser;
 use crate::Locatable;
 
 /// Represents a single module-level constant declaration.
-#[derive(Debug, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub struct Const {
     pub name: Name,
     pub maybe_type: Option<Type>,
     pub value: Expression,
     pub is_pub: bool,
     pub span: Span,
-}
-
-impl Hash for Const {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-        self.maybe_type.hash(state);
-        self.value.hash(state);
-    }
 }
 
 impl PartialEq for Const {

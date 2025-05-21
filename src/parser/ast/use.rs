@@ -73,7 +73,7 @@ impl ModulePath {
 }
 
 /// A module that is imported into a program.
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct UsedMod {
     pub path: ModulePath,
     pub maybe_alias: Option<Name>,

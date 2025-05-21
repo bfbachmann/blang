@@ -1654,3 +1654,22 @@ pub fn err_import_cycle(used_mod: &UsedMod, cycle: &[PathBuf]) -> AnalyzeError {
     AnalyzeError::new(ErrorKind::ImportCycle, "import cycle", used_mod.path.span)
         .with_detail(format!("The offending import chain is: {}", mod_chain).as_str())
 }
+
+#[must_use]
+pub fn err_cyclical_containment(type_name: &str, hierarchy: &[String], span: Span) -> AnalyzeError {
+    AnalyzeError::new(
+        ErrorKind::InfiniteSizedType,
+        format_code!("type {} cannot contain itself", type_name).as_str(),
+        span,
+    )
+    .with_detail(
+        format!(
+            "The offending type hierarchy is {}.",
+            hierarchy_to_string(hierarchy)
+        )
+        .as_str(),
+    )
+    .with_help(
+        "Consider adding some form of indirection on the offending types, like a pointer type.",
+    )
+}

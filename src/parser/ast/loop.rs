@@ -1,5 +1,3 @@
-use std::hash::{Hash, Hasher};
-
 use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
@@ -11,7 +9,7 @@ use crate::parser::file_parser::FileParser;
 use crate::Locatable;
 
 /// Represents a closure that is executed repeatedly.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Loop {
     pub maybe_init: Option<Statement>,
     pub maybe_cond: Option<Expression>,
@@ -21,12 +19,6 @@ pub struct Loop {
 }
 
 locatable_impl!(Loop);
-
-impl Hash for Loop {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.body.hash(state);
-    }
-}
 
 impl Loop {
     /// Parses a loop. Expects token sequences of the form

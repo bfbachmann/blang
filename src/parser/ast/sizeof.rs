@@ -1,5 +1,4 @@
 use std::fmt::{Display, Formatter};
-use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
@@ -12,7 +11,7 @@ use crate::Locatable;
 /// Represents a `sizeof` statement. Note that `sizeof` expressions are not
 /// considered unary operations (i.e. `sizeof` is not an operator) because
 /// the would-be operand is a type rather than an expression.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct SizeOf {
     pub typ: Type,
     pub span: Span,
@@ -21,12 +20,6 @@ pub struct SizeOf {
 impl Display for SizeOf {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} {}", TokenKind::SizeOf, self.typ)
-    }
-}
-
-impl Hash for SizeOf {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.typ.hash(state);
     }
 }
 

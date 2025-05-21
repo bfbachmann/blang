@@ -9,24 +9,15 @@ use crate::parser::ast::r#type::Type;
 use crate::parser::error::{ErrorKind, ParseError, ParseResult};
 use crate::parser::file_parser::FileParser;
 use crate::Locatable;
-use std::hash::{Hash, Hasher};
 
 /// Represents tuple type declaration.
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone)]
 pub struct TupleType {
     pub field_types: Vec<Type>,
     pub span: Span,
 }
 
 locatable_impl!(TupleType);
-
-impl Hash for TupleType {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        for typ in &self.field_types {
-            typ.hash(state);
-        }
-    }
-}
 
 impl Display for TupleType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -130,7 +121,7 @@ impl TupleType {
 }
 
 /// Represents tuple initialization.
-#[derive(Debug, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub struct TupleInit {
     pub values: Vec<Expression>,
     pub span: Span,
@@ -159,12 +150,6 @@ impl Display for TupleInit {
 impl PartialEq for TupleInit {
     fn eq(&self, other: &Self) -> bool {
         self.values == other.values
-    }
-}
-
-impl Hash for TupleInit {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.values.hash(state);
     }
 }
 

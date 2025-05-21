@@ -1,5 +1,4 @@
 use std::fmt::{Display, Formatter};
-use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::Span;
 use crate::lexer::token::Token;
@@ -11,18 +10,12 @@ use crate::parser::file_parser::FileParser;
 use crate::Locatable;
 
 /// Represents a set of external function declarations.
-#[derive(Clone, Debug, Eq)]
+#[derive(Clone, Debug)]
 pub struct ExternFn {
     pub signature: FunctionSignature,
     pub maybe_link_name: Option<String>,
     pub is_pub: bool,
     pub span: Span,
-}
-
-impl Hash for ExternFn {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.signature.hash(state);
-    }
 }
 
 impl PartialEq for ExternFn {

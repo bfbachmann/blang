@@ -1,5 +1,3 @@
-use std::hash::{Hash, Hasher};
-
 use crate::lexer::pos::Span;
 use crate::locatable_impl;
 use crate::parser::ast::closure::Closure;
@@ -10,18 +8,11 @@ use crate::Locatable;
 
 /// Represents a branch in a conditional. `if` and `else if` branches must have condition
 /// expressions, but `else` branches must not.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Branch {
     pub condition: Option<Expression>,
     pub body: Closure,
     pub span: Span,
-}
-
-impl Hash for Branch {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.condition.hash(state);
-        self.body.hash(state);
-    }
 }
 
 locatable_impl!(Branch);

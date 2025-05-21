@@ -1,5 +1,4 @@
 use std::fmt;
-use std::hash::{Hash, Hasher};
 
 use crate::lexer::pos::{Position, Span};
 use crate::lexer::token::Token;
@@ -15,31 +14,13 @@ use crate::Locatable;
 
 /// Represents the name, arguments, and return type of a function. Anonymous functions
 /// have empty names.
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone)]
 pub struct FunctionSignature {
     pub name: Name,
     pub args: Vec<Argument>,
     pub maybe_ret_type: Option<Type>,
     pub params: Option<Params>,
     pub span: Span,
-}
-
-impl Hash for FunctionSignature {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-
-        for arg in &self.args {
-            arg.hash(state);
-        }
-
-        if let Some(typ) = &self.maybe_ret_type {
-            typ.hash(state);
-        }
-
-        if let Some(params) = &self.params {
-            params.hash(state);
-        }
-    }
 }
 
 impl fmt::Display for FunctionSignature {

@@ -11,13 +11,13 @@ use crate::parser::error::ParseResult;
 use crate::parser::file_parser::FileParser;
 use crate::Locatable;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Pattern {
     pub kind: PatternKind,
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum PatternKind {
     LetBinding(bool, Vec<Expression>),
     Exprs(Vec<Expression>),
@@ -93,7 +93,7 @@ impl Pattern {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct MatchCase {
     pub pattern: Pattern,
     pub maybe_cond: Option<Expression>,
@@ -140,7 +140,7 @@ impl MatchCase {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Match {
     pub target: Expression,
     pub cases: Vec<MatchCase>,

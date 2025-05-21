@@ -1,5 +1,3 @@
-use std::hash::{Hash, Hasher};
-
 use crate::lexer::pos::{Position, Span};
 use crate::lexer::token::Token;
 use crate::lexer::token_kind::TokenKind;
@@ -10,7 +8,7 @@ use crate::parser::file_parser::FileParser;
 use crate::Locatable;
 
 /// Represents a closure, which is just a series of statements with their own scope.
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone)]
 pub struct Closure {
     pub statements: Vec<Statement>,
     span: Span,
@@ -19,12 +17,6 @@ pub struct Closure {
 impl PartialEq for Closure {
     fn eq(&self, other: &Self) -> bool {
         self.statements == other.statements && self.span == other.span
-    }
-}
-
-impl Hash for Closure {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.statements.hash(state);
     }
 }
 

@@ -39,7 +39,7 @@ use crate::parser::file_parser::FileParser;
 
 /// Represents basic and composite expressions. For basic expressions, see `Expression::from_basic`,
 /// and for composite expressions, see `Expression::from`.
-#[derive(Debug, PartialEq, Clone, Eq, Hash)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
     // Basic expressions.
     Symbol(Symbol),
