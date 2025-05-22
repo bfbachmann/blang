@@ -225,8 +225,6 @@ pub enum TokenKind {
     Dot,
     #[token("@")]
     At,
-    #[token("with")]
-    With,
     #[token("$")]
     DollarSign,
 
@@ -341,7 +339,6 @@ impl TokenKind {
             TokenKind::Enum => "enum".to_string(),
             TokenKind::At => "@".to_string(),
             TokenKind::Spec => "spec".to_string(),
-            TokenKind::With => "with".to_string(),
             TokenKind::As => "as".to_string(),
             TokenKind::DollarSign => "$".to_string(),
             TokenKind::Like => "~~".to_string(),
