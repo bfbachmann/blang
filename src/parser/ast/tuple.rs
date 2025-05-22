@@ -103,7 +103,7 @@ impl TupleType {
                         kind: TokenKind::RightBrace,
                         ..
                     } =
-                        parser.parse_expecting_any(vec![TokenKind::Comma, TokenKind::RightBrace])?
+                        parser.parse_expecting_any(&[TokenKind::Comma, TokenKind::RightBrace])?
                     {
                         // Record the ending position of this statement.
                         end_pos = token.span.end_pos;
@@ -205,7 +205,7 @@ impl TupleInit {
                         kind: TokenKind::RightBrace,
                         ..
                     } =
-                        parser.parse_expecting_any(vec![TokenKind::Comma, TokenKind::RightBrace])?
+                        parser.parse_expecting_any(&[TokenKind::Comma, TokenKind::RightBrace])?
                     {
                         // Record the ending position of this statement.
                         end_pos = token.span.end_pos;

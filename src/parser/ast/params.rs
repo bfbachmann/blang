@@ -96,7 +96,7 @@ impl Params {
             params.push(Param::parse(parser)?);
 
             // The next token should either be a comma or the closing bracket.
-            match parser.parse_expecting_any(vec![TokenKind::Comma, TokenKind::RightBracket])? {
+            match parser.parse_expecting_any(&[TokenKind::Comma, TokenKind::RightBracket])? {
                 Token {
                     kind: TokenKind::RightBracket,
                     span,

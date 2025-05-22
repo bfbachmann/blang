@@ -257,8 +257,7 @@ impl FunctionSignature {
             };
 
             // After the argument, the next token should be `,` or `)`.
-            let token =
-                parser.parse_expecting_any(vec![TokenKind::Comma, TokenKind::RightParen])?;
+            let token = parser.parse_expecting_any(&[TokenKind::Comma, TokenKind::RightParen])?;
             match token {
                 Token {
                     kind: TokenKind::Comma,

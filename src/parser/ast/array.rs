@@ -148,7 +148,7 @@ impl ArrayInit {
         let mut maybe_repeat_expr = None;
 
         // Parse the rest of the values in the array, or the `; <repeat_count>`, or `]`.
-        let end_pos = match parser.parse_expecting_any(vec![
+        let end_pos = match parser.parse_expecting_any(&[
             TokenKind::Comma,
             TokenKind::SemiColon,
             TokenKind::RightBracket,
@@ -161,7 +161,7 @@ impl ArrayInit {
                 values.push(Expression::parse(parser)?);
 
                 // The next token should either be `,` or `]`.
-                match parser.parse_expecting_any(vec![TokenKind::Comma, TokenKind::RightBracket]) {
+                match parser.parse_expecting_any(&[TokenKind::Comma, TokenKind::RightBracket]) {
                     Ok(Token {
                         kind: TokenKind::RightBracket,
                         span,

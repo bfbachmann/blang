@@ -61,7 +61,7 @@ impl VariableAssignment {
 
         // The next token should be an assignment operator.
         let assign_op = parser
-            .parse_expecting_any(vec![
+            .parse_expecting_any(&[
                 TokenKind::Equal,
                 TokenKind::PlusEqual,
                 TokenKind::MinusEqual,

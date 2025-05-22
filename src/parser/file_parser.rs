@@ -40,14 +40,14 @@ impl FileParser {
     }
 
     /// Returns an error if the next token is not any of the given kinds, or the token otherwise.
-    pub fn parse_expecting_any(&mut self, expected: Vec<TokenKind>) -> ParseResult<Token> {
+    pub fn parse_expecting_any(&mut self, expected: &[TokenKind]) -> ParseResult<Token> {
         match self.tokens.next() {
             None => Err(ParseError::new(
                 ErrorKind::UnexpectedEOF,
                 format!(
                     r#"expected {}{}, but found EOF"#,
                     if expected.len() > 1 { "one of " } else { "" },
-                    fmt::format_code_vec(&expected, ", ")
+                    fmt::format_code_vec(expected, ", ")
                 )
                 .as_str(),
                 None,
@@ -62,7 +62,7 @@ impl FileParser {
                         format!(
                             r#"expected {}{}, but found {}"#,
                             if expected.len() > 1 { "one of " } else { "" },
-                            fmt::format_code_vec(&expected, ", "),
+                            fmt::format_code_vec(expected, ", "),
                             format_code!("{}", token),
                         )
                         .as_str(),

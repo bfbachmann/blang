@@ -35,7 +35,7 @@ impl Loop {
     /// - `closure` is a closure representing the loop body.
     pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
         let token =
-            parser.parse_expecting_any(vec![TokenKind::Loop, TokenKind::While, TokenKind::For])?;
+            parser.parse_expecting_any(&[TokenKind::Loop, TokenKind::While, TokenKind::For])?;
         parser.tokens.rewind(1);
 
         match &token.kind {
