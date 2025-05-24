@@ -93,7 +93,7 @@ impl FunctionSignature {
     ///  - `arg_type` is the type of the argument
     ///  - `arg_name` is an identifier representing the argument name
     ///  - `return_type` is the type of the optional return type
-    pub fn from(parser: &mut FileParser) -> ParseResult<Self> {
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
         // Record the function signature starting position.
         let start_pos = parser.parse_expecting(TokenKind::Fn)?.span.start_pos;
 

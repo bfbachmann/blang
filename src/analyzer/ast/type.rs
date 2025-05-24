@@ -153,36 +153,6 @@ impl AType {
         AType::Function(Box::new(sig))
     }
 
-    /// Returns true if the two types are the same.
-    ///  - For primitive types (i64, bool, etc), they must be exactly the same type.
-    ///  - For struct types, they must be exactly the same type.
-    ///  - For function types, they must have arguments of the same type in the same order and the
-    ///    same return types.
-    pub fn is_same_as(&self, ctx: &ProgramContext, other: &AType, ignore_mutability: bool) -> bool {
-        match (self, other) {
-            (AType::Function(f1), AType::Function(f2)) => f1.is_same_as(ctx, f2),
-            (AType::Tuple(t1), AType::Tuple(t2)) => t1.is_same_as(ctx, t2),
-            (AType::Array(a1), AType::Array(a2)) => a1.is_same_as(ctx, a2),
-            (AType::Pointer(p1), AType::Pointer(p2)) => {
-                let p1_pointee_type = ctx.get_type(p1.pointee_type_key);
-                let p2_pointee_type = ctx.get_type(p2.pointee_type_key);
-                let same_pointee_types = p1_pointee_type.is_same_as(ctx, p2_pointee_type, false);
-                same_pointee_types && (ignore_mutability || p1.is_mut == p2.is_mut)
-            }
-            (a, b) => {
-                if b.is_spec() {
-                    // TODO: Check if type implements spec. At the moment, we're just assuming
-                    // that the spec is satisfied by the type because this case should only
-                    // happen when we're checking if a function signature matches that of a spec,
-                    // so this works for now but isn't really robust long-term.
-                    return true;
-                }
-
-                a == b
-            }
-        }
-    }
-
     /// Returns true if this type is unknown.
     pub fn is_unknown(&self) -> bool {
         matches!(self, AType::Unknown(_))

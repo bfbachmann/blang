@@ -1124,14 +1124,13 @@ pub fn err_incorrect_spec_fn(
     AnalyzeError::new(
         ErrorKind::IncorrectSpecFnInImpl,
         format_code!(
-            "{} is implemented incorrectly for spec {}",
-            spec_fn_sig.name,
-            spec_name
+            "incorrect implementation of {}",
+            format!("{}.{}", spec_name, spec_fn_sig.name)
         )
         .as_str(),
         span,
     )
-    .with_detail(format_code!("Spec {} expects {}.", spec_name, spec_fn_sig.display(ctx),).as_str())
+    .with_detail(format_code!("Spec {} expects {}.", spec_name, spec_fn_sig.display(ctx)).as_str())
     .with_note(Note {
         message: format_code!("{} is defined here.", spec_fn_sig.name),
         span: spec_fn_sig.span,

@@ -91,10 +91,7 @@ impl ATupleType {
         }
 
         for (field1, field2) in self.fields.iter().zip(other.fields.iter()) {
-            let type1 = ctx.get_type(field1.type_key);
-            let type2 = ctx.get_type(field2.type_key);
-
-            if !type1.is_same_as(ctx, type2, false) {
+            if !ctx.types_match(field1.type_key, field2.type_key, false) {
                 return false;
             }
         }

@@ -34,7 +34,7 @@ impl Display for ModulePath {
 
 impl ModulePath {
     /// Parses a module path from the given token stream. A module path is just a string literal.
-    pub fn from(parser: &mut FileParser) -> ParseResult<ModulePath> {
+    pub fn parse(parser: &mut FileParser) -> ParseResult<ModulePath> {
         match parser.tokens.next() {
             Some(
                 token @ Token {
@@ -131,7 +131,7 @@ impl UsedMod {
     /// - `ident` is any identifier to import from the given path.
     pub fn parse(parser: &mut FileParser) -> ParseResult<UsedMod> {
         let start_pos = parser.parse_expecting(TokenKind::Use)?.span.start_pos;
-        let path = ModulePath::from(parser)?;
+        let path = ModulePath::parse(parser)?;
         let mut end_pos = path.span.end_pos;
 
         // Parse the optional `@<name>`.

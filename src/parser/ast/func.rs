@@ -58,7 +58,7 @@ impl Function {
         let is_pub = parser.parse_optional(TokenKind::Pub).is_some();
 
         // The first set of tokens should be the function signature.
-        let sig = FunctionSignature::from(parser)?;
+        let sig = FunctionSignature::parse(parser)?;
 
         // The remaining tokens should be the function body.
         let body = Closure::parse(parser)?;

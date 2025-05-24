@@ -49,7 +49,7 @@ impl EnumTypeVariant {
     /// where
     ///  - `name` is the variant name
     ///  - `type` is the optional variant type.
-    pub fn from(parser: &mut FileParser) -> ParseResult<Self> {
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
         let start_pos = parser.current_position();
         let name = parser.parse_identifier()?;
 
@@ -148,7 +148,7 @@ impl EnumType {
                 break token.span.end_pos;
             }
 
-            variants.push(EnumTypeVariant::from(parser)?);
+            variants.push(EnumTypeVariant::parse(parser)?);
 
             // Parse the optional comma.
             parser.parse_optional(TokenKind::Comma);

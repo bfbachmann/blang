@@ -253,7 +253,7 @@ pub fn parse_expr(parser: &mut FileParser) -> ParseResult<Expression> {
 
             expr
         } else if token.kind == TokenKind::SizeOf {
-            Expression::SizeOf(SizeOf::from(parser)?)
+            Expression::SizeOf(SizeOf::parse(parser)?)
         } else {
             parse_basic_expr(parser)?
         };
@@ -559,7 +559,7 @@ fn parse_unit_expr(parser: &mut FileParser) -> ParseResult<Expression> {
         }
 
         // A `from` expression.
-        TokenKind::From => Expression::From(From::from(parser)?),
+        TokenKind::From => Expression::From(From::parse(parser)?),
 
         other => {
             return Err(ParseError::new_with_token(
@@ -592,7 +592,7 @@ mod tests {
 
     fn parse(raw: &str) -> ParseResult<Expression> {
         let tokens = lex(raw, 0).expect("should succeed");
-        let mut parser = FileParser::new(0, Stream::from(tokens));
+        let mut parser = FileParser::new(0, Stream::new(tokens));
         Expression::parse(&mut parser)
     }
 

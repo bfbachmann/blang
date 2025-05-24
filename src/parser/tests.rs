@@ -31,7 +31,7 @@ mod tests {
 
     fn new_parser(code: &str) -> FileParser {
         let tokens = lex(code, 0).expect("should succeed");
-        FileParser::new(0, Stream::from(tokens))
+        FileParser::new(0, Stream::new(tokens))
     }
 
     fn parse(code: &str) -> ParseResult<SrcFile> {
@@ -906,7 +906,7 @@ mod tests {
                 "#
             );
             let tokens = lex(raw.as_str(), 0).expect("should succeed");
-            let mut parser = FileParser::new(0, Stream::from(tokens));
+            let mut parser = FileParser::new(0, Stream::new(tokens));
             let result = SrcFile::parse(&mut parser);
             assert!(matches!(
                 result,

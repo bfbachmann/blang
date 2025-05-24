@@ -1267,6 +1267,56 @@ impl ProgramContext {
         mono.mono_type_key
     }
 
+    /// Returns true if the two types are compatible.
+    pub fn types_match(&self, tk1: TypeKey, tk2: TypeKey, ignore_mutability: bool) -> bool {
+        if tk1 == tk2 {
+            return true;
+        }
+
+        match (
+            self.type_monomorphizations.get(&tk1),
+            self.type_monomorphizations.get(&tk2),
+        ) {
+            (Some(mono1), Some(mono2)) => {
+                if mono1.poly_type_key != mono2.poly_type_key {
+                    return false;
+                }
+
+                for (p1, p2) in mono1
+                    .replaced_params
+                    .iter()
+                    .zip(mono2.replaced_params.iter())
+                {
+                    if !self.types_match(p1.replacement_type_key, p2.replacement_type_key, false) {
+                        return false;
+                    }
+                }
+
+                true
+            }
+
+            _ => match (self.get_type(tk1), self.get_type(tk2)) {
+                (AType::Array(a), AType::Array(b)) => a.is_same_as(self, b),
+                (AType::Tuple(a), AType::Tuple(b)) => a.is_same_as(self, b),
+                (AType::Function(a), AType::Function(b)) => a.is_same_as(self, b),
+                (AType::Pointer(a), AType::Pointer(b)) => a.is_same_as(self, b, ignore_mutability),
+                (AType::Unknown(_), _) | (_, AType::Unknown(_)) => true,
+                (AType::Spec(a), AType::Spec(b)) => a.is_same_as(b),
+                (AType::Spec(_), _) | (_, AType::Spec(_)) => {
+                    self.type_implements_spec(tk1, tk2) || self.type_implements_spec(tk2, tk1)
+                }
+                _ => false,
+            },
+        }
+    }
+
+    /// Returns true if the give type implements the given spec and false otherwise.
+    fn type_implements_spec(&self, type_key: TypeKey, spec_tk: TypeKey) -> bool {
+        self.type_impls
+            .get(&type_key)
+            .is_some_and(|impls| impls.spec_impls.contains_key(&spec_tk))
+    }
+
     /// Analyzes a passed parameter type and checks that it matches the expected
     /// parameter constraints.
     fn check_param<T: Locatable>(
@@ -1283,8 +1333,12 @@ impl ProgramContext {
             return Ok(param_type_key);
         }
 
-        // Make sure the type passed as the parameter is not a spec.
-        if passed_param_type.is_spec() {
+        // Make sure the type passed as the parameter is not a spec, unless the spec is `Self`.
+        if passed_param_type.is_spec()
+            && !self
+                .get_cur_self_type_key()
+                .is_some_and(|tk| tk == param_type_key)
+        {
             return Err(AnalyzeError::new(
                 ErrorKind::MismatchedTypes,
                 "expected concrete or generic type, but found spec",

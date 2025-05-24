@@ -7,7 +7,7 @@ pub struct Stream<T> {
 
 impl<T> Stream<T> {
     /// Creates a new stream.
-    pub fn from(tokens: Vec<T>) -> Self {
+    pub fn new(tokens: Vec<T>) -> Self {
         Stream { tokens, cursor: 0 }
     }
 

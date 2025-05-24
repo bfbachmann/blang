@@ -44,6 +44,18 @@ impl APointerType {
         }
     }
 
+    /// Returns true if this pointer type is the compatible with `other`.
+    pub fn is_same_as(
+        &self,
+        ctx: &ProgramContext,
+        other: &APointerType,
+        ignore_mutability: bool,
+    ) -> bool {
+        let same_pointee_types =
+            ctx.types_match(self.pointee_type_key, other.pointee_type_key, false);
+        same_pointee_types && (ignore_mutability || self.is_mut == other.is_mut)
+    }
+
     /// Returns the human-readable version of this pointer type.
     pub fn display(&self, ctx: &ProgramContext) -> String {
         format!(

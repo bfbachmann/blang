@@ -117,7 +117,8 @@ impl ASpecType {
         a_spec_type
     }
 
+    /// Returns true only if this spec type has all the same member functions as `other`.
     pub fn is_same_as(&self, other: &ASpecType) -> bool {
-        self.name == other.name && self.member_fn_type_keys == other.member_fn_type_keys
+        self.member_fn_type_keys == other.member_fn_type_keys
     }
 }

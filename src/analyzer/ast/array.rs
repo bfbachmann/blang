@@ -102,11 +102,11 @@ impl AArrayType {
             return true;
         }
 
-        // At this point we know both arrays are non-empty and have some element type key, so
-        // make sure the type keys match.
-        let elem_type1 = ctx.get_type(self.maybe_element_type_key.unwrap());
-        let elem_type2 = ctx.get_type(other.maybe_element_type_key.unwrap());
-        elem_type1.is_same_as(ctx, elem_type2, false)
+        ctx.types_match(
+            self.maybe_element_type_key.unwrap(),
+            other.maybe_element_type_key.unwrap(),
+            false,
+        )
     }
 }
 
@@ -174,15 +174,9 @@ impl AArrayInit {
         // Make sure all the values are of the same type.
         let maybe_element_type_key = if !contained_values.is_empty() {
             let expected_type_key = contained_values.first().unwrap().type_key;
-            let expected_type = ctx.get_type(expected_type_key);
 
             for value in &contained_values {
-                if value.type_key == expected_type_key {
-                    continue;
-                }
-
-                let value_type = ctx.get_type(value.type_key);
-                if !value_type.is_same_as(ctx, expected_type, false) {
+                if !ctx.types_match(value.type_key, expected_type_key, false) {
                     let err =
                         err_mismatched_types(ctx, expected_type_key, value.type_key, value.span);
                     ctx.insert_err(err);

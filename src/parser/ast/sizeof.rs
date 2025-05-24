@@ -33,7 +33,7 @@ impl SizeOf {
     ///
     /// where
     ///  - `type` is any type.
-    pub fn from(parser: &mut FileParser) -> ParseResult<Self> {
+    pub fn parse(parser: &mut FileParser) -> ParseResult<Self> {
         // Parse the `sizeof` keyword.
         let sizeof_token = parser.parse_expecting(TokenKind::SizeOf)?;
 

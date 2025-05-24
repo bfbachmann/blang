@@ -363,13 +363,7 @@ fn check_types(
         err_mismatched_types(ctx, mapped_expected_tk, actual_tk, *loc.span());
 
     // Do some simple checks to see if the types are the same.
-    if mapped_expected_tk == actual_tk {
-        return Ok(());
-    }
-
-    let expected_type = ctx.get_type(mapped_expected_tk);
-    let actual_type = ctx.get_type(actual_tk);
-    if expected_type.is_same_as(ctx, actual_type, false) {
+    if ctx.types_match(mapped_expected_tk, actual_tk, false) {
         return Ok(());
     }
 
@@ -381,6 +375,8 @@ fn check_types(
 
     // At this point we know that the expected type is some generic type that we have not yet
     // mapped to a type, so we'll try to do that now.
+    let expected_type = ctx.get_type(mapped_expected_tk);
+    let actual_type = ctx.get_type(actual_tk);
     match (expected_type.clone(), actual_type.clone()) {
         (AType::Pointer(expected_ptr_type), AType::Pointer(actual_ptr_type)) => {
             return check_types(

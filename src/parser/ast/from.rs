@@ -21,7 +21,7 @@ impl From {
     /// the form
     ///
     ///     from <statement>
-    pub fn from(parser: &mut FileParser) -> ParseResult<From> {
+    pub fn parse(parser: &mut FileParser) -> ParseResult<From> {
         let start_pos = parser.parse_expecting(TokenKind::From)?.span.start_pos;
 
         let statement = Box::new(Statement::parse(parser)?);

@@ -64,7 +64,7 @@ impl SpecType {
                 break token.span.end_pos;
             }
 
-            fn_sigs.push(FunctionSignature::from(parser)?);
+            fn_sigs.push(FunctionSignature::parse(parser)?);
         };
 
         Ok(SpecType {

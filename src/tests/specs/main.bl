@@ -2,6 +2,8 @@ mod specs
 
 use "std/libc" {exit}
 use "std/runtime" {assert}
+use "std/types/slice" {Slice}
+use "std/types/result" {Result}
 use "src/tests/specs/utils" {Test}
 
 struct Thing {}
@@ -48,6 +50,28 @@ fn get_value_2[T: Get2]() -> int {
     return T.get_value()
 }
 
+pub spec Parse {
+    fn parse(bytes: Slice[u8]) -> {uint, Result[Self, str]}
+}
+
+impl uint: Parse {
+    fn parse(bytes: Slice[u8]) -> {uint, Result[uint, str]} {
+        let mut value = 0uint
+
+        for let mut i = 0uint; i < bytes.len(); i += 1 {
+            let byte = bytes.get(i).unwrap()
+            if byte < '0' as u8 || byte > '9' as u8 {
+                break
+            }
+
+            // TODO: Check for overflow.
+            value = value * 10 + byte as uint - '0' as uint
+        }
+
+        return {i, Result[uint, str]::Ok(value)}
+    }
+}
+
 // Check that we can implement local specs on foreign types.
 impl str: Get1 {
     fn get_value() -> int {
@@ -60,5 +84,12 @@ fn main() {
     assert(get_value_1[Getter]() == 1, "expected 1")
     assert(get_value_2[Getter]() == 2, "expected 2")
     assert(get_value_1[str]() == 1, "expected 1")
+
+    let result = uint.parse(Slice[u8].from_str("432"))
+    let offset = result.(0)
+    let value = result.(1).ok().unwrap()
+    assert(offset == 3, "expected 3")
+    assert(value == 432, "expected 432")
+    
     exit(0)
 }

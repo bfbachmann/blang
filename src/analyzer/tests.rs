@@ -15,7 +15,7 @@ mod tests {
     fn get_analysis(raw: &str) -> ProgramAnalysis {
         let raw = "mod test\n".to_string() + raw;
         let tokens = lex(&raw, 0).expect("should not error");
-        let mut parser = FileParser::new(0, Stream::from(tokens));
+        let mut parser = FileParser::new(0, Stream::new(tokens));
         let src_file = SrcFile::parse(&mut parser).expect("should not error");
 
         let config = CodeGenConfig::new_test_default(PathBuf::new(), OutputFormat::LLVMIR);
@@ -63,7 +63,7 @@ mod tests {
 
         for (mod_path, mod_code) in mods {
             let tokens = lex(mod_code.as_str(), file_id).expect("lexing should succeed");
-            let mut parser = FileParser::new(file_id, Stream::from(tokens.clone()));
+            let mut parser = FileParser::new(file_id, Stream::new(tokens.clone()));
             let src_file = SrcFile::parse(&mut parser).expect("should not error");
 
             parsed_mods.insert(mod_path, vec![src_file]);
@@ -822,6 +822,21 @@ mod tests {
             "#,
         );
         check_err(&result, Some(ErrorKind::SpecNotSatisfied));
+    }
+
+    #[test]
+    fn spec_used_as_param() {
+        let result = analyze(
+            r#"
+            spec Test {}
+            fn thing[T]() {}
+
+            fn main() {
+                thing[Test]()
+            }
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::MismatchedTypes));
     }
 
     #[test]

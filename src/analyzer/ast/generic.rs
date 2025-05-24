@@ -1,9 +1,8 @@
+use crate::analyzer::type_store::TypeKey;
+use crate::lexer::pos::Span;
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
-
-use crate::analyzer::type_store::TypeKey;
-use crate::lexer::pos::Span;
 
 /// Represents a generic type with a set of specs that serve as constraints
 /// on what the generic type can do.

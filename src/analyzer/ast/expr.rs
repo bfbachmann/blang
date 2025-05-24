@@ -454,15 +454,7 @@ impl AExpr {
         // Try to coerce this expression to the expected type before doing the type check.
         self = self.try_coerce_to(ctx, expected_tk);
 
-        // Skip the type check if either type is unknown, as this implies that semantic analysis
-        // has already failed somewhere else in this expression or wherever it's being used.
-        let actual_type = ctx.get_type(self.type_key);
-        let expected_type = ctx.get_type(expected_tk);
-        if actual_type.is_unknown() || expected_type.is_unknown() {
-            return self;
-        }
-
-        if !actual_type.is_same_as(ctx, expected_type, ignore_mutability) {
+        if !ctx.types_match(self.type_key, expected_tk, ignore_mutability) {
             let err = err_mismatched_types(ctx, expected_tk, self.type_key, *expr.span());
             ctx.insert_err(err);
         }
@@ -733,11 +725,7 @@ impl AExpr {
     pub fn try_into_const_uint(&self, ctx: &mut ProgramContext) -> Option<u64> {
         let expr = self.clone().try_coerce_to(ctx, ctx.uint_type_key());
 
-        if !expr.kind.is_const()
-            || !ctx
-                .get_type(expr.type_key)
-                .is_same_as(ctx, &AType::Uint, true)
-        {
+        if !expr.kind.is_const() || !ctx.types_match(expr.type_key, ctx.uint_type_key(), true) {
             return None;
         }
 
@@ -847,7 +835,7 @@ pub fn check_operand_types(
     }
 
     // Operands need to be the same in all cases except for bit shift operations.
-    if !op.is_bitshift() && !right_type.is_same_as(ctx, left_type, true) {
+    if !op.is_bitshift() && !ctx.types_match(right_expr.type_key, left_expr.type_key, true) {
         errors.push(err_mismatched_operand_types(
             ctx,
             op,

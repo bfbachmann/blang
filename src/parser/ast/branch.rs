@@ -38,7 +38,7 @@ impl Branch {
     /// where
     ///  - `expr` is the branch condition expression
     ///  - `closure` is the branch body closure
-    pub fn from(parser: &mut FileParser, with_condition: bool) -> ParseResult<Self> {
+    pub fn parse(parser: &mut FileParser, with_condition: bool) -> ParseResult<Self> {
         // Record the starting position of the branch.
         let start_pos = parser.current_position();
 

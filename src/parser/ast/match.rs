@@ -33,7 +33,7 @@ impl Pattern {
     ///     <expr>
     ///     _
     ///     <empty>
-    fn from(parser: &mut FileParser) -> ParseResult<Pattern> {
+    fn parse(parser: &mut FileParser) -> ParseResult<Pattern> {
         // Handle empty pattern.
         if parser.next_token_is_one_of(&vec![TokenKind::Colon, TokenKind::If]) {
             let prev_token = parser.tokens.prev().unwrap();
@@ -108,10 +108,10 @@ impl MatchCase {
     ///     case <pattern>: <statement>...
     ///     case <pattern> if <cond>: <statement>...
     ///     case if <cond>: <statement>...
-    fn from(parser: &mut FileParser) -> ParseResult<MatchCase> {
+    fn parse(parser: &mut FileParser) -> ParseResult<MatchCase> {
         let start_pos = parser.parse_expecting(TokenKind::Case)?.span.start_pos;
 
-        let pattern = Pattern::from(parser)?;
+        let pattern = Pattern::parse(parser)?;
         let maybe_cond = match parser.parse_optional(TokenKind::If) {
             Some(_) => Some(Expression::parse(parser)?),
             None => None,
@@ -179,7 +179,7 @@ impl Match {
                 break token.span.end_pos;
             }
 
-            cases.push(MatchCase::from(parser)?);
+            cases.push(MatchCase::parse(parser)?);
         };
 
         Ok(Match {

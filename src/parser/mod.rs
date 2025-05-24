@@ -386,7 +386,7 @@ pub fn parse_mod_dir(
         };
 
         // Parse the source file.
-        let mut parser = FileParser::new(*file_id, Stream::from(tokens));
+        let mut parser = FileParser::new(*file_id, Stream::new(tokens));
         let src_file = match SrcFile::parse(&mut parser) {
             Ok(src_file) => src_file,
             Err(err) => {

@@ -62,7 +62,7 @@ impl Conditional {
         parser.parse_expecting(TokenKind::If)?;
 
         // Parse the rest of the branch (the expression and the closure).
-        let branch = Branch::from(parser, true)?;
+        let branch = Branch::parse(parser, true)?;
 
         // We now have the first `if` branch. Continue by adding other `else if` branches until
         // there are none left.
@@ -83,7 +83,7 @@ impl Conditional {
                 }) => {
                     // Move past the `if` token.
                     parser.tokens.next();
-                    let branch = Branch::from(parser, true)?;
+                    let branch = Branch::parse(parser, true)?;
                     branches.push(branch);
                 }
 
@@ -91,7 +91,7 @@ impl Conditional {
                 _ => {
                     // Parse the rest of the branch and add it to the list of branches, then break
                     // because we're reached the end of the conditional.
-                    let branch = Branch::from(parser, false)?;
+                    let branch = Branch::parse(parser, false)?;
                     branches.push(branch);
                     break;
                 }

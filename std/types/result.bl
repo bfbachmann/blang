@@ -1,5 +1,7 @@
 mod result
 
+use "std/types/opt" {Opt}
+
 /// Represents the result of an operation that may fail. This can either be
 /// `Ok(T)` for success, or `Err(E)` for failure.
 pub enum Result[T, E] {
@@ -8,17 +10,25 @@ pub enum Result[T, E] {
 }
 
 impl Result {
-    /// Unwraps the result, returning `T`, or panics if the result is `Err`.
-    pub fn unwrap(self) -> T {
+    /// Converts the result into an optional that contains a value if the result
+    /// is `Ok`.
+    pub fn ok(self) -> Opt[T] {
         match self {
         case let Result[T, E]::Ok(t):
-            return t
+            return Opt[T]::Some(t)
         case:
-            panic("unwrap of result Err")
+            return Opt[T]::None
+        }
+    }
 
-            // TODO: Use unreachable statement when supported
-            let ptr: *T = null
-            return ptr^
+    /// Converts the result into an optional that contains an error value if 
+    /// the result is `Err`.
+    pub fn err(self) -> Opt[E] {
+        match self {
+        case let Result[T, E]::Err(e):
+            return Opt[E]::Some(e)
+        case:
+            return Opt[E]::None
         }
     }
 

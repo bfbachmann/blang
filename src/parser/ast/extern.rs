@@ -64,7 +64,7 @@ impl ExternFn {
         };
 
         // Parse the function signature.
-        let fn_sig = FunctionSignature::from(parser)?;
+        let fn_sig = FunctionSignature::parse(parser)?;
         let end_pos = fn_sig.span().end_pos;
 
         Ok(ExternFn {

@@ -168,11 +168,7 @@ impl AFnSig {
         }
 
         for (this_arg, other_arg) in self.args.iter().zip(other.args.iter()) {
-            if this_arg.type_key != other_arg.type_key && {
-                let this_type = ctx.get_type(this_arg.type_key);
-                let other_type = ctx.get_type(other_arg.type_key);
-                !this_type.is_same_as(ctx, other_type, false)
-            } {
+            if !ctx.types_match(this_arg.type_key, other_arg.type_key, false) {
                 return false;
             }
         }
@@ -180,11 +176,7 @@ impl AFnSig {
         match (self.maybe_ret_type_key, other.maybe_ret_type_key) {
             (None, None) => true,
             (Some(this_ret_tk), Some(other_ret_tk)) => {
-                this_ret_tk == other_ret_tk || {
-                    let this_ret_type = ctx.get_type(this_ret_tk);
-                    let other_ret_type = ctx.get_type(other_ret_tk);
-                    this_ret_type.is_same_as(ctx, other_ret_type, false)
-                }
+                ctx.types_match(this_ret_tk, other_ret_tk, false)
             }
             _ => false,
         }
@@ -226,13 +218,7 @@ impl AFnSig {
                         .iter()
                         .zip(other_param_type.spec_type_keys.iter())
                     {
-                        if this_spec_tk == other_spec_tk {
-                            continue;
-                        }
-
-                        let this_spec_type = ctx.get_type(*this_spec_tk).to_spec_type();
-                        let other_spec_type = ctx.get_type(*other_spec_tk).to_spec_type();
-                        if !this_spec_type.is_same_as(other_spec_type) {
+                        if !ctx.types_match(*this_spec_tk, *other_spec_tk, false) {
                             return false;
                         }
                     }
