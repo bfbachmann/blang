@@ -835,7 +835,11 @@ pub fn check_operand_types(
     }
 
     // Operands need to be the same in all cases except for bit shift operations.
-    if !op.is_bitshift() && !ctx.types_match(right_expr.type_key, left_expr.type_key, true) {
+    if !op.is_bitshift()
+        && !ctx.types_match(right_expr.type_key, left_expr.type_key, true)
+        && !left_type.is_unknown()
+        && !right_type.is_unknown()
+    {
         errors.push(err_mismatched_operand_types(
             ctx,
             op,
@@ -869,6 +873,11 @@ pub fn check_operand_types(
 
 /// Returns true only if `operand_type` is valid for operator `op`.
 fn is_valid_operand_type(op: &Operator, operand_type: &AType, is_left_operand: bool) -> bool {
+    // Ignore operands that already failed analysis.
+    if operand_type.is_unknown() {
+        return true;
+    }
+
     // Determine the expected operand types on the operator.
     match op {
         // Mathematical operators only work on numeric and pointer types.
