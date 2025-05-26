@@ -798,13 +798,15 @@ impl AExpr {
 /// another. If successful, returns the type key of the operands (their types should be the
 /// same).
 pub fn check_operand_types(
-    ctx: &ProgramContext,
+    ctx: &mut ProgramContext,
     left_expr: &AExpr,
     op: &Operator,
     right_expr: &AExpr,
 ) -> Result<Option<TypeKey>, Vec<AnalyzeError>> {
     let left_type = ctx.get_type(left_expr.type_key);
-    let right_type = ctx.get_type(right_expr.type_key);
+    if left_type.is_unknown() {
+        return Ok(Some(left_expr.type_key));
+    }
 
     let mut left_type_key = None;
     let mut right_type_key = None;
@@ -822,6 +824,14 @@ pub fn check_operand_types(
         left_type_key = Some(left_expr.type_key);
     }
 
+    // Try to coerce the right operand to the right type.
+    let right_expr = if op.is_bitshift() {
+        right_expr.clone().try_coerce_to(ctx, ctx.uint_type_key())
+    } else {
+        right_expr.clone().try_coerce_to(ctx, left_expr.type_key)
+    };
+    let right_type = ctx.get_type(right_expr.type_key);
+
     if !is_valid_operand_type(op, right_type, false) {
         errors.push(err_invalid_operand_type(
             ctx,
@@ -837,7 +847,6 @@ pub fn check_operand_types(
     // Operands need to be the same in all cases except for bit shift operations.
     if !op.is_bitshift()
         && !ctx.types_match(right_expr.type_key, left_expr.type_key, true)
-        && !left_type.is_unknown()
         && !right_type.is_unknown()
     {
         errors.push(err_mismatched_operand_types(
@@ -854,7 +863,7 @@ pub fn check_operand_types(
         (Some(ltk), Some(rtk)) => {
             // In the case of pointer arithmetic, if either of the pointers is
             // mutable, we'll make the result mutable as well.
-            if ctx.get_type(rtk).is_mut_ptr() {
+            if right_type.is_mut_ptr() {
                 Some(rtk)
             } else {
                 Some(ltk)

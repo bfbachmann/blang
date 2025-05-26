@@ -886,14 +886,21 @@ mod tests {
 
     #[test]
     fn binary_expr_type_coercion() {
-        let result = analyze(
+        let valid_code = [
             r#"
-            fn main() {
-                let a = 8u64 - 14 % 2 == 0
-            }
-        "#,
-        );
-        check_err(&result, None);
+                fn main() {
+                    let a = 8u64 - 14 % 2 == 0
+                }
+            "#,
+            r#"
+                fn main() {
+                    let a = 8 bls 2
+                }
+            "#,
+        ];
+        for code in valid_code {
+            check_err(&analyze(code), None);
+        }
 
         let result = analyze(
             r#"
