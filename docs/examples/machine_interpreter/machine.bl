@@ -71,18 +71,22 @@ impl Machine {
     /// Executes an instruction.
     fn exec_inst(*mut self, inst: *Instruction) -> ExecResult {
         match inst.kind {
-        case let InstKind::Store:
-            print_str("store\n")
-            return self.store(inst.operands.(0), inst.operands.(1) as uint)
-        case let InstKind::Copy:
-            print_str("copy\n")
-            return self.copy(inst.operands.(0) as uint, inst.operands.(1) as uint)
-        case let InstKind::Add:
-            print_str("add\n")
-            return self.add(inst.operands.(0) as uint, inst.operands.(1) as uint)
-        case let InstKind::JumpIf0:
-            print_str("jumpif0\n")
-            return self.jumpif0(inst.operands.(0) as uint, inst.operands.(1) as uint)
+            let InstKind::Store => {
+                print_str("store\n")
+                return self.store(inst.operands.(0), inst.operands.(1) as uint)
+            }
+            let InstKind::Copy => {
+                print_str("copy\n")
+                return self.copy(inst.operands.(0) as uint, inst.operands.(1) as uint)
+            }
+            let InstKind::Add => {
+                print_str("add\n")
+                return self.add(inst.operands.(0) as uint, inst.operands.(1) as uint)
+            }
+            let InstKind::JumpIf0 => {
+                print_str("jumpif0\n")
+                return self.jumpif0(inst.operands.(0) as uint, inst.operands.(1) as uint)
+            }
         }
         
         return ExecResult.new_err("unimplemented instruction")

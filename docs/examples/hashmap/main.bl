@@ -63,12 +63,19 @@ fn display_hashmap[K: Hash + Eq + Print, V: Print](map: HashMap[K, V]) {
 
     for let mut i = 0uint; i < map.slots.len(); i += 1 {
         match map.slots.ptr_at(i) {
-        case let Slot[K, V]::Occupied(entry):
-            printf(Format.new(map.allocator, "% -> %\n").arg(&entry.key).arg(&entry.value))
-        case let Slot[K, V]::Empty:
-            printf(Format.new(map.allocator, "empty\n"))
-        case let Slot[K, V]::Deleted:
-            printf(Format.new(map.allocator, "deleted\n"))
+            let Slot[K, V]::Occupied(entry) => {
+                printf(
+                    Format.new(map.allocator, "% -> %\n")
+                        .arg(&entry.key)
+                        .arg(&entry.value)
+                )
+            }
+            let Slot[K, V]::Empty => {
+                printf(Format.new(map.allocator, "empty\n"))
+            }
+            let Slot[K, V]::Deleted => {
+                printf(Format.new(map.allocator, "deleted\n"))
+            }
         }
     }
 
@@ -151,17 +158,19 @@ impl HashMap {
             let slot_ptr = self.slots.ptr_at((hash + i) % len)
 
             match slot_ptr {
-            case let Slot[K, V]::Occupied(entry_ptr):
-                if entry_ptr.key.eq(key) {
-                    let old_value = entry_ptr.value
-                    entry_ptr^ = new_entry
-                    return Opt[V]::Some(old_value)
+                let Slot[K, V]::Occupied(entry_ptr) => {
+                    if entry_ptr.key.eq(key) {
+                        let old_value = entry_ptr.value
+                        entry_ptr^ = new_entry
+                        return Opt[V]::Some(old_value)
+                    }
                 }
 
-            case:
-                slot_ptr^ = Slot[K, V]::Occupied(new_entry)
-                self.len += 1
-                return Opt[V]::None
+                _ => {
+                    slot_ptr^ = Slot[K, V]::Occupied(new_entry)
+                    self.len += 1
+                    return Opt[V]::None
+                }
             }
         }
 
@@ -177,16 +186,18 @@ impl HashMap {
             let slot_ptr = self.slots.ptr_at((hash + i) % len)
 
             match slot_ptr {
-            case let Slot[K, V]::Occupied(entry_ptr) if entry_ptr.key.eq(key):
-                let value = entry_ptr.value
-                slot_ptr^ = Slot[K, V]::Deleted
-                self.len -= 1
-                return Opt[V]::Some(value)
+                let Slot[K, V]::Occupied(entry_ptr) if entry_ptr.key.eq(key) => {
+                    let value = entry_ptr.value
+                    slot_ptr^ = Slot[K, V]::Deleted
+                    self.len -= 1
+                    return Opt[V]::Some(value)
+                }
 
-            case let Slot[K, V]::Empty:
-                return Opt[V]::None
+                let Slot[K, V]::Empty => {
+                    return Opt[V]::None
+                }
 
-            case:
+                _ => {}
             }
         }
 
@@ -201,13 +212,15 @@ impl HashMap {
             let slot_ptr = self.slots.ptr_at((hash + i) % len)
 
             match slot_ptr {
-            case let Slot[K, V]::Occupied(entry) if entry.key.eq(key):
-                return Opt[V]::Some(entry.value)
+                let Slot[K, V]::Occupied(entry) if entry.key.eq(key) => {
+                    return Opt[V]::Some(entry.value)
+                }
 
-            case let Slot[K, V]::Empty:
-                return Opt[V]::None
+                let Slot[K, V]::Empty => {
+                    return Opt[V]::None
+                }
 
-            case:
+                _ => {}
             }
         }
 
@@ -240,9 +253,10 @@ impl HashMap {
 
         for let mut i = 0uint; i < old_len; i += 1 {
             match old_slots.ptr_at(i) {
-            case let Slot[K, V]::Occupied(entry):
-                self.insert(entry.key, entry.value)
-            case:
+                let Slot[K, V]::Occupied(entry) => {
+                    self.insert(entry.key, entry.value)
+                }
+                _ => {}
             }
         }
 

@@ -23,23 +23,21 @@ impl Opt {
     /// Returns the contained value, if any. Otherwise, returns `default`.
     pub fn unwrap_or(self, default: T) -> T {
         match self {
-        case let Opt[T]::Some(t):
-            return t
-        case:
-            return default
+            let Opt[T]::Some(t) => return t
+            _ => return default
         }
     }
 
     /// Returns the contained value, or panics if there is none.
     pub fn unwrap(self) -> T {
         match self {
-        case let Opt[T]::Some(t):
-            return t
-        case:
-            panic("cannot unwrap optional None")
+            let Opt[T]::Some(t) => return t
+            _ => {
+                panic("cannot unwrap optional None")
 
-            // TODO: Remove this when we can mark `panic` as `noreturn`.
-            return @mem.heap_alloc[T](1)^
+                // TODO: Remove this when we can mark `panic` as `noreturn`.
+                return @mem.heap_alloc[T](1)^
+            }
         }
     }
 
@@ -47,8 +45,8 @@ impl Opt {
     /// returns an optional wrapping the result. Otherwise, returns None.
     pub fn map[O](self, f: fn (T) -> O) -> Opt[O] {
         match self {
-        case let Opt[T]::Some(t): return Opt[O]::Some(f(t))
-        case: return Opt[O]::None
+            let Opt[T]::Some(t) => return Opt[O]::Some(f(t))
+            _ => return Opt[O]::None
         }
     }
 }

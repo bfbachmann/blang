@@ -1335,9 +1335,8 @@ impl ProgramContext {
 
         // Make sure the type passed as the parameter is not a spec, unless the spec is `Self`.
         if passed_param_type.is_spec()
-            && !self
-                .get_cur_self_type_key()
-                .is_some_and(|tk| tk == param_type_key)
+            && self
+                .get_cur_self_type_key().is_none_or(|tk| tk != param_type_key)
         {
             return Err(AnalyzeError::new(
                 ErrorKind::MismatchedTypes,

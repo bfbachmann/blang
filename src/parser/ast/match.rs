@@ -104,35 +104,27 @@ pub struct MatchCase {
 impl MatchCase {
     /// Parses a match case from the token stream. Expects token sequences of the forms
     ///
-    ///     case: <statement>...
-    ///     case <pattern>: <statement>...
-    ///     case <pattern> if <cond>: <statement>...
-    ///     case if <cond>: <statement>...
+    ///     <patter> => <statement>
+    ///     <pattern> if <cond> => <statement>
     fn parse(parser: &mut FileParser) -> ParseResult<MatchCase> {
-        let start_pos = parser.parse_expecting(TokenKind::Case)?.span.start_pos;
-
         let pattern = Pattern::parse(parser)?;
         let maybe_cond = match parser.parse_optional(TokenKind::If) {
             Some(_) => Some(Expression::parse(parser)?),
             None => None,
         };
 
-        parser.parse_expecting(TokenKind::Colon)?;
+        parser.parse_expecting(TokenKind::FatArrow)?;
 
-        let body_start = parser.current_position();
-
-        let mut statements = vec![];
-        while !parser.next_token_is_one_of(&vec![TokenKind::Case, TokenKind::RightBrace]) {
-            statements.push(Statement::parse(parser)?);
-        }
-
-        let body = Closure::new(
-            statements,
-            parser.new_span(body_start, parser.current_position()),
-        );
+        let body = match Statement::parse(parser)? {
+            Statement::Closure(closure) => closure,
+            statement => {
+                let span = *statement.span();
+                Closure::new(vec![statement], span)
+            }
+        };
 
         Ok(MatchCase {
-            span: parser.new_span(start_pos, body.span().end_pos),
+            span: parser.new_span(pattern.span.start_pos, body.span().end_pos),
             pattern,
             maybe_cond,
             body,

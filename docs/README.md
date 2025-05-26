@@ -356,14 +356,14 @@ enum SearchError {
 
 fn handle_err(err: SearchError) {
     match err {
-    case let SearchError::NotFound:
-        // ...
-    case let SearchError::Internal(code) if code == 1:
-        handle_fatal_internal(code)
-    case let SearchError::Internal(code):
-        handle_internal(code)
-    case:
-        // handle default case
+      let SearchError::NotFound => {
+          // Handle not found case
+      }
+      let SearchError::Internal(code) if code == 1 => handle_fatal_internal(code)
+      let SearchError::Internal(code) => handle_internal(code)
+      _ => {
+          // handle default case
+      }
     }
 }
 ```

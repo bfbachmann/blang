@@ -1615,9 +1615,9 @@ mod tests {
             r#"
                 fn thing(v: int) -> int {
                     match v {
-                    case 0: return 0
-                    case let x if x > 0: return 1
-                    case:
+                        0 => return 0
+                        let x if x > 0 => return 1
+                        _ => {}
                     }
                 }
             "#,
@@ -1889,7 +1889,7 @@ mod tests {
             
             fn main() {
                 match Thing::One {
-                case let Thing::One:
+                    let Thing::One => {}
                 }
             }
             "#,
@@ -1908,8 +1908,8 @@ mod tests {
 
             fn main() {
                 match Thing::One {
-                case let Thing::One:
-                case let Thing::Two if false:
+                    let Thing::One => {}
+                    let Thing::Two if false => {}
                 }
             }
             "#,
@@ -1923,8 +1923,8 @@ mod tests {
             r#"
             fn main() {
                 match 1 {
-                case 1:
-                case 2:
+                    1 => {}
+                    2 => {}
                 }
             }
             "#,
@@ -1938,7 +1938,7 @@ mod tests {
             r#"
             fn main() {
                 match true {
-                case true:
+                    true => {}
                 }
             }
             "#,
@@ -1952,8 +1952,8 @@ mod tests {
             r#"
             fn main() {
                 match true {
-                case true:
-                case false:
+                    true => {}
+                    false => {}
                 }
             }
             "#,
@@ -1967,9 +1967,9 @@ mod tests {
             r#"
             fn main() {
                 match true {
-                case true:
-                case false:
-                case:
+                    true => {}
+                    false => {}
+                    _ => {}
                 }
             }
             "#,
@@ -1986,8 +1986,8 @@ mod tests {
             }
             fn main() {
                 match Thing::One(1) {
-                case 1:
-                case:
+                    1 => {}
+                    _ => {}
                 }
             }
             "#,
@@ -2004,8 +2004,8 @@ mod tests {
             }
             fn main() {
                 match Thing::One(1) {
-                case let invalid():
-                case:
+                    let invalid() => {}
+                    _ => {}
                 }
             }
             "#,
@@ -2022,8 +2022,8 @@ mod tests {
             }
             fn main() {
                 match Thing::One(1) {
-                case let Thing::One(invalid()):
-                case:
+                    let Thing::One(invalid()) => {}
+                    _ => {}
                 }
             }
             "#,
@@ -2040,8 +2040,8 @@ mod tests {
             }
             fn main() {
                 match Thing::One(1) {
-                case let Thing::One:
-                case:
+                    let Thing::One => {}
+                    _ => {}
                 }
             }
             "#,
@@ -2058,7 +2058,7 @@ mod tests {
             }
             fn main() {
                 match Thing::One(1) {
-                case let x, y:
+                    let x, y => {}
                 }
             }
             "#,
@@ -2075,7 +2075,7 @@ mod tests {
             }
             fn main() {
                 match Thing::One {
-                case let Thing::One(invalid):
+                    let Thing::One(invalid) => {}
                 }
             }
             "#,
@@ -2092,8 +2092,8 @@ mod tests {
             }
             fn main() {
                 match "test" {
-                case let Thing::One:
-                case:
+                    let Thing::One => {}
+                    _ => {}
                 }
             }
             "#,
@@ -2109,8 +2109,8 @@ mod tests {
             enum B { One }
             fn main() {
                 match A::One {
-                case let B::One:
-                case:
+                    let B::One => {}
+                    _ => {}
                 }
             }
             "#,
@@ -2125,8 +2125,8 @@ mod tests {
             struct Thing {}
             fn main() {
                 match Thing{} {
-                case Thing{}:
-                case:
+                    Thing{} => {}
+                    _ => {}
                 }
             }
             "#,
@@ -2141,7 +2141,7 @@ mod tests {
             enum Thing { One(int), Two(int) }
             fn main() {
                 match Thing::One(1) {
-                case let Thing::One(x), Thing::Two(y):
+                    let Thing::One(x), Thing::Two(y) => {}
                 }
             }
             "#,
@@ -2156,7 +2156,7 @@ mod tests {
             enum Thing { One(int), Two(bool) }
             fn main() {
                 match Thing::One(1) {
-                case let Thing::One(x), Thing::Two(x):
+                    let Thing::One(x), Thing::Two(x) => {}
                 }
             }
             "#,
@@ -2171,7 +2171,7 @@ mod tests {
             enum Thing { One(int), Two(bool) }
             fn main() {
                 match Thing::One(1) {
-                case let Thing::One(_), Thing::Two(v):
+                    let Thing::One(_), Thing::Two(v) => {}
                 }
             }
             "#,
@@ -2186,7 +2186,7 @@ mod tests {
             enum Thing { One(int), Two(bool) }
             fn main() {
                 match Thing::One(1) {
-                case let Thing::One(v), Thing::Two(_):
+                    let Thing::One(v), Thing::Two(_) => {}
                 }
             }
             "#,
@@ -2201,7 +2201,7 @@ mod tests {
             enum Thing { One(int), Two(bool) }
             fn main() {
                 match Thing::One(1) {
-                case let Thing::One(_), Thing::Two(_), Thing::One(_):
+                    let Thing::One(_), Thing::Two(_), Thing::One(_) => {}
                 }
             }
             "#,

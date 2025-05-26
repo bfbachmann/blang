@@ -159,8 +159,6 @@ pub enum TokenKind {
     Else,
     #[token("match")]
     Match,
-    #[token("case")]
-    Case,
     #[token("for")]
     For,
     #[token("while")]
@@ -219,6 +217,8 @@ pub enum TokenKind {
     Colon,
     #[token("->")]
     Arrow,
+    #[token("=>")]
+    FatArrow,
     #[token("::")]
     DoubleColon,
     #[token(".")]
@@ -310,7 +310,6 @@ impl TokenKind {
             TokenKind::If => "if".to_string(),
             TokenKind::Else => "else".to_string(),
             TokenKind::Match => "match".to_string(),
-            TokenKind::Case => "case".to_string(),
             TokenKind::For => "for".to_string(),
             TokenKind::While => "while".to_string(),
             TokenKind::Loop => "loop".to_string(),
@@ -326,6 +325,7 @@ impl TokenKind {
             TokenKind::SemiColon => ";".to_string(),
             TokenKind::Colon => ":".to_string(),
             TokenKind::Arrow => "->".to_string(),
+            TokenKind::FatArrow => "=>".to_string(),
             TokenKind::DoubleColon => "::".to_string(),
             TokenKind::Dot => ".".to_string(),
             TokenKind::Break => "break".to_string(),
