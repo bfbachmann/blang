@@ -763,7 +763,15 @@ impl ProgramContext {
             }
         }
 
-        if replaced_tks {
+        let has_replaced_param = match self.get_type(type_key).params() {
+            Some(params) => params
+                .params
+                .iter()
+                .any(|p| type_mappings.contains_key(&p.generic_type_key)),
+            None => false,
+        };
+
+        if replaced_tks || has_replaced_param {
             // Remove parameters from the signature now that they're no longer relevant.
             enum_type.maybe_params = None;
 
@@ -1336,7 +1344,8 @@ impl ProgramContext {
         // Make sure the type passed as the parameter is not a spec, unless the spec is `Self`.
         if passed_param_type.is_spec()
             && self
-                .get_cur_self_type_key().is_none_or(|tk| tk != param_type_key)
+                .get_cur_self_type_key()
+                .is_none_or(|tk| tk != param_type_key)
         {
             return Err(AnalyzeError::new(
                 ErrorKind::MismatchedTypes,

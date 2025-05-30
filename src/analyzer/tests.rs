@@ -2987,6 +2987,25 @@ mod tests {
     }
 
     #[test]
+    fn monomorphize_invalid_enum_type() {
+        let result = analyze(
+            r#"
+                enum Opt[T] {
+                    Some(t) // `t` here is not defined
+                    None
+                }
+                
+                fn main() {
+                    // This used to cause a compiler panic because it was failing to monomorphize
+                    // the invalid type.
+                    let o = Opt[Opt[int]]::Some(Opt[int]::Some(1234))
+                }
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::UndefType));
+    }
+
+    #[test]
     fn tuple_type_equality() {
         let result = analyze(
             r#"
