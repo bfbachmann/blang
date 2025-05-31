@@ -316,7 +316,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let ll_loop_end = self.append_block("array_init_done");
 
                 // Init array index and jump to condition branch.
-                let ll_index_type = self.ll_ctx.i64_type();
+                let ll_index_type = self.type_converter.ptr_sized_int_type();
                 let ll_index_ptr =
                     self.build_entry_alloc("array_index_ptr", ll_index_type.as_basic_type_enum());
                 self.ll_builder
@@ -433,9 +433,16 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // If we're storing a value in this enum, then we should access it as a struct containing
         // the variant number type followed by the specific type of the value stored.
         if let Some(value) = &enum_init.maybe_value {
-            let ll_value_type = self.type_converter.get_basic_type(value.type_key);
+            let ll_inner_type = self.type_converter.get_basic_type(value.type_key);
+            let ll_pad_type = self
+                .type_converter
+                .enum_variant_pad_type(enum_init.type_key, value.type_key);
             ll_struct_type = self.ll_ctx.struct_type(
-                &[ll_variant_num_type.as_basic_type_enum(), ll_value_type],
+                &[
+                    ll_variant_num_type.as_basic_type_enum(),
+                    ll_pad_type.as_basic_type_enum(),
+                    ll_inner_type,
+                ],
                 false,
             );
         }
@@ -456,15 +463,25 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             )
             .unwrap();
 
-        // Set the variant value field, if necessary.
+        // Set the padding and variant value, if necessary.
         if let Some(value) = &enum_init.maybe_value {
-            let ll_value = self.gen_expr(value.as_ref());
-            let ll_value_field_ptr = self
+            let ll_padding_field_ptr = self
                 .ll_builder
-                .build_struct_gep(ll_struct_type, ll_struct_ptr, 1, "enum.value_ptr")
+                .build_struct_gep(ll_struct_type, ll_struct_ptr, 1, "enum.pad_ptr")
+                .unwrap();
+            let ll_pad_type = self
+                .type_converter
+                .enum_variant_pad_type(enum_init.type_key, value.type_key);
+            self.ll_builder
+                .build_store(ll_padding_field_ptr, ll_pad_type.const_zero())
                 .unwrap();
 
-            self.copy_value(ll_value, ll_value_field_ptr, value.type_key);
+            let ll_inner_val = self.gen_expr(value.as_ref());
+            let ll_inner_field_ptr = self
+                .ll_builder
+                .build_struct_gep(ll_struct_type, ll_struct_ptr, 2, "enum.value_ptr")
+                .unwrap();
+            self.copy_value(ll_inner_val, ll_inner_field_ptr, value.type_key);
         }
 
         ll_struct_ptr.as_basic_value_enum()

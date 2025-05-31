@@ -85,6 +85,12 @@ fn main() {
         assert(v.unwrap() == 234, "expected 234")
     }
 
+    // Check that const enums are initialized properly.
+    {
+        const o = Opt[Opt[uint]]::Some(Opt[uint]::Some(23))
+        assert(o.unwrap().unwrap() == 23, "expected 23")
+    }
+
     exit(0)
 }
 

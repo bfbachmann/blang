@@ -445,7 +445,7 @@ fn build(target_mod: &str, quiet: bool, config: CodeGenConfig) -> Result<(), Com
     if !quiet {
         let total_duration = Instant::now() - start_time;
         println!(
-            "Compiled {} ({}) in {}.\n",
+            "Built {} ({}) in {}",
             target_mod,
             output_path,
             format_duration(total_duration)

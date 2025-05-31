@@ -1,6 +1,7 @@
 mod matches
 
 use "std/libc" @proc
+use "std/types/opt" {Opt}
 use "std/runtime" {panic, assert}
 
 enum MyEnum {
@@ -13,9 +14,25 @@ enum MyEnum {
 fn main() {
     // Check that we can match against an enum by reference.
     let mut value = MyEnum::A(5)
-    match &mut value {
-        let MyEnum::A(v) => v^ *= 2
-        let other => other^ = MyEnum::C
+    {
+        match &mut value {
+            let MyEnum::A(v) => v^ *= 2
+            let other => other^ = MyEnum::C
+        }
+
+        struct Thing{
+            a: int
+            b: int
+        }
+
+        match &Opt[Thing]::Some(Thing{a: 9, b: -10}) {
+            let Opt[Thing]::Some(inner) => {
+                assert(inner.a == 9, "expected 9")
+                assert(inner.b == -10, "expected -10")
+            }
+
+            _ => panic("expected Some")
+        }
     }
 
     // Check that we can match against an enum by value.
@@ -53,7 +70,7 @@ fn main() {
 }
 
 // Make sure return checks work for match statements.
-fn test() -> bool {
+fn _() -> bool {
     match "test" {
         "thing" => return true
         // Check that we can omit the pattern and just use `if`.

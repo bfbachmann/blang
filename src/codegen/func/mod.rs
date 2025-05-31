@@ -15,7 +15,7 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::debug_info::{DICompileUnit, DebugInfoBuilder};
 use inkwell::module::{Linkage, Module};
-use inkwell::types::{AnyType, AnyTypeEnum, BasicTypeEnum};
+use inkwell::types::{AnyType, AnyTypeEnum, BasicType, BasicTypeEnum};
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
 use std::collections::HashMap;
 
@@ -502,7 +502,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             self.ll_builder
                 .build_ptr_to_int(
                     ll_val.into_pointer_value(),
-                    self.ll_ctx.i64_type(),
+                    self.type_converter.ptr_sized_int_type(),
                     "ptr_to_int",
                 )
                 .unwrap()
@@ -563,12 +563,14 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     ) -> BasicValueEnum<'ctx> {
         let ll_enum_type = self.type_converter.get_basic_type(enum_tk);
         let ll_inner_type = self.type_converter.get_basic_type(inner_tk);
+        let ll_pad_type = self.type_converter.enum_variant_pad_type(enum_tk, inner_tk);
         let ll_variant_type = self.ll_ctx.struct_type(
             &[
                 ll_enum_type
                     .into_struct_type()
                     .get_field_type_at_index(0)
                     .unwrap(),
+                ll_pad_type.as_basic_type_enum(),
                 ll_inner_type,
             ],
             false,
@@ -581,7 +583,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     .build_struct_gep(
                         ll_variant_type,
                         ll_enum_value.into_pointer_value(),
-                        1,
+                        2,
                         "enum_inner_val_ptr",
                     )
                     .unwrap();
@@ -597,8 +599,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     !as_ptr,
                     "cannot load enum inner value as pointer from non-pointer value"
                 );
+                let ll_struct_value = ll_enum_value.into_struct_value();
                 self.ll_builder
-                    .build_extract_value(ll_enum_value.into_struct_value(), 1, "enum_inner_val")
+                    .build_extract_value(
+                        ll_struct_value,
+                        ll_struct_value.count_fields() - 1,
+                        "enum_inner_val",
+                    )
                     .unwrap()
             }
         }

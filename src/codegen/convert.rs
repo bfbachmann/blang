@@ -1,3 +1,4 @@
+use std::cmp::max;
 use std::collections::HashMap;
 
 use inkwell::context::Context;
@@ -334,7 +335,7 @@ impl<'a> TypeConverter<'a> {
     /// other words, this returns the number of bytes required to hold the type in memory on the
     /// target system.
     pub fn size_of_type(&self, type_key: TypeKey) -> u64 {
-        let ll_type = self.to_basic_type(type_key);
+        let ll_type = self.get_basic_type(type_key);
         self.ll_target_machine
             .get_target_data()
             .get_abi_size(&ll_type)
@@ -342,10 +343,31 @@ impl<'a> TypeConverter<'a> {
 
     /// Returns the natural alignment of the given type in bytes.
     pub fn align_of_type(&self, type_key: TypeKey) -> u32 {
+        if let AType::Enum(enum_type) = self.get_type(type_key) {
+            let tag_bytes = enum_variant_num_field_size(enum_type.variants.len() as u64);
+            let ll_tag_type = self.int_type_with_size(tag_bytes);
+            let tag_align = self
+                .ll_target_machine
+                .get_target_data()
+                .get_abi_alignment(&ll_tag_type);
+            let max_variant_align = self.max_enum_variant_alignment(enum_type);
+            return max(tag_align, max_variant_align);
+        }
+
         let ll_type = self.to_basic_type(type_key);
         self.ll_target_machine
             .get_target_data()
             .get_abi_alignment(&ll_type)
+    }
+
+    /// Returns the array needed to pad an enum variant.
+    pub fn enum_variant_pad_type(&self, enum_tk: TypeKey, inner_tk: TypeKey) -> ArrayType<'a> {
+        let enum_type = self.get_type(enum_tk).to_enum_type();
+        let enum_size = self.size_of_type(enum_tk) as u32;
+        let inner_size = self.size_of_type(inner_tk) as u32;
+        let tag_size = enum_variant_num_field_size(enum_type.variants.len() as u64);
+        let pad_size = enum_size - tag_size - inner_size;
+        self.ctx.i8_type().array_type(pad_size)
     }
 
     /// Returns the size of the given type in bytes as an LLVM constant integer.
@@ -360,15 +382,35 @@ impl<'a> TypeConverter<'a> {
             .const_int(v, sign_extend)
     }
 
+    /// Returns a pointer-sized integer type (depends on target platform).
+    pub fn ptr_sized_int_type(&self) -> IntType<'a> {
+        get_ptr_sized_int_type(self.ctx, self.ll_target_machine).into_int_type()
+    }
+
     /// Returns the size of the largest enum variant in bytes.
     fn max_enum_variant_size(&self, enum_type: &AEnumType) -> u64 {
-        enum_type
-            .variants
-            .iter()
-            .fold(0, |acc, (_, v)| match v.maybe_type_key {
-                Some(tk) => u64::max(acc, self.size_of_type(tk)),
-                None => acc,
-            })
+        match self.largest_enum_variant_tk(enum_type) {
+            Some(tk) => self.size_of_type(tk),
+            None => 0,
+        }
+    }
+
+    /// Returns the type key of the enum variant with the greatest size, if one exists.
+    fn largest_enum_variant_tk(&self, enum_type: &AEnumType) -> Option<TypeKey> {
+        let mut largest = None;
+        let mut max_size = 0;
+
+        for variant in enum_type.variants.values() {
+            if let Some(tk) = variant.maybe_type_key {
+                let variant_size = self.size_of_type(tk);
+                if variant_size > max_size {
+                    max_size = variant_size;
+                    largest = Some(tk);
+                }
+            }
+        }
+
+        largest
     }
 
     /// Returns the maximum (i.e. strictest) padding required for any of the enum variant values.

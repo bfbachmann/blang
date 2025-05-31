@@ -159,7 +159,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 target_enum_tk,
                 ll_target,
                 ll_target_variant_num,
-                &target_type,
                 target_is_signed,
                 is_last_case,
             );
@@ -273,7 +272,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         target_enum_tk: TypeKey,
         ll_target: BasicValueEnum<'ctx>,
         ll_target_variant_num: Option<IntValue<'ctx>>,
-        target_type: &AType,
         target_is_signed: bool,
         is_last_case: bool,
     ) -> Option<IntValue<'ctx>> {
@@ -347,13 +345,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 // a wildcard.
                 if !var_name.is_empty() {
                     // Extract the value from inside the enum.
-                    let (load_ptr, var_tk) = match target_type {
-                        AType::Pointer(_) => (true, target_tk),
+                    let (load_ptr, inner_tk) = match self.type_converter.get_type(*var_tk) {
+                        AType::Pointer(ptr_type) => (true, ptr_type.pointee_type_key),
                         _ => (false, *var_tk),
                     };
                     let ll_inner_val =
-                        self.get_enum_inner_val(target_enum_tk, var_tk, ll_target, load_ptr);
-                    self.create_var(var_name, var_tk, ll_inner_val);
+                        self.get_enum_inner_val(target_enum_tk, inner_tk, ll_target, load_ptr);
+                    self.create_var(var_name, *var_tk, ll_inner_val);
                 }
 
                 // Don't do a comparison if this is the last case, as it's guaranteed

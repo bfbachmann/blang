@@ -7,7 +7,7 @@ use "std/runtime" {assert, panic}
 use "std/allocator" {Allocator, LibcAllocator}
 use "std/types/slice" {Slice, SliceMut}
 use "std/libc" @libc
-use "std/fmt" {printf, Format, Print}
+use "std/fmt" {printf, println, Format, Print}
 
 fn main() {
     let mut al = LibcAllocator.new().dynamic()

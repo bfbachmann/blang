@@ -134,12 +134,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 };
 
                 let ll_str_type = self.type_converter.get_struct_type(expr.type_key);
+                let ll_str_len = self
+                    .type_converter
+                    .get_const_int(literal.len() as u64, false);
                 let ll_str_val = ll_str_type.const_named_struct(&[
                     global.as_basic_value_enum(),
-                    self.ll_ctx
-                        .i64_type()
-                        .const_int(literal.len() as u64, false)
-                        .as_basic_value_enum(),
+                    ll_str_len.as_basic_value_enum(),
                 ]);
 
                 ll_str_val.as_basic_value_enum()
@@ -273,16 +273,24 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
                 // Only append the variant value if there is one.
                 if let Some(val) = &enum_init.maybe_value {
+                    let ll_pad_type = self
+                        .type_converter
+                        .enum_variant_pad_type(enum_init.type_key, val.type_key);
                     let ll_enum_inner = self.gen_const_expr(val);
                     let ll_variant_type = self.ll_ctx.struct_type(
                         &[
                             ll_variant_num_type.as_basic_type_enum(),
+                            ll_pad_type.as_basic_type_enum(),
                             ll_enum_inner.get_type(),
                         ],
                         false,
                     );
                     ll_variant_type
-                        .const_named_struct(&[ll_variant_num, ll_enum_inner])
+                        .const_named_struct(&[
+                            ll_variant_num,
+                            ll_pad_type.const_zero().as_basic_value_enum(),
+                            ll_enum_inner,
+                        ])
                         .as_basic_value_enum()
                 } else if ll_struct_type.count_fields() == 2 {
                     ll_struct_type
