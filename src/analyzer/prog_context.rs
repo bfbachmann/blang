@@ -717,9 +717,7 @@ impl ProgramContext {
 
         let mut replaced_tks = false;
         for field in &mut struct_type.fields {
-            if self.replace_tks(&mut field.type_key, type_mappings) {
-                replaced_tks = true;
-            }
+            replaced_tks |= self.replace_tks(&mut field.type_key, type_mappings);
         }
 
         let has_replaced_param = match self.get_type(type_key).params() {
@@ -755,15 +753,13 @@ impl ProgramContext {
     ) -> Option<TypeKey> {
         let mut replaced_tks = false;
         let mut enum_type = self.get_type(type_key).to_enum_type().clone();
-        for variant in &mut enum_type.variants.values_mut() {
+        for variant in enum_type.variants.values_mut() {
             if let Some(variant_tk) = &mut variant.maybe_type_key {
-                if self.replace_tks(variant_tk, type_mappings) {
-                    replaced_tks = true;
-                }
+                replaced_tks |= self.replace_tks(variant_tk, type_mappings);
             }
         }
 
-        let has_replaced_param = match self.get_type(type_key).params() {
+        let has_replaced_param = match &enum_type.maybe_params {
             Some(params) => params
                 .params
                 .iter()

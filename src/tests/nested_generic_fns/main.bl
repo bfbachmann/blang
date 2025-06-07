@@ -49,18 +49,60 @@ impl Inner2: Call {
     }
 }
 
-// This just tests that we can properly call functions that call nested 
-// functions that inherit generic parameters from their parents.
-fn main() {
-    let mut inner2 = Inner2{s: "bing"}
-    let mut c2 = Caller.new(&mut inner2)
-    c2.call()
-    assert(inner2.s == "bla", "expected bla")
+fn a[A]() -> uint {
+    struct Thing {
+        a: A
+    }
 
-    let mut inner = Inner{i: 0}
-    let mut c = Caller.new(&mut inner)
-    c.call()
-    assert(inner.i == 1, "expected 1")
+    return b[Thing]()
+}
+
+fn b[B]() -> uint {
+    return sizeof B
+}
+
+fn size_of[X]() -> uint {
+    return sizeof X
+}
+
+fn size[A]() -> uint {
+    return size_of[A]()
+}
+
+struct Entry[B] {
+    t: B
+}
+
+enum Slot[C] {
+    Occupied(Entry[C])
+}
+
+impl Slot {
+    fn size() -> uint {
+        return size[Self]()
+    }
+}
+
+fn main() {
+    // This just tests that we can properly call functions that call nested 
+    // functions that inherit generic parameters from their parents.
+    {
+        let mut inner2 = Inner2{s: "bing"}
+        let mut c2 = Caller.new(&mut inner2)
+        c2.call()
+        assert(inner2.s == "bla", "expected bla")
+
+        let mut inner = Inner{i: 0}
+        let mut c = Caller.new(&mut inner)
+        c.call()
+        assert(inner.i == 1, "expected 1")
+    }
+
+    // Check that monomorphization goes deep enough.
+    {
+        assert(Slot[i16].size() == sizeof Slot[i16], "wrong size for Slot[i16]")
+        assert(a[{str}]() > 0, "wrong size")
+    }
 
     @libc.exit(0)
 }

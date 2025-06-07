@@ -565,7 +565,8 @@ mod tests {
             // Compile the source code to IR.
             let codegen_config =
                 CodeGenConfig::new_test_default(PathBuf::from(&ir_path), OutputFormat::LLVMIR);
-            build(path.to_str().unwrap(), true, codegen_config).unwrap();
+            build(path.to_str().unwrap(), true, codegen_config)
+                .unwrap_or_else(|_| panic!("{} should build", path.display()));
 
             // Verify IR and build executable with Clang.
             let clang_proc = clang_build_verify(&ir_path, &exe_path);

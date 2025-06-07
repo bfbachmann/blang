@@ -7,7 +7,7 @@ use "std/runtime" {assert, panic}
 use "std/allocator" {Allocator, LibcAllocator}
 use "std/types/slice" {Slice, SliceMut}
 use "std/libc" @libc
-use "std/fmt" {printf, println, Format, Print}
+use "std/fmt" {printf, Format, Print}
 
 fn main() {
     let mut al = LibcAllocator.new().dynamic()
@@ -149,25 +149,25 @@ impl HashMap {
         
         let len = self.slots.len()
         let hash = hash_key(key)
-        let new_entry = Entry[K, V]{
+        let new_slot = Slot[K, V]::Occupied(Entry[K, V]{
             key: key
             value: value
-        }
+        })
 
         for let mut i = 0uint; i < len; i += 1 {
-            let slot_ptr = self.slots.ptr_at((hash + i) % len)
+            let index = (hash + i) % len
+            let slot = self.slots.get(index).unwrap()
 
-            match slot_ptr {
-                let Slot[K, V]::Occupied(entry_ptr) => {
-                    if entry_ptr.key.eq(key) {
-                        let old_value = entry_ptr.value
-                        entry_ptr^ = new_entry
-                        return Opt[V]::Some(old_value)
+            match slot {
+                let Slot[K, V]::Occupied(entry) => {
+                    if entry.key.eq(key) {
+                        self.slots.set(index, new_slot)
+                        return Opt[V]::Some(entry.value)
                     }
                 }
 
                 _ => {
-                    slot_ptr^ = Slot[K, V]::Occupied(new_entry)
+                    self.slots.set(index, new_slot)
                     self.len += 1
                     return Opt[V]::None
                 }

@@ -58,8 +58,6 @@ struct MonoItemCollector {
     complete_mono_items: Vec<MonoItem>,
     /// Tracks items that have already been queued so we don't re-queue them.
     already_queued_items: HashSet<MonoItem>,
-    /// Tracks the index of the mono item that is currently being traversed.
-    cur_item_index: usize,
 }
 
 impl MonoItemCollector {
@@ -78,7 +76,6 @@ impl MonoItemCollector {
             nested_fns: Default::default(),
             used_extern_fns: Default::default(),
             incomplete_mono_items: Default::default(),
-            cur_item_index: 0,
             already_queued_items: HashSet::from([root_item.clone()]),
             complete_mono_items: vec![root_item],
         }
@@ -100,49 +97,124 @@ impl MonoItemCollector {
 
     /// Collects a monomorphic item. All collected items are functions for which we'll generate
     /// machine code.
-    fn collect_item(&mut self, item: MonoItem) -> usize {
-        // Update the parent item's children with the collected item's index.
-        let new_index = self.complete_mono_items.len();
-
-        // Insert the collected item and return its index.
+    fn collect_item(&mut self, item: MonoItem) {
         self.complete_mono_items.push(item);
-        new_index
+    }
+
+    /// Walks the types recursively starting with the given type key looking for generic types.
+    /// Any generic type keys that are found will be mapped to their corresponding concrete type
+    /// in `type_mapping`.
+    fn map_nested_generics(
+        &self,
+        type_key: TypeKey,
+        traversed: &mut HashSet<TypeKey>,
+        type_mapping: &mut HashMap<TypeKey, TypeKey>,
+    ) {
+        if !traversed.insert(type_key) {
+            return;
+        }
+
+        match self.get_type(type_key) {
+            AType::Bool
+            | AType::U8
+            | AType::I8
+            | AType::U16
+            | AType::I16
+            | AType::U32
+            | AType::I32
+            | AType::F32
+            | AType::I64
+            | AType::U64
+            | AType::F64
+            | AType::Int
+            | AType::Uint
+            | AType::Str
+            | AType::Char => {}
+
+            AType::Struct(struct_type) => {
+                for field in &struct_type.fields {
+                    self.map_nested_generics(field.type_key, traversed, type_mapping);
+                }
+            }
+
+            AType::Enum(enum_type) => {
+                for variant in enum_type.variants.values() {
+                    if let Some(variant_tk) = variant.maybe_type_key {
+                        self.map_nested_generics(variant_tk, traversed, type_mapping);
+                    }
+                }
+            }
+
+            AType::Tuple(tuple_type) => {
+                for field in &tuple_type.fields {
+                    self.map_nested_generics(field.type_key, traversed, type_mapping);
+                }
+            }
+
+            AType::Array(array_type) => {
+                if let Some(elem_tk) = array_type.maybe_element_type_key {
+                    self.map_nested_generics(elem_tk, traversed, type_mapping);
+                }
+            }
+
+            AType::Function(sig) => {
+                for arg in &sig.args {
+                    self.map_nested_generics(arg.type_key, traversed, type_mapping);
+                }
+
+                if let Some(ret_tk) = sig.maybe_ret_type_key {
+                    self.map_nested_generics(ret_tk, traversed, type_mapping);
+                }
+            }
+
+            AType::Pointer(ptr_type) => {
+                self.map_nested_generics(ptr_type.pointee_type_key, traversed, type_mapping);
+            }
+
+            AType::Spec(_) => {
+                panic!("unexpected spec type")
+            }
+
+            AType::Generic(_) => {
+                type_mapping
+                    .entry(type_key)
+                    .or_insert_with(|| self.deep_map_type_key(type_key));
+            }
+
+            AType::Unknown(_) => {
+                panic!("encountered unknown type")
+            }
+        }
     }
 
     /// Queues a function for monomorphization.
-    fn queue_item(&mut self, type_key: TypeKey, mut type_mappings: HashMap<TypeKey, TypeKey>) {
+    fn queue_item(&mut self, type_key: TypeKey, mut type_mapping: HashMap<TypeKey, TypeKey>) {
         // Update mapped values based on existing mappings in parent contexts.
-        for v in type_mappings.values_mut() {
+        for v in type_mapping.values_mut() {
             *v = self.map_type_key(*v);
         }
 
-        let parent_item = self.complete_mono_items.get(self.cur_item_index).unwrap();
+        let parent_item = self.complete_mono_items.last().unwrap();
         let is_nested = self.nested_fns.contains(&type_key);
 
         // Include type mappings from parent contexts if the item could possibly need them.
         if is_nested {
             for (k, v) in &parent_item.type_mappings {
                 // Don't overwrite mappings from child contexts.
-                if !type_mappings.contains_key(k) {
-                    type_mappings.insert(*k, *v);
-                }
+                type_mapping.entry(*k).or_insert(*v);
             }
         }
 
-        // Sanity check: make sure nothing is mapped to a generic type.
-        for (k, v) in &mut type_mappings {
-            if self.get_type(*v).is_generic() {
-                *v = self.map_type_key(*k);
-            }
-            assert!(
-                !self.get_type(*v).is_generic(),
-                "{k} is mapped to generic type {v}"
-            );
+        // For all target types included in the type mapping, make sure that any generic types
+        // they contain are also included in the type mapping.
+        let mut traversed = HashSet::new();
+        for target_tk in type_mapping.values().cloned().collect::<Vec<_>>() {
+            self.map_nested_generics(target_tk, &mut traversed, &mut type_mapping);
         }
 
         let item = MonoItem {
             type_key,
-            type_mappings,
+            type_mappings: type_mapping,
         };
 
         // Don't queue the item if it has already been queued or is identical to its parent (a
@@ -154,22 +226,31 @@ impl MonoItemCollector {
     }
 
     /// Pops the item from the front of the queue of functions that need monomorphization.
-    fn pop_queued_item(&mut self) -> Option<usize> {
-        match self.incomplete_mono_items.pop_front() {
-            Some(item) => {
-                self.cur_item_index = self.collect_item(item);
-                Some(self.cur_item_index)
-            }
-            None => None,
+    fn pop_queued_item(&mut self) -> bool {
+        if let Some(item) = self.incomplete_mono_items.pop_front() {
+            self.collect_item(item);
+            return true;
         }
+
+        false
     }
 
     /// Maps the given type key to a new type key based on the type mappings in the current
     /// context (i.e. generic parameter mappings for the current function).
     fn map_type_key(&self, type_key: TypeKey) -> TypeKey {
-        let item = self.complete_mono_items.get(self.cur_item_index).unwrap();
+        let item = self.complete_mono_items.last().unwrap();
         if let Some(tk) = item.type_mappings.get(&type_key) {
             return *tk;
+        }
+
+        type_key
+    }
+
+    fn deep_map_type_key(&self, type_key: TypeKey) -> TypeKey {
+        for item in self.complete_mono_items.iter().rev() {
+            if let Some(tk) = item.type_mappings.get(&type_key) {
+                return *tk;
+            }
         }
 
         type_key
@@ -249,10 +330,8 @@ pub fn mono_prog(src_info: &SrcInfo, analysis: ProgramAnalysis) -> MonoProg {
         }
     }
 
-    // If there is a main function, we'll start traversing from there. Otherwise, we'll just
-    // iterate through all the functions.
-    while let Some(index) = collector.pop_queued_item() {
-        walk_item(&mut collector, index);
+    while collector.pop_queued_item() {
+        walk_next_item(&mut collector);
     }
 
     // Filter out unused extern functions.
@@ -316,8 +395,8 @@ fn track_fn(collector: &mut MonoItemCollector, queue: bool, func: AFn) {
     }
 }
 
-fn walk_item(collector: &mut MonoItemCollector, index: usize) {
-    let item = collector.complete_mono_items.get(index).unwrap();
+fn walk_next_item(collector: &mut MonoItemCollector) {
+    let item = collector.complete_mono_items.last().unwrap();
     let func = collector.fns.get(&item.type_key).unwrap();
 
     for statement in func.body.statements.clone() {

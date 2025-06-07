@@ -71,11 +71,12 @@ impl<'a> TypeConverter<'a> {
 
     /// Returns the type key that `type_key` should be replaced with according to the current
     /// type mapping. If there is none, just returns `type_key`.
-    pub fn map_type_key(&self, type_key: TypeKey) -> TypeKey {
-        match self.type_mapping.get(&type_key) {
-            Some(tk) => *tk,
-            None => type_key,
+    pub fn map_type_key(&self, mut type_key: TypeKey) -> TypeKey {
+        while let Some(tk) = self.type_mapping.get(&type_key) {
+            type_key = *tk;
         }
+
+        type_key
     }
 
     /// Returns the LLVM basic type enum for the type associated with the given type key.

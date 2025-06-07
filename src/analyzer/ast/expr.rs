@@ -775,6 +775,8 @@ impl AExpr {
                 expr.try_into_const_uint(ctx)
             }
 
+            // TODO: Remove this. There's no way this works in every case because things may
+            // no have been monomorphized fully by this point.
             AExprKind::Sizeof(type_key) => Some(size_of_type(ctx, *type_key)),
 
             _ => None,
