@@ -13,7 +13,7 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::targets::{FileType, TargetMachine};
-use inkwell::values::{BasicMetadataValueEnum, BasicValue};
+use inkwell::values::BasicMetadataValueEnum;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -227,15 +227,24 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
 
         let ll_ret_val = self
             .ll_builder
-            .build_call(ll_ext_fn, &ll_args_to_pass, "extern_call")
+            .build_call(ll_ext_fn, &ll_args_to_pass, "extern_result")
             .unwrap()
             .try_as_basic_value()
             .left();
-        let ll_ret_val: Option<&dyn BasicValue> = match ll_ret_val.as_ref() {
-            Some(ret_val) => Some(ret_val),
-            None => None,
-        };
-        self.ll_builder.build_return(ll_ret_val).unwrap();
+
+        if let Some(ll_ret_val) = ll_ret_val {
+            if is_sret {
+                let ll_target_ptr = ll_intern_fn.get_nth_param(0).unwrap().into_pointer_value();
+                self.ll_builder
+                    .build_store(ll_target_ptr, ll_ret_val)
+                    .unwrap();
+            } else {
+                self.ll_builder.build_return(Some(&ll_ret_val)).unwrap();
+                return;
+            }
+        }
+
+        self.ll_builder.build_return(None).unwrap();
     }
 }
 
