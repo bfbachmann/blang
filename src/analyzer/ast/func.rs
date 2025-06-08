@@ -149,7 +149,7 @@ impl AFnSig {
         // We can clear the params from the program context now that we're
         // done analyzing this signature.
         if a_fn_sig.params.is_some() {
-            ctx.pop_params(true);
+            ctx.pop_params(false);
         }
 
         a_fn_sig
@@ -411,7 +411,7 @@ impl AFn {
         // Remove the function signature params now that we're done analyzing
         // the function.
         if signature.params.is_some() {
-            ctx.pop_params(false);
+            ctx.pop_params(true);
         }
 
         AFn {

@@ -2916,6 +2916,22 @@ mod tests {
     }
 
     #[test]
+    fn no_unused() {
+        let result = analyze(
+            r#"
+            fn thing[T](offset: uint) -> uint {
+                return sizeof T + offset
+            }
+
+            fn main() {
+                thing[u32](0)
+            }
+            "#,
+        );
+        check_warn(&result, None);
+    }
+
+    #[test]
     fn non_const_static() {
         let result = analyze(
             r#"
