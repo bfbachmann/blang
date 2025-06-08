@@ -89,6 +89,31 @@ impl<'a> TypeConverter<'a> {
         self.to_fn_type(self.get_type(type_key).to_fn_sig())
     }
 
+    /// Returns the LLVM function type for the C representation of the function.
+    pub fn get_c_fn_type(&self, sig: &AFnSig) -> FunctionType<'a> {
+        let ll_ret_type = match &sig.maybe_ret_type_key {
+            None => self.ctx.void_type().as_any_type_enum(),
+            Some(tk) => self.get_basic_type(*tk).as_any_type_enum(),
+        };
+        let ll_arg_types: Vec<BasicMetadataTypeEnum> = sig
+            .args
+            .iter()
+            .map(|arg| self.get_basic_type(arg.type_key).into())
+            .collect();
+        let mut param_types: Vec<LLVMTypeRef> = ll_arg_types
+            .iter()
+            .map(|ll_type| ll_type.as_type_ref())
+            .collect();
+        unsafe {
+            FunctionType::new(LLVMFunctionType(
+                ll_ret_type.as_type_ref(),
+                param_types.as_mut_ptr(),
+                param_types.len() as u32,
+                false as i32,
+            ))
+        }
+    }
+
     /// Returns the LLVM struct type for the type associated with the given type key.
     pub fn get_struct_type(&self, type_key: TypeKey) -> StructType<'a> {
         self.get_basic_type(type_key).into_struct_type()
@@ -193,22 +218,16 @@ impl<'a> TypeConverter<'a> {
         //      fn new_person(person: *Person)
         //
         // and the `person` pointer will be written to when assigning the return value.
-        let ret_type = sig
-            .maybe_ret_type_key
-            .map(|type_key| self.get_type(type_key));
-        let extra_arg_type = match ret_type {
-            Some(AType::Struct(_)) => Some(self.ctx.ptr_type(AddressSpace::default())),
-            Some(AType::Enum(_)) => Some(self.ctx.ptr_type(AddressSpace::default())),
-            Some(AType::Tuple(_)) => Some(self.ctx.ptr_type(AddressSpace::default())),
-            Some(AType::Array(_)) => Some(self.ctx.ptr_type(AddressSpace::default())),
-            _ => None,
-        };
-
-        if let Some(arg_type) = extra_arg_type {
-            // Change the return type to void because, on return, we'll just be writing to the
-            // pointer passed in the first argument.
-            ll_ret_type = self.ctx.void_type().as_any_type_enum();
-            ll_arg_types.push(arg_type.into());
+        if let Some(ret_tk) = sig.maybe_ret_type_key {
+            let ret_type = self.get_type(ret_tk);
+            if ret_type.is_composite() {
+                // Change the return type to void because, on return, we'll just be writing to the
+                // pointer passed in the first argument.
+                ll_ret_type = self.ctx.void_type().as_any_type_enum();
+                
+                // Include the return type as the first argument instead.
+                ll_arg_types.push(self.ctx.ptr_type(AddressSpace::default()).into());
+            }
         }
 
         // Get arg types.

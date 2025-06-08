@@ -9,7 +9,6 @@ use crate::codegen::program::{init_target_machine, CodeGenConfig, OutputFormat};
 use crate::mono_collector::MonoProg;
 use crate::parser::{ModID, SrcInfo};
 use flamer::flame;
-use inkwell::attributes::AttributeLoc;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
@@ -171,11 +170,12 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
         let fn_sig = &ext_fn.fn_sig;
         let link_name = ext_fn.maybe_link_name.as_ref().unwrap_or(&fn_sig.name);
 
-        // Generate the external function definition.
-        let ll_fn_type = self.type_converter.get_fn_type(fn_sig.type_key);
-        let ll_extern_fn =
+        // Generate the external function definition with C calling conventions.
+        let ll_ext_fn_type = self.type_converter.get_c_fn_type(fn_sig);
+        let ll_ext_fn =
             self.ll_mod
-                .add_function(link_name.as_str(), ll_fn_type, Some(Linkage::External));
+                .add_function(link_name.as_str(), ll_ext_fn_type, Some(Linkage::External));
+        ll_ext_fn.set_call_conventions(llvm_sys::LLVMCallConv::LLVMCCallConv as u32);
 
         // Generate the internal function that calls the external one. We'll tell
         // LLVM to always inline this function.
@@ -189,22 +189,45 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
             true => Some(Linkage::External),
             false => None,
         };
-        let ll_internal_fn = self.ll_mod.add_function(&mangled_name, ll_fn_type, linkage);
-        ll_internal_fn.add_attribute(
-            AttributeLoc::Function,
-            self.ll_ctx.create_string_attribute("alwaysinline", ""),
-        );
+        let ll_intern_fn_type = self.type_converter.get_fn_type(fn_sig.type_key);
+        let ll_intern_fn = self
+            .ll_mod
+            .add_function(&mangled_name, ll_intern_fn_type, linkage);
+        let is_sret = fn_sig
+            .maybe_ret_type_key
+            .is_some_and(|ret_tk| self.type_converter.get_type(ret_tk).is_composite());
 
-        let ll_entry_block = self.ll_ctx.append_basic_block(ll_internal_fn, "entry");
+        let ll_entry_block = self.ll_ctx.append_basic_block(ll_intern_fn, "entry");
         self.ll_builder.position_at_end(ll_entry_block);
-        let ll_args: Vec<BasicMetadataValueEnum> = ll_internal_fn
-            .get_params()
-            .iter()
-            .map(|param| param.as_basic_value_enum().into())
-            .collect();
+
+        // Assemble arguments, being careful to dereference any arguments that are supposed to be
+        // passed by value.
+        let mut ll_args_to_pass: Vec<BasicMetadataValueEnum> = vec![];
+        let param_offset = match is_sret {
+            true => 1,
+            false => 0,
+        };
+
+        for (i, arg) in fn_sig.args.iter().enumerate() {
+            let mut ll_arg = ll_intern_fn
+                .get_nth_param((i + param_offset) as u32)
+                .unwrap();
+
+            let needs_deref = self.type_converter.get_type(arg.type_key).is_composite();
+            if needs_deref {
+                let ll_arg_type = self.type_converter.get_basic_type(arg.type_key);
+                ll_arg = self
+                    .ll_builder
+                    .build_load(ll_arg_type, ll_arg.into_pointer_value(), &arg.name)
+                    .unwrap();
+            }
+
+            ll_args_to_pass.push(ll_arg.into());
+        }
+
         let ll_ret_val = self
             .ll_builder
-            .build_call(ll_extern_fn, ll_args.as_slice(), "extern_call")
+            .build_call(ll_ext_fn, &ll_args_to_pass, "extern_call")
             .unwrap()
             .try_as_basic_value()
             .left();
