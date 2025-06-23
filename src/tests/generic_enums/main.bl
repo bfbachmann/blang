@@ -13,7 +13,7 @@ fn main() {
     // Check that create and use enum variants.
     {
         let ok_int = Result[int, str]::Ok(1234)
-        assert(ok_int ~~ Result[int, str]::Ok(1234), "expected Ok")
+        assert(ok_int ~~ Result::Ok(1234), "expected Ok")
     }
 
     // Check that type inference works on generic enum variants without 

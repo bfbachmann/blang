@@ -44,7 +44,7 @@ fn main() {
     // references its generic parameters. We're going to test it here.
     {
         for let mut i = 0; i < 10; i += 1 {
-            let result = Opt[int]::Some(i)
+            let result = Opt::Some(i)
                 .map(fn (v: int) -> bool {
                     return v % 2 == 0
                 })

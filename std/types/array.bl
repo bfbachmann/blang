@@ -71,7 +71,7 @@ impl Array {
     pub fn write_at_offset(*mut self, mut offset: uint, slice: Slice[T]) -> uint {
         for let mut i = 0uint; offset + i < self.data.len(); i += 1 {
             match slice.get(i) {
-                let Opt[T]::Some(t) => self.data.set(i + offset, t)
+                let Opt::Some(t) => self.data.set(i + offset, t)
                 _ => break
             }
         }

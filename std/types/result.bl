@@ -14,8 +14,8 @@ impl Result {
     /// is `Ok`.
     pub fn ok(self) -> Opt[T] {
         match self {
-            let Result[T, E]::Ok(t) => return Opt[T]::Some(t)
-            _ => return Opt[T]::None
+            let Result::Ok(t) => return Opt::Some(t)
+            _ => return Opt::None
         }
     }
 
@@ -23,15 +23,15 @@ impl Result {
     /// the result is `Err`.
     pub fn err(self) -> Opt[E] {
         match self {
-            let Result[T, E]::Err(e) => return Opt[E]::Some(e)
-            _ => return Opt[E]::None
+            let Result::Err(e) => return Opt::Some(e)
+            _ => return Opt::None
         }
     }
 
     /// Returns true if this is an `Ok` result.
     pub fn is_ok(self) -> bool {
         match self {
-            let Result[T, E]::Ok(_) => return true
+            let Result::Ok(_) => return true
             _ => return false
         }
     }

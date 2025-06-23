@@ -45,9 +45,9 @@ impl Slice {
     /// Returns the value at index `i` in the slice.
     pub fn get(self, i: uint) -> Opt[T] {
         if i >= self.len {
-            return Opt[T]::None
+            return Opt::None
         }
-        return Opt[T]::Some(self.ptr_at(i)^)
+        return Opt::Some(self.ptr_at(i)^)
     }
 
     /// Returns a slice that points to elements from index `start` (incluive) 
@@ -136,9 +136,9 @@ impl SliceMut {
     /// bounds.
     pub fn get(self, i: uint) -> Opt[T] {
         if i >= self.len {
-            return Opt[T]::None
+            return Opt::None
         }
-        return Opt[T]::Some(self.ptr_at(i)^)
+        return Opt::Some(self.ptr_at(i)^)
     }
 
     /// Sets the element at index `i` to `t`. Panics if `i` is out of bounds.

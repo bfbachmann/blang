@@ -87,7 +87,7 @@ fn main() {
 
     // Check that const enums are initialized properly.
     {
-        const o = Opt[Opt[uint]]::Some(Opt[uint]::Some(23))
+        const o = Opt::Some(Opt::Some(23))
         assert(o.unwrap().unwrap() == 23, "expected 23")
     }
 
@@ -95,7 +95,7 @@ fn main() {
 }
 
 fn get_opt() -> Opt[uint] {
-    return Opt[uint]::Some(234)
+    return Opt::Some(234)
 }
 
 fn take_enum(e: E) {

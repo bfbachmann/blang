@@ -128,16 +128,13 @@ fn analyze_enum_binding(
     used_variant_nums: &mut HashSet<usize>,
     is_first_pattern: bool,
 ) {
-    let binding = match &binding_expr {
-        Expression::EnumInit(binding) => binding,
-        _ => {
-            let err = err_expected_enum_pattern(*binding_expr.span());
-            ctx.insert_err(err);
-            return;
-        }
+    let Expression::EnumInit(binding) = &binding_expr else {
+        let err = err_expected_enum_pattern(*binding_expr.span());
+        ctx.insert_err(err);
+        return;
     };
 
-    let enum_tk = ctx.resolve_type(&Type::Unresolved(binding.typ.clone()));
+    let mut enum_tk = ctx.resolve_maybe_polymorphic_type(&Type::Unresolved(binding.typ.clone()));
 
     // Figure out how we're supposed to bind variables inside enum patterns based on
     // the target type.
@@ -146,6 +143,16 @@ fn analyze_enum_binding(
         AType::Pointer(ptr_type) => (ptr_type.pointee_type_key, true, ptr_type.is_mut),
         _ => (match_target.type_key, false, false),
     };
+
+    // If the enum type is the polymorphic version of the target type, just assume the enum type
+    // is the same as the target type.
+    if ctx.get_type(enum_tk).params().is_some() {
+        if let Some(mono) = ctx.type_monomorphizations.get(&target_tk) {
+            if mono.poly_type_key == enum_tk {
+                enum_tk = target_tk;
+            }
+        }
+    }
 
     // Make sure the enum type matches the target type.
     if enum_tk != target_tk

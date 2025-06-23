@@ -63,17 +63,17 @@ fn display_hashmap[K: Hash + Eq + Print, V: Print](map: HashMap[K, V]) {
 
     for let mut i = 0uint; i < map.slots.len(); i += 1 {
         match map.slots.ptr_at(i) {
-            let Slot[K, V]::Occupied(entry) => {
+            let Slot::Occupied(entry) => {
                 printf(
                     Format.new(map.allocator, "% -> %\n")
                         .arg(&entry.key)
                         .arg(&entry.value)
                 )
             }
-            let Slot[K, V]::Empty => {
+            let Slot::Empty => {
                 printf(Format.new(map.allocator, "empty\n"))
             }
-            let Slot[K, V]::Deleted => {
+            let Slot::Deleted => {
                 printf(Format.new(map.allocator, "deleted\n"))
             }
         }
@@ -159,23 +159,23 @@ impl HashMap {
             let slot = self.slots.get(index).unwrap()
 
             match slot {
-                let Slot[K, V]::Occupied(entry) => {
+                let Slot::Occupied(entry) => {
                     if entry.key.eq(key) {
                         self.slots.set(index, new_slot)
-                        return Opt[V]::Some(entry.value)
+                        return Opt::Some(entry.value)
                     }
                 }
 
                 _ => {
                     self.slots.set(index, new_slot)
                     self.len += 1
-                    return Opt[V]::None
+                    return Opt::None
                 }
             }
         }
 
         panic("failed to locate slot for insertion")
-        return Opt[V]::None
+        return Opt::None
     }
 
     pub fn delete(*mut self, key: K) -> Opt[V] {
@@ -186,22 +186,22 @@ impl HashMap {
             let slot_ptr = self.slots.ptr_at((hash + i) % len)
 
             match slot_ptr {
-                let Slot[K, V]::Occupied(entry_ptr) if entry_ptr.key.eq(key) => {
+                let Slot::Occupied(entry_ptr) if entry_ptr.key.eq(key) => {
                     let value = entry_ptr.value
                     slot_ptr^ = Slot::Deleted
                     self.len -= 1
-                    return Opt[V]::Some(value)
+                    return Opt::Some(value)
                 }
 
-                let Slot[K, V]::Empty => {
-                    return Opt[V]::None
+                let Slot::Empty => {
+                    return Opt::None
                 }
 
                 _ => {}
             }
         }
 
-        return Opt[V]::None
+        return Opt::None
     }
 
     pub fn get(self, key: K) -> Opt[V] {
@@ -212,19 +212,19 @@ impl HashMap {
             let slot_ptr = self.slots.ptr_at((hash + i) % len)
 
             match slot_ptr {
-                let Slot[K, V]::Occupied(entry) if entry.key.eq(key) => {
-                    return Opt[V]::Some(entry.value)
+                let Slot::Occupied(entry) if entry.key.eq(key) => {
+                    return Opt::Some(entry.value)
                 }
 
-                let Slot[K, V]::Empty => {
-                    return Opt[V]::None
+                let Slot::Empty => {
+                    return Opt::None
                 }
 
                 _ => {}
             }
         }
 
-        return Opt[V]::None
+        return Opt::None
     }
 
     pub fn free(*mut self) {
@@ -253,7 +253,7 @@ impl HashMap {
 
         for let mut i = 0uint; i < old_len; i += 1 {
             match old_slots.ptr_at(i) {
-                let Slot[K, V]::Occupied(entry) => {
+                let Slot::Occupied(entry) => {
                     self.insert(entry.key, entry.value)
                 }
                 _ => {}

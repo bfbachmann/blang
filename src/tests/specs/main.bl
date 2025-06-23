@@ -68,7 +68,7 @@ impl uint: Parse {
             value = value * 10 + byte as uint - '0' as uint
         }
 
-        return {i, Result[uint, str]::Ok(value)}
+        return {i, Result::Ok(value)}
     }
 }
 

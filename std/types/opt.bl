@@ -12,18 +12,18 @@ pub enum Opt[T] {
 impl Opt {
     /// Returns true if the value is `None`.
     pub fn is_none(self) -> bool {
-        return self ~~ Opt[T]::None
+        return self ~~ Opt::None
     }
 
     /// Returns true if the value is `Some(T)`.
     pub fn is_some(self) -> bool {
-        return self !~ Opt[T]::None
+        return self !~ Opt::None
     }
 
     /// Returns the contained value, if any. Otherwise, returns `default`.
     pub fn unwrap_or(self, default: T) -> T {
         match self {
-            let Opt[T]::Some(t) => return t
+            let Opt::Some(t) => return t
             _ => return default
         }
     }
@@ -31,7 +31,7 @@ impl Opt {
     /// Returns the contained value, or panics if there is none.
     pub fn unwrap(self) -> T {
         match self {
-            let Opt[T]::Some(t) => return t
+            let Opt::Some(t) => return t
             _ => {
                 panic("cannot unwrap optional None")
 
@@ -45,8 +45,8 @@ impl Opt {
     /// returns an optional wrapping the result. Otherwise, returns None.
     pub fn map[O](self, f: fn (T) -> O) -> Opt[O] {
         match self {
-            let Opt[T]::Some(t) => return Opt[O]::Some(f(t))
-            _ => return Opt[O]::None
+            let Opt::Some(t) => return Opt::Some(f(t))
+            _ => return Opt::None
         }
     }
 }
