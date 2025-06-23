@@ -1457,7 +1457,7 @@ fn analyze_from(
 fn analyze_expr_with_pref(
     ctx: &mut ProgramContext,
     expr: Expression,
-    maybe_expected_type_key: Option<TypeKey>,
+    maybe_expected_tk: Option<TypeKey>,
     allow_type: bool,
     allow_polymorph: bool,
     prefer_method: bool,
@@ -1571,7 +1571,7 @@ fn analyze_expr_with_pref(
         }
 
         Expression::EnumInit(enum_init) => {
-            let a_init = AEnumVariantInit::from(ctx, &enum_init);
+            let a_init = AEnumVariantInit::from(ctx, &enum_init, maybe_expected_tk);
             let type_key = a_init.type_key;
             AExpr {
                 kind: AExprKind::EnumInit(a_init),
@@ -1581,11 +1581,11 @@ fn analyze_expr_with_pref(
         }
 
         Expression::TupleInit(tuple_init) => {
-            analyze_tuple_init(ctx, tuple_init, maybe_expected_type_key, span)
+            analyze_tuple_init(ctx, tuple_init, maybe_expected_tk, span)
         }
 
         Expression::ArrayInit(array_init) => {
-            analyze_array_init(ctx, *array_init, maybe_expected_type_key, span)
+            analyze_array_init(ctx, *array_init, maybe_expected_tk, span)
         }
 
         Expression::SizeOf(sizeof) => {
@@ -1599,7 +1599,7 @@ fn analyze_expr_with_pref(
 
         Expression::FunctionCall(fn_call) => {
             // Analyze the function call and ensure it has a return type.
-            analyze_fn_call(ctx, *fn_call, maybe_expected_type_key, span)
+            analyze_fn_call(ctx, *fn_call, maybe_expected_tk, span)
         }
 
         Expression::Index(index) => {
@@ -1614,7 +1614,7 @@ fn analyze_expr_with_pref(
         Expression::MemberAccess(member_access) => {
             // Prefer methods if the expected type is a function.
             let prefer_method = prefer_method
-                || match maybe_expected_type_key {
+                || match maybe_expected_tk {
                     Some(tk) => ctx.get_type(tk).is_fn(),
                     None => false,
                 };
@@ -1633,15 +1633,10 @@ fn analyze_expr_with_pref(
             analyze_unary_op(ctx, op, &expr, right_expr, span)
         }
 
-        Expression::BinaryOperation(left_expr, op, right_expr) => analyze_binary_op(
-            ctx,
-            op,
-            *left_expr,
-            *right_expr,
-            maybe_expected_type_key,
-            span,
-        ),
+        Expression::BinaryOperation(left_expr, op, right_expr) => {
+            analyze_binary_op(ctx, op, *left_expr, *right_expr, maybe_expected_tk, span)
+        }
 
-        Expression::From(from) => analyze_from(ctx, &from, maybe_expected_type_key),
+        Expression::From(from) => analyze_from(ctx, &from, maybe_expected_tk),
     }
 }

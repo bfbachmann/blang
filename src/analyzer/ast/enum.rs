@@ -4,9 +4,10 @@ use std::fmt::{Display, Formatter};
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::params::AParams;
 use crate::analyzer::ast::r#type::AType;
+use crate::analyzer::check_types;
 use crate::analyzer::error::{
     err_dup_enum_variant, err_dup_ident, err_expected_enum, err_missing_variant_value,
-    err_no_such_variant, err_unexpected_variant_value,
+    err_no_such_variant, err_type_annotations_needed, err_unexpected_variant_value, AnalyzeResult,
 };
 use crate::analyzer::ident::Ident;
 use crate::analyzer::prog_context::ProgramContext;
@@ -227,15 +228,20 @@ impl Display for AEnumVariantInit {
 
 impl AEnumVariantInit {
     /// Performs semantic analysis on enum variant initialization.
-    pub fn from(ctx: &mut ProgramContext, enum_init: &EnumVariantInit) -> Self {
+    pub fn from(
+        ctx: &mut ProgramContext,
+        enum_init: &EnumVariantInit,
+        maybe_expected_tk: Option<TypeKey>,
+    ) -> Self {
         // Make sure the enum type exists.
-        let enum_type_key = ctx.resolve_type(&Type::Unresolved(enum_init.typ.clone()));
-        let enum_type = match ctx.get_type(enum_type_key) {
+        let mut enum_tk =
+            ctx.resolve_maybe_polymorphic_type(&Type::Unresolved(enum_init.typ.clone()));
+        let mut enum_type = match ctx.get_type(enum_tk) {
             AType::Unknown(_) => {
                 // The enum type has already failed semantic analysis, so we should avoid
                 // analyzing its initialization and just return some zero-value placeholder instead.
                 return AEnumVariantInit {
-                    type_key: enum_type_key,
+                    type_key: enum_tk,
                     variant: AEnumTypeVariant {
                         number: 0,
                         name: "".to_string(),
@@ -246,15 +252,15 @@ impl AEnumVariantInit {
                 };
             }
 
-            AType::Enum(enum_type) => enum_type,
+            AType::Enum(enum_type) => enum_type.clone(),
 
             _ => {
                 // This is not an enum type. Record the error and return a placeholder value.
-                let err = err_expected_enum(ctx, enum_type_key, enum_init.span);
+                let err = err_expected_enum(ctx, enum_tk, enum_init.span);
                 ctx.insert_err(err);
 
                 return AEnumVariantInit {
-                    type_key: enum_type_key,
+                    type_key: enum_tk,
                     variant: AEnumTypeVariant {
                         number: 0,
                         name: "<unknown>".to_string(),
@@ -266,22 +272,44 @@ impl AEnumVariantInit {
             }
         };
 
+        // Check if this enum type is the current `Self` type. If so, it's allowed to remain
+        // polymorphic.
+        let is_cur_self_type = ctx
+            .get_cur_self_type_key()
+            .is_some_and(|self_tk| self_tk == enum_tk);
+
+        // If the enum type is polymorphic and the expected result type is a monomorphization of
+        // that polymorphic type, then we can just assume the enum type is the monomorphic version.
+        if let Some(expected_tk) = maybe_expected_tk {
+            match ctx.get_type(expected_tk) {
+                AType::Enum(expected_enum_type) if expected_enum_type.maybe_params.is_none() => {
+                    match (
+                        &enum_type.maybe_params,
+                        ctx.type_monomorphizations.get(&expected_tk),
+                    ) {
+                        (Some(_), Some(mono)) if mono.poly_type_key == enum_tk => {
+                            enum_tk = expected_tk;
+                            enum_type = expected_enum_type.clone();
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+
         // Make sure the enum variant exists.
         let variant = match enum_type.variants.get(&enum_init.variant_name) {
             Some(v) => v.clone(),
             None => {
                 // This enum type has no such variant. Record the error and return a placeholder
                 // value.
-                let err = err_no_such_variant(
-                    ctx,
-                    enum_type_key,
-                    &enum_init.variant_name,
-                    enum_init.span,
-                );
+                let err =
+                    err_no_such_variant(ctx, enum_tk, &enum_init.variant_name, enum_init.span);
                 ctx.insert_err(err);
 
                 return AEnumVariantInit {
-                    type_key: enum_type_key,
+                    type_key: enum_tk,
                     variant: AEnumTypeVariant {
                         number: 0,
                         name: "<unknown>".to_string(),
@@ -309,21 +337,49 @@ impl AEnumVariantInit {
                     ctx.insert_err(err);
 
                     return AEnumVariantInit {
-                        type_key: enum_type_key,
+                        type_key: enum_tk,
                         variant,
                         maybe_value: None,
                         span: enum_init.span,
                     };
                 }
 
-                Some(Box::new(AExpr::from(
-                    ctx,
-                    value.as_ref().clone(),
+                // Only expect a specific inner type if we know what the concrete enum type is.
+                let expected_inner_tk = match &enum_type.maybe_params {
+                    Some(_) => None,
+                    None => variant.maybe_type_key,
+                };
+
+                let inner_expr =
+                    AExpr::from(ctx, value.as_ref().clone(), expected_inner_tk, false, false);
+
+                // If the enum type is polymorphic, then we need to check if we can resolve the
+                // implicit monomorphization params from this variant's inner value.
+                if let (false, Some(params), Some(variant_inner_tk)) = (
+                    is_cur_self_type,
+                    &enum_type.maybe_params,
                     variant.maybe_type_key,
-                    false,
-                    false,
-                )))
+                ) {
+                    match infer_mono_type(
+                        ctx,
+                        enum_tk,
+                        params,
+                        &inner_expr,
+                        enum_init,
+                        variant_inner_tk,
+                    ) {
+                        Ok(tk) => {
+                            enum_tk = tk;
+                        }
+                        Err(err) => {
+                            ctx.insert_err(err);
+                        }
+                    }
+                }
+
+                Some(Box::new(inner_expr))
             }
+
             None => {
                 if let Some(type_key) = &variant.maybe_type_key {
                     // A value was expected but was not provided. Record the error and return a
@@ -338,11 +394,13 @@ impl AEnumVariantInit {
                     ctx.insert_err(err);
 
                     return AEnumVariantInit {
-                        type_key: enum_type_key,
+                        type_key: enum_tk,
                         variant,
                         maybe_value: None,
                         span: enum_init.span,
                     };
+                } else if !is_cur_self_type && enum_type.maybe_params.is_some() {
+                    ctx.insert_err(err_type_annotations_needed(ctx, enum_tk, enum_init.span));
                 }
 
                 None
@@ -350,7 +408,7 @@ impl AEnumVariantInit {
         };
 
         AEnumVariantInit {
-            type_key: enum_type_key,
+            type_key: enum_tk,
             variant,
             maybe_value,
             span: enum_init.span,
@@ -372,4 +430,62 @@ impl AEnumVariantInit {
 
         s
     }
+}
+
+/// Tries to infer the monomorphic enum type from some polymorphic type based on the inner value
+/// type used in the variant initialization.
+fn infer_mono_type(
+    ctx: &mut ProgramContext,
+    enum_tk: TypeKey,
+    params: &AParams,
+    inner_expr: &AExpr,
+    enum_init: &EnumVariantInit,
+    variant_inner_tk: TypeKey,
+) -> AnalyzeResult<TypeKey> {
+    let unknown_tk = ctx.unknown_type_key();
+    let mut type_mappings: HashMap<TypeKey, TypeKey> = params
+        .params
+        .iter()
+        .map(|param| (param.generic_type_key, unknown_tk))
+        .collect();
+    let has_errs = match check_types(
+        ctx,
+        variant_inner_tk,
+        inner_expr.type_key,
+        &mut type_mappings,
+        enum_init,
+    ) {
+        Err(err) => {
+            ctx.insert_err(err);
+            true
+        }
+        Ok(()) => false,
+    };
+
+    // Use resolved type mappings from arguments to monomorphize the enum type.
+    let params = &params.params;
+    let mut param_replacement_tks = vec![];
+    let mut dummy_param_locs = vec![];
+    let dummy_span = &enum_init.span;
+    for param in params {
+        let replacement_tk = *type_mappings.get(&param.generic_type_key).unwrap();
+        if replacement_tk == unknown_tk {
+            // We failed to resolve at least one generic param, so don't attempt monomorphization.
+            if !has_errs {
+                return Err(err_type_annotations_needed(ctx, enum_tk, enum_init.span));
+            }
+        }
+
+        dummy_param_locs.push(dummy_span);
+        param_replacement_tks.push(replacement_tk);
+    }
+
+    // Try to execute the monomorphization using the discovered params and update the
+    // expression and symbol info using the result.
+    Ok(ctx.try_execute_monomorphization(
+        enum_tk,
+        param_replacement_tks.clone(),
+        &dummy_param_locs,
+        &enum_init.span,
+    ))
 }

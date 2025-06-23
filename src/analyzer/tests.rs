@@ -854,6 +854,23 @@ mod tests {
     }
 
     #[test]
+    fn enum_init_type_annotations_needed() {
+        let result = analyze(
+            r#"
+            enum Thing[T] {
+                Value(T)
+                Empty
+            }
+
+            fn main() {
+                let t = Thing::Empty
+            }
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::UnresolvedParams));
+    }
+
+    #[test]
     fn incompatible_type_cast() {
         let result = analyze(
             r#"

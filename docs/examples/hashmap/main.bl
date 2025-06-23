@@ -149,7 +149,7 @@ impl HashMap {
         
         let len = self.slots.len()
         let hash = hash_key(key)
-        let new_slot = Slot[K, V]::Occupied(Entry[K, V]{
+        let new_slot = Slot::Occupied(Entry[K, V]{
             key: key
             value: value
         })
@@ -188,7 +188,7 @@ impl HashMap {
             match slot_ptr {
                 let Slot[K, V]::Occupied(entry_ptr) if entry_ptr.key.eq(key) => {
                     let value = entry_ptr.value
-                    slot_ptr^ = Slot[K, V]::Deleted
+                    slot_ptr^ = Slot::Deleted
                     self.len -= 1
                     return Opt[V]::Some(value)
                 }
@@ -268,7 +268,7 @@ impl HashMap {
         let mut slots = SliceMut[Slot[K, V]].new(ptr, len)
 
         for let mut i = 0uint; i < len; i += 1 {
-            slots.ptr_at(i)^ = Slot[K, V]::Empty
+            slots.ptr_at(i)^ = Slot::Empty
         }
 
         return slots

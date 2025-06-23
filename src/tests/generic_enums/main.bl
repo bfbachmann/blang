@@ -2,6 +2,7 @@ mod generic_enums
 
 use "std/libc" {exit}
 use "std/runtime" {assert}
+use "std/types/opt" {Opt}
 
 enum Result[T, E] {
     Ok(T)
@@ -9,8 +10,18 @@ enum Result[T, E] {
 }
 
 fn main() {
-    let ok_int = Result[int, str]::Ok(1234)
-    assert(ok_int ~~ Result[int, str]::Ok(1234), "expected Ok")
+    // Check that create and use enum variants.
+    {
+        let ok_int = Result[int, str]::Ok(1234)
+        assert(ok_int ~~ Result[int, str]::Ok(1234), "expected Ok")
+    }
+
+    // Check that type inference works on generic enum variants without 
+    // explicit parameters.
+    {
+        let v = Opt::Some(23)
+        assert(v.unwrap() == 23, "expected 23")
+    }
 
     exit(0)
 }
