@@ -9,7 +9,7 @@ struct Ref[T] {
 
 impl Ref {
     fn clone(self) -> Ref[T] {
-        return Ref[T]{
+        return Ref{
             ptr: self.ptr
         }
     }
@@ -22,7 +22,7 @@ impl Ref {
 fn heap[T](t: *T) -> Ref[T] {
     let ptr = malloc(sizeof T) as *mut T
     memcpy(ptr as *mut u8, t as *u8, sizeof T)
-    return Ref[T]{
+    return Ref{
        ptr: ptr
     }
 }
@@ -48,12 +48,12 @@ fn main() {
     assert(clone.get_ptr()^ == msg, "expected \"test\"")
 
     // Check that we can initialize parameterized structs inline.
-    let ref_2 = Ref[int]{ptr: &mut 9}
+    let ref_2 = Ref{ptr: &mut 9}
     assert(ref_2.ptr^ == 9, "expected 9")
 
     // Check that we can instantiate monomorphized types that refer to 
     // themselves.
-    let thing = Thing[int]{
+    let thing = Thing{
         f: fn (thing: Thing[int]) {}
     }
 

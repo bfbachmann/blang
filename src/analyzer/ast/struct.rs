@@ -1,9 +1,11 @@
 use crate::analyzer::ast::expr::AExpr;
 use crate::analyzer::ast::params::AParams;
 use crate::analyzer::ast::r#type::AType;
+use crate::analyzer::check_types;
 use crate::analyzer::error::{
-    err_dup_field_assign, err_dup_field_decl, err_dup_ident, err_not_pub, err_type_not_struct,
-    err_undef_field, err_uninitialized_struct_fields,
+    err_dup_field_assign, err_dup_field_decl, err_dup_ident, err_mismatched_types, err_not_pub,
+    err_type_annotations_needed, err_type_not_struct, err_undef_field,
+    err_uninitialized_struct_fields,
 };
 use crate::analyzer::ident::Ident;
 use crate::analyzer::prog_context::ProgramContext;
@@ -11,7 +13,7 @@ use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::Span;
 use crate::parser::ast::r#struct::{StructInit, StructType};
 use crate::parser::ast::r#type::Type;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
@@ -214,15 +216,20 @@ impl PartialEq for AStructInit {
 
 impl AStructInit {
     /// Performs semantic analysis on struct initialization.
-    pub fn from(ctx: &mut ProgramContext, struct_init: &StructInit) -> Self {
+    pub fn from(
+        ctx: &mut ProgramContext,
+        struct_init: &StructInit,
+        maybe_expected_tk: Option<TypeKey>,
+    ) -> Self {
         // Resolve the struct type.
-        let type_key = ctx.resolve_type(&Type::Unresolved(struct_init.typ.clone()));
-        let struct_type = match ctx.get_type(type_key) {
+        let mut struct_tk =
+            ctx.resolve_maybe_polymorphic_type(&Type::Unresolved(struct_init.typ.clone()));
+        let mut struct_type = match ctx.get_type(struct_tk) {
             AType::Unknown(_) => {
                 // The struct type has already failed semantic analysis, so we should avoid
                 // analyzing its initialization and just return some zero-value placeholder instead.
                 return AStructInit {
-                    type_key,
+                    type_key: struct_tk,
                     field_values: Default::default(),
                 };
             }
@@ -231,20 +238,59 @@ impl AStructInit {
 
             _ => {
                 // This is not a struct type. Record the error and return a placeholder value.
-                let err = err_type_not_struct(ctx, type_key, struct_init.span);
+                let err = err_type_not_struct(ctx, struct_tk, struct_init.span);
                 ctx.insert_err(err);
 
                 return AStructInit {
-                    type_key,
+                    type_key: struct_tk,
                     field_values: Default::default(),
                 };
             }
         };
 
+        // Check if this struct type is the current `Self` type. If so, it's allowed to remain
+        // polymorphic.
+        let is_cur_self_type = ctx
+            .get_cur_self_type_key()
+            .is_some_and(|self_tk| self_tk == struct_tk);
+
+        // If the struct type is polymorphic and the expected result type is a monomorphization of
+        // that polymorphic type, then we can just assume the struct type is the monomorphic version.
+        if let Some(expected_tk) = maybe_expected_tk {
+            match ctx.get_type(expected_tk) {
+                AType::Struct(expected_struct_type)
+                    if expected_struct_type.maybe_params.is_none() =>
+                {
+                    match (
+                        &struct_type.maybe_params,
+                        ctx.type_monomorphizations.get(&expected_tk),
+                    ) {
+                        (Some(_), Some(mono)) if mono.poly_type_key == struct_tk => {
+                            struct_tk = expected_tk;
+                            struct_type = expected_struct_type.clone();
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+
         // Analyze struct field assignments and collect errors.
+        let unknown_tk = ctx.unknown_type_key();
         let mut errors = vec![];
         let mut field_values: Vec<(String, AExpr)> = vec![];
         let mut used_field_names = HashSet::new();
+        let mut err_resolving_param = false;
+        let mut type_mappings: HashMap<TypeKey, TypeKey> = match &struct_type.maybe_params {
+            Some(params) => params
+                .params
+                .iter()
+                .map(|param| (param.generic_type_key, unknown_tk))
+                .collect(),
+            None => HashMap::new(),
+        };
+
         for (field_name_symbol, field_value) in &struct_init.field_values {
             let field_name = field_name_symbol.name.value.as_str();
 
@@ -255,7 +301,7 @@ impl AStructInit {
                     errors.push(err_undef_field(
                         ctx,
                         field_name,
-                        type_key,
+                        struct_tk,
                         field_name_symbol.span,
                     ));
 
@@ -266,12 +312,30 @@ impl AStructInit {
 
             // Record an error if the struct field is not settable from the current
             // module.
-            if !ctx.struct_field_is_accessible(type_key, field_name) {
+            if !ctx.struct_field_is_accessible(struct_tk, field_name) {
                 ctx.insert_err(err_not_pub(field_name, field_name_symbol.span));
             }
 
+            let expected_tk = match type_mappings.is_empty() || is_cur_self_type {
+                true => Some(field_tk),
+                false => None,
+            };
+
             // Analyze the value being assigned to the struct field.
-            let expr = AExpr::from(ctx, field_value.clone(), Some(field_tk), false, false);
+            let expr = AExpr::from(ctx, field_value.clone(), expected_tk, false, false);
+
+            if expected_tk.is_none() {
+                if let Err(err) = check_types(
+                    ctx,
+                    field_tk,
+                    expr.type_key,
+                    &mut type_mappings,
+                    field_value,
+                ) {
+                    errors.push(err);
+                    err_resolving_param = true;
+                }
+            }
 
             // Insert the analyzed struct field value, making sure that it was not already assigned.
             if used_field_names.insert(field_name.to_string()) {
@@ -292,7 +356,7 @@ impl AStructInit {
         if !uninit_field_names.is_empty() {
             errors.push(err_uninitialized_struct_fields(
                 ctx,
-                type_key,
+                struct_tk,
                 uninit_field_names,
                 struct_init.span,
             ));
@@ -304,8 +368,44 @@ impl AStructInit {
             ctx.insert_err(err);
         }
 
+        if !type_mappings.is_empty() && !is_cur_self_type {
+            let params = &struct_type.maybe_params.unwrap().params;
+            let mut param_replacement_tks = vec![];
+            let mut dummy_param_locs = vec![];
+            let dummy_span = &struct_init.span;
+            for param in params {
+                let replacement_tk = *type_mappings.get(&param.generic_type_key).unwrap();
+                if replacement_tk == ctx.unknown_type_key() {
+                    // We failed to resolve at least one generic param, so don't attempt
+                    // monomorphization.
+                    if !err_resolving_param {
+                        let type_annotations_needed_err =
+                            err_type_annotations_needed(ctx, struct_tk, struct_init.typ.span);
+                        ctx.insert_err(type_annotations_needed_err);
+                    }
+
+                    return AStructInit {
+                        type_key: struct_tk,
+                        field_values,
+                    };
+                }
+
+                dummy_param_locs.push(dummy_span);
+                param_replacement_tks.push(replacement_tk);
+            }
+
+            // Try to execute the monomorphization using the discovered params and update the
+            // expression and symbol info using the result.
+            struct_tk = ctx.try_execute_monomorphization(
+                struct_tk,
+                param_replacement_tks.clone(),
+                &dummy_param_locs,
+                &struct_init.typ,
+            );
+        }
+
         AStructInit {
-            type_key,
+            type_key: struct_tk,
             field_values,
         }
     }

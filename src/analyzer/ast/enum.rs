@@ -453,7 +453,7 @@ fn infer_mono_type(
         variant_inner_tk,
         inner_expr.type_key,
         &mut type_mappings,
-        enum_init,
+        inner_expr,
     ) {
         Err(err) => {
             ctx.insert_err(err);

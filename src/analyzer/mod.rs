@@ -147,6 +147,28 @@ pub fn check_types(
                     Ok(())
                 }
 
+                (None, Some(actual_mono)) => {
+                    if mapped_expected_tk != actual_mono.poly_type_key {
+                        return Err(mismatched_types_err);
+                    }
+
+                    let expected_type_mappings: HashMap<TypeKey, TypeKey> = expected_type
+                        .params()
+                        .unwrap()
+                        .params
+                        .iter()
+                        .map(|p| (p.generic_type_key, p.generic_type_key))
+                        .collect();
+                    let actual_type_mappings = actual_mono.type_mappings();
+
+                    for (generic_tk, replacement_tk) in expected_type_mappings {
+                        let actual_tk = actual_type_mappings.get(&generic_tk).unwrap();
+                        check_types(ctx, replacement_tk, *actual_tk, type_mappings, loc)?
+                    }
+
+                    Ok(())
+                }
+
                 _ => Err(mismatched_types_err),
             };
         }

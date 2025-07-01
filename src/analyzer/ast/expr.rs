@@ -1561,7 +1561,7 @@ fn analyze_expr_with_pref(
         },
 
         Expression::StructInit(struct_init) => {
-            let a_init = AStructInit::from(ctx, &struct_init);
+            let a_init = AStructInit::from(ctx, &struct_init, maybe_expected_tk);
             let type_key = a_init.type_key;
             AExpr {
                 kind: AExprKind::StructInit(a_init),
