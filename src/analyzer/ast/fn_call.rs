@@ -7,7 +7,8 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::symbol::{ASymbol, SymbolKind};
 use crate::analyzer::check_types;
 use crate::analyzer::error::{
-    err_not_callable, err_type_annotations_needed, err_wrong_num_args, AnalyzeError,
+    err_mismatched_types, err_not_callable, err_type_annotations_needed, err_wrong_num_args,
+    AnalyzeError,
 };
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
@@ -311,6 +312,12 @@ fn analyze_generic_args(
             &mut type_mappings,
             passed_arg,
         ) {
+            let err = match ctx.monomorphize_type(defined_arg.type_key, &type_mappings, None) {
+                Some(expected_tk) => {
+                    err_mismatched_types(ctx, expected_tk, passed_arg_tk, *passed_arg.span())
+                }
+                None => err,
+            };
             errs.push(err);
         }
     }

@@ -10,7 +10,7 @@ use crate::analyzer::error::{
 use crate::analyzer::ident::Ident;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
-use crate::lexer::pos::Span;
+use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::r#struct::{StructInit, StructType};
 use crate::parser::ast::r#type::Type;
 use std::collections::{HashMap, HashSet};
@@ -332,6 +332,16 @@ impl AStructInit {
                     &mut type_mappings,
                     field_value,
                 ) {
+                    let err = match ctx.monomorphize_type(field_tk, &type_mappings, None) {
+                        Some(expected_tk) => err_mismatched_types(
+                            ctx,
+                            expected_tk,
+                            expr.type_key,
+                            *field_value.span(),
+                        ),
+                        None => err,
+                    };
+
                     errors.push(err);
                     err_resolving_param = true;
                 }

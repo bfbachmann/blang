@@ -6,8 +6,9 @@ use crate::analyzer::ast::params::AParams;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::check_types;
 use crate::analyzer::error::{
-    err_dup_enum_variant, err_dup_ident, err_expected_enum, err_missing_variant_value,
-    err_no_such_variant, err_type_annotations_needed, err_unexpected_variant_value, AnalyzeResult,
+    err_dup_enum_variant, err_dup_ident, err_expected_enum, err_mismatched_types,
+    err_missing_variant_value, err_no_such_variant, err_type_annotations_needed,
+    err_unexpected_variant_value, AnalyzeResult,
 };
 use crate::analyzer::ident::Ident;
 use crate::analyzer::prog_context::ProgramContext;
@@ -456,6 +457,12 @@ fn infer_mono_type(
         inner_expr,
     ) {
         Err(err) => {
+            let err = match ctx.monomorphize_type(variant_inner_tk, &type_mappings, None) {
+                Some(expected_tk) => {
+                    err_mismatched_types(ctx, expected_tk, inner_expr.type_key, inner_expr.span)
+                }
+                None => err,
+            };
             ctx.insert_err(err);
             true
         }
