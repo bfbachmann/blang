@@ -350,15 +350,17 @@ fn emit_to_file(
             )),
         },
 
-        OutputFormat::LLVMBitcode => match ll_mod.write_bitcode_to_path(&output_file) {
-            true => Ok(()),
-            false => Err(CodeGenError::new(
-                ErrorKind::WriteOutFailed,
-                format!("failed to write bitcode to {}", output_file.display()).as_str(),
-            )),
-        },
+        OutputFormat::LLVMBitcode | OutputFormat::Assembly => {
+            match ll_mod.write_bitcode_to_path(&output_file) {
+                true => Ok(()),
+                false => Err(CodeGenError::new(
+                    ErrorKind::WriteOutFailed,
+                    format!("failed to write bitcode to {}", output_file.display()).as_str(),
+                )),
+            }
+        }
 
-        OutputFormat::Executable | OutputFormat::Object | OutputFormat::Assembly => {
+        OutputFormat::Executable | OutputFormat::Object => {
             let file_type = match config.output_format {
                 OutputFormat::Assembly => FileType::Assembly,
                 _ => FileType::Object,

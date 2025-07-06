@@ -272,12 +272,14 @@ fn link(
     output_path: &Path,
     linker_args: &[String],
 ) -> Result<(), CodeGenError> {
+    let output_path = output_path.to_string_lossy().to_string();
     let mut extra_link_args = vec![];
+
     let linker_cmd = if let Some(linker) = linker {
         linker.as_str()
     } else {
         match output_format {
-            OutputFormat::LLVMBitcode | OutputFormat::LLVMIR => {
+            OutputFormat::Assembly | OutputFormat::LLVMBitcode | OutputFormat::LLVMIR => {
                 if !linker_args.contains(&"-S".to_string()) {
                     // Append -S to tell LLVM to output IR/bitcode instead of an object file or
                     // executable.
@@ -285,7 +287,7 @@ fn link(
                 }
                 "llvm-link"
             }
-            OutputFormat::Assembly | OutputFormat::Object | OutputFormat::Executable => {
+            OutputFormat::Object | OutputFormat::Executable => {
                 // Try to determine the system linker based on the target platform.
                 match target_triple.contains("windows") {
                     true => "link.exe",
@@ -300,7 +302,7 @@ fn link(
     link_cmd
         .args(linker_args)
         .args(extra_link_args)
-        .args(["-o", output_path.to_str().unwrap()])
+        .args(["-o", &output_path])
         .args(obj_file_paths);
 
     // Convert the command to a str so we can log it, if necessary.
@@ -321,25 +323,44 @@ fn link(
                 if !output.stderr.is_empty() {
                     eprintln!("{}", String::from_utf8(output.stderr.clone()).unwrap());
                 }
-                Ok(())
             }
 
-            false => Err(CodeGenError::new(
-                ErrorKind::LinkingFailed,
-                format!(
-                    "\"{}\": {}",
-                    raw_cmd,
-                    String::from_utf8(output.stderr)
-                        .unwrap_or("".to_string())
-                        .as_str()
-                )
-                .as_str(),
-            )),
+            false => {
+                return Err(CodeGenError::new(
+                    ErrorKind::LinkingFailed,
+                    format!(
+                        "\"{}\": {}",
+                        raw_cmd,
+                        String::from_utf8(output.stderr)
+                            .unwrap_or("".to_string())
+                            .as_str()
+                    )
+                    .as_str(),
+                ))
+            }
         },
 
-        Err(err) => Err(CodeGenError::new(
-            ErrorKind::LinkingFailed,
-            format!("failed to invoke linker \"{}\"\n{}", raw_cmd, err).as_str(),
-        )),
+        Err(err) => {
+            return Err(CodeGenError::new(
+                ErrorKind::LinkingFailed,
+                format!("failed to invoke linker \"{}\"\n{}", raw_cmd, err).as_str(),
+            ))
+        }
+    };
+
+    // If the requested output format is assembly, then we need to use llc to convert the
+    // LLVM bitcode into asm.
+    if matches!(output_format, OutputFormat::Assembly) {
+        if let Err(err) = Command::new("llc")
+            .args([&output_path, "-o", &output_path])
+            .output()
+        {
+            return Err(CodeGenError::new(
+                ErrorKind::LinkingFailed,
+                format!("failed to invoke linker \"{}\"\n{}", raw_cmd, err).as_str(),
+            ));
+        }
     }
+
+    Ok(())
 }
