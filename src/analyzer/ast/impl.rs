@@ -53,17 +53,18 @@ impl AImpl {
             None => false,
         };
 
-        // Pops params before returning.
+        // Set the impl type key in the program context so we can use it when resolving type `Self`.
+        ctx.set_cur_self_type_key(Some(type_key));
+
+        // Pops params and unsets the current `Self` type key before returning.
         fn finish(ctx: &mut ProgramContext, has_params: bool, impl_: AImpl) -> AImpl {
             if has_params {
                 ctx.pop_params(false);
             }
 
+            ctx.set_cur_self_type_key(None);
             impl_
         }
-
-        // Set the impl type key in the program context so we can use it when resolving type `Self`.
-        ctx.set_cur_self_type_key(Some(type_key));
 
         // If this block implements a spec, resolve it and track it in the program context while
         // we analyze its functions.
@@ -142,8 +143,6 @@ impl AImpl {
         for err in spec_impl_errs {
             ctx.insert_err(err);
         }
-
-        ctx.set_cur_self_type_key(None);
 
         finish(
             ctx,
