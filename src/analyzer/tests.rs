@@ -658,6 +658,24 @@ mod tests {
     }
 
     #[test]
+    fn default_member_fn_conflict() {
+        let result = analyze(
+            r#"
+            struct Thing[T] {}
+            
+            impl Thing {
+                fn conflict() {}
+            }
+            
+            impl Thing[int] {
+                fn conflict() {}
+            }
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::DuplicateFunction));
+    }
+
+    #[test]
     fn duplicate_enum_variant() {
         let result = analyze(
             r#"

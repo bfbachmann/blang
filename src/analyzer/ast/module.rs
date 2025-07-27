@@ -485,6 +485,18 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
         // make sure that function names don't collide with those of existing functions from
         // other default impls on this type.
         if is_default_impl {
+            // If the impl type is a monomorphization, make sure the polymorphic parent type does not
+            // already declare a matching member function.
+            if let Some(mono) = ctx.type_monomorphizations.get(&impl_type_key) {
+                if let Some(existing_fn_tk) =
+                    ctx.get_default_member_fn(mono.poly_type_key, &fn_sig.name)
+                {
+                    let existing_fn_sig = ctx.get_type(existing_fn_tk).to_fn_sig();
+                    let err = err_dup_mem_fn(ctx, &fn_sig, existing_fn_sig);
+                    ctx.insert_err(err);
+                }
+            }
+
             let maybe_default_fn_tk =
                 ctx.get_default_member_fn(impl_type_key, fn_sig.name.as_str());
             if let Some(existing_fn_tk) = maybe_default_fn_tk {

@@ -227,9 +227,8 @@ fn check_spec_impl(
 }
 
 /// Returns an error if the `impl` block for type `impl_tk` (optionally for spec `maybe_spec_tk`)
-/// is illegal. The impl would be considered legal if any of the following are true
-/// - `maybe_spec_tk` is `None` (i.e. it's a default `impl`), and `impl_tk` refers to a local type
-/// - neither the `impl` type nor the spec type are foreign.
+/// is illegal. The impl would be considered legal if at least one of the `impl` type and the spec
+/// type is defined in the current module.
 pub fn check_legal_impl(
     ctx: &mut ProgramContext,
     impl_tk: TypeKey,
