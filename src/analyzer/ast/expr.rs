@@ -76,18 +76,18 @@ pub enum AExprKind {
 impl fmt::Display for AExprKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            AExprKind::Symbol(sym) => write!(f, "{}", sym),
-            AExprKind::MemberAccess(m) => write!(f, "{}", m),
-            AExprKind::BoolLiteral(b) => write!(f, "{}", b),
-            AExprKind::I8Literal(i) => write!(f, "{}i8", i),
-            AExprKind::U8Literal(i) => write!(f, "{}u8", i),
-            AExprKind::I16Literal(i) => write!(f, "{}i16", i),
-            AExprKind::U16Literal(i) => write!(f, "{}u16", i),
-            AExprKind::I32Literal(i) => write!(f, "{}i32", i),
-            AExprKind::U32Literal(i) => write!(f, "{}u32", i),
-            AExprKind::F32Literal(i) => write!(f, "{}f32", i),
-            AExprKind::I64Literal(i) => write!(f, "{}i64", i),
-            AExprKind::U64Literal(i) => write!(f, "{}u64", i),
+            AExprKind::Symbol(sym) => write!(f, "{sym}"),
+            AExprKind::MemberAccess(m) => write!(f, "{m}"),
+            AExprKind::BoolLiteral(b) => write!(f, "{b}"),
+            AExprKind::I8Literal(i) => write!(f, "{i}i8"),
+            AExprKind::U8Literal(i) => write!(f, "{i}u8"),
+            AExprKind::I16Literal(i) => write!(f, "{i}i16"),
+            AExprKind::U16Literal(i) => write!(f, "{i}u16"),
+            AExprKind::I32Literal(i) => write!(f, "{i}i32"),
+            AExprKind::U32Literal(i) => write!(f, "{i}u32"),
+            AExprKind::F32Literal(i) => write!(f, "{i}f32"),
+            AExprKind::I64Literal(i) => write!(f, "{i}i64"),
+            AExprKind::U64Literal(i) => write!(f, "{i}u64"),
             AExprKind::F64Literal(i, has_suffix) => write!(
                 f,
                 "{}{}",
@@ -106,32 +106,32 @@ impl fmt::Display for AExprKind {
                     false => "",
                 }
             ),
-            AExprKind::UintLiteral(i) => write!(f, "{}", i),
-            AExprKind::StrLiteral(s) => write!(f, "{}", s),
-            AExprKind::CharLiteral(c) => write!(f, "{}", c),
-            AExprKind::StructInit(s) => write!(f, "{}", s),
-            AExprKind::EnumInit(e) => write!(f, "{}", e),
-            AExprKind::TupleInit(t) => write!(f, "{}", t),
-            AExprKind::ArrayInit(a) => write!(f, "{}", a),
-            AExprKind::Index(i) => write!(f, "{}", i),
-            AExprKind::FunctionCall(call) => write!(f, "{}", call),
+            AExprKind::UintLiteral(i) => write!(f, "{i}"),
+            AExprKind::StrLiteral(s) => write!(f, "{s}"),
+            AExprKind::CharLiteral(c) => write!(f, "{c}"),
+            AExprKind::StructInit(s) => write!(f, "{s}"),
+            AExprKind::EnumInit(e) => write!(f, "{e}"),
+            AExprKind::TupleInit(t) => write!(f, "{t}"),
+            AExprKind::ArrayInit(a) => write!(f, "{a}"),
+            AExprKind::Index(i) => write!(f, "{i}"),
+            AExprKind::FunctionCall(call) => write!(f, "{call}"),
             AExprKind::AnonFunction(func) => write!(f, "{}", *func),
             AExprKind::UnaryOperation(op, expr) => match op {
-                Operator::Defererence => write!(f, "{}{}", expr, op),
-                Operator::MutReference => write!(f, "{} {}", op, expr),
-                _ => write!(f, "{}{}", op, expr),
+                Operator::Defererence => write!(f, "{expr}{op}"),
+                Operator::MutReference => write!(f, "{op} {expr}"),
+                _ => write!(f, "{op}{expr}"),
             },
             AExprKind::BinaryOperation(left, op, right) => {
-                write!(f, "{} {} {}", left, op, right)
+                write!(f, "{left} {op} {right}")
             }
             AExprKind::TypeCast(expr, target_type_key) => {
-                write!(f, "{} as {}", expr, target_type_key)
+                write!(f, "{expr} as {target_type_key}")
             }
             AExprKind::Sizeof(type_key) => {
-                write!(f, "sizeof {}", type_key)
+                write!(f, "sizeof {type_key}")
             }
             AExprKind::From(statement) => {
-                write!(f, "from {}", statement)
+                write!(f, "from {statement}")
             }
             AExprKind::Unknown => {
                 write!(f, "<unknown>")
@@ -284,17 +284,17 @@ impl AExprKind {
     /// Returns the human-readable version of this expression kind.
     pub fn display(&self, ctx: &ProgramContext) -> String {
         match self {
-            AExprKind::Symbol(sym) => format!("{}", sym),
-            AExprKind::BoolLiteral(b) => format!("{}", b),
-            AExprKind::I8Literal(i) => format!("{}", i),
-            AExprKind::U8Literal(i) => format!("{}", i),
-            AExprKind::I16Literal(i) => format!("{}", i),
-            AExprKind::U16Literal(i) => format!("{}", i),
-            AExprKind::I32Literal(i) => format!("{}", i),
-            AExprKind::U32Literal(i) => format!("{}", i),
-            AExprKind::F32Literal(i) => format!("{}", i),
-            AExprKind::I64Literal(i) => format!("{}", i),
-            AExprKind::U64Literal(i) => format!("{}", i),
+            AExprKind::Symbol(sym) => format!("{sym}"),
+            AExprKind::BoolLiteral(b) => format!("{b}"),
+            AExprKind::I8Literal(i) => format!("{i}"),
+            AExprKind::U8Literal(i) => format!("{i}"),
+            AExprKind::I16Literal(i) => format!("{i}"),
+            AExprKind::U16Literal(i) => format!("{i}"),
+            AExprKind::I32Literal(i) => format!("{i}"),
+            AExprKind::U32Literal(i) => format!("{i}"),
+            AExprKind::F32Literal(i) => format!("{i}"),
+            AExprKind::I64Literal(i) => format!("{i}"),
+            AExprKind::U64Literal(i) => format!("{i}"),
             AExprKind::F64Literal(i, has_suffix) => format!(
                 "{}{}",
                 i,
@@ -311,9 +311,9 @@ impl AExprKind {
                     false => "",
                 }
             ),
-            AExprKind::UintLiteral(i) => format!("{}", i),
+            AExprKind::UintLiteral(i) => format!("{i}"),
             AExprKind::StrLiteral(s) => s.to_string(),
-            AExprKind::CharLiteral(c) => format!("{}", c),
+            AExprKind::CharLiteral(c) => format!("{c}"),
             AExprKind::StructInit(s) => s.display(ctx),
             AExprKind::EnumInit(e) => e.display(ctx),
             AExprKind::TupleInit(t) => t.display(ctx),
@@ -343,7 +343,7 @@ impl AExprKind {
                 format!("{}.{}", access.base_expr.display(ctx), access.member_name)
             }
             AExprKind::From(statement) => {
-                format!("from {}", statement)
+                format!("from {statement}")
             }
             AExprKind::Unknown => "<unknown>".to_string(),
         }
@@ -502,7 +502,7 @@ impl AExpr {
                 ctx.insert_err(err);
             }
 
-            other => panic!("unexpected ident kind: {:?}", other),
+            other => panic!("unexpected ident kind: {other:?}"),
         }
     }
 
@@ -763,7 +763,7 @@ impl AExpr {
                     Operator::Multiply => Some(left * right),
                     Operator::Divide => Some(left / right),
                     Operator::Modulo => Some(left % right),
-                    other => panic!("unexpected operator {}", other),
+                    other => panic!("unexpected operator {other}"),
                 }
             }
 
@@ -931,7 +931,7 @@ fn is_valid_operand_type(op: &Operator, operand_type: &AType, is_left_operand: b
         | Operator::LessThanOrEqual => operand_type.is_numeric() || operand_type.is_any_ptr(),
 
         // If this happens, something is badly broken.
-        other => panic!("unexpected operator {}", other),
+        other => panic!("unexpected operator {other}"),
     }
 }
 
@@ -1004,7 +1004,7 @@ fn get_result_type(
         },
 
         // If this happens, the something is badly broken.
-        other => panic!("unexpected operator {}", other),
+        other => panic!("unexpected operator {other}"),
     }
 }
 
@@ -1040,7 +1040,7 @@ fn get_expected_operand_type_key(
         Operator::As => None,
 
         // If this happens, the something is badly broken.
-        other => panic!("unexpected operator {}", other),
+        other => panic!("unexpected operator {other}"),
     }
 }
 
@@ -1326,7 +1326,7 @@ fn analyze_unary_op(
         }
 
         _ => {
-            panic!("unexpected unary operator {}", op)
+            panic!("unexpected unary operator {op}")
         }
     }
 }

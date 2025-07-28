@@ -135,8 +135,8 @@ impl Display for AArrayInit {
             None => {
                 for (i, value) in self.values.iter().enumerate() {
                     match i {
-                        0 => write!(f, "{}", value)?,
-                        _ => write!(f, ", {}", value)?,
+                        0 => write!(f, "{value}")?,
+                        _ => write!(f, ", {value}")?,
                     };
                 }
             }

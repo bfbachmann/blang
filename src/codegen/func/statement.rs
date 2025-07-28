@@ -72,7 +72,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 self.insert_local_const(const_decl.clone());
             }
             AStatement::Static(static_decl) => {
-                panic!("unexpected static declaration: {:?}", static_decl);
+                panic!("unexpected static declaration: {static_decl:?}");
             }
         };
 

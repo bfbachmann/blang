@@ -24,7 +24,7 @@ impl Display for TupleType {
         write!(f, "{{")?;
 
         for (i, typ) in self.field_types.iter().enumerate() {
-            write!(f, "{}", typ)?;
+            write!(f, "{typ}")?;
 
             if i + 1 < self.field_types.len() {
                 write!(f, ", ")?;
@@ -134,7 +134,7 @@ impl Display for TupleInit {
         write!(f, "{{")?;
 
         for (i, val) in self.values.iter().enumerate() {
-            write!(f, "{}", val)?;
+            write!(f, "{val}")?;
 
             if i + 1 < self.values.len() {
                 write!(f, ", ")?;

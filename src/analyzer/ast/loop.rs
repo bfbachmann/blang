@@ -24,15 +24,15 @@ impl Display for ALoop {
             f,
             "for {}; {}; {}; {{ ... }}",
             match &self.maybe_init {
-                Some(init) => format!("{}", init),
+                Some(init) => format!("{init}"),
                 None => "".into(),
             },
             match &self.maybe_cond {
-                Some(cond) => format!("{}", cond),
+                Some(cond) => format!("{cond}"),
                 None => "".into(),
             },
             match &self.maybe_update {
-                Some(update) => format!("{}", update),
+                Some(update) => format!("{update}"),
                 None => "".into(),
             },
         )

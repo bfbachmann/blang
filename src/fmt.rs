@@ -183,7 +183,7 @@ fn print_source_color(file_path: &str, span: &Span) {
             );
             println!(
                 "{} {}{}{}",
-                format!("{:>width$}|", line_num, width = width)
+                format!("{line_num:>width$}|")
                     .blue()
                     .bold(),
                 left,
@@ -200,7 +200,7 @@ fn print_source_color(file_path: &str, span: &Span) {
             );
             println!(
                 "{} {}{}",
-                format!("{:>width$}|", line_num, width = width)
+                format!("{line_num:>width$}|")
                     .blue()
                     .bold(),
                 left,
@@ -211,7 +211,7 @@ fn print_source_color(file_path: &str, span: &Span) {
             let (left, right) = line.split_at(end_pos.col as usize - 1);
             println!(
                 "{} {}{}",
-                format!("{:>width$}|", line_num, width = width)
+                format!("{line_num:>width$}|")
                     .blue()
                     .bold(),
                 left.red().bold(),
@@ -226,7 +226,7 @@ fn print_source_color(file_path: &str, span: &Span) {
             } else if mid_lines_printed <= 1 {
                 println!(
                     "{} {}",
-                    format!("{:>width$}|", line_num, width = width)
+                    format!("{line_num:>width$}|")
                         .blue()
                         .bold(),
                     line.red().bold()
@@ -268,12 +268,7 @@ fn print_source_no_color(file_path: &str, span: &Span) {
             let (mid, right) = right.split_at((end_pos.col - start_pos.col) as usize);
             println!("{pipe:>width$}", pipe = "|", width = width + 1);
             println!(
-                "{:>width$}| {}{}{}",
-                line_num,
-                left,
-                mid,
-                right,
-                width = width
+                "{line_num:>width$}| {left}{mid}{right}"
             );
             println!(
                 "{:>width$}| {}{}",
@@ -286,7 +281,7 @@ fn print_source_no_color(file_path: &str, span: &Span) {
             // The segment we're printing spans multiple lines, and this is the first.
             let (left, right) = line.split_at(start_pos.col as usize - 1);
             println!("{pipe:>width$}", pipe = "|", width = width + 1);
-            println!("{:>width$}| {}{}", line_num, left, right, width = width);
+            println!("{line_num:>width$}| {left}{right}");
             println!(
                 "{:>width$}| {}^-- starts here",
                 " ".repeat(line_num.to_string().len()),
@@ -296,7 +291,7 @@ fn print_source_no_color(file_path: &str, span: &Span) {
         } else if line_num == end_pos.line {
             // The segment we're printing spans multiple lines, and this is the last.
             let (left, right) = line.split_at(end_pos.col as usize - 1);
-            println!("{:>width$}| {}{}", line_num, left, right, width = width);
+            println!("{line_num:>width$}| {left}{right}");
             println!(
                 "{:>width$}| {}^-- ends here",
                 " ".repeat(line_num.to_string().len()),
@@ -313,7 +308,7 @@ fn print_source_no_color(file_path: &str, span: &Span) {
             if mid_lines_printed == 3 {
                 println!("{}", ".".repeat(width + 1).blue().bold(),);
             } else if mid_lines_printed <= 1 {
-                println!("{:>width$}| {}", line_num, line, width = width);
+                println!("{line_num:>width$}| {line}");
             }
         }
     }

@@ -20,7 +20,7 @@ pub struct TypeStore {
 impl Debug for TypeStore {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         for (i, typ) in self.types.iter().enumerate() {
-            writeln!(f, "{i}: {:#?}", typ)?;
+            writeln!(f, "{i}: {typ:#?}")?;
         }
 
         Ok(())
@@ -32,7 +32,7 @@ impl GetType for TypeStore {
     fn get_type(&self, key: TypeKey) -> &AType {
         match self.types.get(key as usize) {
             Some(typ) => typ,
-            None => panic!("type key {} not found", key),
+            None => panic!("type key {key} not found"),
         }
     }
 }

@@ -32,7 +32,7 @@ impl Display for AStatic {
         write!(f, "{}", self.name)?;
 
         if let Some(typ) = &self.declared_type_key {
-            write!(f, ": {}", typ)?;
+            write!(f, ": {typ}")?;
         }
 
         write!(f, " = {}", self.value)

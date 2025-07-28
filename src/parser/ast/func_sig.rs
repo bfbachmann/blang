@@ -28,7 +28,7 @@ impl fmt::Display for FunctionSignature {
         write!(f, "fn {}(", self.name)?;
 
         for arg in self.args.iter() {
-            write!(f, "{}", arg)?;
+            write!(f, "{arg}")?;
 
             if arg != self.args.last().unwrap() {
                 write!(f, ", ")?;
@@ -36,7 +36,7 @@ impl fmt::Display for FunctionSignature {
         }
 
         if let Some(typ) = &self.maybe_ret_type {
-            write!(f, ") -> {}", typ)
+            write!(f, ") -> {typ}")
         } else {
             write!(f, ")")
         }

@@ -80,43 +80,43 @@ pub enum Expression {
 impl Display for Expression {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Expression::Symbol(s) => write!(f, "{}", s),
-            Expression::BoolLiteral(b) => write!(f, "{}", b),
-            Expression::I8Literal(i) => write!(f, "{}", i),
-            Expression::U8Literal(i) => write!(f, "{}", i),
-            Expression::I16Literal(i) => write!(f, "{}", i),
-            Expression::U16Literal(i) => write!(f, "{}", i),
-            Expression::I32Literal(i) => write!(f, "{}", i),
-            Expression::U32Literal(i) => write!(f, "{}", i),
-            Expression::F32Literal(i) => write!(f, "{}", i),
-            Expression::I64Literal(i) => write!(f, "{}", i),
-            Expression::U64Literal(i) => write!(f, "{}", i),
-            Expression::F64Literal(i) => write!(f, "{}", i),
-            Expression::IntLiteral(i) => write!(f, "{}", i),
-            Expression::UintLiteral(i) => write!(f, "{}", i),
-            Expression::StrLiteral(s) => write!(f, "{}", s),
-            Expression::CharLiteral(c) => write!(f, "{}", c),
-            Expression::FunctionCall(call) => write!(f, "{}", call),
-            Expression::AnonFunction(func) => write!(f, "{}", func),
+            Expression::Symbol(s) => write!(f, "{s}"),
+            Expression::BoolLiteral(b) => write!(f, "{b}"),
+            Expression::I8Literal(i) => write!(f, "{i}"),
+            Expression::U8Literal(i) => write!(f, "{i}"),
+            Expression::I16Literal(i) => write!(f, "{i}"),
+            Expression::U16Literal(i) => write!(f, "{i}"),
+            Expression::I32Literal(i) => write!(f, "{i}"),
+            Expression::U32Literal(i) => write!(f, "{i}"),
+            Expression::F32Literal(i) => write!(f, "{i}"),
+            Expression::I64Literal(i) => write!(f, "{i}"),
+            Expression::U64Literal(i) => write!(f, "{i}"),
+            Expression::F64Literal(i) => write!(f, "{i}"),
+            Expression::IntLiteral(i) => write!(f, "{i}"),
+            Expression::UintLiteral(i) => write!(f, "{i}"),
+            Expression::StrLiteral(s) => write!(f, "{s}"),
+            Expression::CharLiteral(c) => write!(f, "{c}"),
+            Expression::FunctionCall(call) => write!(f, "{call}"),
+            Expression::AnonFunction(func) => write!(f, "{func}"),
             Expression::UnaryOperation(op, expr) => match op {
-                Operator::Defererence => write!(f, "{}{}", expr, op),
-                Operator::MutReference => write!(f, "{} {}", op, expr),
-                _ => write!(f, "{}{}", op, expr),
+                Operator::Defererence => write!(f, "{expr}{op}"),
+                Operator::MutReference => write!(f, "{op} {expr}"),
+                _ => write!(f, "{op}{expr}"),
             },
             Expression::BinaryOperation(left_expr, op, right_expr) => {
-                write!(f, "{} {} {}", left_expr, op, right_expr)
+                write!(f, "{left_expr} {op} {right_expr}")
             }
             Expression::StructInit(struct_init) => {
-                write!(f, "struct initialization {}", struct_init)
+                write!(f, "struct initialization {struct_init}")
             }
-            Expression::EnumInit(enum_init) => write!(f, "enum initialization {}", enum_init),
-            Expression::TupleInit(tuple_init) => write!(f, "tuple initialization {}", tuple_init),
-            Expression::ArrayInit(array_init) => write!(f, "array initialization {}", array_init),
-            Expression::SizeOf(so) => write!(f, "{}", so),
-            Expression::Index(idx) => write!(f, "{}", idx),
-            Expression::MemberAccess(m) => write!(f, "{}", m),
+            Expression::EnumInit(enum_init) => write!(f, "enum initialization {enum_init}"),
+            Expression::TupleInit(tuple_init) => write!(f, "tuple initialization {tuple_init}"),
+            Expression::ArrayInit(array_init) => write!(f, "array initialization {array_init}"),
+            Expression::SizeOf(so) => write!(f, "{so}"),
+            Expression::Index(idx) => write!(f, "{idx}"),
+            Expression::MemberAccess(m) => write!(f, "{m}"),
             Expression::TypeCast(expr, target_type) => {
-                write!(f, "{} as {}", expr, target_type)
+                write!(f, "{expr} as {target_type}")
             }
             Expression::From(from) => {
                 write!(f, "from {}", from.statement)
@@ -196,8 +196,8 @@ enum OutNode {
 impl Display for OutNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
-            OutNode::Expr(e) => write!(f, "{}", e),
-            OutNode::BinOp(o) => write!(f, "{}", o),
+            OutNode::Expr(e) => write!(f, "{e}"),
+            OutNode::BinOp(o) => write!(f, "{o}"),
         }
     }
 }

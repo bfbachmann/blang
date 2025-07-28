@@ -2080,7 +2080,7 @@ impl ProgramContext {
             | AType::F64
             | AType::Int
             | AType::Uint => {
-                format!("{}", typ)
+                format!("{typ}")
             }
 
             AType::Struct(struct_type) => {
@@ -2191,7 +2191,7 @@ impl ProgramContext {
                         params += param_display.as_str();
                     }
                     _ => {
-                        params += format!(", {}", param_display).as_str();
+                        params += format!(", {param_display}").as_str();
                     }
                 }
             }

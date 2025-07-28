@@ -117,7 +117,7 @@ pub fn init_target_machine(
 
         None => {
             if let Err(msg) = Target::initialize_native(&InitializationConfig::default()) {
-                return Err(CodeGenError::new(ErrorKind::TargetInitFailed, msg.as_str()));
+                return Err(CodeGenError::new(ErrorKind::TargetInit, msg.as_str()));
             };
 
             (
@@ -133,8 +133,8 @@ pub fn init_target_machine(
         Ok(target) => target,
         Err(msg) => {
             return Err(CodeGenError::new(
-                ErrorKind::TargetInitFailed,
-                format!("failed to create target triple: {}", msg).as_str(),
+                ErrorKind::TargetInit,
+                format!("failed to create target triple: {msg}").as_str(),
             ))
         }
     };
@@ -149,8 +149,8 @@ pub fn init_target_machine(
         CodeModel::Default,
     ) {
         None => Err(CodeGenError::new(
-            ErrorKind::TargetInitFailed,
-            format!("failed to initialize machine for {}", target_triple).as_str(),
+            ErrorKind::TargetInit,
+            format!("failed to initialize machine for {target_triple}").as_str(),
         )),
         Some(machine) => Ok(machine),
     }
@@ -327,7 +327,7 @@ fn link(
 
             false => {
                 return Err(CodeGenError::new(
-                    ErrorKind::LinkingFailed,
+                    ErrorKind::Linking,
                     format!(
                         "\"{}\": {}",
                         raw_cmd,
@@ -342,8 +342,8 @@ fn link(
 
         Err(err) => {
             return Err(CodeGenError::new(
-                ErrorKind::LinkingFailed,
-                format!("failed to invoke linker \"{}\"\n{}", raw_cmd, err).as_str(),
+                ErrorKind::Linking,
+                format!("failed to invoke linker \"{raw_cmd}\"\n{err}").as_str(),
             ))
         }
     };
@@ -356,8 +356,8 @@ fn link(
             .output()
         {
             return Err(CodeGenError::new(
-                ErrorKind::LinkingFailed,
-                format!("failed to invoke linker \"{}\"\n{}", raw_cmd, err).as_str(),
+                ErrorKind::Linking,
+                format!("failed to invoke linker \"{raw_cmd}\"\n{err}").as_str(),
             ));
         }
     }

@@ -31,7 +31,7 @@ impl Display for Const {
         write!(f, "{}", self.name)?;
 
         if let Some(typ) = &self.maybe_type {
-            write!(f, ": {}", typ)?;
+            write!(f, ": {typ}")?;
         }
 
         write!(f, " = {}", self.value)

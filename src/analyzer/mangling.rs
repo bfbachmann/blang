@@ -69,7 +69,7 @@ pub fn mangle_type<T: GetType>(
     };
 
     let mangled_name = mangle(
-        &format!("{}{}", impl_type_prefix, name),
+        &format!("{impl_type_prefix}{name}"),
         &typ.span(),
         param_tks.as_slice(),
     );

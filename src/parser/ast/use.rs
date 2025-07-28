@@ -98,7 +98,7 @@ impl Display for UsedMod {
         write!(f, "{} ", self.path)?;
 
         if let Some(alias) = &self.maybe_alias {
-            write!(f, "@{} ", alias)?;
+            write!(f, "@{alias} ")?;
         }
 
         if !self.symbols.is_empty() {
@@ -106,8 +106,8 @@ impl Display for UsedMod {
 
             for (i, ident) in self.symbols.iter().enumerate() {
                 match i {
-                    0 => write!(f, "{}", ident)?,
-                    _ => write!(f, ", {}", ident)?,
+                    0 => write!(f, "{ident}")?,
+                    _ => write!(f, ", {ident}")?,
                 }
             }
 

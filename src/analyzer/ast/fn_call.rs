@@ -31,8 +31,8 @@ impl Display for AFnCall {
 
         for (i, arg) in self.args.iter().enumerate() {
             match i {
-                0 => write!(f, "{}", arg)?,
-                _ => write!(f, ", {}", arg)?,
+                0 => write!(f, "{arg}")?,
+                _ => write!(f, ", {arg}")?,
             };
         }
 

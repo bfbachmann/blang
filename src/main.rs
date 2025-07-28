@@ -119,7 +119,7 @@ fn main() {
                 let target_triple = sub_matches.get_one::<String>("target").cloned();
                 if let Some(triple) = &target_triple {
                     if let Err(err) = validate_target_triple(triple) {
-                        eprintln!("{}", err);
+                        eprintln!("{err}");
                     }
                 }
 
@@ -273,7 +273,7 @@ impl Display for AnalyzeProgError {
             AnalyzeProgError::WriteOutFailed(s) => s,
         };
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -316,15 +316,13 @@ fn analyze(
 
     if src_info.mod_info.is_empty() {
         return Err(AnalyzeProgError::NoSourceFiles(format!(
-            r#"no source files found in "{}""#,
-            target_mod_path
+            r#"no source files found in "{target_mod_path}""#
         )));
     }
 
     if src_info.mod_info.get_id_by_path(target_mod_path).is_none() {
         return Err(AnalyzeProgError::ModNotFound(format!(
-            r#"module "{}" not found"#,
-            target_mod_path
+            r#"module "{target_mod_path}" not found"#
         )));
     }
 
@@ -559,8 +557,8 @@ mod tests {
         // generate executables for them.
         for path in paths {
             let src_path_stem = path.file_stem().unwrap().to_str().unwrap();
-            let ir_path = format!("bin/{}.ll", src_path_stem);
-            let exe_path = format!("bin/{}", src_path_stem);
+            let ir_path = format!("bin/{src_path_stem}.ll");
+            let exe_path = format!("bin/{src_path_stem}");
 
             // Compile the source code to IR.
             let codegen_config =

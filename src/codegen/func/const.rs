@@ -234,7 +234,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                         .const_array(ll_elements.as_slice())
                         .as_basic_value_enum()
                 } else {
-                    panic!("unexpected array element type {}", ll_element_type)
+                    panic!("unexpected array element type {ll_element_type}")
                 };
 
                 ll_global_array.set_initializer(&ll_array_value);
@@ -320,7 +320,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             AExprKind::MemberAccess(access) => self.gen_member_access(access),
 
-            _ => panic!("unexpected const expression {}", expr),
+            _ => panic!("unexpected const expression {expr}"),
         }
     }
 

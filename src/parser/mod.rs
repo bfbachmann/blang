@@ -436,12 +436,12 @@ pub fn parse_mod_dir(
 pub fn lex_source_file(file_id: FileID, input_path: &str) -> Result<LexResult<Vec<Token>>, String> {
     let full_path = match fs::canonicalize(input_path) {
         Ok(p) => p,
-        Err(err) => return Err(format!("error reading {}: {}", input_path, err)),
+        Err(err) => return Err(format!("error reading {input_path}: {err}")),
     };
 
     let source_code = match fs::read_to_string(full_path) {
         Ok(code) => code,
-        Err(err) => return Err(format!("error reading {}: {}", input_path, err)),
+        Err(err) => return Err(format!("error reading {input_path}: {err}")),
     };
 
     Ok(lex(source_code.as_str(), file_id))

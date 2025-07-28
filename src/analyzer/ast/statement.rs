@@ -45,25 +45,25 @@ pub enum AStatement {
 impl fmt::Display for AStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            AStatement::VariableDeclaration(v) => write!(f, "{}", v),
-            AStatement::VariableAssignment(v) => write!(f, "{}", v),
-            AStatement::FunctionDeclaration(v) => write!(f, "{}", v),
-            AStatement::Closure(v) => write!(f, "{}", v),
-            AStatement::FunctionCall(v) => write!(f, "{}", v),
-            AStatement::Conditional(v) => write!(f, "{}", v),
-            AStatement::Match(v) => write!(f, "{}", v),
-            AStatement::Loop(v) => write!(f, "{}", v),
+            AStatement::VariableDeclaration(v) => write!(f, "{v}"),
+            AStatement::VariableAssignment(v) => write!(f, "{v}"),
+            AStatement::FunctionDeclaration(v) => write!(f, "{v}"),
+            AStatement::Closure(v) => write!(f, "{v}"),
+            AStatement::FunctionCall(v) => write!(f, "{v}"),
+            AStatement::Conditional(v) => write!(f, "{v}"),
+            AStatement::Match(v) => write!(f, "{v}"),
+            AStatement::Loop(v) => write!(f, "{v}"),
             AStatement::Break(_) => write!(f, "break"),
             AStatement::Continue(_) => write!(f, "continue"),
-            AStatement::Return(v) => write!(f, "{}", v),
-            AStatement::Yield(v) => write!(f, "{}", v),
-            AStatement::StructTypeDeclaration(s) => write!(f, "{}", s),
-            AStatement::EnumTypeDeclaration(e) => write!(f, "{}", e),
+            AStatement::Return(v) => write!(f, "{v}"),
+            AStatement::Yield(v) => write!(f, "{v}"),
+            AStatement::StructTypeDeclaration(s) => write!(f, "{s}"),
+            AStatement::EnumTypeDeclaration(e) => write!(f, "{e}"),
             AStatement::Const(const_decl) => {
-                write!(f, "const {}", const_decl)
+                write!(f, "const {const_decl}")
             }
             AStatement::Static(static_decl) => {
-                write!(f, "static.rs {}", static_decl)
+                write!(f, "static.rs {static_decl}")
             }
         }
     }

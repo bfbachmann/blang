@@ -57,7 +57,7 @@ impl fmt::Display for AFnSig {
         write!(f, "fn {}(", self.name)?;
 
         for (i, arg) in self.args.iter().enumerate() {
-            write!(f, "{}", arg)?;
+            write!(f, "{arg}")?;
 
             if i != self.args.len() - 1 {
                 write!(f, ", ")?;
@@ -65,7 +65,7 @@ impl fmt::Display for AFnSig {
         }
 
         if let Some(typ) = &self.maybe_ret_type_key {
-            write!(f, ") -> {}", typ)
+            write!(f, ") -> {typ}")
         } else {
             write!(f, ")")
         }

@@ -99,7 +99,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 self.gen_expr(expr).into_pointer_value()
             }
 
-            other => panic!("cannot get pointer to expression {}", other),
+            other => panic!("cannot get pointer to expression {other}"),
         }
     }
 
@@ -159,7 +159,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             _ => {}
         }
 
-        panic!("failed to resolve variable {}", name);
+        panic!("failed to resolve variable {name}");
     }
 
     /// Gets a variable (or member) and returns its value.
@@ -209,7 +209,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let ll_field_index = match base_expr_type {
             AType::Struct(struct_type) => struct_type.get_field_index(member_name).unwrap() as u32,
             AType::Tuple(tuple_type) => tuple_type.get_field_index(member_name) as u32,
-            other => panic!("invalid member access on type {}", other),
+            other => panic!("invalid member access on type {other}"),
         };
 
         self.ll_builder
@@ -217,7 +217,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 ll_base_expr_type,
                 ll_base_val.into_pointer_value(),
                 ll_field_index,
-                format!("{}_ptr", member_name).as_str(),
+                format!("{member_name}_ptr").as_str(),
             )
             .unwrap()
     }
@@ -245,7 +245,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     .build_extract_value(
                         ll_base_val.into_struct_value(),
                         struct_type.get_field_index(member_name).unwrap() as u32,
-                        format!("{}_ptr", member_name).as_str(),
+                        format!("{member_name}_ptr").as_str(),
                     )
                     .unwrap()
             }
@@ -256,12 +256,12 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     .build_extract_value(
                         ll_base_val.into_struct_value(),
                         tuple_type.get_field_index(member_name) as u32,
-                        format!("{}_ptr", member_name).as_str(),
+                        format!("{member_name}_ptr").as_str(),
                     )
                     .unwrap()
             }
 
-            other => panic!("invalid member access on type {}", other),
+            other => panic!("invalid member access on type {other}"),
         }
     }
 }

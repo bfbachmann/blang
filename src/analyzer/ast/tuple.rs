@@ -32,7 +32,7 @@ impl Display for ATupleType {
         write!(f, "{{")?;
 
         for (i, field) in self.fields.iter().enumerate() {
-            write!(f, "{}", field)?;
+            write!(f, "{field}")?;
 
             if i + 1 < self.fields.len() {
                 write!(f, ", ")?;
@@ -80,7 +80,7 @@ impl ATupleType {
             }
         }
 
-        panic!("tuple type {} has no field {}", self, name)
+        panic!("tuple type {self} has no field {name}")
     }
 
     /// Returns true if this tuple type is the same as `other`. Tuple types are considered the same
@@ -112,7 +112,7 @@ impl Display for ATupleInit {
         write!(f, "{{")?;
 
         for (i, typ) in self.values.iter().enumerate() {
-            write!(f, "{}", typ)?;
+            write!(f, "{typ}")?;
 
             if i + 1 < self.values.len() {
                 write!(f, ", ")?;

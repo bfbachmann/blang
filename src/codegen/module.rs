@@ -302,7 +302,7 @@ fn optimize(
     match ll_mod.run_passes(&opt_pipeline, target_machine, opts) {
         Ok(_) => Ok(()),
         Err(err) => Err(CodeGenError::new(
-            ErrorKind::OptimizationFailed,
+            ErrorKind::Optimization,
             &err.to_string(),
         )),
     }
@@ -326,7 +326,7 @@ fn emit_to_file(
 
     if let Err(e) = fs::create_dir_all(mod_cache_dir) {
         return Err(CodeGenError::new(
-            ErrorKind::WriteOutFailed,
+            ErrorKind::WriteOut,
             format!(
                 "failed to create directory {}: {}",
                 mod_cache_dir.display(),
@@ -345,7 +345,7 @@ fn emit_to_file(
         OutputFormat::LLVMIR => match ll_mod.print_to_file(&output_file) {
             Ok(_) => Ok(()),
             Err(e) => Err(CodeGenError::new(
-                ErrorKind::WriteOutFailed,
+                ErrorKind::WriteOut,
                 e.to_string().as_str(),
             )),
         },
@@ -354,7 +354,7 @@ fn emit_to_file(
             match ll_mod.write_bitcode_to_path(&output_file) {
                 true => Ok(()),
                 false => Err(CodeGenError::new(
-                    ErrorKind::WriteOutFailed,
+                    ErrorKind::WriteOut,
                     format!("failed to write bitcode to {}", output_file.display()).as_str(),
                 )),
             }
@@ -369,7 +369,7 @@ fn emit_to_file(
             match target_machine.write_to_file(ll_mod, file_type, &output_file) {
                 Ok(_) => Ok(()),
                 Err(msg) => Err(CodeGenError::new(
-                    ErrorKind::WriteOutFailed,
+                    ErrorKind::WriteOut,
                     msg.to_str().unwrap(),
                 )),
             }

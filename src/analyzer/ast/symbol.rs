@@ -173,7 +173,7 @@ impl ASymbol {
                 ..
             } => (value.type_key, is_pub, SymbolKind::Static, mod_id),
 
-            other => panic!("unexpected identifier kind: {:?}", other),
+            other => panic!("unexpected identifier kind: {other:?}"),
         };
 
         // Record an error if this symbol refers to a non-public foreign type.

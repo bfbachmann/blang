@@ -18,7 +18,7 @@ pub struct ARet {
 impl fmt::Display for ARet {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Some(expr) = &self.val {
-            write!(f, "return {}", expr)
+            write!(f, "return {expr}")
         } else {
             write!(f, "return")
         }

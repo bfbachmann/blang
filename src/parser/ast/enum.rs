@@ -31,7 +31,7 @@ impl Display for EnumTypeVariant {
         write!(f, "{}", self.name)?;
 
         if let Some(typ) = &self.maybe_type {
-            write!(f, "({})", typ)?;
+            write!(f, "({typ})")?;
         }
 
         Ok(())
@@ -100,8 +100,8 @@ impl Display for EnumType {
 
         for (i, variant) in self.variants.iter().enumerate() {
             match i {
-                0 => write!(f, "{}", variant)?,
-                _ => write!(f, ", {}", variant)?,
+                0 => write!(f, "{variant}")?,
+                _ => write!(f, ", {variant}")?,
             }
         }
 
@@ -192,7 +192,7 @@ impl Display for EnumVariantInit {
         )?;
 
         if let Some(value) = &self.maybe_value {
-            write!(f, "({})", value)?;
+            write!(f, "({value})")?;
         }
 
         Ok(())

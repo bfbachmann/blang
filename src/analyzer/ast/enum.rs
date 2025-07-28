@@ -40,7 +40,7 @@ impl Display for AEnumTypeVariant {
         write!(f, "{}", self.name)?;
 
         if let Some(type_key) = &self.maybe_type_key {
-            write!(f, "({})", type_key)?;
+            write!(f, "({type_key})")?;
         }
 
         Ok(())
@@ -83,8 +83,8 @@ impl Display for AEnumType {
 
         for (i, variant) in self.variants.values().enumerate() {
             match i {
-                0 => write!(f, "{}", variant)?,
-                _ => write!(f, ", {}", variant)?,
+                0 => write!(f, "{variant}")?,
+                _ => write!(f, ", {variant}")?,
             }
         }
 
@@ -220,7 +220,7 @@ impl Display for AEnumVariantInit {
         )?;
 
         if let Some(value) = &self.maybe_value {
-            write!(f, "({})", value)?;
+            write!(f, "({value})")?;
         }
 
         Ok(())

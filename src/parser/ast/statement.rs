@@ -92,7 +92,7 @@ impl fmt::Display for Statement {
             }
             Statement::Return(ret) => {
                 if let Some(val) = &ret.value {
-                    write!(f, "return {}", val)
+                    write!(f, "return {val}")
                 } else {
                     write!(f, "return")
                 }
@@ -101,22 +101,22 @@ impl fmt::Display for Statement {
                 write!(f, "yield {}", yld.value)
             }
             Statement::StructDeclaration(s) => {
-                write!(f, "{}", s)
+                write!(f, "{s}")
             }
             Statement::EnumDeclaration(e) => {
-                write!(f, "{}", e)
+                write!(f, "{e}")
             }
             Statement::ExternFn(extern_fn) => {
-                write!(f, "{}", extern_fn)
+                write!(f, "{extern_fn}")
             }
             Statement::ConstDeclaration(const_decl) => {
-                write!(f, "{}", const_decl)
+                write!(f, "{const_decl}")
             }
             Statement::StaticDeclaration(static_decl) => {
-                write!(f, "{}", static_decl)
+                write!(f, "{static_decl}")
             }
             Statement::Use(used_mod) => {
-                write!(f, "{}", used_mod)
+                write!(f, "{used_mod}")
             }
             Statement::Impl(impl_) => {
                 write!(

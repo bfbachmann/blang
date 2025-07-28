@@ -5,19 +5,19 @@ pub type CodeGenResult<T> = Result<T, CodeGenError>;
 
 #[derive(Debug)]
 pub enum ErrorKind {
-    OptimizationFailed,
-    WriteOutFailed,
-    TargetInitFailed,
-    LinkingFailed,
+    Optimization,
+    WriteOut,
+    TargetInit,
+    Linking,
 }
 
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            ErrorKind::OptimizationFailed => write!(f, "optimization failed"),
-            ErrorKind::WriteOutFailed => write!(f, "writing output failed"),
-            ErrorKind::TargetInitFailed => write!(f, "failed to initialize target"),
-            ErrorKind::LinkingFailed => write!(f, "linking failed"),
+            ErrorKind::Optimization => write!(f, "optimization failed"),
+            ErrorKind::WriteOut => write!(f, "writing output failed"),
+            ErrorKind::TargetInit => write!(f, "failed to initialize target"),
+            ErrorKind::Linking => write!(f, "linking failed"),
         }
     }
 }

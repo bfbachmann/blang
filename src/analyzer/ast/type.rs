@@ -71,15 +71,15 @@ impl Display for AType {
             AType::F64 => write!(f, "f64"),
             AType::Int => write!(f, "int"),
             AType::Uint => write!(f, "uint"),
-            AType::Struct(s) => write!(f, "{}", s),
-            AType::Enum(e) => write!(f, "{}", e),
-            AType::Spec(s) => write!(f, "{}", s),
-            AType::Tuple(t) => write!(f, "{}", t),
-            AType::Array(a) => write!(f, "{}", a),
-            AType::Function(func) => write!(f, "{}", func),
-            AType::Pointer(typ) => write!(f, "{}", typ),
-            AType::Generic(g) => write!(f, "{}", g),
-            AType::Unknown(name) => write!(f, "{}", name),
+            AType::Struct(s) => write!(f, "{s}"),
+            AType::Enum(e) => write!(f, "{e}"),
+            AType::Spec(s) => write!(f, "{s}"),
+            AType::Tuple(t) => write!(f, "{t}"),
+            AType::Array(a) => write!(f, "{a}"),
+            AType::Function(func) => write!(f, "{func}"),
+            AType::Pointer(typ) => write!(f, "{typ}"),
+            AType::Generic(g) => write!(f, "{g}"),
+            AType::Unknown(name) => write!(f, "{name}"),
         }
     }
 }
@@ -274,7 +274,7 @@ impl AType {
     pub fn to_struct_type(&self) -> &AStructType {
         match self {
             AType::Struct(struct_type) => struct_type,
-            _ => panic!("type {} is not a struct", self),
+            _ => panic!("type {self} is not a struct"),
         }
     }
 
@@ -283,7 +283,7 @@ impl AType {
     pub fn to_tuple_type(&self) -> &ATupleType {
         match self {
             AType::Tuple(tuple_type) => tuple_type,
-            _ => panic!("type {} is not a tuple", self),
+            _ => panic!("type {self} is not a tuple"),
         }
     }
 
@@ -292,7 +292,7 @@ impl AType {
     pub fn to_ptr_type(&self) -> &APointerType {
         match self {
             AType::Pointer(ptr_type) => ptr_type,
-            _ => panic!("type {} is not a pointer", self),
+            _ => panic!("type {self} is not a pointer"),
         }
     }
 
@@ -301,7 +301,7 @@ impl AType {
     pub fn to_enum_type(&self) -> &AEnumType {
         match self {
             AType::Enum(enum_type) => enum_type,
-            _ => panic!("type {} is not an enum", self),
+            _ => panic!("type {self} is not an enum"),
         }
     }
 
@@ -310,7 +310,7 @@ impl AType {
     pub fn to_spec_type(&self) -> &ASpecType {
         match self {
             AType::Spec(spec_type) => spec_type,
-            _ => panic!("type {} is not a spec", self),
+            _ => panic!("type {self} is not a spec"),
         }
     }
 
@@ -319,7 +319,7 @@ impl AType {
     pub fn to_generic_type(&self) -> &AGenericType {
         match self {
             AType::Generic(generic_type) => generic_type,
-            _ => panic!("type {} is not a generic", self),
+            _ => panic!("type {self} is not a generic"),
         }
     }
 
@@ -328,7 +328,7 @@ impl AType {
     pub fn to_array_type(&self) -> &AArrayType {
         match self {
             AType::Array(array_type) => array_type,
-            _ => panic!("type {} is not am array", self),
+            _ => panic!("type {self} is not am array"),
         }
     }
 
@@ -336,7 +336,7 @@ impl AType {
     pub fn to_fn_sig(&self) -> &AFnSig {
         match self {
             AType::Function(sig) => sig,
-            _ => panic!("type {} is not a function", self),
+            _ => panic!("type {self} is not a function"),
         }
     }
 

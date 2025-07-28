@@ -54,7 +54,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             | AExprKind::UintLiteral(_)
             | AExprKind::StrLiteral(_)
             | AExprKind::CharLiteral(_) => {
-                panic!("constant expression {} was not marked as constant", expr)
+                panic!("constant expression {expr} was not marked as constant")
             }
 
             AExprKind::FunctionCall(call) => self.gen_call(call).unwrap(),
@@ -182,7 +182,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     ll_struct_type,
                     ll_struct_ptr,
                     i as u32,
-                    format!("tuple.{}_ptr", i).as_str(),
+                    format!("tuple.{i}_ptr").as_str(),
                 )
                 .unwrap();
 
@@ -587,7 +587,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             // the stack and use their pointers as the arguments rather than the constant values
             // themselves.
             if !ll_arg_val.is_pointer_value() && is_composite {
-                let ll_arg_ptr = self.stack_alloc(format!("arg_{}_literal", i).as_str(), arg_tk);
+                let ll_arg_ptr = self.stack_alloc(format!("arg_{i}_literal").as_str(), arg_tk);
                 self.copy_value(ll_arg_val, ll_arg_ptr, arg_tk);
                 args.push(ll_arg_ptr.into());
             } else {
@@ -760,7 +760,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
 
             _ => {
-                panic!("unsupported unary operator {}", op)
+                panic!("unsupported unary operator {op}")
             }
         }
     }
@@ -1025,8 +1025,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         op: &Operator,
         right_expr: &AExpr,
     ) -> BasicValueEnum<'ctx> {
-        let right_block = self.append_block(format!("logical_{}_rhs", op).as_str());
-        let end_block = self.append_block(format!("logical_{}_end", op).as_str());
+        let right_block = self.append_block(format!("logical_{op}_rhs").as_str());
+        let end_block = self.append_block(format!("logical_{op}_end").as_str());
 
         // Generate code for the left expression.
         let ll_lhs = self.gen_expr(left_expr);

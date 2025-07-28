@@ -91,13 +91,13 @@ impl Display for ArrayInit {
 
         for (i, value) in self.values.iter().enumerate() {
             match i {
-                0 => write!(f, "{}", value)?,
-                _ => write!(f, ", {}", value)?,
+                0 => write!(f, "{value}")?,
+                _ => write!(f, ", {value}")?,
             };
         }
 
         if let Some(expr) = &self.maybe_repeat_expr {
-            write!(f, "; {}", expr)?;
+            write!(f, "; {expr}")?;
         }
 
         write!(f, "]")

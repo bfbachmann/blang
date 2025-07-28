@@ -226,7 +226,7 @@ pub fn check_closure_returns(ctx: &mut ProgramContext, closure: &AClosure, kind:
             }
         }
 
-        other => panic!("unexpected scope kind {:?}", other),
+        other => panic!("unexpected scope kind {other:?}"),
     };
 }
 
@@ -762,7 +762,7 @@ pub fn check_closure_yields(ctx: &mut ProgramContext, closure: &AClosure, kind: 
             }
         }
 
-        other => panic!("unexpected scope kind {:?}", other),
+        other => panic!("unexpected scope kind {other:?}"),
     };
 }
 

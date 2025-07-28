@@ -587,9 +587,9 @@ fn lex_f64_literal(lexer: &mut Lexer<TokenKind>) -> FilterResult<(f64, bool), Le
 impl Display for TokenKind {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            TokenKind::BoolLiteral(b) => write!(f, "{}", b),
-            TokenKind::StrLiteral(s) => write!(f, r#""{}""#, s),
-            TokenKind::Identifier(s) => write!(f, "{}", s),
+            TokenKind::BoolLiteral(b) => write!(f, "{b}"),
+            TokenKind::StrLiteral(s) => write!(f, r#""{s}""#),
+            TokenKind::Identifier(s) => write!(f, "{s}"),
             other => write!(f, "{}", other.to_string()),
         }
     }
@@ -608,9 +608,9 @@ pub enum LexingError {
 impl Display for LexingError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            LexingError::InvalidInt(e) => write!(f, "{}", e),
-            LexingError::InvalidF64(e) => write!(f, "{}", e),
-            LexingError::InvalidChar(e) => write!(f, "{}", e),
+            LexingError::InvalidInt(e) => write!(f, "{e}"),
+            LexingError::InvalidF64(e) => write!(f, "{e}"),
+            LexingError::InvalidChar(e) => write!(f, "{e}"),
             LexingError::InvalidCharCode(c) => write!(f, "invalid character code {c}"),
             LexingError::Default => write!(f, "invalid token"),
         }

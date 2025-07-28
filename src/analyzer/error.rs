@@ -1056,7 +1056,7 @@ pub fn err_mismatched_index_type(
 pub fn err_index_out_of_bounds(i: u64, len: u64, span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::IndexOutOfBounds,
-        format!("index {} is out of bounds [0:{})", i, len).as_str(),
+        format!("index {i} is out of bounds [0:{len})").as_str(),
         span,
     )
 }
@@ -1651,7 +1651,7 @@ pub fn err_import_cycle(used_mod: &UsedMod, cycle: &[PathBuf]) -> AnalyzeError {
     );
 
     AnalyzeError::new(ErrorKind::ImportCycle, "import cycle", used_mod.path.span)
-        .with_detail(format!("The offending import chain is: {}", mod_chain).as_str())
+        .with_detail(format!("The offending import chain is: {mod_chain}").as_str())
 }
 
 #[must_use]

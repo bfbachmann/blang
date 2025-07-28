@@ -175,11 +175,11 @@ impl<'a> TypeConverter<'a> {
             }
 
             AType::Spec(name) => {
-                panic!("unexpected spec type {}", name)
+                panic!("unexpected spec type {name}")
             }
 
             AType::Unknown(name) => {
-                panic!("unexpected unknown type {}", name)
+                panic!("unexpected unknown type {name}")
             }
         }
     }

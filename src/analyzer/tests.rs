@@ -1,3 +1,4 @@
+#[allow(clippy::module_inception)]
 #[cfg(test)]
 mod tests {
     use crate::analyzer::analyze::{analyze_modules, AnalyzedModule, ProgramAnalysis};
@@ -1404,9 +1405,8 @@ mod tests {
             let result = analyze(
                 format!(
                     "fn main() {{
-                    let x: {} = 99999999999999999
-                }}",
-                    lit
+                    let x: {lit} = 99999999999999999
+                }}"
                 )
                 .as_str(),
             );

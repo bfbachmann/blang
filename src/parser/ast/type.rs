@@ -51,11 +51,11 @@ impl PartialEq for Type {
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Type::Function(fn_sig) => write!(f, "{}", fn_sig),
-            Type::Tuple(t) => write!(f, "{}", t),
-            Type::Pointer(t) => write!(f, "{}", t),
-            Type::Array(a) => write!(f, "{}", a),
-            Type::Unresolved(u) => write!(f, "{}", u),
+            Type::Function(fn_sig) => write!(f, "{fn_sig}"),
+            Type::Tuple(t) => write!(f, "{t}"),
+            Type::Pointer(t) => write!(f, "{t}"),
+            Type::Array(a) => write!(f, "{a}"),
+            Type::Unresolved(u) => write!(f, "{u}"),
         }
     }
 }

@@ -335,7 +335,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let ll_fn = self
             .ll_mod
             .get_function(mangled_name.as_str())
-            .unwrap_or_else(|| panic!("function `{}` should exist", mangled_name));
+            .unwrap_or_else(|| panic!("function `{mangled_name}` should exist"));
 
         self.ll_fn = Some(ll_fn);
 
@@ -449,7 +449,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         let ll_ptr = self
             .ll_builder
-            .build_alloca(ll_typ, format!("{}_ptr", name).as_str())
+            .build_alloca(ll_typ, format!("{name}_ptr").as_str())
             .unwrap();
 
         // Make sure we continue from where we left off as our builder position may have changed

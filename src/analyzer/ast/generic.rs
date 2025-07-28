@@ -29,7 +29,7 @@ impl Display for AGenericType {
             if i == 0 {
                 write!(f, "{}: {}", self.name, type_key)?;
             } else {
-                write!(f, " + {}", type_key)?;
+                write!(f, " + {type_key}")?;
             }
         }
 
