@@ -224,7 +224,7 @@ impl<'a> TypeConverter<'a> {
                 // Change the return type to void because, on return, we'll just be writing to the
                 // pointer passed in the first argument.
                 ll_ret_type = self.ctx.void_type().as_any_type_enum();
-                
+
                 // Include the return type as the first argument instead.
                 ll_arg_types.push(self.ctx.ptr_type(AddressSpace::default()).into());
             }
@@ -444,7 +444,7 @@ impl<'a> TypeConverter<'a> {
             })
     }
 
-    fn int_type_with_size(&self, bytes_required: u32) -> IntType {
+    fn int_type_with_size(&self, bytes_required: u32) -> IntType<'_> {
         match bytes_required {
             1 => self.ctx.i8_type(),
             2 => self.ctx.i16_type(),

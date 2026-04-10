@@ -230,7 +230,7 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
             .build_call(ll_ext_fn, &ll_args_to_pass, "extern_result")
             .unwrap()
             .try_as_basic_value()
-            .left();
+            .basic();
 
         if let Some(ll_ret_val) = ll_ret_val {
             if is_sret {
@@ -301,10 +301,7 @@ fn optimize(
     let (opt_pipeline, opts) = config.optimization_pass_config();
     match ll_mod.run_passes(&opt_pipeline, target_machine, opts) {
         Ok(_) => Ok(()),
-        Err(err) => Err(CodeGenError::new(
-            ErrorKind::Optimization,
-            &err.to_string(),
-        )),
+        Err(err) => Err(CodeGenError::new(ErrorKind::Optimization, &err.to_string())),
     }
 }
 

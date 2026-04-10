@@ -659,8 +659,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // the return value was written to the address pointed to by the first function argument.
         // This will only be the case for functions that return structured values.
         let result = ll_call.try_as_basic_value();
-        if result.left().is_some() {
-            result.left()
+        if result.basic().is_some() {
+            result.basic()
         } else if call.maybe_ret_type_key.is_some() {
             Some(args.first()?.into_pointer_value().as_basic_value_enum())
         } else {
@@ -933,8 +933,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     .build_call(convert_fn, &[ll_src_val.into()], name.as_str())
                     .unwrap()
                     .try_as_basic_value()
-                    .left()
-                    .unwrap()
+                    .unwrap_basic()
             }
 
             // Float to unsigned int.
@@ -947,8 +946,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     .build_call(convert_fn, &[ll_src_val.into()], name.as_str())
                     .unwrap()
                     .try_as_basic_value()
-                    .left()
-                    .unwrap()
+                    .unwrap_basic()
             }
 
             // Int to int.

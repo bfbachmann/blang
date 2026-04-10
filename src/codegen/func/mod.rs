@@ -725,7 +725,7 @@ pub(crate) fn get_fn_attrs(
                 new_attr(ctx, "writeonly"),
                 new_attr(ctx, "noalias"),
                 new_attr(ctx, "nonnull"),
-                new_attr(ctx, "nocapture"),
+                new_attr(ctx, "captures"),
             ],
         );
 
@@ -744,7 +744,7 @@ pub(crate) fn get_fn_attrs(
             // Mark the pointer argument as pass by value and not captured by the callee.
             let mut ll_arg_attrs = vec![
                 new_type_attr(ctx, "byval", ll_attr_type),
-                new_attr(ctx, "nocapture"),
+                new_attr(ctx, "captures"),
             ];
 
             // If the argument type has non-zero size, mark it as dereferenceable up to its size.
@@ -785,6 +785,6 @@ pub(crate) fn new_type_attr(ctx: &Context, name: &str, ll_attr_type: AnyTypeEnum
 
 fn new_attr_kind(name: &str) -> u32 {
     let ll_attr_kind = Attribute::get_named_enum_kind_id(name);
-    assert_ne!(ll_attr_kind, 0, "invalid attribute");
+    assert_ne!(ll_attr_kind, 0, "invalid attribute with name '{}'", name);
     ll_attr_kind
 }

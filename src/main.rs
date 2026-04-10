@@ -595,7 +595,7 @@ mod tests {
     }
 
     fn clang_build_verify(ir_path: &str, exe_path: &str) -> Child {
-        std::process::Command::new("clang-18")
+        std::process::Command::new("clang-21")
             .args([
                 ir_path,
                 "-O2",

@@ -9,9 +9,12 @@ use inkwell::debug_info::{
     DIType, DWARFEmissionKind, DWARFSourceLanguage,
 };
 use inkwell::module::Module;
-use inkwell::values::{BasicValueEnum, PointerValue};
+use inkwell::values::{AsValueRef, BasicValueEnum, PointerValue};
 use inkwell::AddressSpace;
-use llvm_sys::debuginfo::{LLVMDIFlags, LLVMDWARFTypeEncoding};
+use llvm_sys::debuginfo::{
+    LLVMDIBuilderInsertDbgValueRecordBefore,
+    LLVMDIBuilderInsertDeclareRecordBefore, LLVMDIFlags, LLVMDWARFTypeEncoding,
+};
 
 /// Creates a new debug info builder and compile unit for the file.
 pub fn new_di_ctx<'ctx>(
@@ -213,17 +216,25 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             self.type_converter.align_of_type(type_key),
         );
 
-        di_ctx.di_builder.insert_declare_before_instruction(
-            ll_var_ptr,
-            Some(di_var),
-            None,
-            self.gen_di_location(pos),
-            self.ll_builder
-                .get_insert_block()
-                .unwrap()
-                .get_last_instruction()
-                .unwrap(),
-        );
+        let ll_dummy_expr = di_ctx.di_builder.create_expression(vec![]);
+        let ll_di_loc = self.gen_di_location(pos);
+        let ll_inst = self
+            .ll_builder
+            .get_insert_block()
+            .unwrap()
+            .get_last_instruction()
+            .unwrap();
+
+        unsafe {
+            LLVMDIBuilderInsertDeclareRecordBefore(
+                di_ctx.di_builder.as_mut_ptr(),
+                ll_var_ptr.as_value_ref(),
+                di_var.as_mut_ptr(),
+                ll_dummy_expr.as_mut_ptr(),
+                ll_di_loc.as_mut_ptr(),
+                ll_inst.as_value_ref(),
+            );
+        }
 
         self.gen_di_value(di_var, pos, ll_val);
     }
@@ -236,17 +247,25 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         ll_val: BasicValueEnum<'ctx>,
     ) {
         let di_builder = &self.di_ctx.as_ref().unwrap().di_builder;
-        di_builder.insert_dbg_value_before(
-            ll_val,
-            di_var,
-            None,
-            self.gen_di_location(pos),
-            self.ll_builder
-                .get_insert_block()
-                .unwrap()
-                .get_last_instruction()
-                .unwrap(),
-        );
+
+        let ll_dummy_expr = di_builder.create_expression(vec![]);
+        let ll_inst = self
+            .ll_builder
+            .get_insert_block()
+            .unwrap()
+            .get_last_instruction()
+            .unwrap();
+        let ll_di_loc = self.gen_di_location(pos);
+        unsafe {
+            LLVMDIBuilderInsertDbgValueRecordBefore(
+                di_builder.as_mut_ptr(),
+                ll_val.as_value_ref(),
+                di_var.as_mut_ptr(),
+                ll_dummy_expr.as_mut_ptr(),
+                ll_di_loc.as_mut_ptr(),
+                ll_inst.as_value_ref(),
+            )
+        };
     }
 
     fn di_file_from_id(&self, file_id: FileID) -> DIFile<'ctx> {
