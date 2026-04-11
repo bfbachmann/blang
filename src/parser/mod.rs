@@ -12,7 +12,7 @@ use crate::parser::src_file::SrcFile;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Debug;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub mod ast;
 pub mod error;
@@ -160,6 +160,7 @@ pub struct SrcInfo {
     pub file_info: FileInfoStore,
     pub dir_info: DirInfoStore,
     pub src_files: HashMap<FileID, SrcFile>,
+    pub cwd: PathBuf,
 }
 
 impl Debug for SrcInfo {
@@ -171,8 +172,9 @@ impl Debug for SrcInfo {
 }
 
 impl SrcInfo {
-    fn new() -> Self {
+    fn new(cwd: PathBuf) -> Self {
         SrcInfo {
+            cwd,
             mod_info: Default::default(),
             file_info: Default::default(),
             dir_info: Default::default(),
@@ -187,7 +189,10 @@ impl SrcInfo {
 
     #[cfg(test)]
     pub fn new_test_mods(src: HashMap<String, Vec<SrcFile>>) -> Self {
+        use std::env;
+
         let mut src_info = SrcInfo {
+            cwd: env::current_dir().unwrap(),
             mod_info: Default::default(),
             file_info: Default::default(),
             dir_info: Default::default(),
@@ -291,8 +296,8 @@ impl SrcInfo {
 }
 
 /// Parses all modules and their dependencies recursively starting from the given module path.
-pub fn parse_mods(mod_path: &str) -> (SrcInfo, Vec<ParseError>) {
-    let mut src_info = SrcInfo::new();
+pub fn parse_mods(mod_path: &str, cwd: PathBuf) -> (SrcInfo, Vec<ParseError>) {
+    let mut src_info = SrcInfo::new(cwd);
     let mut checked_mod_paths = HashSet::new();
     let mut errs = vec![];
 

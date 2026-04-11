@@ -15,7 +15,6 @@ use llvm_sys::debuginfo::{
     LLVMDIBuilderInsertDbgValueRecordBefore, LLVMDIBuilderInsertDeclareRecordBefore, LLVMDIFlags,
     LLVMDWARFTypeEncoding,
 };
-use std::env;
 use std::path::PathBuf;
 
 /// Creates a new debug info builder and compile unit for the file.
@@ -24,14 +23,13 @@ pub fn new_di_ctx<'ctx>(
     file_id: FileID,
     ll_module: &Module<'ctx>,
 ) -> DICtx<'ctx> {
-    let cwd = env::current_dir().unwrap();
     let (dir, file_name) = src_info.dir_and_file_name(file_id);
     let file = PathBuf::from(dir).join(file_name);
     let (di_builder, di_cu) = ll_module.create_debug_info_builder(
         true,
         DWARFSourceLanguage::C,
         file.to_str().unwrap(),
-        cwd.to_str().unwrap(),
+        src_info.cwd.to_str().unwrap(),
         "blang",
         false,
         "",
@@ -273,7 +271,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 
     fn di_file_from_id(&self, file_id: FileID) -> DIFile<'ctx> {
-        let cwd = env::current_dir().unwrap();
         let (dir, file_name) = self.src_info.dir_and_file_name(file_id);
         let file = PathBuf::from(dir).join(file_name);
 
@@ -281,6 +278,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             .as_ref()
             .unwrap()
             .di_builder
-            .create_file(file.to_str().unwrap(), cwd.to_str().unwrap())
+            .create_file(file.to_str().unwrap(), self.src_info.cwd.to_str().unwrap())
     }
 }

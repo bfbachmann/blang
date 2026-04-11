@@ -3,8 +3,8 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::os::unix::prelude::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process;
 use std::time::Instant;
+use std::{env, process};
 
 use clap::{arg, Arg, ArgAction, Command};
 use flamer::flame;
@@ -260,6 +260,7 @@ enum AnalyzeProgError {
     NoSourceFiles(String),
     AnalysisFailed(String),
     WriteOutFailed(String),
+    GetCWDFailed(String),
 }
 
 impl Display for AnalyzeProgError {
@@ -270,6 +271,7 @@ impl Display for AnalyzeProgError {
             AnalyzeProgError::NoSourceFiles(s) => s,
             AnalyzeProgError::AnalysisFailed(s) => s,
             AnalyzeProgError::WriteOutFailed(s) => s,
+            AnalyzeProgError::GetCWDFailed(s) => s,
         };
 
         write!(f, "{s}")
@@ -284,8 +286,13 @@ fn analyze(
     maybe_dump_path: Option<&String>,
     config: CodeGenConfig,
 ) -> Result<(SrcInfo, ProgramAnalysis), AnalyzeProgError> {
+    let cwd = match env::current_dir() {
+        Ok(path) => path,
+        Err(e) => return Err(AnalyzeProgError::GetCWDFailed(e.to_string())),
+    };
+
     // Parse all targeted source files.
-    let (src_info, errs) = parse_mods(target_mod_path);
+    let (src_info, errs) = parse_mods(target_mod_path, cwd);
 
     if !errs.is_empty() {
         for err in &errs {
