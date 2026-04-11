@@ -26,7 +26,6 @@ mod analyzer;
 mod lexer;
 mod mono_collector;
 mod parser;
-mod util;
 
 fn main() {
     // Define the root command.

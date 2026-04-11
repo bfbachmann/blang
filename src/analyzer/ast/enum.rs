@@ -17,7 +17,6 @@ use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
 use crate::parser::ast::r#enum::{EnumType, EnumVariantInit};
 use crate::parser::ast::r#type::Type;
-use crate::util;
 
 /// Represents a semantically valid enum type variant declaration.
 #[derive(Debug, Clone)]
@@ -73,7 +72,7 @@ impl PartialEq for AEnumType {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && self.maybe_params == other.maybe_params
-            && util::hashmaps_eq(&self.variants, &other.variants)
+            && self.variants == other.variants
     }
 }
 
