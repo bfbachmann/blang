@@ -79,6 +79,7 @@ impl Operator {
         }
     }
 
+    #[allow(clippy::inherent_to_string_shadow_display)]
     pub fn to_string(&self) -> String {
         match self {
             Operator::Add => TokenKind::Plus.to_string(),

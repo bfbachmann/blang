@@ -24,6 +24,7 @@ pub struct ProgramCodeGen<'a> {
 #[derive(PartialEq, Clone, Copy)]
 pub enum OutputFormat {
     LLVMBitcode,
+    #[allow(clippy::upper_case_acronyms)]
     LLVMIR,
     Assembly,
     Object,

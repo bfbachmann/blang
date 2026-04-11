@@ -234,6 +234,7 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
+    #[allow(clippy::inherent_to_string_shadow_display)]
     fn to_string(&self) -> String {
         match self {
             TokenKind::Newline => "\n".to_string(),

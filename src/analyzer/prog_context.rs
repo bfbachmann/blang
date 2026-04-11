@@ -367,6 +367,7 @@ impl ProgramContext {
     }
 
     /// Drains all module constants and statics from the program context.
+    #[allow(clippy::type_complexity)]
     pub fn drain_mod_consts_and_statics(
         &mut self,
     ) -> (

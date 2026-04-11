@@ -265,6 +265,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Generates code that compares a pattern to a match target. Returns the result of the
     /// comparison, if any.
+    #[allow(clippy::too_many_arguments)]
     fn gen_pattern_cmp(
         &mut self,
         pattern: &APattern,

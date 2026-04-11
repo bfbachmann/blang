@@ -50,6 +50,7 @@ pub struct DICtx<'ctx> {
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Generates code for the given function.
+    #[allow(clippy::too_many_arguments)]
     pub fn generate(
         context: &'ctx Context,
         src_info: &'a SrcInfo,
