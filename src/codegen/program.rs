@@ -192,6 +192,7 @@ impl CodeGenConfig {
     pub fn new_test_default(output_path: PathBuf, output_format: OutputFormat) -> CodeGenConfig {
         let mut cfg = CodeGenConfig::new_default(output_path, output_format);
         cfg.verify = true;
+        cfg.emit_debug_info = true;
         cfg
     }
 

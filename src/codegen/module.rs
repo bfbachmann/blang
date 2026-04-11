@@ -15,20 +15,42 @@ use inkwell::module::{Linkage, Module};
 use inkwell::targets::{FileType, TargetMachine};
 use inkwell::values::BasicMetadataValueEnum;
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
+use std::fs;
 
 pub struct ModuleCodeGen<'a, 'ctx> {
     mod_id: ModID,
     ll_ctx: &'a Context,
     ll_builder: Builder<'ctx>,
     ll_mod: Module<'ctx>,
+    ll_di_ctxs: HashMap<ModID, DICtx<'ctx>>,
     src_info: &'a SrcInfo,
     prog: &'a MonoProg,
     type_converter: TypeConverter<'ctx>,
 }
 
 impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
+    fn new(
+        mod_id: ModID,
+        ll_ctx: &'a Context,
+        ll_builder: Builder<'ctx>,
+        ll_mod: Module<'ctx>,
+        src_info: &'a SrcInfo,
+        prog: &'a MonoProg,
+        type_converter: TypeConverter<'ctx>,
+    ) -> Self {
+        Self {
+            mod_id,
+            ll_ctx,
+            ll_builder,
+            ll_mod,
+            ll_di_ctxs: HashMap::new(),
+            src_info,
+            prog,
+            type_converter,
+        }
+    }
+
     fn gen_mod(&mut self) -> CodeGenResult<()> {
         // Set debug info metadata.
         if self.prog.config.emit_debug_info {
@@ -52,10 +74,9 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
 
         // If a main function was defined, generate a wrapping main that calls it.
         // This is necessary because the defined main function will not have the name
-        // "main", but rather something like "my_project/my_module/main.bl::main`,
-        // so the linker won't locate it as the entrypoint. Generating our own
-        // wrapping main also gives us the opportunity to initialize things at
-        // runtime, like a GC.
+        // "main", but rather some mangled name, so the linker won't locate it as the
+        // entrypoint. Generating our own wrapping main also gives us the opportunity
+        // to initialize things at runtime, like a GC.
         if let Some(main_fn_tk) = &self.prog.maybe_main_fn_tk {
             self.type_converter.set_type_mapping(HashMap::new());
             let main_fn_sig = self.type_converter.get_type(*main_fn_tk).to_fn_sig();
@@ -82,6 +103,11 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
                 self.ll_builder.build_call(ll_main_fn, &[], "main").unwrap();
                 self.ll_builder.build_return(None).unwrap();
             }
+        }
+
+        // Finalize DI builders.
+        for ll_di_ctx in self.ll_di_ctxs.values() {
+            ll_di_ctx.di_builder.finalize();
         }
 
         Ok(())
@@ -123,7 +149,6 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
         }
 
         // Generate functions.
-        let mut di_ctxs: HashMap<ModID, DICtx> = HashMap::new();
         for item in items {
             self.type_converter.set_type_mapping(item.type_mappings);
 
@@ -132,12 +157,12 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
             let file_id = func.span.file_id;
 
             let maybe_di_ctx = if self.prog.config.emit_debug_info {
-                if let Some(di_ctx) = di_ctxs.get_mut(&file_id) {
+                if let Some(di_ctx) = self.ll_di_ctxs.get_mut(&file_id) {
                     Some(di_ctx)
                 } else {
                     let di_ctx = new_di_ctx(self.src_info, file_id, &self.ll_mod);
-                    di_ctxs.insert(file_id, di_ctx);
-                    Some(di_ctxs.get_mut(&file_id).unwrap())
+                    self.ll_di_ctxs.insert(file_id, di_ctx);
+                    Some(self.ll_di_ctxs.get_mut(&file_id).unwrap())
                 }
             } else {
                 None
@@ -153,10 +178,6 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
                 self.prog,
                 func,
             )?;
-        }
-
-        for di_ctx in di_ctxs.into_values() {
-            di_ctx.di_builder.finalize();
         }
 
         Ok(())
@@ -273,15 +294,15 @@ pub(crate) fn gen_module(src_info: &SrcInfo, prog: &MonoProg, mod_id: ModID) -> 
     ll_mod.set_data_layout(&data_layout);
 
     // Create the module code generator and generate the module.
-    let mut codegen = ModuleCodeGen {
+    let mut codegen = ModuleCodeGen::new(
         mod_id,
-        ll_ctx: &ll_ctx,
-        src_info,
+        &ll_ctx,
         ll_builder,
         ll_mod,
+        src_info,
         prog,
         type_converter,
-    };
+    );
     codegen.gen_mod()?;
 
     // Run optimization passes.
