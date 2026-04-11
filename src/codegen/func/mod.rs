@@ -342,7 +342,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // Attach debug info.
         self.set_di_subprogram(func, &mangled_name);
-        self.set_di_location(&func.body.span().start_pos);
 
         // Start building from the beginning of the entry block.
         let entry = self.append_block("entry");
@@ -384,7 +383,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // instruction), we have to insert one.
         let fn_scope = self.pop_scope().into_fn();
         if !fn_scope.guarantees_return {
+            self.set_di_location(&func.body.span.end_pos);
             self.ll_builder.build_return(None).unwrap();
+            self.unset_di_location();
         }
 
         Ok(ll_fn)

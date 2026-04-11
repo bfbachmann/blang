@@ -29,8 +29,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Assigns the value to the variable with the given name. Panics if no such variable exists.
     pub(crate) fn assign_var(&mut self, assign: &AVarAssign) {
-        self.set_di_location(&assign.target.span().start_pos);
-
         // Get a pointer to the target variable (or variable member).
         let ll_var_ptr = self.get_ptr_to(&assign.target);
 

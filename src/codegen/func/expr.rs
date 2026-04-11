@@ -23,8 +23,6 @@ use super::{get_fn_attrs, FnCodeGen};
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles an arbitrary expression.
     pub(crate) fn gen_expr(&mut self, expr: &AExpr) -> BasicValueEnum<'ctx> {
-        self.set_di_location(&expr.span.start_pos);
-
         let ll_val = match &expr.kind {
             _ if expr.kind.is_const() => self.gen_const_expr(expr),
 
@@ -529,8 +527,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Compiles a function call, returning the result if one exists.
     pub(crate) fn gen_call(&mut self, call: &AFnCall) -> Option<BasicValueEnum<'ctx>> {
-        self.set_di_location(&call.span.start_pos);
-
         let mut fn_sig = self
             .prog
             .type_store
@@ -602,23 +598,31 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     SymbolKind::Variable | SymbolKind::Static => {
                         // Load the function pointer from the symbol value and call it indirectly.
                         let ll_fn_ptr = self.get_var_value(symbol).into_pointer_value();
-                        self.ll_builder
+                        self.set_di_location(&call.span.start_pos);
+                        let ll_result = self
+                            .ll_builder
                             .build_indirect_call(
                                 ll_fn_type,
                                 ll_fn_ptr,
                                 args.as_slice(),
                                 mangled_name.as_str(),
                             )
-                            .unwrap()
+                            .unwrap();
+                        self.unset_di_location();
+                        ll_result
                     }
 
                     SymbolKind::Const | SymbolKind::Fn => {
                         // The symbol refers directly to a function that we can look up in the
                         // module and call directly.
                         let ll_fn = self.get_or_define_function(symbol.type_key);
-                        self.ll_builder
+                        self.set_di_location(&call.span.start_pos);
+                        let ll_result = self
+                            .ll_builder
                             .build_call(ll_fn, args.as_slice(), symbol.name.as_str())
-                            .unwrap()
+                            .unwrap();
+                        self.unset_di_location();
+                        ll_result
                     }
 
                     SymbolKind::Type => {
@@ -629,21 +633,29 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
             AExprKind::MemberAccess(access) if access.is_method => {
                 let ll_fn = self.get_or_define_function(fn_sig.type_key);
-                self.ll_builder
+                self.set_di_location(&call.span.start_pos);
+                let ll_result = self
+                    .ll_builder
                     .build_call(ll_fn, args.as_slice(), access.member_name.as_str())
-                    .unwrap()
+                    .unwrap();
+                self.unset_di_location();
+                ll_result
             }
 
             _ => {
                 let ll_fn_ptr = self.gen_expr(&call.fn_expr).into_pointer_value();
-                self.ll_builder
+                self.set_di_location(&call.span.start_pos);
+                let ll_result = self
+                    .ll_builder
                     .build_indirect_call(
                         ll_fn_type,
                         ll_fn_ptr,
                         args.as_slice(),
                         mangled_name.as_str(),
                     )
-                    .unwrap()
+                    .unwrap();
+                self.unset_di_location();
+                ll_result
             }
         };
 

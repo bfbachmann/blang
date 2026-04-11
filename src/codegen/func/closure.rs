@@ -6,8 +6,6 @@ use crate::codegen::scope::CodegenScope;
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles all statements in the closure.
     pub(crate) fn gen_closure(&mut self, closure: &AClosure) -> CodeGenResult<()> {
-        self.set_di_location(&closure.span.start_pos);
-
         self.push_scope(CodegenScope::new_closure());
 
         for (i, statement) in closure.statements.iter().enumerate() {

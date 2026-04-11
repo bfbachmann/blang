@@ -1,25 +1,29 @@
+use super::FnCodeGen;
 use crate::analyzer::ast::r#loop::ALoop;
 use crate::codegen::error::CodeGenResult;
-
-use super::FnCodeGen;
+use crate::lexer::pos::Span;
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles a break statement.
-    pub(crate) fn gen_break(&mut self) {
+    pub(crate) fn gen_break(&mut self, span: &Span) {
         self.set_guarantees_terminator(true);
         let loop_end = self.get_or_create_loop_end_block();
+        self.set_di_location(&span.start_pos);
         self.ll_builder
             .build_unconditional_branch(loop_end)
             .unwrap();
+        self.unset_di_location();
     }
 
     /// Compiles a continue statement.
-    pub(crate) fn gen_continue(&mut self) {
+    pub(crate) fn gen_continue(&mut self, span: &Span) {
         self.set_guarantees_terminator(true);
         let loop_begin = self.get_loop_begin_block();
+        self.set_di_location(&span.start_pos);
         self.ll_builder
             .build_unconditional_branch(loop_begin)
             .unwrap();
+        self.unset_di_location();
     }
 
     /// Compiles a loop.

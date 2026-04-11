@@ -10,8 +10,6 @@ use inkwell::values::BasicValue;
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles a statement.
     pub(crate) fn gen_statement(&mut self, statement: &AStatement) -> CodeGenResult<()> {
-        self.set_di_location(&statement.span().start_pos);
-
         match statement {
             AStatement::VariableDeclaration(var_decl) => {
                 // Get the value of the expression being assigned to the variable.
@@ -56,11 +54,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AStatement::Loop(closure) => {
                 self.gen_loop(closure)?;
             }
-            AStatement::Break(_) => {
-                self.gen_break();
+            AStatement::Break(span) => {
+                self.gen_break(span);
             }
-            AStatement::Continue(_) => {
-                self.gen_continue();
+            AStatement::Continue(span) => {
+                self.gen_continue(span);
             }
             AStatement::Return(ret) => {
                 self.gen_return(ret);
@@ -99,15 +97,21 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     self.copy_value(result, ll_ret_ptr.into_pointer_value(), ret_type_key);
 
                     // Return void.
+                    self.set_di_location(&ret.span.start_pos);
                     self.ll_builder.build_return(None).unwrap();
+                    self.unset_di_location();
                 } else {
+                    self.set_di_location(&ret.span.start_pos);
                     self.ll_builder.build_return(Some(&result)).unwrap();
+                    self.unset_di_location();
                 }
             }
 
             // The function has no return type, so return void.
             None => {
+                self.set_di_location(&ret.span.start_pos);
                 self.ll_builder.build_return(None).unwrap();
+                self.unset_di_location();
             }
         }
     }

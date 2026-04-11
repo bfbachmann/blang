@@ -193,6 +193,14 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         self.ll_builder.set_current_debug_location(di_location);
     }
 
+    pub(crate) fn unset_di_location(&self) {
+        if self.di_ctx.is_none() {
+            return;
+        }
+
+        self.ll_builder.unset_current_debug_location();
+    }
+
     /// Generates debug info about a variable declaration.
     pub(crate) fn gen_di_declare(
         &mut self,
