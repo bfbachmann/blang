@@ -66,11 +66,14 @@ fn main() {
                     .action(ArgAction::SetTrue),
             )
             .arg(
-                arg!(-d --debug "Generate source-level debug information")
+                arg!(-d --debug "Generate source-level debug information (implies no optimization by default)")
                     .required(false)
                     .action(ArgAction::SetTrue),
             )
-            .arg(arg!(-t --target <TARGET> "Generate code for the given target").required(false))
+            .arg(
+                arg!(-t --target <TARGET> "Generate code for the given target platform")
+                    .required(false),
+            )
             .arg(
                 arg!(-f --format <FORMAT> "Output file format")
                     .required(false)
@@ -122,6 +125,8 @@ fn main() {
                     }
                 }
 
+                let debug = sub_matches.get_flag("debug");
+
                 let optimization_level = match sub_matches.get_one::<String>("optimization-level") {
                     Some(level) => match level.as_str() {
                         "default" => OptimizationLevel::Default,
@@ -130,7 +135,7 @@ fn main() {
                         "aggressive" => OptimizationLevel::Aggressive,
                         _ => unreachable!(),
                     },
-
+                    None if debug => OptimizationLevel::None,
                     None => OptimizationLevel::Default,
                 };
 
@@ -190,7 +195,6 @@ fn main() {
                 };
 
                 let quiet = sub_matches.get_flag("quiet");
-                let debug = sub_matches.get_flag("debug");
 
                 let linker = sub_matches
                     .get_one::<String>("linker")
