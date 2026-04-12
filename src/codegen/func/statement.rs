@@ -4,7 +4,6 @@ use crate::analyzer::ast::ret::ARet;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::type_store::GetType;
 use crate::codegen::error::CodeGenResult;
-use crate::lexer::pos::Locatable;
 use inkwell::values::BasicValue;
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {

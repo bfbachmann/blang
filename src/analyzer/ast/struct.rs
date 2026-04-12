@@ -23,6 +23,7 @@ use std::hash::{Hash, Hasher};
 pub struct AField {
     pub name: String,
     pub type_key: TypeKey,
+    pub span: Span,
 }
 
 impl PartialEq for AField {
@@ -138,6 +139,7 @@ impl AStructType {
             fields.push(AField {
                 name: field.name.clone(),
                 type_key: ctx.resolve_type(&field.typ),
+                span: field.span,
             });
         }
 

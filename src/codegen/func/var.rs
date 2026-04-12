@@ -6,7 +6,6 @@ use crate::analyzer::ast::symbol::{ASymbol, SymbolKind};
 use crate::analyzer::ast::var_assign::AVarAssign;
 use crate::analyzer::mangling::mangle_name;
 use crate::analyzer::type_store::{GetType, TypeKey};
-use crate::lexer::pos::Locatable;
 use crate::parser::ast::op::Operator;
 
 use super::FnCodeGen;

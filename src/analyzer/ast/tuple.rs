@@ -3,6 +3,7 @@ use crate::analyzer::ast::r#struct::AField;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
+use crate::lexer::pos::Locatable;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::tuple::{TupleInit, TupleType};
 use std::fmt::{Display, Formatter};
@@ -54,6 +55,7 @@ impl ATupleType {
             fields.push(AField {
                 name: field_index.to_string(),
                 type_key: ctx.resolve_type(field_type),
+                span: *field_type.span(),
             })
         }
 
@@ -153,6 +155,7 @@ impl ATupleInit {
                 AField {
                     name: i.to_string(),
                     type_key: val.type_key,
+                    span: *val.span(),
                 },
                 val,
             ));

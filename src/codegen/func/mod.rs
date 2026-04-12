@@ -6,14 +6,13 @@ use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::codegen::convert::TypeConverter;
 use crate::codegen::error::CodeGenResult;
 use crate::codegen::scope::{CodegenScope, CodegenScopeKind, FromScope, LoopScope};
-use crate::lexer::pos::Locatable;
 use crate::mono_collector::MonoProg;
 use crate::parser::SrcInfo;
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
-use inkwell::debug_info::{DICompileUnit, DebugInfoBuilder};
+use inkwell::debug_info::{DICompileUnit, DIType, DebugInfoBuilder};
 use inkwell::module::{Linkage, Module};
 use inkwell::types::{AnyType, AnyTypeEnum, BasicType, BasicTypeEnum};
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
@@ -40,6 +39,9 @@ pub struct FnCodeGen<'a, 'ctx> {
     prog: &'a MonoProg,
     scopes: Vec<CodegenScope<'ctx>>,
     cur_block: Option<BasicBlock<'ctx>>,
+    // This is just here to prevent infinite recursion while generating debug info
+    // for self-referential types.
+    di_types: HashMap<TypeKey, DIType<'ctx>>,
 }
 
 /// The debug info context.
@@ -72,6 +74,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             prog,
             scopes: vec![CodegenScope::new_fn()],
             cur_block: None,
+            di_types: Default::default(),
         };
 
         fn_compiler.gen_fn(func)
