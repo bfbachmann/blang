@@ -407,6 +407,20 @@ impl<'a> TypeConverter<'a> {
         get_ptr_sized_int_type(self.ctx, self.ll_target_machine).into_int_type()
     }
 
+    /// Returns the size of a pointer on the target system in bytes.
+    pub fn size_of_ptr(&self) -> u32 {
+        self.ll_target_machine
+            .get_target_data()
+            .get_pointer_byte_size(None)
+    }
+
+    /// Returns the alignment of a pointer on the target system in bytes.
+    pub fn align_of_ptr(&self) -> u32 {
+        self.ll_target_machine
+            .get_target_data()
+            .get_abi_alignment(&self.ctx.ptr_type(AddressSpace::default()))
+    }
+
     /// Returns the size of the largest enum variant in bytes.
     fn max_enum_variant_size(&self, enum_type: &AEnumType) -> u64 {
         match self.largest_enum_variant_tk(enum_type) {

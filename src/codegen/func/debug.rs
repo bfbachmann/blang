@@ -23,7 +23,6 @@ use llvm_sys::debuginfo::{
 };
 use std::path::PathBuf;
 
-const DW_ATE_ADDRESS: LLVMDWARFTypeEncoding = 1;
 const DW_ATE_BOOLEAN: LLVMDWARFTypeEncoding = 2;
 const DW_ATE_FLOAT: LLVMDWARFTypeEncoding = 4;
 const DW_ATE_SIGNED: LLVMDWARFTypeEncoding = 5;
@@ -159,53 +158,51 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             return *di_type;
         }
 
-        let type_size = self.type_converter.size_of_type(type_key);
+        let type_size_bits = self.type_converter.size_of_type(type_key) * 8;
 
         let di_type = match self.type_converter.get_type(type_key) {
             AType::Bool => self
-                .gen_di_basic_type("bool", type_size, Some(DW_ATE_BOOLEAN))
+                .gen_di_basic_type("bool", type_size_bits, Some(DW_ATE_BOOLEAN))
                 .as_type(),
             AType::U8 => self
-                .gen_di_basic_type("u8", type_size, Some(DW_ATE_UNSIGNED))
+                .gen_di_basic_type("u8", type_size_bits, Some(DW_ATE_UNSIGNED_CHAR))
                 .as_type(),
             AType::I8 => self
-                .gen_di_basic_type("i8", type_size, Some(DW_ATE_SIGNED))
+                .gen_di_basic_type("i8", type_size_bits, Some(DW_ATE_SIGNED))
                 .as_type(),
             AType::U16 => self
-                .gen_di_basic_type("u16", type_size, Some(DW_ATE_UNSIGNED))
+                .gen_di_basic_type("u16", type_size_bits, Some(DW_ATE_UNSIGNED))
                 .as_type(),
             AType::I16 => self
-                .gen_di_basic_type("i16", type_size, Some(DW_ATE_SIGNED))
+                .gen_di_basic_type("i16", type_size_bits, Some(DW_ATE_SIGNED))
                 .as_type(),
             AType::U32 => self
-                .gen_di_basic_type("u32", type_size, Some(DW_ATE_UNSIGNED))
+                .gen_di_basic_type("u32", type_size_bits, Some(DW_ATE_UNSIGNED))
                 .as_type(),
             AType::I32 => self
-                .gen_di_basic_type("i32", type_size, Some(DW_ATE_SIGNED))
+                .gen_di_basic_type("i32", type_size_bits, Some(DW_ATE_SIGNED))
                 .as_type(),
             AType::F32 => self
-                .gen_di_basic_type("f32", type_size, Some(DW_ATE_FLOAT))
+                .gen_di_basic_type("f32", type_size_bits, Some(DW_ATE_FLOAT))
                 .as_type(),
             AType::I64 => self
-                .gen_di_basic_type("i64", type_size, Some(DW_ATE_SIGNED))
+                .gen_di_basic_type("i64", type_size_bits, Some(DW_ATE_SIGNED))
                 .as_type(),
             AType::U64 => self
-                .gen_di_basic_type("u64", type_size, Some(DW_ATE_UNSIGNED))
+                .gen_di_basic_type("u64", type_size_bits, Some(DW_ATE_UNSIGNED))
                 .as_type(),
             AType::F64 => self
-                .gen_di_basic_type("f64", type_size, Some(DW_ATE_FLOAT))
+                .gen_di_basic_type("f64", type_size_bits, Some(DW_ATE_FLOAT))
                 .as_type(),
             AType::Int => self
-                .gen_di_basic_type("int", type_size, Some(DW_ATE_SIGNED))
+                .gen_di_basic_type("int", type_size_bits, Some(DW_ATE_SIGNED))
                 .as_type(),
             AType::Uint => self
-                .gen_di_basic_type("uint", type_size, Some(DW_ATE_UNSIGNED))
+                .gen_di_basic_type("uint", type_size_bits, Some(DW_ATE_UNSIGNED))
                 .as_type(),
-            AType::Str => self
-                .gen_di_basic_type("str", type_size, Some(DW_ATE_ADDRESS))
-                .as_type(),
+            AType::Str => self.gen_di_str_type(type_key, type_size_bits).as_type(),
             AType::Char => self
-                .gen_di_basic_type("char", type_size, Some(DW_ATE_UNSIGNED_CHAR))
+                .gen_di_basic_type("char", type_size_bits, Some(DW_ATE_UNSIGNED_CHAR))
                 .as_type(),
             AType::Struct(struct_type) => self
                 .gen_di_struct_type(
@@ -252,7 +249,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     ) -> DICompositeType<'ctx> {
         let di_member_placeholders = fields
             .iter()
-            .map(|_ty| unsafe {
+            .map(|_| unsafe {
                 self.di_builder()
                     .unwrap()
                     .create_placeholder_derived_type(self.ll_ctx)
@@ -270,7 +267,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             di_file,
             span.start_pos.line,
             self.type_converter.size_of_type(tk) * 8, // Size in bits
-            self.type_converter.align_of_type(tk) * 8, // Alignment in bits
+            self.type_converter.align_of_type(tk) * 8, // Align bits
             LLVMDIFlags::PUBLIC,
             None,
             &di_member_placeholders_as_ditype,
@@ -309,6 +306,94 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         di_struct_type
     }
 
+    /// Generates debug info for the `str` type.
+    fn gen_di_str_type(&mut self, tk: TypeKey, type_size_bits: u64) -> DICompositeType<'ctx> {
+        let di_file = self.di_ctx.as_ref().unwrap().di_cu.get_file();
+
+        let ptr_size_bits = self.type_converter.size_of_ptr() as u64 * 8;
+        let ptr_align_bits = self.type_converter.align_of_ptr() * 8;
+        let di_pointee_type = self
+            .gen_di_basic_type("u8", 8, Some(DW_ATE_UNSIGNED_CHAR))
+            .as_type();
+        let di_ptr_type = self.di_builder().unwrap().create_pointer_type(
+            "ptr",
+            di_pointee_type,
+            ptr_size_bits,
+            ptr_align_bits,
+            AddressSpace::default(),
+        );
+        let di_len_type = self
+            .gen_di_basic_type("uint", ptr_size_bits, Some(DW_ATE_UNSIGNED))
+            .as_type();
+
+        let di_member_types = [di_ptr_type.as_type(), di_len_type];
+
+        let di_member_placeholders = di_member_types
+            .iter()
+            .map(|_| unsafe {
+                self.di_builder()
+                    .unwrap()
+                    .create_placeholder_derived_type(self.ll_ctx)
+            })
+            .collect::<Vec<_>>();
+        let di_member_placeholders_as_ditype = di_member_placeholders
+            .iter()
+            .map(|ty| ty.as_type())
+            .collect::<Vec<_>>();
+
+        let di_struct_type = self.di_builder().unwrap().create_struct_type(
+            self.cur_di_scope(),
+            "str",
+            di_file,
+            0,
+            type_size_bits,
+            self.type_converter.align_of_type(tk) * 8, // Align bits
+            LLVMDIFlags::PUBLIC,
+            None,
+            &di_member_placeholders_as_ditype,
+            0,
+            None,
+            "str",
+        );
+
+        let di_ptr_member_type = self.di_builder().unwrap().create_member_type(
+            di_struct_type.as_debug_info_scope(),
+            "ptr",
+            di_file,
+            0,
+            ptr_size_bits,
+            ptr_align_bits,
+            0,
+            LLVMDIFlags::PUBLIC,
+            di_ptr_type.as_type(),
+        );
+
+        let di_len_member_type = self.di_builder().unwrap().create_member_type(
+            di_struct_type.as_debug_info_scope(),
+            "len",
+            di_file,
+            0,
+            ptr_size_bits,
+            ptr_align_bits,
+            ptr_size_bits,
+            LLVMDIFlags::PUBLIC,
+            di_len_type,
+        );
+
+        unsafe {
+            self.di_builder()
+                .unwrap()
+                .replace_placeholder_derived_type(di_member_placeholders[0], di_ptr_member_type);
+        }
+        unsafe {
+            self.di_builder()
+                .unwrap()
+                .replace_placeholder_derived_type(di_member_placeholders[1], di_len_member_type);
+        }
+
+        di_struct_type
+    }
+
     /// Generates debug info about an enum type.
     fn gen_di_enum_type(&self, tk: TypeKey, enum_type: &AEnumType) -> DIBasicType<'ctx> {
         // TODO: Implement properly.
@@ -332,7 +417,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         self.di_builder().unwrap().create_array_type(
             elem_type,
             self.type_converter.size_of_type(tk) * 8, // Size in bits
-            self.type_converter.align_of_type(tk) * 8, // Alignment in bits
+            self.type_converter.align_of_type(tk) * 8, // Align bits
             #[allow(clippy::single_range_in_vec_init)]
             &[(0i64..array_type.len as i64)],
         )
@@ -381,14 +466,14 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     fn gen_di_basic_type(
         &self,
         type_name: &str,
-        type_size: u64,
+        type_size_bits: u64,
         encoding: Option<LLVMDWARFTypeEncoding>,
     ) -> DIBasicType<'ctx> {
         self.di_builder()
             .unwrap()
             .create_basic_type(
                 type_name,
-                type_size * 8, // Size in bits
+                type_size_bits,
                 encoding.unwrap_or_default(),
                 LLVMDIFlags::PUBLIC,
             )
