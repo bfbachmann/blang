@@ -366,17 +366,24 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         for (ll_arg_val, arg) in ll_fn_params.into_iter().zip(func.signature.args.iter()) {
             let arg_type = self.prog.type_store.get_type(arg.type_key);
             let is_composite = arg_type.is_composite();
-            let optimization_enabled =
-                self.prog.config.optimization_level != OptimizationLevel::None;
+
+            // TODO: I'm not sure if it even makes sense to spill args onto the stack
+            // in so many cases. Technically, we only need to do this if the argument
+            // needs an address in memory that is guaranteed to be in this function's stack
+            // frame. The only such case I can think of is if the value is going to be mutated
+            // while referenced. As an optimization, we could try to detect this and flag
+            // it during analysis to catch this case. In most cases, this shouldn't happen, so we
+            // shouldn't be spilling so often. Note that spilling is basically required if debug
+            // info is being emitted.
+            let force_spill = self.prog.config.optimization_level == OptimizationLevel::None
+                || self.prog.config.emit_debug_info;
 
             // Composite types are passed as pointers and don't need to be copied to the callee
             // stack because they point to memory on the caller's stack that is safe to modify.
             // We avoid doing this if optimization is disabled because it makes it hard for
             // debuggers to find the location of the value in memory if it's not on within the
             // function's stack frame.
-            if is_composite && optimization_enabled {
-                self.insert_var(arg.name.to_string(), ll_arg_val.into_pointer_value());
-            } else {
+            if force_spill || !is_composite {
                 let ll_arg_ptr = self.create_var(arg.name.as_str(), arg.type_key, ll_arg_val);
 
                 // Build debug info for the declaration.
@@ -387,6 +394,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                     ll_arg_ptr,
                     ll_arg_val,
                 );
+            } else {
+                self.insert_var(arg.name.to_string(), ll_arg_val.into_pointer_value());
             }
         }
 
