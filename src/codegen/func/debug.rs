@@ -1,4 +1,3 @@
-use crate::analyzer::ast::arg::AArg;
 use crate::analyzer::ast::array::AArrayType;
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::pointer::APointerType;
@@ -59,8 +58,8 @@ pub fn new_di_ctx<'ctx>(
 }
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
-    fn di_builder(&self) -> Option<&DebugInfoBuilder<'ctx>> {
-        self.di_ctx.as_ref().map(|c| &c.di_builder)
+    fn di_builder(&self) -> &DebugInfoBuilder<'ctx> {
+        self.di_ctx.as_ref().map(|c| &c.di_builder).unwrap()
     }
 
     /// Generates and sets debug info about a function on the current function.
@@ -73,7 +72,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let di_file = self.di_file_from_id(func.span.file_id);
         let di_subroutine_type = self.gen_di_subroutine_type(&func.signature);
 
-        let di_subprog = self.di_builder().unwrap().create_function(
+        let di_subprog = self.di_builder().create_function(
             di_scope,
             &func.signature.name,
             Some(mangled_name),
@@ -90,26 +89,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         self.ll_fn.unwrap().set_subprogram(di_subprog);
     }
 
-    pub(crate) fn gen_di_fn_param(&mut self, arg: &AArg, arg_no: u32) {
-        if self.di_ctx.is_none() {
-            return;
-        }
-
-        let di_type = self.gen_di_type(arg.type_key);
-        self.di_builder().unwrap().create_parameter_variable(
-            self.cur_di_scope(),
-            &arg.name,
-            arg_no,
-            self.di_ctx.as_ref().unwrap().di_cu.get_file(),
-            arg.span.start_pos.line,
-            di_type,
-            true,
-            LLVMDIFlags::PUBLIC,
-        );
-
-        // TODO: Set arg value.
-    }
-
     /// Generates debug info about a function type.
     fn gen_di_subroutine_type(&mut self, fn_sig: &AFnSig) -> DISubroutineType<'ctx> {
         let di_file = self.di_file_from_id(fn_sig.span.file_id);
@@ -122,7 +101,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 if ret_type.is_composite() {
                     let ptr_type_name = format!("*{}", ret_type.name());
                     let di_type = self.gen_di_type(ret_tk);
-                    let di_ptr_type = self.di_builder().unwrap().create_pointer_type(
+                    let di_ptr_type = self.di_builder().create_pointer_type(
                         &ptr_type_name,
                         di_type,
                         64,
@@ -144,7 +123,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             .map(|arg| self.gen_di_type(arg.type_key))
             .collect();
 
-        self.di_builder().unwrap().create_subroutine_type(
+        self.di_builder().create_subroutine_type(
             di_file,
             di_ret_type,
             &di_param_types,
@@ -224,10 +203,17 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             AType::Array(array_type) => self.gen_di_array_type(type_key, array_type).as_type(),
             AType::Pointer(ptr_type) => self.gen_di_ptr_type(type_key, ptr_type).as_type(),
             AType::Function(_) => {
+                let ptr_size_bits = self.type_converter.size_of_ptr() as u64 * 8;
+                let ptr_align_bits = self.type_converter.align_of_ptr() * 8;
                 let di_void_type = self.gen_di_void_type();
                 self.di_builder()
-                    .unwrap()
-                    .create_pointer_type("ptr", di_void_type, 0, 0, AddressSpace::default())
+                    .create_pointer_type(
+                        "ptr",
+                        di_void_type,
+                        ptr_size_bits,
+                        ptr_align_bits,
+                        AddressSpace::default(),
+                    )
                     .as_type()
             }
             AType::Spec(_) | AType::Generic(_) | AType::Unknown(_) => {
@@ -251,7 +237,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             .iter()
             .map(|_| unsafe {
                 self.di_builder()
-                    .unwrap()
                     .create_placeholder_derived_type(self.ll_ctx)
             })
             .collect::<Vec<_>>();
@@ -261,7 +246,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             .collect::<Vec<_>>();
 
         let di_file = self.di_ctx.as_ref().unwrap().di_cu.get_file();
-        let di_struct_type = self.di_builder().unwrap().create_struct_type(
+        let di_struct_type = self.di_builder().create_struct_type(
             self.cur_di_scope(),
             name,
             di_file,
@@ -284,7 +269,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             let field_type_size = self.type_converter.size_of_type(field.type_key) * 8;
             let field_type_align = self.type_converter.align_of_type(field.type_key) * 8;
 
-            let di_member_type = self.di_builder().unwrap().create_member_type(
+            let di_member_type = self.di_builder().create_member_type(
                 di_struct_type.as_debug_info_scope(),
                 &field.name,
                 di_file,
@@ -297,7 +282,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             );
             unsafe {
                 self.di_builder()
-                    .unwrap()
                     .replace_placeholder_derived_type(*di_placeholder, di_member_type);
             }
             offset += field_type_size;
@@ -315,7 +299,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let di_pointee_type = self
             .gen_di_basic_type("u8", 8, Some(DW_ATE_UNSIGNED_CHAR))
             .as_type();
-        let di_ptr_type = self.di_builder().unwrap().create_pointer_type(
+        let di_ptr_type = self.di_builder().create_pointer_type(
             "ptr",
             di_pointee_type,
             ptr_size_bits,
@@ -332,7 +316,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             .iter()
             .map(|_| unsafe {
                 self.di_builder()
-                    .unwrap()
                     .create_placeholder_derived_type(self.ll_ctx)
             })
             .collect::<Vec<_>>();
@@ -341,7 +324,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             .map(|ty| ty.as_type())
             .collect::<Vec<_>>();
 
-        let di_struct_type = self.di_builder().unwrap().create_struct_type(
+        let di_struct_type = self.di_builder().create_struct_type(
             self.cur_di_scope(),
             "str",
             di_file,
@@ -356,7 +339,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             "str",
         );
 
-        let di_ptr_member_type = self.di_builder().unwrap().create_member_type(
+        let di_ptr_member_type = self.di_builder().create_member_type(
             di_struct_type.as_debug_info_scope(),
             "ptr",
             di_file,
@@ -368,7 +351,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             di_ptr_type.as_type(),
         );
 
-        let di_len_member_type = self.di_builder().unwrap().create_member_type(
+        let di_len_member_type = self.di_builder().create_member_type(
             di_struct_type.as_debug_info_scope(),
             "len",
             di_file,
@@ -382,12 +365,10 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         unsafe {
             self.di_builder()
-                .unwrap()
                 .replace_placeholder_derived_type(di_member_placeholders[0], di_ptr_member_type);
         }
         unsafe {
             self.di_builder()
-                .unwrap()
                 .replace_placeholder_derived_type(di_member_placeholders[1], di_len_member_type);
         }
 
@@ -398,7 +379,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     fn gen_di_enum_type(&self, tk: TypeKey, enum_type: &AEnumType) -> DIBasicType<'ctx> {
         // TODO: Implement properly.
         self.di_builder()
-            .unwrap()
             .create_basic_type(
                 &enum_type.name,
                 self.type_converter.size_of_type(tk) * 8, // Size in bits
@@ -414,7 +394,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             Some(elem_tk) => self.gen_di_type(elem_tk),
             None => self.gen_di_void_type(),
         };
-        self.di_builder().unwrap().create_array_type(
+        self.di_builder().create_array_type(
             elem_type,
             self.type_converter.size_of_type(tk) * 8, // Size in bits
             self.type_converter.align_of_type(tk) * 8, // Align bits
@@ -428,7 +408,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Make a dummy type first so we can avoid stack overflows in cases where types
         // refer to themselves. This is only a concern with pointer types.
         let di_pointee_type = self.gen_di_void_type();
-        let di_ptr_type = self.di_builder().unwrap().create_pointer_type(
+        let di_ptr_type = self.di_builder().create_pointer_type(
             format!("ptr::<{}>", ptr_type.pointee_type_key).as_str(),
             di_pointee_type,
             0,
@@ -439,7 +419,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // Now we can generate the actual type without worrying about infinite recursion.
         let di_pointee_type = self.gen_di_type(ptr_type.pointee_type_key);
-        self.di_builder().unwrap().create_pointer_type(
+        self.di_builder().create_pointer_type(
             format!("ptr::<{}>", ptr_type.pointee_type_key).as_str(),
             di_pointee_type,
             0,
@@ -451,7 +431,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Generates debug info for an empty type.
     fn gen_di_void_type(&self) -> DIType<'ctx> {
         self.di_builder()
-            .unwrap()
             .create_basic_type(
                 "void",
                 0,
@@ -470,7 +449,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         encoding: Option<LLVMDWARFTypeEncoding>,
     ) -> DIBasicType<'ctx> {
         self.di_builder()
-            .unwrap()
             .create_basic_type(
                 type_name,
                 type_size_bits,
@@ -482,11 +460,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Creates debug info about the location of a section of source code.
     fn gen_di_location(&self, pos: &Position) -> DILocation<'ctx> {
-        self.di_ctx
-            .as_ref()
-            .unwrap()
-            .di_builder
-            .create_debug_location(self.ll_ctx, pos.line, pos.col, self.cur_di_scope(), None)
+        self.di_builder().create_debug_location(
+            self.ll_ctx,
+            pos.line,
+            pos.col,
+            self.cur_di_scope(),
+            None,
+        )
     }
 
     /// Returns the current debug info scope.
@@ -532,7 +512,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         let di_file = self.di_ctx.as_ref().unwrap().di_cu.get_file();
         let di_type = self.gen_di_type(type_key);
-        let di_var = self.di_builder().unwrap().create_auto_variable(
+        let di_var = self.di_builder().create_auto_variable(
             self.cur_di_scope(),
             name,
             di_file,
@@ -559,7 +539,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         unsafe {
             LLVMDIBuilderInsertDeclareRecordBefore(
-                self.di_ctx.as_ref().unwrap().di_builder.as_mut_ptr(),
+                self.di_builder().as_mut_ptr(),
                 ll_var_ptr.as_value_ref(),
                 di_var.as_mut_ptr(),
                 ll_dummy_expr.as_mut_ptr(),
@@ -578,7 +558,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         pos: &Position,
         ll_val: BasicValueEnum<'ctx>,
     ) {
-        let di_builder = self.di_builder().unwrap();
+        let di_builder = self.di_builder();
 
         let ll_dummy_expr = di_builder.create_expression(vec![]);
         let ll_inst = self

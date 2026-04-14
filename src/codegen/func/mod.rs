@@ -16,6 +16,7 @@ use inkwell::debug_info::{DICompileUnit, DIType, DebugInfoBuilder};
 use inkwell::module::{Linkage, Module};
 use inkwell::types::{AnyType, AnyTypeEnum, BasicType, BasicTypeEnum};
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
+use inkwell::OptimizationLevel;
 use std::collections::HashMap;
 
 mod closure;
@@ -354,28 +355,38 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // Skip the first function argument if it is a special argument that holds the pointer to
         // the location to which the return value will be written. We'll know that this is the case
         // if the LLVM function value has one extra param (argument).
-        let (ll_fn_params, mut arg_index) =
-            if ll_fn.count_params() == (func.signature.args.len() + 1) as u32 {
-                let mut params = ll_fn.get_params();
-                params.remove(0);
-                (params, 1)
-            } else {
-                (ll_fn.get_params(), 0)
-            };
+        let ll_fn_params = if ll_fn.count_params() == (func.signature.args.len() + 1) as u32 {
+            let mut params = ll_fn.get_params();
+            params.remove(0);
+            params
+        } else {
+            ll_fn.get_params()
+        };
 
         for (ll_arg_val, arg) in ll_fn_params.into_iter().zip(func.signature.args.iter()) {
-            // Insert debug info about the arg.
-            self.gen_di_fn_param(arg, arg_index);
-            arg_index += 1;
-
             let arg_type = self.prog.type_store.get_type(arg.type_key);
+            let is_composite = arg_type.is_composite();
+            let optimization_enabled =
+                self.prog.config.optimization_level != OptimizationLevel::None;
 
             // Composite types are passed as pointers and don't need to be copied to the callee
             // stack because they point to memory on the caller's stack that is safe to modify.
-            if arg_type.is_composite() {
+            // We avoid doing this if optimization is disabled because it makes it hard for
+            // debuggers to find the location of the value in memory if it's not on within the
+            // function's stack frame.
+            if is_composite && optimization_enabled {
                 self.insert_var(arg.name.to_string(), ll_arg_val.into_pointer_value());
             } else {
-                self.create_var(arg.name.as_str(), arg.type_key, ll_arg_val);
+                let ll_arg_ptr = self.create_var(arg.name.as_str(), arg.type_key, ll_arg_val);
+
+                // Build debug info for the declaration.
+                self.gen_di_declare(
+                    &arg.name,
+                    &arg.span.start_pos,
+                    arg.type_key,
+                    ll_arg_ptr,
+                    ll_arg_val,
+                );
             }
         }
 
