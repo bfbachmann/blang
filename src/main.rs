@@ -58,7 +58,7 @@ fn main() {
             .arg(
                 arg!(-r --"reloc-mode" <RELOC_MODE> "Relocation mode")
                     .required(false)
-                    .value_parser(["default", "pic", "dynamic-no-pic", "static.rs"]),
+                    .value_parser(["default", "pic", "dynamic-no-pic", "static"]),
             )
             .arg(
                 arg!(-q --quiet ... "Don't print log messages")
@@ -91,7 +91,7 @@ fn main() {
             ),
     );
 
-    // Add the "check" subcommand for performing static.rs analysis.
+    // Add the "check" subcommand for performing static analysis.
     let cmd = cmd.subcommand(
         Command::new("check")
             .about("Perform static analysis only")
@@ -144,7 +144,7 @@ fn main() {
                         "default" => RelocMode::Default,
                         "pic" => RelocMode::PIC,
                         "dynamic-no-pic" => RelocMode::DynamicNoPic,
-                        "static.rs" => RelocMode::Static,
+                        "static" => RelocMode::Static,
                         _ => unreachable!(),
                     },
 
@@ -282,7 +282,7 @@ impl Display for AnalyzeProgError {
     }
 }
 
-/// Performs static.rs analysis on the source code starting at the given module path. Returns the
+/// Performs static analysis on the source code starting at the given module path. Returns the
 /// results of analysis, or an error message.
 #[flame]
 fn analyze(

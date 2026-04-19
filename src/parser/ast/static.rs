@@ -8,7 +8,7 @@ use crate::parser::error::ParseResult;
 use crate::parser::file_parser::FileParser;
 use std::fmt::{Display, Formatter};
 
-/// Represents a `static.rs` value declaration.
+/// Represents a `static` value declaration.
 #[derive(Debug, Clone)]
 pub struct Static {
     pub name: Name,
