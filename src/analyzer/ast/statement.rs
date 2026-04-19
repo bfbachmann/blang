@@ -63,7 +63,7 @@ impl fmt::Display for AStatement {
                 write!(f, "const {const_decl}")
             }
             AStatement::Static(static_decl) => {
-                write!(f, "static.rs {static_decl}")
+                write!(f, "static {static_decl}")
             }
         }
     }
