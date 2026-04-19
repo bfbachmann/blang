@@ -169,7 +169,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let ll_struct_type = self.type_converter.get_struct_type(tuple_init.type_key);
 
         // Allocate space for the struct on the stack.
-        let ll_struct_ptr = self.stack_alloc("tuple_init_ptr", tuple_init.type_key);
+        let ll_struct_ptr = self.gen_alloc("tuple_init_ptr", tuple_init.type_key);
 
         // Assign values to initialized tuple fields.
         for (i, field_val) in tuple_init.values.iter().enumerate() {
@@ -229,7 +229,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let ll_collection_ptr = if ll_collection_val.is_pointer_value() {
                     ll_collection_val.into_pointer_value()
                 } else {
-                    let ll_ptr = self.stack_alloc("collection", index.collection_expr.type_key);
+                    let ll_ptr = self.gen_alloc("collection", index.collection_expr.type_key);
                     self.copy_value(ll_collection_val, ll_ptr, index.collection_expr.type_key);
                     ll_ptr
                 };
@@ -316,7 +316,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 // Init array index and jump to condition branch.
                 let ll_index_type = self.type_converter.ptr_sized_int_type();
                 let ll_index_ptr =
-                    self.build_entry_alloc("array_index_ptr", ll_index_type.as_basic_type_enum());
+                    self.gen_gc_malloc("array_index_ptr", ll_index_type.as_basic_type_enum());
                 self.ll_builder
                     .build_store(ll_index_ptr, ll_index_type.const_int(0, false))
                     .unwrap();
@@ -447,7 +447,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
         // Allocate space for the struct on the stack.
         let ll_struct_ptr =
-            self.build_entry_alloc("enum_init_ptr", ll_struct_type.as_basic_type_enum());
+            self.gen_gc_malloc("enum_init_ptr", ll_struct_type.as_basic_type_enum());
 
         // Set the variant number on the struct.
         let ll_number_field_ptr = self
@@ -496,7 +496,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let ll_struct_type = self.type_converter.get_struct_type(struct_init.type_key);
 
         // Allocate space for the struct on the stack.
-        let ll_struct_ptr = self.stack_alloc(
+        let ll_struct_ptr = self.gen_alloc(
             format!("{}.init_ptr", struct_type.name).as_str(),
             struct_init.type_key,
         );
@@ -565,7 +565,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // structured types.
         let mut args: Vec<BasicMetadataValueEnum> = vec![];
         if ll_fn_type.count_param_types() == call.args.len() as u32 + 1 {
-            let ptr = self.stack_alloc("ret_val_ptr", call.maybe_ret_type_key?);
+            let ptr = self.gen_alloc("ret_val_ptr", call.maybe_ret_type_key?);
             args.push(ptr.into());
             1
         } else {
@@ -583,7 +583,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             // the stack and use their pointers as the arguments rather than the constant values
             // themselves.
             if !ll_arg_val.is_pointer_value() && is_composite {
-                let ll_arg_ptr = self.stack_alloc(format!("arg_{i}_literal").as_str(), arg_tk);
+                let ll_arg_ptr = self.gen_alloc(format!("arg_{i}_literal").as_str(), arg_tk);
                 self.copy_value(ll_arg_val, ll_arg_ptr, arg_tk);
                 args.push(ll_arg_ptr.into());
             } else {
@@ -723,7 +723,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
                 _ => {
                     let ll_operand_val = self.gen_expr(operand_expr);
-                    let ll_ptr = self.stack_alloc("referenced_val_ptr", operand_expr.type_key);
+                    let ll_ptr = self.gen_alloc("referenced_val_ptr", operand_expr.type_key);
                     self.copy_value(ll_operand_val, ll_ptr, operand_expr.type_key);
                     ll_ptr.as_basic_value_enum()
                 }

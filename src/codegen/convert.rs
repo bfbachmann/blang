@@ -356,6 +356,11 @@ impl<'a> TypeConverter<'a> {
     /// target system.
     pub fn size_of_type(&self, type_key: TypeKey) -> u64 {
         let ll_type = self.get_basic_type(type_key);
+        self.abi_size_of_type(ll_type)
+    }
+
+    /// Returns the size LLVM ABI size of the given type in bytes.
+    pub fn abi_size_of_type(&self, ll_type: BasicTypeEnum) -> u64 {
         self.ll_target_machine
             .get_target_data()
             .get_abi_size(&ll_type)

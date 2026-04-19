@@ -618,6 +618,8 @@ mod tests {
                 "-Wextra",
                 "-Wpedantic",
                 "-Werror",
+                "-L=-L/opt/homebrew/Cellar/bdw-gc/8.2.12/lib",
+                "-lgc",
                 "-o",
                 exe_path,
             ])

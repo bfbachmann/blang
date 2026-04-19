@@ -13,10 +13,12 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::targets::{FileType, TargetMachine};
-use inkwell::values::BasicMetadataValueEnum;
+use inkwell::types::BasicTypeEnum;
+use inkwell::values::{BasicMetadataValueEnum, PointerValue};
+use inkwell::AddressSpace;
 use std::collections::HashMap;
-use std::path::Path;
 use std::fs;
+use std::path::Path;
 
 pub struct ModuleCodeGen<'a, 'ctx> {
     mod_id: ModID,
@@ -62,6 +64,9 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
             );
         }
 
+        // Define functions that support the runtime (GC, etc).
+        self.gen_runtime_fns();
+
         // Define extern functions.
         if let Some(extern_fns) = self.prog.extern_fns.get(&self.mod_id) {
             for extern_fn in extern_fns.values() {
@@ -92,7 +97,7 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
                     self.type_converter.type_mapping(),
                     &self.prog.type_monomorphizations,
                 );
-                let ll_main_fn = self.ll_mod.get_function(&mangled_name).unwrap();
+
                 let ll_wrapper_fn = self.ll_mod.add_function(
                     "main",
                     self.ll_ctx.void_type().fn_type(&[], false),
@@ -100,6 +105,15 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
                 );
                 let ll_entry_block = self.ll_ctx.append_basic_block(ll_wrapper_fn, "entry");
                 self.ll_builder.position_at_end(ll_entry_block);
+
+                // Generate GC initialization call.
+                let ll_gc_init_fn = self.ll_mod.get_function("GC_init").unwrap();
+                self.ll_builder
+                    .build_call(ll_gc_init_fn, &[], "GC_init")
+                    .unwrap();
+
+                // Generate the call to the program's main.
+                let ll_main_fn = self.ll_mod.get_function(&mangled_name).unwrap();
                 self.ll_builder.build_call(ll_main_fn, &[], "main").unwrap();
                 self.ll_builder.build_return(None).unwrap();
             }
@@ -111,6 +125,31 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
         }
 
         Ok(())
+    }
+
+    /// Generates built-in functions (i.e. stuff for the language runtime and GC).
+    fn gen_runtime_fns(&self) {
+        // Generate `GC_init` for initializing the garbage collector.
+        let ll_fn_type = self.ll_ctx.void_type().fn_type(&[], false);
+        self.ll_mod.add_function("GC_init", ll_fn_type, None);
+
+        // Generate `GC_malloc` for allocating garbage-collected memory.
+        let ll_fn_type = self
+            .ll_ctx
+            .ptr_type(AddressSpace::default())
+            .fn_type(&[self.type_converter.ptr_sized_int_type().into()], false);
+        self.ll_mod.add_function("GC_malloc", ll_fn_type, None);
+
+        // Generate `GC_debug_malloc` for allocating garbage-collected memory with debug info if
+        // debug info is enabled.
+        if self.prog.config.emit_debug_info {
+            let ll_fn_type = self
+                .ll_ctx
+                .ptr_type(AddressSpace::default())
+                .fn_type(&[self.type_converter.ptr_sized_int_type().into()], false);
+            self.ll_mod
+                .add_function("GC_debug_malloc", ll_fn_type, None);
+        }
     }
 
     /// Defines and generates all mono items (functions) in the module.

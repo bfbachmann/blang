@@ -20,7 +20,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         type_key: TypeKey,
         ll_val: BasicValueEnum<'ctx>,
     ) -> PointerValue<'ctx> {
-        let ll_dst_ptr = self.stack_alloc(name, type_key);
+        let ll_dst_ptr = self.gen_alloc(name, type_key);
         self.copy_value(ll_val, ll_dst_ptr, type_key);
         self.insert_var(name.to_string(), ll_dst_ptr);
         ll_dst_ptr
@@ -109,7 +109,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             (SymbolKind::Const, Some(mod_id)) => {
                 if let Some(consts) = self.prog.mod_consts.get(mod_id) {
                     if let Some(const_) = consts.get(name) {
-                        let ll_ptr = self.stack_alloc(name, const_.type_key);
+                        let ll_ptr = self.gen_alloc(name, const_.type_key);
                         let ll_val = self.gen_const_expr(const_);
                         self.copy_value(ll_val, ll_ptr, const_.type_key);
                         return ll_ptr;

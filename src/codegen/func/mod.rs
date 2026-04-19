@@ -14,9 +14,9 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::debug_info::{DICompileUnit, DIType, DebugInfoBuilder};
 use inkwell::module::{Linkage, Module};
-use inkwell::types::{AnyType, AnyTypeEnum, BasicType, BasicTypeEnum};
+use inkwell::types::{AnyType, AnyTypeEnum, AsTypeRef, BasicType, BasicTypeEnum};
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
-use inkwell::OptimizationLevel;
+use inkwell::{AddressSpace, OptimizationLevel};
 use std::collections::HashMap;
 
 mod closure;
@@ -367,7 +367,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             let arg_type = self.prog.type_store.get_type(arg.type_key);
             let is_composite = arg_type.is_composite();
 
-            // TODO: I'm not sure if it even makes sense to spill args onto the stack
+            // TODO: I'm not sure if it even makes sense to spill args onto the stack/memory
             // in so many cases. Technically, we only need to do this if the argument
             // needs an address in memory that is guaranteed to be in this function's stack
             // frame. The only such case I can think of is if the value is going to be mutated
@@ -453,35 +453,31 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Allocates space on the stack in the current function's entry block to store
     /// a value of the given type.
-    fn stack_alloc(&mut self, name: &str, type_key: TypeKey) -> PointerValue<'ctx> {
+    fn gen_alloc(&mut self, name: &str, type_key: TypeKey) -> PointerValue<'ctx> {
         let ll_type = self.type_converter.get_basic_type(type_key);
-        self.build_entry_alloc(name, ll_type)
+        self.gen_gc_malloc(name, ll_type)
     }
 
-    /// Allocates space on the stack in the current function's entry block to store
-    /// a value of the given LLVM type.
-    fn build_entry_alloc(&mut self, name: &str, ll_typ: BasicTypeEnum<'ctx>) -> PointerValue<'ctx> {
-        let entry = self.ll_fn.unwrap().get_first_basic_block().unwrap();
-
-        // Switch to the beginning of the entry block if we're not already there.
-        let prev_block = match entry.get_first_instruction() {
-            Some(first_instr) => {
-                self.ll_builder.position_before(&first_instr);
-                self.cur_block
-            }
-            None => self.set_current_block(entry),
+    /// Allocates space on the GC heap to store the given type.
+    fn gen_gc_malloc(&mut self, name: &str, ll_type: BasicTypeEnum<'ctx>) -> PointerValue<'ctx> {
+        // Use the debug version of the allocation function for debug builds.
+        let fn_name = match self.prog.config.emit_debug_info {
+            true => "GC_malloc",
+            false => "GC_debug_malloc",
         };
+        let ll_fn = self.ll_mod.get_function(fn_name).unwrap();
 
-        let ll_ptr = self
-            .ll_builder
-            .build_alloca(ll_typ, format!("{name}_ptr").as_str())
-            .unwrap();
-
-        // Make sure we continue from where we left off as our builder position may have changed
-        // in this function.
-        self.set_current_block(prev_block.unwrap());
-
-        ll_ptr
+        // Generate a call to it with the size of the type as its argument and return the pointer
+        // it returns.
+        let ll_value = self
+            .type_converter
+            .get_const_int(self.type_converter.abi_size_of_type(ll_type), false);
+        self.ll_builder
+            .build_call(ll_fn, &[ll_value.into()], name)
+            .unwrap()
+            .try_as_basic_value()
+            .unwrap_basic()
+            .into_pointer_value()
     }
 
     /// Builds a load instruction to load data from a pointer in `ll_ptr` if
