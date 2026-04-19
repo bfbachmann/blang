@@ -115,6 +115,7 @@ jobs:
           -Denable_cplusplus=${{ matrix.enable_cplusplus }} 
           -Denable_threads=${{ matrix.enable_threads }} 
           -Denable_werror
+          -Doptimize=ReleaseFast
 
       - name: Upload static libs
         uses: actions/upload-artifact@v7
