@@ -1,0 +1,123 @@
+# This workflow uses Zig and its excellent cross-compilation support to test
+# compiling for multiple platforms. No tests are actually run since it would
+# require emulation.
+name: Zig Build BDWGC
+
+on:
+  push:
+    paths:
+      - .github/workflows/zig-build-bdwgc.yaml
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.ttriple }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        zig_version: [ "0.16.0" ]
+        ttriple: [
+          aarch64-linux-gnu,
+          aarch64-linux-musl,
+          aarch64-macos-none,
+          #aarch64_be-linux-gnu,
+          aarch64_be-linux-musl,
+          #arc-linux-gnu, # FIXME: __linux__ macro is not predefined
+          arm-linux-gnueabi,
+          arm-linux-gnueabihf,
+          arm-linux-musleabi,
+          #arm-linux-musleabihf,
+          armeb-linux-gnueabi,
+          #armeb-linux-gnueabihf,
+          #armeb-linux-musleabi,
+          armeb-linux-musleabihf,
+          loongarch64-linux-gnu,
+          #loongarch64-linux-gnusf, # FIXME: LLVM error in memmoveFast
+          loongarch64-linux-musl,
+          #m68k-linux-gnu, # FIXME: No available targets compatible with triple
+          #m68k-linux-musl, # FIXME: No available targets compatible with triple
+          #mips-linux-gnueabi,
+          #mips-linux-gnueabihf,
+          mips-linux-musleabi,
+          mips-linux-musleabihf,
+          mips64-linux-gnuabi64,
+          #mips64-linux-gnuabin32,
+          mips64-linux-muslabi64,
+          mips64-linux-muslabin32,
+          #mips64el-linux-gnuabi64,
+          mips64el-linux-gnuabin32,
+          mips64el-linux-muslabi64,
+          #mips64el-linux-muslabin32,
+          mipsel-linux-gnueabi,
+          #mipsel-linux-gnueabihf,
+          mipsel-linux-musleabi,
+          mipsel-linux-musleabihf,
+          #powerpc-linux-gnueabi,
+          powerpc-linux-gnueabihf,
+          #powerpc-linux-musleabi,
+          powerpc-linux-musleabihf,
+          powerpc64-linux-gnu,
+          #powerpc64-linux-musl,
+          #powerpc64le-linux-gnu,
+          powerpc64le-linux-musl,
+          riscv32-linux-gnu,
+          riscv32-linux-musl,
+          riscv64-linux-gnu,
+          riscv64-linux-musl,
+          s390x-linux-gnu,
+          s390x-linux-musl,
+          sparc-linux-gnu,
+          sparc64-linux-gnu,
+          thumb-linux-musleabi,
+          #thumb-linux-musleabihf,
+          #thumbeb-linux-musleabi,
+          thumbeb-linux-musleabihf,
+          wasm32-wasi-musl,
+          #x86-linux-gnu,
+          x86-linux-musl,
+          x86_64-linux-gnu.2.27, # with a glibc version
+          x86_64-linux-gnux32,
+          #x86_64-linux-musl,
+          x86_64-linux-muslx32,
+          x86_64-macos-none,
+        ]
+        enable_cplusplus: [ false ]
+        enable_threads: [ true ]
+        linkage: [ static ]
+        exclude:
+          - enable_threads: true
+            ttriple: wasm32-wasi-musl
+          - linkage: static # FIXME: ignoring -fno-PIC option
+            ttriple: mips64-linux-muslabi64
+          - linkage: static # FIXME: ignoring -fno-PIC option
+            ttriple: mips64el-linux-muslabi64
+
+    steps:
+      - name: Download BDWGC source
+        uses: actions/checkout@v6
+        with:
+          repository: bdwgc/bdwgc
+          ref: master
+          path: bdwgc
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ matrix.zig_version }}
+
+      - name: Build
+        working-directory: ${{ github.workspace }}/bdwgc
+        run: >
+          zig build
+          -Dtarget=${{ matrix.ttriple }} 
+          -Dlinkage=${{ matrix.linkage }} 
+          -Denable_cplusplus=${{ matrix.enable_cplusplus }} 
+          -Denable_threads=${{ matrix.enable_threads }} 
+          -Denable_werror
+
+      - name: Upload static libs
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.ttriple }}
+          path: ${{ github.workspace }}/bdwgc/zig-out/lib/*.a

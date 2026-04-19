@@ -1,0 +1,42 @@
+name: Build BDWGC
+on:
+  push:
+    paths:
+      - .github/workflows/build-bdwgc.yaml
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.os }}-${{ matrix.arch }} ${{ matrix.build_type }}
+    runs-on: [ "${{ matrix.os }}", "${{ matrix.arch }}" ]
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        os:
+          - ubuntu-24.04
+          - ubuntu-22.04
+          - macos-26
+        arch:
+          - aarch64
+          - x86_64
+        build_type:
+          - Debug
+          - Release
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Configure CMake
+        run: >
+          cmake -B ${{ github.workspace }}/build
+          -S ${{ github.workspace }}
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DBUILD_SHARED_LIBS=OFF
+          -DGC_BUILD_SHARED_LIBS=OFF
+          -Denable_single_obj_compilation=ON
+          -Denable_threads=ON
+
+      - name: Build
+        run: >
+          cmake --build ${{ github.workspace }}/build
+          --config ${{ matrix.build_type }} --verbose --parallel
