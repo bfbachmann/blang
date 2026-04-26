@@ -151,9 +151,4 @@ impl Machine {
     pub fn memory_at(self, index: uint) -> int {
         return self.memory.(index)
     }
-
-    /// Frees memory associated with this machine.
-    pub fn free(self) {
-        self.instructions.free()
-    }
 }

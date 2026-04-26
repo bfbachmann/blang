@@ -2,7 +2,6 @@ mod io
 
 use "std/libc" @libc
 use "std/types/array" {Array}
-use "std/allocator" {Allocator}
 
 const buf_size: uint = 1024 * 4
 
@@ -14,17 +13,12 @@ pub struct FileReader {
 
 impl FileReader {
     /// Creates a reader that can read from the file with descriptor `fd`.
-    pub fn new(al: Allocator, fd: uint) -> FileReader {
+    pub fn new(fd: uint) -> FileReader {
         return FileReader{
             fd: fd
             // Don't allocate any memory upfront.
-            read_buf: Array[u8].new(al)
+            read_buf: Array[u8].new()
         }
-    }
-
-    /// Frees all memory associated with the file reader.
-    pub fn free(self) {
-        self.read_buf.free()
     }
 }
 

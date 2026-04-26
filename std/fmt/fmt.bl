@@ -5,7 +5,6 @@ use "std/convert" @convert
 use "std/types/slice" {Slice}
 use "std/types/list" {List}
 use "std/io" {Writer, FileWriter}
-use "std/allocator" {Allocator, LibcAllocator}
 
 /// Prints `p` to stdout with a newline at the end.
 pub fn println[P: Print](p: P) {
@@ -19,8 +18,7 @@ pub fn eprintln[P: Print](p: P) {
 
 /// Prints `p` to `fd` with a newline at the end.
 pub fn println_fd[P: Print](fd: uint, p: P) {
-    let mut al = LibcAllocator.new().dynamic()
-    printf_fd(fd, Format.new(al, "%\n").arg(&p))
+    printf_fd(fd, Format.new("%\n").arg(&p))
 }
 
 /// Prints `format` to stdout.
@@ -36,15 +34,13 @@ pub fn eprintf(format: Format) {
 /// Prints `format` to `fd`.
 pub fn printf_fd(fd: uint, format: Format) {
     print_fd(fd, format)
-    format.free()
 }
 
 /// Prints `p` to `fd`.
 pub fn print_fd[P: Print](fd: uint, p: P) {
-    let mut allocator = LibcAllocator.new().dynamic()
-    let mut writer = FileWriter.new(allocator, fd)
+    let mut writer = FileWriter.new(fd)
     p.print(&mut writer.dynamic())
-    writer.free()
+    writer.flush()
 }
 
 /// Any type that can be printed into a writer.
@@ -60,10 +56,10 @@ pub struct Format {
 
 impl Format {
     /// Create a new format.
-    pub fn new(al: Allocator, fmt: str) -> Format {
+    pub fn new(fmt: str) -> Format {
         return Format{
             fmt: Slice[u8].from_str(fmt)
-            args: List[Arg].new(al)
+            args: List[Arg].new()
         }
     }
 
@@ -71,17 +67,6 @@ impl Format {
     pub fn arg[P: Print](mut self, p: *P) -> Format {
         self.args.push(Arg.new(p))
         return self
-    }
-
-    /// Prints the format into the given writer and frees it.
-    pub fn print_and_free(self, writer: *mut Writer) {
-        self.print(writer)
-        self.free()
-    }
-
-    /// Frees all memory associated with the format.
-    pub fn free(self) {
-        self.args.free()
     }
 }
 

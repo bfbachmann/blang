@@ -2,7 +2,6 @@ mod machine_interpreter
 
 use "std/libc" @libc
 use "std/types/list" {List}
-use "std/allocator" {Allocator}
 use "std/runtime" {assert}
 
 /// Represents a machine instruction.
@@ -90,7 +89,6 @@ impl ParseResult {
 
 /// Parses a program from a character buffer.
 pub struct Parser {
-    allocator: Allocator
     buf: *u8
     buf_len: uint
     cursor: uint
@@ -99,9 +97,8 @@ pub struct Parser {
 
 impl Parser {
     /// Returns a new parser for parsing the instructions in `buf` with a length of `buf_len` bytes.
-    pub fn new(al: Allocator, buf: *u8, buf_len: uint) -> Parser {
+    pub fn new(buf: *u8, buf_len: uint) -> Parser {
         return Parser{
-            allocator: al
             buf: buf
             buf_len: buf_len
             cursor: 0
@@ -112,7 +109,7 @@ impl Parser {
     /// Parses the instructions stored in the parser and returns the result. This function
     /// will abort with an error message if the program is syntactically invalid.
     pub fn parse_instructions(*mut self) -> List[Instruction] {
-        let mut instructions = List[Instruction].new(self.allocator)
+        let mut instructions = List[Instruction].new()
         loop {
             let result = self.try_parse_inst()
             assert(result.status !~ ParseStatus::Err, result.msg)

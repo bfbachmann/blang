@@ -1,13 +1,11 @@
 mod machine_interpreter
 
 use "std/libc" @libc
-use "std/allocator" {LibcAllocator}
+use "std/mem" @mem
 use "std/runtime" {assert}
+use "std/io" {Buffer, FileReader}
 
 fn main() {
-    // Use libc for memory management.
-    let allocator = LibcAllocator.new().dynamic()
-
     // Open file for reading.
     let file = @libc.fopen("docs/examples/machine_interpreter/program.txt\0".ptr(), "rb\0".ptr())
     assert(file as uint != 0, "failed to open file")
@@ -26,7 +24,7 @@ fn main() {
     assert(bytes_read == size_bytes as uint, "failed to read file into memory")
 
     // Read instructions from the file.
-    let mut parser = Parser.new(allocator, prog_data, bytes_read)
+    let mut parser = Parser.new(prog_data, bytes_read)
     let instructions = parser.parse_instructions()
 
     // Execute instructions.
@@ -41,8 +39,6 @@ fn main() {
         sum += machine.memory_at(i)
     }
 
-    machine.free()
-    @libc.free(prog_data)
     @libc.fclose(file)
     @libc.exit(sum as uint)
 }

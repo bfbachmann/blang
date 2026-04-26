@@ -14,9 +14,9 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::debug_info::{DICompileUnit, DIType, DebugInfoBuilder};
 use inkwell::module::{Linkage, Module};
-use inkwell::types::{AnyType, AnyTypeEnum, AsTypeRef, BasicType, BasicTypeEnum};
+use inkwell::types::{AnyType, AnyTypeEnum, BasicType, BasicTypeEnum};
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
-use inkwell::{AddressSpace, OptimizationLevel};
+use inkwell::OptimizationLevel;
 use std::collections::HashMap;
 
 mod closure;
@@ -432,8 +432,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         if typ.is_composite() {
             // Copy the value from the source pointer to the destination pointer.
             let ll_type_size = self.type_converter.const_int_size_of_type(type_key);
-
-            // TODO: I'm not sure about the alignment here at all.
             let ll_align = self.type_converter.align_of_type(type_key);
 
             self.ll_builder
@@ -451,19 +449,26 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
     }
 
-    /// Allocates space on the stack in the current function's entry block to store
-    /// a value of the given type.
+    /// Allocates memory to store a value of the given type.
     fn gen_alloc(&mut self, name: &str, type_key: TypeKey) -> PointerValue<'ctx> {
         let ll_type = self.type_converter.get_basic_type(type_key);
-        self.gen_gc_malloc(name, ll_type)
+        let malloc_atomic = !self.type_converter.may_contain_gc_ptr(type_key);
+        self.gen_gc_malloc(name, ll_type, malloc_atomic)
     }
 
-    /// Allocates space on the GC heap to store the given type.
-    fn gen_gc_malloc(&mut self, name: &str, ll_type: BasicTypeEnum<'ctx>) -> PointerValue<'ctx> {
-        // Use the debug version of the allocation function for debug builds.
-        let fn_name = match self.prog.config.emit_debug_info {
-            true => "GC_malloc",
-            false => "GC_debug_malloc",
+    /// Allocates space on the GC heap to store the given type. If `atomic` is true, it will be
+    /// assumed that the given type doesn't contain any pointers.
+    fn gen_gc_malloc(
+        &mut self,
+        name: &str,
+        ll_type: BasicTypeEnum<'ctx>,
+        atomic: bool,
+    ) -> PointerValue<'ctx> {
+        let fn_name = match (self.prog.config.emit_debug_info, atomic) {
+            (true, true) => "GC_debug_malloc_atomic",
+            (true, false) => "GC_debug_malloc",
+            (false, true) => "GC_malloc_atomic",
+            (false, false) => "GC_malloc",
         };
         let ll_fn = self.ll_mod.get_function(fn_name).unwrap();
 

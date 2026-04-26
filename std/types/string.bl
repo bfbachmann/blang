@@ -1,6 +1,7 @@
 mod string
 
 use "std/libc" @libc
+use "std/mem" @mem
 
 /// Strings are heap-allocated sequences of bytes.
 pub struct String {
@@ -10,7 +11,7 @@ pub struct String {
 impl String {
     /// Creates a new `String` from the given `str`.
     pub fn from_str(s: str) -> String {
-        let ptr = @libc.malloc(s.len())
+        let ptr = @mem.gc_malloc(s.len())
         @libc.memcpy(ptr, s.ptr(), s.len())
         return String{
             bytes: Slice[u8].new(ptr, s.len())
@@ -20,7 +21,7 @@ impl String {
     /// Creates a new `String` from the concatenation of `first` and `second`.
     pub fn concat(first: Slice[u8], second: Slice[u8]) -> String {
         let new_len = first.len() + second.len()
-        let ptr = @libc.malloc(new_len)
+        let ptr = @mem.gc_malloc(new_len)
 
         @libc.memcpy(ptr, first.ptr(), first.len())
         @libc.memcpy(ptr.(first.len() as int), second.ptr(), second.len())
@@ -38,10 +39,5 @@ impl String {
     /// Returns the length of the string in bytes.
     pub fn len(self) -> uint {
         return self.bytes.len()
-    }
-
-    /// Frees heap space allocated for this `String`.
-    pub fn free(self) {
-        @libc.free(self.ptr())
     }
 }

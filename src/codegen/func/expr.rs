@@ -315,8 +315,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
                 // Init array index and jump to condition branch.
                 let ll_index_type = self.type_converter.ptr_sized_int_type();
-                let ll_index_ptr =
-                    self.gen_gc_malloc("array_index_ptr", ll_index_type.as_basic_type_enum());
+                let ll_index_ptr = self.gen_gc_malloc(
+                    "array_index_ptr",
+                    ll_index_type.as_basic_type_enum(),
+                    false,
+                );
                 self.ll_builder
                     .build_store(ll_index_ptr, ll_index_type.const_int(0, false))
                     .unwrap();
@@ -445,9 +448,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             );
         }
 
-        // Allocate space for the struct on the stack.
-        let ll_struct_ptr =
-            self.gen_gc_malloc("enum_init_ptr", ll_struct_type.as_basic_type_enum());
+        // Allocate space for the struct.
+        let malloc_atomic = self.type_converter.may_contain_gc_ptr(enum_init.type_key);
+        let ll_struct_ptr = self.gen_gc_malloc(
+            "enum_init_ptr",
+            ll_struct_type.as_basic_type_enum(),
+            malloc_atomic,
+        );
 
         // Set the variant number on the struct.
         let ll_number_field_ptr = self

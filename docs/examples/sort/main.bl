@@ -4,12 +4,10 @@ use "std/libc" @libc
 use "std/runtime" {panic}
 use "std/types/list" {List}
 use "std/specs" {Ord, Order}
-use "std/allocator" {LibcAllocator}
 
 fn main() {
     // Created a list and populate it.
-    let mut al = LibcAllocator.new().dynamic()
-    let mut list = List[Value].new(al)
+    let mut list = List[Value].new()
     for let mut i = 10; i >= 0; i -= 1 {
         list.push(Value{v: i})
     }

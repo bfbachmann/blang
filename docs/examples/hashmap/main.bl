@@ -4,14 +4,13 @@ use "std/specs" {Eq}
 use "std/types/hasher" {Hash, Hasher, BuildHash}
 use "std/types/opt" {Opt}
 use "std/runtime" {assert, panic}
-use "std/allocator" {Allocator, LibcAllocator}
 use "std/types/slice" {Slice, SliceMut}
 use "std/libc" @libc
+use "std/mem" @mem
 use "std/fmt" {printf, Format, Print}
 
 fn main() {
-    let mut al = LibcAllocator.new().dynamic()
-    let mut map = HashMap[int, int].new(al)
+    let mut map = HashMap[int, int].new()
 
     let mut last_i = 1
     let mut i = 1
@@ -53,33 +52,31 @@ fn main() {
         i = i + temp
     }
 
-    map.free()
-
     @libc.exit(0)
 }
 
 fn display_hashmap[K: Hash + Eq + Print, V: Print](map: HashMap[K, V]) {
-    printf(Format.new(map.allocator, "_______HashMap______\n"))
+    printf(Format.new("_______HashMap______\n"))
 
     for let mut i = 0uint; i < map.slots.len(); i += 1 {
         match map.slots.ptr_at(i) {
             let Slot::Occupied(entry) => {
                 printf(
-                    Format.new(map.allocator, "% -> %\n")
+                    Format.new("% -> %\n")
                         .arg(&entry.key)
                         .arg(&entry.value)
                 )
             }
             let Slot::Empty => {
-                printf(Format.new(map.allocator, "empty\n"))
+                printf(Format.new("empty\n"))
             }
             let Slot::Deleted => {
-                printf(Format.new(map.allocator, "deleted\n"))
+                printf(Format.new("deleted\n"))
             }
         }
     }
 
-    printf(Format.new(map.allocator, "____________________\n"))
+    printf(Format.new("____________________\n"))
 }
 
 /// Implements the DJB2 hash function.
@@ -115,7 +112,6 @@ impl DJB2Hasher: BuildHash {
 }
 
 pub struct HashMap[K: Hash + Eq, V] {
-    allocator: Allocator
     slots: SliceMut[Slot[K, V]]
     len: uint
 }
@@ -132,9 +128,8 @@ pub struct Entry[K, V] {
 }
 
 impl HashMap {
-    pub fn new(al: Allocator) -> Self {
+    pub fn new() -> Self {
         return Self{
-            allocator: al
             slots: SliceMut[Slot[K, V]].new_empty()
             len: 0
         }
@@ -227,11 +222,6 @@ impl HashMap {
         return Opt::None
     }
 
-    pub fn free(*mut self) {
-        self.allocator.free(self.slots.ptr() as *mut u8)
-        self.len = 0
-    }
-
     fn grow_if_needed(*mut self) {
         // Check if we need to allocate more capacity for the table.
         // Using load factor of 0.8 (4 / 5).
@@ -248,7 +238,7 @@ impl HashMap {
         }
 
         let old_slots = self.slots
-        self.slots = self.new_empty_slots(new_len)
+        self.slots = HashMap.new_empty_slots(new_len)
         self.len = 0
 
         for let mut i = 0uint; i < old_len; i += 1 {
@@ -259,12 +249,10 @@ impl HashMap {
                 _ => {}
             }
         }
-
-        self.allocator.free(old_slots.ptr() as *mut u8)
     }
 
-    fn new_empty_slots(*mut self, len: uint) -> SliceMut[Slot[K, V]] {
-        let ptr = self.allocator.alloc(len * sizeof Slot[K, V]) as *mut Slot[K, V]
+    fn new_empty_slots(len: uint) -> SliceMut[Slot[K, V]] {
+        let ptr = @mem.gc_malloc(len * sizeof Slot[K, V]) as *mut Slot[K, V]
         let mut slots = SliceMut[Slot[K, V]].new(ptr, len)
 
         for let mut i = 0uint; i < len; i += 1 {
@@ -273,7 +261,6 @@ impl HashMap {
 
         return slots
     }
-
 }
 
 fn hash_key[K: Hash](key: K) -> uint {

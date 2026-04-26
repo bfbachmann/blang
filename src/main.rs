@@ -618,8 +618,9 @@ mod tests {
                 "-Wextra",
                 "-Wpedantic",
                 "-Werror",
-                "-L=-L/opt/homebrew/Cellar/bdw-gc/8.2.12/lib",
+                "-L/Users/bfbachmann/Documents/code/bdwgc/zig-out/lib",
                 "-lgc",
+                "-Wl,-rpath,/Users/bfbachmann/Documents/code/bdwgc/zig-out/lib",
                 "-o",
                 exe_path,
             ])

@@ -13,8 +13,7 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::targets::{FileType, TargetMachine};
-use inkwell::types::BasicTypeEnum;
-use inkwell::values::{BasicMetadataValueEnum, PointerValue};
+use inkwell::values::BasicMetadataValueEnum;
 use inkwell::AddressSpace;
 use std::collections::HashMap;
 use std::fs;
@@ -64,15 +63,15 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
             );
         }
 
-        // Define functions that support the runtime (GC, etc).
-        self.gen_runtime_fns();
-
         // Define extern functions.
         if let Some(extern_fns) = self.prog.extern_fns.get(&self.mod_id) {
             for extern_fn in extern_fns.values() {
                 self.gen_extern_fn(extern_fn)
             }
         }
+
+        // Define functions that support the runtime (GC, etc).
+        self.gen_runtime_fns();
 
         // Define and generate functions.
         self.gen_fns()?;
@@ -114,7 +113,9 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
 
                 // Generate the call to the program's main.
                 let ll_main_fn = self.ll_mod.get_function(&mangled_name).unwrap();
-                self.ll_builder.build_call(ll_main_fn, &[], "main").unwrap();
+                self.ll_builder
+                    .build_call(ll_main_fn, &[], &mangled_name)
+                    .unwrap();
                 self.ll_builder.build_return(None).unwrap();
             }
         }
@@ -129,26 +130,33 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
 
     /// Generates built-in functions (i.e. stuff for the language runtime and GC).
     fn gen_runtime_fns(&self) {
-        // Generate `GC_init` for initializing the garbage collector.
-        let ll_fn_type = self.ll_ctx.void_type().fn_type(&[], false);
-        self.ll_mod.add_function("GC_init", ll_fn_type, None);
+        let linkage = Some(Linkage::External);
 
-        // Generate `GC_malloc` for allocating garbage-collected memory.
-        let ll_fn_type = self
+        // The function type for all kinds of malloc-like functions. This is just a function
+        // that takes a pointer-sized int representing the number of bytes to allocate, and returns
+        // a pointer to allocated memory.
+        let ll_malloc_fn_type = self
             .ll_ctx
             .ptr_type(AddressSpace::default())
             .fn_type(&[self.type_converter.ptr_sized_int_type().into()], false);
-        self.ll_mod.add_function("GC_malloc", ll_fn_type, None);
 
-        // Generate `GC_debug_malloc` for allocating garbage-collected memory with debug info if
-        // debug info is enabled.
-        if self.prog.config.emit_debug_info {
-            let ll_fn_type = self
-                .ll_ctx
-                .ptr_type(AddressSpace::default())
-                .fn_type(&[self.type_converter.ptr_sized_int_type().into()], false);
-            self.ll_mod
-                .add_function("GC_debug_malloc", ll_fn_type, None);
+        // Generate `GC_init` for initializing the garbage collector if it's not already defined
+        // via an extern fn.
+        if self.ll_mod.get_function("GC_init").is_none() {
+            let ll_fn_type = self.ll_ctx.void_type().fn_type(&[], false);
+            self.ll_mod.add_function("GC_init", ll_fn_type, linkage);
+        }
+
+        // Define the family of malloc-like functions exposed by the GC.
+        for name in [
+            "GC_malloc",
+            "GC_debug_malloc",
+            "GC_malloc_atomic",
+            "GC_debug_malloc_atomic",
+        ] {
+            if self.ll_mod.get_function(name).is_none() {
+                self.ll_mod.add_function(name, ll_malloc_fn_type, linkage);
+            }
         }
     }
 
