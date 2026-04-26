@@ -412,8 +412,7 @@ fn parse_basic_expr(parser: &mut FileParser) -> ParseResult<Expression> {
                         kind: TokenKind::RightParen,
                         span,
                         ..
-                    } =
-                        parser.parse_expecting_any(&[TokenKind::Comma, TokenKind::RightParen])?
+                    } = parser.parse_expecting_any(&[TokenKind::Comma, TokenKind::RightParen])?
                     {
                         expr = Expression::FunctionCall(Box::new(FnCall::new(
                             expr,

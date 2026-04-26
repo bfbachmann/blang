@@ -183,9 +183,7 @@ fn print_source_color(file_path: &str, span: &Span) {
             );
             println!(
                 "{} {}{}{}",
-                format!("{line_num:>width$}|")
-                    .blue()
-                    .bold(),
+                format!("{line_num:>width$}|").blue().bold(),
                 left,
                 mid.red().bold(),
                 right
@@ -200,9 +198,7 @@ fn print_source_color(file_path: &str, span: &Span) {
             );
             println!(
                 "{} {}{}",
-                format!("{line_num:>width$}|")
-                    .blue()
-                    .bold(),
+                format!("{line_num:>width$}|").blue().bold(),
                 left,
                 right.red().bold(),
             );
@@ -211,9 +207,7 @@ fn print_source_color(file_path: &str, span: &Span) {
             let (left, right) = line.split_at(end_pos.col as usize - 1);
             println!(
                 "{} {}{}",
-                format!("{line_num:>width$}|")
-                    .blue()
-                    .bold(),
+                format!("{line_num:>width$}|").blue().bold(),
                 left.red().bold(),
                 right
             );
@@ -226,9 +220,7 @@ fn print_source_color(file_path: &str, span: &Span) {
             } else if mid_lines_printed <= 1 {
                 println!(
                     "{} {}",
-                    format!("{line_num:>width$}|")
-                        .blue()
-                        .bold(),
+                    format!("{line_num:>width$}|").blue().bold(),
                     line.red().bold()
                 );
             }
@@ -267,9 +259,7 @@ fn print_source_no_color(file_path: &str, span: &Span) {
             let (left, right) = line.split_at(start_pos.col as usize - 1);
             let (mid, right) = right.split_at((end_pos.col - start_pos.col) as usize);
             println!("{pipe:>width$}", pipe = "|", width = width + 1);
-            println!(
-                "{line_num:>width$}| {left}{mid}{right}"
-            );
+            println!("{line_num:>width$}| {left}{mid}{right}");
             println!(
                 "{:>width$}| {}{}",
                 " ".repeat(line_num.to_string().len()),

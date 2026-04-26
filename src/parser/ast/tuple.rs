@@ -102,8 +102,7 @@ impl TupleType {
                     if let token @ Token {
                         kind: TokenKind::RightBrace,
                         ..
-                    } =
-                        parser.parse_expecting_any(&[TokenKind::Comma, TokenKind::RightBrace])?
+                    } = parser.parse_expecting_any(&[TokenKind::Comma, TokenKind::RightBrace])?
                     {
                         // Record the ending position of this statement.
                         end_pos = token.span.end_pos;
@@ -204,8 +203,7 @@ impl TupleInit {
                     if let token @ Token {
                         kind: TokenKind::RightBrace,
                         ..
-                    } =
-                        parser.parse_expecting_any(&[TokenKind::Comma, TokenKind::RightBrace])?
+                    } = parser.parse_expecting_any(&[TokenKind::Comma, TokenKind::RightBrace])?
                     {
                         // Record the ending position of this statement.
                         end_pos = token.span.end_pos;

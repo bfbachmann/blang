@@ -733,7 +733,7 @@ pub fn check_closure_yields(ctx: &mut ProgramContext, closure: &AClosure, kind: 
                     if loop_.maybe_cond.is_some() {
                         ctx.insert_err(err_missing_yield(
                             Some("The last statement in this closure is a loop that is not guaranteed to yield."),
-                            closure.span
+                            closure.span,
                         ));
                     }
 
@@ -757,7 +757,7 @@ pub fn check_closure_yields(ctx: &mut ProgramContext, closure: &AClosure, kind: 
             if closure_has_any_break(closure) || !closure_has_any_yield(closure) {
                 ctx.insert_err(err_missing_yield(
                     Some("The last statement in this closure is a loop that is not guaranteed to yield."),
-                    closure.span
+                    closure.span,
                 ));
             }
         }

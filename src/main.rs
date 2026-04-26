@@ -70,10 +70,7 @@ fn main() {
                     .required(false)
                     .action(ArgAction::SetTrue),
             )
-            .arg(
-                arg!(-t --target <TARGET> "Generate code for the given target platform")
-                    .required(false),
-            )
+            .arg(arg!(-t --target <TARGET> "Generate code for the given target platform").required(false))
             .arg(
                 arg!(-f --format <FORMAT> "Output file format")
                     .required(false)
