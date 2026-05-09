@@ -275,7 +275,7 @@ fn link(
     linker_args: &[String],
 ) -> Result<(), CodeGenError> {
     let output_path = output_path.to_string_lossy().to_string();
-    let mut extra_link_args = vec![];
+    let mut extra_link_args = vec!["-lgc".to_string()];
 
     let linker_cmd = if let Some(linker) = linker {
         linker.as_str()

@@ -38,7 +38,7 @@ fn main() {
         let empty_2: [u64; 0] = [1; 0]
 
         // Constant array declaration at the function level.
-        const c = [{true}, {false}]
+        const c = [.{true}, .{false}]
         assert(c.(0).(0) == true, "expected true")
         assert(c.(1).(0) == false, "expected false")
 

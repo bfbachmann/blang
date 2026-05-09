@@ -25,6 +25,7 @@ use crate::parser::ast::r#enum::EnumVariantInit;
 use crate::parser::ast::r#struct::StructInit;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::sizeof::SizeOf;
+use crate::parser::ast::statement::Statement;
 use crate::parser::ast::str_lit::StrLit;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::tuple::TupleInit;
@@ -206,7 +207,7 @@ impl Display for OutNode {
 ///
 ///     <basic> [<binop> <comp>]*
 ///     <unop> <basic> [<binop> <comp>]*
-///     sizeof type [<binop> <comp>]*
+///     sizeof <type> [<binop> <comp>]*
 ///     <basic> as <type> [<binop> <comp>]*
 ///
 /// where
@@ -508,7 +509,7 @@ fn parse_unit_expr(parser: &mut FileParser) -> ParseResult<Expression> {
 
         // Composite value initialization.
         TokenKind::LeftBracket => Expression::ArrayInit(Box::new(ArrayInit::parse(parser)?)),
-        TokenKind::LeftBrace => Expression::TupleInit(TupleInit::parse(parser)?),
+        TokenKind::DotLeftBrace => Expression::TupleInit(TupleInit::parse(parser)?),
 
         // Inline function declarations.
         TokenKind::Fn => Expression::AnonFunction(Box::new(Function::parse_anon(parser)?)),
@@ -557,8 +558,22 @@ fn parse_unit_expr(parser: &mut FileParser) -> ParseResult<Expression> {
             }
         }
 
-        // A `from` expression.
-        TokenKind::From => Expression::From(From::parse(parser)?),
+        // This is supposed to catch all the cases where statements are used as expressions.
+        // We parse the statement and then wrap it in a `From` AST node so it's easy for the
+        // analyzer to tell that the statement MUST yield values of a consistent type (i.e
+        // it's semantically like an expression).
+        TokenKind::If
+        | TokenKind::For
+        | TokenKind::While
+        | TokenKind::Loop
+        | TokenKind::LeftBrace
+        | TokenKind::Match => {
+            let statement = Box::new(Statement::parse(parser)?);
+            Expression::From(From {
+                span: *statement.span(),
+                statement,
+            })
+        }
 
         other => {
             return Err(ParseError::new_with_token(

@@ -25,7 +25,7 @@ The language and compiler are still very young, so they still lack some critical
 * [Statements as Expressions: `from`, `yield`](#statements-as-expressions-from-yield)
 * [Structures: `struct`](#structures-struct)
 * [Enumerations: `enum`](#enumerations-enum)
-* [Tuples: `{...}`](#tuples-)
+* [Tuples: `.{...}`](#tuples)
 * [Arrays: `[...]`](#arrays-)
 * [Implementations, Methods, and Method Calls: `impl`, `fn`](#implementations-methods-and-method-calls-impl-fn)
 * [Conditionals: `if`, `else if`, `else`](#conditionals-if-elsif-else)
@@ -240,20 +240,20 @@ enum Result {
 fn main() {
     let result = Result::Err("failed!")
 
-    // Enum values are copied automatically, like in C.
+    // Enum values are copied automatically.
     let new_result = result
 }
 ```
 
-### Tuples: `{...}`
+### Tuples: `.{...}`
 
-Tuples are like structs, except their fields are identified by index rather than by name.
+Tuples are like anonymous structs. Their fields are identified by index rather than by name.
 
 ```
 fn main() {
-    let values: { str, i64, bool } = { "thing", 1, true }
+    let values: .{str, i64, bool} = .{"thing", 1, true}
 
-    // Tuple values are copied automatically, like in C.
+    // Tuple values are copied automatically.
     let new_values = values
     let msg = values.(0)
 }

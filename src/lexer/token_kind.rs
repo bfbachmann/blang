@@ -189,12 +189,12 @@ pub enum TokenKind {
     Use,
     #[token("mod")]
     Mod,
-    #[token("from")]
-    From,
     #[token("yield")]
     Yield,
 
     // Delimiters
+    #[token(".{")]
+    DotLeftBrace,
     #[token("{")]
     LeftBrace,
     #[token("}")]
@@ -314,6 +314,7 @@ impl TokenKind {
             TokenKind::For => "for".to_string(),
             TokenKind::While => "while".to_string(),
             TokenKind::Loop => "loop".to_string(),
+            TokenKind::DotLeftBrace => ".{".to_string(),
             TokenKind::LeftBrace => "{".to_string(),
             TokenKind::RightBrace => "}".to_string(),
             TokenKind::BeginIndex => ".(".to_string(),
@@ -349,7 +350,6 @@ impl TokenKind {
             TokenKind::Deref => "^".to_string(),
             TokenKind::Use => "use".to_string(),
             TokenKind::Mod => "mod".to_string(),
-            TokenKind::From => "from".to_string(),
             TokenKind::Yield => "yield".to_string(),
         }
     }

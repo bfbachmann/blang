@@ -19,7 +19,7 @@ use crate::analyzer::error::{
     err_expected_ret_val, err_invalid_from_expr, err_invalid_mut_ref_const, err_invalid_mut_ref_fn,
     err_invalid_mut_ref_immut, err_invalid_operand_type, err_invalid_type_cast,
     err_invalid_unary_operand_type, err_literal_out_of_range, err_mismatched_operand_types,
-    err_mismatched_types, err_superfluous_type_cast, AnalyzeError,
+    err_mismatched_types, err_missing_yield, err_superfluous_type_cast, AnalyzeError,
 };
 use crate::analyzer::ident::{IdentKind, Usage};
 use crate::analyzer::prog_context::ProgramContext;
@@ -1413,6 +1413,10 @@ fn analyze_from(
     maybe_expected_type_key: Option<TypeKey>,
 ) -> AExpr {
     ctx.push_scope(Scope::new(ScopeKind::FromBody, maybe_expected_type_key));
+    if let Some(tk) = maybe_expected_type_key {
+        ctx.set_cur_expected_yield_type_key(tk);
+    }
+
     let statement = AStatement::from(ctx, &from.statement);
 
     // Make sure the statement is a valid kind.
@@ -1436,14 +1440,20 @@ fn analyze_from(
     // was specified, or it will be a value determined based on the type of
     // the first value `yielded` from the statement. It could also be `None`
     // in the case where the statement does not contain a `yield`.
-    let type_key = match ctx.pop_scope(true).yield_type_key() {
-        Some(tk) => tk,
-        None => ctx.unknown_type_key(),
+    let (type_key, yields) = match ctx.pop_scope(true).yield_type_key() {
+        Some(tk) => (tk, true),
+        None => {
+            ctx.insert_err(err_missing_yield(
+                Some(format_code!("This statement does not {} any value.", "yield").as_str()),
+                *statement.span(),
+            ));
+            (ctx.unknown_type_key(), false)
+        }
     };
 
     // Make sure all possible branches of the statement yield a value.
     let mut closure = AClosure::new(vec![statement], *from.statement.span());
-    if valid_statement {
+    if valid_statement && yields {
         check_closure_yields(ctx, &closure, &ScopeKind::FromBody);
     }
 

@@ -2,6 +2,7 @@ mod linked_list
 
 use "std/libc" @libc
 use "std/runtime" {assert}
+use "std/types/opt" {Opt}
 
 /// A node in a linked list.
 struct Node {
@@ -79,10 +80,9 @@ impl Node {
         return head
     }
 
-    /// Return true and the index of the first node containing the
-    /// target value, or false and zero if no such value exists in
-    /// the list.
-    fn index_of(self, target: int) -> {bool, uint} {
+    /// Returns the index of the first node containing the
+    /// target value, or None if no such value exists in the list.
+    fn index_of(self, target: int) -> Opt[uint] {
         let mut i: uint = 0
         for
             let mut head = &self;
@@ -90,13 +90,13 @@ impl Node {
             head = head.next
         {
             if head.value == target {
-                return {true, i}
+                return Opt::Some(i)
             }
 
             i += 1
         }
 
-        return {false, 0}
+        return Opt::None
     }
 }
 
@@ -116,11 +116,11 @@ fn main() {
 
     // Check that we can determine the index of the inserted values.
     let result_20 = head.index_of(20)
-    assert(result_20.(0), "index of value 20 not found")
-    assert(result_20.(1) == 4, "index of value 20 is wrong")
+    assert(result_20.is_some(), "index of value 20 not found")
+    assert(result_20.unwrap() == 4, "index of value 20 is wrong")
     let result_48 = head.index_of(-48)
-    assert(result_48.(0), "index of value -48 not found")
-    assert(result_48.(1) == 5, "index of value -48 is wrong")
+    assert(result_48.is_some(), "index of value -48 not found")
+    assert(result_48.unwrap() == 5, "index of value -48 is wrong")
 
     // Remove the inserted values.
     assert(head.remove(5).value == -48, "removed node 5 is wrong")

@@ -69,7 +69,7 @@ fn sort[T: Order](list: *mut List[T]) {
 }
 
 /// Finds the minimum value from the `start` index to the end of the list (inclusive).
-fn find_min[T: Order](list: *List[T], start: uint) -> {uint, T} {
+fn find_min[T: Order](list: *List[T], start: uint) -> .{uint, T} {
     let mut min_value = list.get(start).unwrap()
     let mut min_index = start
 
@@ -81,5 +81,5 @@ fn find_min[T: Order](list: *List[T], start: uint) -> {uint, T} {
         }
     }
 
-    return {min_index, min_value}
+    return .{min_index, min_value}
 }

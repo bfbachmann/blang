@@ -5,7 +5,7 @@ use "std/runtime" {assert}
 
 fn main() {
     // Check conditional yields.
-    let x = from if false {
+    let x = if false {
         yield 1
     } else {
         yield 2
@@ -13,7 +13,7 @@ fn main() {
     assert(x == 2, "expected 2")
 
     // Check closure yields.
-    let y = from {
+    let y = {
         let mut sum = 0
         for let mut i = 0; i < 3; i += 1 {
             sum += i
@@ -24,7 +24,7 @@ fn main() {
 
     // Check loop yields.
     let mut value = 1
-    let z = from loop {
+    let z = loop {
         if value % 4 != 0 {
             value += 1
             continue
@@ -35,9 +35,9 @@ fn main() {
     assert(z == 4, "expected 4")
 
     // Check nested yields.
-    let nested = from {
-        yield from {
-            yield from if true {
+    let nested = {
+        yield {
+            yield if true {
                 yield 5
             } else {
                 yield 6

@@ -115,10 +115,10 @@ fn main() {
     // Test structs that contain tuples.
     {
         struct T {
-            tuple: {i64, i64}
+            tuple: .{i64, i64}
         }
 
-        let mut t = T{tuple: {1, 2}}
+        let mut t = T{tuple: .{1, 2}}
         assert(t.tuple.(0) == 1, "51")
         assert(t.tuple.(1) == 2, "52")
 

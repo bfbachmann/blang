@@ -80,7 +80,7 @@ impl Format: Print {
 
         for let mut i: uint = 0; i < fmt_len; i += 1 {
             let cur_char = self.fmt.ptr_at(i)^
-            last_char = from {
+            last_char = {
                 if last_char == '\\' as u8 && cur_char == '\\' as u8 {
                     write_substr(writer, &self.fmt, substr_start, i + 1)
                     substr_start = i + 1

@@ -461,27 +461,17 @@ pub fn err_expected_ret_val(ctx: &ProgramContext, call: &AFnCall, span: Span) ->
 
 #[must_use]
 pub fn err_invalid_from_expr(span: Span) -> AnalyzeError {
-    AnalyzeError::new(
-        ErrorKind::InvalidStatement,
-        format_code!("invalid {} expression", "from").as_str(),
-        span,
-    )
-    .with_detail(
-        format_code!(
-            "The statement following {} must be a conditional, {}, {}, or closure.",
-            "from",
-            "match",
-            "loop",
+    AnalyzeError::new(ErrorKind::InvalidStatement, "invalid expression", span)
+        .with_detail(
+            format_code!(
+                "This statement statement must be an {}, {}, {}, or closure.",
+                "if",
+                "match",
+                "loop",
+            )
+            .as_str(),
         )
-        .as_str(),
-    )
-    .with_help(
-        format_code!(
-            "Consider wrapping the statement following {} in a closure.",
-            "from"
-        )
-        .as_str(),
-    )
+        .with_help("This statement is used as an expression and therefore must yield a value, but it currently does not.")
 }
 
 #[must_use]
@@ -536,7 +526,11 @@ pub fn err_unexpected_continue(span: Span) -> AnalyzeError {
 pub fn err_unexpected_yield(span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::UnexpectedYield,
-        format_code!("cannot {} from outside a {} block", "yield", "from").as_str(),
+        format_code!(
+            "cannot {} from a block that is not being used as an expression",
+            "yield"
+        )
+        .as_str(),
         span,
     )
 }

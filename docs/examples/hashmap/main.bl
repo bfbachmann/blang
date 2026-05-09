@@ -231,7 +231,7 @@ impl HashMap {
             return
         }
 
-        let new_len: uint = from if old_len == 0 {
+        let new_len: uint = if old_len == 0 {
             yield 8uint
         } else {
             yield old_len * 2

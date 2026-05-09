@@ -61,7 +61,7 @@ fn apply[T](f: fn (T) -> T, t: T) -> T {
 }
 
 // Test functions that have tuple arguments that contain the function params.
-fn get_second[T](tup: {T, T}) -> T {
+fn get_second[T](tup: .{T, T}) -> T {
     return tup.(1)
 }
 
@@ -83,7 +83,7 @@ fn main() {
     heap_free(thing_ptr)
 
     assert(apply(double, -7) == -14, "expected -14")
-    assert(get_second({2, 9}) == 9, "expected 9")
+    assert(get_second(.{2, 9}) == 9, "expected 9")
     assert(deref(&17) == 17, "expected 17")
     assert(nth([1, 2, 3, 4], 2) == 3, "expected 3")
 

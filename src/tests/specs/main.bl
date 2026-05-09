@@ -51,11 +51,11 @@ fn get_value_2[T: Get2]() -> int {
 }
 
 pub spec Parse {
-    fn parse(bytes: Slice[u8]) -> {uint, Result[Self, str]}
+    fn parse(bytes: Slice[u8]) -> .{uint, Result[Self, str]}
 }
 
 impl uint: Parse {
-    fn parse(bytes: Slice[u8]) -> {uint, Result[uint, str]} {
+    fn parse(bytes: Slice[u8]) -> .{uint, Result[uint, str]} {
         let mut value = 0uint
 
         for let mut i = 0uint; i < bytes.len(); i += 1 {
@@ -68,7 +68,7 @@ impl uint: Parse {
             value = value * 10 + byte as uint - '0' as uint
         }
 
-        return {i, Result::Ok(value)}
+        return .{i, Result::Ok(value)}
     }
 }
 
