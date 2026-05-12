@@ -1,9 +1,9 @@
 mod machine_interpreter
 
 use "std/libc" @libc
-use "std/mem" @mem
 use "std/runtime" {assert}
-use "std/io" {Buffer, FileReader}
+use "std/fmt" {println, Format}
+use "std/types/result" {Result}
 
 fn main() {
     // Open file for reading.
@@ -25,20 +25,37 @@ fn main() {
 
     // Read instructions from the file.
     let mut parser = Parser.new(prog_data, bytes_read)
-    let instructions = parser.parse_instructions()
+    let parse_result = parser.parse_instructions()
+    @libc.fclose(file)
+
+    let instructions = match parse_result {
+        let Result::Ok(i) => yield i
+        let Result::Err(msg) => {
+            println(Format.new("parsing failed: %").arg(&msg))
+            @libc.exit(1)
+            return  // Just here to make the compiler happy
+        }
+    }
 
     // Execute instructions.
     let mut machine = Machine.new(instructions)
     let result = machine.exec_prog()
-    assert(result.status ~~ ExecStatus::Ok, result.msg)
+    let mut exit_code = 0
 
-    // For debugging purposes, sum the machine memory and use it as
-    // the exit code.
-    let mut sum = 0
-    for let mut i = 0uint; i < 10; i += 1 {
-        sum += machine.memory_at(i)
+    match result {
+        let ExecResult::Err(msg) => {
+            println(Format.new("execution failed: %").arg(&msg))
+            exit_code = 1
+        }
+
+        _ => {
+            // For debugging purposes, sum the machine memory and use it as
+            // the exit code.
+            for let mut i = 0uint; i < 10; i += 1 {
+                exit_code += machine.memory_at(i)
+            }
+        }
     }
 
-    @libc.fclose(file)
-    @libc.exit(sum as uint)
+    @libc.exit(exit_code as uint)
 }

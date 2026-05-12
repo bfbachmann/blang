@@ -212,7 +212,7 @@ impl List {
 
     /// Resized the unerlying memory segment.
     fn resize(*mut self, new_cap: uint) {
-        let ptr = @libc.realloc(self.data.ptr() as *mut u8, new_cap * sizeof T)
+        let ptr = @mem.gc_realloc(self.data.ptr() as *mut u8, new_cap * sizeof T)
         self.data = SliceMut[T].new(ptr as *mut T, new_cap)
     }
 }

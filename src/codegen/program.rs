@@ -275,7 +275,7 @@ fn link(
     linker_args: &[String],
 ) -> Result<(), CodeGenError> {
     let output_path = output_path.to_string_lossy().to_string();
-    let mut extra_link_args = vec!["-lgc".to_string()];
+    let mut extra_link_args = vec![];
 
     let linker_cmd = if let Some(linker) = linker {
         linker.as_str()
@@ -290,6 +290,9 @@ fn link(
                 "llvm-link"
             }
             OutputFormat::Object | OutputFormat::Executable => {
+                // Include the GC via linker args.
+                extra_link_args.push("-lgc".to_string());
+
                 // Try to determine the system linker based on the target platform.
                 match target_triple.contains("windows") {
                     true => "link.exe",

@@ -1,7 +1,0 @@
-mod machine_interpreter
-
-use "std/libc" @libc
-
-pub fn print_str(s: str) {
-    @libc.write(@libc.stdout, s.ptr(), s.len())
-}
