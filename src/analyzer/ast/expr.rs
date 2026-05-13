@@ -775,9 +775,7 @@ impl AExpr {
                 expr.try_into_const_uint(ctx)
             }
 
-            // TODO: Remove this. There's no way this works in every case because things may
-            // no have been monomorphized fully by this point.
-            AExprKind::Sizeof(type_key) => Some(size_of_type(ctx, *type_key)),
+            AExprKind::Sizeof(type_key) => size_of_type(ctx, *type_key),
 
             _ => None,
         }
@@ -1443,10 +1441,12 @@ fn analyze_from(
     let (type_key, yields) = match ctx.pop_scope(true).yield_type_key() {
         Some(tk) => (tk, true),
         None => {
-            ctx.insert_err(err_missing_yield(
-                Some(format_code!("This statement does not {} any value.", "yield").as_str()),
-                *statement.span(),
-            ));
+            if valid_statement {
+                ctx.insert_err(err_missing_yield(
+                    Some(format_code!("This statement does not {} any value.", "yield").as_str()),
+                    *statement.span(),
+                ));
+            }
             (ctx.unknown_type_key(), false)
         }
     };

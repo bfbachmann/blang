@@ -53,6 +53,7 @@ pub enum ErrorKind {
     InvalidMain,
     InfiniteSizedType,
     InvalidStatement,
+    InvalidFromExpr,
     ImmutableAssignment,
     InvalidMutRef,
     InvalidAssignmentTarget,
@@ -461,17 +462,24 @@ pub fn err_expected_ret_val(ctx: &ProgramContext, call: &AFnCall, span: Span) ->
 
 #[must_use]
 pub fn err_invalid_from_expr(span: Span) -> AnalyzeError {
-    AnalyzeError::new(ErrorKind::InvalidStatement, "invalid expression", span)
+    AnalyzeError::new(ErrorKind::InvalidFromExpr, "invalid expression", span)
         .with_detail(
             format_code!(
-                "This statement statement must be an {}, {}, {}, or closure.",
+                "This statement must be an {}, {}, {}, or closure.",
                 "if",
                 "match",
                 "loop",
             )
             .as_str(),
         )
-        .with_help("This statement is used as an expression and therefore must yield a value, but it currently does not.")
+        .with_help(
+            format_code!(
+                "This statement is used as an expression and therefore must {} a \
+                value, but it currently does not.",
+                "yield"
+            )
+            .as_str(),
+        )
 }
 
 #[must_use]
@@ -1570,6 +1578,13 @@ pub fn err_invalid_array_size_type(span: Span) -> AnalyzeError {
         ErrorKind::InvalidArraySize,
         format_code!("expected constant of type {}", "uint").as_str(),
         span,
+    )
+    .with_detail(
+        format_code!(
+            "Array sizes must be {} values known at compile time.",
+            "uint"
+        )
+        .as_str(),
     )
 }
 

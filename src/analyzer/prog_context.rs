@@ -24,7 +24,7 @@ use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 use crate::analyzer::warn::{warn_unused, AnalyzeWarning};
 use crate::codegen::program::{init_target_machine, CodeGenConfig};
 use crate::fmt::format_code_vec;
-use crate::lexer::pos::{Locatable, Position, Span};
+use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::{Name, Symbol};
 use crate::parser::ast::unresolved::UnresolvedType;
@@ -245,9 +245,9 @@ pub struct ProgramContext {
     type_declaration_mod_ids: HashMap<TypeKey, ModID>,
 
     /// Collects warnings emitted by the analyzer during analysis.
-    pub warnings: HashMap<Position, AnalyzeWarning>,
+    pub warnings: Vec<AnalyzeWarning>,
     /// Collects errors emitted by the analyzer during analysis.
-    pub errors: HashMap<Position, AnalyzeError>,
+    pub errors: Vec<AnalyzeError>,
 }
 
 impl ProgramContext {
@@ -389,12 +389,12 @@ impl ProgramContext {
 
     /// Inserts an error into the program context.
     pub fn insert_err(&mut self, err: AnalyzeError) {
-        self.errors.insert(err.span.start_pos, err);
+        self.errors.push(err);
     }
 
     /// Inserts a warning into the program context.
     pub fn insert_warn(&mut self, warn: AnalyzeWarning) {
-        self.warnings.insert(warn.span.start_pos, warn);
+        self.warnings.push(warn);
     }
 
     /// Tries to locate the type key associated with the given type and returns it

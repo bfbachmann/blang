@@ -410,8 +410,24 @@ impl<'a> TypeConverter<'a> {
     /// other words, this returns the number of bytes required to hold the type in memory on the
     /// target system.
     pub fn size_of_type(&self, type_key: TypeKey) -> u64 {
-        let ll_type = self.get_basic_type(type_key);
-        self.abi_size_of_type(ll_type)
+        let typ = self.get_type(type_key);
+
+        match typ {
+            AType::Bool | AType::U8 | AType::I8 | AType::Char => 1,
+            AType::U16 | AType::I16 => 2,
+            AType::U32 | AType::I32 | AType::F32 => 4,
+            AType::I64 | AType::U64 | AType::F64 => 8,
+            AType::Int | AType::Uint | AType::Function(_) | AType::Pointer(_) => {
+                self.size_of_ptr() as u64
+            }
+            AType::Str | AType::Struct(_) | AType::Enum(_) | AType::Tuple(_) | AType::Array(_) => {
+                let ll_type = self.get_basic_type(type_key);
+                self.abi_size_of_type(ll_type)
+            }
+            AType::Spec(_) | AType::Generic(_) | AType::Unknown(_) => {
+                panic!("unexpected type {typ}")
+            }
+        }
     }
 
     /// Returns the size LLVM ABI size of the given type in bytes.

@@ -974,6 +974,18 @@ mod tests {
     }
 
     #[test]
+    fn generic_array_len() {
+        let result = analyze(
+            r#"
+            fn thing[T]() -> [u8; sizeof T] {
+                return [0; sizeof T]
+            }
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::InvalidArraySize));
+    }
+
+    #[test]
     fn non_const_array_type_len() {
         let result = analyze(
             r#"
@@ -1639,7 +1651,10 @@ mod tests {
             "#,
         );
         check_err(&result, Some(ErrorKind::MissingYield));
+    }
 
+    #[test]
+    fn invalid_from_statement() {
         let result = analyze(
             r#"
                 fn main() {
@@ -1648,7 +1663,7 @@ mod tests {
                 }
             "#,
         );
-        check_err(&result, Some(ErrorKind::MissingYield));
+        check_err(&result, Some(ErrorKind::InvalidFromExpr));
     }
 
     #[test]
