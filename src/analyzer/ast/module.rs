@@ -85,8 +85,7 @@ impl AModule {
                         if let Some(ident) = ctx
                             .remove_unchecked_ident_from_cur_scope(&extern_fn.signature.name.value)
                         {
-                            let ext_fn = AExternFn::from(ctx, ident.kind.as_unchecked_extern_fn());
-                            ctx.insert_analyzed_extern_fn(ext_fn);
+                            AExternFn::from(ctx, ident.kind.as_unchecked_extern_fn());
                         }
                     }
 

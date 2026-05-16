@@ -1979,8 +1979,7 @@ impl ProgramContext {
             }
 
             IdentKind::UncheckedExternFn(func) => {
-                let ext_fn = AExternFn::from(self, &func);
-                self.insert_analyzed_extern_fn(ext_fn);
+                AExternFn::from(self, &func);
             }
 
             IdentKind::UncheckedStructType(struct_type) => {
