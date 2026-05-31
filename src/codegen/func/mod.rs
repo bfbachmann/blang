@@ -1,7 +1,6 @@
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::mangling::mangle_type;
-use crate::analyzer::prog_context::Monomorphization;
 use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::codegen::convert::TypeConverter;
 use crate::codegen::error::CodeGenResult;
@@ -328,12 +327,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Compiles the given function.
     fn gen_fn(&mut self, func: &AFn) -> CodeGenResult<FunctionValue<'ctx>> {
-        let mangled_name = mangle_type(
-            &self.prog.type_store,
-            func.signature.type_key,
-            self.type_converter.type_mapping(),
-            &self.prog.type_monomorphizations,
-        );
+        let (_, mangled_name) =
+            get_fn_tk_and_mangled_name(self.prog, self.type_converter, func.signature.type_key);
 
         // Retrieve the function and create a new "entry" block at the start of the function
         // body.
@@ -640,12 +635,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Either finds the given function in the current module, or generates a declaration for it
     /// if it's foreign.
     fn get_or_define_function(&mut self, fn_tk: TypeKey) -> FunctionValue<'ctx> {
-        let mangled_name = mangle_type(
-            self.type_converter,
-            fn_tk,
-            self.type_converter.type_mapping(),
-            &self.prog.type_monomorphizations,
-        );
+        let (fn_tk, mangled_name) =
+            get_fn_tk_and_mangled_name(self.prog, self.type_converter, fn_tk);
 
         match self.ll_mod.get_function(&mangled_name) {
             Some(f) => f,
@@ -653,9 +644,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let fn_sig = self.type_converter.get_type(fn_tk).to_fn_sig();
                 let mangled_name = gen_fn_sig(
                     self.ll_ctx,
+                    self.prog,
                     self.ll_mod,
                     self.type_converter,
-                    &self.prog.type_monomorphizations,
                     fn_sig,
                     Some(Linkage::External),
                 );
@@ -666,23 +657,54 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 }
 
+pub fn get_fn_tk_and_mangled_name(
+    prog: &MonoProg,
+    type_converter: &TypeConverter,
+    mut fn_tk: TypeKey,
+) -> (TypeKey, String) {
+    let fn_sig = prog.type_store.get_type(fn_tk).to_fn_sig();
+
+    // Handle function calls on generic types.
+    if let Some(impl_tk) = fn_sig.maybe_impl_type_key {
+        if prog.type_store.get_type(impl_tk).is_generic() {
+            // This is a function on a generic type. We need to look up the
+            // actual function by figuring out what the corresponding concrete
+            // type is.
+            let mapped_impl_tk = type_converter.map_type_key(impl_tk);
+            let impls = prog.type_impls.get(&mapped_impl_tk).unwrap();
+            let spec_tk = prog
+                .type_impls
+                .get(&impl_tk)
+                .unwrap()
+                .get_spec_type_key(fn_sig.type_key)
+                .unwrap();
+
+            fn_tk = impls.get_fn_from_spec_impl(spec_tk, &fn_sig.name).unwrap();
+        }
+    }
+
+    let mangled_name = mangle_type(
+        type_converter,
+        fn_tk,
+        type_converter.type_mapping(),
+        &prog.type_monomorphizations,
+    );
+
+    (fn_tk, mangled_name)
+}
+
 /// Defines the given function in the current module based on the function signature.
 pub fn gen_fn_sig<'a, 'ctx>(
     ctx: &'ctx Context,
+    prog: &'a MonoProg,
     ll_mod: &'a Module<'ctx>,
     type_converter: &'a TypeConverter<'ctx>,
-    type_monomorphizations: &'a HashMap<TypeKey, Monomorphization>,
     sig: &AFnSig,
     linkage: Option<Linkage>,
 ) -> String {
     // Define the function in the module using the fully-qualified function name.
-    let ll_fn_type = type_converter.get_fn_type(sig.type_key);
-    let mangled_name = mangle_type(
-        type_converter,
-        sig.type_key,
-        type_converter.type_mapping(),
-        type_monomorphizations,
-    );
+    let (fn_tk, mangled_name) = get_fn_tk_and_mangled_name(prog, type_converter, sig.type_key);
+    let ll_fn_type = type_converter.get_fn_type(fn_tk);
 
     assert!(
         ll_mod.get_function(&mangled_name).is_none(),

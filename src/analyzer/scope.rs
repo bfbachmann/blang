@@ -1,8 +1,9 @@
 use crate::analyzer::ast::expr::AExpr;
+use crate::analyzer::constraints::ImplConstraints;
 use crate::analyzer::ident::{Ident, IdentKind};
 use crate::analyzer::type_store::TypeKey;
 use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 /// Represents a kind of scope in which symbols can be defined.
@@ -61,6 +62,8 @@ pub struct Scope {
     /// Tracks the number of anonymous functions that were defined directly inside this scope.
     /// This is used to give each anonymous function a unique mangled name within this scope.
     anon_fn_count: usize,
+    /// Contains additional constraints for parameters in an impl block.
+    impl_constraints: ImplConstraints,
 }
 
 impl Scope {
@@ -72,6 +75,7 @@ impl Scope {
             maybe_ret_type_key,
             maybe_yield_type_key: None,
             anon_fn_count: 0,
+            impl_constraints: Default::default(),
         }
     }
 
@@ -179,5 +183,16 @@ impl Scope {
             .values()
             .filter(|i| i.is_unused_top_level())
             .collect()
+    }
+
+    /// Sets the impl constraints for the scope.
+    pub fn set_impl_constraints(&mut self, constraints: ImplConstraints) {
+        self.impl_constraints = constraints
+    }
+
+    /// Returns the spec type keys that represent additional constraints for the given generic
+    /// parameter, if any.
+    pub fn get_constraints_for_param(&self, param_tk: TypeKey) -> Option<&HashSet<TypeKey>> {
+        self.impl_constraints.get_constraints(param_tk)
     }
 }

@@ -33,6 +33,7 @@ pub enum ErrorKind {
     InvalidConst,
     DuplicateIdentifier,
     UndefType,
+    UndefParam,
     UndefSymbol,
     UndefStructField,
     UndefMod,
@@ -58,6 +59,7 @@ pub enum ErrorKind {
     InvalidMutRef,
     InvalidAssignmentTarget,
     UseOfPrivateValue,
+    ConstraintsNotSatisfied,
     TypeIsNotStruct,
     TypeIsNotEnum,
     SpecImplConflict,
@@ -83,6 +85,10 @@ pub enum ErrorKind {
     IllegalSelfArg,
     MatchNotExhaustive,
     ExpectedType,
+    DupConstraintSpec,
+    RedundantConstraint,
+    ParamAlreadyConstrained,
+    IllegalConstraints,
 }
 
 /// Represents any fatal error that occurs during program analysis.
@@ -189,6 +195,28 @@ pub fn err_not_pub(name: &str, span: Span) -> AnalyzeError {
         ErrorKind::UseOfPrivateValue,
         format_code!("{} is not public", name).as_str(),
         span,
+    )
+}
+
+#[must_use]
+pub fn err_constraints_not_satisfied(
+    span: Span,
+    type_name: &str,
+    method_name: &str,
+) -> AnalyzeError {
+    AnalyzeError::new(
+        ErrorKind::ConstraintsNotSatisfied,
+        "constraints not satisfied",
+        span,
+    )
+    .with_detail(
+        format_code!(
+            "Type {} does not implement {} in this {} because it is missing the required constraints.",
+            type_name,
+            method_name,
+            "impl",
+        )
+        .as_str(),
     )
 }
 
@@ -316,6 +344,104 @@ pub fn err_expected_type(name: &str, span: Span) -> AnalyzeError {
         ErrorKind::ExpectedType,
         format_code!("{} is not a type", name).as_str(),
         span,
+    )
+}
+
+#[must_use]
+pub fn err_undef_param(
+    type_name: &str,
+    type_span: Span,
+    param_name: &str,
+    param_span: Span,
+) -> AnalyzeError {
+    let err = AnalyzeError::new(
+        ErrorKind::UndefParam,
+        format_code!("type {} has no parameter {}", type_name, param_name).as_str(),
+        param_span,
+    );
+
+    if type_span != Span::default() {
+        err.with_note(Note {
+            message: format_code!("{} is defined here.", type_name),
+            span: type_span,
+        })
+    } else {
+        err
+    }
+}
+
+#[must_use]
+pub fn err_illegal_constraints(
+    type_name: &str,
+    type_span: Span,
+    constraints_span: Span,
+) -> AnalyzeError {
+    AnalyzeError::new(
+        ErrorKind::IllegalConstraints,
+        "illegal constraints",
+        constraints_span,
+    )
+    .with_note(Note {
+        message: format_code!(
+            "Type {} is defined here without parameters, so it can't have constraints.",
+            type_name
+        ),
+        span: type_span,
+    })
+}
+
+#[must_use]
+pub fn err_param_already_constrained(param_name: &str, span: Span) -> AnalyzeError {
+    AnalyzeError::new(
+        ErrorKind::ParamAlreadyConstrained,
+        format_code!("parameter {} is already constrained", param_name).as_str(),
+        span,
+    )
+}
+
+#[must_use]
+pub fn err_redundant_constraint(
+    param_name: &str,
+    spec_name: &str,
+    param_span: Span,
+    type_span: Span,
+) -> AnalyzeError {
+    let err = AnalyzeError::new(
+        ErrorKind::RedundantConstraint,
+        format_code!(
+            "redundant constraint {} for parameter {}",
+            spec_name,
+            param_name
+        )
+        .as_str(),
+        param_span,
+    );
+
+    if type_span != Span::default() {
+        err.with_note(Note {
+            message: format_code!(
+                "{} is originally defined with constraint {} here.",
+                param_name,
+                spec_name
+            ),
+            span: type_span,
+        })
+    } else {
+        err
+    }
+}
+
+#[must_use]
+pub fn err_dup_constraint_spec(param_name: &str, spec_name: &str, spec_span: Span) -> AnalyzeError {
+    AnalyzeError::new(
+        ErrorKind::DupConstraintSpec,
+        format_code!(
+            "duplicate constraint {} for parameter {}",
+            spec_name,
+            param_name,
+        )
+        .as_str(),
+        spec_span,
     )
 }
 

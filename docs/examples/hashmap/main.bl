@@ -7,7 +7,8 @@ use "std/runtime" {assert, panic}
 use "std/types/slice" {Slice, SliceMut}
 use "std/libc" @libc
 use "std/mem" @mem
-use "std/fmt" {printf, Format, Print}
+use "std/fmt" {println, Format}
+use "std/io" {Print, Writer}
 
 fn main() {
     let mut map = HashMap[int, int].new()
@@ -17,35 +18,35 @@ fn main() {
     for let mut count = 0; count < 10; count += 1 {
         assert(map.insert(i, i).is_none(), "first insert: expected None")
         assert(map.len() == count as uint + 1, "first insert: wrong length")
-        display_hashmap(map)
+        println(map)
 
         assert(map.get(i).unwrap_or(-1) == i, "first get: wrong value")
         assert(map.len() == count as uint + 1, "first get: wrong length")
-        display_hashmap(map)
+        println(map)
 
         assert(map.insert(i, i * 2).unwrap_or(-1) == i, "second insert: wrong value")
         assert(map.len() == count as uint + 1, "second insert: wrong length")
-        display_hashmap(map)
+        println(map)
 
         assert(map.get(i).unwrap_or(-1) == i * 2, "second get: wrong value")
         assert(map.len() == count as uint + 1, "second get: wrong length")
-        display_hashmap(map)
+        println(map)
 
         assert(map.delete(i).unwrap_or(-1) == i * 2, "first delete: wrong value")
         assert(map.len() == count as uint, "first delete: wrong length")
-        display_hashmap(map)
+        println(map)
 
         assert(map.delete(i).is_none(), "second delete: expected None")
         assert(map.len() == count as uint, "second delete: wrong length")
-        display_hashmap(map)
+        println(map)
 
         assert(map.get(i).is_none(), "third get: expected None")
         assert(map.len() == count as uint, "third get: wrong length")
-        display_hashmap(map)
+        println(map)
 
         assert(map.insert(i, i).is_none(), "third insert: expected None")
         assert(map.len() == count as uint + 1, "third insert: wrong length")
-        display_hashmap(map)
+        println(map)
 
         let temp = last_i
         last_i = i
@@ -53,30 +54,6 @@ fn main() {
     }
 
     @libc.exit(0)
-}
-
-fn display_hashmap[K: Hash + Eq + Print, V: Print](map: HashMap[K, V]) {
-    printf(Format.new("_______HashMap______\n"))
-
-    for let mut i = 0uint; i < map.slots.len(); i += 1 {
-        match map.slots.ptr_at(i) {
-            let Slot::Occupied(entry) => {
-                printf(
-                    Format.new("% -> %\n")
-                        .arg(&entry.key)
-                        .arg(&entry.value)
-                )
-            }
-            let Slot::Empty => {
-                printf(Format.new("empty\n"))
-            }
-            let Slot::Deleted => {
-                printf(Format.new("deleted\n"))
-            }
-        }
-    }
-
-    printf(Format.new("____________________\n"))
 }
 
 /// Implements the DJB2 hash function.
@@ -260,6 +237,31 @@ impl HashMap {
         }
 
         return slots
+    }
+}
+
+impl HashMap: Print if [K: Print, V: Print] {
+    fn print(self, writer: *mut Writer) {
+        "{\n".print(writer)
+
+        for let mut i = 0uint; i < self.slots.len(); i += 1 {
+            match self.slots.ptr_at(i) {
+                let Slot::Occupied(entry) => {
+                    Format.new("  %: %,\n")
+                        .arg(&entry.key)
+                        .arg(&entry.value)
+                        .print(writer)
+                }
+                let Slot::Empty => {
+                    Format.new("  empty,\n").print(writer)
+                }
+                let Slot::Deleted => {
+                    Format.new("  deleted,\n").print(writer)
+                }
+            }
+        }
+
+        "}".print(writer)
     }
 }
 

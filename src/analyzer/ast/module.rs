@@ -7,10 +7,12 @@ use crate::analyzer::ast::r#static::AStatic;
 use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::spec::ASpecType;
+use crate::analyzer::constraints::ImplConstraints;
 use crate::analyzer::error::{
-    err_dup_ident, err_dup_impl_fn, err_dup_import_alias, err_dup_imported_mod, err_dup_mem_fn,
-    err_expected_spec, err_invalid_mod_path, err_invalid_statement, err_not_pub,
-    err_undef_foreign_symbol, AnalyzeResult,
+    err_dup_constraint_spec, err_dup_ident, err_dup_impl_fn, err_dup_import_alias,
+    err_dup_imported_mod, err_dup_mem_fn, err_expected_spec, err_illegal_constraints,
+    err_invalid_mod_path, err_invalid_statement, err_not_pub, err_param_already_constrained,
+    err_redundant_constraint, err_undef_foreign_symbol, err_undef_param, AnalyzeResult,
 };
 use crate::analyzer::ident::{Ident, IdentKind, ModAlias, Usage};
 use crate::analyzer::prog_context::ProgramContext;
@@ -399,7 +401,88 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     // If there are parameters for this impl, push them to the program context
     // so we can resolve them when we're analyzing member functions.
     let typ = ctx.get_type(impl_type_key);
-    let has_params = match typ.params() {
+    let type_span = typ.span();
+    let params = typ.params().cloned();
+
+    // Analyze generic parameter constraints, if any.
+    let maybe_constraints = match (&impl_.maybe_param_constraints, &params) {
+        (Some(constraints), Some(p)) => {
+            // Make a map from existing params to their spec constraints.
+            let mut existing_constraints = HashMap::new();
+            for param in &p.params {
+                let spec_tks = ctx
+                    .get_type(param.generic_type_key)
+                    .to_generic_type()
+                    .spec_type_keys
+                    .clone();
+                existing_constraints.insert(param.generic_type_key, spec_tks);
+            }
+
+            // Now check all the additional constraints for this impl and make sure they don't
+            // conflict with the existing ones for the type.
+            let mut param_constraints = ImplConstraints::default();
+            for constraint in &constraints.params {
+                let param_tk = match p.params.iter().find(|param| param.name == constraint.name) {
+                    Some(param) => param.generic_type_key,
+                    None => {
+                        ctx.insert_err(err_undef_param(
+                            &ctx.display_type(impl_type_key),
+                            type_span,
+                            &constraint.name,
+                            constraint.span,
+                        ));
+                        continue;
+                    }
+                };
+
+                // Resolve all the specs for this param so we can put them in a map.
+                let mut spec_tks = HashSet::new();
+                for spec in &constraint.required_specs {
+                    let spec_tk = ctx.resolve_type(&spec.as_unresolved_type());
+                    let existing_spec_tks = existing_constraints.get(&param_tk).unwrap();
+
+                    if existing_spec_tks.contains(&spec_tk) {
+                        ctx.insert_err(err_redundant_constraint(
+                            &constraint.name,
+                            &ctx.display_type(spec_tk),
+                            constraint.span,
+                            type_span,
+                        ))
+                    }
+
+                    if spec_tk != ctx.unknown_type_key() && !spec_tks.insert(spec_tk) {
+                        ctx.insert_err(err_dup_constraint_spec(
+                            &constraint.name,
+                            &ctx.display_type(spec_tk),
+                            spec.span,
+                        ))
+                    }
+                }
+
+                if !param_constraints.add_constraint(param_tk, spec_tks) {
+                    ctx.insert_err(err_param_already_constrained(
+                        &constraint.name,
+                        constraint.span,
+                    ));
+                }
+            }
+
+            Some(param_constraints)
+        }
+
+        (Some(constraints), None) => {
+            ctx.insert_err(err_illegal_constraints(
+                &ctx.display_type(impl_type_key),
+                type_span,
+                constraints.span,
+            ));
+            None
+        }
+
+        (None, _) => None,
+    };
+
+    let has_params = match &params {
         Some(params) => {
             ctx.push_params(params.clone());
             true
@@ -523,10 +606,21 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     // messages when the corresponding type gets used.
     match maybe_spec_tk {
         Some(spec_tk) => {
-            ctx.insert_spec_impl(impl_type_key, spec_tk, fn_type_keys, impl_.header_span());
+            ctx.insert_spec_impl(
+                impl_type_key,
+                spec_tk,
+                fn_type_keys,
+                maybe_constraints.unwrap_or_default(),
+                impl_.header_span(),
+            );
         }
         None => {
-            ctx.insert_default_impl(impl_type_key, fn_type_keys);
+            ctx.insert_default_impl(
+                impl_type_key,
+                fn_type_keys,
+                maybe_constraints.unwrap_or_default(),
+                impl_.header_span(),
+            );
         }
     }
 

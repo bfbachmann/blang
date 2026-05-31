@@ -131,9 +131,9 @@ pub fn display_msg(
 pub fn format_file_loc(path: &str, line: Option<u32>, col: Option<u32>) -> String {
     match (line, col) {
         (Some(l), Some(c)) if l > 0 && c > 0 => {
-            format!("{} {}:{}:{}", "-->".blue().bold(), path, l, c)
+            format!("{}:{}:{}", path, l, c)
         }
-        _ => format!("{} {}", "-->".blue().bold(), path),
+        _ => path.to_string(),
     }
 }
 

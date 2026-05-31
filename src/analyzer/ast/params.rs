@@ -5,6 +5,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::analyzer::ast::generic::AGenericType;
 use crate::analyzer::ast::r#type::AType;
+use crate::analyzer::constraints::ImplConstraints;
 use crate::analyzer::error::{err_dup_param, err_expected_spec};
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
@@ -45,8 +46,8 @@ locatable_impl!(AParam);
 
 impl AParam {
     /// Performs semantic analysis on a generic parameter.
-    /// `poly_type_key` should be the key for the type to which these parameters
-    /// apply. It will be used to disambiguate parameters that have the same
+    /// `poly_type_key` should be the key for the type to which the parameter
+    /// applies. It will be used to disambiguate parameters that have the same
     /// name and constraints but apply to different types.
     fn from(ctx: &mut ProgramContext, param: &Param, poly_type_key: TypeKey) -> Self {
         let mut required_spec_type_keys = vec![];
@@ -90,7 +91,13 @@ impl AParam {
                 impl_fns.insert(fn_sig.name, fn_sig.type_key);
             }
 
-            ctx.insert_spec_impl(generic_type_key, spec_type_key, impl_fns, Span::default());
+            ctx.insert_spec_impl(
+                generic_type_key,
+                spec_type_key,
+                impl_fns,
+                ImplConstraints::default(),
+                Span::default(),
+            );
         }
 
         AParam {

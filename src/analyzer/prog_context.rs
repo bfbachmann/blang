@@ -13,6 +13,7 @@ use crate::analyzer::ast::r#struct::AStructType;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::ast::tuple::ATupleType;
+use crate::analyzer::constraints::ImplConstraints;
 use crate::analyzer::error::{
     err_expected_params, err_expected_type, err_not_pub, err_undef_mod_alias, err_undef_type,
     err_unexpected_params, AnalyzeError, AnalyzeResult, ErrorKind,
@@ -74,70 +75,113 @@ impl Monomorphization {
 /// Contains information about `impl` blocks for a type.
 #[derive(Default)]
 pub struct TypeImpls {
-    /// Maps function name to function type key for all functions declared in default impl blocks
-    /// (impl blocks without specs) for the type.
-    default_fns: HashMap<String, TypeKey>,
+    /// All `impl` blocks for a type.
+    impls: Vec<TypeImpl>,
     /// Tracks usage of default member functions. Member functions that are used will appear here.
     used_default_fns: HashSet<TypeKey>,
-    /// Maps implemented spec type key to spec impl info.
-    spec_impls: HashMap<TypeKey, SpecImpl>,
     /// Contains the type keys of all public member functions for this type.
     pub_fn_tks: HashSet<TypeKey>,
 }
 
-/// Contains information about a spec implementation on some type.
+/// Contains information about an `impl` block for a type.
 #[derive(Clone, Default)]
-pub struct SpecImpl {
-    /// Maps member function names to their type keys.
-    pub member_fns: HashMap<String, TypeKey>,
+pub struct TypeImpl {
+    /// Maps generic type key to a set of spec type keys that the generic type must implement
+    /// for this impl to be valid.
+    pub constraints: ImplConstraints,
     /// The span of the impl header.
     pub header_span: Span,
+    /// Maps function name to function type key for all functions declared in default impl blocks
+    /// (impl blocks without specs) for the type.
+    pub member_fns: HashMap<String, TypeKey>,
+    /// The optional spec being implemented in this impl.
+    pub maybe_spec_tk: Option<TypeKey>,
 }
 
 impl TypeImpls {
+    /// Returns true iff there exists an impl for the given spec type.
+    fn has_impl_for_spec(&self, spec_tk: TypeKey) -> bool {
+        self.impls
+            .iter()
+            .any(|i| i.maybe_spec_tk.is_some_and(|tk| tk == spec_tk))
+    }
+
     /// Inserts information about a spec `impl` block for some type.
     fn insert_spec_impl(
         &mut self,
         spec_tk: TypeKey,
         member_fns: HashMap<String, TypeKey>,
+        constraints: ImplConstraints,
         header_span: Span,
     ) {
-        self.spec_impls.insert(
-            spec_tk,
-            SpecImpl {
-                member_fns,
-                header_span,
-            },
-        );
+        self.impls.push(TypeImpl {
+            constraints,
+            header_span,
+            member_fns,
+            maybe_spec_tk: Some(spec_tk),
+        });
+    }
+
+    /// Returns the impl block that implements the given spec, if any.
+    fn get_spec_impl(&self, spec_tk: TypeKey) -> Option<&TypeImpl> {
+        self.impls
+            .iter()
+            .find(|i| i.maybe_spec_tk.is_some_and(|tk| tk == spec_tk))
+    }
+
+    /// Returns the impl with the given header span, if any.
+    fn get_impl_by_header_span(&self, header_span: &Span) -> Option<&TypeImpl> {
+        self.impls.iter().find(|i| &i.header_span == header_span)
     }
 
     /// Inserts information about a default `impl` block for some type.
-    fn insert_default_impl(&mut self, member_fns: HashMap<String, TypeKey>) {
-        self.default_fns.extend(member_fns);
+    fn insert_default_impl(
+        &mut self,
+        member_fns: HashMap<String, TypeKey>,
+        constraints: ImplConstraints,
+        header_span: Span,
+    ) {
+        self.impls.push(TypeImpl {
+            constraints,
+            header_span,
+            member_fns,
+            maybe_spec_tk: None,
+        });
     }
 
     /// Inserts the given function info.
-    fn insert_fn(&mut self, maybe_spec_tk: Option<TypeKey>, fn_name: String, fn_type_key: TypeKey) {
-        match maybe_spec_tk {
-            Some(spec_tk) => {
-                self.spec_impls
-                    .entry(spec_tk)
-                    .or_default()
-                    .member_fns
-                    .insert(fn_name, fn_type_key);
-            }
-            None => {
-                self.default_fns.insert(fn_name, fn_type_key);
+    fn insert_fn(&mut self, maybe_spec_tk: Option<TypeKey>, fn_name: String, fn_tk: TypeKey) {
+        // Find the impl block that this function should belong to.
+        for impl_ in &mut self.impls {
+            let should_insert = match (impl_.maybe_spec_tk, maybe_spec_tk) {
+                (Some(impl_spec_tk), Some(spec_tk)) if impl_spec_tk == spec_tk => true,
+                (None, None) => true,
+                _ => false,
+            };
+
+            if should_insert {
+                impl_.member_fns.insert(fn_name, fn_tk);
+                return;
             }
         }
+
+        // There are no suitable blocks, so just make a default one.
+        self.impls.push(TypeImpl {
+            constraints: Default::default(),
+            header_span: Default::default(),
+            member_fns: HashMap::from([(fn_name, fn_tk)]),
+            maybe_spec_tk,
+        });
     }
 
     /// Returns the type key for the spec that the given function implements.
-    fn get_spec_type_key(&self, fn_type_key: TypeKey) -> Option<TypeKey> {
-        for (spec_tk, spec_impl) in &self.spec_impls {
-            for fn_tk in spec_impl.member_fns.values() {
-                if *fn_tk == fn_type_key {
-                    return Some(*spec_tk);
+    pub fn get_spec_type_key(&self, fn_type_key: TypeKey) -> Option<TypeKey> {
+        for impl_ in &self.impls {
+            if let Some(spec_tk) = &impl_.maybe_spec_tk {
+                for fn_tk in impl_.member_fns.values() {
+                    if *fn_tk == fn_type_key {
+                        return Some(*spec_tk);
+                    }
                 }
             }
         }
@@ -153,15 +197,30 @@ impl TypeImpls {
     /// Tries to find a "default" function (i.e. a function declared in a regular `impl` block
     /// without a spec) with the given name.
     fn get_default_fn(&mut self, name: &str) -> Option<TypeKey> {
-        self.default_fns.get(name).copied()
+        for impl_ in &self.impls {
+            if impl_.maybe_spec_tk.is_some() {
+                continue;
+            }
+
+            if let Some(fn_tk) = impl_.member_fns.get(name) {
+                return Some(*fn_tk);
+            }
+        }
+
+        None
     }
 
     /// Returns the type keys of all unused private default functions.
     fn unused_default_fns(&self) -> Vec<TypeKey> {
         let mut fn_tks = vec![];
-        for fn_tk in self.default_fns.values() {
-            if !self.pub_fn_tks.contains(fn_tk) && !self.used_default_fns.contains(fn_tk) {
-                fn_tks.push(*fn_tk);
+
+        for impl_ in &self.impls {
+            if impl_.maybe_spec_tk.is_none() {
+                for fn_tk in impl_.member_fns.values() {
+                    if !self.pub_fn_tks.contains(fn_tk) && !self.used_default_fns.contains(fn_tk) {
+                        fn_tks.push(*fn_tk);
+                    }
+                }
             }
         }
 
@@ -171,37 +230,54 @@ impl TypeImpls {
     /// Tries to find the function with the given name that is part of the implementation of the
     /// given spec.
     pub fn get_fn_from_spec_impl(&self, spec_tk: TypeKey, name: &str) -> Option<TypeKey> {
-        match self.spec_impls.get(&spec_tk) {
-            Some(impls) => impls.member_fns.get(name).cloned(),
-            None => None,
+        for impl_ in &self.impls {
+            match &impl_.maybe_spec_tk {
+                Some(tk) if *tk == spec_tk => {
+                    return impl_.member_fns.get(name).cloned();
+                }
+                _ => {}
+            }
         }
+
+        None
     }
 
     /// Tries to find the member function with the given name. Returns
     ///  - `Ok(None)` if no matching member functions exist
-    ///  - `Ok(Some(tk))` if exactly one matching member function exists
+    ///  - `Ok(Some(tk, constraints))` if exactly one matching member function exists
     ///  - `Err(())` if multiple matching member functions are found.
-    fn get_fns_by_name(&mut self, name: &str) -> Result<Option<TypeKey>, ()> {
+    fn get_fn_by_name(&mut self, name: &str) -> Result<Option<TypeKey>, ()> {
         let mut fn_tks = vec![];
+        let mut is_default_fn = false;
 
-        // Find a default function with the same name.
-        if let Some(tk) = self.default_fns.get(name) {
-            self.used_default_fns.insert(*tk);
-            fn_tks.push(*tk);
-        }
-
-        // Find any spec functions with the same name.
-        for spec_impl in self.spec_impls.values() {
-            if let Some(tk) = spec_impl.member_fns.get(name) {
-                fn_tks.push(*tk);
+        for impl_ in &self.impls {
+            if let Some(fn_tk) = impl_.member_fns.get(name) {
+                fn_tks.push(*fn_tk);
+                is_default_fn = impl_.maybe_spec_tk.is_none();
             }
         }
 
         match fn_tks.len() {
             0 => Ok(None),
-            1 => Ok(Some(fn_tks[0])),
+            1 => {
+                if is_default_fn {
+                    self.used_default_fns.insert(fn_tks[0]);
+                }
+
+                Ok(Some(fn_tks[0]))
+            }
             _ => Err(()),
         }
+    }
+
+    fn get_constraints_for_fn(&self, fn_tk: TypeKey) -> &ImplConstraints {
+        for impl_ in &self.impls {
+            if impl_.member_fns.values().any(|tk| *tk == fn_tk) {
+                return &impl_.constraints;
+            }
+        }
+
+        panic!("failed to locate impl for function")
     }
 }
 
@@ -322,7 +398,7 @@ impl ProgramContext {
             .spec_type_keys;
 
         for spec_type_key in spec_type_keys.clone() {
-            if self.get_spec_impl(type_key, spec_type_key).is_none()
+            if !self.type_implements_spec(type_key, spec_type_key)
                 && !self.type_has_unchecked_spec_impl(type_key, spec_type_key)
             {
                 missing_spec_type_keys.push(spec_type_key);
@@ -333,14 +409,26 @@ impl ProgramContext {
     }
 
     /// Returns information about the spec impl for the given type, if such a spec impl exists.
-    pub fn get_spec_impl(&mut self, impl_tk: TypeKey, spec_type_key: TypeKey) -> Option<&SpecImpl> {
+    pub fn get_spec_impl(&mut self, impl_tk: TypeKey, spec_type_key: TypeKey) -> Option<&TypeImpl> {
         match self.type_impls.get(&impl_tk) {
-            Some(impls) => impls.spec_impls.get(&spec_type_key),
+            Some(impls) => impls.get_spec_impl(spec_type_key),
             None => None,
         }
     }
 
-    /// Returns true if type given type has an impl for the given spec that has not yet been
+    /// Returns the impl for the given type with the given header span, if any.
+    pub fn get_impl_by_header_span(
+        &self,
+        impl_tk: TypeKey,
+        header_span: &Span,
+    ) -> Option<&TypeImpl> {
+        match self.type_impls.get(&impl_tk) {
+            Some(impl_) => impl_.get_impl_by_header_span(header_span),
+            None => None,
+        }
+    }
+
+    /// Returns true if the given type has an impl for the given spec that has not yet been
     /// analyzed.
     fn type_has_unchecked_spec_impl(&mut self, type_key: TypeKey, spec_type_key: TypeKey) -> bool {
         // We haven't yet analyzed an impl block on the type for the given spec, so let's see
@@ -1257,15 +1345,57 @@ impl ProgramContext {
         };
 
         // Mark this new monomorphic type as implementing the specs its polymorphic
-        // counterpart implements.
-        if let Some(impls) = self.type_impls.get(&poly_type_key) {
-            for (spec_tk, impl_info) in impls.spec_impls.clone() {
-                self.insert_spec_impl(
-                    mono.mono_type_key,
-                    spec_tk,
-                    HashMap::new(),
-                    impl_info.header_span,
-                );
+        // counterpart implements, but only if this monomorphization conforms to the spec
+        // impl constraints.
+        let mut new_spec_impls = vec![];
+        if let Some(type_impls) = self.type_impls.get(&poly_type_key) {
+            'impl_check: for impl_ in &type_impls.impls {
+                let spec_tk = match impl_.maybe_spec_tk {
+                    Some(tk) => tk,
+                    None => continue,
+                };
+
+                // We can only assume the monomorphic type implements this spec if the constraints
+                // for the spec were satisfied by the monomorphization.
+                for (param_tk, spec_tks) in impl_.constraints.entries() {
+                    for spec_tk in spec_tks {
+                        let mapped_tk = *type_mappings.get(param_tk).unwrap();
+                        if !self.type_implements_spec(mapped_tk, *spec_tk) {
+                            continue 'impl_check;
+                        }
+                    }
+                }
+
+                let fn_names: Vec<String> = impl_.member_fns.keys().cloned().collect();
+                new_spec_impls.push((spec_tk, impl_.header_span, fn_names));
+            }
+        }
+
+        for (spec_tk, header_span, fn_names) in new_spec_impls {
+            self.insert_spec_impl(
+                mono.mono_type_key,
+                spec_tk,
+                // We'll monomorphize the member functions for this spec impl below, and they'll
+                // be inserted into this impl info automatically.
+                HashMap::new(),
+                // No constraints necessary because we already know the original constraints were
+                // satisfied by the monomorphization.
+                ImplConstraints::default(),
+                header_span,
+            );
+
+            // We normally don't need to preemptively monomorphize all the member functions like
+            // this. Generally, we just monomorphize them on the fly when we need them. However,
+            // we have to do this here because this monomorphic type could be passed to a function
+            // that takes it via some generic parameter and then calls one of the methods from
+            // this spec on it. In that case, we need to have generated the relevant methods from
+            // the spec here so they're available during codegen. For all other cases, the method
+            // will be called on the monomorphic type explicitly, so we can just do this kind of
+            // member function monomorphization when we see the explicit function use.
+            for fn_name in fn_names {
+                self.try_monomorphize_member_fn(mono.mono_type_key, &fn_name)
+                    .unwrap()
+                    .unwrap();
             }
         }
 
@@ -1316,10 +1446,25 @@ impl ProgramContext {
     }
 
     /// Returns true if the give type implements the given spec and false otherwise.
-    fn type_implements_spec(&self, type_key: TypeKey, spec_tk: TypeKey) -> bool {
-        self.type_impls
+    pub fn type_implements_spec(&self, type_key: TypeKey, spec_tk: TypeKey) -> bool {
+        // Check if the type has impls, and if so, check if there is an impl for the given spec.
+        if self
+            .type_impls
             .get(&type_key)
-            .is_some_and(|impls| impls.spec_impls.contains_key(&spec_tk))
+            .is_some_and(|impls| impls.has_impl_for_spec(spec_tk))
+        {
+            return true;
+        }
+
+        // Check if the type is a param that has the given spec as an additional constraint in
+        // the current params scope.
+        if let Some(scope) = self.cur_mod_ctx().get_scope_by_kind(&ScopeKind::Params) {
+            if let Some(spec_tks) = scope.get_constraints_for_param(type_key) {
+                return spec_tks.contains(&spec_tk);
+            }
+        }
+
+        false
     }
 
     /// Analyzes a passed parameter type and checks that it matches the expected
@@ -1613,23 +1758,30 @@ impl ProgramContext {
         impl_tk: TypeKey,
         spec_tk: TypeKey,
         member_fns: HashMap<String, TypeKey>,
+        constraints: ImplConstraints,
         header_span: Span,
     ) {
         self.type_impls
             .entry(impl_tk)
             .or_default()
-            .insert_spec_impl(spec_tk, member_fns, header_span);
+            .insert_spec_impl(spec_tk, member_fns, constraints, header_span);
     }
 
     /// Inserts information about a default impl block for a type.
-    pub fn insert_default_impl(&mut self, impl_tk: TypeKey, member_fns: HashMap<String, TypeKey>) {
+    pub fn insert_default_impl(
+        &mut self,
+        impl_tk: TypeKey,
+        member_fns: HashMap<String, TypeKey>,
+        constraints: ImplConstraints,
+        header_span: Span,
+    ) {
         self.type_impls
             .entry(impl_tk)
             .or_default()
-            .insert_default_impl(member_fns);
+            .insert_default_impl(member_fns, constraints, header_span);
     }
 
-    /// Returns the type key of the spec that the given function on the given implements.
+    /// Returns the type key of the spec that the given function implements.
     pub fn get_spec_impl_by_fn(&self, fn_type_key: TypeKey) -> Option<TypeKey> {
         let func = self.get_type(fn_type_key).to_fn_sig();
         match func.maybe_impl_type_key {
@@ -1657,7 +1809,7 @@ impl ProgramContext {
         type_key: TypeKey,
         fn_name: &str,
     ) -> Result<Option<AFnSig>, ()> {
-        match self.get_member_fns(type_key, fn_name) {
+        match self.get_member_fn(type_key, fn_name) {
             // We didn't find any member functions for this type, but maybe this type was generated
             // as the result of a monomorphization and we have yet to generate this member function
             // for it. Let's check...
@@ -1678,10 +1830,60 @@ impl ProgramContext {
     ///  - `Ok(None)` if no matching member functions exist
     ///  - `Ok(Some(tk))` if exactly one matching member function exists
     ///  - `Err(())` if multiple matching member functions are found.
-    fn get_member_fns(&mut self, type_key: TypeKey, fn_name: &str) -> Result<Option<TypeKey>, ()> {
-        match self.type_impls.get_mut(&type_key) {
-            Some(impls) => impls.get_fns_by_name(fn_name),
+    fn get_member_fn(&mut self, type_key: TypeKey, fn_name: &str) -> Result<Option<TypeKey>, ()> {
+        let mut maybe_spec_tk = None;
+        let mut maybe_spec_fn_tk = None;
+
+        // For generic types, we need to figure out if they are declared as implementing any
+        // specs via impl constraints, and for each of those specs, we'll check if there is a
+        // member function with a matching name.
+        'generic: {
+            if self.get_type(type_key).is_generic() {
+                let scope = match self.cur_mod_ctx().get_scope_by_kind(&ScopeKind::Params) {
+                    Some(s) => s,
+                    None => break 'generic,
+                };
+
+                let spec_tks = match scope.get_constraints_for_param(type_key) {
+                    Some(s) => s,
+                    None => break 'generic,
+                };
+
+                for spec_tk in spec_tks {
+                    let spec_type = self.get_type(*spec_tk).to_spec_type();
+                    match (spec_type.member_fn_type_keys.get(fn_name), maybe_spec_fn_tk) {
+                        (Some(_), Some(_)) => {
+                            // We already found a method with a matching name, so it's ambiguous.
+                            return Err(());
+                        }
+                        (Some(fn_tk), None) => {
+                            maybe_spec_fn_tk = Some(*fn_tk);
+                            maybe_spec_tk = Some(*spec_tk);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        let result = match self.type_impls.get_mut(&type_key) {
+            Some(impls) => impls.get_fn_by_name(fn_name),
             None => Ok(None),
+        };
+
+        match (result, maybe_spec_fn_tk) {
+            // We found the member fn the normal way.
+            (r, None) => r,
+            // We found the member fn via a constraint on a generic type.
+            (Ok(None), Some(spec_fn_tk)) => {
+                let mut fn_sig = self.get_type(spec_fn_tk).to_fn_sig().clone();
+                fn_sig.replace_type_and_define(self, maybe_spec_tk.unwrap(), type_key);
+                let fn_tk = fn_sig.type_key;
+                self.insert_member_fn(type_key, maybe_spec_tk, fn_sig);
+                Ok(Some(fn_tk))
+            }
+            // We found multiple member fns by the given name.
+            _ => Err(()),
         }
     }
 
@@ -1703,7 +1905,6 @@ impl ProgramContext {
         fn_name: &str,
     ) -> Option<TypeKey> {
         let type_impls = self.type_impls.get(&type_key)?;
-
         type_impls.get_fn_from_spec_impl(spec_tk, fn_name)
     }
 
@@ -1722,7 +1923,7 @@ impl ProgramContext {
         };
 
         // Try to find the function by name on the parent polymorphic type.
-        let poly_fn_tk = match self.get_member_fns(mono.poly_type_key, fn_name) {
+        let poly_fn_tk = match self.get_member_fn(mono.poly_type_key, fn_name) {
             // No function found.
             Ok(None) => return Ok(None),
             // Exactly one function found. This is what we want.
@@ -1731,10 +1932,26 @@ impl ProgramContext {
             _ => return Err(()),
         };
 
+        let type_mappings = mono.type_mappings();
+
+        // Check if we're even allowed to access this member if it comes from an impl with
+        // extra constraints.
+        if let Some(impls) = self.type_impls.get(&mono.poly_type_key) {
+            let constraints = impls.get_constraints_for_fn(poly_fn_tk);
+
+            for (param_tk, spec_tks) in constraints.entries() {
+                let mapped_tk = *type_mappings.get(param_tk).unwrap();
+                for spec_tk in spec_tks {
+                    if !self.type_implements_spec(mapped_tk, *spec_tk) {
+                        return Ok(None);
+                    }
+                }
+            }
+        }
+
         let is_pub = self.member_fn_is_pub(mono.poly_type_key, poly_fn_tk);
 
         // Monomorphize the function from the polymorphic parent type.
-        let type_mappings = mono.type_mappings();
         let mono_fn_sig = match self.monomorphize_fn_type(poly_fn_tk, &type_mappings, None) {
             Some(fn_tk) => self.get_type(fn_tk).to_fn_sig().clone(),
             // Monomorphization failed.
@@ -1805,8 +2022,44 @@ impl ProgramContext {
     /// Returns true if the member function is accessible from the current module.
     /// This will be true if the type is defined in this module or the function was
     /// declared public.
-    pub fn member_fn_is_accessible(&self, type_key: TypeKey, fn_type_key: TypeKey) -> bool {
-        self.type_declared_in_cur_mod(type_key) || self.member_fn_is_pub(type_key, fn_type_key)
+    pub fn member_fn_is_accessible(&self, impl_tk: TypeKey, fn_tk: TypeKey) -> bool {
+        self.type_declared_in_cur_mod(impl_tk) || self.member_fn_is_pub(impl_tk, fn_tk)
+    }
+
+    /// Returns true iff the constraints for the impl in which the function was defined are
+    /// satisfied.
+    pub fn fn_constraints_satisfied(&self, impl_tk: TypeKey, fn_tk: TypeKey) -> bool {
+        let constraints = self
+            .type_impls
+            .get(&impl_tk)
+            .unwrap()
+            .get_constraints_for_fn(fn_tk);
+
+        if constraints.is_empty() {
+            return true;
+        }
+
+        let scope = match self.cur_mod_ctx().get_scope_by_kind(&ScopeKind::Params) {
+            None => {
+                return false;
+            }
+            Some(scope) => scope,
+        };
+
+        for (param_tk, required_spec_tks) in constraints.entries() {
+            match scope.get_constraints_for_param(*param_tk) {
+                None => {
+                    return false;
+                }
+                Some(implemented_spec_tks) => {
+                    if !implemented_spec_tks.is_superset(required_spec_tks) {
+                        return false;
+                    }
+                }
+            };
+        }
+
+        true
     }
 
     /// Returns true if the given type was declared in the current module.
@@ -1849,6 +2102,8 @@ impl ProgramContext {
                 self.insert_default_impl(
                     type_key,
                     HashMap::from([(member_fn_sig.name, member_fn_sig.type_key)]),
+                    ImplConstraints::default(),
+                    Span::default(),
                 );
             }
         }
@@ -2152,6 +2407,56 @@ impl ProgramContext {
 
     pub fn pop_params(&mut self, check_usage: bool) {
         assert_eq!(self.pop_scope(check_usage).kind, ScopeKind::Params);
+    }
+
+    /// Marks the current Params scope with information about the given constraints so that the
+    /// generic types in the constraints can be considered as implementing their respective specs
+    /// under the Params scope. This will also permanently store information that indicates that
+    /// these generic types implement their respective specs if the constraints are met so we can
+    /// look this up later.
+    pub fn set_impl_constraints(&mut self, constraints: ImplConstraints) {
+        // Mark the generic types as conditionally implementing the specs from their respective
+        // constraints.
+        for (param_tk, spec_tks) in constraints.entries() {
+            match self.type_impls.entry(*param_tk) {
+                Entry::Occupied(mut entry) => {
+                    for spec_tk in spec_tks {
+                        entry.get_mut().insert_spec_impl(
+                            *spec_tk,
+                            HashMap::new(),
+                            constraints.clone(),
+                            Span::default(),
+                        );
+                    }
+                }
+                Entry::Vacant(entry) => {
+                    let mut impls = TypeImpls::default();
+                    for spec_tk in spec_tks {
+                        impls.insert_spec_impl(
+                            *spec_tk,
+                            HashMap::new(),
+                            constraints.clone(),
+                            Span::default(),
+                        )
+                    }
+
+                    entry.insert(impls);
+                }
+            }
+        }
+
+        self.cur_mod_ctx_mut()
+            .get_scope_by_kind_mut(&ScopeKind::Params)
+            .unwrap()
+            .set_impl_constraints(constraints);
+    }
+
+    pub fn get_constraints_for_param(&self, param_tk: TypeKey) -> Option<&HashSet<TypeKey>> {
+        let scope = self
+            .cur_mod_ctx()
+            .get_scope_by_kind(&ScopeKind::Params)
+            .unwrap();
+        scope.get_constraints_for_param(param_tk)
     }
 
     pub fn type_is_pub(&self, type_key: TypeKey) -> bool {

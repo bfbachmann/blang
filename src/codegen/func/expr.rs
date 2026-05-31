@@ -14,11 +14,10 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::ast::symbol::SymbolKind;
 use crate::analyzer::ast::tuple::ATupleInit;
-use crate::analyzer::mangling::mangle_type;
 use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::parser::ast::op::Operator;
 
-use super::{get_fn_attrs, FnCodeGen};
+use super::{get_fn_attrs, get_fn_tk_and_mangled_name, FnCodeGen};
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles an arbitrary expression.
@@ -534,37 +533,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Compiles a function call, returning the result if one exists.
     pub(crate) fn gen_call(&mut self, call: &AFnCall) -> Option<BasicValueEnum<'ctx>> {
-        let mut fn_sig = self
-            .prog
-            .type_store
-            .get_type(call.fn_expr.type_key)
-            .to_fn_sig();
-
-        // Handle function calls on generic types.
-        if let Some(impl_tk) = fn_sig.maybe_impl_type_key {
-            if let AType::Generic(generic_type) = self.prog.type_store.get_type(impl_tk) {
-                // This is a function on a generic type. We need to look up the
-                // actual function by figuring out what the corresponding concrete
-                // type.
-                let mapped_impl_tk = self.type_converter.map_type_key(impl_tk);
-                let impls = self.prog.type_impls.get(&mapped_impl_tk).unwrap();
-
-                for spec_tk in &generic_type.spec_type_keys {
-                    if let Some(tk) = impls.get_fn_from_spec_impl(*spec_tk, &fn_sig.name) {
-                        fn_sig = self.prog.type_store.get_type(tk).to_fn_sig();
-                        break;
-                    }
-                }
-            }
-        }
-
-        let mangled_name = mangle_type(
-            &self.prog.type_store,
-            fn_sig.type_key,
-            self.type_converter.type_mapping(),
-            &self.prog.type_monomorphizations,
-        );
-        let ll_fn_type = self.type_converter.get_fn_type(fn_sig.type_key);
+        let (fn_tk, mangled_name) =
+            get_fn_tk_and_mangled_name(self.prog, self.type_converter, call.fn_expr.type_key);
+        let ll_fn_type = self.type_converter.get_fn_type(fn_tk);
 
         // Check if we're short one argument. If so, it means the function signature expects
         // the return value to be written to the address pointed to by the first argument, so we
@@ -639,7 +610,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
 
             AExprKind::MemberAccess(access) if access.is_method => {
-                let ll_fn = self.get_or_define_function(fn_sig.type_key);
+                let ll_fn = self.get_or_define_function(fn_tk);
                 self.set_di_location(&call.span.start_pos);
                 let ll_result = self
                     .ll_builder
@@ -667,6 +638,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         };
 
         // Attach argument attributes.
+        let fn_sig = self.type_converter.get_type(fn_tk).to_fn_sig();
         for (ll_loc, ll_attrs) in get_fn_attrs(self.ll_ctx, self.type_converter, fn_sig) {
             for ll_attr in ll_attrs {
                 ll_call.add_attribute(ll_loc, ll_attr);

@@ -187,9 +187,9 @@ impl<'a: 'ctx, 'ctx> ModuleCodeGen<'a, 'ctx> {
 
             gen_fn_sig(
                 self.ll_ctx,
+                self.prog,
                 &self.ll_mod,
                 &self.type_converter,
-                &self.prog.type_monomorphizations,
                 &sig,
                 linkage,
             );

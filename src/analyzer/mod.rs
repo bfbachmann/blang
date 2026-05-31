@@ -19,6 +19,7 @@ mod tests;
 mod type_containment;
 pub mod type_store;
 pub mod warn;
+mod constraints;
 
 /// Tries to check if the actual type matches the expected type using the provided type mappings.
 /// Updates the mappings if the actual type is compatible with the expected type and the expected

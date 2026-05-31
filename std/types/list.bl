@@ -5,6 +5,7 @@ use "std/mem" @mem
 use "std/types/opt" {Opt}
 use "std/types/slice" {Slice, SliceMut}
 use "std/runtime" {panic}
+use "std/io" {Print, Writer}
 
 /// The minimum capacity of the list once it has been allocated.
 const min_cap: uint = 4
@@ -194,10 +195,9 @@ impl List {
             return
         }
 
-        let mut new_cap = if cap < min_cap {
-            yield min_cap
-        } else {
-            yield cap * growth_factor
+        let mut new_cap = match cap < min_cap {
+            true => yield min_cap
+            false => yield cap * growth_factor
         }
 
         // Keep multiplying the capacity by the growth factor until it's big
@@ -214,5 +214,21 @@ impl List {
     fn resize(*mut self, new_cap: uint) {
         let ptr = @mem.gc_realloc(self.data.ptr() as *mut u8, new_cap * sizeof T)
         self.data = SliceMut[T].new(ptr as *mut T, new_cap)
+    }
+}
+
+impl List: Print if [T: Print] {
+    /// Prints all elements in the list.
+    fn print(self, writer: *mut Writer) {
+        "[".print(writer)
+
+        for let mut i = 0uint; i < self.len; i += 1 {
+            self.data.get(i).unwrap().print(writer)
+            if i + 1 < self.len {
+                ", ".print(writer)
+            }
+        }
+
+        "]".print(writer)
     }
 }

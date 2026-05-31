@@ -1795,6 +1795,115 @@ mod tests {
     }
 
     #[test]
+    fn impl_constraints_undef_param() {
+        let result = analyze(
+            r#"
+            spec Eq {}
+            struct Thing[T] {}
+            impl Thing if [Undef: Eq] {}
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::UndefParam));
+    }
+
+    #[test]
+    fn impl_constraints_redundant_constraint() {
+        let result = analyze(
+            r#"
+            spec Eq {}
+            spec Other {}
+            struct Thing[T: Eq] {}
+            impl Thing if [T: Eq + Other] {}
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::RedundantConstraint));
+    }
+
+    #[test]
+    fn impl_constraints_dup_constraint_spec() {
+        let result = analyze(
+            r#"
+            spec Eq {}
+            spec Other {}
+            struct Thing[T] {}
+            impl Thing if [T: Eq + Other + Eq] {}
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::DupConstraintSpec));
+    }
+
+    #[test]
+    fn impl_constraints_param_already_constrained() {
+        let result = analyze(
+            r#"
+            spec Eq {}
+            spec Other {}
+            struct Thing[T] {}
+            impl Thing if [T: Eq, T: Other] {}
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::ParamAlreadyConstrained));
+    }
+
+    #[test]
+    fn impl_constraints_illegal() {
+        let result = analyze(
+            r#"
+            struct Thing {}
+            impl Thing if [T: Eq] {}
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::IllegalConstraints));
+    }
+
+    #[test]
+    fn impl_constraints_undef_member() {
+        let result = analyze(
+            r#"
+            spec Eq {}
+            struct Thing[T] {t: T}
+            impl Thing if [T: Eq] {
+                fn value(self) -> T {
+                    return self.t
+                }
+            }
+            
+            fn main() {
+                Thing{t: true}.value()
+            }
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::UndefMember));
+    }
+
+    #[test]
+    fn impl_constraints_not_satisfied() {
+        let result = analyze(
+            r#"
+            spec Eq {
+                fn eq(self, other: Self) -> bool
+            }
+            
+            struct Thing[T] {t: T}
+
+            impl Thing if [T: Eq] {
+                fn contains(self, t: T) -> bool {
+                    return self.t.eq(t)
+                }
+            }
+            
+            impl Thing {
+                fn check(self, t: T) -> bool {
+                    // self.t doeesn't implement Eq in this context
+                    return self.t.eq(t)
+                }
+            }
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::ConstraintsNotSatisfied));
+    }
+
+    #[test]
     fn spec_not_defined() {
         let result = analyze(
             r#"

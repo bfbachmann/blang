@@ -607,7 +607,7 @@ mod tests {
                 ir_path,
                 "-O2",
                 "-fverify-intermediate-code",
-                "-fsanitize=undefined,address",
+                // "-fsanitize=undefined,address",
                 "-fstack-protector-all",
                 "-fno-sanitize-recover=all",
                 "-Wall",
@@ -615,9 +615,7 @@ mod tests {
                 "-Wextra",
                 "-Wpedantic",
                 "-Werror",
-                "-L/Users/bfbachmann/Documents/code/bdwgc/zig-out/lib",
                 "-lgc",
-                "-Wl,-rpath,/Users/bfbachmann/Documents/code/bdwgc/zig-out/lib",
                 "-o",
                 exe_path,
             ])

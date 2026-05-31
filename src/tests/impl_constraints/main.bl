@@ -1,0 +1,54 @@
+mod impl_constraints
+
+use "std/libc" {exit}
+use "std/runtime" {assert}
+
+fn main() {
+    let v = Value{inner: 1}
+    let c = Container{value: v}
+
+    assert(c.contains(v), "contains failed")
+    assert(c.to_int() == v.inner, "to_int failed")
+
+    exit(0)
+}
+
+spec Eq {
+    fn eq(self, other: Self) -> bool
+}
+
+spec ToInt {
+    fn to_int(self) -> int
+}
+
+struct Container[T] {
+    value: T
+}
+
+impl Container if [T: Eq] {
+    fn contains(self, target: T) -> bool {
+        return self.value.eq(target)
+    }
+}
+
+impl Container: ToInt if [T: ToInt] {
+    fn to_int(self) -> int {
+        return self.value.to_int()
+    }
+}
+
+struct Value {
+    inner: int
+}
+
+impl Value: Eq {
+    fn eq(self, other: Self) -> bool {
+        return self.inner == other.inner
+    }
+}
+
+impl Value: ToInt {
+    fn to_int(self) -> int {
+        return self.inner
+    }
+}

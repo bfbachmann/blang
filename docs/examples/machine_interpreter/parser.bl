@@ -4,8 +4,8 @@ use "std/libc" @libc
 use "std/types/list" {List}
 use "std/types/opt" {Opt}
 use "std/types/result" {Result}
-use "std/fmt" {Print, Format}
-use "std/io" {Writer}
+use "std/fmt" {Format}
+use "std/io" {Writer, Print}
 
 /// Represents a machine instruction.
 pub enum Instruction {

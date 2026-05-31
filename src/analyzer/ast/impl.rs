@@ -1,5 +1,3 @@
-use std::collections::{HashMap, HashSet};
-
 use crate::analyzer::ast::func::AFn;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{
@@ -14,6 +12,7 @@ use crate::parser::ast::func::Function;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Symbol;
+use std::collections::{HashMap, HashSet};
 
 /// Represents a semantically valid `impl` block that declares member functions for a type.
 #[derive(Debug)]
@@ -43,11 +42,19 @@ impl AImpl {
             return placeholder;
         }
 
+        let params = typ.params().cloned();
+
         // If there are parameters for this impl, push them to the program context
         // so we can resolve them when we're analyzing member functions.
-        let has_params = match typ.params() {
+        let has_params = match &params {
             Some(params) => {
                 ctx.push_params(params.clone());
+
+                // Get already-analyzed impl info and use it to set constraints on the current impl.
+                if let Some(impl_info) = ctx.get_impl_by_header_span(type_key, &impl_.header_span())
+                {
+                    ctx.set_impl_constraints(impl_info.constraints.clone());
+                }
                 true
             }
             None => false,
