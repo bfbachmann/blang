@@ -7,6 +7,7 @@ use crate::analyzer::ast::generic::AGenericType;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::constraints::ImplConstraints;
 use crate::analyzer::error::{err_dup_param, err_expected_spec};
+use crate::analyzer::ident::Ident;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::fmt::vec_to_string;
@@ -155,6 +156,11 @@ impl AParams {
     /// apply. It will be used to disambiguate parameters that have the same
     /// name and constraints but apply to different types.
     pub fn from(ctx: &mut ProgramContext, params: &Params, poly_type_key: TypeKey) -> Self {
+        ctx.push_params(AParams {
+            params: vec![],
+            span: params.span,
+        });
+
         let mut a_params: Vec<AParam> = vec![];
         for param in &params.params {
             // Record an error and skip this param if another param with the same name already
@@ -166,8 +172,20 @@ impl AParams {
 
             // Analyze the param.
             let a_param = AParam::from(ctx, param, poly_type_key);
+
+            ctx.insert_ident(Ident::new_type(
+                param.name.clone(),
+                false,
+                a_param.generic_type_key,
+                Some(ctx.cur_mod_id()),
+                param.span,
+            ))
+            .unwrap();
+
             a_params.push(a_param);
         }
+
+        ctx.pop_params(false);
 
         AParams {
             params: a_params,

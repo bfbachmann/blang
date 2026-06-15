@@ -873,6 +873,59 @@ mod tests {
     }
 
     #[test]
+    fn resolve_impl_out_of_order() {
+        let result = analyze(
+            r#"
+            fn main() {
+                // We analyze this do_thing call before we analyze `impl Thing: Test[T] {}`,
+                // but it should still work!
+                do_thing(Thing[int]{})
+            }
+            
+            struct Thing[T] {}
+            spec Test[T] {}
+            impl Thing: Test[T] {}
+            fn do_thing[T: Test[int]](t: T) {}
+            "#,
+        );
+        check_err(&result, None);
+    }
+
+    #[test]
+    fn complex_dependent_generics() {
+        let result = analyze(
+            r#"
+            fn main() {
+                // This is the crux. Can we recognize that Thing{} a valid arg here?
+                take(Thing{})
+            }
+
+            enum Opt[T] {
+                Some(T)
+                None
+            }
+            
+            spec Print {}
+            impl int: Print {}
+            struct Thing {}
+            
+            spec Get[T] {
+                fn get(self) -> T
+            }
+            
+            impl Thing: Get[Opt[int]] {
+                fn get(self) -> Opt[int] {
+                    return Opt::None
+                }
+            }
+
+            fn take[O: Print, T: Get[Opt[O]]](t: T) {}
+            "#,
+        );
+        check_err(&result, None);
+    }
+
+    #[test]
     fn enum_init_type_annotations_needed() {
         let result = analyze(
             r#"

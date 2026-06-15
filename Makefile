@@ -1,9 +1,10 @@
-.PHONY: lint test check
+.PHONY: fix test lint
 
-lint:
+fix:
 	cargo clippy --fix --allow-dirty
 
 test:
 	cargo llvm-cov
 
-check: lint test
+lint:
+	cargo clippy

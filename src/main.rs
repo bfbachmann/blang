@@ -607,7 +607,7 @@ mod tests {
                 ir_path,
                 "-O2",
                 "-fverify-intermediate-code",
-                // "-fsanitize=undefined,address",
+                // "-fsanitize=undefined,address", // TODO: reenable on next LLVM upgrade.
                 "-fstack-protector-all",
                 "-fno-sanitize-recover=all",
                 "-Wall",

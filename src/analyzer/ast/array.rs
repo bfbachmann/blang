@@ -88,26 +88,6 @@ impl AArrayType {
             len,
         }
     }
-
-    /// Returns true if this array type is the same as `other`. Array types are considered the same
-    /// if they have the same length and have element types that are considered the same.
-    pub fn is_same_as(&self, ctx: &ProgramContext, other: &AArrayType) -> bool {
-        // Check array lengths match.
-        if self.len != other.len {
-            return false;
-        }
-
-        // They're the same if they both have length 0.
-        if self.len == 0 {
-            return true;
-        }
-
-        ctx.types_match(
-            self.maybe_element_type_key.unwrap(),
-            other.maybe_element_type_key.unwrap(),
-            false,
-        )
-    }
 }
 
 /// Represents array initialization. Arrays can be initialized as empty, with a list of of values,

@@ -15,8 +15,9 @@ use crate::analyzer::ast::spec::ASpecType;
 use crate::analyzer::ast::tuple::ATupleType;
 use crate::analyzer::constraints::ImplConstraints;
 use crate::analyzer::error::{
-    err_expected_params, err_expected_type, err_not_pub, err_undef_mod_alias, err_undef_type,
-    err_unexpected_params, AnalyzeError, AnalyzeResult, ErrorKind,
+    err_expected_params, err_expected_type, err_not_pub, err_spec_not_satisfied,
+    err_undef_mod_alias, err_undef_type, err_unexpected_params, AnalyzeError, AnalyzeResult,
+    ErrorKind,
 };
 use crate::analyzer::ident::{Ident, IdentKind, ModAlias, Usage};
 use crate::analyzer::mod_context::ModuleContext;
@@ -24,7 +25,6 @@ use crate::analyzer::scope::{Scope, ScopeKind};
 use crate::analyzer::type_store::{GetType, TypeKey, TypeStore};
 use crate::analyzer::warn::{warn_unused, AnalyzeWarning};
 use crate::codegen::program::{init_target_machine, CodeGenConfig};
-use crate::fmt::format_code_vec;
 use crate::lexer::pos::{Locatable, Span};
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::{Name, Symbol};
@@ -38,7 +38,7 @@ use std::hash::{Hash, Hasher};
 #[derive(Debug, Hash, Clone, PartialEq, Eq)]
 pub struct ReplacedParam {
     pub param_type_key: TypeKey,
-    pub replacement_type_key: TypeKey,
+    pub replacement_tk: TypeKey,
 }
 
 /// Represents a polymorphic type that was monomorphized, and the set of
@@ -67,7 +67,7 @@ impl Monomorphization {
     pub fn type_mappings(&self) -> HashMap<TypeKey, TypeKey> {
         self.replaced_params
             .iter()
-            .map(|rp| (rp.param_type_key, rp.replacement_type_key))
+            .map(|rp| (rp.param_type_key, rp.replacement_tk))
             .collect()
     }
 }
@@ -99,13 +99,6 @@ pub struct TypeImpl {
 }
 
 impl TypeImpls {
-    /// Returns true iff there exists an impl for the given spec type.
-    fn has_impl_for_spec(&self, spec_tk: TypeKey) -> bool {
-        self.impls
-            .iter()
-            .any(|i| i.maybe_spec_tk.is_some_and(|tk| tk == spec_tk))
-    }
-
     /// Inserts information about a spec `impl` block for some type.
     fn insert_spec_impl(
         &mut self,
@@ -120,13 +113,6 @@ impl TypeImpls {
             member_fns,
             maybe_spec_tk: Some(spec_tk),
         });
-    }
-
-    /// Returns the impl block that implements the given spec, if any.
-    fn get_spec_impl(&self, spec_tk: TypeKey) -> Option<&TypeImpl> {
-        self.impls
-            .iter()
-            .find(|i| i.maybe_spec_tk.is_some_and(|tk| tk == spec_tk))
     }
 
     /// Returns the impl with the given header span, if any.
@@ -229,11 +215,34 @@ impl TypeImpls {
 
     /// Tries to find the function with the given name that is part of the implementation of the
     /// given spec.
-    pub fn get_fn_from_spec_impl(&self, spec_tk: TypeKey, name: &str) -> Option<TypeKey> {
+    pub fn get_fn_from_spec_impl<T: GetType>(
+        &self,
+        t: &T,
+        type_impls: &HashMap<TypeKey, TypeImpls>,
+        type_monos: &HashMap<TypeKey, Monomorphization>,
+        maybe_scope: Option<&Scope>,
+        spec_tk: TypeKey,
+        name: &str,
+    ) -> Option<TypeKey> {
         for impl_ in &self.impls {
             match &impl_.maybe_spec_tk {
-                Some(tk) if *tk == spec_tk => {
-                    return impl_.member_fns.get(name).cloned();
+                Some(tk)
+                    if matches!(
+                        types_have_same_shape(
+                            t,
+                            type_impls,
+                            type_monos,
+                            maybe_scope,
+                            *tk,
+                            spec_tk,
+                            false,
+                        ),
+                        (true, _)
+                    ) =>
+                {
+                    if let Some(fn_tk) = impl_.member_fns.get(name) {
+                        return Some(*fn_tk);
+                    }
                 }
                 _ => {}
             }
@@ -379,7 +388,7 @@ impl ProgramContext {
     }
 
     /// Returns the mutable module context corresponding to the module that is
-    /// currently being analysed.
+    /// currently being analyzed.
     fn cur_mod_ctx_mut(&mut self) -> &mut ModuleContext {
         self.module_contexts.get_mut(&self.cur_mod_id).unwrap()
     }
@@ -390,7 +399,8 @@ impl ProgramContext {
         &mut self,
         type_key: TypeKey,
         generic_type_key: TypeKey,
-    ) -> Vec<TypeKey> {
+    ) -> (Vec<TypeKey>, Vec<(TypeKey, TypeKey)>) {
+        let mut solved_param_mappings = vec![];
         let mut missing_spec_type_keys = vec![];
         let spec_type_keys = &self
             .get_type(generic_type_key)
@@ -398,22 +408,52 @@ impl ProgramContext {
             .spec_type_keys;
 
         for spec_type_key in spec_type_keys.clone() {
-            if !self.type_implements_spec(type_key, spec_type_key)
-                && !self.type_has_unchecked_spec_impl(type_key, spec_type_key)
-            {
+            let (passed, mappings) = self.type_implements_spec(type_key, spec_type_key);
+            solved_param_mappings.extend(mappings);
+            if !passed && !self.type_has_unchecked_spec_impl(type_key, spec_type_key) {
                 missing_spec_type_keys.push(spec_type_key);
             }
         }
 
-        missing_spec_type_keys
+        (missing_spec_type_keys, solved_param_mappings)
     }
 
-    /// Returns information about the spec impl for the given type, if such a spec impl exists.
-    pub fn get_spec_impl(&mut self, impl_tk: TypeKey, spec_type_key: TypeKey) -> Option<&TypeImpl> {
-        match self.type_impls.get(&impl_tk) {
-            Some(impls) => impls.get_spec_impl(spec_type_key),
-            None => None,
+    /// Returns a spec impl for the given type that would conflict with an impl for the given type
+    /// and spec, if any.
+    pub fn get_conflicting_spec_impl(
+        &self,
+        impl_tk: TypeKey,
+        spec_type_key: TypeKey,
+    ) -> Option<&TypeImpl> {
+        let impls = self.type_impls.get(&impl_tk)?;
+        for impl_ in &impls.impls {
+            if let Some(impl_spec_tk) = &impl_.maybe_spec_tk {
+                let (passed, _) = self.types_have_same_shape(spec_type_key, *impl_spec_tk);
+                if passed {
+                    return Some(impl_);
+                }
+            }
         }
+
+        None
+    }
+
+    /// Returns true if the two given types have the same shape. Types X and Y have the same shape
+    /// if any of the following are true
+    /// - they are the same type, or compatible types
+    /// - either of them is generic
+    /// - they are both monomorphizations of the same type where all parameters have the same shape.
+    fn types_have_same_shape(&self, tk1: TypeKey, tk2: TypeKey) -> (bool, Vec<(TypeKey, TypeKey)>) {
+        let maybe_scope = self.cur_mod_ctx().get_scope_by_kind(&ScopeKind::Params);
+        types_have_same_shape(
+            &self.type_store,
+            &self.type_impls,
+            &self.type_monomorphizations,
+            maybe_scope,
+            tk1,
+            tk2,
+            false,
+        )
     }
 
     /// Returns the impl for the given type with the given header span, if any.
@@ -443,7 +483,20 @@ impl ProgramContext {
                         continue;
                     }
 
+                    let maybe_params = self.get_type(impl_tk).params();
+                    let has_params = match maybe_params {
+                        Some(params) => {
+                            self.push_params(params.clone());
+                            true
+                        }
+                        None => false,
+                    };
+
                     let impl_spec_tk = self.resolve_type(&spec_sym.as_unresolved_type());
+                    if has_params {
+                        self.pop_params(false);
+                    }
+
                     if impl_spec_tk == spec_type_key {
                         return true;
                     }
@@ -1142,7 +1195,11 @@ impl ProgramContext {
             // monomorphization info.
             let mut param_tks = vec![];
             for param in &params.params {
-                param_tks.push(*type_mappings.get(&param.generic_type_key).unwrap());
+                param_tks.push(
+                    *type_mappings
+                        .get(&param.generic_type_key)
+                        .unwrap_or(&self.unknown_type_key()),
+                );
             }
 
             Some((*tk, param_tks))
@@ -1153,7 +1210,7 @@ impl ProgramContext {
             // type and use it to extract monomorphization info.
             let mut param_tks = vec![];
             for replaced_param in &mono.replaced_params {
-                let mut param_tk = replaced_param.replacement_type_key;
+                let mut param_tk = replaced_param.replacement_tk;
                 self.replace_tks(&mut param_tk, type_mappings);
                 param_tks.push(param_tk);
             }
@@ -1179,15 +1236,11 @@ impl ProgramContext {
 
         // Just try to monomorphize the type the basic way.
         match self.monomorphize_type(*tk, type_mappings, None) {
-            Some(mono_tk) => {
-                if mono_tk != *tk {
-                    *tk = mono_tk;
-                    true
-                } else {
-                    false
-                }
+            Some(mono_tk) if mono_tk != *tk => {
+                *tk = mono_tk;
+                true
             }
-            None => false,
+            _ => false,
         }
     }
 
@@ -1282,17 +1335,16 @@ impl ProgramContext {
         let mut type_mappings: HashMap<TypeKey, TypeKey> = HashMap::new();
         let mut all_type_keys_match = true;
         let mut param_checks_failed = false;
-        let type_display = self.display_type(poly_type_key);
 
         for (param, (passed_param_tk, param_loc)) in defined_params
             .iter()
             .zip(param_type_keys.iter().zip(param_locs.iter()))
         {
-            match self.check_param(*passed_param_tk, *param_loc, param, &type_display) {
+            match self.check_param(*passed_param_tk, *param_loc, param, poly_type_key) {
                 Ok(param_tk) => {
                     mono.replaced_params.push(ReplacedParam {
                         param_type_key: param.generic_type_key,
-                        replacement_type_key: param_tk,
+                        replacement_tk: param_tk,
                     });
 
                     type_mappings.insert(param.generic_type_key, param_tk);
@@ -1360,7 +1412,7 @@ impl ProgramContext {
                 for (param_tk, spec_tks) in impl_.constraints.entries() {
                     for spec_tk in spec_tks {
                         let mapped_tk = *type_mappings.get(param_tk).unwrap();
-                        if !self.type_implements_spec(mapped_tk, *spec_tk) {
+                        if let (false, _) = self.type_implements_spec(mapped_tk, *spec_tk) {
                             continue 'impl_check;
                         }
                     }
@@ -1371,7 +1423,37 @@ impl ProgramContext {
             }
         }
 
-        for (spec_tk, header_span, fn_names) in new_spec_impls {
+        for (mut spec_tk, header_span, fn_names) in new_spec_impls {
+            // Maybe the spec is a monomorphization using params from the impl type. If so, we
+            // need to re-monomorphize it using the type mappings for the impl type.
+            if let Some(spec_mono) = self.type_monomorphizations.get(&spec_tk) {
+                let mut spec_needs_mono = false;
+                let mut replacement_tks: Vec<TypeKey> = spec_mono
+                    .replaced_params
+                    .iter()
+                    .map(|p| p.replacement_tk)
+                    .collect();
+
+                for replacement_tk in &mut replacement_tks {
+                    if let Some(tk) = type_mappings.get(replacement_tk) {
+                        *replacement_tk = *tk;
+                        spec_needs_mono = true;
+                    }
+                }
+
+                if spec_needs_mono {
+                    let dummy_span = Span::default();
+                    let dummy_param_locs: Vec<&Span> =
+                        replacement_tks.iter().map(|_| &dummy_span).collect();
+                    spec_tk = self.try_execute_monomorphization(
+                        spec_mono.poly_type_key,
+                        replacement_tks,
+                        &dummy_param_locs,
+                        &dummy_span,
+                    );
+                }
+            }
+
             self.insert_spec_impl(
                 mono.mono_type_key,
                 spec_tk,
@@ -1404,67 +1486,33 @@ impl ProgramContext {
 
     /// Returns true if the two types are compatible.
     pub fn types_match(&self, tk1: TypeKey, tk2: TypeKey, ignore_mutability: bool) -> bool {
-        if tk1 == tk2 {
-            return true;
-        }
-
-        match (
-            self.type_monomorphizations.get(&tk1),
-            self.type_monomorphizations.get(&tk2),
-        ) {
-            (Some(mono1), Some(mono2)) => {
-                if mono1.poly_type_key != mono2.poly_type_key {
-                    return false;
-                }
-
-                for (p1, p2) in mono1
-                    .replaced_params
-                    .iter()
-                    .zip(mono2.replaced_params.iter())
-                {
-                    if !self.types_match(p1.replacement_type_key, p2.replacement_type_key, false) {
-                        return false;
-                    }
-                }
-
-                true
-            }
-
-            _ => match (self.get_type(tk1), self.get_type(tk2)) {
-                (AType::Array(a), AType::Array(b)) => a.is_same_as(self, b),
-                (AType::Tuple(a), AType::Tuple(b)) => a.is_same_as(self, b),
-                (AType::Function(a), AType::Function(b)) => a.is_same_as(self, b),
-                (AType::Pointer(a), AType::Pointer(b)) => a.is_same_as(self, b, ignore_mutability),
-                (AType::Unknown(_), _) | (_, AType::Unknown(_)) => true,
-                (AType::Spec(a), AType::Spec(b)) => a.is_same_as(b),
-                (AType::Spec(_), _) | (_, AType::Spec(_)) => {
-                    self.type_implements_spec(tk1, tk2) || self.type_implements_spec(tk2, tk1)
-                }
-                _ => false,
-            },
-        }
+        let maybe_scope = self.cur_mod_ctx().get_scope_by_kind(&ScopeKind::Params);
+        types_match(
+            &self.type_store,
+            &self.type_impls,
+            &self.type_monomorphizations,
+            maybe_scope,
+            tk1,
+            tk2,
+            ignore_mutability,
+        )
     }
 
     /// Returns true if the give type implements the given spec and false otherwise.
-    pub fn type_implements_spec(&self, type_key: TypeKey, spec_tk: TypeKey) -> bool {
-        // Check if the type has impls, and if so, check if there is an impl for the given spec.
-        if self
-            .type_impls
-            .get(&type_key)
-            .is_some_and(|impls| impls.has_impl_for_spec(spec_tk))
-        {
-            return true;
-        }
-
-        // Check if the type is a param that has the given spec as an additional constraint in
-        // the current params scope.
-        if let Some(scope) = self.cur_mod_ctx().get_scope_by_kind(&ScopeKind::Params) {
-            if let Some(spec_tks) = scope.get_constraints_for_param(type_key) {
-                return spec_tks.contains(&spec_tk);
-            }
-        }
-
-        false
+    pub fn type_implements_spec(
+        &self,
+        type_key: TypeKey,
+        spec_tk: TypeKey,
+    ) -> (bool, Vec<(TypeKey, TypeKey)>) {
+        let maybe_scope = self.cur_mod_ctx().get_scope_by_kind(&ScopeKind::Params);
+        type_implements_spec(
+            &self.type_store,
+            &self.type_impls,
+            &self.type_monomorphizations,
+            maybe_scope,
+            type_key,
+            spec_tk,
+        )
     }
 
     /// Analyzes a passed parameter type and checks that it matches the expected
@@ -1474,7 +1522,7 @@ impl ProgramContext {
         param_type_key: TypeKey,
         param_loc: &T,
         expected_param: &AParam,
-        type_display: &String,
+        poly_tk: TypeKey,
     ) -> AnalyzeResult<TypeKey> {
         let passed_param_type = self.get_type(param_type_key);
 
@@ -1499,7 +1547,7 @@ impl ProgramContext {
                     "Expected a concrete or generic type in place of parameter {} on \
                     {}, but found spec {}.",
                     expected_param.name,
-                    type_display,
+                    self.display_type(poly_tk),
                     passed_param_type.to_spec_type().name,
                 )
                 .as_str(),
@@ -1508,33 +1556,20 @@ impl ProgramContext {
 
         // Make sure that the type passed as the parameter value implements
         // the required specs.
-        let missing_spec_type_keys =
+        let (missing_spec_type_keys, _) =
             self.get_missing_spec_impls(param_type_key, expected_param.generic_type_key);
         let missing_spec_names: Vec<String> = missing_spec_type_keys
             .into_iter()
             .map(|tk| self.display_type(tk))
             .collect();
         if !missing_spec_names.is_empty() {
-            let param_type_display = self.display_type(param_type_key);
-            return Err(AnalyzeError::new(
-                ErrorKind::SpecNotSatisfied,
-                format_code!("type {} violates parameter constraints", param_type_display).as_str(),
+            return Err(err_spec_not_satisfied(
+                self,
+                param_type_key,
+                &missing_spec_names,
+                &expected_param.name,
+                poly_tk,
                 *param_loc.span(),
-            )
-            .with_detail(
-                format!(
-                    "{} does not implement spec{} {} required \
-                    by parameter {} in {}.",
-                    format_code!(param_type_display),
-                    match missing_spec_names.len() {
-                        1 => "",
-                        _ => "s",
-                    },
-                    format_code_vec(&missing_spec_names, ", "),
-                    format_code!(expected_param.name),
-                    format_code!(type_display),
-                )
-                .as_str(),
             ));
         }
 
@@ -1905,7 +1940,16 @@ impl ProgramContext {
         fn_name: &str,
     ) -> Option<TypeKey> {
         let type_impls = self.type_impls.get(&type_key)?;
-        type_impls.get_fn_from_spec_impl(spec_tk, fn_name)
+
+        for impl_ in &type_impls.impls {
+            if let Some(impl_spec_tk) = &impl_.maybe_spec_tk {
+                if let (true, _) = self.types_have_same_shape(*impl_spec_tk, spec_tk) {
+                    return impl_.member_fns.get(fn_name).cloned();
+                }
+            }
+        }
+
+        None
     }
 
     /// Tries to locate the given member function on the parent polymorphic type and monomorphizes
@@ -1942,7 +1986,7 @@ impl ProgramContext {
             for (param_tk, spec_tks) in constraints.entries() {
                 let mapped_tk = *type_mappings.get(param_tk).unwrap();
                 for spec_tk in spec_tks {
-                    if !self.type_implements_spec(mapped_tk, *spec_tk) {
+                    if let (false, _) = self.type_implements_spec(mapped_tk, *spec_tk) {
                         return Ok(None);
                     }
                 }
@@ -1960,11 +2004,46 @@ impl ProgramContext {
 
         // Figure out if this function was implemented as part of a spec. If so, we need to
         // associate the newly-monomorphized function with that same spec.
-        let maybe_spec_tk = self
+        let mut maybe_spec_tk = self
             .type_impls
             .get(&mono.poly_type_key)
             .unwrap()
             .get_spec_type_key(poly_fn_tk);
+
+        // If this function is part of a spec impl, then we may also need to monomorphize the spec.
+        'spec_check: {
+            let spec_tk = match maybe_spec_tk {
+                Some(tk) => tk,
+                None => break 'spec_check,
+            };
+
+            let spec_mono = match self.type_monomorphizations.get(&spec_tk) {
+                Some(mono) => mono,
+                None => break 'spec_check,
+            };
+
+            let mut param_tks = vec![];
+            let mut dummy_param_locs = vec![];
+            let dummy_span = Span::default();
+
+            for replaced_param in &spec_mono.replaced_params {
+                param_tks.push(
+                    *type_mappings
+                        .get(&replaced_param.replacement_tk)
+                        .unwrap_or(&replaced_param.replacement_tk),
+                );
+                dummy_param_locs.push(&dummy_span);
+            }
+
+            let new_spec_tk = self.try_execute_monomorphization(
+                spec_mono.poly_type_key,
+                param_tks,
+                &dummy_param_locs,
+                &dummy_span,
+            );
+
+            maybe_spec_tk = Some(new_spec_tk);
+        }
 
         self.insert_member_fn(type_key, maybe_spec_tk, mono_fn_sig.clone());
         if is_pub {
@@ -2098,14 +2177,23 @@ impl ProgramContext {
                     member_fn_sig.type_key,
                 );
             }
-            None => {
-                self.insert_default_impl(
+            None => match maybe_spec_type_key {
+                None => {
+                    self.insert_default_impl(
+                        type_key,
+                        HashMap::from([(member_fn_sig.name, member_fn_sig.type_key)]),
+                        ImplConstraints::default(),
+                        Span::default(),
+                    );
+                }
+                Some(spec_tk) => self.insert_spec_impl(
                     type_key,
+                    spec_tk,
                     HashMap::from([(member_fn_sig.name, member_fn_sig.type_key)]),
                     ImplConstraints::default(),
                     Span::default(),
-                );
-            }
+                ),
+            },
         }
     }
 
@@ -2485,10 +2573,10 @@ impl ProgramContext {
             params += "[";
             for (i, replaced_param) in mono.replaced_params.iter().enumerate() {
                 // Prevent infinite recursion.
-                let param_display = if replaced_param.replacement_type_key == type_key {
+                let param_display = if replaced_param.replacement_tk == type_key {
                     self.display_type(replaced_param.param_type_key)
                 } else {
-                    self.display_type(replaced_param.replacement_type_key)
+                    self.display_type(replaced_param.replacement_tk)
                 };
 
                 match i {
@@ -2506,4 +2594,355 @@ impl ProgramContext {
 
         params
     }
+}
+
+/// Returns true if the two given types have the same shape. Types X and Y have the same shape
+/// if any of the following are true
+/// - they are the same type, or compatible types
+/// - either of them is generic
+/// - they are both monomorphizations of the same type where all parameters have the same shape.
+///
+/// This function is just indented for use when trying to detect conflicting spec impls.
+fn types_have_same_shape<T: GetType>(
+    t: &T,
+    type_impls: &HashMap<TypeKey, TypeImpls>,
+    type_monos: &HashMap<TypeKey, Monomorphization>,
+    maybe_scope: Option<&Scope>,
+    tk1: TypeKey,
+    tk2: TypeKey,
+    check_specs: bool,
+) -> (bool, Vec<(TypeKey, TypeKey)>) {
+    let mut discovered_mappings = vec![];
+
+    if types_match(t, type_impls, type_monos, maybe_scope, tk1, tk2, false) {
+        return (true, discovered_mappings);
+    }
+
+    match (t.get_type(tk1), t.get_type(tk2)) {
+        (AType::Bool, AType::Bool)
+        | (AType::U8, AType::U8)
+        | (AType::I8, AType::I8)
+        | (AType::U16, AType::U16)
+        | (AType::I16, AType::I16)
+        | (AType::U32, AType::U32)
+        | (AType::I32, AType::I32)
+        | (AType::F32, AType::F32)
+        | (AType::I64, AType::I64)
+        | (AType::U64, AType::U64)
+        | (AType::F64, AType::F64)
+        | (AType::Int, AType::Int)
+        | (AType::Uint, AType::Uint)
+        | (AType::Str, AType::Str)
+        | (AType::Char, AType::Char) => return (true, discovered_mappings),
+
+        (AType::Generic(_), _) | (_, AType::Generic(_)) if !check_specs => {
+            return (true, discovered_mappings)
+        }
+
+        (_, AType::Generic(generic_type)) => {
+            for spec_tk in &generic_type.spec_type_keys {
+                let (passed, new_mappings) =
+                    type_implements_spec(t, type_impls, type_monos, maybe_scope, tk1, *spec_tk);
+                if !passed {
+                    return (false, discovered_mappings);
+                }
+
+                discovered_mappings.extend(new_mappings);
+                discovered_mappings.push((tk2, tk1))
+            }
+
+            return (true, discovered_mappings);
+        }
+
+        _ => {}
+    }
+
+    match (type_monos.get(&tk1), type_monos.get(&tk2)) {
+        (Some(mono1), Some(mono2)) if mono1.poly_type_key == mono2.poly_type_key => {
+            for (param1, param2) in mono1
+                .replaced_params
+                .iter()
+                .zip(mono2.replaced_params.iter())
+            {
+                let (passed, new_mappings) = types_have_same_shape(
+                    t,
+                    type_impls,
+                    type_monos,
+                    maybe_scope,
+                    param1.replacement_tk,
+                    param2.replacement_tk,
+                    check_specs,
+                );
+                if !passed {
+                    return (false, discovered_mappings);
+                }
+
+                discovered_mappings.extend(new_mappings);
+            }
+
+            (true, discovered_mappings)
+        }
+
+        _ => (false, discovered_mappings),
+    }
+}
+
+/// Returns true if the two types are compatible (i.e one type can be used where the other is
+/// expected).
+pub fn types_match<T: GetType>(
+    t: &T,
+    type_impls: &HashMap<TypeKey, TypeImpls>,
+    type_monos: &HashMap<TypeKey, Monomorphization>,
+    maybe_scope: Option<&Scope>,
+    tk1: TypeKey,
+    tk2: TypeKey,
+    ignore_mutability: bool,
+) -> bool {
+    if tk1 == tk2 {
+        return true;
+    }
+
+    match (type_monos.get(&tk1), type_monos.get(&tk2)) {
+        (Some(mono1), Some(mono2)) => {
+            if mono1.poly_type_key != mono2.poly_type_key {
+                return false;
+            }
+
+            for (p1, p2) in mono1
+                .replaced_params
+                .iter()
+                .zip(mono2.replaced_params.iter())
+            {
+                if !types_match(
+                    t,
+                    type_impls,
+                    type_monos,
+                    maybe_scope,
+                    p1.replacement_tk,
+                    p2.replacement_tk,
+                    false,
+                ) {
+                    return false;
+                }
+            }
+
+            true
+        }
+
+        _ => match (t.get_type(tk1), t.get_type(tk2)) {
+            (AType::Array(a), AType::Array(b)) => {
+                // Check array lengths match.
+                if a.len != b.len {
+                    return false;
+                }
+
+                // They're the same if they both have length 0.
+                if a.len == 0 {
+                    return true;
+                }
+
+                types_match(
+                    t,
+                    type_impls,
+                    type_monos,
+                    maybe_scope,
+                    a.maybe_element_type_key.unwrap(),
+                    b.maybe_element_type_key.unwrap(),
+                    false,
+                )
+            }
+
+            (AType::Tuple(a), AType::Tuple(b)) => {
+                if a.fields.len() != b.fields.len() {
+                    return false;
+                }
+
+                for (field1, field2) in a.fields.iter().zip(b.fields.iter()) {
+                    if !types_match(
+                        t,
+                        type_impls,
+                        type_monos,
+                        maybe_scope,
+                        field1.type_key,
+                        field2.type_key,
+                        false,
+                    ) {
+                        return false;
+                    }
+                }
+
+                true
+            }
+
+            (AType::Function(a), AType::Function(b)) => {
+                if a.args.len() != b.args.len() {
+                    return false;
+                }
+
+                for (this_arg, other_arg) in a.args.iter().zip(b.args.iter()) {
+                    if !types_match(
+                        t,
+                        type_impls,
+                        type_monos,
+                        maybe_scope,
+                        this_arg.type_key,
+                        other_arg.type_key,
+                        false,
+                    ) {
+                        return false;
+                    }
+                }
+
+                match (a.maybe_ret_type_key, b.maybe_ret_type_key) {
+                    (None, None) => true,
+                    (Some(this_ret_tk), Some(other_ret_tk)) => types_match(
+                        t,
+                        type_impls,
+                        type_monos,
+                        maybe_scope,
+                        this_ret_tk,
+                        other_ret_tk,
+                        false,
+                    ),
+                    _ => false,
+                }
+            }
+
+            (AType::Pointer(a), AType::Pointer(b)) => {
+                let same_pointee_types = types_match(
+                    t,
+                    type_impls,
+                    type_monos,
+                    maybe_scope,
+                    a.pointee_type_key,
+                    b.pointee_type_key,
+                    false,
+                );
+                same_pointee_types && (ignore_mutability || a.is_mut == b.is_mut)
+            }
+
+            (AType::Spec(a), AType::Spec(b)) => a.member_fn_type_keys == b.member_fn_type_keys,
+
+            (AType::Spec(_), _) | (_, AType::Spec(_)) => {
+                let (check1, _) =
+                    type_implements_spec(t, type_impls, type_monos, maybe_scope, tk1, tk2);
+                let (check2, _) =
+                    type_implements_spec(t, type_impls, type_monos, maybe_scope, tk2, tk1);
+                check1 || check2
+            }
+
+            (AType::Unknown(_), _) | (_, AType::Unknown(_)) => true,
+
+            _ => false,
+        },
+    }
+}
+
+/// Returns true if the give type implements the given spec and false otherwise.
+pub fn type_implements_spec<T: GetType>(
+    t: &T,
+    type_impls: &HashMap<TypeKey, TypeImpls>,
+    type_monos: &HashMap<TypeKey, Monomorphization>,
+    maybe_scope: Option<&Scope>,
+    type_key: TypeKey,
+    spec_tk: TypeKey,
+) -> (bool, Vec<(TypeKey, TypeKey)>) {
+    let mut solved_param_mappings = vec![];
+
+    // Check if the type has impls, and if so, check if there is an impl for the given spec.
+    if let Some(impls) = type_impls.get(&type_key) {
+        let maybe_required_spec_mono = type_monos.get(&spec_tk);
+
+        'next_impl: for impl_ in &impls.impls {
+            let impl_spec_tk = match impl_.maybe_spec_tk {
+                None => continue,
+                Some(tk) => tk,
+            };
+
+            if impl_spec_tk == spec_tk {
+                // We found an impl for the type that implements exactly the spec we're looking
+                // for. We don't need to check the constraints on the impl because:
+                // - if the type is a monomorphization, this spec impl wouldn't exist here at
+                //   all if its constraints weren't met by the monomorphization
+                // - if the type is not the result of monomorphization, then there can't be any
+                //   constraints at all.
+                return (true, solved_param_mappings);
+            }
+
+            // We know that the type doesn't exactly implement the spec, but maybe it implements
+            // a compatible monomorphization of the spec.
+            let maybe_impl_spec_mono = type_monos.get(&impl_spec_tk);
+            match (maybe_impl_spec_mono, maybe_required_spec_mono) {
+                (Some(impl_spec_mono), Some(required_spec_mono)) => {
+                    if impl_spec_mono.poly_type_key != required_spec_mono.poly_type_key {
+                        continue;
+                    }
+
+                    // At this point we know that the type implements some monomorphization of
+                    // the required spec. We just need to make sure that the monomorphization is
+                    // compatible with the required spec by checking that all constraints are
+                    // satisfied.
+                    for (impl_rp, required_rp) in impl_spec_mono
+                        .replaced_params
+                        .iter()
+                        .zip(&required_spec_mono.replaced_params)
+                    {
+                        let required_param_type = t.get_type(required_rp.replacement_tk);
+                        match required_param_type {
+                            AType::Generic(generic_type) => {
+                                for spec_tk in &generic_type.spec_type_keys {
+                                    let (passed, mappings) = type_implements_spec(
+                                        t,
+                                        type_impls,
+                                        type_monos,
+                                        maybe_scope,
+                                        impl_rp.replacement_tk,
+                                        *spec_tk,
+                                    );
+
+                                    if !passed {
+                                        continue 'next_impl;
+                                    }
+
+                                    solved_param_mappings.extend(mappings);
+                                    solved_param_mappings
+                                        .push((required_rp.replacement_tk, impl_rp.replacement_tk));
+                                }
+                            }
+                            _ => {
+                                let (passed, new_mappings) = types_have_same_shape(
+                                    t,
+                                    type_impls,
+                                    type_monos,
+                                    maybe_scope,
+                                    impl_rp.replacement_tk,
+                                    required_rp.replacement_tk,
+                                    true,
+                                );
+                                if !passed {
+                                    continue 'next_impl;
+                                }
+
+                                solved_param_mappings.extend(new_mappings);
+                            }
+                        }
+                    }
+
+                    return (true, solved_param_mappings);
+                }
+
+                _ => continue,
+            };
+        }
+    }
+
+    // Check if the type is a param that has the given spec as an additional constraint in
+    // the current params scope.
+    let passed = maybe_scope.is_some_and(|scope| {
+        scope
+            .get_constraints_for_param(type_key)
+            .is_some_and(|spec_tks| spec_tks.contains(&spec_tk))
+    });
+
+    (passed, solved_param_mappings)
 }

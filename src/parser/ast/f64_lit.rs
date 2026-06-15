@@ -21,10 +21,6 @@ pub struct F64Lit {
     pub span: Span,
 }
 
-impl Eq for F64Lit {
-    fn assert_receiver_is_total_eq(&self) {}
-}
-
 impl Hash for F64Lit {
     fn hash<H: Hasher>(&self, _: &mut H) {}
 }

@@ -17,7 +17,7 @@ use crate::analyzer::ast::tuple::ATupleInit;
 use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::parser::ast::op::Operator;
 
-use super::{get_fn_attrs, get_fn_tk_and_mangled_name, FnCodeGen};
+use super::{get_fn_attrs, map_fn_tk_and_mangle_name, FnCodeGen};
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles an arbitrary expression.
@@ -534,7 +534,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles a function call, returning the result if one exists.
     pub(crate) fn gen_call(&mut self, call: &AFnCall) -> Option<BasicValueEnum<'ctx>> {
         let (fn_tk, mangled_name) =
-            get_fn_tk_and_mangled_name(self.prog, self.type_converter, call.fn_expr.type_key);
+            map_fn_tk_and_mangle_name(self.prog, self.type_converter, call.fn_expr.type_key);
         let ll_fn_type = self.type_converter.get_fn_type(fn_tk);
 
         // Check if we're short one argument. If so, it means the function signature expects

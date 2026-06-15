@@ -84,22 +84,6 @@ impl ATupleType {
 
         panic!("tuple type {self} has no field {name}")
     }
-
-    /// Returns true if this tuple type is the same as `other`. Tuple types are considered the same
-    /// if they contain types that are considered the same in the same order.
-    pub fn is_same_as(&self, ctx: &ProgramContext, other: &ATupleType) -> bool {
-        if self.fields.len() != other.fields.len() {
-            return false;
-        }
-
-        for (field1, field2) in self.fields.iter().zip(other.fields.iter()) {
-            if !ctx.types_match(field1.type_key, field2.type_key, false) {
-                return false;
-            }
-        }
-
-        true
-    }
 }
 
 /// Tuple initialization.

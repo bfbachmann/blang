@@ -1,0 +1,7 @@
+mod iter
+
+use "std/types/opt" {Opt}
+
+pub spec Iter[T] {
+    fn next(*mut self) -> Opt[T]
+}

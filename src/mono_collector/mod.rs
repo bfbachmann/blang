@@ -397,7 +397,16 @@ fn track_fn(collector: &mut MonoItemCollector, queue: bool, func: AFn) {
 
 fn walk_next_item(collector: &mut MonoItemCollector) {
     let item = collector.complete_mono_items.last().unwrap();
-    let func = collector.fns.get(&item.type_key).unwrap();
+    let func = match collector.fns.get(&item.type_key) {
+        None => {
+            panic!(
+                "failed to locate {} (tk={})",
+                collector.ctx.display_type(item.type_key),
+                item.type_key,
+            );
+        }
+        Some(f) => f,
+    };
 
     for statement in func.body.statements.clone() {
         walk_statement(collector, statement);
@@ -621,8 +630,7 @@ fn walk_type_key(collector: &mut MonoItemCollector, type_key: TypeKey) {
             let poly_impl_tk = match collector.ctx.type_monomorphizations.get(&mapped_impl_tk) {
                 Some(mono) => {
                     for replaced_param in &mono.replaced_params {
-                        let replacement_tk =
-                            collector.map_type_key(replaced_param.replacement_type_key);
+                        let replacement_tk = collector.map_type_key(replaced_param.replacement_tk);
                         type_mappings.insert(replaced_param.param_type_key, replacement_tk);
                         update_type_mappings(collector, replacement_tk, &mut type_mappings);
                     }
@@ -653,7 +661,7 @@ fn walk_type_key(collector: &mut MonoItemCollector, type_key: TypeKey) {
                     if let Some(fn_tk) = collector.ctx.get_member_fn_from_spec_impl(
                         poly_impl_tk,
                         spec_tk,
-                        fn_sig.name.as_str(),
+                        &fn_sig.name,
                     ) {
                         collector.queue_item(fn_tk, type_mappings);
                     } else if let Some(fn_tk) = collector.ctx.get_member_fn_from_spec_impl(
@@ -664,8 +672,11 @@ fn walk_type_key(collector: &mut MonoItemCollector, type_key: TypeKey) {
                         collector.queue_item(fn_tk, type_mappings);
                     } else {
                         panic!(
-                            "function `{}` should exist on type {poly_impl_tk} for spec {spec_tk}",
+                            "function `{}` should exist on type {} or {} for spec {}",
                             fn_sig.name,
+                            collector.ctx.display_type(poly_impl_tk),
+                            collector.ctx.display_type(mapped_impl_tk),
+                            collector.ctx.display_type(spec_tk),
                         )
                     }
                 }
@@ -708,11 +719,11 @@ fn update_type_mappings(
 ) {
     if let Some(mono) = collector.ctx.type_monomorphizations.get(&type_key) {
         for replaced_param in &mono.replaced_params {
-            let replacement_tk = collector.map_type_key(replaced_param.replacement_type_key);
-            if replacement_tk != replaced_param.replacement_type_key
-                && !type_mappings.contains_key(&replaced_param.replacement_type_key)
+            let replacement_tk = collector.map_type_key(replaced_param.replacement_tk);
+            if replacement_tk != replaced_param.replacement_tk
+                && !type_mappings.contains_key(&replaced_param.replacement_tk)
             {
-                type_mappings.insert(replaced_param.replacement_type_key, replacement_tk);
+                type_mappings.insert(replaced_param.replacement_tk, replacement_tk);
             }
 
             update_type_mappings(collector, replacement_tk, type_mappings);

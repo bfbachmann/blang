@@ -485,6 +485,9 @@ fn define_impl(ctx: &mut ProgramContext, impl_: &Impl) {
     let has_params = match &params {
         Some(params) => {
             ctx.push_params(params.clone());
+            if let Some(constraints) = &maybe_constraints {
+                ctx.set_impl_constraints(constraints.clone());
+            }
             true
         }
         None => false,

@@ -187,6 +187,11 @@ impl List {
         return self.len == self.capacity()
     }
 
+    /// Returns an iterator that yields values from this list.
+    pub fn iter(self) -> ListIter[T] {
+        return ListIter[T].from(self)
+    }
+
     /// Grows the memory that backs the list so it can fit `count` new values.
     fn grow_to_fit(*mut self, count: uint) {
         let desired_cap = self.len + count
@@ -210,7 +215,7 @@ impl List {
         self.resize(new_cap)
     }
 
-    /// Resized the unerlying memory segment.
+    /// Resizes the unerlying memory segment.
     fn resize(*mut self, new_cap: uint) {
         let ptr = @mem.gc_realloc(self.data.ptr() as *mut u8, new_cap * sizeof T)
         self.data = SliceMut[T].new(ptr as *mut T, new_cap)

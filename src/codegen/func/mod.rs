@@ -328,7 +328,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles the given function.
     fn gen_fn(&mut self, func: &AFn) -> CodeGenResult<FunctionValue<'ctx>> {
         let (_, mangled_name) =
-            get_fn_tk_and_mangled_name(self.prog, self.type_converter, func.signature.type_key);
+            map_fn_tk_and_mangle_name(self.prog, self.type_converter, func.signature.type_key);
 
         // Retrieve the function and create a new "entry" block at the start of the function
         // body.
@@ -636,7 +636,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// if it's foreign.
     fn get_or_define_function(&mut self, fn_tk: TypeKey) -> FunctionValue<'ctx> {
         let (fn_tk, mangled_name) =
-            get_fn_tk_and_mangled_name(self.prog, self.type_converter, fn_tk);
+            map_fn_tk_and_mangle_name(self.prog, self.type_converter, fn_tk);
 
         match self.ll_mod.get_function(&mangled_name) {
             Some(f) => f,
@@ -657,7 +657,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 }
 
-pub fn get_fn_tk_and_mangled_name(
+pub fn map_fn_tk_and_mangle_name(
     prog: &MonoProg,
     type_converter: &TypeConverter,
     mut fn_tk: TypeKey,
@@ -679,7 +679,16 @@ pub fn get_fn_tk_and_mangled_name(
                 .get_spec_type_key(fn_sig.type_key)
                 .unwrap();
 
-            fn_tk = impls.get_fn_from_spec_impl(spec_tk, &fn_sig.name).unwrap();
+            fn_tk = impls
+                .get_fn_from_spec_impl(
+                    &prog.type_store,
+                    &prog.type_impls,
+                    &prog.type_monomorphizations,
+                    None,
+                    spec_tk,
+                    &fn_sig.name,
+                )
+                .unwrap();
         }
     }
 
@@ -703,7 +712,7 @@ pub fn gen_fn_sig<'a, 'ctx>(
     linkage: Option<Linkage>,
 ) -> String {
     // Define the function in the module using the fully-qualified function name.
-    let (fn_tk, mangled_name) = get_fn_tk_and_mangled_name(prog, type_converter, sig.type_key);
+    let (fn_tk, mangled_name) = map_fn_tk_and_mangle_name(prog, type_converter, sig.type_key);
     let ll_fn_type = type_converter.get_fn_type(fn_tk);
 
     assert!(

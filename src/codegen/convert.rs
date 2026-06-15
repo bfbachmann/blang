@@ -413,9 +413,9 @@ impl<'a> TypeConverter<'a> {
         let typ = self.get_type(type_key);
 
         match typ {
-            AType::Bool | AType::U8 | AType::I8 | AType::Char => 1,
+            AType::Bool | AType::U8 | AType::I8 => 1,
             AType::U16 | AType::I16 => 2,
-            AType::U32 | AType::I32 | AType::F32 => 4,
+            AType::U32 | AType::I32 | AType::F32 | AType::Char => 4,
             AType::I64 | AType::U64 | AType::F64 => 8,
             AType::Int | AType::Uint | AType::Function(_) | AType::Pointer(_) => {
                 self.size_of_ptr() as u64

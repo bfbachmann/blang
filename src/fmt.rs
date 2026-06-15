@@ -32,7 +32,7 @@ macro_rules! errorln {
 macro_rules! warnln {
     ($($arg:tt)*) => {{
         use colored::{CustomColor, Colorize};
-        print!("{}", "warning: ".custom_color(CustomColor::new(235, 227, 14)).bold());
+        print!("{}", "warning: ".custom_color(CustomColor::new(252, 157, 73)).bold());
         println!($($arg)*);
     }};
 }

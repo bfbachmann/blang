@@ -1,10 +1,9 @@
 mod generic_impls
 
+use "std/types/opt" {Opt}
+use "std/types/list" {List}
 use "std/libc" {puts, exit}
 use "std/runtime" {panic, assert}
-
-// List is the data type being tested.
-use "std/types/list" {List}
 
 spec ToInt {
     fn to_int(self) -> int
@@ -95,6 +94,35 @@ fn main() {
         assert(Empty[str].do_nothing() == 234, "expected 234")
         assert(Empty[Empty[uint]].do_nothing() == 234, "expected 234")
         assert(Thing[ValueGetter].call() == -3, "expected -3")
+    }
+
+    // Check that we can properly use generic impls of generic specs by using
+    // ListIterMap's impl of Iter.
+    {
+        let mut list = List[int].new()
+        for let mut i = 0; i < 10; i += 1 {
+            list.push(i)
+        }
+
+        let mut it = list.iter().filter_map(fn (elem: int) -> Opt[int] {
+            match elem % 2 {
+                0 => return Opt::Some(elem)
+                _ => return Opt::None
+            }
+        })
+        let mut expected = 0
+        loop {
+            match it.next() {
+                let Opt::Some(elem) => {
+                    assert(elem == expected, "wrong elem value")
+                    expected += 2
+                }
+                _ => {
+                    assert(expected == 10, "wrong number of elements")
+                    break
+                }
+            }
+        }
     }
 
     exit(0)

@@ -17,10 +17,6 @@ pub struct F32Lit {
     pub span: Span,
 }
 
-impl Eq for F32Lit {
-    fn assert_receiver_is_total_eq(&self) {}
-}
-
 impl Display for F32Lit {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}f32", self.value)

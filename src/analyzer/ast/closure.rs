@@ -819,6 +819,9 @@ fn check_cond_yields(ctx: &mut ProgramContext, cond: &ACond) {
 /// Checks that all cases in the given match statement yield.
 fn check_match_yields(ctx: &mut ProgramContext, match_: &AMatch) {
     for case in &match_.cases {
+        // TODO: match case is legal if it is guaranteed to
+        //  - return
+        //  - break or continue to somewhere outside the match start point
         check_closure_yields(ctx, &case.body, &ScopeKind::BranchBody)
     }
 }

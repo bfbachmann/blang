@@ -9,6 +9,7 @@ fn main() {
 
     assert(c.contains(v), "contains failed")
     assert(c.to_int() == v.inner, "to_int failed")
+    assert(get_value(Thing{t: Value{inner: 321}}) == 321, "expected 321")
 
     exit(0)
 }
@@ -51,4 +52,32 @@ impl Value: ToInt {
     fn to_int(self) -> int {
         return self.inner
     }
+}
+
+struct Thing[T] {
+    t: T
+}
+
+impl Thing {
+    fn new(t: T) -> Self {
+        return Self {
+            t: t
+        }
+    }
+}
+
+spec Bla[X: ToInt] {
+    fn bla(self) -> int
+}
+
+// Make sure that we're allowed to use T in Bla[T] given that it implements
+// ToInt in this context.
+impl Thing: Bla[T] if [T: ToInt] {
+    fn bla(self) -> int {
+        return self.t.to_int()
+    }
+}
+
+fn get_value[T: ToInt, B: Bla[T]](b: B) -> int {
+    return b.bla()
 }
