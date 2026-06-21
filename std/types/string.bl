@@ -170,6 +170,6 @@ impl CharIter: Iter[char] {
 // Turbo-hack to make a u32 into a char, because the compiler doesn't allow it.
 // (The compiler doesn't allow it because it's only safe if you know for sure
 // that the codepoint is valid UTF-8).
-fn unsafe_u32_to_char(u: u32) -> char {
+pub fn unsafe_u32_to_char(u: u32) -> char {
     return (&u as *char)^
 }

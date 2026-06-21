@@ -557,15 +557,13 @@ pub fn err_invalid_type_cast(
 #[must_use]
 pub fn err_superfluous_type_cast(
     ctx: &ProgramContext,
-    left_expr: &AExpr,
     target_tk: TypeKey,
     span: Span,
 ) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::SuperfluousTypeCast,
         format_code!(
-            "{} already has type {}",
-            left_expr.display(ctx),
+            "value already has type {}",
             ctx.display_type(target_tk)
         )
         .as_str(),

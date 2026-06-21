@@ -1064,7 +1064,7 @@ fn analyze_type_cast(
         ctx.insert_err(err);
         AExpr::new_zero_value(ctx, target_type)
     } else if left_expr.type_key == target_type_key {
-        let err = err_superfluous_type_cast(ctx, &left_expr, target_type_key, span);
+        let err = err_superfluous_type_cast(ctx, target_type_key, span);
         ctx.insert_err(err);
         AExpr::new_zero_value(ctx, target_type)
     } else {
@@ -1454,7 +1454,7 @@ fn analyze_from(
     // Make sure all possible branches of the statement yield a value.
     let mut closure = AClosure::new(vec![statement], *from.statement.span());
     if valid_statement && yields {
-        check_closure_yields(ctx, &closure, &ScopeKind::FromBody);
+        check_closure_yields(ctx, &mut vec![], &closure, &ScopeKind::FromBody);
     }
 
     AExpr {
