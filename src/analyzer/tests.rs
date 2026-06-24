@@ -983,7 +983,7 @@ mod tests {
             "#,
             r#"
                 fn main() {
-                    let a = 8 bls 2
+                    let a = 8 << 2
                 }
             "#,
         ];

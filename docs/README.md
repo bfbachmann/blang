@@ -552,7 +552,7 @@ enum Opt[T] {
 
 impl Opt {
     fn is_none(*self) -> bool {
-        return self^ ~~ Opt[T]::None
+        return self^ =~ Opt[T]::None
     }
 }
 ```

@@ -25,21 +25,21 @@ impl char: Print {
             bytes.(0) = (codepoint) as u8
         } else if (codepoint <= 0x7ff) {
             // 2-byte UTF-8
-            bytes.(0) = ((codepoint brs 6u32) bor 0xc0) as u8
-            bytes.(1) = ((codepoint band 0x3fu32) bor 0x80) as u8
+            bytes.(0) = ((codepoint >> 6u32) | 0xc0) as u8
+            bytes.(1) = ((codepoint & 0x3fu32) | 0x80) as u8
             len = 2
         } else if (codepoint <= 0xffff) {
             // 3-byte UTF-8
-            bytes.(0) = ((codepoint brs 12u32) bor 0xe0) as u8
-            bytes.(1) = (((codepoint brs 6u32) band 0x3f) bor 0x80) as u8
-            bytes.(2) = ((codepoint band 0x3fu32) bor 0x80) as u8
+            bytes.(0) = ((codepoint >> 12u32) | 0xe0) as u8
+            bytes.(1) = (((codepoint >> 6u32) & 0x3f) | 0x80) as u8
+            bytes.(2) = ((codepoint & 0x3fu32) | 0x80) as u8
             len = 3
         } else {
             // 4-byte UTF-8
-            bytes.(0) = ((codepoint brs 18u32) bor 0xf0) as u8
-            bytes.(1) = (((codepoint brs 12u32) band 0x3f) bor 0x80) as u8
-            bytes.(2) = (((codepoint brs 6u32) band 0x3f) bor 0x80) as u8
-            bytes.(3) = ((codepoint band 0x3fu32) bor 0x80) as u8
+            bytes.(0) = ((codepoint >> 18u32) | 0xf0) as u8
+            bytes.(1) = (((codepoint >> 12u32) & 0x3f) | 0x80) as u8
+            bytes.(2) = (((codepoint >> 6u32) & 0x3f) | 0x80) as u8
+            bytes.(3) = ((codepoint & 0x3fu32) | 0x80) as u8
             len = 4
         }
 

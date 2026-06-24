@@ -229,7 +229,7 @@ pub fn parse_expr(parser: &mut FileParser) -> ParseResult<Expression> {
         // Check if the expression is a unary operation, a `sizeof` (which is not considered
         // an operator because its operand is a type and not an expression), or just a basic
         // expression without operators.
-        let expr = if let Some(op) = Operator::from(&token.kind) {
+        let expr = if let Some(op) = Operator::from(&token.kind, false) {
             // The operator should not be binary since it is at the beginning of the expression.
             if !op.is_unary() {
                 return Err(ParseError::new_with_token(
@@ -276,7 +276,7 @@ pub fn parse_expr(parser: &mut FileParser) -> ParseResult<Expression> {
         match parser.tokens.peek_next() {
             // There are more tokens in the sequence that might be part of this expression.
             // Check for optional binary operator or `as` type cast operator.
-            Some(t) => match Operator::from(&t.kind) {
+            Some(t) => match Operator::from(&t.kind, true) {
                 Some(op) if op.is_binary() => {
                     let token = t.clone();
                     parser.tokens.next();
@@ -284,7 +284,7 @@ pub fn parse_expr(parser: &mut FileParser) -> ParseResult<Expression> {
                     // Do the part of the Shunting Yard algorithm where we push operations
                     // on the operator stack with lower precedence to the output queue.
                     while let Some(stack_op_token) = op_stack.back() {
-                        let stack_op = Operator::from(&stack_op_token.kind).unwrap();
+                        let stack_op = Operator::from(&stack_op_token.kind, true).unwrap();
                         if stack_op.precedence() > op.precedence()
                             || (stack_op.precedence() == op.precedence()
                                 && op.is_left_associative())
@@ -309,7 +309,7 @@ pub fn parse_expr(parser: &mut FileParser) -> ParseResult<Expression> {
 
     // Pop the remaining operators from the operator stack and onto the output queue.
     while let Some(token) = op_stack.pop_back() {
-        out_q.push_back(OutNode::BinOp(Operator::from(&token.kind).unwrap()));
+        out_q.push_back(OutNode::BinOp(Operator::from(&token.kind, true).unwrap()));
     }
 
     // Create expression tree from output queue in RPN order.
@@ -320,7 +320,7 @@ pub fn parse_expr(parser: &mut FileParser) -> ParseResult<Expression> {
 fn parse_unary_operators(parser: &mut FileParser) -> Vec<Operator> {
     let mut unary_ops = vec![];
     while let Some(token) = parser.tokens.peek_next() {
-        match Operator::from(&token.kind) {
+        match Operator::from(&token.kind, false) {
             // Make sure the operator is unary and is not a deref (because derefs are suffix
             // operators).
             Some(op) if op.is_unary() && op != Operator::Defererence => {

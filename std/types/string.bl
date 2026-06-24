@@ -95,17 +95,17 @@ impl CharIter {
         let mut extra = 0u8
 
         // Determine expected sequence length and the bits contained in the leading byte.
-        if b0 band 0b1110_000 == 0b1100_0000 {
+        if b0 & 0b1110_000 == 0b1100_0000 {
             // 2-byte sequence: U+0080 – U+07FF
-            codepoint = (b0 band 0b0001_1111) as u32
+            codepoint = (b0 & 0b0001_1111) as u32
             extra = 1
-        } else if b0 band 0b1111_0000 == 0b1110_0000 {
+        } else if b0 & 0b1111_0000 == 0b1110_0000 {
             // 3-byte sequence: U+0800 – U+FFFF
-            codepoint = (b0 band 0b0000_1111) as u32
+            codepoint = (b0 & 0b0000_1111) as u32
             extra = 2
-        } else if b0 band 0b1111_1000 == 0b1111_0000 {
+        } else if b0 & 0b1111_1000 == 0b1111_0000 {
             // 4-byte sequence: U+10000 – U+10FFFF
-            codepoint = (b0 band 0b0000_0111) as u32
+            codepoint = (b0 & 0b0000_0111) as u32
             extra = 3
         } else {
             // Lone continuation byte (0x80–0xBF) or invalid byte (0xF8–0xFF).
@@ -115,8 +115,8 @@ impl CharIter {
         // Consume the continuation bytes.
         for let mut i = 0u8; i < extra; i += 1 {
             match self.bytes.next() {
-                let Opt::Some(b) if b band 0b1100_0000 == 0b1000_0000 => {
-                    codepoint = (codepoint bls 6) bor (b band 0b0011_1111) as u32
+                let Opt::Some(b) if b & 0b1100_0000 == 0b1000_0000 => {
+                    codepoint = (codepoint << 6) | (b & 0b0011_1111) as u32
                 }
                 let other => {
                     // Not a valid continuation byte.
@@ -148,7 +148,7 @@ impl CharIter {
             _ => yield false
         };
         let surrogate = codepoint >= 0xd800 && codepoint <= 0xdfff
-        let too_large  = codepoint > 0x10ffff;
+        let too_large = codepoint > 0x10ffff;
  
         if overlong || surrogate || too_large {
             return Opt::Some(UTF8_UNKNOWN);

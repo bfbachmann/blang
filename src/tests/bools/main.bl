@@ -23,12 +23,12 @@ fn main() {
     assert((true || false) == true, "fail: 17")
     assert((false || false) == false, "fail: 18")
     assert(2_u32 > 0, "fail: 19")
-    assert(1 bls 3uint == 8, "fail: 20")
-    assert(4 brs 2u8 == 1, "fail: 21")
-    assert(-1234 bxor 432 == -1378, "fail: 22")
-    assert(223 band -432 == 80, "fail: 23")
-    assert(223 bor -432 == -289, "fail: 24")
-    assert(bnot 38 == -39, "fail: 25")
+    assert(1 << 3uint == 8, "fail: 20")
+    assert(4 >> 2u8 == 1, "fail: 21")
+    assert(-1234 xor 432 == -1378, "fail: 22")
+    assert(223 & -432 == 80, "fail: 23")
+    assert(223 | -432 == -289, "fail: 24")
+    assert(~ 38 == -39, "fail: 25")
 
     // Test hex integer literals.
     assert(0xf_u8 == 15_u8, "fail: 25")
