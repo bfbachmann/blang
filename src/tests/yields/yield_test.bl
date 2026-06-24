@@ -64,5 +64,23 @@ fn main() {
         }
     }
 
+    // Check that we're allowed to continue from a branch instead of yield.
+    {
+        for let mut i = 0; i < 1; i += 1 {
+            let result = match false {
+                true => yield true
+                false => continue
+            }
+        }
+
+        for i = 0; i < 1; i += 1 {
+            let result = if false {
+                yield true
+            } else {
+                continue
+            }
+        }
+    }
+
     exit(0)
 }

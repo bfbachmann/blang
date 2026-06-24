@@ -759,7 +759,7 @@ pub fn check_closure_yields(
 
                 // A break is legal if it breaks to somewhere outside where the yield result
                 // value is declared.
-                Some(AStatement::Break(_))
+                Some(AStatement::Break(_) | AStatement::Continue(_))
                     if get_lowest_scope_depth(scopes, &ScopeKind::LoopBody).is_none() => {}
 
                 _ => {
