@@ -1,7 +1,6 @@
 use crate::analyzer::ast::func::{AFn, AFnSig};
 use crate::analyzer::ast::r#const::AConst;
 use crate::analyzer::mangling::mangle_type;
-use crate::analyzer::prog_context::Monomorphization;
 use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::codegen::convert::TypeConverter;
 use crate::codegen::error::CodeGenResult;
@@ -328,12 +327,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Compiles the given function.
     fn gen_fn(&mut self, func: &AFn) -> CodeGenResult<FunctionValue<'ctx>> {
-        let mangled_name = mangle_type(
-            &self.prog.type_store,
-            func.signature.type_key,
-            self.type_converter.type_mapping(),
-            &self.prog.type_monomorphizations,
-        );
+        let (_, mangled_name) =
+            map_fn_tk_and_mangle_name(self.prog, self.type_converter, func.signature.type_key);
 
         // Retrieve the function and create a new "entry" block at the start of the function
         // body.
@@ -367,7 +362,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             let arg_type = self.prog.type_store.get_type(arg.type_key);
             let is_composite = arg_type.is_composite();
 
-            // TODO: I'm not sure if it even makes sense to spill args onto the stack
+            // TODO: I'm not sure if it even makes sense to spill args onto the stack/memory
             // in so many cases. Technically, we only need to do this if the argument
             // needs an address in memory that is guaranteed to be in this function's stack
             // frame. The only such case I can think of is if the value is going to be mutated
@@ -432,8 +427,6 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         if typ.is_composite() {
             // Copy the value from the source pointer to the destination pointer.
             let ll_type_size = self.type_converter.const_int_size_of_type(type_key);
-
-            // TODO: I'm not sure about the alignment here at all.
             let ll_align = self.type_converter.align_of_type(type_key);
 
             self.ll_builder
@@ -451,37 +444,40 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         }
     }
 
-    /// Allocates space on the stack in the current function's entry block to store
-    /// a value of the given type.
-    fn stack_alloc(&mut self, name: &str, type_key: TypeKey) -> PointerValue<'ctx> {
+    /// Allocates memory to store a value of the given type.
+    fn gen_alloc(&mut self, name: &str, type_key: TypeKey) -> PointerValue<'ctx> {
         let ll_type = self.type_converter.get_basic_type(type_key);
-        self.build_entry_alloc(name, ll_type)
+        let malloc_atomic = !self.type_converter.may_contain_gc_ptr(type_key);
+        self.gen_gc_malloc(name, ll_type, malloc_atomic)
     }
 
-    /// Allocates space on the stack in the current function's entry block to store
-    /// a value of the given LLVM type.
-    fn build_entry_alloc(&mut self, name: &str, ll_typ: BasicTypeEnum<'ctx>) -> PointerValue<'ctx> {
-        let entry = self.ll_fn.unwrap().get_first_basic_block().unwrap();
-
-        // Switch to the beginning of the entry block if we're not already there.
-        let prev_block = match entry.get_first_instruction() {
-            Some(first_instr) => {
-                self.ll_builder.position_before(&first_instr);
-                self.cur_block
-            }
-            None => self.set_current_block(entry),
+    /// Allocates space on the GC heap to store the given type. If `atomic` is true, it will be
+    /// assumed that the given type doesn't contain any pointers.
+    fn gen_gc_malloc(
+        &mut self,
+        name: &str,
+        ll_type: BasicTypeEnum<'ctx>,
+        atomic: bool,
+    ) -> PointerValue<'ctx> {
+        let fn_name = match (self.prog.config.emit_debug_info, atomic) {
+            (true, true) => "GC_debug_malloc_atomic",
+            (true, false) => "GC_debug_malloc",
+            (false, true) => "GC_malloc_atomic",
+            (false, false) => "GC_malloc",
         };
+        let ll_fn = self.ll_mod.get_function(fn_name).unwrap();
 
-        let ll_ptr = self
-            .ll_builder
-            .build_alloca(ll_typ, format!("{name}_ptr").as_str())
-            .unwrap();
-
-        // Make sure we continue from where we left off as our builder position may have changed
-        // in this function.
-        self.set_current_block(prev_block.unwrap());
-
-        ll_ptr
+        // Generate a call to it with the size of the type as its argument and return the pointer
+        // it returns.
+        let ll_value = self
+            .type_converter
+            .get_const_int(self.type_converter.abi_size_of_type(ll_type), false);
+        self.ll_builder
+            .build_call(ll_fn, &[ll_value.into()], name)
+            .unwrap()
+            .try_as_basic_value()
+            .unwrap_basic()
+            .into_pointer_value()
     }
 
     /// Builds a load instruction to load data from a pointer in `ll_ptr` if
@@ -639,12 +635,8 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Either finds the given function in the current module, or generates a declaration for it
     /// if it's foreign.
     fn get_or_define_function(&mut self, fn_tk: TypeKey) -> FunctionValue<'ctx> {
-        let mangled_name = mangle_type(
-            self.type_converter,
-            fn_tk,
-            self.type_converter.type_mapping(),
-            &self.prog.type_monomorphizations,
-        );
+        let (fn_tk, mangled_name) =
+            map_fn_tk_and_mangle_name(self.prog, self.type_converter, fn_tk);
 
         match self.ll_mod.get_function(&mangled_name) {
             Some(f) => f,
@@ -652,9 +644,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let fn_sig = self.type_converter.get_type(fn_tk).to_fn_sig();
                 let mangled_name = gen_fn_sig(
                     self.ll_ctx,
+                    self.prog,
                     self.ll_mod,
                     self.type_converter,
-                    &self.prog.type_monomorphizations,
                     fn_sig,
                     Some(Linkage::External),
                 );
@@ -665,23 +657,63 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     }
 }
 
+pub fn map_fn_tk_and_mangle_name(
+    prog: &MonoProg,
+    type_converter: &TypeConverter,
+    mut fn_tk: TypeKey,
+) -> (TypeKey, String) {
+    let fn_sig = prog.type_store.get_type(fn_tk).to_fn_sig();
+
+    // Handle function calls on generic types.
+    if let Some(impl_tk) = fn_sig.maybe_impl_type_key {
+        if prog.type_store.get_type(impl_tk).is_generic() {
+            // This is a function on a generic type. We need to look up the
+            // actual function by figuring out what the corresponding concrete
+            // type is.
+            let mapped_impl_tk = type_converter.map_type_key(impl_tk);
+            let impls = prog.type_impls.get(&mapped_impl_tk).unwrap();
+            let spec_tk = prog
+                .type_impls
+                .get(&impl_tk)
+                .unwrap()
+                .get_spec_type_key(fn_sig.type_key)
+                .unwrap();
+
+            fn_tk = impls
+                .get_fn_from_spec_impl(
+                    &prog.type_store,
+                    &prog.type_impls,
+                    &prog.type_monomorphizations,
+                    None,
+                    spec_tk,
+                    &fn_sig.name,
+                )
+                .unwrap();
+        }
+    }
+
+    let mangled_name = mangle_type(
+        type_converter,
+        fn_tk,
+        type_converter.type_mapping(),
+        &prog.type_monomorphizations,
+    );
+
+    (fn_tk, mangled_name)
+}
+
 /// Defines the given function in the current module based on the function signature.
 pub fn gen_fn_sig<'a, 'ctx>(
     ctx: &'ctx Context,
+    prog: &'a MonoProg,
     ll_mod: &'a Module<'ctx>,
     type_converter: &'a TypeConverter<'ctx>,
-    type_monomorphizations: &'a HashMap<TypeKey, Monomorphization>,
     sig: &AFnSig,
     linkage: Option<Linkage>,
 ) -> String {
     // Define the function in the module using the fully-qualified function name.
-    let ll_fn_type = type_converter.get_fn_type(sig.type_key);
-    let mangled_name = mangle_type(
-        type_converter,
-        sig.type_key,
-        type_converter.type_mapping(),
-        type_monomorphizations,
-    );
+    let (fn_tk, mangled_name) = map_fn_tk_and_mangle_name(prog, type_converter, sig.type_key);
+    let ll_fn_type = type_converter.get_fn_type(fn_tk);
 
     assert!(
         ll_mod.get_function(&mangled_name).is_none(),

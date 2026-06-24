@@ -25,6 +25,7 @@ use crate::parser::ast::r#enum::EnumVariantInit;
 use crate::parser::ast::r#struct::StructInit;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::sizeof::SizeOf;
+use crate::parser::ast::statement::Statement;
 use crate::parser::ast::str_lit::StrLit;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::tuple::TupleInit;
@@ -206,7 +207,7 @@ impl Display for OutNode {
 ///
 ///     <basic> [<binop> <comp>]*
 ///     <unop> <basic> [<binop> <comp>]*
-///     sizeof type [<binop> <comp>]*
+///     sizeof <type> [<binop> <comp>]*
 ///     <basic> as <type> [<binop> <comp>]*
 ///
 /// where
@@ -228,7 +229,7 @@ pub fn parse_expr(parser: &mut FileParser) -> ParseResult<Expression> {
         // Check if the expression is a unary operation, a `sizeof` (which is not considered
         // an operator because its operand is a type and not an expression), or just a basic
         // expression without operators.
-        let expr = if let Some(op) = Operator::from(&token.kind) {
+        let expr = if let Some(op) = Operator::from(&token.kind, false) {
             // The operator should not be binary since it is at the beginning of the expression.
             if !op.is_unary() {
                 return Err(ParseError::new_with_token(
@@ -275,7 +276,7 @@ pub fn parse_expr(parser: &mut FileParser) -> ParseResult<Expression> {
         match parser.tokens.peek_next() {
             // There are more tokens in the sequence that might be part of this expression.
             // Check for optional binary operator or `as` type cast operator.
-            Some(t) => match Operator::from(&t.kind) {
+            Some(t) => match Operator::from(&t.kind, true) {
                 Some(op) if op.is_binary() => {
                     let token = t.clone();
                     parser.tokens.next();
@@ -283,7 +284,7 @@ pub fn parse_expr(parser: &mut FileParser) -> ParseResult<Expression> {
                     // Do the part of the Shunting Yard algorithm where we push operations
                     // on the operator stack with lower precedence to the output queue.
                     while let Some(stack_op_token) = op_stack.back() {
-                        let stack_op = Operator::from(&stack_op_token.kind).unwrap();
+                        let stack_op = Operator::from(&stack_op_token.kind, true).unwrap();
                         if stack_op.precedence() > op.precedence()
                             || (stack_op.precedence() == op.precedence()
                                 && op.is_left_associative())
@@ -308,7 +309,7 @@ pub fn parse_expr(parser: &mut FileParser) -> ParseResult<Expression> {
 
     // Pop the remaining operators from the operator stack and onto the output queue.
     while let Some(token) = op_stack.pop_back() {
-        out_q.push_back(OutNode::BinOp(Operator::from(&token.kind).unwrap()));
+        out_q.push_back(OutNode::BinOp(Operator::from(&token.kind, true).unwrap()));
     }
 
     // Create expression tree from output queue in RPN order.
@@ -319,7 +320,7 @@ pub fn parse_expr(parser: &mut FileParser) -> ParseResult<Expression> {
 fn parse_unary_operators(parser: &mut FileParser) -> Vec<Operator> {
     let mut unary_ops = vec![];
     while let Some(token) = parser.tokens.peek_next() {
-        match Operator::from(&token.kind) {
+        match Operator::from(&token.kind, false) {
             // Make sure the operator is unary and is not a deref (because derefs are suffix
             // operators).
             Some(op) if op.is_unary() && op != Operator::Defererence => {
@@ -412,8 +413,7 @@ fn parse_basic_expr(parser: &mut FileParser) -> ParseResult<Expression> {
                         kind: TokenKind::RightParen,
                         span,
                         ..
-                    } =
-                        parser.parse_expecting_any(&[TokenKind::Comma, TokenKind::RightParen])?
+                    } = parser.parse_expecting_any(&[TokenKind::Comma, TokenKind::RightParen])?
                     {
                         expr = Expression::FunctionCall(Box::new(FnCall::new(
                             expr,
@@ -509,7 +509,7 @@ fn parse_unit_expr(parser: &mut FileParser) -> ParseResult<Expression> {
 
         // Composite value initialization.
         TokenKind::LeftBracket => Expression::ArrayInit(Box::new(ArrayInit::parse(parser)?)),
-        TokenKind::LeftBrace => Expression::TupleInit(TupleInit::parse(parser)?),
+        TokenKind::DotLeftBrace => Expression::TupleInit(TupleInit::parse(parser)?),
 
         // Inline function declarations.
         TokenKind::Fn => Expression::AnonFunction(Box::new(Function::parse_anon(parser)?)),
@@ -558,8 +558,22 @@ fn parse_unit_expr(parser: &mut FileParser) -> ParseResult<Expression> {
             }
         }
 
-        // A `from` expression.
-        TokenKind::From => Expression::From(From::parse(parser)?),
+        // This is supposed to catch all the cases where statements are used as expressions.
+        // We parse the statement and then wrap it in a `From` AST node so it's easy for the
+        // analyzer to tell that the statement MUST yield values of a consistent type (i.e
+        // it's semantically like an expression).
+        TokenKind::If
+        | TokenKind::For
+        | TokenKind::While
+        | TokenKind::Loop
+        | TokenKind::LeftBrace
+        | TokenKind::Match => {
+            let statement = Box::new(Statement::parse(parser)?);
+            Expression::From(From {
+                span: *statement.span(),
+                statement,
+            })
+        }
 
         other => {
             return Err(ParseError::new_with_token(

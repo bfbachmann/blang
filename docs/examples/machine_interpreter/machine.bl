@@ -1,6 +1,7 @@
 mod machine_interpreter
 
 use "std/types/list" {List}
+use "std/fmt" {println}
 
 const mem_size: uint = 1024
 
@@ -13,29 +14,16 @@ pub struct Machine {
 }
 
 /// The result of instruction execution.
-pub struct ExecResult {
-    pub status: ExecStatus
-    pub msg: str
-}
-
-/// Indicates whether execution succeeded.
-pub enum ExecStatus {
+pub enum ExecResult {
     Ok
-    Err
+    Err(str)
 }
 
 impl ExecResult {
-    fn new_ok() -> ExecResult {
-        return ExecResult{
-            status: ExecStatus::Ok
-            msg: ""
-        }
-    }
-
-    fn new_err(msg: str) -> ExecResult {
-        return ExecResult{
-            status: ExecStatus::Err
-            msg: msg
+    pub fn is_err(self) -> bool {
+        match self {
+            let ExecResult::Err(_) => return true
+            _ => return false
         }
     }
 }
@@ -58,102 +46,95 @@ impl Machine {
             self.pc += 1
         {
             let inst = self.instructions.get(self.pc).unwrap()
-            let result = self.exec_inst(&inst)
-            if result.status ~~ ExecStatus::Err {
+            let result = self.exec_inst(inst)
+            if result.is_err() {
                 return result
             }
         }
 
-        return ExecResult.new_ok()
+        return ExecResult::Ok
     }
 
 
     /// Executes an instruction.
-    fn exec_inst(*mut self, inst: *Instruction) -> ExecResult {
-        match inst.kind {
-            let InstKind::Store => {
-                print_str("store\n")
-                return self.store(inst.operands.(0), inst.operands.(1) as uint)
+    fn exec_inst(*mut self, inst: Instruction) -> ExecResult {
+        println(inst)
+
+        match inst {
+            let Instruction::Store(inst) => {
+                return self.store(inst.value, inst.addr)
             }
-            let InstKind::Copy => {
-                print_str("copy\n")
-                return self.copy(inst.operands.(0) as uint, inst.operands.(1) as uint)
+            let Instruction::Copy(inst) => {
+                return self.copy(inst.src_addr, inst.dst_addr)
             }
-            let InstKind::Add => {
-                print_str("add\n")
-                return self.add(inst.operands.(0) as uint, inst.operands.(1) as uint)
+            let Instruction::Add(inst) => {
+                return self.add(inst.src_addr, inst.dst_addr)
             }
-            let InstKind::JumpIf0 => {
-                print_str("jumpif0\n")
-                return self.jumpif0(inst.operands.(0) as uint, inst.operands.(1) as uint)
+            let Instruction::JumpIf0(inst) => {
+                return self.jumpif0(inst.value_addr, inst.target_addr)
             }
         }
         
-        return ExecResult.new_err("unimplemented instruction")
+        return ExecResult::Err("unimplemented instruction")
     }
 
     /// Executes a store instruction.
     fn store(*mut self, value: int, addr: uint) -> ExecResult {
         if addr >= mem_size {
-            return ExecResult.new_err("store address out of bounds")
+            return ExecResult::Err("store address out of bounds")
         }
 
         self.memory.(addr) = value
-        return ExecResult.new_ok()
+        return ExecResult::Ok
     }
 
     /// Executes a copy instruction.
     fn copy(*mut self, src_addr: uint, dst_addr: uint) -> ExecResult {
         if src_addr >= mem_size {
-            return ExecResult.new_err("copy source address out of bounds")
+            return ExecResult::Err("copy source address out of bounds")
         }
 
         if dst_addr >= mem_size {
-            return ExecResult.new_err("copy destination address out of bounds")
+            return ExecResult::Err("copy destination address out of bounds")
         }
 
         self.memory.(dst_addr) = self.memory.(src_addr)
-        return ExecResult.new_ok()
+        return ExecResult::Ok
     }
 
     /// Executes an add instruction.
     fn add(*mut self, src_addr: uint, dst_addr: uint) -> ExecResult {
         if src_addr >= mem_size {
-            return ExecResult.new_err("add source address out of bounds")
+            return ExecResult::Err("add source address out of bounds")
         }
 
         if dst_addr >= mem_size {
-            return ExecResult.new_err("add destination address out of bounds")
+            return ExecResult::Err("add destination address out of bounds")
         }
 
         self.memory.(dst_addr) += self.memory.(src_addr)
-        return ExecResult.new_ok()
+        return ExecResult::Ok
     }
 
     /// Executes a jumpif0 instruction.
     fn jumpif0(*mut self, src_addr: uint, dst_inst: uint) -> ExecResult {
         if src_addr >= mem_size {
-            return ExecResult.new_err("jumpif0 source address out of bounds")
+            return ExecResult::Err("jumpif0 source address out of bounds")
         }
 
         if dst_inst >= self.instructions.len() {
-            return ExecResult.new_err("jumpif0 destination address out of bounds")
+            return ExecResult::Err("jumpif0 destination address out of bounds")
         }
 
         if self.memory.(src_addr) == 0 {
             self.pc = dst_inst - 1
         }
 
-        return ExecResult.new_ok()
+        return ExecResult::Ok
     }
 
     /// Returns the int in memory at the given index.
     pub fn memory_at(self, index: uint) -> int {
         return self.memory.(index)
-    }
-
-    /// Frees memory associated with this machine.
-    pub fn free(self) {
-        self.instructions.free()
     }
 }

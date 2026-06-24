@@ -2,6 +2,7 @@ use crate::lexer::pos::Span;
 use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::func::Function;
+use crate::parser::ast::params::Params;
 use crate::parser::ast::symbol::Symbol;
 use crate::parser::ast::unresolved::UnresolvedType;
 use crate::parser::error::ParseResult;
@@ -12,6 +13,7 @@ use crate::Locatable;
 #[derive(Clone, Debug)]
 pub struct Impl {
     pub typ: UnresolvedType,
+    pub maybe_param_constraints: Option<Params>,
     /// The spec being implemented for the type.
     pub maybe_spec: Option<Symbol>,
     pub member_fns: Vec<Function>,
@@ -58,6 +60,12 @@ impl Impl {
             None => None,
         };
 
+        // Check for optional parameter conditions.
+        let constraints = match parser.parse_optional(TokenKind::If) {
+            Some(_) => Some(Params::parse(parser)?),
+            None => None,
+        };
+
         // The remaining tokens should be `{` followed by a set of function signatures and a `}`.
         parser.parse_expecting(TokenKind::LeftBrace)?;
 
@@ -73,6 +81,7 @@ impl Impl {
 
         Ok(Impl {
             typ,
+            maybe_param_constraints: constraints,
             maybe_spec,
             member_fns,
             span: parser.new_span(start_pos, end_pos),

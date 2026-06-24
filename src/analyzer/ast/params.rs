@@ -5,7 +5,9 @@ use std::hash::{Hash, Hasher};
 
 use crate::analyzer::ast::generic::AGenericType;
 use crate::analyzer::ast::r#type::AType;
+use crate::analyzer::constraints::ImplConstraints;
 use crate::analyzer::error::{err_dup_param, err_expected_spec};
+use crate::analyzer::ident::Ident;
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::fmt::vec_to_string;
@@ -45,8 +47,8 @@ locatable_impl!(AParam);
 
 impl AParam {
     /// Performs semantic analysis on a generic parameter.
-    /// `poly_type_key` should be the key for the type to which these parameters
-    /// apply. It will be used to disambiguate parameters that have the same
+    /// `poly_type_key` should be the key for the type to which the parameter
+    /// applies. It will be used to disambiguate parameters that have the same
     /// name and constraints but apply to different types.
     fn from(ctx: &mut ProgramContext, param: &Param, poly_type_key: TypeKey) -> Self {
         let mut required_spec_type_keys = vec![];
@@ -90,7 +92,13 @@ impl AParam {
                 impl_fns.insert(fn_sig.name, fn_sig.type_key);
             }
 
-            ctx.insert_spec_impl(generic_type_key, spec_type_key, impl_fns, Span::default());
+            ctx.insert_spec_impl(
+                generic_type_key,
+                spec_type_key,
+                impl_fns,
+                ImplConstraints::default(),
+                Span::default(),
+            );
         }
 
         AParam {
@@ -148,6 +156,11 @@ impl AParams {
     /// apply. It will be used to disambiguate parameters that have the same
     /// name and constraints but apply to different types.
     pub fn from(ctx: &mut ProgramContext, params: &Params, poly_type_key: TypeKey) -> Self {
+        ctx.push_params(AParams {
+            params: vec![],
+            span: params.span,
+        });
+
         let mut a_params: Vec<AParam> = vec![];
         for param in &params.params {
             // Record an error and skip this param if another param with the same name already
@@ -159,8 +172,20 @@ impl AParams {
 
             // Analyze the param.
             let a_param = AParam::from(ctx, param, poly_type_key);
+
+            ctx.insert_ident(Ident::new_type(
+                param.name.clone(),
+                false,
+                a_param.generic_type_key,
+                Some(ctx.cur_mod_id()),
+                param.span,
+            ))
+            .unwrap();
+
             a_params.push(a_param);
         }
+
+        ctx.pop_params(false);
 
         AParams {
             params: a_params,

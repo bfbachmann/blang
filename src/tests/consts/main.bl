@@ -15,7 +15,7 @@ const some_struct = Thing {
     b: false
 }
 const some_struct_I = some_struct.i
-const some_tuple = {345, true}
+const some_tuple = .{345, true}
 const ptr = null
 const other_int = some_int + 1
 const enum_err = Result::Err("failed")
@@ -36,7 +36,7 @@ fn main() {
     assert(some_tuple.(1) == true, "expected true")
     assert(ptr == null, "expected null")
     assert(other_int == some_int + 1, "expected some_int + 1")
-    assert(enum_err ~~ Result::Err("failed"), "expected Err")
+    assert(enum_err =~ Result::Err("failed"), "expected Err")
     assert(same_strs, "expected same")
     assert(some_str != "not the same", "expected 'not the same'")
     assert(some_struct_I == 987, "expected 987")

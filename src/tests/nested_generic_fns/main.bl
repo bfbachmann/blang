@@ -101,7 +101,7 @@ fn main() {
     // Check that monomorphization goes deep enough.
     {
         assert(Slot[i16].size() == sizeof Slot[i16], "wrong size for Slot[i16]")
-        assert(a[{str}]() > 0, "wrong size")
+        assert(a[.{str}]() > 0, "wrong size")
     }
 
     @libc.exit(0)

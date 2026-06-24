@@ -2,95 +2,100 @@ mod machine_interpreter
 
 use "std/libc" @libc
 use "std/types/list" {List}
-use "std/allocator" {Allocator}
-use "std/runtime" {assert}
+use "std/types/opt" {Opt}
+use "std/types/result" {Result}
+use "std/fmt" {Format}
+use "std/io" {Writer, Print}
 
 /// Represents a machine instruction.
-pub struct Instruction {
-    pub kind: InstKind
-    pub operands: {int, int}
-}
-
-impl Instruction {
-    fn new_nop() -> Instruction {
-        return Instruction{
-            kind: InstKind::JumpIf0
-            operands: {1, 0}
-        }
-    }
-}
-
-/// Represents a kind of instruction.
-pub enum InstKind {
+pub enum Instruction {
     /// Stores the immediate `value` into memory at the location `dst_loc`.
     /// Example: Store the value 234 into memory at address 9
     ///     store 234 #9
-    Store
+    Store(StoreInst)
 
     /// Copies a value from one location in memory to another.
     /// Example: Copy the value from address 8 to address 3
     ///     copy #8 #3
-    Copy
+    Copy(CopyInst)
 
     /// Adds a value from one location in memory to another.
     /// Example: Add the value at address 3 to the value at address 4
     ///          and store the result in address 4.
     ///     add #3 #4
-    Add
+    Add(AddInst)
 
     /// Jumps to a designation instruction number if the value at the given
     /// address is 0.
     /// Example: Jump to instruction 3 if the value at address 8 is 0.
     ///     jumpif0 #8 #3
-    JumpIf0
+    JumpIf0(JumpIf0Inst)
 }
 
-/// Indicates whether parsing succeeded.
-enum ParseStatus {
-    /// Parsing succeeded, but there is more to parse.
-    Ok
-    /// Parsing complete.
-    Done
-    /// Parsing failed.
-    Err
+struct StoreInst {
+    value: int
+    addr: uint
+}
+
+struct CopyInst {
+    src_addr: uint
+    dst_addr: uint
+}
+
+struct AddInst {
+    src_addr: uint
+    dst_addr: uint
+}
+
+struct JumpIf0Inst {
+    value_addr: uint
+    target_addr: uint
+}
+
+impl Instruction: Print {
+    pub fn print(self, writer: *mut Writer) {
+        let fmt = match self {
+            let Instruction::Store(inst) => {
+                yield Format.new("store    % #%")
+                    .arg(&inst.value)
+                    .arg(&inst.addr)
+            }
+
+            let Instruction::Copy(inst) => {
+                yield Format.new("copy    #% #%")
+                    .arg(&inst.src_addr)
+                    .arg(&inst.dst_addr)
+            }
+
+            let Instruction::Add(inst) => {
+                yield Format.new("add     #% #%")
+                    .arg(&inst.src_addr)
+                    .arg(&inst.dst_addr)
+            }
+
+            let Instruction::JumpIf0(inst) => {
+                yield Format.new("jumpif0 #% #%")
+                    .arg(&inst.value_addr)
+                    .arg(&inst.target_addr)
+            }
+        }
+
+        fmt.print(writer)
+    }
 }
 
 /// Represents the result of parsing.
-struct ParseResult {
-    status: ParseStatus
-    inst: Instruction
-    msg: str
-}
-
-impl ParseResult {
-    fn new_ok(inst: Instruction) -> ParseResult {
-        return ParseResult{
-            status: ParseStatus::Ok
-            inst: inst
-            msg: ""
-        }
-    }
-
-    fn new_err(msg: str) -> ParseResult {
-        return ParseResult{
-            status: ParseStatus::Err
-            inst: Instruction.new_nop()
-            msg: msg
-        }
-    }
-
-    fn new_done() -> ParseResult {
-        return ParseResult{
-            status: ParseStatus::Done
-            inst: Instruction.new_nop()
-            msg: ""
-        }
-    }
+enum ParseResult {
+    /// For when we parse an instruction.
+    Ok(Instruction)
+    /// For when we encounter a parse error.
+    Err(str)
+    /// For when there is nothing left to parse.
+    Done
 }
 
 /// Parses a program from a character buffer.
 pub struct Parser {
-    allocator: Allocator
     buf: *u8
     buf_len: uint
     cursor: uint
@@ -99,9 +104,8 @@ pub struct Parser {
 
 impl Parser {
     /// Returns a new parser for parsing the instructions in `buf` with a length of `buf_len` bytes.
-    pub fn new(al: Allocator, buf: *u8, buf_len: uint) -> Parser {
+    pub fn new(buf: *u8, buf_len: uint) -> Parser {
         return Parser{
-            allocator: al
             buf: buf
             buf_len: buf_len
             cursor: 0
@@ -111,17 +115,14 @@ impl Parser {
 
     /// Parses the instructions stored in the parser and returns the result. This function
     /// will abort with an error message if the program is syntactically invalid.
-    pub fn parse_instructions(*mut self) -> List[Instruction] {
-        let mut instructions = List[Instruction].new(self.allocator)
+    pub fn parse_instructions(*mut self) -> Result[List[Instruction], str] {
+        let mut instructions = List[Instruction].new()
         loop {
-            let result = self.try_parse_inst()
-            assert(result.status !~ ParseStatus::Err, result.msg)
-    
-            if result.status ~~ ParseStatus::Done {
-                return instructions
+            match self.try_parse_inst() {
+                let ParseResult::Ok(inst) => instructions.push(inst)
+                let ParseResult::Err(msg) => return Result::Err(msg)
+                let ParseResult::Done => return Result::Ok(instructions)
             }
-    
-            instructions.push(result.inst)
         }
     }
 
@@ -133,32 +134,30 @@ impl Parser {
 
         // Check if we're at the end of the buffer
         if self.cursor >= self.buf_len {
-            return ParseResult.new_done()
+            return ParseResult::Done
         }
 
         // Increment instruction counter
         self.inst_count += 1
 
         // Try parse an instruction
-        {
-            if self.try_parse("store") {
-                return self.try_parse_store_operands()
-            }
-
-            if self.try_parse("copy") {
-                return self.try_parse_copy_operands()
-            }
-
-            if self.try_parse("add") {
-                return self.try_parse_add_operands()
-            }
-
-            if self.try_parse("jumpif0") {
-                return self.try_parse_jump_operands()
-            }
+        if self.try_parse("store") {
+            return self.try_parse_store_operands()
         }
 
-        return ParseResult.new_err("unrecognized instruction")
+        if self.try_parse("copy") {
+            return self.try_parse_copy_operands()
+        }
+
+        if self.try_parse("add") {
+            return self.try_parse_add_operands()
+        }
+
+        if self.try_parse("jumpif0") {
+            return self.try_parse_jump_operands()
+        }
+
+        return ParseResult::Err("unrecognized instruction")
     }
 
     /// Tries to parse store instruction operands from the current location in the
@@ -167,23 +166,23 @@ impl Parser {
         self.parse_spaces()
 
         // Parse first operand
-        let value_result = self.try_parse_int()
-        if !value_result.(1) {
-            return ParseResult.new_err("invalid integer value in first 'store' operand")
+        let value_result = match self.try_parse_int() {
+            let Opt::None => return ParseResult::Err("invalid integer value in first 'store' operand")
+            let Opt::Some(r) => yield r
         }
         
         self.parse_spaces()
         
         // Parse second operand
-        let addr_result = self.try_parse_addr()
-        if !addr_result.(1) {
-            return ParseResult.new_err("invalid address in second 'store' operand")
+        let addr_result = match self.try_parse_addr() {
+            let Opt::None => return ParseResult::Err("invalid address in second 'store' operand")
+            let Opt::Some(r) => yield r
         }
 
-        return ParseResult.new_ok(Instruction{
-            kind: InstKind::Store
-            operands: {value_result.(0), addr_result.(0)}
-        })
+        return ParseResult::Ok(Instruction::Store(StoreInst{
+            value: value_result
+            addr: addr_result
+        }))
     }
 
     /// Tries to parse copy instruction operands from the current location in the
@@ -192,23 +191,23 @@ impl Parser {
         self.parse_spaces()
 
         // Parse first operand
-        let src_addr_result = self.try_parse_addr()
-        if !src_addr_result.(1) {
-            return ParseResult.new_err("invalid address in first 'copy' operand")
+        let src_addr_result = match self.try_parse_addr() {
+            let Opt::None => return ParseResult::Err("invalid address in first 'copy' operand")
+            let Opt::Some(r) => yield r
         }
         
         self.parse_spaces()
         
         // Parse second operand
-        let dst_addr_result = self.try_parse_addr()
-        if !dst_addr_result.(1) {
-            return ParseResult.new_err("invalid address in second 'copy' operand")
+        let dst_addr_result = match self.try_parse_addr() {
+            let Opt::None => return ParseResult::Err("invalid address in second 'copy' operand")
+            let Opt::Some(r) => yield r
         }
 
-        return ParseResult.new_ok(Instruction{
-            kind: InstKind::Copy
-            operands: {src_addr_result.(0), dst_addr_result.(0)}
-        })
+        return ParseResult::Ok(Instruction::Copy(CopyInst{
+            src_addr: src_addr_result
+            dst_addr: dst_addr_result
+        }))
     }
 
     /// Tries to parse add instruction operands from the current location in the
@@ -217,23 +216,23 @@ impl Parser {
         self.parse_spaces()
 
         // Parse first operand
-        let src_addr_result = self.try_parse_addr()
-        if !src_addr_result.(1) {
-            return ParseResult.new_err("invalid address in first 'add' operand")
+        let src_addr_result = match self.try_parse_addr() {
+            let Opt::None => return ParseResult::Err("invalid address in first 'add' operand")
+            let Opt::Some(r) => yield r
         }
         
         self.parse_spaces()
         
         // Parse second operand
-        let dst_addr_result = self.try_parse_addr()
-        if !dst_addr_result.(1) {
-            return ParseResult.new_err("invalid address in second 'add' operand")
+        let dst_addr_result = match self.try_parse_addr() {
+            let Opt::None => return ParseResult::Err("invalid address in second 'add' operand")
+            let Opt::Some(r) => yield r
         }
 
-        return ParseResult.new_ok(Instruction{
-            kind: InstKind::Add
-            operands: {src_addr_result.(0), dst_addr_result.(0)}
-        })
+        return ParseResult::Ok(Instruction::Add(AddInst{
+            src_addr: src_addr_result
+            dst_addr: dst_addr_result
+        }))
     }
 
     /// Tries to parse jumpif0 instruction operands from the current location in the
@@ -242,51 +241,58 @@ impl Parser {
         self.parse_spaces()
 
         // Parse first operand
-        let src_addr_result = self.try_parse_addr()
-        if !src_addr_result.(1) {
-            return ParseResult.new_err("invalid address in first 'jumpif0' operand")
+        let src_addr_result = match self.try_parse_addr() {
+            let Opt::None => return ParseResult::Err("invalid address in first 'jumpif0' operand")
+            let Opt::Some(r) => yield r
         }
         
         self.parse_spaces()
         
         // Parse second operand
-        let dst_addr_result = self.try_parse_addr()
-        if !dst_addr_result.(1) {
-            return ParseResult.new_err("invalid address in second 'jumpif0' operand")
+        let dst_addr_result = match self.try_parse_addr() {
+            let Opt::None => return ParseResult::Err("invalid address in second 'jumpif0' operand")
+            let Opt::Some(r) => yield r
         }
 
-        return ParseResult.new_ok(Instruction{
-            kind: InstKind::JumpIf0
-            operands: {src_addr_result.(0), dst_addr_result.(0)}
-        })
+        return ParseResult::Ok(Instruction::JumpIf0(JumpIf0Inst{
+            value_addr: src_addr_result
+            target_addr: dst_addr_result
+        }))
     }
 
     /// Tries to parse an address from the current location in the
-    /// program buffer and returns the result with `true` if successful, and
-    /// `false` otherwise.
-    fn try_parse_addr(*mut self) -> {int, bool} {
+    /// program buffer and returns the result if successful, and
+    /// `None` otherwise.
+    fn try_parse_addr(*mut self) -> Opt[uint] {
         if !self.try_parse("#") {
-            return {0, false}
+            return Opt::None
         }
 
-        let result = self.try_parse_int()
+        let result = match self.try_parse_int() {
+            let Opt::None => return Opt::None
+            let Opt::Some(r) => yield r
+        }
 
         // Make sure the address is not a negative number
-        if result.(0) < 0 {
-            return {0, false}
+        if result < 0 {
+            return Opt::None
         }
 
-        return result 
+        return Opt::Some(result as uint)
     }
 
     /// Tries to parse an integer from the current location in the program buffer
-    /// and returns the result with `true` if successful, and `false` otherwise.
-    fn try_parse_int(*mut self) -> {int, bool} {
+    /// and returns the result if successful, and `None` otherwise.
+    fn try_parse_int(*mut self) -> Opt[int] {
         let mut end_ptr = self.buf_at_cursor()
         let value = @libc.strtol(end_ptr, &mut end_ptr, 10)
         let num_chars = end_ptr as int - self.buf_at_cursor() as int
         self.move_cursor(num_chars)
-        return {value, num_chars > 0}
+
+        match num_chars > 0 {
+            true => return Opt::Some(value)
+            false => return Opt::None
+        }
     }
 
     /// Parses all spaces at the current location in the program buffer.

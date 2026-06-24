@@ -1,30 +1,28 @@
 mod array
 
-use "std/allocator" {Allocator}
 use "std/types/slice" {Slice, SliceMut}
 use "std/types/opt" {Opt}
+use "std/mem" @mem
 
 /// A resizeable array of values of type T.
 pub struct Array[T] {
-    allocator: Allocator
     data: SliceMut[T]
 }
 
 impl Array {
     /// Create a new empty array.
-    pub fn new(al: Allocator) -> Array[T]{
-        return Array[T].new_with_len(al, 0)
+    pub fn new() -> Array[T]{
+        return Array[T].new_with_len(0)
     }
 
     /// Create a new array that can contain `len` elements.
-    pub fn new_with_len(mut al: Allocator, len: uint) -> Array[T] {
+    pub fn new_with_len(len: uint) -> Array[T] {
         let mut ptr: *mut T = null
         if len > 0 {
-            ptr = al.alloc(sizeof T * len) as *mut T
+            ptr = @mem.gc_malloc(sizeof T * len) as *mut T
         }
 
         return Array[T]{
-            allocator: al
             data: SliceMut[T].new(ptr, len)
         }
     }
@@ -33,7 +31,7 @@ impl Array {
     /// this function because it might move all the data in the array,
     /// which would invalidate any existing pointers to its data.
     pub fn resize(*mut self, len: uint) {
-        let ptr = self.allocator.realloc(
+        let ptr = @mem.gc_realloc(
             self.data.ptr() as *mut u8,
             sizeof T * len,
         ) as *mut T
@@ -77,10 +75,5 @@ impl Array {
         }
 
         return i
-    }
-
-    /// Frees all heap memory allocated for the array.
-    pub fn free(mut self) {
-        self.allocator.free(self.data.ptr() as *mut u8)
     }
 }

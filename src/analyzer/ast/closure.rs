@@ -697,15 +697,24 @@ fn closure_has_any_break(closure: &AClosure) -> bool {
 
 /// Checks that the given closure yields. If there is an error, it will be added
 /// to the program context.
-pub fn check_closure_yields(ctx: &mut ProgramContext, closure: &AClosure, kind: &ScopeKind) {
+pub fn check_closure_yields(
+    ctx: &mut ProgramContext,
+    scopes: &mut Vec<ScopeKind>,
+    closure: &AClosure,
+    kind: &ScopeKind,
+) {
+    scopes.push(kind.clone());
+
     // One of the following yield conditions must be satisfied by the final
     // statement in the closure.
     //  1. It is a yield statement.
-    //  2. It is an exhaustive conditional/match where each branch closure satisfies these yield
+    //  2. It is any statement that jumps to somewhere to outside the closure (i.e. continue,
+    //     break, return).
+    //  3. It is an exhaustive conditional/match where each branch closure satisfies these yield
     //     conditions.
-    //  3. It is a loop that contains a yield anywhere that satisfies these yield conditions
+    //  4. It is a loop that contains a yield anywhere that satisfies these yield conditions
     //     and has no breaks.
-    //  4. It is an inline closure with a final statement that that satisfies these yield
+    //  5. It is an inline closure with a final statement that that satisfies these yield
     //     conditions.
     match kind {
         // If this closure is a function body, branch body, or inline closure, we need to ensure
@@ -721,11 +730,11 @@ pub fn check_closure_yields(ctx: &mut ProgramContext, closure: &AClosure, kind: 
 
                 // If it's a conditional, make sure it is exhaustive and recurse on each branch.
                 Some(AStatement::Conditional(cond)) => {
-                    check_cond_yields(ctx, cond);
+                    check_cond_yields(ctx, scopes, cond);
                 }
 
                 Some(AStatement::Match(match_)) => {
-                    check_match_yields(ctx, match_);
+                    check_match_yields(ctx, scopes, match_);
                 }
 
                 // If it's a loop, recurse on the loop body.
@@ -733,17 +742,25 @@ pub fn check_closure_yields(ctx: &mut ProgramContext, closure: &AClosure, kind: 
                     if loop_.maybe_cond.is_some() {
                         ctx.insert_err(err_missing_yield(
                             Some("The last statement in this closure is a loop that is not guaranteed to yield."),
-                            closure.span
+                            closure.span,
                         ));
                     }
 
-                    check_closure_yields(ctx, &loop_.body, &ScopeKind::LoopBody);
+                    check_closure_yields(ctx, scopes, &loop_.body, &ScopeKind::LoopBody);
                 }
 
                 // If it's an inline closure, recurse on the closure.
                 Some(AStatement::Closure(closure)) => {
-                    check_closure_yields(ctx, closure, &ScopeKind::InlineClosure);
+                    check_closure_yields(ctx, scopes, closure, &ScopeKind::InlineClosure);
                 }
+
+                // A return is always legal because it makes the yielded value irrelevant.
+                Some(AStatement::Return(_)) => {}
+
+                // A break is legal if it breaks to somewhere outside where the yield result
+                // value is declared.
+                Some(AStatement::Break(_))
+                    if get_lowest_scope_depth(scopes, &ScopeKind::LoopBody).is_none() => {}
 
                 _ => {
                     ctx.insert_err(err_missing_yield(None, closure.span));
@@ -754,16 +771,31 @@ pub fn check_closure_yields(ctx: &mut ProgramContext, closure: &AClosure, kind: 
         // If this closure is a loop, we need to check that it contains a yield anywhere
         // that satisfies the yield conditions, and that it has no breaks.
         ScopeKind::LoopBody => {
-            if closure_has_any_break(closure) || !closure_has_any_yield(closure) {
+            if !closure_has_any_yield(closure) {
                 ctx.insert_err(err_missing_yield(
-                    Some("The last statement in this closure is a loop that is not guaranteed to yield."),
-                    closure.span
+                    Some(
+                        "The last statement in this closure is a loop that does not yield anything.",
+                    ),
+                    closure.span,
                 ));
+            } else if closure_has_any_break(closure) {
+                ctx.insert_err(err_missing_yield(
+                    Some(
+                        format_code!(
+                        "The last statement in this closure is a loop that contains a {} and therefore is not guaranteed to yield anything.",
+                        "break"
+                    )
+                        .as_str(),
+                    ),
+                    closure.span,
+                ))
             }
         }
 
         other => panic!("unexpected scope kind {other:?}"),
     };
+
+    scopes.pop();
 }
 
 /// Checks that the given conditional is exhaustive and that each branch satisfies return
@@ -784,7 +816,7 @@ fn check_cond_returns(ctx: &mut ProgramContext, cond: &ACond) {
 
 /// Checks that the given conditional is exhaustive and that each branch satisfies yield
 /// conditions.
-fn check_cond_yields(ctx: &mut ProgramContext, cond: &ACond) {
+fn check_cond_yields(ctx: &mut ProgramContext, scopes: &mut Vec<ScopeKind>, cond: &ACond) {
     if !cond.is_exhaustive() {
         ctx.insert_err(err_missing_yield(
             Some("The last statement in this closure is a conditional that is not exhaustive"),
@@ -794,14 +826,14 @@ fn check_cond_yields(ctx: &mut ProgramContext, cond: &ACond) {
     }
 
     for branch in &cond.branches {
-        check_closure_yields(ctx, &branch.body, &ScopeKind::BranchBody);
+        check_closure_yields(ctx, scopes, &branch.body, &ScopeKind::BranchBody);
     }
 }
 
 /// Checks that all cases in the given match statement yield.
-fn check_match_yields(ctx: &mut ProgramContext, match_: &AMatch) {
+fn check_match_yields(ctx: &mut ProgramContext, scopes: &mut Vec<ScopeKind>, match_: &AMatch) {
     for case in &match_.cases {
-        check_closure_yields(ctx, &case.body, &ScopeKind::BranchBody)
+        check_closure_yields(ctx, scopes, &case.body, &ScopeKind::BranchBody)
     }
 }
 
@@ -819,4 +851,14 @@ pub fn analyze_continue(ctx: &mut ProgramContext, cont: &Continue) {
     if !ctx.is_in_loop() {
         ctx.insert_err(err_unexpected_continue(cont.span));
     }
+}
+
+fn get_lowest_scope_depth(scopes: &[ScopeKind], target_kind: &ScopeKind) -> Option<usize> {
+    for (i, kind) in scopes.iter().enumerate().rev() {
+        if kind == target_kind {
+            return Some(i);
+        }
+    }
+
+    None
 }

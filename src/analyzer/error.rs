@@ -33,6 +33,7 @@ pub enum ErrorKind {
     InvalidConst,
     DuplicateIdentifier,
     UndefType,
+    UndefParam,
     UndefSymbol,
     UndefStructField,
     UndefMod,
@@ -53,10 +54,12 @@ pub enum ErrorKind {
     InvalidMain,
     InfiniteSizedType,
     InvalidStatement,
+    InvalidFromExpr,
     ImmutableAssignment,
     InvalidMutRef,
     InvalidAssignmentTarget,
     UseOfPrivateValue,
+    ConstraintsNotSatisfied,
     TypeIsNotStruct,
     TypeIsNotEnum,
     SpecImplConflict,
@@ -82,6 +85,10 @@ pub enum ErrorKind {
     IllegalSelfArg,
     MatchNotExhaustive,
     ExpectedType,
+    DupConstraintSpec,
+    RedundantConstraint,
+    ParamAlreadyConstrained,
+    IllegalConstraints,
 }
 
 /// Represents any fatal error that occurs during program analysis.
@@ -188,6 +195,28 @@ pub fn err_not_pub(name: &str, span: Span) -> AnalyzeError {
         ErrorKind::UseOfPrivateValue,
         format_code!("{} is not public", name).as_str(),
         span,
+    )
+}
+
+#[must_use]
+pub fn err_constraints_not_satisfied(
+    span: Span,
+    type_name: &str,
+    method_name: &str,
+) -> AnalyzeError {
+    AnalyzeError::new(
+        ErrorKind::ConstraintsNotSatisfied,
+        "constraints not satisfied",
+        span,
+    )
+    .with_detail(
+        format_code!(
+            "Type {} does not implement {} in this {} because it is missing the required constraints.",
+            type_name,
+            method_name,
+            "impl",
+        )
+        .as_str(),
     )
 }
 
@@ -319,6 +348,104 @@ pub fn err_expected_type(name: &str, span: Span) -> AnalyzeError {
 }
 
 #[must_use]
+pub fn err_undef_param(
+    type_name: &str,
+    type_span: Span,
+    param_name: &str,
+    param_span: Span,
+) -> AnalyzeError {
+    let err = AnalyzeError::new(
+        ErrorKind::UndefParam,
+        format_code!("type {} has no parameter {}", type_name, param_name).as_str(),
+        param_span,
+    );
+
+    if type_span != Span::default() {
+        err.with_note(Note {
+            message: format_code!("{} is defined here.", type_name),
+            span: type_span,
+        })
+    } else {
+        err
+    }
+}
+
+#[must_use]
+pub fn err_illegal_constraints(
+    type_name: &str,
+    type_span: Span,
+    constraints_span: Span,
+) -> AnalyzeError {
+    AnalyzeError::new(
+        ErrorKind::IllegalConstraints,
+        "illegal constraints",
+        constraints_span,
+    )
+    .with_note(Note {
+        message: format_code!(
+            "Type {} is defined here without parameters, so it can't have constraints.",
+            type_name
+        ),
+        span: type_span,
+    })
+}
+
+#[must_use]
+pub fn err_param_already_constrained(param_name: &str, span: Span) -> AnalyzeError {
+    AnalyzeError::new(
+        ErrorKind::ParamAlreadyConstrained,
+        format_code!("parameter {} is already constrained", param_name).as_str(),
+        span,
+    )
+}
+
+#[must_use]
+pub fn err_redundant_constraint(
+    param_name: &str,
+    spec_name: &str,
+    param_span: Span,
+    type_span: Span,
+) -> AnalyzeError {
+    let err = AnalyzeError::new(
+        ErrorKind::RedundantConstraint,
+        format_code!(
+            "redundant constraint {} for parameter {}",
+            spec_name,
+            param_name
+        )
+        .as_str(),
+        param_span,
+    );
+
+    if type_span != Span::default() {
+        err.with_note(Note {
+            message: format_code!(
+                "{} is originally defined with constraint {} here.",
+                param_name,
+                spec_name
+            ),
+            span: type_span,
+        })
+    } else {
+        err
+    }
+}
+
+#[must_use]
+pub fn err_dup_constraint_spec(param_name: &str, spec_name: &str, spec_span: Span) -> AnalyzeError {
+    AnalyzeError::new(
+        ErrorKind::DupConstraintSpec,
+        format_code!(
+            "duplicate constraint {} for parameter {}",
+            spec_name,
+            param_name,
+        )
+        .as_str(),
+        spec_span,
+    )
+}
+
+#[must_use]
 pub fn err_undef_type(unresolved_type: &UnresolvedType) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::UndefType,
@@ -430,15 +557,13 @@ pub fn err_invalid_type_cast(
 #[must_use]
 pub fn err_superfluous_type_cast(
     ctx: &ProgramContext,
-    left_expr: &AExpr,
     target_tk: TypeKey,
     span: Span,
 ) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::SuperfluousTypeCast,
         format_code!(
-            "{} already has type {}",
-            left_expr.display(ctx),
+            "value already has type {}",
             ctx.display_type(target_tk)
         )
         .as_str(),
@@ -461,27 +586,24 @@ pub fn err_expected_ret_val(ctx: &ProgramContext, call: &AFnCall, span: Span) ->
 
 #[must_use]
 pub fn err_invalid_from_expr(span: Span) -> AnalyzeError {
-    AnalyzeError::new(
-        ErrorKind::InvalidStatement,
-        format_code!("invalid {} expression", "from").as_str(),
-        span,
-    )
-    .with_detail(
-        format_code!(
-            "The statement following {} must be a conditional, {}, {}, or closure.",
-            "from",
-            "match",
-            "loop",
+    AnalyzeError::new(ErrorKind::InvalidFromExpr, "invalid expression", span)
+        .with_detail(
+            format_code!(
+                "This statement must be an {}, {}, {}, or closure.",
+                "if",
+                "match",
+                "loop",
+            )
+            .as_str(),
         )
-        .as_str(),
-    )
-    .with_help(
-        format_code!(
-            "Consider wrapping the statement following {} in a closure.",
-            "from"
+        .with_help(
+            format_code!(
+                "This statement is used as an expression and therefore must {} a \
+                value, but it currently does not.",
+                "yield"
+            )
+            .as_str(),
         )
-        .as_str(),
-    )
 }
 
 #[must_use]
@@ -536,7 +658,11 @@ pub fn err_unexpected_continue(span: Span) -> AnalyzeError {
 pub fn err_unexpected_yield(span: Span) -> AnalyzeError {
     AnalyzeError::new(
         ErrorKind::UnexpectedYield,
-        format_code!("cannot {} from outside a {} block", "yield", "from").as_str(),
+        format_code!(
+            "cannot {} from a block that is not being used as an expression",
+            "yield"
+        )
+        .as_str(),
         span,
     )
 }
@@ -1576,6 +1702,13 @@ pub fn err_invalid_array_size_type(span: Span) -> AnalyzeError {
         ErrorKind::InvalidArraySize,
         format_code!("expected constant of type {}", "uint").as_str(),
         span,
+    )
+    .with_detail(
+        format_code!(
+            "Array sizes must be {} values known at compile time.",
+            "uint"
+        )
+        .as_str(),
     )
 }
 

@@ -1,5 +1,3 @@
-use std::collections::{HashMap, HashSet};
-
 use crate::analyzer::ast::func::AFn;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{
@@ -14,6 +12,7 @@ use crate::parser::ast::func::Function;
 use crate::parser::ast::r#impl::Impl;
 use crate::parser::ast::r#type::Type;
 use crate::parser::ast::symbol::Symbol;
+use std::collections::{HashMap, HashSet};
 
 /// Represents a semantically valid `impl` block that declares member functions for a type.
 #[derive(Debug)]
@@ -43,11 +42,19 @@ impl AImpl {
             return placeholder;
         }
 
+        let params = typ.params().cloned();
+
         // If there are parameters for this impl, push them to the program context
         // so we can resolve them when we're analyzing member functions.
-        let has_params = match typ.params() {
+        let has_params = match &params {
             Some(params) => {
                 ctx.push_params(params.clone());
+
+                // Get already-analyzed impl info and use it to set constraints on the current impl.
+                if let Some(impl_info) = ctx.get_impl_by_header_span(type_key, &impl_.header_span())
+                {
+                    ctx.set_impl_constraints(impl_info.constraints.clone());
+                }
                 true
             }
             None => false,
@@ -112,15 +119,25 @@ impl AImpl {
 
         // Analyze member functions.
         let mut member_fns: HashMap<String, (AFn, &Function)> = HashMap::new();
+        let mut skip_spec_check = false;
         for mem_fn in &impl_.member_fns {
             // Locate the already-analyzed function signature.
-            let mem_fn_tk = match maybe_spec_tk {
-                Some(spec_tk) => ctx
-                    .get_member_fn_from_spec_impl(type_key, spec_tk, &mem_fn.signature.name.value)
-                    .unwrap(),
-                None => ctx
-                    .get_default_member_fn(type_key, &mem_fn.signature.name.value)
-                    .unwrap(),
+            let maybe_mem_fn_tk = match maybe_spec_tk {
+                Some(spec_tk) => ctx.get_member_fn_from_spec_impl(
+                    type_key,
+                    spec_tk,
+                    &mem_fn.signature.name.value,
+                ),
+                None => ctx.get_default_member_fn(type_key, &mem_fn.signature.name.value),
+            };
+
+            let mem_fn_tk = match maybe_mem_fn_tk {
+                None => {
+                    // To avoid redundant errors.
+                    skip_spec_check = true;
+                    continue;
+                }
+                Some(tk) => tk,
             };
 
             let mem_fn_sig = ctx.get_type(mem_fn_tk).to_fn_sig();
@@ -130,14 +147,14 @@ impl AImpl {
 
         // Check that this `impl` actually implements the spec it claims to.
         let spec_impl_errs = match maybe_spec_tk {
-            Some(spec_tk) => check_spec_impl(
+            Some(spec_tk) if !skip_spec_check => check_spec_impl(
                 ctx,
                 type_key,
                 impl_.maybe_spec.as_ref().unwrap(),
                 spec_tk,
                 &member_fns,
             ),
-            None => vec![],
+            _ => vec![],
         };
 
         for err in spec_impl_errs {
@@ -275,7 +292,7 @@ fn check_legal_spec_impl(
 /// Returns an error if the impl for the given type and spec is illegal (i.e. it conflicts with
 /// some other existing spec impl).
 pub fn check_spec_impl_conflicts(
-    ctx: &mut ProgramContext,
+    ctx: &ProgramContext,
     impl_tk: TypeKey,
     spec_tk: TypeKey,
     spec_span: Span,
@@ -285,7 +302,7 @@ pub fn check_spec_impl_conflicts(
     // type, if one exists.
     if let Some(mono) = ctx.type_monomorphizations.get(&impl_tk) {
         let poly_tk = mono.poly_type_key;
-        if let Some(spec_impl) = ctx.get_spec_impl(poly_tk, spec_tk) {
+        if let Some(spec_impl) = ctx.get_conflicting_spec_impl(poly_tk, spec_tk) {
             let header_span = spec_impl.header_span;
             let err = err_spec_impl_conflict(ctx, poly_tk, spec_tk, spec_span, header_span);
             return Err(err);
@@ -294,7 +311,7 @@ pub fn check_spec_impl_conflicts(
 
     if check_self {
         // Make sure there are no conflicting spec impls for this exact type.
-        if let Some(spec_impl) = ctx.get_spec_impl(impl_tk, spec_tk) {
+        if let Some(spec_impl) = ctx.get_conflicting_spec_impl(impl_tk, spec_tk) {
             let header_span = spec_impl.header_span;
             let err = err_spec_impl_conflict(ctx, impl_tk, spec_tk, spec_span, header_span);
             return Err(err);

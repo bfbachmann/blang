@@ -4,9 +4,9 @@ use crate::analyzer::ast::expr::{AExpr, AExprKind};
 use crate::analyzer::ast::generic::AGenericType;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{
-    err_ambiguous_access, err_ambiguous_generic_member_access, err_member_not_method,
-    err_mismatched_types, err_not_pub, err_spec_member_access, err_undef_member,
-    err_unexpected_params, err_unresolved_params, AnalyzeResult, ErrorKind,
+    err_ambiguous_access, err_ambiguous_generic_member_access, err_constraints_not_satisfied,
+    err_member_not_method, err_mismatched_types, err_not_pub, err_spec_member_access,
+    err_undef_member, err_unexpected_params, err_unresolved_params, AnalyzeResult, ErrorKind,
 };
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
@@ -161,13 +161,6 @@ fn try_resolve_member(
     member_name: &str,
     prefer_method: bool,
 ) -> AnalyzeResult<TypeKey> {
-    let not_found_err = err_undef_member(
-        ctx,
-        base_expr.type_key,
-        member_name,
-        access.member_symbol.span,
-    );
-
     if base_expr.kind.is_type() {
         return match ctx.get_type(base_expr.type_key) {
             AType::Generic(generic_type) => {
@@ -179,7 +172,12 @@ fn try_resolve_member(
                     access,
                 ) {
                     Some(fn_tk) => Ok(fn_tk),
-                    None => Err(not_found_err),
+                    None => Err(err_undef_member(
+                        ctx,
+                        base_expr.type_key,
+                        member_name,
+                        access.member_symbol.span,
+                    )),
                 }
             }
 
@@ -309,12 +307,21 @@ fn resolve_generic_method(
     let mut matching_spec_names = vec![];
     'next_spec: for spec_tk in &generic_type.spec_type_keys {
         let spec = ctx.get_type(*spec_tk).to_spec_type();
-        for (fn_name, fn_tk) in &spec.member_fn_type_keys {
-            if fn_name == member_name {
+        if let Some(fn_tk) = spec.member_fn_type_keys.get(member_name) {
+            let fn_type = ctx.get_type(*fn_tk).to_fn_sig();
+            matching_fns.push(fn_type);
+            matching_spec_names.push(spec.name.as_str());
+            continue 'next_spec;
+        }
+    }
+
+    if let Some(spec_tks) = ctx.get_constraints_for_param(base_expr.type_key) {
+        for spec_tk in spec_tks.iter().cloned() {
+            let spec = ctx.get_type(spec_tk).to_spec_type();
+            if let Some(fn_tk) = spec.member_fn_type_keys.get(member_name) {
                 let fn_type = ctx.get_type(*fn_tk).to_fn_sig();
                 matching_fns.push(fn_type);
                 matching_spec_names.push(spec.name.as_str());
-                continue 'next_spec;
             }
         }
     }
@@ -386,20 +393,26 @@ fn resolve_concrete_method(
             };
             let member_type_key = member_fn_sig.type_key;
 
-            // Only allow access to the member if it is public or local
-            // to the current module.
-            if !ctx.member_fn_is_accessible(
-                member_fn_sig.maybe_impl_type_key.unwrap(),
-                member_fn_sig.type_key,
-            ) {
+            // Make sure the member fn is public or local to the current module.
+            let impl_tk = member_fn_sig.maybe_impl_type_key.unwrap();
+            if !ctx.member_fn_is_accessible(impl_tk, member_fn_sig.type_key) {
                 ctx.insert_err(err_not_pub(member_name, access.member_symbol.span));
+            }
+
+            // Make sure the impl constraints on the member fn are satisfied.
+            if !ctx.fn_constraints_satisfied(impl_tk, member_fn_sig.type_key) {
+                ctx.insert_err(err_constraints_not_satisfied(
+                    access.member_symbol.span,
+                    ctx.display_type(impl_tk).as_str(),
+                    &member_fn_sig.name,
+                ));
             }
 
             if called_via_type {
                 return Ok(member_type_key);
             }
 
-            // If the base expression is a value rather than a type,
+            // If the base expression is a value rather than a type, so
             // we need to make sure the member function being accessed
             // takes `self` as its first argument.
             if !takes_self {

@@ -442,7 +442,7 @@ mod tests {
             r#"
             struct Inner {
                 count: i64,
-                outer: {Outer},
+                outer: .{Outer},
             }
 
             struct Outer {
@@ -568,7 +568,7 @@ mod tests {
         let result = analyze(
             r#"
             fn main() {
-                let a = {1, 2, 3}
+                let a = .{1, 2, 3}
                 let b = a.(5)
             }
             "#,
@@ -581,7 +581,7 @@ mod tests {
         let result = analyze(
             r#"
             fn main() {
-                let mut a = {1, 2, 3}
+                let mut a = .{1, 2, 3}
                 a.(0) = true
             }
             "#,
@@ -605,7 +605,7 @@ mod tests {
     fn duplicate_const() {
         let result = analyze(
             r#"
-            const a = {1, 2, true}
+            const a = .{1, 2, true}
             const a = "test"
             "#,
         );
@@ -616,7 +616,7 @@ mod tests {
     fn const_type_mismatch() {
         let result = analyze(
             r#"
-            const a: {bool, i64, i64} = {1, 2, true}
+            const a: .{bool, i64, i64} = .{1, 2, true}
             "#,
         );
         check_err(&result, Some(ErrorKind::MismatchedTypes));
@@ -873,6 +873,59 @@ mod tests {
     }
 
     #[test]
+    fn resolve_impl_out_of_order() {
+        let result = analyze(
+            r#"
+            fn main() {
+                // We analyze this do_thing call before we analyze `impl Thing: Test[T] {}`,
+                // but it should still work!
+                do_thing(Thing[int]{})
+            }
+            
+            struct Thing[T] {}
+            spec Test[T] {}
+            impl Thing: Test[T] {}
+            fn do_thing[T: Test[int]](t: T) {}
+            "#,
+        );
+        check_err(&result, None);
+    }
+
+    #[test]
+    fn complex_dependent_generics() {
+        let result = analyze(
+            r#"
+            fn main() {
+                // This is the crux. Can we recognize that Thing{} a valid arg here?
+                take(Thing{})
+            }
+
+            enum Opt[T] {
+                Some(T)
+                None
+            }
+            
+            spec Print {}
+            impl int: Print {}
+            struct Thing {}
+            
+            spec Get[T] {
+                fn get(self) -> T
+            }
+            
+            impl Thing: Get[Opt[int]] {
+                fn get(self) -> Opt[int] {
+                    return Opt::None
+                }
+            }
+
+            fn take[O: Print, T: Get[Opt[O]]](t: T) {}
+            "#,
+        );
+        check_err(&result, None);
+    }
+
+    #[test]
     fn enum_init_type_annotations_needed() {
         let result = analyze(
             r#"
@@ -930,7 +983,7 @@ mod tests {
             "#,
             r#"
                 fn main() {
-                    let a = 8 bls 2
+                    let a = 8 << 2
                 }
             "#,
         ];
@@ -967,6 +1020,18 @@ mod tests {
             fn main() {
                 let len: uint = 2
                 let x = [1; len]
+            }
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::InvalidArraySize));
+    }
+
+    #[test]
+    fn generic_array_len() {
+        let result = analyze(
+            r#"
+            fn thing[T]() -> [u8; sizeof T] {
+                return [0; sizeof T]
             }
             "#,
         );
@@ -1564,7 +1629,7 @@ mod tests {
         let result = analyze(
             r#"
                 fn main() {
-                    let result = from if true {
+                    let result = if true {
                         yield 1
                     } else if false {
                         yield "bing"
@@ -1582,7 +1647,7 @@ mod tests {
         let result = analyze(
             r#"
                 fn main() {
-                    let result: bool = from if true {
+                    let result: bool = if true {
                         yield 1
                     } else {
                         yield 3
@@ -1598,13 +1663,23 @@ mod tests {
         let result = analyze(
             r#"
                 fn main() {
-                    let result = from {
+                    let result = {
                         if false {
                             yield 1
                         }
-    
-                        return
                     }
+                }
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::MissingYield));
+
+        let result = analyze(
+            r#"
+                fn main() {
+                    // Illegal: last branch missing yield
+                    let _ = if false {
+                        yield 1
+                    } else {}
                 }
             "#,
         );
@@ -1612,11 +1687,11 @@ mod tests {
     }
 
     #[test]
-    fn missing_yield_in_loop() {
+    fn missing_yield_in_loop_with_break() {
         let result = analyze(
             r#"
                 fn main() {
-                    let result = from loop {
+                    let result = loop {
                         if false {
                             yield 1
                         }
@@ -1629,6 +1704,19 @@ mod tests {
             "#,
         );
         check_err(&result, Some(ErrorKind::MissingYield));
+    }
+
+    #[test]
+    fn invalid_from_statement() {
+        let result = analyze(
+            r#"
+                fn main() {
+                    // Illegal: missing yield entirely
+                    let _ = for let mut i = 0; i < 10; i += 1 {}
+                }
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::InvalidFromExpr));
     }
 
     #[test]
@@ -1757,6 +1845,115 @@ mod tests {
             "#,
         );
         check_err(&result, Some(ErrorKind::SpecImplMissingFns));
+    }
+
+    #[test]
+    fn impl_constraints_undef_param() {
+        let result = analyze(
+            r#"
+            spec Eq {}
+            struct Thing[T] {}
+            impl Thing if [Undef: Eq] {}
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::UndefParam));
+    }
+
+    #[test]
+    fn impl_constraints_redundant_constraint() {
+        let result = analyze(
+            r#"
+            spec Eq {}
+            spec Other {}
+            struct Thing[T: Eq] {}
+            impl Thing if [T: Eq + Other] {}
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::RedundantConstraint));
+    }
+
+    #[test]
+    fn impl_constraints_dup_constraint_spec() {
+        let result = analyze(
+            r#"
+            spec Eq {}
+            spec Other {}
+            struct Thing[T] {}
+            impl Thing if [T: Eq + Other + Eq] {}
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::DupConstraintSpec));
+    }
+
+    #[test]
+    fn impl_constraints_param_already_constrained() {
+        let result = analyze(
+            r#"
+            spec Eq {}
+            spec Other {}
+            struct Thing[T] {}
+            impl Thing if [T: Eq, T: Other] {}
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::ParamAlreadyConstrained));
+    }
+
+    #[test]
+    fn impl_constraints_illegal() {
+        let result = analyze(
+            r#"
+            struct Thing {}
+            impl Thing if [T: Eq] {}
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::IllegalConstraints));
+    }
+
+    #[test]
+    fn impl_constraints_undef_member() {
+        let result = analyze(
+            r#"
+            spec Eq {}
+            struct Thing[T] {t: T}
+            impl Thing if [T: Eq] {
+                fn value(self) -> T {
+                    return self.t
+                }
+            }
+            
+            fn main() {
+                Thing{t: true}.value()
+            }
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::UndefMember));
+    }
+
+    #[test]
+    fn impl_constraints_not_satisfied() {
+        let result = analyze(
+            r#"
+            spec Eq {
+                fn eq(self, other: Self) -> bool
+            }
+            
+            struct Thing[T] {t: T}
+
+            impl Thing if [T: Eq] {
+                fn contains(self, t: T) -> bool {
+                    return self.t.eq(t)
+                }
+            }
+            
+            impl Thing {
+                fn check(self, t: T) -> bool {
+                    // self.t doeesn't implement Eq in this context
+                    return self.t.eq(t)
+                }
+            }
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::ConstraintsNotSatisfied));
     }
 
     #[test]
@@ -2017,6 +2214,92 @@ mod tests {
             "#,
         );
         check_warn(&result, Some(WarnKind::Unreachable));
+    }
+
+    #[test]
+    fn legal_from_statements() {
+        let result = analyze(
+            r#"
+            fn main() {
+                // Legal: we either yield or return.
+                let _ = match true {
+                    true => return
+                    false => yield 1
+                }
+
+                // Legal: we either yield or return.
+                let _ = if false {
+                    return
+                } else {
+                    yield true
+                }
+
+                // Legal: the closure either yields or returns.
+                let _ = {
+                    if false {
+                        yield false
+                    }
+                    return
+                }
+
+                // Legal: the closure either yields or returns.
+                let _ = {
+                    if false {
+                        return
+                    }
+                    yield false
+                }
+
+                // Legal: the loop may yield something or return, or run forever.
+                let _ = loop {
+                    if false {
+                        yield 1
+                    }
+                    return
+                }
+            }
+            "#,
+        );
+        check_err(&result, None);
+    }
+
+    #[test]
+    fn missing_yield_in_closure() {
+        let result = analyze(
+            r#"
+            fn main() {
+                // Illegal: the closure is not guaranteed to yield anyting.
+                let _ = {
+                    return
+                }
+            }
+            "#,
+        );
+        check_err(&result, Some(ErrorKind::MissingYield));
+    }
+
+    #[test]
+    fn deep_type_inference_on_from_block() {
+        let result = analyze(
+            r#"
+            fn main() {
+                let _: uint = loop {
+                    if true {
+                        return
+                    }
+
+                    {
+                        if true {
+                            yield 1
+                        } else {
+                            yield 2
+                        }
+                    }
+                }
+            }
+            "#,
+        );
+        check_err(&result, None);
     }
 
     #[test]
@@ -3057,7 +3340,7 @@ mod tests {
     }
 
     #[test]
-    fn tuple_type_equality() {
+    fn array_type_equality() {
         let result = analyze(
             r#"
             enum Result[O, E] {
@@ -3087,7 +3370,7 @@ mod tests {
     }
 
     #[test]
-    fn array_type_equality() {
+    fn tuple_type_equality() {
         let result = analyze(
             r#"
             enum Result[O, E] {
@@ -3098,7 +3381,7 @@ mod tests {
             struct IOError {}
             
             spec Writer[T] {
-                fn write(*mut self, data: T) -> Result[{}, IOError]
+                fn write(*mut self, data: T) -> Result[.{}, IOError]
             }
             
             struct File {}
@@ -3107,8 +3390,8 @@ mod tests {
             // in the type store, so it ended up having multiple different type keys and was 
             // therefor considered to be multiple different types. 
             impl File: Writer[u8] {
-                fn write(*mut self, data: u8) -> Result[{}, IOError] {
-                    return Result[{}, IOError]::Ok({})
+                fn write(*mut self, data: u8) -> Result[.{}, IOError] {
+                    return Result[.{}, IOError]::Ok(.{})
                 }
             }
         "#,

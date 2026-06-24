@@ -133,7 +133,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             .is_composite();
         let is_const = !result.is_pointer_value();
         if is_composite_type && is_const {
-            let ll_ptr = self.stack_alloc("yielded_value", yld.value.type_key);
+            let ll_ptr = self.gen_alloc("yielded_value", yld.value.type_key);
             self.copy_value(result, ll_ptr, yld.value.type_key);
             result = ll_ptr.as_basic_value_enum();
         }

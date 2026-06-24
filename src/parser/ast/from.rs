@@ -1,13 +1,13 @@
 use crate::lexer::pos::Span;
-use crate::lexer::token_kind::TokenKind;
 use crate::locatable_impl;
 use crate::parser::ast::statement::Statement;
-use crate::parser::error::ParseResult;
-use crate::parser::file_parser::FileParser;
 use crate::Locatable;
 
 /// Represents a statement that yields a result. This language construct exists
-/// so statements can be used as expressions.
+/// so statements can be used as expressions. There is no special syntax for this
+/// AST node. It's just here so the parser can easily tell the analyzer where it
+/// expected an expression but found a statement that could be valid in place of
+/// an expression if it yields a valid set of values.
 #[derive(Debug, PartialEq, Clone)]
 pub struct From {
     pub statement: Box<Statement>,
@@ -15,20 +15,3 @@ pub struct From {
 }
 
 locatable_impl!(From);
-
-impl From {
-    /// Parses a `from` block from the token stream. Expects token sequences of
-    /// the form
-    ///
-    ///     from <statement>
-    pub fn parse(parser: &mut FileParser) -> ParseResult<From> {
-        let start_pos = parser.parse_expecting(TokenKind::From)?.span.start_pos;
-
-        let statement = Box::new(Statement::parse(parser)?);
-
-        Ok(From {
-            span: parser.new_span(start_pos, statement.span().end_pos),
-            statement,
-        })
-    }
-}

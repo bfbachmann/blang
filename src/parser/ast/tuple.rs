@@ -54,7 +54,7 @@ impl TupleType {
 
     /// Parses tuple type declarations. Expects token sequences of the form
     ///
-    ///     { <type>, ... }
+    ///     .{ <type>, ... }
     ///
     /// where
     ///  - `type` is the type of the tuple field and can be repeated.
@@ -64,8 +64,8 @@ impl TupleType {
         // Record the starting position of this statement.
         let start_pos = parser.current_position();
 
-        // The first token should be `{`.
-        parser.parse_expecting(TokenKind::LeftBrace)?;
+        // The first token should be `.{`.
+        parser.parse_expecting(TokenKind::DotLeftBrace)?;
 
         // The next tokens should be types followed by commas ending in `}`.
         let mut types = vec![];
@@ -102,8 +102,7 @@ impl TupleType {
                     if let token @ Token {
                         kind: TokenKind::RightBrace,
                         ..
-                    } =
-                        parser.parse_expecting_any(&[TokenKind::Comma, TokenKind::RightBrace])?
+                    } = parser.parse_expecting_any(&[TokenKind::Comma, TokenKind::RightBrace])?
                     {
                         // Record the ending position of this statement.
                         end_pos = token.span.end_pos;
@@ -156,7 +155,7 @@ impl PartialEq for TupleInit {
 impl TupleInit {
     /// Parses tuple initializations. Expects token sequences of the form
     ///
-    ///     { <expr>, ... }
+    ///     .{ <expr>, ... }
     ///
     /// where
     ///  - `expr` is and expression representing a tuple field.
@@ -166,8 +165,8 @@ impl TupleInit {
         // Record the starting position of this statement.
         let start_pos = parser.current_position();
 
-        // The first token should be `{`.
-        parser.parse_expecting(TokenKind::LeftBrace)?;
+        // The first token should be `.{`.
+        parser.parse_expecting(TokenKind::DotLeftBrace)?;
 
         // The next tokens should be expressions followed by commas ending in `}`.
         let mut values = vec![];
@@ -204,8 +203,7 @@ impl TupleInit {
                     if let token @ Token {
                         kind: TokenKind::RightBrace,
                         ..
-                    } =
-                        parser.parse_expecting_any(&[TokenKind::Comma, TokenKind::RightBrace])?
+                    } = parser.parse_expecting_any(&[TokenKind::Comma, TokenKind::RightBrace])?
                     {
                         // Record the ending position of this statement.
                         end_pos = token.span.end_pos;

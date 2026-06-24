@@ -8,7 +8,7 @@ use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::analyzer::warn::AnalyzeWarning;
 use crate::codegen::program::CodeGenConfig;
-use crate::lexer::pos::{Position, Span};
+use crate::lexer::pos::Span;
 use crate::parser::{ModID, SrcInfo};
 use flamer::flame;
 
@@ -24,20 +24,13 @@ impl AnalyzedModule {
     /// Creates a new analyzed module.
     pub fn new(
         module: AModule,
-        errors: HashMap<Position, AnalyzeError>,
-        warns: HashMap<Position, AnalyzeWarning>,
+        errors: Vec<AnalyzeError>,
+        warnings: Vec<AnalyzeWarning>,
     ) -> AnalyzedModule {
-        // Extract and sort errors and warnings by their location in the source file.
-        let mut errors: Vec<(Position, AnalyzeError)> = errors.into_iter().collect();
-        errors.sort_by(|(pos1, _), (pos2, _)| pos1.cmp(pos2));
-
-        let mut warnings: Vec<(Position, AnalyzeWarning)> = warns.into_iter().collect();
-        warnings.sort_by(|(pos1, _), (pos2, _)| pos1.cmp(pos2));
-
         AnalyzedModule {
             module,
-            errors: errors.into_iter().map(|(_, e)| e).collect(),
-            warnings: warnings.into_iter().map(|(_, w)| w.clone()).collect(),
+            errors,
+            warnings,
         }
     }
 }
@@ -125,11 +118,7 @@ pub fn analyze_module(
             let err = err_import_cycle(used_mod, &cycle);
             analyzed_mods.insert(
                 mod_id,
-                AnalyzedModule::new(
-                    AModule::new_empty(),
-                    HashMap::from([(err.span.start_pos, err)]),
-                    HashMap::new(),
-                ),
+                AnalyzedModule::new(AModule::new_empty(), vec![err], vec![]),
             );
             return false;
         }

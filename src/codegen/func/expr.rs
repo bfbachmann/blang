@@ -14,11 +14,10 @@ use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::ast::statement::AStatement;
 use crate::analyzer::ast::symbol::SymbolKind;
 use crate::analyzer::ast::tuple::ATupleInit;
-use crate::analyzer::mangling::mangle_type;
 use crate::analyzer::type_store::{GetType, TypeKey};
 use crate::parser::ast::op::Operator;
 
-use super::{get_fn_attrs, FnCodeGen};
+use super::{get_fn_attrs, map_fn_tk_and_mangle_name, FnCodeGen};
 
 impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
     /// Compiles an arbitrary expression.
@@ -169,7 +168,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let ll_struct_type = self.type_converter.get_struct_type(tuple_init.type_key);
 
         // Allocate space for the struct on the stack.
-        let ll_struct_ptr = self.stack_alloc("tuple_init_ptr", tuple_init.type_key);
+        let ll_struct_ptr = self.gen_alloc("tuple_init_ptr", tuple_init.type_key);
 
         // Assign values to initialized tuple fields.
         for (i, field_val) in tuple_init.values.iter().enumerate() {
@@ -229,7 +228,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
                 let ll_collection_ptr = if ll_collection_val.is_pointer_value() {
                     ll_collection_val.into_pointer_value()
                 } else {
-                    let ll_ptr = self.stack_alloc("collection", index.collection_expr.type_key);
+                    let ll_ptr = self.gen_alloc("collection", index.collection_expr.type_key);
                     self.copy_value(ll_collection_val, ll_ptr, index.collection_expr.type_key);
                     ll_ptr
                 };
@@ -315,8 +314,11 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
                 // Init array index and jump to condition branch.
                 let ll_index_type = self.type_converter.ptr_sized_int_type();
-                let ll_index_ptr =
-                    self.build_entry_alloc("array_index_ptr", ll_index_type.as_basic_type_enum());
+                let ll_index_ptr = self.gen_gc_malloc(
+                    "array_index_ptr",
+                    ll_index_type.as_basic_type_enum(),
+                    false,
+                );
                 self.ll_builder
                     .build_store(ll_index_ptr, ll_index_type.const_int(0, false))
                     .unwrap();
@@ -445,9 +447,13 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             );
         }
 
-        // Allocate space for the struct on the stack.
-        let ll_struct_ptr =
-            self.build_entry_alloc("enum_init_ptr", ll_struct_type.as_basic_type_enum());
+        // Allocate space for the struct.
+        let malloc_atomic = self.type_converter.may_contain_gc_ptr(enum_init.type_key);
+        let ll_struct_ptr = self.gen_gc_malloc(
+            "enum_init_ptr",
+            ll_struct_type.as_basic_type_enum(),
+            malloc_atomic,
+        );
 
         // Set the variant number on the struct.
         let ll_number_field_ptr = self
@@ -496,7 +502,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         let ll_struct_type = self.type_converter.get_struct_type(struct_init.type_key);
 
         // Allocate space for the struct on the stack.
-        let ll_struct_ptr = self.stack_alloc(
+        let ll_struct_ptr = self.gen_alloc(
             format!("{}.init_ptr", struct_type.name).as_str(),
             struct_init.type_key,
         );
@@ -527,37 +533,9 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
     /// Compiles a function call, returning the result if one exists.
     pub(crate) fn gen_call(&mut self, call: &AFnCall) -> Option<BasicValueEnum<'ctx>> {
-        let mut fn_sig = self
-            .prog
-            .type_store
-            .get_type(call.fn_expr.type_key)
-            .to_fn_sig();
-
-        // Handle function calls on generic types.
-        if let Some(impl_tk) = fn_sig.maybe_impl_type_key {
-            if let AType::Generic(generic_type) = self.prog.type_store.get_type(impl_tk) {
-                // This is a function on a generic type. We need to look up the
-                // actual function by figuring out what the corresponding concrete
-                // type.
-                let mapped_impl_tk = self.type_converter.map_type_key(impl_tk);
-                let impls = self.prog.type_impls.get(&mapped_impl_tk).unwrap();
-
-                for spec_tk in &generic_type.spec_type_keys {
-                    if let Some(tk) = impls.get_fn_from_spec_impl(*spec_tk, &fn_sig.name) {
-                        fn_sig = self.prog.type_store.get_type(tk).to_fn_sig();
-                        break;
-                    }
-                }
-            }
-        }
-
-        let mangled_name = mangle_type(
-            &self.prog.type_store,
-            fn_sig.type_key,
-            self.type_converter.type_mapping(),
-            &self.prog.type_monomorphizations,
-        );
-        let ll_fn_type = self.type_converter.get_fn_type(fn_sig.type_key);
+        let (fn_tk, mangled_name) =
+            map_fn_tk_and_mangle_name(self.prog, self.type_converter, call.fn_expr.type_key);
+        let ll_fn_type = self.type_converter.get_fn_type(fn_tk);
 
         // Check if we're short one argument. If so, it means the function signature expects
         // the return value to be written to the address pointed to by the first argument, so we
@@ -565,7 +543,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         // structured types.
         let mut args: Vec<BasicMetadataValueEnum> = vec![];
         if ll_fn_type.count_param_types() == call.args.len() as u32 + 1 {
-            let ptr = self.stack_alloc("ret_val_ptr", call.maybe_ret_type_key?);
+            let ptr = self.gen_alloc("ret_val_ptr", call.maybe_ret_type_key?);
             args.push(ptr.into());
             1
         } else {
@@ -583,7 +561,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             // the stack and use their pointers as the arguments rather than the constant values
             // themselves.
             if !ll_arg_val.is_pointer_value() && is_composite {
-                let ll_arg_ptr = self.stack_alloc(format!("arg_{i}_literal").as_str(), arg_tk);
+                let ll_arg_ptr = self.gen_alloc(format!("arg_{i}_literal").as_str(), arg_tk);
                 self.copy_value(ll_arg_val, ll_arg_ptr, arg_tk);
                 args.push(ll_arg_ptr.into());
             } else {
@@ -632,7 +610,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
             }
 
             AExprKind::MemberAccess(access) if access.is_method => {
-                let ll_fn = self.get_or_define_function(fn_sig.type_key);
+                let ll_fn = self.get_or_define_function(fn_tk);
                 self.set_di_location(&call.span.start_pos);
                 let ll_result = self
                     .ll_builder
@@ -660,6 +638,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
         };
 
         // Attach argument attributes.
+        let fn_sig = self.type_converter.get_type(fn_tk).to_fn_sig();
         for (ll_loc, ll_attrs) in get_fn_attrs(self.ll_ctx, self.type_converter, fn_sig) {
             for ll_attr in ll_attrs {
                 ll_call.add_attribute(ll_loc, ll_attr);
@@ -723,7 +702,7 @@ impl<'a, 'ctx> FnCodeGen<'a, 'ctx> {
 
                 _ => {
                     let ll_operand_val = self.gen_expr(operand_expr);
-                    let ll_ptr = self.stack_alloc("referenced_val_ptr", operand_expr.type_key);
+                    let ll_ptr = self.gen_alloc("referenced_val_ptr", operand_expr.type_key);
                     self.copy_value(ll_operand_val, ll_ptr, operand_expr.type_key);
                     ll_ptr.as_basic_value_enum()
                 }

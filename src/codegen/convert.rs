@@ -114,6 +114,61 @@ impl<'a> TypeConverter<'a> {
         }
     }
 
+    /// Returns true only if the given type may contain a pointer that could possibly be used
+    /// to access the GC heap, either directly or indirectly.
+    pub fn may_contain_gc_ptr(&self, type_key: TypeKey) -> bool {
+        let typ = self.get_type(type_key);
+        match typ {
+            AType::Bool
+            | AType::U8
+            | AType::I8
+            | AType::U16
+            | AType::I16
+            | AType::U32
+            | AType::I32
+            | AType::F32
+            | AType::I64
+            | AType::U64
+            | AType::F64
+            | AType::Int
+            | AType::Uint
+            | AType::Str // always points to read-only program data
+            | AType::Char
+            | AType::Function(_) => false,
+
+            AType::Struct(struct_type) => struct_type
+                .fields
+                .iter()
+                .find(|f| self.may_contain_gc_ptr(f.type_key))
+                .is_some(),
+
+            AType::Enum(enum_type) => enum_type
+                .variants
+                .values()
+                .find(|v| {
+                    v.maybe_type_key
+                        .is_some_and(|tk| self.may_contain_gc_ptr(tk))
+                })
+                .is_some(),
+
+            AType::Tuple(tuple_type) => tuple_type
+                .fields
+                .iter()
+                .find(|f| self.may_contain_gc_ptr(f.type_key))
+                .is_some(),
+
+            AType::Array(array_type) => array_type
+                .maybe_element_type_key
+                .is_some_and(|tk| self.may_contain_gc_ptr(tk)),
+
+            AType::Pointer(_) => true,
+
+            AType::Spec(_) | AType::Generic(_) | AType::Unknown(_) => {
+                panic!("unexpected type {typ}")
+            }
+        }
+    }
+
     /// Returns the LLVM struct type for the type associated with the given type key.
     pub fn get_struct_type(&self, type_key: TypeKey) -> StructType<'a> {
         self.get_basic_type(type_key).into_struct_type()
@@ -355,7 +410,28 @@ impl<'a> TypeConverter<'a> {
     /// other words, this returns the number of bytes required to hold the type in memory on the
     /// target system.
     pub fn size_of_type(&self, type_key: TypeKey) -> u64 {
-        let ll_type = self.get_basic_type(type_key);
+        let typ = self.get_type(type_key);
+
+        match typ {
+            AType::Bool | AType::U8 | AType::I8 => 1,
+            AType::U16 | AType::I16 => 2,
+            AType::U32 | AType::I32 | AType::F32 | AType::Char => 4,
+            AType::I64 | AType::U64 | AType::F64 => 8,
+            AType::Int | AType::Uint | AType::Function(_) | AType::Pointer(_) => {
+                self.size_of_ptr() as u64
+            }
+            AType::Str | AType::Struct(_) | AType::Enum(_) | AType::Tuple(_) | AType::Array(_) => {
+                let ll_type = self.get_basic_type(type_key);
+                self.abi_size_of_type(ll_type)
+            }
+            AType::Spec(_) | AType::Generic(_) | AType::Unknown(_) => {
+                panic!("unexpected type {typ}")
+            }
+        }
+    }
+
+    /// Returns the size LLVM ABI size of the given type in bytes.
+    pub fn abi_size_of_type(&self, ll_type: BasicTypeEnum) -> u64 {
         self.ll_target_machine
             .get_target_data()
             .get_abi_size(&ll_type)

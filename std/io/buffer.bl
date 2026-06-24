@@ -3,7 +3,6 @@ mod io
 use "std/runtime" {assert}
 use "std/types/array" {Array}
 use "std/types/slice" {Slice}
-use "std/allocator" {Allocator}
 
 /// A growable IO buffer that can be used to temporarily store data in memory.
 pub struct Buffer {
@@ -13,17 +12,17 @@ pub struct Buffer {
 
 impl Buffer {
     /// Creates a new empty buffer.
-    pub fn new(al: Allocator) -> Buffer {
+    pub fn new() -> Buffer {
         return Buffer{
-            buf: Array[u8].new(al)
+            buf: Array[u8].new()
             cursor: 0
         }
     }
 
     /// Creates a new buffer with the given capacity.
-    pub fn new_with_capacity(al: Allocator, cap: uint) -> Buffer {
+    pub fn new_with_capacity(cap: uint) -> Buffer {
         return Buffer{
-            buf: Array[u8].new_with_len(al, cap)
+            buf: Array[u8].new_with_len(cap)
             cursor: 0
         }
     }
@@ -89,11 +88,6 @@ impl Buffer {
 
         self.buf.resize(len)
     }
-
-    /// Frees all memory associated with the buffer.
-    pub fn free(self) {
-        self.buf.free()
-    }
 }
 
 impl Buffer: Write {
@@ -135,22 +129,16 @@ const default_capacity: uint = 1024 * 4
 
 impl Buffered {
     /// Creates a new buffered writer that writes to `W`.
-    pub fn new(al: Allocator, writer: W) -> Buffered[W] {
+    pub fn new(writer: W) -> Buffered[W] {
         return Buffered[W]{
             writer: writer
-            buf: Buffer.new_with_capacity(al, default_capacity)
+            buf: Buffer.new_with_capacity(default_capacity)
         }
     }
 
     /// Flushes the buffer to the underlying writer.
     pub fn flush(*mut self) {
         self.buf.drain_into(&mut self.writer)
-    }
-
-    /// Frees all memory associated with the buffered writer.
-    pub fn free(mut self) {
-        self.flush()
-        self.buf.free()
     }
 }
 

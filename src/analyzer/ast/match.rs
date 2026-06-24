@@ -4,10 +4,10 @@ use crate::analyzer::ast::pointer::APointerType;
 use crate::analyzer::ast::r#type::AType;
 use crate::analyzer::error::{
     err_conflicting_patterns, err_dup_ident, err_dup_pattern, err_enum_pattern_missing_value,
-    err_enum_variant_has_no_value, err_expected_enum_pattern, err_illegal_pattern_binding,
-    err_inconsistent_binding_types, err_inconsistent_pattern_binding_names, err_inexhaustive_match,
-    err_invalid_enum_pattern, err_invalid_pattern_expr, err_mismatched_pattern_types,
-    err_type_not_struct, err_undef_enum_variant,
+    err_enum_variant_has_no_value, err_expected_enum, err_expected_enum_pattern,
+    err_illegal_pattern_binding, err_inconsistent_binding_types,
+    err_inconsistent_pattern_binding_names, err_inexhaustive_match, err_invalid_enum_pattern,
+    err_invalid_pattern_expr, err_mismatched_pattern_types, err_undef_enum_variant,
 };
 use crate::analyzer::ident::Ident;
 use crate::analyzer::prog_context::ProgramContext;
@@ -175,8 +175,11 @@ fn analyze_enum_binding(
             }
         },
 
+        // Ignore unresolve types.
+        AType::Unknown(_) => return,
+
         _ => {
-            let err = err_type_not_struct(ctx, enum_tk, binding.span);
+            let err = err_expected_enum(ctx, enum_tk, binding.span);
             ctx.insert_err(err);
             return;
         }
@@ -366,6 +369,7 @@ impl AMatch {
     pub fn from(ctx: &mut ProgramContext, match_: &Match) -> AMatch {
         let target = AExpr::from(ctx, match_.target.clone(), None, false, false);
         let target_type = ctx.get_type(target.type_key).clone();
+        let target_type_resolved = !target_type.is_unknown();
 
         let mut cases = vec![];
         let mut exhaustive = false;
@@ -375,7 +379,7 @@ impl AMatch {
 
         for case in &match_.cases {
             // If the case is unreachable, so insert a warning.
-            if exhaustive {
+            if exhaustive && target_type_resolved {
                 warns.push(warn_unreachable_case(case.span));
             }
 
@@ -424,7 +428,7 @@ impl AMatch {
             ctx.insert_warn(warn);
         }
 
-        if !exhaustive {
+        if !exhaustive && target_type_resolved {
             let mut err = err_inexhaustive_match(match_.span);
 
             if !unmatched_variants.is_empty() && matching_enum {

@@ -1,10 +1,11 @@
 mod list
 
 use "std/libc" @libc
-use "std/allocator" {Allocator}
+use "std/mem" @mem
 use "std/types/opt" {Opt}
 use "std/types/slice" {Slice, SliceMut}
 use "std/runtime" {panic}
+use "std/io" {Print, Writer}
 
 /// The minimum capacity of the list once it has been allocated.
 const min_cap: uint = 4
@@ -14,31 +15,29 @@ const growth_factor: uint = 2
 
 /// An array of values of type T that resizes itself automatically.
 pub struct List[T] {
-    allocator: Allocator
     data: SliceMut[T]
     len: uint
 }
 
 impl List {
     /// Returns a new empty list.
-    pub fn new(al: Allocator) -> List[T] {
-        return List[T].with_capacity(al, 0)
+    pub fn new() -> List[T] {
+        return List[T].with_capacity(0)
     }
 
     /// Returns a list with enough allocated memory to hold `cap` values of 
     /// type `T`.
-    pub fn with_capacity(mut al: Allocator, cap: uint) -> List[T] {
-        let data = from if cap == 0 {
+    pub fn with_capacity(cap: uint) -> List[T] {
+        let data = if cap == 0 {
             yield SliceMut[T].new_empty()
         } else {
             yield SliceMut[T].new(
-                al.alloc(cap * sizeof T) as *mut T,
+                @mem.gc_malloc(cap * sizeof T) as *mut T,
                 cap
             )
         }
 
         return List[T] {
-            allocator: al
             data: data
             len: 0
         }
@@ -146,7 +145,6 @@ impl List {
     /// Pushes `values` onto the end of the list.
     pub fn extend(*mut self, mut values: List[T]) {
         values.drain_into(self)
-        values.free()
     }
 
     /// Returns a slice that refereces the data currently in the list.
@@ -179,13 +177,6 @@ impl List {
         self.len = 0
     }
 
-    /// Frees the memory allocated for this list.
-    pub fn free(self) {
-        if self.capacity() > 0 {
-            @libc.free(self.data.ptr() as *mut u8)
-        }
-    }
-
     /// Returns true if the list has no elements.
     pub fn is_empty(self) -> bool {
         return self.len == 0
@@ -196,6 +187,11 @@ impl List {
         return self.len == self.capacity()
     }
 
+    /// Returns an iterator that yields values from this list.
+    pub fn iter(self) -> ListIter[T] {
+        return ListIter[T].from(self)
+    }
+
     /// Grows the memory that backs the list so it can fit `count` new values.
     fn grow_to_fit(*mut self, count: uint) {
         let desired_cap = self.len + count
@@ -204,10 +200,9 @@ impl List {
             return
         }
 
-        let mut new_cap = from if cap < min_cap {
-            yield min_cap
-        } else {
-            yield cap * growth_factor
+        let mut new_cap = match cap < min_cap {
+            true => yield min_cap
+            false => yield cap * growth_factor
         }
 
         // Keep multiplying the capacity by the growth factor until it's big
@@ -220,9 +215,25 @@ impl List {
         self.resize(new_cap)
     }
 
-    /// Resized the unerlying memory segment.
+    /// Resizes the unerlying memory segment.
     fn resize(*mut self, new_cap: uint) {
-        let ptr = @libc.realloc(self.data.ptr() as *mut u8, new_cap * sizeof T)
+        let ptr = @mem.gc_realloc(self.data.ptr() as *mut u8, new_cap * sizeof T)
         self.data = SliceMut[T].new(ptr as *mut T, new_cap)
+    }
+}
+
+impl List: Print if [T: Print] {
+    /// Prints all elements in the list.
+    fn print(self, writer: *mut Writer) {
+        "[".print(writer)
+
+        for let mut i = 0uint; i < self.len; i += 1 {
+            self.data.get(i).unwrap().print(writer)
+            if i + 1 < self.len {
+                ", ".print(writer)
+            }
+        }
+
+        "]".print(writer)
     }
 }

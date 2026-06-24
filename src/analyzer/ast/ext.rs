@@ -61,7 +61,6 @@ impl AExternFn {
             span: ext.span,
         };
 
-        // TODO: don't clone.
         ctx.insert_analyzed_extern_fn(a_ext_fn.clone());
 
         a_ext_fn

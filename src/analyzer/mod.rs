@@ -5,10 +5,12 @@ use crate::analyzer::error::{
 use crate::analyzer::prog_context::ProgramContext;
 use crate::analyzer::type_store::TypeKey;
 use crate::lexer::pos::Locatable;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 pub mod analyze;
 pub mod ast;
+mod constraints;
 pub mod error;
 pub mod ident;
 pub mod mangling;
@@ -241,7 +243,25 @@ pub fn check_types(
     let expected_param = expected_type.to_generic_type();
     let param_name = expected_param.name.clone();
     let parent_tk = expected_param.poly_type_key;
-    let missing_spec_tks = ctx.get_missing_spec_impls(actual_tk, mapped_expected_tk);
+    let (missing_spec_tks, solved_mappings) =
+        ctx.get_missing_spec_impls(actual_tk, mapped_expected_tk);
+
+    for (param_tk, replacement_tk) in solved_mappings {
+        match type_mappings.entry(param_tk) {
+            Entry::Occupied(mut entry) => {
+                let existing_tk = *entry.get();
+                if existing_tk != ctx.unknown_type_key() && existing_tk != replacement_tk {
+                    todo!("inconsistent mappings for param {param_tk}");
+                }
+
+                *entry.get_mut() = replacement_tk;
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(replacement_tk);
+            }
+        }
+    }
+
     let missing_spec_names: Vec<String> = missing_spec_tks
         .into_iter()
         .map(|tk| ctx.display_type(tk))

@@ -1,6 +1,10 @@
 mod string
 
+use "std/specs/iter" {Iter}
+use "std/types/opt" {Opt}
+use "std/types/slice" {Slice, SliceIter}
 use "std/libc" @libc
+use "std/mem" @mem
 
 /// Strings are heap-allocated sequences of bytes.
 pub struct String {
@@ -10,7 +14,7 @@ pub struct String {
 impl String {
     /// Creates a new `String` from the given `str`.
     pub fn from_str(s: str) -> String {
-        let ptr = @libc.malloc(s.len())
+        let ptr = @mem.gc_malloc(s.len())
         @libc.memcpy(ptr, s.ptr(), s.len())
         return String{
             bytes: Slice[u8].new(ptr, s.len())
@@ -20,7 +24,7 @@ impl String {
     /// Creates a new `String` from the concatenation of `first` and `second`.
     pub fn concat(first: Slice[u8], second: Slice[u8]) -> String {
         let new_len = first.len() + second.len()
-        let ptr = @libc.malloc(new_len)
+        let ptr = @mem.gc_malloc(new_len)
 
         @libc.memcpy(ptr, first.ptr(), first.len())
         @libc.memcpy(ptr.(first.len() as int), second.ptr(), second.len())
@@ -40,8 +44,132 @@ impl String {
         return self.bytes.len()
     }
 
-    /// Frees heap space allocated for this `String`.
-    pub fn free(self) {
-        @libc.free(self.ptr())
+    /// Returns an iterator over the UTF-8 chars in the string.
+    pub fn chars(self) -> CharIter {
+        return CharIter.from_iter(self.bytes.iter())
     }
+}
+
+/// An iterator over the unicode characters in a byte sequence (i.e. string or
+/// byte slice).
+pub struct CharIter {
+    bytes: SliceIter[u8]
+    pending: Opt[u8]
+}
+
+impl CharIter {
+    /// Creates a new char iterator from the given byte iterator.
+    pub fn from_iter(it: SliceIter[u8]) -> Self {
+        return Self{
+            bytes: it
+            pending: Opt::None
+        }
+    }
+
+    fn next_byte(*mut self) -> Opt[u8] {
+        if self.pending.is_some() {
+            let b = self.pending
+            self.pending = Opt::None
+            return b
+        }
+
+        return self.bytes.next()
+    }
+
+    fn next_codepoint(*mut self) -> Opt[u32] {
+        // We'll use this codepoint to stand in for any invalid sequences we
+        // find while decoding.
+        const UTF8_UNKNOWN: u32 = 0xfffd
+
+        let b0 = match self.next_byte() {
+            let Opt::Some(b) => yield b
+            _ => return Opt::None
+        }
+
+        // Single-byte codepoint (U+0000 – U+007F)
+        if b0 < 0x80 {
+            return Opt::Some(b0 as u32);
+        }
+
+        let mut codepoint = 0u32
+        let mut extra = 0u8
+
+        // Determine expected sequence length and the bits contained in the leading byte.
+        if b0 & 0b1110_000 == 0b1100_0000 {
+            // 2-byte sequence: U+0080 – U+07FF
+            codepoint = (b0 & 0b0001_1111) as u32
+            extra = 1
+        } else if b0 & 0b1111_0000 == 0b1110_0000 {
+            // 3-byte sequence: U+0800 – U+FFFF
+            codepoint = (b0 & 0b0000_1111) as u32
+            extra = 2
+        } else if b0 & 0b1111_1000 == 0b1111_0000 {
+            // 4-byte sequence: U+10000 – U+10FFFF
+            codepoint = (b0 & 0b0000_0111) as u32
+            extra = 3
+        } else {
+            // Lone continuation byte (0x80–0xBF) or invalid byte (0xF8–0xFF).
+            return Opt::Some(UTF8_UNKNOWN)
+        }
+
+        // Consume the continuation bytes.
+        for let mut i = 0u8; i < extra; i += 1 {
+            match self.bytes.next() {
+                let Opt::Some(b) if b & 0b1100_0000 == 0b1000_0000 => {
+                    codepoint = (codepoint << 6) | (b & 0b0011_1111) as u32
+                }
+                let other => {
+                    // Not a valid continuation byte.
+                    // If we got an actual byte, save it so the next iteration can
+                    // reprocess it (it may be the start of a new valid sequence).
+                    if i == 0 {
+                        // No continuation bytes consumed yet; the pending byte is
+                        // whatever `other` is (could be None = end of stream).
+                        self.pending = other
+                    }
+                    // Bytes consumed in iterations 1..i are themselves invalid
+                    // (they were valid continuations, but the sequence is now broken).
+                    // We can only surface one replacement character per call, so the
+                    // caller will see one U+FFFD here; the salvageable byte (if any)
+                    // will be re-examined on the next call via `self.pending`.
+                    return Opt::Some(UTF8_UNKNOWN)
+                }
+            }
+        }
+
+        // Validate the decoded codepoint:
+        // - Overlong encodings (value fits in fewer bytes than used)
+        // - Surrogate halves (U+D800–U+DFFF)
+        // - Values above U+10FFFF
+        let overlong = match extra {
+            1 => yield codepoint < 0x80
+            2 => yield codepoint < 0x800
+            3 => yield codepoint < 0x10000
+            _ => yield false
+        };
+        let surrogate = codepoint >= 0xd800 && codepoint <= 0xdfff
+        let too_large = codepoint > 0x10ffff;
+ 
+        if overlong || surrogate || too_large {
+            return Opt::Some(UTF8_UNKNOWN);
+        }
+ 
+        // SAFETY: we've verified this is a valid, non-surrogate Unicode scalar value.
+        return Opt::Some(codepoint)
+    }
+}
+
+impl CharIter: Iter[char] {
+    /// Returns the next unicode character in the iterator if there is one,
+    /// or else None.
+    pub fn next(*mut self) -> Opt[char] {
+        return self.next_codepoint().map(unsafe_u32_to_char)
+    }
+}
+
+// Turbo-hack to make a u32 into a char, because the compiler doesn't allow it.
+// (The compiler doesn't allow it because it's only safe if you know for sure
+// that the codepoint is valid UTF-8).
+pub fn unsafe_u32_to_char(u: u32) -> char {
+    return (&u as *char)^
 }

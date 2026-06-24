@@ -49,34 +49,32 @@ pub enum TokenKind {
     LogicalAndEqual,
     #[token("||=")]
     LogicalOrEqual,
-    #[token("band")]
-    BitwiseAnd,
-    #[token("bor")]
+    #[token("|")]
     BitwiseOr,
-    #[token("bxor")]
+    #[token("xor")]
     BitwiseXor,
-    #[token("bls")]
+    #[token("<<")]
     BitwiseLeftShift,
-    #[token("brs")]
+    #[token(">>")]
     BitwiseRightShift,
-    #[token("band=")]
+    #[token("&=")]
     BitwiseAndEqual,
-    #[token("bor=")]
+    #[token("|=")]
     BitwiseOrEqual,
-    #[token("bxor=")]
+    #[token("xor=")]
     BitwiseXorEqual,
-    #[token("bls=")]
+    #[token("<<=")]
     BitwiseLeftShiftEqual,
-    #[token("brs=")]
+    #[token(">>=")]
     BitwiseRightShiftEqual,
 
     // Unary operators
     #[token("!")]
     LogicalNot,
-    #[token("bnot")]
+    #[token("~")]
     BitwiseNot,
     #[token("&")]
-    Ref,
+    Ampersand,
     #[token("&mut")]
     RefMut,
     #[token("^")]
@@ -89,7 +87,7 @@ pub enum TokenKind {
     // Comparators
     #[token("==")]
     EqualTo,
-    #[token("~~")]
+    #[token("=~")]
     Like,
     #[token("!~")]
     NotLike,
@@ -189,12 +187,12 @@ pub enum TokenKind {
     Use,
     #[token("mod")]
     Mod,
-    #[token("from")]
-    From,
     #[token("yield")]
     Yield,
 
     // Delimiters
+    #[token(".{")]
+    DotLeftBrace,
     #[token("{")]
     LeftBrace,
     #[token("}")]
@@ -249,22 +247,21 @@ impl TokenKind {
             TokenKind::AsteriskEqual => "*=".to_string(),
             TokenKind::ForwardSlashEqual => "/=".to_string(),
             TokenKind::PercentEqual => "%=".to_string(),
-            TokenKind::LogicalAnd => "and".to_string(),
-            TokenKind::LogicalOr => "or".to_string(),
+            TokenKind::LogicalAnd => "&&".to_string(),
+            TokenKind::LogicalOr => "||".to_string(),
             TokenKind::LogicalAndEqual => "&&=".to_string(),
             TokenKind::LogicalOrEqual => "||=".to_string(),
             TokenKind::LogicalNot => "!".to_string(),
-            TokenKind::BitwiseNot => "bnot".to_string(),
-            TokenKind::BitwiseAnd => "band".to_string(),
-            TokenKind::BitwiseOr => "bor".to_string(),
-            TokenKind::BitwiseXor => "bxor".to_string(),
-            TokenKind::BitwiseLeftShift => "bls".to_string(),
-            TokenKind::BitwiseRightShift => "brs".to_string(),
-            TokenKind::BitwiseAndEqual => "band=".to_string(),
-            TokenKind::BitwiseOrEqual => "bor=".to_string(),
-            TokenKind::BitwiseXorEqual => "bxor=".to_string(),
+            TokenKind::BitwiseNot => "~".to_string(),
+            TokenKind::BitwiseOr => "|".to_string(),
+            TokenKind::BitwiseXor => "xor".to_string(),
+            TokenKind::BitwiseLeftShift => "<<".to_string(),
+            TokenKind::BitwiseRightShift => ">>".to_string(),
+            TokenKind::BitwiseAndEqual => "&=".to_string(),
+            TokenKind::BitwiseOrEqual => "|=".to_string(),
+            TokenKind::BitwiseXorEqual => "xor=".to_string(),
             TokenKind::BitwiseLeftShiftEqual => "bls=".to_string(),
-            TokenKind::BitwiseRightShiftEqual => "brs=".to_string(),
+            TokenKind::BitwiseRightShiftEqual => ">>=".to_string(),
             TokenKind::Equal => "=".to_string(),
             TokenKind::EqualTo => "==".to_string(),
             TokenKind::NotEqualTo => "!=".to_string(),
@@ -314,6 +311,7 @@ impl TokenKind {
             TokenKind::For => "for".to_string(),
             TokenKind::While => "while".to_string(),
             TokenKind::Loop => "loop".to_string(),
+            TokenKind::DotLeftBrace => ".{".to_string(),
             TokenKind::LeftBrace => "{".to_string(),
             TokenKind::RightBrace => "}".to_string(),
             TokenKind::BeginIndex => ".(".to_string(),
@@ -344,12 +342,11 @@ impl TokenKind {
             TokenKind::DollarSign => "$".to_string(),
             TokenKind::Like => "~~".to_string(),
             TokenKind::NotLike => "!~".to_string(),
-            TokenKind::Ref => "&".to_string(),
+            TokenKind::Ampersand => "&".to_string(),
             TokenKind::RefMut => "&mut".to_string(),
             TokenKind::Deref => "^".to_string(),
             TokenKind::Use => "use".to_string(),
             TokenKind::Mod => "mod".to_string(),
-            TokenKind::From => "from".to_string(),
             TokenKind::Yield => "yield".to_string(),
         }
     }

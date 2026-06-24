@@ -1,0 +1,91 @@
+mod list
+
+use "std/specs/iter" {Iter}
+use "std/types/opt" {Opt}
+
+/// An iterator over a list.
+pub struct ListIter[T] {
+    list: List[T]
+    index: uint
+}
+
+impl ListIter {
+    /// Creates a new iterator over the given list.
+    pub fn from(list: List[T]) -> Self {
+        return Self{
+            list: list
+            index: 0
+        }
+    }
+
+    /// Creates an iterator over the given list that will map each element of
+    /// the list to a new value using the given function.
+    pub fn map[O](self, map_fn: fn (T) -> O) -> ListIterMap[T, O] {
+        return ListIterMap{
+            iter: self
+            map_fn: map_fn
+        }
+    }
+
+    /// Creates an iterator over the given list that will map each element of
+    /// the list to a new value using the given function, filtering out any
+    /// values for which `map_fn` returns `None`.
+    pub fn filter_map[O](self, map_fn: fn (T) -> Opt[O]) -> ListIterFilterMap[T, O] {
+        return ListIterFilterMap{
+            iter: self
+            map_fn: map_fn
+        }
+    }
+}
+
+impl ListIter: Iter[T] {
+    /// Returns the next element in the iterator, or `None`.
+    pub fn next(*mut self) -> Opt[T] {
+        if self.index >= self.list.len() {
+            return Opt::None
+        }
+
+        let elem = self.list.get(self.index)
+        self.index += 1
+        return elem
+    }
+}
+
+/// An iterator that maps elements of the underlying list to new values
+/// before returning them from `next`.
+pub struct ListIterMap[T, O] {
+    iter: ListIter[T]
+    map_fn: fn (T) -> O
+}
+
+impl ListIterMap: Iter[O] {
+    /// Returns the next element in the iterator, or `None`.
+    pub fn next(*mut self) -> Opt[O] {
+        return self.iter.next().map(self.map_fn)
+    }
+}
+
+/// An iterator that filters and maps elements of the underlying list to new 
+/// values before returning them from `next`.
+pub struct ListIterFilterMap[T, O] {
+    iter: ListIter[T]
+    map_fn: fn (T) -> Opt[O]
+}
+
+impl ListIterFilterMap: Iter[O] {
+    /// Returns the next element in the iterator, or `None`.
+    pub fn next(*mut self) -> Opt[O] {
+        loop {
+            match self.iter.next() {
+                let Opt::Some(elem) => {
+                    let mapped_elem = self.map_fn(elem)
+                    if mapped_elem.is_some() {
+                        return mapped_elem
+                    }
+                }
+
+                _ => return Opt::None
+            }
+        }
+    }
+}

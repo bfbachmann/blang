@@ -290,6 +290,9 @@ fn link(
                 "llvm-link"
             }
             OutputFormat::Object | OutputFormat::Executable => {
+                // Include the GC via linker args.
+                extra_link_args.push("-lgc".to_string());
+
                 // Try to determine the system linker based on the target platform.
                 match target_triple.contains("windows") {
                     true => "link.exe",

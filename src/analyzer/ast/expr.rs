@@ -19,7 +19,7 @@ use crate::analyzer::error::{
     err_expected_ret_val, err_invalid_from_expr, err_invalid_mut_ref_const, err_invalid_mut_ref_fn,
     err_invalid_mut_ref_immut, err_invalid_operand_type, err_invalid_type_cast,
     err_invalid_unary_operand_type, err_literal_out_of_range, err_mismatched_operand_types,
-    err_mismatched_types, err_superfluous_type_cast, AnalyzeError,
+    err_mismatched_types, err_missing_yield, err_superfluous_type_cast, AnalyzeError,
 };
 use crate::analyzer::ident::{IdentKind, Usage};
 use crate::analyzer::prog_context::ProgramContext;
@@ -775,9 +775,7 @@ impl AExpr {
                 expr.try_into_const_uint(ctx)
             }
 
-            // TODO: Remove this. There's no way this works in every case because things may
-            // no have been monomorphized fully by this point.
-            AExprKind::Sizeof(type_key) => Some(size_of_type(ctx, *type_key)),
+            AExprKind::Sizeof(type_key) => size_of_type(ctx, *type_key),
 
             _ => None,
         }
@@ -1066,7 +1064,7 @@ fn analyze_type_cast(
         ctx.insert_err(err);
         AExpr::new_zero_value(ctx, target_type)
     } else if left_expr.type_key == target_type_key {
-        let err = err_superfluous_type_cast(ctx, &left_expr, target_type_key, span);
+        let err = err_superfluous_type_cast(ctx, target_type_key, span);
         ctx.insert_err(err);
         AExpr::new_zero_value(ctx, target_type)
     } else {
@@ -1413,6 +1411,10 @@ fn analyze_from(
     maybe_expected_type_key: Option<TypeKey>,
 ) -> AExpr {
     ctx.push_scope(Scope::new(ScopeKind::FromBody, maybe_expected_type_key));
+    if let Some(tk) = maybe_expected_type_key {
+        ctx.set_cur_expected_yield_type_key(tk);
+    }
+
     let statement = AStatement::from(ctx, &from.statement);
 
     // Make sure the statement is a valid kind.
@@ -1436,15 +1438,23 @@ fn analyze_from(
     // was specified, or it will be a value determined based on the type of
     // the first value `yielded` from the statement. It could also be `None`
     // in the case where the statement does not contain a `yield`.
-    let type_key = match ctx.pop_scope(true).yield_type_key() {
-        Some(tk) => tk,
-        None => ctx.unknown_type_key(),
+    let (type_key, yields) = match ctx.pop_scope(true).yield_type_key() {
+        Some(tk) => (tk, true),
+        None => {
+            if valid_statement {
+                ctx.insert_err(err_missing_yield(
+                    Some(format_code!("This statement does not {} any value.", "yield").as_str()),
+                    *statement.span(),
+                ));
+            }
+            (ctx.unknown_type_key(), false)
+        }
     };
 
     // Make sure all possible branches of the statement yield a value.
     let mut closure = AClosure::new(vec![statement], *from.statement.span());
-    if valid_statement {
-        check_closure_yields(ctx, &closure, &ScopeKind::FromBody);
+    if valid_statement && yields {
+        check_closure_yields(ctx, &mut vec![], &closure, &ScopeKind::FromBody);
     }
 
     AExpr {

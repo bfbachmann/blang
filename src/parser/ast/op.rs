@@ -47,7 +47,7 @@ impl fmt::Display for Operator {
 impl Operator {
     /// Creates an operator from the given token kind. Returns `None` if the kind is not a valid
     /// operator.
-    pub fn from(kind: &TokenKind) -> Option<Self> {
+    pub fn from(kind: &TokenKind, prefer_binary_op: bool) -> Option<Self> {
         match kind {
             TokenKind::Plus => Some(Operator::Add),
             TokenKind::Minus => Some(Operator::Subtract),
@@ -65,14 +65,14 @@ impl Operator {
             TokenKind::GreaterThanOrEqual => Some(Operator::GreaterThanOrEqual),
             TokenKind::LessThanOrEqual => Some(Operator::LessThanOrEqual),
             TokenKind::As => Some(Operator::As),
-            TokenKind::BitwiseAnd => Some(Operator::BitwiseAnd),
             TokenKind::BitwiseOr => Some(Operator::BitwiseOr),
             TokenKind::BitwiseXor => Some(Operator::BitwiseXor),
             TokenKind::BitwiseLeftShift => Some(Operator::BitwiseLeftShift),
             TokenKind::BitwiseRightShift => Some(Operator::BitwiseRightShift),
             TokenKind::Like => Some(Operator::Like),
             TokenKind::NotLike => Some(Operator::NotLike),
-            TokenKind::Ref => Some(Operator::Reference),
+            TokenKind::Ampersand if prefer_binary_op => Some(Operator::BitwiseAnd),
+            TokenKind::Ampersand => Some(Operator::Reference),
             TokenKind::RefMut => Some(Operator::MutReference),
             TokenKind::Deref => Some(Operator::Defererence),
             _ => None,
@@ -100,12 +100,12 @@ impl Operator {
             Operator::GreaterThanOrEqual => TokenKind::GreaterThanOrEqual.to_string(),
             Operator::LessThanOrEqual => TokenKind::LessThanOrEqual.to_string(),
             Operator::As => TokenKind::As.to_string(),
-            Operator::BitwiseAnd => TokenKind::BitwiseAnd.to_string(),
+            Operator::BitwiseAnd => TokenKind::Ampersand.to_string(),
             Operator::BitwiseOr => TokenKind::BitwiseOr.to_string(),
             Operator::BitwiseXor => TokenKind::BitwiseXor.to_string(),
             Operator::BitwiseLeftShift => TokenKind::BitwiseLeftShift.to_string(),
             Operator::BitwiseRightShift => TokenKind::BitwiseRightShift.to_string(),
-            Operator::Reference => TokenKind::Ref.to_string(),
+            Operator::Reference => TokenKind::Ampersand.to_string(),
             Operator::MutReference => TokenKind::RefMut.to_string(),
             Operator::Defererence => TokenKind::Deref.to_string(),
         }

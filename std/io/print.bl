@@ -1,0 +1,126 @@
+mod io
+
+use "std/types/slice" {Slice}
+use "std/convert" @convert
+
+/// Any type that can be printed into a writer.
+pub spec Print {
+    fn print(self, writer: *mut Writer)
+}
+
+impl str: Print {
+    fn print(self, writer: *mut Writer) {
+        writer.write(Slice[u8].from_str(self))
+    }
+}
+
+impl char: Print {
+    fn print(self, writer: *mut Writer) {
+        let mut bytes = [0u8; 4]
+        let mut len = 1uint
+        let codepoint = self as u32
+
+        if (codepoint <= 0x7f) {
+            // 1-byte UTF-8 (ASCII)
+            bytes.(0) = (codepoint) as u8
+        } else if (codepoint <= 0x7ff) {
+            // 2-byte UTF-8
+            bytes.(0) = ((codepoint >> 6u32) | 0xc0) as u8
+            bytes.(1) = ((codepoint & 0x3fu32) | 0x80) as u8
+            len = 2
+        } else if (codepoint <= 0xffff) {
+            // 3-byte UTF-8
+            bytes.(0) = ((codepoint >> 12u32) | 0xe0) as u8
+            bytes.(1) = (((codepoint >> 6u32) & 0x3f) | 0x80) as u8
+            bytes.(2) = ((codepoint & 0x3fu32) | 0x80) as u8
+            len = 3
+        } else {
+            // 4-byte UTF-8
+            bytes.(0) = ((codepoint >> 18u32) | 0xf0) as u8
+            bytes.(1) = (((codepoint >> 12u32) & 0x3f) | 0x80) as u8
+            bytes.(2) = (((codepoint >> 6u32) & 0x3f) | 0x80) as u8
+            bytes.(3) = ((codepoint & 0x3fu32) | 0x80) as u8
+            len = 4
+        }
+
+        writer.write(Slice[u8].new(&bytes as *u8, len))
+    }
+}
+
+impl bool: Print {
+    fn print(self, writer: *mut Writer) {
+        writer.write(Slice[u8].from_str(@convert.bool_to_str(self)))
+    }
+}
+
+impl Slice[u8]: Print {
+    fn print(self, writer: *mut Writer) {
+        writer.write(self)
+    }
+}
+
+impl int: Print {
+    fn print(self, writer: *mut Writer) {
+        let result = @convert.int_to_str(self)
+        let bytes = &result.(0) as *u8
+        let offset = result.(1)
+        writer.write(Slice[u8].new(bytes.(offset as int), 65uint - offset))
+    }
+}
+
+impl uint: Print {
+    fn print(self, writer: *mut Writer) {
+        let result = @convert.uint_to_str(self)
+        let bytes = &result.(0) as *u8
+        let offset = result.(1)
+        writer.write(Slice[u8].new(bytes.(offset as int), 65uint - offset))
+    }
+}
+
+impl u64: Print {
+    fn print(self, writer: *mut Writer) {
+        (self as int).print(writer)
+    }
+}
+
+impl u32: Print {
+    fn print(self, writer: *mut Writer) {
+        (self as int).print(writer)
+    }
+}
+
+impl u16: Print {
+    fn print(self, writer: *mut Writer) {
+        (self as int).print(writer)
+    }
+}
+
+impl u8: Print {
+    fn print(self, writer: *mut Writer) {
+        (self as int).print(writer)
+    }
+}
+
+impl i64: Print {
+    fn print(self, writer: *mut Writer) {
+        (self as int).print(writer)
+    }
+}
+
+impl i32: Print {
+    fn print(self, writer: *mut Writer) {
+        (self as int).print(writer)
+    }
+}
+
+impl i16: Print {
+    fn print(self, writer: *mut Writer) {
+        (self as int).print(writer)
+    }
+}
+
+impl i8: Print {
+    fn print(self, writer: *mut Writer) {
+        (self as int).print(writer)
+    }
+}

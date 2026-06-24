@@ -31,7 +31,7 @@ fn main() {
         assert(result.i == -87, "5")
         assert(result.b == false, "6")
 
-        assert(take_tuple(&{9}) == 9, "7")
+        assert(take_tuple(&.{9}) == 9, "7")
 
         // Check pointer type coercion.
         let u: *u64 = &mut 1234u64
@@ -155,6 +155,6 @@ fn take_t(t: *T) -> T {
     }
 }
 
-fn take_tuple(tup: *{int}) -> int {
+fn take_tuple(tup: *.{int}) -> int {
     return tup^.(0)
 }

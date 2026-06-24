@@ -18,8 +18,8 @@ pub fn mangle_type<T: GetType>(
             .iter()
             .map(|rp| {
                 *type_mappings
-                    .get(&rp.replacement_type_key)
-                    .unwrap_or(&rp.replacement_type_key)
+                    .get(&rp.replacement_tk)
+                    .unwrap_or(&rp.replacement_tk)
             })
             .collect()
     } else {
@@ -54,8 +54,8 @@ pub fn mangle_type<T: GetType>(
                 } else if let Some(mono) = type_monomorphizations.get(impl_tk) {
                     param_tks.extend(mono.replaced_params.iter().map(|rp| {
                         *type_mappings
-                            .get(&rp.replacement_type_key)
-                            .unwrap_or(&rp.replacement_type_key)
+                            .get(&rp.replacement_tk)
+                            .unwrap_or(&rp.replacement_tk)
                     }));
                 }
 

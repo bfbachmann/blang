@@ -4,82 +4,56 @@ use "std/specs" {Eq}
 use "std/types/hasher" {Hash, Hasher, BuildHash}
 use "std/types/opt" {Opt}
 use "std/runtime" {assert, panic}
-use "std/allocator" {Allocator, LibcAllocator}
 use "std/types/slice" {Slice, SliceMut}
 use "std/libc" @libc
-use "std/fmt" {printf, Format, Print}
+use "std/mem" @mem
+use "std/fmt" {println, Format}
+use "std/io" {Print, Writer}
 
 fn main() {
-    let mut al = LibcAllocator.new().dynamic()
-    let mut map = HashMap[int, int].new(al)
+    let mut map = HashMap[int, int].new()
 
     let mut last_i = 1
     let mut i = 1
     for let mut count = 0; count < 10; count += 1 {
         assert(map.insert(i, i).is_none(), "first insert: expected None")
         assert(map.len() == count as uint + 1, "first insert: wrong length")
-        display_hashmap(map)
+        println(map)
 
         assert(map.get(i).unwrap_or(-1) == i, "first get: wrong value")
         assert(map.len() == count as uint + 1, "first get: wrong length")
-        display_hashmap(map)
+        println(map)
 
         assert(map.insert(i, i * 2).unwrap_or(-1) == i, "second insert: wrong value")
         assert(map.len() == count as uint + 1, "second insert: wrong length")
-        display_hashmap(map)
+        println(map)
 
         assert(map.get(i).unwrap_or(-1) == i * 2, "second get: wrong value")
         assert(map.len() == count as uint + 1, "second get: wrong length")
-        display_hashmap(map)
+        println(map)
 
         assert(map.delete(i).unwrap_or(-1) == i * 2, "first delete: wrong value")
         assert(map.len() == count as uint, "first delete: wrong length")
-        display_hashmap(map)
+        println(map)
 
         assert(map.delete(i).is_none(), "second delete: expected None")
         assert(map.len() == count as uint, "second delete: wrong length")
-        display_hashmap(map)
+        println(map)
 
         assert(map.get(i).is_none(), "third get: expected None")
         assert(map.len() == count as uint, "third get: wrong length")
-        display_hashmap(map)
+        println(map)
 
         assert(map.insert(i, i).is_none(), "third insert: expected None")
         assert(map.len() == count as uint + 1, "third insert: wrong length")
-        display_hashmap(map)
+        println(map)
 
         let temp = last_i
         last_i = i
         i = i + temp
     }
 
-    map.free()
-
     @libc.exit(0)
-}
-
-fn display_hashmap[K: Hash + Eq + Print, V: Print](map: HashMap[K, V]) {
-    printf(Format.new(map.allocator, "_______HashMap______\n"))
-
-    for let mut i = 0uint; i < map.slots.len(); i += 1 {
-        match map.slots.ptr_at(i) {
-            let Slot::Occupied(entry) => {
-                printf(
-                    Format.new(map.allocator, "% -> %\n")
-                        .arg(&entry.key)
-                        .arg(&entry.value)
-                )
-            }
-            let Slot::Empty => {
-                printf(Format.new(map.allocator, "empty\n"))
-            }
-            let Slot::Deleted => {
-                printf(Format.new(map.allocator, "deleted\n"))
-            }
-        }
-    }
-
-    printf(Format.new(map.allocator, "____________________\n"))
 }
 
 /// Implements the DJB2 hash function.
@@ -105,7 +79,7 @@ impl DJB2Hasher: BuildHash {
     pub fn write(*mut self, bytes: Slice[u8]) {
         for let mut i = 0uint; i < bytes.len(); i += 1 {
             let c = bytes.ptr_at(i)^ as u64
-            self.hash = ((self.hash bls 5uint) + self.hash) + c
+            self.hash = ((self.hash << 5uint) + self.hash) + c
         }
     }
 
@@ -115,7 +89,6 @@ impl DJB2Hasher: BuildHash {
 }
 
 pub struct HashMap[K: Hash + Eq, V] {
-    allocator: Allocator
     slots: SliceMut[Slot[K, V]]
     len: uint
 }
@@ -132,9 +105,8 @@ pub struct Entry[K, V] {
 }
 
 impl HashMap {
-    pub fn new(al: Allocator) -> Self {
+    pub fn new() -> Self {
         return Self{
-            allocator: al
             slots: SliceMut[Slot[K, V]].new_empty()
             len: 0
         }
@@ -227,11 +199,6 @@ impl HashMap {
         return Opt::None
     }
 
-    pub fn free(*mut self) {
-        self.allocator.free(self.slots.ptr() as *mut u8)
-        self.len = 0
-    }
-
     fn grow_if_needed(*mut self) {
         // Check if we need to allocate more capacity for the table.
         // Using load factor of 0.8 (4 / 5).
@@ -241,14 +208,14 @@ impl HashMap {
             return
         }
 
-        let new_len: uint = from if old_len == 0 {
+        let new_len: uint = if old_len == 0 {
             yield 8uint
         } else {
             yield old_len * 2
         }
 
         let old_slots = self.slots
-        self.slots = self.new_empty_slots(new_len)
+        self.slots = HashMap.new_empty_slots(new_len)
         self.len = 0
 
         for let mut i = 0uint; i < old_len; i += 1 {
@@ -259,12 +226,10 @@ impl HashMap {
                 _ => {}
             }
         }
-
-        self.allocator.free(old_slots.ptr() as *mut u8)
     }
 
-    fn new_empty_slots(*mut self, len: uint) -> SliceMut[Slot[K, V]] {
-        let ptr = self.allocator.alloc(len * sizeof Slot[K, V]) as *mut Slot[K, V]
+    fn new_empty_slots(len: uint) -> SliceMut[Slot[K, V]] {
+        let ptr = @mem.gc_malloc(len * sizeof Slot[K, V]) as *mut Slot[K, V]
         let mut slots = SliceMut[Slot[K, V]].new(ptr, len)
 
         for let mut i = 0uint; i < len; i += 1 {
@@ -273,7 +238,31 @@ impl HashMap {
 
         return slots
     }
+}
 
+impl HashMap: Print if [K: Print, V: Print] {
+    fn print(self, writer: *mut Writer) {
+        "{\n".print(writer)
+
+        for let mut i = 0uint; i < self.slots.len(); i += 1 {
+            match self.slots.ptr_at(i) {
+                let Slot::Occupied(entry) => {
+                    Format.new("  %: %,\n")
+                        .arg(&entry.key)
+                        .arg(&entry.value)
+                        .print(writer)
+                }
+                let Slot::Empty => {
+                    Format.new("  empty,\n").print(writer)
+                }
+                let Slot::Deleted => {
+                    Format.new("  deleted,\n").print(writer)
+                }
+            }
+        }
+
+        "}".print(writer)
+    }
 }
 
 fn hash_key[K: Hash](key: K) -> uint {

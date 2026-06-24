@@ -59,7 +59,7 @@ pub fn warn_unreachable(statement: &AStatement, span: Span) -> AnalyzeWarning {
 pub fn warn_unused(name: &str, span: Span) -> AnalyzeWarning {
     AnalyzeWarning::new(
         WarnKind::Unused,
-        format_code!("{} is unused", name).as_str(),
+        format_code!("{} is never used", name).as_str(),
         span,
     )
 }

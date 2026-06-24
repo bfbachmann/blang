@@ -2,6 +2,8 @@ mod generic_fns
 
 use "std/libc" {malloc, free, exit}
 use "std/runtime" {assert}
+use "std/types/opt" {Opt}
+use "std/types/list" {List}
 
 spec ToStr {
     fn to_str(self) -> str
@@ -61,7 +63,7 @@ fn apply[T](f: fn (T) -> T, t: T) -> T {
 }
 
 // Test functions that have tuple arguments that contain the function params.
-fn get_second[T](tup: {T, T}) -> T {
+fn get_second[T](tup: .{T, T}) -> T {
     return tup.(1)
 }
 
@@ -75,6 +77,89 @@ fn nth[T](array: [T; 4], n: uint) -> T {
     return array.(n)
 }
 
+// Test functions with complex generics that depend on each other.
+fn accumulate[T: Join, It: Iter[T]](mut acc: T, mut it: It) -> T {
+    while it.has_next() {
+        acc = acc.join(it.next().unwrap())
+    }
+    return acc
+}
+
+spec Iter[T] {
+    fn next(*mut self) -> Opt[T]
+    fn has_next(self) -> bool
+}
+
+spec Join {
+    fn join(self, other: Self) -> Self
+}
+
+impl int: Join {
+    fn join(self, other: Self) -> Self {
+        return self + other
+    }
+}
+
+struct Range {
+    i: int
+    end: int
+}
+
+impl Range {
+    fn new(start: int, end: int) -> Self {
+        return Self{
+            i: start
+            end: end
+        }
+    }
+}
+
+impl Range: Iter[int] {
+    fn next(*mut self) -> Opt[int] {
+        if self.has_next() {
+            let result = Opt::Some(self.i)
+            self.i += 1
+            return result
+        }
+
+        return Opt::None
+    }
+
+    fn has_next(self) -> bool {
+        return self.i < self.end
+    }
+}
+
+struct ListIter[T] {
+    list: *List[T]
+    i: uint
+}
+
+impl ListIter {
+    fn from(l: *List[T]) -> Self {
+        return Self{
+            list: l
+            i: 0
+        }
+    }
+}
+
+impl ListIter: Iter[T] {
+    fn next(*mut self) -> Opt[T] {
+        if self.has_next() {
+            let elem = self.list.get(self.i)
+            self.i += 1
+            return elem
+        }
+
+        return Opt::None
+    }
+
+    fn has_next(self) -> bool {
+        return self.i < self.list.len()
+    }
+}
+
 fn main() {
     assert(get_default_str[Thing]() == "default", "expected \"default\"")
 
@@ -83,9 +168,17 @@ fn main() {
     heap_free(thing_ptr)
 
     assert(apply(double, -7) == -14, "expected -14")
-    assert(get_second({2, 9}) == 9, "expected 9")
+    assert(get_second(.{2, 9}) == 9, "expected 9")
     assert(deref(&17) == 17, "expected 17")
     assert(nth([1, 2, 3, 4], 2) == 3, "expected 3")
+
+    assert(accumulate(0, Range.new(1, 10)) == 45, "accumulate range failed")
+
+    let mut l = List[int].new()
+    for let mut i = 1; i < 101; i += 1 {
+        l.push(i)
+    }
+    assert(accumulate(0, ListIter[int].from(&l)) == 5050, "accumulate list failed")
 
     exit(0)
 }

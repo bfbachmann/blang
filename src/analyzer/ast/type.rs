@@ -345,6 +345,79 @@ impl AType {
         matches!(self, AType::Generic(_))
     }
 
+    /// Returns true iff the size of this type depends on the size of generic types.
+    pub fn size_depends_on_generics(&self, ctx: &ProgramContext) -> bool {
+        match self {
+            AType::Generic(_) => true,
+
+            AType::Bool
+            | AType::U8
+            | AType::I8
+            | AType::U16
+            | AType::I16
+            | AType::U32
+            | AType::I32
+            | AType::F32
+            | AType::I64
+            | AType::U64
+            | AType::F64
+            | AType::Int
+            | AType::Uint
+            | AType::Str
+            | AType::Char
+            | AType::Function(_)
+            | AType::Pointer(_)
+            | AType::Spec(_)
+            | AType::Unknown(_) => false,
+
+            AType::Struct(struct_type) => {
+                for field in &struct_type.fields {
+                    let field_type = ctx.get_type(field.type_key);
+                    if field_type.size_depends_on_generics(ctx) {
+                        return true;
+                    }
+                }
+
+                false
+            }
+
+            AType::Enum(enum_type) => {
+                for variant in enum_type.variants.values() {
+                    if let Some(inner_tk) = variant.maybe_type_key {
+                        let inner_type = ctx.get_type(inner_tk);
+                        if inner_type.size_depends_on_generics(ctx) {
+                            return true;
+                        }
+                    }
+                }
+
+                false
+            }
+
+            AType::Tuple(tuple_type) => {
+                for field in &tuple_type.fields {
+                    let field_type = ctx.get_type(field.type_key);
+                    if field_type.size_depends_on_generics(ctx) {
+                        return true;
+                    }
+                }
+
+                false
+            }
+
+            AType::Array(array_type) => {
+                if let Some(elem_tk) = array_type.maybe_element_type_key {
+                    let elem_type = ctx.get_type(elem_tk);
+                    if elem_type.size_depends_on_generics(ctx) {
+                        return true;
+                    }
+                }
+
+                false
+            }
+        }
+    }
+
     /// Returns true if the type is `bool`.
     pub fn is_bool(&self) -> bool {
         matches!(self, AType::Bool)
@@ -363,7 +436,13 @@ impl AType {
 }
 
 /// Returns the size of the given type in bytes on the target system (includes padding).
-pub fn size_of_type(ctx: &ProgramContext, type_key: TypeKey) -> u64 {
+pub fn size_of_type(ctx: &ProgramContext, type_key: TypeKey) -> Option<u64> {
+    let typ = ctx.get_type(type_key);
+
+    if typ.size_depends_on_generics(ctx) {
+        return None;
+    }
+
     let ll_ctx = Context::create();
     let converter = TypeConverter::new(
         &ll_ctx,
@@ -371,5 +450,6 @@ pub fn size_of_type(ctx: &ProgramContext, type_key: TypeKey) -> u64 {
         &ctx.type_monomorphizations,
         &ctx.target_machine,
     );
-    converter.size_of_type(type_key)
+
+    Some(converter.size_of_type(type_key))
 }

@@ -85,7 +85,7 @@ impl Type {
             }
 
             Some(Token {
-                kind: TokenKind::LeftBrace,
+                kind: TokenKind::DotLeftBrace,
                 ..
             }) => {
                 let tuple_type = TupleType::parse(parser)?;

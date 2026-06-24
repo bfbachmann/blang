@@ -1,0 +1,83 @@
+mod impl_constraints
+
+use "std/libc" {exit}
+use "std/runtime" {assert}
+
+fn main() {
+    let v = Value{inner: 1}
+    let c = Container{value: v}
+
+    assert(c.contains(v), "contains failed")
+    assert(c.to_int() == v.inner, "to_int failed")
+    assert(get_value(Thing{t: Value{inner: 321}}) == 321, "expected 321")
+
+    exit(0)
+}
+
+spec Eq {
+    fn eq(self, other: Self) -> bool
+}
+
+spec ToInt {
+    fn to_int(self) -> int
+}
+
+struct Container[T] {
+    value: T
+}
+
+impl Container if [T: Eq] {
+    fn contains(self, target: T) -> bool {
+        return self.value.eq(target)
+    }
+}
+
+impl Container: ToInt if [T: ToInt] {
+    fn to_int(self) -> int {
+        return self.value.to_int()
+    }
+}
+
+struct Value {
+    inner: int
+}
+
+impl Value: Eq {
+    fn eq(self, other: Self) -> bool {
+        return self.inner == other.inner
+    }
+}
+
+impl Value: ToInt {
+    fn to_int(self) -> int {
+        return self.inner
+    }
+}
+
+struct Thing[T] {
+    t: T
+}
+
+impl Thing {
+    fn new(t: T) -> Self {
+        return Self {
+            t: t
+        }
+    }
+}
+
+spec Bla[X: ToInt] {
+    fn bla(self) -> int
+}
+
+// Make sure that we're allowed to use T in Bla[T] given that it implements
+// ToInt in this context.
+impl Thing: Bla[T] if [T: ToInt] {
+    fn bla(self) -> int {
+        return self.t.to_int()
+    }
+}
+
+fn get_value[T: ToInt, B: Bla[T]](b: B) -> int {
+    return b.bla()
+}

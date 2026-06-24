@@ -2,6 +2,7 @@ mod slice
 
 use "std/runtime" {assert}
 use "std/types/opt" {Opt}
+use "std/specs/iter" {Iter}
 
 /// A bounded pointer to contiguous values of type T.
 pub struct Slice[T] {
@@ -73,6 +74,10 @@ impl Slice {
     /// `end` (exclusive).
     pub fn slice_right(self, start: uint) -> Slice[T] {
         return self.slice(start, self.len)
+    }
+
+    pub fn iter(*self) -> SliceIter[T] {
+        return SliceIter[T].from(self)
     }
 }
 
@@ -176,5 +181,32 @@ impl SliceMut {
     /// `end` (exclusive).
     pub fn slice_right(self, start: uint) -> SliceMut[T] {
         return self.slice(start, self.len)
+    }
+}
+
+/// An interator over a slice.
+pub struct SliceIter[T] {
+    slice: *Slice[T]
+    index: uint
+}
+
+impl SliceIter {
+    /// Creates a new iterator that iterates over the given slice.
+    pub fn from(slice: *Slice[T]) -> Self {
+        return Self{
+            slice: slice
+            index: 0
+        }
+    }
+}
+
+impl SliceIter: Iter[T] {
+    /// Returns the next element in the iterator if one exists, or else None.
+    pub fn next(*mut self) -> Opt[T] {
+        let elem = self.slice.get(self.index)
+        if elem.is_some() {
+            self.index += 1
+        }
+        return elem
     }
 }
