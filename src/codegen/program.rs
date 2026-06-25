@@ -276,6 +276,7 @@ fn link(
 ) -> Result<(), CodeGenError> {
     let output_path = output_path.to_string_lossy().to_string();
     let mut extra_link_args = vec![];
+    let mut extra_libs = vec![];
 
     let linker_cmd = if let Some(linker) = linker {
         linker.as_str()
@@ -290,8 +291,8 @@ fn link(
                 "llvm-link"
             }
             OutputFormat::Object | OutputFormat::Executable => {
-                // Include the GC via linker args.
-                extra_link_args.push("-lgc".to_string());
+                // Include the GC lib.
+                extra_libs.push("-lgc".to_string());
 
                 // Try to determine the system linker based on the target platform.
                 match target_triple.contains("windows") {
@@ -308,7 +309,8 @@ fn link(
         .args(linker_args)
         .args(extra_link_args)
         .args(["-o", &output_path])
-        .args(obj_file_paths);
+        .args(obj_file_paths)
+        .args(extra_libs);
 
     // Convert the command to a str so we can log it, if necessary.
     let raw_cmd = format!(
